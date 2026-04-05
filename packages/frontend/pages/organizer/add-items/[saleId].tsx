@@ -1801,7 +1801,7 @@ const AddItemsDetailPage = () => {
                     href={`/organizer/add-items/${saleId}/review`}
                     className="text-sm font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 hover:underline ml-auto flex-shrink-0 whitespace-nowrap"
                   >
-                    Review & Publish{unpublishedCount > 0 ? ` (${unpublishedCount})` : ''} →
+                    Review & Publish{unpublishedCount > 0 ? ` (${unpublishedCount})` : ''}
                   </Link>
                 </div>
                 {/* Row 2: secondary actions */}
@@ -1901,7 +1901,6 @@ const AddItemsDetailPage = () => {
               {/* Sort controls bar */}
               {items.length > 0 && (
                 <div className="px-4 py-3 bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-warm-700 dark:text-warm-300">Sort by:</span>
                   {(['name', 'price', 'status', 'date'] as const).map((option) => (
                     <button
                       key={option}
