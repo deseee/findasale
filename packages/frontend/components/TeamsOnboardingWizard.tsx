@@ -110,9 +110,9 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
       // Redirect to workspace management page
       if (onComplete) {
         onComplete();
-      } else {
-        router.push('/organizer/workspace');
       }
+      // Always navigate to workspace page after completion
+      router.push('/organizer/workspace');
     } catch (error: any) {
       console.error('Error completing TEAMS onboarding:', error);
       const msg = error.response?.data?.error || 'Failed to setup workspace';
