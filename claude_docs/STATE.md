@@ -7,6 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S398 COMPLETE (2026-04-05):** Dashboard overhaul, feedback system design, review card UX spec, CLAUDE.md dispatch routing fix
+
+**S398 Summary:**
+
+Dashboard UI session + feedback system architecture. Removed floating feedback widget. Dashboard: shrunk welcome text, removed subtitle line, added button icons (Clock/ShoppingCart/Megaphone), reordered POS before Holds, made LIVE badge a link to public sale page with edit pencil button, fixed review count to combine drafts+unpublished, fixed weather overflow (restored 2-line wrap), fixed dropdown overflow on Items/POS buttons, fixed Other Sales card mobile layout (stacked, LIVE badge inline+linked, removed redundant "Live now" text). Feedback system: UX specced 10 event-triggered micro-surveys (5 organizer, 5 shopper) + static menu item. Architect approved schema (FeedbackSuppression table, User model extensions). Review card layout: UX specced full redesign with "Ready to Publish" / "Needs Work" / "Cannot Publish" status system replacing raw percentages.
+
+**S398 Files Changed (7 files):**
+- `packages/frontend/pages/organizer/dashboard.tsx` — Welcome padding, subtitle removed, button labels/icons/order, LIVE badge linked, edit pencil, review count combined, dropdown overflow fix
+- `packages/frontend/pages/_app.tsx` — Floating feedback widget disconnected
+- `packages/frontend/components/WeatherStrip.tsx` — Removed truncation, restored 2-line wrap
+- `packages/frontend/components/SecondarySaleCard.tsx` — LIVE badge inline+linked, "Live now" removed, mobile stacked layout
+- `packages/backend/src/routes/organizers.ts` — Review count includes drafts+unpublished across all sales
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — Card layout adjustments (partial — UX spec supersedes)
+- `CLAUDE.md` — Added dispatch routing rule (Skills vs Agent types) to §7
+
+**S398 Specs Delivered (not yet implemented):**
+- `claude_docs/FEEDBACK_SYSTEM_SPEC.md` — Full feedback system architecture
+- `claude_docs/FEEDBACK_SURVEY_MAPPING.md` — 10 survey trigger mappings
+- `claude_docs/FEEDBACK_SYSTEM_HANDOFF.md` — Patrick summary
+- `claude_docs/FEEDBACK_DEV_QUICKSTART.md` — Dev implementation guide
+- `claude_docs/ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md` — Schema review + migration plan
+- `claude_docs/ARCHITECT_PATRICK_SUMMARY.md` — Architect summary
+- `claude_docs/ux-spotchecks/review-card-layout-spec.md` — Review card redesign spec
+
+---
+
 **S397 COMPLETE (2026-04-05):** Add-items page mobile UI polish — sort controls, toolbar layout, dark mode fixes, item row restructure, dropdown escape fix, link/navigation cleanup
 
 **S397 Summary:**
@@ -1167,36 +1193,28 @@ Files changed S361:
 
 ---
 
-## Next Session (S396)
+## Next Session (S399)
 
-### S396 Priority 0 — Push S395 changes
-```powershell
-git add packages/backend/src/controllers/printKitController.ts
-git add packages/frontend/pages/organizer/pos.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S395: print kit QR fixes + POS tap-to-scan + misc label fix + cart price dark mode"
-.\push.ps1
-```
+### S399 Priority 1 — Implement review card redesign
+UX spec at `claude_docs/ux-spotchecks/review-card-layout-spec.md`. Replace raw percentages/confidence with "Ready to Publish" / "Review Before Publishing" / "Cannot Publish Yet" status system. Plain English labels for what's missing.
 
-### S396 Priority 1 — POS QA
-- Cart price displays bright green in dark mode (quick Chrome check)
-- Scan item sticker QR → item added
-- Scan price sheet QR → misc item added at correct price with correct label
-- Print kit: download all 6 templates, confirm no auth errors
+### S399 Priority 2 — Build feedback collection system
+Schema migration (FeedbackSuppression table + User model extensions), backend endpoints, frontend survey components. Full specs in `claude_docs/FEEDBACK_SYSTEM_SPEC.md`, `FEEDBACK_DEV_QUICKSTART.md`. Architect approved at `claude_docs/ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md`.
 
-### S396 Priority 2 — Chrome QA backlog
-Large backlog of Shipped items pending Chrome QA from S389–S394. Prioritize:
-- Hunt Pass page accuracy (1.5x, XP matrix, benefits list)
-- Referral page (/shopper/referrals)
-- Organizer nav additions (Insights, Branding)
-- Tier Progress widget on organizer dashboard
+### S399 Priority 3 — Chrome QA: S398 dashboard changes
+- Welcome text small, no subtitle line
+- Button icons render (Clock, ShoppingCart, Megaphone), POS before Holds
+- LIVE badge links to public sale page, edit pencil links to edit page
+- Review Items card shows combined draft+unpublished count, card shows when only unpublished exist
+- Weather wraps to 2 lines (not truncated)
+- Other Sales card: LIVE badge small+inline+linked, no "Live now" text, stacked layout on mobile
+- Items/POS dropdown menus don't overflow container
 
-### S392 Priority 2 — Audit alerts (from weekly audit)
-- CRITICAL: Sale detail items buried below map
-- HIGH: Trending page images broken
-- HIGH: Inspiration Gallery images missing
-- HIGH: Feed page images blurry
+### Carry-forward QA backlog
+- S397: add-items sort, toolbar, dark mode, item row, link removal, back-nav
+- S396: rapidfire hold, photo limit prompt, onboarding modal routes
+- Full POS walkthrough (4 payment modes)
+- Audit alerts: sale detail items below map, trending images, inspiration gallery, feed blur
 
 ### Standing Notes
 - All Railway env vars ✅. Migrations ✅ (20260402_add_charity_donation deployed).

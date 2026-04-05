@@ -1,30 +1,30 @@
-# Patrick's Dashboard — S397 Complete (2026-04-05)
+# Patrick's Dashboard — S398 Complete (2026-04-05)
 
 ---
 
 ## Status
 
-- **Vercel:** ⏳ S397 changes ready to push
-- **Railway:** ⏳ Backend changes ready to push (itemController limit, organizers.ts active sale fix)
-- **DB:** ✅ No migration required
+- **Vercel:** ⏳ S398 changes ready to push (dashboard overhaul + feedback widget removal)
+- **Railway:** ⏳ Backend change ready to push (review count fix in organizers.ts)
+- **DB:** ✅ No migration required this session (feedback system migration comes next session)
 
 ---
 
-## What Happened This Session (S397)
+## What Happened This Session (S398)
 
-**Add-items page mobile UI overhaul — sort controls, toolbar layout, dark mode, navigation fixes.**
+**Dashboard overhaul + feedback system design + review card UX spec.**
 
-- **Teams modal race condition fixed** — Was firing for users who already had a workspace because the query hadn't loaded yet. Added loading guard.
-- **Review Drafts link fixed** — Was pointing to wrong sale. Now uses the correct active sale ID.
-- **Active sale logic improved** — Backend now prefers PUBLISHED sales over DRAFT when selecting the active sale.
-- **Item limit raised** — Review page was capped at 20 items. Now fetches up to 500.
-- **Sort controls added** — Name/Price/Status/Date sort buttons on add-items and review pages.
-- **Mobile item rows restructured** — Checkbox+arrow stacked left, status+trash stacked right, giving item names much more horizontal space.
-- **Header and toolbar rebuilt** — Replaced broken flex-wrap with two explicit rows each. No more elements escaping the container.
-- **Dark mode fixed** — Toolbar buttons, More Actions dropdown text, and hover states all visible now.
-- **More Actions dropdown fixed** — Was clipping off right edge of screen. Now uses fixed positioning with viewport-calculated coordinates.
-- **Item name link removed** — Clicking the item title no longer navigates to the edit page (unnecessary).
-- **Thumbnail back-nav fixed** — Removed `target="_blank"` from thumbnail link so swiping back in the PWA returns to add-items instead of exiting the app.
+- **Floating feedback widget removed** — Disconnected from _app.tsx. Component file kept for reference.
+- **Welcome text shrunk** — Smaller font, reduced padding, subtitle line removed entirely.
+- **Button icons added** — Clock (Holds), ShoppingCart (POS), Megaphone (Ripples). POS now before Holds.
+- **LIVE badge linked** — Green LIVE pill on sale cards now links to public sale page. Edit pencil button added next to it.
+- **Review Items card fixed** — Count now combines drafts + unpublished (was only counting drafts). Card shows even with 0 drafts if unpublished items exist.
+- **Weather overflow fixed** — Restored 2-line wrapping instead of truncation.
+- **Dropdown overflow fixed** — Items/POS sale picker menus constrained to card width.
+- **Other Sales card improved** — Stacked layout on mobile, LIVE badge small+inline+linked, redundant "Live now" text removed.
+- **CLAUDE.md fix** — Added dispatch routing rule so Claude stops confusing Skills vs Agent types.
+- **Feedback system specced** — 10 event-triggered micro-surveys designed (5 organizer, 5 shopper), Architect approved schema, dev quickstart ready.
+- **Review card layout specced** — UX redesign with "Ready to Publish" / "Needs Work" / "Cannot Publish" status replacing raw percentages.
 
 ---
 
@@ -33,14 +33,22 @@
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/_app.tsx
+git add packages/frontend/components/WeatherStrip.tsx
+git add packages/frontend/components/SecondarySaleCard.tsx
 git add packages/backend/src/routes/organizers.ts
-git add packages/backend/src/controllers/itemController.ts
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
 git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
-git add packages/frontend/components/BulkActionDropdown.tsx
+git add CLAUDE.md
+git add claude_docs/FEEDBACK_SYSTEM_SPEC.md
+git add claude_docs/FEEDBACK_SURVEY_MAPPING.md
+git add claude_docs/FEEDBACK_SYSTEM_HANDOFF.md
+git add claude_docs/FEEDBACK_DEV_QUICKSTART.md
+git add claude_docs/ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md
+git add claude_docs/ARCHITECT_PATRICK_SUMMARY.md
+git add claude_docs/ux-spotchecks/review-card-layout-spec.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S397: add-items mobile UI overhaul — sort, toolbar, dark mode, nav fixes"
+git commit -m "S398: Dashboard overhaul, feedback system specs, review card UX spec, remove feedback float, CLAUDE.md dispatch routing fix"
 .\push.ps1
 ```
 
@@ -65,9 +73,9 @@ Full report: `claude_docs/audits/weekly-audit-2026-04-02.md`
 
 ---
 
-## Next Session (S398)
+## Next Session (S399)
 
-- Chrome QA: S397 add-items page — sort controls, toolbar, dark mode, item row layout, link removal, back-nav
-- Chrome QA: S396 fixes — rapidfire hold behavior, photo limit prompt, onboarding modal routes
-- Chrome QA: Full POS walkthrough (all 4 payment modes, camera, QR, invoice, card reader)
-- Concurrent sales gate: implement from spec at `claude_docs/specs/concurrent-sales-gate-spec.md`
+1. **Implement review card redesign** — UX spec ready at `claude_docs/ux-spotchecks/review-card-layout-spec.md`
+2. **Build feedback collection system** — Schema migration + backend + frontend. All specs ready.
+3. **Chrome QA: S398 dashboard changes** — verify all tweaks on mobile
+4. **Carry-forward QA backlog** — S397 add-items, S396 rapidfire/limits, POS walkthrough, audit alerts
