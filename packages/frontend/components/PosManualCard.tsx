@@ -191,16 +191,17 @@ export default function PosManualCard({
       {/* ═══ IDLE STATE: Form ═══ */}
       {state === 'idle' && (
         <div className="space-y-4">
-          {/* CNP Fee Notice */}
-          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700">
-            <div className="flex gap-2">
-              <span className="text-lg">⚠️</span>
+          {/* CNP Fee + Dispute Warning */}
+          <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600 dark:text-amber-400 text-base mt-0.5">⚠</span>
               <div>
-                <p className="text-xs font-semibold text-amber-900 dark:text-amber-100">CNP Fee Notice</p>
-                <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
-                  Card-not-present fee: ${cnpFeeAmount > 0 ? cnpFeeAmount.toFixed(2) : '~$1.40'}
-                  <br />
-                  (3.7% vs 3.2% for card reader)
+                <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry — Higher Risk</p>
+                <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
+                  Processing fee: 3.4% + $0.30 (vs 2.7% + $0.05 for card reader)
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  <strong>No dispute protection.</strong> If a shopper disputes this charge, you will lose the sale amount plus a $15 dispute fee with no recourse. Only use manual entry for trusted buyers. (Stripe's optional Chargeback Protection at +0.4%/transaction can cover this — contact support to enable.)
                 </p>
               </div>
             </div>
