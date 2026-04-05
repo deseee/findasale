@@ -1,59 +1,38 @@
-# Patrick's Dashboard — S394 Complete (2026-04-04)
+# Patrick's Dashboard — S395 Complete (2026-04-05)
 
 ---
 
 ## Status
 
-- **Vercel:** ⚠️ S393+S394 push pending — see push block below
-- **Railway:** ⚠️ S393 migration still required (POSSession + POSPaymentLink tables)
-- **DB:** ⚠️ Migration required if not yet run
+- **Vercel:** ⚠️ S395 push pending — see push block below
+- **Railway:** ✅ (no new migrations this session)
+- **DB:** ✅ No migration required
 
 ---
 
-## What Happened This Session (S394)
+## What Happened This Session (S395)
 
-**POS gap analysis + component rebuild.** S393 delivered the backend correctly but the frontend didn't match the spec. Rebuilt 4 new components and rewired pos.tsx properly.
+**Print kit QR fixes + POS QR scanner overhaul.**
 
-- **PosManualCard** — Stripe Elements card-not-present flow with fee notice (3.4%+$0.30) and dispute warning ($15 fee, no recourse, Chargeback Protection option at +0.4%)
-- **PosPaymentQr** — Generate → display → waiting → paid states. Full-screen QR modal. Cancel & Regenerate button so organizer can add items and re-generate without a page reload.
-- **PosOpenCarts** — Shows linked shopper carts, pull-to-POS in one tap.
-- **PosInvoiceModal** — Send invoice for a hold, email delivery, 24h default expiry.
-- **pos.tsx UX fixes:** Payment grid reordered (Cash → Stripe QR → Card Reader → Invoice), Connect Reader button removed (status badge is now clickable), Card Reader disabled+tooltip when no reader connected, camera useEffect race condition fixed, QR field name corrected, fees corrected.
+- **Print kit QR codes** now encode `https://finda.sale` (not `localhost`) — phone scanning works
+- **Price sheet QRs** now add misc items to the POS ticket when scanned (same as quick-add buttons)
+- **POS QR scanner** switched from auto-fire to tap-to-scan — no more duplicate adds
+- **Tap crops to tap location** — scanning with multiple QRs in frame now only reads the one you tapped
+- **Misc item labels** fixed — 75¢, $1.50, $2.50 now show correctly (was mapping everything to "50¢" or rounding)
+- **Cart item price** now shows bright green in dark mode
 
 ---
 
 ## Patrick Action Items
 
-**Push everything (S393 + S394 combined):**
-
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260404_pos_upgrade/migration.sql
-git add packages/backend/src/controllers/posController.ts
-git add packages/backend/src/routes/pos.ts
-git add packages/backend/src/index.ts
-git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/printKitController.ts
 git add packages/frontend/pages/organizer/pos.tsx
-git add packages/frontend/components/ShopperCartDrawer.tsx
-git add packages/frontend/components/PosManualCard.tsx
-git add packages/frontend/components/PosPaymentQr.tsx
-git add packages/frontend/components/PosOpenCarts.tsx
-git add packages/frontend/components/PosInvoiceModal.tsx
-git add packages/frontend/package.json
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S393+S394: POS multi-payment hub — QR, manual card, Open Carts, invoice, camera, UX fixes"
+git commit -m "S395: print kit QR fixes + POS tap-to-scan + misc label fix + cart price dark mode"
 .\push.ps1
-```
-
-**Then run the migration (if not done from S393):**
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
 ```
 
 **Other open items:**

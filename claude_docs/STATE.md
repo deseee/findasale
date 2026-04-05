@@ -7,6 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S395 COMPLETE (2026-04-05):** Print kit fixes + POS QR scanner overhaul
+
+**S395 Summary:**
+
+Continued from S395 context expiry. Print kit: crash fix (null price), auth fix (blob download), PDF layout rounds (6 templates), QR codes fixed to `https://finda.sale` fallback. POS QR scanner overhauled: price sheet QRs now add misc items to cart, tap-to-scan replaces auto-fire, tap crops to 35% window around tap location to prevent wrong-QR detection, misc item labels fixed (75¢/$1.50/etc.), cart price darkmode set to bright green.
+
+**S395 Files Changed (2 files):**
+- `packages/backend/src/controllers/printKitController.ts` — price sheet QR URLs updated to POS misc-add format (`/pos/{saleId}?action=add-misc&price=X.XX`), QR fallback changed to `https://finda.sale`
+- `packages/frontend/pages/organizer/pos.tsx` — tap-to-scan (no auto-fire), crop-to-tap-location (35% window), 10-frame retry on tap, misc label fix (75¢/$1.50 etc.), cart price `dark:text-green-400`
+
+**S395 QA:**
+- Scan item sticker QR in POS → item added to cart ✅ (Patrick verified)
+- Scan price sheet QR in POS → misc item added at correct price ✅ (Patrick verified)
+- Tap-to-scan prevents duplicate adds ✅ (Patrick verified)
+- Misc item labels show correctly (75¢, $1.50, etc.) ✅ (Patrick verified)
+- Cart price bright green in dark mode — pending Chrome verify
+
+---
+
 **S394 COMPLETE (2026-04-04):** POS gap analysis + rebuild — 4 new components (PosManualCard, PosPaymentQr, PosOpenCarts, PosInvoiceModal), pos.tsx multi-payment hub wired up, QR regeneration fix.
 
 **S394 Summary:**
@@ -1068,18 +1087,26 @@ Files changed S361:
 
 ---
 
-## Next Session (S392)
+## Next Session (S396)
 
-### S392 Priority 0 — Smoke test S391 on finda.sale
-Verify deployed features:
-- /shopper/haul-posts feed page loads, create page works
-- /shopper/rare-finds page loads (Hunt Pass required)
-- Hunt Pass page shows Treasure Hunt Pro + Rare Finds Pass benefits
-- Shopper dashboard shows Rare Finds widget (Hunt Pass users only)
-- Haul Posts nav link present in shopper nav
+### S396 Priority 0 — Push S395 changes
+```powershell
+git add packages/backend/src/controllers/printKitController.ts
+git add packages/frontend/pages/organizer/pos.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S395: print kit QR fixes + POS tap-to-scan + misc label fix + cart price dark mode"
+.\push.ps1
+```
 
-### S392 Priority 1 — Chrome QA backlog
-Large backlog of Shipped items pending Chrome QA from S389–S391. Prioritize:
+### S396 Priority 1 — POS QA
+- Cart price displays bright green in dark mode (quick Chrome check)
+- Scan item sticker QR → item added
+- Scan price sheet QR → misc item added at correct price with correct label
+- Print kit: download all 6 templates, confirm no auth errors
+
+### S396 Priority 2 — Chrome QA backlog
+Large backlog of Shipped items pending Chrome QA from S389–S394. Prioritize:
 - Hunt Pass page accuracy (1.5x, XP matrix, benefits list)
 - Referral page (/shopper/referrals)
 - Organizer nav additions (Insights, Branding)
