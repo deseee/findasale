@@ -487,12 +487,12 @@ const OrganizerDashboard = () => {
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-4">
           {/* Header */}
-          <div className="mb-4">
-            <h1 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
+          <div className="mb-2">
+            <h1 className="text-lg font-bold text-warm-900 dark:text-warm-100">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
           </div>
 
           {/* Consolidated Action Bar — always visible */}
-          <div className="flex flex-wrap gap-2 mb-6 relative">
+          <div className="flex flex-wrap gap-2 mb-4 relative">
             <Link href="/organizer/create-sale" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
               + New Sale
             </Link>
@@ -775,13 +775,18 @@ const OrganizerDashboard = () => {
                           <div className="flex-1">
                             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{activeSale.title}</h2>
                             <div className="flex flex-wrap items-center gap-2 mb-3">
-                              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
-                                activeSale.status === 'PUBLISHED'
-                                  ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                                  : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
-                              }`}>
-                                {activeSale.status === 'PUBLISHED' ? '🟢 LIVE' : '⚠️ DRAFT'}
-                              </span>
+                              {activeSale.status === 'PUBLISHED' ? (
+                                <Link href={`/sales/${activeSale.id}`} className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800 transition-colors`} title="See your sale as shoppers see it">
+                                  🟢 LIVE
+                                </Link>
+                              ) : (
+                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200`}>
+                                  ⚠️ DRAFT
+                                </span>
+                              )}
+                              <Link href={`/organizer/edit-sale/${activeSale.id}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" title="Edit sale details">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Link>
                               {statsData?.activeSale && (
                                 <SalePerformanceBadge
                                   itemCount={statsData.activeSale.itemCount ?? 0}
@@ -809,26 +814,12 @@ const OrganizerDashboard = () => {
                   {/* Consolidated Action Buttons Row */}
                   <div className="flex flex-wrap gap-2 mt-2 border-t border-warm-200 dark:border-gray-700">
                     {activeSale.status === 'PUBLISHED' && (
-                      <>
-                        <Link href={`/sales/${activeSale.id}`} className="text-sm px-3 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition-colors" title="See your sale as shoppers see it">
-                          🟢 Live
-                        </Link>
-                        <Link href={`/organizer/edit-sale/${activeSale.id}`} className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1" title="Edit sale details">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Link>
-                      </>
-                    )}
-                    {activeSale.status === 'PUBLISHED' && (
                       <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add, edit, or remove items from this sale">
                         Items
                       </Link>
                     )}
                     {activeSale.status === 'DRAFT' && (
-                      <>
-                        <Link href={`/organizer/edit-sale/${activeSale.id}`} className="text-sm px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1" title="Edit sale details">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Link>
-                      </>
+                      <></>
                     )}
                     {activeSale.status === 'DRAFT' && (
                       <Link href={`/organizer/add-items/${activeSale.id}`} className="text-sm px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors" title="Add items to this draft sale">
