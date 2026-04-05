@@ -149,7 +149,7 @@ export default function PosManualCard({
         const timeStr = now.toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
-          meridiem: 'short',
+          hour12: true,
         });
         setSuccessTimestamp(timeStr);
 
