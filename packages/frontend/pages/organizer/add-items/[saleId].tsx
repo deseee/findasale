@@ -1981,19 +1981,23 @@ const AddItemsDetailPage = () => {
                           }
                         }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.has(item.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            const newSet = new Set(selectedItems);
-                            if (e.target.checked) newSet.add(item.id);
-                            else newSet.delete(item.id);
-                            setSelectedItems(newSet);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="rounded cursor-pointer flex-shrink-0"
-                        />
+                        {/* Checkbox + expand arrow stacked vertically on left */}
+                        <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.has(item.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const newSet = new Set(selectedItems);
+                              if (e.target.checked) newSet.add(item.id);
+                              else newSet.delete(item.id);
+                              setSelectedItems(newSet);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="rounded cursor-pointer"
+                          />
+                          <span className="text-warm-400 text-sm">{isExpanded ? '▲' : '▼'}</span>
+                        </div>
                         {/* Thumbnail — links to public item page */}
                         <a
                           href={`/items/${item.id}`}
@@ -2026,7 +2030,7 @@ const AddItemsDetailPage = () => {
                             {item.price != null ? `$${item.price}` : 'No price'} · {formatCategory(item.category) || 'Uncategorized'}
                           </p>
                         </div>
-                        {/* Status badge + delete + expand arrow stacked vertically */}
+                        {/* Status badge + delete stacked vertically */}
                         <div className="flex-shrink-0 flex flex-col items-center gap-1">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
                             draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
@@ -2049,7 +2053,6 @@ const AddItemsDetailPage = () => {
                           >
                             🗑️
                           </button>
-                          <span className="text-warm-400 text-sm">{isExpanded ? '▲' : '▼'}</span>
                         </div>
                       </div>
 
