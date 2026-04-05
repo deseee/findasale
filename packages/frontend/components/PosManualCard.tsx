@@ -140,7 +140,8 @@ export default function PosManualCard({
         const cardBrand = cardElementElement._element?.dataset?.brand || 'card';
 
         // Get card details from payment method
-        const cardLast4 = paymentIntent.charges?.data[0]?.payment_method_details?.card?.last4 || '';
+        // Note: Client-side PaymentIntent doesn't have .charges property (server-side only)
+        const cardLast4 = '';
         setLastFourDigits(cardLast4);
 
         // Format current time
