@@ -57,25 +57,32 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not your sale.' });
     }
 
-    // Generate QR code for yard sign
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_print&utm_medium=print&utm_campaign=${saleId}`;
-
-    const qrBuffer = await QRCode.toBuffer(saleUrl, {
-      type: 'png',
-      width: 400,
-      margin: 2,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
-    });
-
     // Lazy-load PDFDocument to avoid server crashes before rebuild
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
 
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const items = sale.items;
+
+    // Pre-generate all item QR codes
+    const itemQrBuffers: Buffer[] = [];
+    for (const item of items) {
+      const itemUrl = `${frontendUrl}/items/${item.id}`;
+      itemQrBuffers.push(
+        await QRCode.toBuffer(itemUrl, {
+          type: 'png',
+          width: 150,
+          margin: 1,
+          color: { dark: '#1a1a2e', light: '#ffffff' },
+        })
+      );
+    }
+
     // Create PDF document with LETTER size
+    // Page starts here — no cover page. autoFirstPage: true creates page 1
     const doc = new PDFDocument({
       size: 'LETTER',
-      margins: 0,
+      margin: 0,
       autoFirstPage: true,
     });
 
@@ -83,67 +90,54 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="print-kit-${saleId}.pdf"`);
     doc.pipe(res);
 
-    // ── PAGE 1: Yard Sign QR Code ──────────────────────────────
-    const qrSize = 360; // 5 inches @ 72 dpi
-    const qrX = (PAGE_W - qrSize) / 2;
-    const qrY = (PAGE_H - qrSize) / 2;
+    // ── PAGES: Item Stickers (Avery 5160 grid) ──────────────
+    // Avery 5160 spec: 3 cols × 10 rows = 30 stickers per page
+    const STICKER_W = 189;  // 2.625 inches
+    const STICKER_H = 72;   // 1 inch
+    const COLS_STICKER = 3;
+    const ROWS_STICKER = 10;
+    const LEFT_MARGIN = 13;
+    const TOP_MARGIN = 36;
+    const QR_SIZE = 48;
 
-    doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
-
-    // Add sale title below QR
-    doc
-      .fontSize(16)
-      .fillColor('#1a1a2e')
-      .font('Helvetica-Bold')
-      .text(sale.title, PAGE_MARGIN, qrY + qrSize + 20, {
-        width: PAGE_W - PAGE_MARGIN * 2,
-        align: 'center',
-      });
-
-    doc
-      .fontSize(10)
-      .fillColor('#666666')
-      .font('Helvetica')
-      .text('Scan to browse & buy online', PAGE_MARGIN, doc.y + 8, {
-        width: PAGE_W - PAGE_MARGIN * 2,
-        align: 'center',
-      });
-
-    // ── PAGES 2+: Item Stickers (Avery 5160 grid) ──────────────
-    // Grid: 3 cols × 10 rows = 30 stickers per page. First page starts on page 2.
-    const items = sale.items;
-    let itemIndex = 0;
-
-    // Pre-generate all item QR codes
-    const itemQrBuffers: { [itemId: string]: Buffer } = {};
-    for (const item of items) {
-      const itemUrl = `${frontendUrl}/items/${item.id}`;
-      itemQrBuffers[item.id] = await QRCode.toBuffer(itemUrl, {
-        type: 'png',
-        width: 200,
-        margin: 1,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
-      });
-    }
-
-    // Only add sticker pages if there are items
-    if (items.length > 0) {
-      while (itemIndex < items.length) {
-        doc.addPage();
-
-        // Draw grid of stickers on this page
-        for (let row = 0; row < ROWS && itemIndex < items.length; row++) {
-          for (let col = 0; col < COLS && itemIndex < items.length; col++) {
-            const item = items[itemIndex++];
-
-            // Calculate sticker position
-            const x = PAGE_MARGIN + col * STICKER_W;
-            const y = PAGE_MARGIN + row * STICKER_H;
-
-            drawSticker(doc, item, x, y, itemQrBuffers[item.id]);
-          }
-        }
+    // For each item (index i):
+    for (let i = 0; i < items.length; i++) {
+      // Add page only when i > 0 && i % 30 === 0 (page 2+)
+      if (i > 0 && i % (COLS_STICKER * ROWS_STICKER) === 0) {
+        doc.addPage({ size: 'LETTER', margin: 0 });
       }
+
+      const col = i % COLS_STICKER;
+      const row = Math.floor((i % (COLS_STICKER * ROWS_STICKER)) / COLS_STICKER);
+      const sX = LEFT_MARGIN + col * STICKER_W;
+      const sY = TOP_MARGIN + row * STICKER_H;
+      const item = items[i];
+
+      // Item title (truncate to ~30 chars)
+      const titleText = (item.title || '').slice(0, 32);
+      doc
+        .font('Helvetica')
+        .fontSize(7)
+        .fillColor('#1a1a2e')
+        .text(titleText, sX + 8, sY + 6, { width: 129, lineBreak: false });
+
+      // Price
+      const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'N/A';
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(14)
+        .fillColor('#16a34a')
+        .text(priceText, sX + 8, sY + 20, { width: 100, lineBreak: false });
+
+      // Item ID
+      doc
+        .font('Helvetica')
+        .fontSize(5)
+        .fillColor('#999999')
+        .text(item.id, sX + 8, sY + 46, { width: 129, lineBreak: false });
+
+      // QR — right side, vertically centered
+      doc.image(itemQrBuffers[i], sX + 137, sY + 12, { width: QR_SIZE, height: QR_SIZE });
     }
 
     doc.end();
@@ -300,54 +294,62 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
 
-    // Landscape half-page: 8.5" wide, 5.5" tall
-    const doc = new PDFDocument({ size: [612, 396], margins: 0 });
+    // Landscape Letter: 792×612 pts, 2 signs per page
+    const doc = new PDFDocument({ size: [792, 612], margins: 0 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="directional-signs-${saleId}.pdf"`);
     doc.pipe(res);
 
-    const saleType = sale.saleType || 'ESTATE_SALE';
-    const saleTypeText =
-      saleType === 'ESTATE_SALE'
-        ? 'Estate Sale'
-        : saleType === 'YARD_SALE'
-          ? 'Yard Sale'
-          : 'Sale';
-
-    // Draw two directional signs per page
+    // Draw two directional signs per page (top and bottom)
     for (let i = 0; i < 2; i++) {
-      const yOffset = i * 198; // Half-page height = 396 / 2 = 198
+      const yOffset = i * 306; // 612 / 2 = 306 per sign
 
       // Border
       doc
-        .rect(12, yOffset + 12, 588, 174)
-        .lineWidth(1)
-        .stroke('#1a1a2e');
+        .rect(2, yOffset + 2, 788, 302)
+        .lineWidth(2)
+        .stroke('#cccccc');
 
-      // Draw filled right-pointing triangle arrow (PDFKit polygon)
-      const arrowX = 30;
-      const arrowY = yOffset + 35;
-      doc.save()
-        .moveTo(arrowX, arrowY)
-        .lineTo(arrowX + 45, arrowY + 25)
-        .lineTo(arrowX, arrowY + 50)
-        .fill('#1a1a2e');
-      doc.restore();
-
+      // Arrow — filled right-pointing polygon (LEFT third)
+      const ax = 20;
+      const ay = yOffset + 80;
       doc
-        .fontSize(18)
-        .fillColor('#1a1a2e')
+        .polygon(
+          [ax, ay + 75],              // left-top
+          [ax + 90, ay],              // right-top point
+          [ax + 90, ay + 40],         // step in
+          [ax + 140, ay + 40],        // arrow shaft top-right
+          [ax + 140, ay + 110],       // arrow shaft bottom-right
+          [ax + 90, ay + 110],        // step out
+          [ax + 90, ay + 150],        // right-bottom point
+        )
+        .fill('#16a34a');
+
+      // Sale name (middle section)
+      doc
         .font('Helvetica-Bold')
-        .text(saleTypeText, 90, yOffset + 50, { width: 300, align: 'left' });
+        .fontSize(28)
+        .fillColor('#1a1a2e')
+        .text(sale.title, 180, yOffset + 50, { width: 250, lineBreak: false });
 
+      // "This Way" subtext
       doc
+        .font('Helvetica')
         .fontSize(14)
         .fillColor('#666666')
-        .font('Helvetica')
-        .text('>> This Way', 90, yOffset + 75, { width: 300, align: 'left' });
+        .text('This Way', 180, yOffset + 140, { width: 250, lineBreak: false });
 
-      // QR (right side)
-      doc.image(qrBuffer, 430, yOffset + 40, { width: 150, height: 150 });
+      // Address line (if available)
+      if (sale.address) {
+        doc
+          .font('Helvetica')
+          .fontSize(11)
+          .fillColor('#999999')
+          .text(sale.address, 180, yOffset + 165, { width: 250, lineBreak: false });
+      }
+
+      // QR code — top right, 150×150
+      doc.image(qrBuffer, 630, yOffset + 30, { width: 150, height: 150 });
     }
 
     doc.end();
@@ -394,11 +396,14 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
 
-    // 4" × 6" landscape
-    const doc = new PDFDocument({ size: [576, 288], margins: 0 });
+    // Portrait Letter = 612×792 pts
+    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="table-tents-${saleId}.pdf"`);
     doc.pipe(res);
+
+    const PANEL_W = 306;  // each half
+    const TENT_H = 396;
 
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
       month: 'short',
@@ -409,56 +414,70 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
       day: 'numeric',
     });
 
-    // Draw two table tents per page
+    // Draw two tents per page (tent 1: y=0..396, tent 2: y=396..792)
     for (let i = 0; i < 2; i++) {
-      const yOffset = i * 144; // Half page
+      const yOffset = i * 396;
 
-      // Border (fold line in middle)
+      // LEFT PANEL (front — customer sees this)
+      // Border
       doc
-        .rect(12, yOffset + 12, 552, 120)
+        .rect(0, yOffset, PANEL_W, TENT_H)
+        .lineWidth(1.5)
+        .stroke('#cccccc');
+
+      // Sale title
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(18)
+        .fillColor('#1a1a2e')
+        .text(sale.title, 12, yOffset + 20, { width: 282, lineBreak: false });
+
+      // Date range
+      doc
+        .font('Helvetica')
+        .fontSize(12)
+        .fillColor('#666666')
+        .text(`${startDate} – ${endDate}`, 12, yOffset + 90, { width: 282, lineBreak: false });
+
+      // QR code — centered in left panel, 200×200, x=(306-200)/2=53
+      doc.image(qrBuffer, 53, yOffset + 160, { width: 200, height: 200 });
+
+      // RIGHT PANEL (back)
+      // Border
+      doc
+        .rect(PANEL_W, yOffset, PANEL_W, TENT_H)
+        .lineWidth(1.5)
+        .stroke('#cccccc');
+
+      // Fold line (dashed vertical)
+      doc
+        .moveTo(PANEL_W, yOffset)
+        .lineTo(PANEL_W, yOffset + TENT_H)
+        .dash(4, { space: 4 })
         .lineWidth(1)
-        .stroke('#1a1a2e');
-
-      // Fold line indicator (dashed)
-      doc
-        .moveTo(300, yOffset + 12)
-        .lineTo(300, yOffset + 132)
-        .lineWidth(0.5)
-        .dash(2, { space: 2 })
-        .stroke('#cccccc')
+        .stroke('#aaaaaa')
         .undash();
 
-      // Front (left half): Sale title, date, QR
+      // finda.sale
       doc
+        .font('Helvetica-Bold')
+        .fontSize(24)
+        .fillColor('#16a34a')
+        .text('finda.sale', PANEL_W + 18, yOffset + 20, { width: 270, align: 'center', lineBreak: false });
+
+      // Tagline
+      doc
+        .font('Helvetica')
         .fontSize(14)
         .fillColor('#1a1a2e')
-        .font('Helvetica-Bold')
-        .text(sale.title, 25, yOffset + 25, { width: 260, align: 'center' });
+        .text('Browse items before you arrive.', PANEL_W + 18, yOffset + 70, { width: 270, align: 'center', lineBreak: false });
 
+      // Small instruction
       doc
-        .fontSize(10)
-        .fillColor('#666666')
         .font('Helvetica')
-        .text(`${startDate} – ${endDate}`, 25, yOffset + 50, { width: 260, align: 'center' });
-
-      // QR positioned within left half bounds: max 120×120pt with 10pt padding
-      const leftPanelW = 288; // Half of 576 (document width)
-      const qrSize = 120;
-      const qrX = 25 + (260 - qrSize) / 2;  // Centered within left panel width
-      const qrY = yOffset + 65;
-      doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
-
-      // Back (right half): FindA.Sale URL
-      doc
         .fontSize(10)
-        .fillColor('#1a1a2e')
-        .font('Helvetica')
-        .text('finda.sale', 325, yOffset + 60, { width: 250, align: 'center' });
-
-      doc
-        .fontSize(8)
-        .fillColor('#666666')
-        .text('Browse items before you arrive', 325, yOffset + 75, { width: 250, align: 'center' });
+        .fillColor('#999999')
+        .text('Scan QR code on the left to view online.', PANEL_W + 18, yOffset + 180, { width: 270, align: 'center', lineBreak: false });
     }
 
     doc.end();
@@ -497,7 +516,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 150,
+      width: 400,
       margin: 1,
       color: { dark: '#1a1a2e', light: '#ffffff' },
     });
@@ -510,45 +529,53 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="hang-tags-${saleId}.pdf"`);
     doc.pipe(res);
 
-    // Hang tags: 4 cols × 3 rows = 12 tags per page. 140×100pt per tag (landscape).
-    const TAG_W = 140;   // ~1.94 inches wide
-    const TAG_H = 100;   // ~1.39 inches tall
+    // Hang tags: 4 cols × 3 rows = 12 tags per page
+    const TAG_W = 140;
+    const TAG_H = 220;
     const COLS = 4;
     const ROWS = 3;
-    const PAGE_W = 612;
-    const PAGE_H = 792;
-    const MARGIN_X = (PAGE_W - COLS * TAG_W) / 2;  // centers the grid
-    const MARGIN_Y = (PAGE_H - ROWS * TAG_H) / 2;
+    const MARGIN_X = (612 - COLS * TAG_W) / 2;  // = 26
+    const MARGIN_Y = (792 - ROWS * TAG_H) / 2;  // = 66
+    const QR_SIZE = 110;
 
+    // For each tag at (col, row):
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
-        const x = MARGIN_X + col * TAG_W;
-        const y = MARGIN_Y + row * TAG_H;
+        const tagX = MARGIN_X + col * TAG_W;
+        const tagY = MARGIN_Y + row * TAG_H;
 
-        // Dashed border around each tag
+        // Dashed perforated border
         doc
-          .rect(x + 4, y + 4, TAG_W - 8, TAG_H - 8)
-          .lineWidth(0.5)
-          .dash(3, { space: 2 })
+          .rect(tagX, tagY, TAG_W, TAG_H)
+          .dash(2, { space: 2 })
+          .lineWidth(1)
           .stroke('#cccccc')
           .undash();
 
-        // Sale name (small, top)
+        // Hole punch circle at top center
         doc
+          .circle(tagX + TAG_W / 2, tagY + 12, 6)
+          .lineWidth(1)
+          .stroke('#999999');
+
+        // Sale name (below hole punch)
+        doc
+          .font('Helvetica')
           .fontSize(8)
           .fillColor('#1a1a2e')
-          .font('Helvetica-Bold')
-          .text(sale.title, x + 8, y + 8, {
-            width: TAG_W - 16,
-            align: 'center',
-            ellipsis: true,
-          });
+          .text(sale.title, tagX + 5, tagY + 26, { width: TAG_W - 10, align: 'center', lineBreak: false });
 
-        // QR code (centered horizontally, below title)
-        const qrSize = 80;
-        const qrX = x + (TAG_W - qrSize) / 2;
-        const qrY = y + 28;
-        doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+        // QR code — centered horizontally, filling most of the tag
+        const qrX = tagX + (TAG_W - QR_SIZE) / 2;  // = tagX + 15
+        const qrY = tagY + 45;
+        doc.image(qrBuffer, qrX, qrY, { width: QR_SIZE, height: QR_SIZE });
+
+        // finda.sale (bottom)
+        doc
+          .font('Helvetica')
+          .fontSize(7)
+          .fillColor('#999999')
+          .text('finda.sale', tagX + 5, tagY + TAG_H - 16, { width: TAG_W - 10, align: 'center', lineBreak: false });
       }
     }
 
@@ -680,171 +707,183 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         align: 'center',
       });
 
-    // PAGE 2: Directional Signs
-    doc.addPage();
-    const saleType = sale.saleType || 'ESTATE_SALE';
-    const saleTypeText =
-      saleType === 'ESTATE_SALE'
-        ? 'Estate Sale'
-        : saleType === 'YARD_SALE'
-          ? 'Yard Sale'
-          : 'Sale';
-
-    // Title
-    doc
-      .fontSize(20)
-      .fillColor('#1a1a2e')
-      .font('Helvetica-Bold')
-      .text('Directional Signs', PAGE_MARGIN, 20, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+    // PAGE 2: Directional Signs (landscape orientation, 2 per page)
+    // Switch to landscape by creating a new page with custom size
+    // Note: getFullSignKitPDF continues with portrait pages, so we add it before switching back
+    doc.addPage({ size: [792, 612] });
 
     for (let i = 0; i < 2; i++) {
-      const yOffset = 100 + i * 300;
+      const yOffset = i * 306;
 
+      // Border
       doc
-        .rect(PAGE_MARGIN, yOffset, PAGE_W - PAGE_MARGIN * 2, 250)
-        .lineWidth(1)
-        .stroke('#1a1a2e');
+        .rect(2, yOffset + 2, 788, 302)
+        .lineWidth(2)
+        .stroke('#cccccc');
 
-      // Draw filled right-pointing triangle arrow (PDFKit polygon)
-      const arrowX2 = PAGE_MARGIN + 20;
-      const arrowY2 = yOffset + 30;
-      doc.save()
-        .moveTo(arrowX2, arrowY2)
-        .lineTo(arrowX2 + 45, arrowY2 + 25)
-        .lineTo(arrowX2, arrowY2 + 50)
-        .fill('#1a1a2e');
-      doc.restore();
-
+      // Arrow — filled right-pointing polygon (LEFT third)
+      const ax = 20;
+      const ay = yOffset + 80;
       doc
-        .fontSize(18)
-        .fillColor('#1a1a2e')
+        .polygon(
+          [ax, ay + 75],              // left-top
+          [ax + 90, ay],              // right-top point
+          [ax + 90, ay + 40],         // step in
+          [ax + 140, ay + 40],        // arrow shaft top-right
+          [ax + 140, ay + 110],       // arrow shaft bottom-right
+          [ax + 90, ay + 110],        // step out
+          [ax + 90, ay + 150],        // right-bottom point
+        )
+        .fill('#16a34a');
+
+      // Sale name (middle section)
+      doc
         .font('Helvetica-Bold')
-        .text(saleTypeText, PAGE_MARGIN + 80, yOffset + 40, { width: 300, align: 'left' });
+        .fontSize(28)
+        .fillColor('#1a1a2e')
+        .text(sale.title, 180, yOffset + 50, { width: 250, lineBreak: false });
 
+      // "This Way" subtext
       doc
+        .font('Helvetica')
         .fontSize(14)
         .fillColor('#666666')
-        .font('Helvetica')
-        .text('>> This Way', PAGE_MARGIN + 80, yOffset + 65, { width: 300, align: 'left' });
+        .text('This Way', 180, yOffset + 140, { width: 250, lineBreak: false });
 
-      doc.image(qrDirectional, PAGE_W - PAGE_MARGIN - 150, yOffset + 30, {
-        width: 120,
-        height: 120,
-      });
+      // Address line (if available)
+      if (sale.address) {
+        doc
+          .font('Helvetica')
+          .fontSize(11)
+          .fillColor('#999999')
+          .text(sale.address, 180, yOffset + 165, { width: 250, lineBreak: false });
+      }
+
+      // QR code — top right, 150×150
+      doc.image(qrDirectional, 630, yOffset + 30, { width: 150, height: 150 });
     }
 
-    // PAGE 3: Table Tents
-    doc.addPage();
-    doc
-      .fontSize(20)
-      .fillColor('#1a1a2e')
-      .font('Helvetica-Bold')
-      .text('Table Tents (Fold in Half)', PAGE_MARGIN, 20, {
-        width: PAGE_W - PAGE_MARGIN * 2,
-        align: 'center',
-      });
+    // PAGE 3: Table Tents (switch back to portrait Letter)
+    doc.addPage({ size: 'LETTER' });
 
+    const PANEL_W_FULL = 306;  // each half
+    const TENT_H_FULL = 396;
+
+    // Draw two tents per page (tent 1: y=0..396, tent 2: y=396..792)
     for (let i = 0; i < 2; i++) {
-      const yOffset = 100 + i * 300;
+      const yOffset = i * 396;
 
+      // LEFT PANEL (front — customer sees this)
+      // Border
       doc
-        .rect(PAGE_MARGIN, yOffset, PAGE_W - PAGE_MARGIN * 2, 250)
+        .rect(0, yOffset, PANEL_W_FULL, TENT_H_FULL)
+        .lineWidth(1.5)
+        .stroke('#cccccc');
+
+      // Sale title
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(18)
+        .fillColor('#1a1a2e')
+        .text(sale.title, 12, yOffset + 20, { width: 282, lineBreak: false });
+
+      // Date range
+      doc
+        .font('Helvetica')
+        .fontSize(12)
+        .fillColor('#666666')
+        .text(`${startDate} – ${endDate}`, 12, yOffset + 90, { width: 282, lineBreak: false });
+
+      // QR code — centered in left panel, 200×200, x=(306-200)/2=53
+      doc.image(qrTableTent, 53, yOffset + 160, { width: 200, height: 200 });
+
+      // RIGHT PANEL (back)
+      // Border
+      doc
+        .rect(PANEL_W_FULL, yOffset, PANEL_W_FULL, TENT_H_FULL)
+        .lineWidth(1.5)
+        .stroke('#cccccc');
+
+      // Fold line (dashed vertical)
+      doc
+        .moveTo(PANEL_W_FULL, yOffset)
+        .lineTo(PANEL_W_FULL, yOffset + TENT_H_FULL)
+        .dash(4, { space: 4 })
         .lineWidth(1)
-        .stroke('#1a1a2e');
-
-      // Fold line
-      const foldX = PAGE_MARGIN + (PAGE_W - PAGE_MARGIN * 2) / 2;
-      doc
-        .moveTo(foldX, yOffset)
-        .lineTo(foldX, yOffset + 250)
-        .lineWidth(0.5)
-        .dash(2, { space: 2 })
-        .stroke('#cccccc')
+        .stroke('#aaaaaa')
         .undash();
 
-      // Front
+      // finda.sale
       doc
+        .font('Helvetica-Bold')
+        .fontSize(24)
+        .fillColor('#16a34a')
+        .text('finda.sale', PANEL_W_FULL + 18, yOffset + 20, { width: 270, align: 'center', lineBreak: false });
+
+      // Tagline
+      doc
+        .font('Helvetica')
         .fontSize(14)
         .fillColor('#1a1a2e')
-        .font('Helvetica-Bold')
-        .text(sale.title, PAGE_MARGIN + 20, yOffset + 30, {
-          width: (PAGE_W - PAGE_MARGIN * 2) / 2 - 40,
-          align: 'center',
-        });
+        .text('Browse items before you arrive.', PANEL_W_FULL + 18, yOffset + 70, { width: 270, align: 'center', lineBreak: false });
 
+      // Small instruction
       doc
-        .fontSize(10)
-        .fillColor('#666666')
         .font('Helvetica')
-        .text(`${startDate} – ${endDate}`, PAGE_MARGIN + 20, yOffset + 60, {
-          width: (PAGE_W - PAGE_MARGIN * 2) / 2 - 40,
-          align: 'center',
-        });
-
-      doc.image(qrTableTent, PAGE_MARGIN + 40, yOffset + 80, { width: 100, height: 100 });
-
-      // Back
-      doc
         .fontSize(10)
-        .fillColor('#1a1a2e')
-        .font('Helvetica')
-        .text('finda.sale', PAGE_MARGIN + (PAGE_W - PAGE_MARGIN * 2) / 2 + 20, yOffset + 50, {
-          width: (PAGE_W - PAGE_MARGIN * 2) / 2 - 40,
-          align: 'center',
-        });
-
-      doc
-        .fontSize(8)
-        .fillColor('#666666')
-        .text('Browse items before you arrive', PAGE_MARGIN + (PAGE_W - PAGE_MARGIN * 2) / 2 + 20, yOffset + 70, {
-          width: (PAGE_W - PAGE_MARGIN * 2) / 2 - 40,
-          align: 'center',
-        });
+        .fillColor('#999999')
+        .text('Scan QR code on the left to view online.', PANEL_W_FULL + 18, yOffset + 180, { width: 270, align: 'center', lineBreak: false });
     }
 
     // PAGE 4: Hang Tags
-    doc.addPage();
-    doc
-      .fontSize(20)
-      .fillColor('#1a1a2e')
-      .font('Helvetica-Bold')
-      .text('Hang Tags (Cut Along Dashed Lines)', PAGE_MARGIN, 20, {
-        width: PAGE_W - PAGE_MARGIN * 2,
-        align: 'center',
-      });
+    doc.addPage({ size: 'LETTER' });
 
-    const TAG_W = 216;
-    const TAG_H = 144;
-    const COLS = 4;
-    const ROWS = 2;
-    const START_X = 36;
-    const START_Y = 100;
+    const TAG_W_FULL = 140;
+    const TAG_H_FULL = 220;
+    const COLS_FULL = 4;
+    const ROWS_FULL = 3;
+    const MARGIN_X_FULL = (612 - COLS_FULL * TAG_W_FULL) / 2;  // = 26
+    const MARGIN_Y_FULL = (792 - ROWS_FULL * TAG_H_FULL) / 2;  // = 66
+    const QR_SIZE_FULL = 110;
 
-    for (let row = 0; row < ROWS; row++) {
-      for (let col = 0; col < COLS; col++) {
-        const x = START_X + col * TAG_W;
-        const y = START_Y + row * TAG_H;
+    // For each tag at (col, row):
+    for (let row = 0; row < ROWS_FULL; row++) {
+      for (let col = 0; col < COLS_FULL; col++) {
+        const tagX = MARGIN_X_FULL + col * TAG_W_FULL;
+        const tagY = MARGIN_Y_FULL + row * TAG_H_FULL;
 
+        // Dashed perforated border
         doc
-          .rect(x + 6, y + 6, TAG_W - 12, TAG_H - 12)
-          .lineWidth(0.5)
-          .dash(3, { space: 2 })
+          .rect(tagX, tagY, TAG_W_FULL, TAG_H_FULL)
+          .dash(2, { space: 2 })
+          .lineWidth(1)
           .stroke('#cccccc')
           .undash();
 
+        // Hole punch circle at top center
         doc
+          .circle(tagX + TAG_W_FULL / 2, tagY + 12, 6)
+          .lineWidth(1)
+          .stroke('#999999');
+
+        // Sale name (below hole punch)
+        doc
+          .font('Helvetica')
           .fontSize(8)
           .fillColor('#1a1a2e')
-          .font('Helvetica-Bold')
-          .text(sale.title, x + 10, y + 15, {
-            width: TAG_W - 20,
-            align: 'center',
-            ellipsis: true,
-          });
+          .text(sale.title, tagX + 5, tagY + 26, { width: TAG_W_FULL - 10, align: 'center', lineBreak: false });
 
-        const qrX = x + (TAG_W - 100) / 2;
-        const qrY = y + 35;
-        doc.image(qrHangTag, qrX, qrY, { width: 100, height: 100 });
+        // QR code — centered horizontally
+        const qrX_full = tagX + (TAG_W_FULL - QR_SIZE_FULL) / 2;  // = tagX + 15
+        const qrY_full = tagY + 45;
+        doc.image(qrHangTag, qrX_full, qrY_full, { width: QR_SIZE_FULL, height: QR_SIZE_FULL });
+
+        // finda.sale (bottom)
+        doc
+          .font('Helvetica')
+          .fontSize(7)
+          .fillColor('#999999')
+          .text('finda.sale', tagX + 5, tagY + TAG_H_FULL - 16, { width: TAG_W_FULL - 10, align: 'center', lineBreak: false });
       }
     }
 
@@ -883,9 +922,9 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
     // Generate QR code for sale URL (reuse for all cells)
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_price_sheet`;
-    const qrBuffer = await QRCode.toBuffer(saleUrl, {
+    const saleQrBuffer = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 300,
+      width: 200,
       margin: 1,
       color: { dark: '#1a1a2e', light: '#ffffff' },
     });
@@ -893,88 +932,62 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
 
-    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    const prices = [0.25, 0.50, 0.75, 1.00, 1.50, 2.00, 2.50, 3.00, 3.50,
+                    4.00, 4.50, 5.00, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+    // 27 prices total — fits exactly in 3×9 grid on one page
+
+    const COLS = 3;
+    const ROWS = 9;
+    const CELL_W = 204;   // 612 / 3
+    const CELL_H = 88;    // 792 / 9
+    const QR_SIZE = 36;
+
+    // Create doc WITHOUT calling addPage() — autoFirstPage:true handles it
+    const doc = new PDFDocument({ size: 'LETTER', margin: 0, autoFirstPage: true });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="price-sheet-${saleId}.pdf"`);
     doc.pipe(res);
 
-    // Layout: 3 columns × 5 rows per page = 15 prices per page, 2 pages for 27 prices
-    const COLS = 3;
-    const ROWS = 5;
-    const CELL_W = 612 / COLS; // 204 points per column
-    const CELL_H = 792 / ROWS; // 158 points per row
-    const QR_SIZE = 60;
-
-    // Price points: $0.25, $0.50, $0.75, $1–$5 (0.25 increments), then $6–$20
-    const prices: number[] = [
-      0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5,
-      4.0, 4.5, 5.0, 6, 7, 8, 9, 10, 11,
-      12, 13, 14, 15, 16, 17, 18, 19, 20,
-    ];
-
-    doc.addPage();
-    let priceIndex = 0;
-
+    // Draw all 27 cells
     for (let i = 0; i < prices.length; i++) {
-      // Add new page every 15 prices
-      if (i > 0 && i % (COLS * ROWS) === 0) {
-        doc.addPage();
-      }
-
-      const cellIndex = i % (COLS * ROWS);
-      const col = cellIndex % COLS;
-      const row = Math.floor(cellIndex / COLS);
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
       const cellX = col * CELL_W;
       const cellY = row * CELL_H;
-      const price = prices[i];
 
-      // Dashed border
+      // Dashed cell border
       doc
-        .rect(cellX + 6, cellY + 6, CELL_W - 12, CELL_H - 12)
-        .lineWidth(0.5)
-        .dash(3, { space: 3 })
+        .rect(cellX, cellY, CELL_W, CELL_H)
+        .dash(2, { space: 2 })
+        .lineWidth(1)
         .stroke('#cccccc')
         .undash();
 
-      // Sale name (top, 7pt)
-      doc
-        .font('Helvetica')
-        .fontSize(7)
-        .fillColor('#666666')
-        .text(sale.title, cellX + 8, cellY + 8, {
-          width: CELL_W - 16,
-          align: 'center',
-          lineBreak: false,
-          ellipsis: true,
-        });
-
-      // Price (large, centered, green)
-      const priceText = `$${price.toFixed(2)}`;
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(32)
-        .fillColor('#16a34a')
-        .text(priceText, cellX, cellY + 25, {
-          width: CELL_W,
-          align: 'center',
-          lineBreak: false,
-        });
-
-      // QR code (centered horizontally, below price)
-      const qrX = cellX + (CELL_W - QR_SIZE) / 2;
-      const qrY = cellY + 75;
-      doc.image(qrBuffer, qrX, qrY, { width: QR_SIZE, height: QR_SIZE });
-
-      // finda.sale (bottom, 6pt)
+      // Sale name (top)
       doc
         .font('Helvetica')
         .fontSize(6)
+        .fillColor('#666666')
+        .text(sale.title, cellX + 6, cellY + 5, { width: CELL_W - 12, align: 'center', lineBreak: false });
+
+      // Price — SAME 22pt size for ALL prices
+      const priceText = `$${prices[i].toFixed(2)}`;
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(22)
+        .fillColor('#1a1a2e')
+        .text(priceText, cellX, cellY + 18, { width: CELL_W, align: 'center', lineBreak: false });
+
+      // QR code — bottom right
+      doc.image(saleQrBuffer, cellX + CELL_W - QR_SIZE - 6, cellY + CELL_H - QR_SIZE - 6,
+        { width: QR_SIZE, height: QR_SIZE });
+
+      // finda.sale — bottom left
+      doc
+        .font('Helvetica')
+        .fontSize(5)
         .fillColor('#999999')
-        .text('finda.sale', cellX, cellY + CELL_H - 14, {
-          width: CELL_W,
-          align: 'center',
-          lineBreak: false,
-        });
+        .text('finda.sale', cellX + 6, cellY + CELL_H - 14, { width: 80, lineBreak: false });
     }
 
     doc.end();
