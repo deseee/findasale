@@ -1794,14 +1794,14 @@ const AddItemsDetailPage = () => {
                     aria-label="Select all items"
                     className="rounded cursor-pointer flex-shrink-0"
                   />
-                  <h2 className="font-semibold text-warm-900 dark:text-warm-100 flex-1 whitespace-nowrap">
+                  <h2 className="font-semibold text-warm-900 dark:text-warm-100 flex-shrink-0">
                     {items.length} Item{items.length !== 1 ? 's' : ''}
                   </h2>
                   <Link
                     href={`/organizer/add-items/${saleId}/review`}
-                    className="text-sm font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 hover:underline flex-shrink-0"
+                    className="text-sm font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 hover:underline ml-auto flex-shrink-0 whitespace-nowrap"
                   >
-                    Review & Publish{unpublishedCount > 0 ? ` (${unpublishedCount})` : ''} &rarr;
+                    Review & Publish{unpublishedCount > 0 ? ` (${unpublishedCount})` : ''} →
                   </Link>
                 </div>
                 {/* Row 2: secondary actions */}
@@ -1858,9 +1858,9 @@ const AddItemsDetailPage = () => {
                     <button
                       onClick={() => handleBulkOperation('delete')}
                       disabled={bulkUpdateMutation.isPending}
-                      className="text-xs font-semibold bg-red-600 hover:bg-red-700 disabled:opacity-50 px-3 py-1 rounded transition-colors ml-auto"
+                      className="text-xs font-semibold bg-red-600 hover:bg-red-700 disabled:opacity-50 px-3 py-1 rounded transition-colors"
                     >
-                      🗑 Delete
+                      🗑
                     </button>
                   </div>
                   {/* Row 2: price input + set price + print kit + more actions */}
@@ -1871,7 +1871,7 @@ const AddItemsDetailPage = () => {
                       onChange={(e) => setBulkPrice(e.target.value)}
                       placeholder="$ Price"
                       step="0.01"
-                      className="w-24 px-2 py-1 border border-amber-400 rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-white text-amber-900 placeholder-amber-400"
+                      className="w-20 px-2 py-1 border border-amber-400 rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-white text-amber-900 placeholder-amber-400"
                     />
                     <button
                       onClick={() => { if (bulkPrice) handleBulkOperation('price', parseFloat(bulkPrice)); }}
