@@ -7,67 +7,60 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S393 COMPLETE (2026-04-04):** POS upgrade — 4-tile payment grid, camera QR scanner, Open Carts (shopper cart sharing), Payment QR (Stripe Payment Links), Invoice tile (holds-to-invoice), preserved Card/Cash flows.
+**S394 COMPLETE (2026-04-04):** POS gap analysis + rebuild — 4 new components (PosManualCard, PosPaymentQr, PosOpenCarts, PosInvoiceModal), pos.tsx multi-payment hub wired up, QR regeneration fix.
 
-**S393 Summary:**
+**S394 Summary:**
 
-Full POS checkout redesign. Single-screen architecture throughout. Two parallel agents (backend + frontend). Zero TS errors on both. 9 files changed, 2 new models, 1 new migration.
+Patrick found the S393 POS delivery didn't match the spec. Full gap analysis + rebuild of the frontend POS layer. 5 files changed (4 new components + pos.tsx heavily modified). No backend changes — posController.ts from S393 is correct.
 
-**New Models:**
-- `POSSession` — shopper shares cart with cashier (2h expiry, polled every 10s)
-- `POSPaymentLink` — Stripe Payment Link + base64 QR (24h expiry, polled every 3s)
+**What was rebuilt:**
+- `PosManualCard.tsx` (NEW) — CNP Stripe Elements flow, amber fee notice (3.4%+$0.30 vs 2.7%+$0.05), dispute warning ($15 fee, no protection, Chargeback Protection option)
+- `PosPaymentQr.tsx` (NEW) — QR generate → display → waiting → paid states, full-screen modal, Cancel & Regenerate button
+- `PosOpenCarts.tsx` (NEW) — linked shopper carts dashboard, pull-to-POS flow
+- `PosInvoiceModal.tsx` (NEW) — holds-to-invoice modal, email delivery, 24h expiry default
+- `pos.tsx` — payment grid reordered (Cash→Stripe QR→Card Reader→Invoice), Connect Reader button removed (status badge clickable instead), Card Reader disabled+tooltip when no reader, camera useEffect fix (100ms delay), QR field name fix (qrCodeDataUrl), CNP fee numbers corrected, "Send QR"→"Stripe QR", onReset handler for QR regeneration
 
-**Architecture decisions:**
-- HoldInvoice already existed → POSInvoice eliminated (4 models → 2)
-- POSLineItem eliminated → organizer cart is React state, no server-side line items needed
-- Socket.io deferred → polling only for MVP
-- Invoice MVP → email only, Twilio deferred
+**S394 Files Changed (5 files, 4 new):**
+- `packages/frontend/components/PosManualCard.tsx` — NEW
+- `packages/frontend/components/PosPaymentQr.tsx` — NEW
+- `packages/frontend/components/PosOpenCarts.tsx` — NEW
+- `packages/frontend/components/PosInvoiceModal.tsx` — NEW
+- `packages/frontend/pages/organizer/pos.tsx` — payment hub wiring, all UX fixes
 
-**Backend (posController.ts — 7 endpoints):**
-1. `POST /api/pos/sessions` — shopper shares cart
-2. `GET /api/pos/sessions?saleId=` — organizer gets linked carts
-3. `POST /api/pos/sessions/:id/pull` — organizer pulls cart (marks PULLED)
-4. `POST /api/pos/payment-links` — create Stripe Payment Link + QR
-5. `GET /api/pos/payment-links/:id` — poll status
-6. `GET /api/pos/holds?saleId=` — active holds (CONFIRMED, expiresAt>now, invoiceId=null)
-7. `POST /api/pos/holds/:reservationId/invoice` — send hold invoice via Resend
+**S394 Pending Patrick Actions:**
+Push block at bottom of session (see patrick-dashboard.md)
 
-**Frontend (pos.tsx — 1322 lines):**
-- 2×2 payment mode grid: Card / Cash / QR Code / Invoice
-- Camera QR scanner: jsqr + getUserMedia, continuous rAF loop, extracts itemId from `https://finda.sale/qr/items/[itemId]`
-- Open Carts banner: polls every 10s, pull-cart flow
-- Payment QR panel: generate link → display QR → poll 3s → auto-complete
-- Invoice tile: active holds list, send invoice per hold
-- All existing Card Terminal + Cash flows preserved exactly
+**S394 QA Queue (Chrome — next session):**
+- Payment grid: all 4 tiles render, correct order (Cash / Stripe QR / Card Reader / Invoice)
+- Card Reader tile: disabled + tooltip when no reader; clickable status badge
+- Stripe QR: generate → QR displays → Cancel & Regenerate resets without page reload
+- Manual Card: CNP fees and dispute warning visible; Stripe Elements renders
+- Camera: tap QR Code tile → camera opens, scan works
+- Invoice tile: holds appear, send invoice email completes
+- Cash: change calculator still works
+
+---
+
+**S393 COMPLETE (2026-04-04):** POS backend — 7 endpoints, 2 new Prisma models, Stripe Payment Links, shopper cart sharing, hold invoicing.
 
 **S393 Files Changed (9 files, 2 new):**
-- `packages/database/prisma/schema.prisma` — POSSession + POSPaymentLink models + back-relations
+- `packages/database/prisma/schema.prisma` — POSSession + POSPaymentLink models
 - `packages/database/prisma/migrations/20260404_pos_upgrade/migration.sql` — NEW
 - `packages/backend/src/controllers/posController.ts` — NEW (7 endpoints)
 - `packages/backend/src/routes/pos.ts` — NEW
 - `packages/backend/src/index.ts` — posRoutes mounted
 - `packages/backend/src/controllers/stripeController.ts` — payment_link.completed webhook
-- `packages/frontend/pages/organizer/pos.tsx` — full redesign (1322 lines)
+- `packages/frontend/pages/organizer/pos.tsx` — initial redesign (superseded by S394)
 - `packages/frontend/components/ShopperCartDrawer.tsx` — "Share cart with cashier" button
 - `packages/frontend/package.json` — jsqr ^1.4.0 added
 
-**S393 Pending Patrick Actions:**
-1. Push: see push block provided in session
-2. Run migration:
+**S393 Migration (still required if not yet run):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
-
-**S393 QA Queue (Chrome — next session):**
-- Camera QR scanner: open POS, tap QR Code tile, grant camera, scan item QR
-- Payment QR panel: generate link, verify QR displays, complete via shopper
-- Open Carts banner: shopper shares cart from drawer, organizer sees it in POS within 10s
-- Invoice tile: active holds appear, send invoice flow completes
-- Card Terminal: verify charge flow still works end-to-end
-- Cash: verify change calculator + cashFeeBalance still work
 
 ---
 
