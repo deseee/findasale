@@ -1,5 +1,5 @@
-import React from 'react';
-import { CheckCircle, Lock, TrendingUp, Users, BarChart3, Globe } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle, Lock, TrendingUp, Users, BarChart3, Globe, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface PosTierGatesProps {
   tier: 0 | 1 | 2 | 3;
@@ -46,6 +46,8 @@ export default function PosTierGates({
   totalRevenue,
   nextGate,
 }: PosTierGatesProps) {
+  const [expanded, setExpanded] = useState(false);
+
   const isUnlocked = (tierNum: 1 | 2 | 3): boolean => {
     return tier >= tierNum;
   };
@@ -71,17 +73,32 @@ export default function PosTierGates({
     return Math.min(txProgress, revenueProgress);
   };
 
-  return (
-    <div className="mb-8">
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-amber-200 dark:border-amber-900 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-          POS Value Unlock Tiers
-        </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-          Unlock advanced features based on your sales activity. Current: {transactionCount} sales · ${totalRevenue.toFixed(2)} revenue
-        </p>
+  const unlockedCount = ([1, 2, 3] as const).filter(t => isUnlocked(t)).length;
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+  return (
+    <div className="mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-amber-200 dark:border-amber-900 p-6">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between hover:opacity-75 transition"
+        >
+          <div className="text-left">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              POS Value Unlock Tiers
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {unlockedCount}/3 unlocked · {transactionCount} sales · ${totalRevenue.toFixed(2)}
+            </p>
+          </div>
+          {expanded ? (
+            <ChevronUp className="w-5 h-5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+          )}
+        </button>
+
+        {expanded && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
           {/* Tier 1 */}
           <TierCard
             tierNum={1}
@@ -118,7 +135,8 @@ export default function PosTierGates({
             )}
             requiresPro={true}
           />
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

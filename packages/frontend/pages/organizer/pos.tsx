@@ -16,11 +16,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useQuery } from '@tanstack/react-query';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
 import jsQR from 'jsqr';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
 import PosTierGates from '../../components/PosTierGates';
+import PosInvoiceModal from '../../components/PosInvoiceModal';
+import PosOpenCarts from '../../components/PosOpenCarts';
+import PosPaymentQr from '../../components/PosPaymentQr';
+import PosManualCard from '../../components/PosManualCard';
 import { PosTierStatus } from '../../lib/types/posTiers';
 
 // ─── Types ────────────────────────────────────────────────────────────────────────────
@@ -52,7 +58,7 @@ interface CartItem {
 
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 type PaymentStatus = 'idle' | 'creating' | 'waiting_for_card' | 'processing' | 'success' | 'error' | 'cancelled';
-type PaymentMode = 'card' | 'cash' | 'qr' | 'invoice';
+type PaymentMode = 'card' | 'manual_card' | 'cash' | 'qr' | 'invoice';
 type NumpadMode = 'price';
 
 interface CashPaymentResponse {
@@ -78,6 +84,18 @@ interface LinkedCart {
   cartTotal: number;
   createdAt: string;
 }
+
+// ─── Stripe Helper ────────────────────────────────────────────────────────────────
+
+// Lazy-initialize Stripe on client-side only to avoid SSR errors
+let stripePromise: Promise<Stripe | null> | null = null;
+const getStripePromise = () => {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  if (!stripePromise) {
+    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+  }
+  return stripePromise;
+};
 
 // ─── Component ─────────────────────────────────────────────────────────────────────
 
@@ -130,6 +148,7 @@ export default function POSPage() {
   // Invoice/Holds state
   const [holds, setHolds] = useState<HoldItem[]>([]);
   const [holdsLoading, setHoldsLoading] = useState(false);
+  const [invoiceModalHold, setInvoiceModalHold] = useState<HoldItem | null>(null);
 
   // Open Carts state
   const [linkedCarts, setLinkedCarts] = useState<LinkedCart[]>([]);
@@ -733,16 +752,6 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* POS Value Unlock Tiers */}
-      {!posTierLoading && posTierStatus && (
-        <PosTierGates
-          tier={posTierStatus.tier}
-          transactionCount={posTierStatus.transactionCount}
-          totalRevenue={posTierStatus.totalRevenue}
-          nextGate={posTierStatus.nextGate}
-        />
-      )}
-
       {/* Sale selector */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Sale</label>
@@ -890,28 +899,9 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Open Carts Banner */}
-      {linkedCarts.length > 0 && (
-        <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-2">
-            🛒 {linkedCarts.length} shopper{linkedCarts.length !== 1 ? 's have' : ' has'} shared cart{linkedCarts.length !== 1 ? 's' : ''}
-          </p>
-          <div className="space-y-2">
-            {linkedCarts.map(lc => (
-              <div key={lc.id} className="flex justify-between items-center">
-                <span className="text-xs text-amber-900 dark:text-amber-200">
-                  {lc.shopperName} ({lc.cartItems.length} item{lc.cartItems.length !== 1 ? 's' : ''})
-                </span>
-                <button
-                  onClick={() => handleAddLinkedCart(lc.id, lc.cartItems)}
-                  className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:underline"
-                >
-                  [Add]
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Open Carts Dashboard */}
+      {selectedSaleId && (
+        <PosOpenCarts linkedCarts={linkedCarts} onPullCart={handleAddLinkedCart} />
       )}
 
       {/* Cart display */}
@@ -976,7 +966,7 @@ export default function POSPage() {
       )}
 
       {/* Payment method selector (2×2 grid) */}
-      {cart.length > 0 && (
+      {selectedSaleId && (
         <div className="mb-4">
           <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">How are they paying?</h3>
           <div className="grid grid-cols-2 gap-2">
@@ -988,7 +978,7 @@ export default function POSPage() {
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 paymentMode === 'card'
                   ? 'bg-sage-700 text-white'
-                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
             >
               <span className="text-xl">💳</span>
@@ -1003,7 +993,7 @@ export default function POSPage() {
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
                 paymentMode === 'cash'
                   ? 'bg-sage-700 text-white'
-                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
             >
               <span className="text-xl">💵</span>
@@ -1016,8 +1006,8 @@ export default function POSPage() {
                 paymentMode === 'qr'
                   ? 'bg-sage-700 text-white'
                   : cart.length === 0
-                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed'
-                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
             >
               <span className="text-xl">📲</span>
@@ -1031,59 +1021,58 @@ export default function POSPage() {
                 paymentMode === 'invoice'
                   ? 'bg-sage-700 text-white'
                   : !holds || holds.length === 0
-                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed'
-                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300'
+                  ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
               }`}
             >
               <span className="text-xl">📧</span>
               <span className="text-xs">Invoice</span>
             </button>
           </div>
+          {/* Manual card entry link (below Card Reader button) */}
+          <div className="mt-2">
+            <button
+              onClick={() => {
+                setPaymentMode('manual_card');
+                setNumpadOpen(false);
+              }}
+              className="text-xs text-sage-700 dark:text-sage-400 hover:underline"
+            >
+              No reader? Enter card manually
+            </button>
+          </div>
         </div>
+      )}
+
+      {/* Payment Method: Manual Card Entry */}
+      {paymentMode === 'manual_card' && cart.length > 0 && (
+        <Elements stripe={getStripePromise()}>
+          <PosManualCard
+            cartTotal={cartTotal}
+            cart={cart}
+            selectedSaleId={selectedSaleId}
+            buyerEmail={buyerEmail}
+            onSuccess={(message) => {
+              showToast(message, 'success');
+              handleNewTransaction();
+            }}
+            onError={(message) => {
+              showToast(message, 'error');
+            }}
+          />
+        </Elements>
       )}
 
       {/* Payment Method: QR Code */}
       {paymentMode === 'qr' && cart.length > 0 && (
-        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
-          <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">📲 Shopper Scan to Pay</h4>
-          <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Total: ${cartTotal.toFixed(2)}</p>
-
-          {(paymentLinkStatus === 'idle' || paymentLinkStatus === 'generating') && (
-            <button
-              onClick={handleGeneratePaymentQr}
-              disabled={paymentLinkStatus === 'generating'}
-              className="w-full py-3 rounded-lg bg-sage-700 text-white font-semibold hover:bg-sage-800 transition disabled:opacity-50"
-            >
-              {paymentLinkStatus === 'generating' ? 'Generating…' : 'Generate QR Code'}
-            </button>
-          )}
-
-          {paymentLinkQr && (
-            <div className="my-3 flex justify-center">
-              <img src={paymentLinkQr} alt="Payment QR" className="w-48 h-48 rounded-lg" />
-            </div>
-          )}
-
-          {paymentLinkStatus === 'waiting' && (
-            <div className="text-center text-sm text-warm-600 dark:text-warm-400">
-              ⏳ Waiting for payment…
-            </div>
-          )}
-
-          {paymentLinkStatus === 'paid' && (
-            <div className="text-center">
-              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-3">
-                ✅ Paid! ${cartTotal.toFixed(2)} received
-              </p>
-              <button
-                onClick={handleNewTransaction}
-                className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition"
-              >
-                New Transaction
-              </button>
-            </div>
-          )}
-        </div>
+        <PosPaymentQr
+          cartTotal={cartTotal}
+          paymentLinkId={paymentLinkId}
+          paymentLinkQr={paymentLinkQr}
+          paymentLinkStatus={paymentLinkStatus}
+          onGenerate={handleGeneratePaymentQr}
+          onNewTransaction={handleNewTransaction}
+        />
       )}
 
       {/* Payment Method: Invoice/Holds */}
@@ -1113,7 +1102,7 @@ export default function POSPage() {
                   </div>
                   <p className="text-xs text-warm-600 dark:text-warm-400 mb-2">{hold.itemTitle}</p>
                   <button
-                    onClick={() => handleSendInvoice(hold.reservationId, hold.shopperEmail)}
+                    onClick={() => setInvoiceModalHold(hold)}
                     className="w-full py-2 rounded-lg bg-sage-700 text-white text-xs font-semibold hover:bg-sage-800 transition"
                   >
                     Send Invoice →
@@ -1166,7 +1155,8 @@ export default function POSPage() {
       {/* Charge buttons */}
       {paymentStatus !== 'success' && cart.length > 0 && (
         <div className="space-y-3">
-          {paymentMode === 'card' ? (
+          {/* Card payment button */}
+          {paymentMode === 'card' && (
             <>
               <button
                 onClick={handleCharge}
@@ -1192,7 +1182,10 @@ export default function POSPage() {
                 </button>
               )}
             </>
-          ) : (
+          )}
+
+          {/* Cash payment numpad and button */}
+          {paymentMode === 'cash' && (
             <>
               {/* Inline cash received numpad */}
               <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 shadow-sm">
@@ -1263,6 +1256,16 @@ export default function POSPage() {
         </p>
       )}
 
+      {/* POS Value Unlock Tiers */}
+      {!posTierLoading && posTierStatus && (
+        <PosTierGates
+          tier={posTierStatus.tier}
+          transactionCount={posTierStatus.transactionCount}
+          totalRevenue={posTierStatus.totalRevenue}
+          nextGate={posTierStatus.nextGate}
+        />
+      )}
+
       {/* Back link */}
       <div className="mt-8 text-center">
         <a href="/organizer/dashboard" className="text-sm text-warm-400 dark:text-warm-500 hover:text-warm-600 dark:hover:text-warm-400">
@@ -1270,6 +1273,18 @@ export default function POSPage() {
         </a>
       </div>
       </div>
+
+      {/* Invoice Modal */}
+      {invoiceModalHold && (
+        <PosInvoiceModal
+          hold={invoiceModalHold}
+          onClose={() => setInvoiceModalHold(null)}
+          onSent={(reservationId) => {
+            setHolds(prev => prev.filter(h => h.reservationId !== reservationId));
+            setInvoiceModalHold(null);
+          }}
+        />
+      )}
 
       {/* QR Scan Camera Modal */}
       {cameraOpen && (
