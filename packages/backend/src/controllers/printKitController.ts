@@ -61,7 +61,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const items = sale.items;
 
     // Pre-generate all item QR codes
@@ -171,7 +171,7 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not your sale.' });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_yard_sign`;
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
@@ -281,7 +281,7 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
       return res.status(403).json({ message: 'Not your sale.' });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_directional_sign`;
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
@@ -399,7 +399,7 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not your sale.' });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_table_tent`;
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
@@ -527,7 +527,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not your sale.' });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_hang_tag`;
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
@@ -626,7 +626,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not your sale.' });
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_full_kit`;
 
     // Generate all QR codes upfront
@@ -936,7 +936,7 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
     }
 
     // Generate QR code for sale URL (reuse for all cells)
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_price_sheet`;
     const saleQrBuffer = await QRCode.toBuffer(saleUrl, {
       type: 'png',
