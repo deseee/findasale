@@ -668,13 +668,13 @@ export default function POSPage() {
     setPaymentLinkStatus('generating');
     try {
       const itemIds = cart.filter(c => c.itemId).map(c => c.itemId!);
-      const res = await api.post<{ linkId: string; qrCode: string }>('/pos/payment-links', {
+      const res = await api.post<{ linkId: string; qrCodeDataUrl: string }>('/pos/payment-links', {
         saleId: selectedSaleId,
         amount: cartTotal,
         itemIds,
       });
       setPaymentLinkId(res.data.linkId);
-      setPaymentLinkQr(res.data.qrCode); // base64 data URL
+      setPaymentLinkQr(res.data.qrCodeDataUrl); // base64 data URL
       setPaymentLinkStatus('waiting');
     } catch (err) {
       console.error('[pos] QR generation error:', err);
@@ -1003,7 +1003,7 @@ export default function POSPage() {
               }`}
             >
               <span className="text-xl">📲</span>
-              <span className="text-xs">Send QR</span>
+              <span className="text-xs">Stripe QR</span>
             </button>
             <button
               onClick={() => {
