@@ -79,6 +79,7 @@ interface Item {
   healthScore?: HealthScore;
   priceBeforeMarkdown?: number; // Feature #91: Auto-Markdown
   markdownApplied?: boolean; // Feature #91: Auto-Markdown
+  createdAt?: string;
 }
 
 const CATEGORIES = [
