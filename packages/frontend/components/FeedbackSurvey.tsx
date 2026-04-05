@@ -17,7 +17,8 @@ import { useTheme } from '@/hooks/useTheme';
 export const FeedbackSurvey: React.FC = () => {
   const { isSurveyOpen, currentSurvey, answer, dontAskAgain, isSubmitting, closeSurvey, setAnswer, setDontAskAgain, setIsSubmitting, setCooldownEndTime } = useFeedbackContext();
   const { showToast } = useToast();
-  const { isDark } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [autoDismissTimer, setAutoDismissTimer] = useState<NodeJS.Timeout | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const firstButtonRef = useRef<HTMLButtonElement>(null);

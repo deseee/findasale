@@ -23,7 +23,8 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({ isOpen, onClose }) =
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const { showToast } = useToast();
-  const { isDark } = useTheme();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   if (!isOpen) return null;
 
