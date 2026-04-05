@@ -27,6 +27,7 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
   disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openLeft, setOpenLeft] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -46,6 +47,14 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleToggle = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setOpenLeft(rect.left < window.innerWidth / 2);
+    }
+    setIsOpen(!isOpen);
+  };
+
   const handleAction = (callback: () => void) => {
     callback();
     setIsOpen(false);
@@ -55,9 +64,9 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
     <div className="relative inline-block">
       <button
         ref={buttonRef}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
         disabled={disabled}
-        className="text-sm font-semibold text-amber-700 hover:text-amber-800 disabled:opacity-50 hover:bg-amber-50 px-3 py-1 rounded transition-colors"
+        className="text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-3 py-1 rounded transition-colors"
         title="More bulk actions"
       >
         ⋮ More Actions
@@ -66,7 +75,7 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-warm-200 z-[99]"
+          className={`absolute mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-warm-200 dark:border-gray-700 z-[99] ${openLeft ? 'left-0' : 'right-0'}`}
         >
           <button
             onClick={() => handleAction(onSetCategory)}
