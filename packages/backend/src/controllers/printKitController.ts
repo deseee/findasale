@@ -935,15 +935,9 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not your sale.' });
     }
 
-    // Generate QR code for sale URL (reuse for all cells)
+    // QR codes will be generated per price cell with POS misc-add action
+    // (no single buffer — each cell gets its own QR with that price)
     const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
-    const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_price_sheet`;
-    const saleQrBuffer = await QRCode.toBuffer(saleUrl, {
-      type: 'png',
-      width: 200,
-      margin: 1,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
-    });
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
@@ -999,7 +993,15 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
         .text('finda.sale', cellX + 8, cellY + 56, { width: 80, lineBreak: false });
 
       // QR code — right side, 48×48, vertically centered
-      doc.image(saleQrBuffer, cellX + 137, cellY + 12, { width: QR_SIZE, height: QR_SIZE });
+      // Encodes POS misc-add action with price for this cell
+      const miscQrUrl = `${frontendUrl}/pos/${saleId}?action=add-misc&price=${prices[i].toFixed(2)}`;
+      const miscQrBuffer = await QRCode.toBuffer(miscQrUrl, {
+        type: 'png',
+        width: 200,
+        margin: 1,
+        color: { dark: '#1a1a2e', light: '#ffffff' },
+      });
+      doc.image(miscQrBuffer, cellX + 137, cellY + 12, { width: QR_SIZE, height: QR_SIZE });
     }
 
     doc.end();

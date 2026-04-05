@@ -203,6 +203,30 @@ export default function POSPage() {
     }
   }, [router.isReady, router.query.saleId]);
 
+  // ─── Handle price sheet QR code auto-add-misc action ───────────────────────────────
+
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const action = router.query.action;
+    const priceStr = router.query.price;
+
+    if (action === 'add-misc' && priceStr) {
+      const price = parseFloat(priceStr as string);
+      if (!isNaN(price) && price > 0) {
+        // Add the misc item with the decoded price
+        const label = price >= 1 ? `$${price.toFixed(0)}` : price === 0.25 ? '25¢' : '50¢';
+        setCart(prev => [...prev, { id: `misc-${Date.now()}`, title: `Misc ${label}`, amount: price }]);
+
+        // Clear the query params to prevent re-adding on page refresh
+        router.replace({
+          pathname: router.pathname,
+          query: router.query.saleId ? { saleId: router.query.saleId } : {},
+        }, undefined, { shallow: true });
+      }
+    }
+  }, [router.isReady, router.query.action, router.query.price, router.pathname, router.query.saleId]);
+
   // ─── Initialize Stripe Terminal SDK ───────────────────────────────────────────────────────
 
   const initTerminal = useCallback(async () => {
