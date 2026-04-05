@@ -19,9 +19,14 @@ export const upload = multer({ storage: multer.memoryStorage() });
 
 // Debounce AI analysis to allow "+" button usage (multi-photo grouping)
 export const rapidfireAIDebounce = new Map<string, ReturnType<typeof setTimeout>>();
+export const heldAnalysisItems = new Set<string>(); // Track items where user explicitly held analysis via hold-analysis endpoint
 export const RAPIDFIRE_AI_DELAY_MS = 4500; // 4.5s window for user to add more photos via "+"
 
 export function resetRapidDraftDebounce(itemId: string): void {
+  // Do NOT restart the debounce if the item is in hold state
+  if (heldAnalysisItems.has(itemId)) {
+    return; // Item is held; don't reset the timer
+  }
   const existingTimer = rapidfireAIDebounce.get(itemId);
   if (existingTimer) clearTimeout(existingTimer);
   const timer = setTimeout(() => {

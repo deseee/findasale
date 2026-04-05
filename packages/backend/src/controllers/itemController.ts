@@ -18,7 +18,7 @@ import { checkSaleOverLimit } from '../lib/tierEnforcement'; // Feature #75: Tie
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
 import { createNotification } from '../services/notificationService'; // P0: Bid notifications
 import { closeAuction } from '../services/auctionService'; // Auction close flow
-import { resetRapidDraftDebounce, rapidfireAIDebounce } from './uploadController'; // Rapidfire Mode: AI analysis debounce
+import { resetRapidDraftDebounce, rapidfireAIDebounce, heldAnalysisItems } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
 import { awardXp, XP_AWARDS } from '../services/xpService'; // Phase 2a: XP awards
 
@@ -1308,6 +1308,9 @@ export const holdAnalysis = async (req: AuthRequest, res: Response) => {
     if (existing) clearTimeout(existing);
     rapidfireAIDebounce.delete(id);
 
+    // Mark this item as held so that photo appends (via +) don't restart the timer
+    heldAnalysisItems.add(id);
+
     res.json({ held: true });
   } catch (error) {
     console.error('Error holding analysis:', error);
@@ -1331,6 +1334,11 @@ export const releaseAnalysis = async (req: AuthRequest, res: Response) => {
     if (!item) return res.status(404).json({ message: 'Item not found' });
     if (item.sale.organizer.userId !== req.user.id) return res.status(403).json({ message: 'Access denied.' });
     if (item.draftStatus !== 'DRAFT') return res.status(400).json({ message: 'Item is not in DRAFT status.' });
+
+    // Remove from held set so that resetRapidDraftDebounce will work normally
+    heldAnalysisItems.delete(id);
+
+    // Now start the AI analysis debounce timer
     resetRapidDraftDebounce(id);
     res.json({ released: true });
   } catch (error) {
