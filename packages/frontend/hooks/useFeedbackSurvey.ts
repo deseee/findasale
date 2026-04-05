@@ -123,7 +123,7 @@ export const useFeedbackSurvey = (): UseFeedbackSurveyReturn => {
 
       try {
         const res = await api.get('/api/feedback/suppression');
-        const suppressedIds = new Set(res.data.map((s: any) => s.surveyType));
+        const suppressedIds = new Set<string>(res.data.map((s: any) => s.surveyType));
         setSuppressions(suppressedIds);
       } catch (err) {
         console.error('Failed to fetch suppressions:', err);
