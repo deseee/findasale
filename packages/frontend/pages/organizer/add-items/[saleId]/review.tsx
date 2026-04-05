@@ -709,20 +709,7 @@ const ReviewPage = () => {
                         </button>
                       </div>
                     )}
-                    {/* Column headers */}
-                    <div className="px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-4 text-xs font-medium text-warm-400 dark:text-warm-500 border-b border-warm-100 dark:border-gray-700 mb-1">
-                      <span className="w-4 flex-shrink-0" />
-                      <span className="w-16 flex-shrink-0 hidden xs:inline">Photo</span>
-                      <span className="flex-1 truncate">
-                        <span className="sm:hidden">Item</span>
-                        <span className="hidden sm:inline">Item · Price · Category · Completeness</span>
-                      </span>
-                      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                        <span className="text-right hidden sm:inline whitespace-nowrap">· Confidence</span>
-                        <span className="text-center whitespace-nowrap">· Status</span>
-                        <span className="w-4" />
-                      </div>
-                    </div>
+                    {/* Column headers removed — status line on each card replaces the old header row */}
                     {items.length > 0 && (
                       <div className="flex items-center gap-2 flex-wrap mb-3">
                         <span className="text-xs font-semibold text-warm-700 dark:text-warm-300">Sort by:</span>
@@ -760,7 +747,12 @@ const ReviewPage = () => {
                         >
                           {/* Collapsed row — always visible */}
                           <div
-                            className={`p-3 sm:p-4 flex items-start gap-2 sm:gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged).split(' ').slice(1).join(' ')}`}
+                            className={`p-3 sm:p-4 flex items-start gap-3 sm:gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${
+                              item.healthScore?.grade === 'clear' ? 'border-green-500' :
+                              item.healthScore?.grade === 'nudge' ? 'border-amber-500' :
+                              item.healthScore?.grade === 'blocked' ? 'border-red-500' :
+                              'border-warm-300 dark:border-gray-600'
+                            }`}
                             onClick={() => handleToggleExpand(item.id)}
                           >
                             {/* Left column: checkbox + expand/collapse arrow (narrow, vertically centered) */}
@@ -768,6 +760,8 @@ const ReviewPage = () => {
                               <input
                                 type="checkbox"
                                 checked={selectedItems.has(item.id)}
+                                disabled={item.healthScore?.grade === 'blocked'}
+                                title={item.healthScore?.grade === 'blocked' ? 'This item must be reviewed before publishing' : undefined}
                                 onChange={(e) => {
                                   e.stopPropagation();
                                   const next = new Set(selectedItems);
@@ -775,7 +769,7 @@ const ReviewPage = () => {
                                   else next.delete(item.id);
                                   setSelectedItems(next);
                                 }}
-                                className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500"
+                                className={`w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500 ${item.healthScore?.grade === 'blocked' ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 onClick={(e) => e.stopPropagation()}
                               />
                               <span className="text-warm-400 text-xs">{expandedItemId === item.id ? '▲' : '▼'}</span>
@@ -809,27 +803,26 @@ const ReviewPage = () => {
 
                             {/* Main content area: title, price, category, health bar */}
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm sm:text-base truncate">{item.title}</p>
-                              <p className="text-xs sm:text-sm text-warm-600 dark:text-warm-400">
-                                <span className="flex items-center gap-1">
-                                  {item.price != null ? (
-                                    item.markdownApplied && item.priceBeforeMarkdown ? (
-                                      <>
-                                        <span className="line-through text-gray-400 dark:text-gray-500 text-xs">
-                                          ${item.priceBeforeMarkdown.toFixed(2)}
-                                        </span>
-                                        <span className="text-green-600 dark:text-green-400">
-                                          ${item.price.toFixed(2)}
-                                        </span>
-                                      </>
-                                    ) : (
-                                      `$${item.price.toFixed(2)}`
-                                    )
+                              <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm sm:text-base line-clamp-2 sm:line-clamp-1">{item.title}</p>
+                              <p className="text-xs sm:text-sm text-warm-600 dark:text-warm-400 flex items-center gap-1 flex-wrap">
+                                {item.price != null ? (
+                                  item.markdownApplied && item.priceBeforeMarkdown ? (
+                                    <>
+                                      <span className="line-through text-gray-400 dark:text-gray-500 text-xs">
+                                        ${item.priceBeforeMarkdown.toFixed(2)}
+                                      </span>
+                                      <span className="text-green-600 dark:text-green-400">
+                                        ${item.price.toFixed(2)}
+                                      </span>
+                                    </>
                                   ) : (
-                                    'No price'
-                                  )}
-                                </span>
-                                {' · '}<span className="inline-block truncate">{item.category || 'Uncategorized'}</span>
+                                    <span>${item.price.toFixed(2)}</span>
+                                  )
+                                ) : (
+                                  <span className="text-red-500 dark:text-red-400">No price set</span>
+                                )}
+                                <span>·</span>
+                                <span className="truncate">{item.category || 'Uncategorized'}</span>
                               </p>
                               {/* Status line — human-readable health score */}
                               {item.healthScore && (
