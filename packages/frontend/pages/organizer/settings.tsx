@@ -20,6 +20,7 @@ import Tooltip from '../../components/Tooltip';
 import ThemeToggle from '../../components/ThemeToggle';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import PasskeyManager from '../../components/PasskeyManager';
+import FeedbackMenu from '../../components/FeedbackMenu';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,7 +31,7 @@ const OrganizerSettingsPage = () => {
   const { showToast } = useToast();
   const { tier, isPro } = useOrganizerTier();
   const { isLowBandwidth, networkType, toggleLowBandwidth } = useNetworkQuality();
-  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
@@ -43,6 +44,7 @@ const OrganizerSettingsPage = () => {
   const [fontSize, setFontSize] = useState(16);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
+  const [isFeedbackMenuOpen, setIsFeedbackMenuOpen] = useState(false);
   const { highContrast, setHighContrast } = useTheme();
   const queryClient = useQueryClient();
 
@@ -177,7 +179,7 @@ const OrganizerSettingsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
-            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance'].map((tab) => (
+            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'help'].map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -671,8 +673,33 @@ const OrganizerSettingsPage = () => {
               </div>
             </div>
           )}
+
+          {/* Help & Support Tab */}
+          {activeTab === 'help' && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-6">Help & Support</h2>
+
+              <div className="space-y-4">
+                <div className="border border-warm-200 dark:border-gray-700 rounded p-4">
+                  <h3 className="font-medium text-warm-900 dark:text-gray-100 mb-2">Send Feedback</h3>
+                  <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+                    Help us improve FindA.Sale by sharing your feedback. Your thoughts directly shape our roadmap.
+                  </p>
+                  <button
+                    onClick={() => setIsFeedbackMenuOpen(true)}
+                    className="bg-sage-600 hover:bg-sage-700 text-white px-4 py-2 rounded font-medium transition"
+                  >
+                    Open Feedback Form
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Feedback Menu Modal */}
+      <FeedbackMenu isOpen={isFeedbackMenuOpen} onClose={() => setIsFeedbackMenuOpen(false)} />
     </>
   );
 };
