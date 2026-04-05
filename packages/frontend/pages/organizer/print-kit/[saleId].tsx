@@ -38,8 +38,8 @@ interface Sale {
 interface Item {
   id: string;
   title: string;
-  price: number;
-  condition: string;
+  price: number | null;
+  condition: string | null;
   status: string;
   photoUrl?: string;
   saleId: string;
@@ -500,9 +500,9 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                           <img key={item.photoUrl} src={item.photoUrl} alt={item.title} className="item-photo" />
                         )}
                         <div className="item-title">{item.title}</div>
-                        <div className="item-price">${item.price.toFixed(2)}</div>
+                        <div className="item-price">${item.price != null ? item.price.toFixed(2) : 'N/A'}</div>
                         <div className="item-condition">
-                          <ConditionBadge condition={item.condition} />
+                          <ConditionBadge condition={item.condition || ''} />
                         </div>
                         <img
                           src={getQRUrl(`https://finda.sale/items/${item.id}`, 80)}
