@@ -1778,7 +1778,20 @@ const AddItemsDetailPage = () => {
             </div>
           ) : items && items.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
-              <div className="p-4 border-b border-warm-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="p-4 border-b border-warm-200 dark:border-gray-700 flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={selectedItems.size === items.length && items.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedItems(new Set(items.map((i: any) => i.id)));
+                    } else {
+                      setSelectedItems(new Set());
+                    }
+                  }}
+                  aria-label="Select all items"
+                  className="rounded cursor-pointer"
+                />
                 <h2 className="font-semibold text-warm-900 dark:text-warm-100">
                   {items.length} Item{items.length !== 1 ? 's' : ''}
                   {selectedItems.size > 0 && (
@@ -1863,7 +1876,7 @@ const AddItemsDetailPage = () => {
                         onChange={(e) => setBulkPrice(e.target.value)}
                         placeholder="Price"
                         step="0.01"
-                        className="w-24 px-2 py-1 border border-white rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-amber-700 text-white placeholder-amber-200"
+                        className="w-24 px-2 py-1 border border-white rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-white text-amber-900 placeholder-amber-400"
                       />
                       <button
                         onClick={() => {
@@ -2013,7 +2026,7 @@ const AddItemsDetailPage = () => {
                             {item.price != null ? `$${item.price}` : 'No price'} · {formatCategory(item.category) || 'Uncategorized'}
                           </p>
                         </div>
-                        {/* Status badge + delete stacked vertically */}
+                        {/* Status badge + delete + expand arrow stacked vertically */}
                         <div className="flex-shrink-0 flex flex-col items-center gap-1">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
                             draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
@@ -2036,8 +2049,8 @@ const AddItemsDetailPage = () => {
                           >
                             🗑️
                           </button>
+                          <span className="text-warm-400 text-sm">{isExpanded ? '▲' : '▼'}</span>
                         </div>
-                        <span className="text-warm-400 text-sm flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
                       </div>
 
                       {/* Expanded edit panel */}
