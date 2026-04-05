@@ -178,6 +178,11 @@ model User {
   purchasesVisible Boolean  @default(true)                                    // Toggle to show/hide purchase history on public profile
   collectorTitle   String?                                                    // Title from curated list (e.g., "Furniture Curator", "Vintage Hunter")
 
+  // Feature: Feedback System — Survey suppression tracking
+  feedbackSuppressions FeedbackSuppression[]
+  firstSalePublished   Boolean @default(false)  // For OG-1 trigger gate
+  lastSurveyShownAt    DateTime?               // For session/cooldown logic
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
@@ -1177,11 +1182,33 @@ model Feedback {
   id        String   @id @default(cuid())
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  rating    Int      // 1-5
+  rating    Int?     // 1-5 (nullable: some surveys use text answers only)
   text      String?
   page      String?
   userAgent String?
+
+  // Feature: Feedback context for survey tracking
+  surveyType    String?    // "OG-1", "SH-2", null for legacy static form
+  deviceType    String?    // "mobile", "desktop"
+  userTierAtTime String?   // e.g., "SIMPLE", "PRO", null if not applicable
+
   createdAt DateTime @default(now())
+
+  // Optional: for analytics speed
+  @@index([surveyType, createdAt])
+  @@index([userId, surveyType])
+}
+
+// Feature: Feedback Suppression — user opt-out tracking
+model FeedbackSuppression {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  surveyType  String
+  suppressedAt DateTime @default(now())
+
+  @@unique([userId, surveyType])
+  @@index([userId])
 }
 
 // Beta Invite Code System — Patrick controls organizer access during beta

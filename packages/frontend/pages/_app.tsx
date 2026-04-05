@@ -9,7 +9,9 @@ import Layout from '../components/Layout';
 import { AuthProvider, useAuth } from '../components/AuthContext';
 import { ToastProvider, useToast } from '../components/ToastContext';
 import { CartProvider } from '../context/CartContext';
+import { FeedbackProvider } from '../context/FeedbackContext';
 import InstallPrompt from '../components/InstallPrompt';
+import FeedbackSurvey from '../components/FeedbackSurvey';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 import { useTheme } from '../hooks/useTheme'; // #63: Dark Mode
 import { useSentryUserContext } from '../hooks/useSentryUserContext'; // Feature #21: User Impact Scoring
@@ -237,9 +239,12 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <QueryClientProvider client={queryClient}>
               <ThemeInitializer />
               <CartProvider>
+              <FeedbackProvider>
               <ErrorBoundary key={router.asPath}>
                 {getLayout(<Component {...pageProps} />)}
               </ErrorBoundary>
+              <FeedbackSurvey />
+              </FeedbackProvider>
               </CartProvider>
               {/* PWA helpers */}
               <ServiceWorkerUpdateNotifier />

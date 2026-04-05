@@ -7,6 +7,40 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S399 COMPLETE (2026-04-05):** Review card redesign + feedback collection system infrastructure
+
+**S399 Summary:**
+
+Two major implementations shipped. Review card redesign replaces raw health scores/AI confidence percentages with human-readable status system ("Ready to Publish" / "Review Before Publishing" / "Cannot Publish Yet") with color-coded breakdown sections. Feedback collection system: schema migration (FeedbackSuppression table + User model extensions), backend endpoints (submit with surveyType/dontAskAgain, suppression CRUD), frontend infrastructure (FeedbackSurvey portal modal, FeedbackMenu settings form, useFeedbackSurvey hook with cooldown/suppression/tier-gate logic, FeedbackContext provider). 10 survey trigger integrations into specific pages deferred to next dispatch.
+
+**S399 Files Changed (12 files, 5 new):**
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — Status line replaces health bar, health breakdown sections (What's Ready/Must Fix/Improvements/Optional), AI confidence moved to expanded panel, blocked checkbox disabled
+- `packages/database/prisma/schema.prisma` — FeedbackSuppression model, User extensions (firstSalePublished, lastSurveyShownAt, feedbackSuppressions relation), Feedback extensions (surveyType, deviceType, userTierAtTime)
+- `packages/database/prisma/migrations/20260405_add_feedback_system/migration.sql` — NEW
+- `packages/backend/src/controllers/feedbackController.ts` — Extended submitFeedback (surveyType, dontAskAgain, device detection, tier capture); new createSuppression + listSuppressions endpoints
+- `packages/backend/src/routes/feedback.ts` — Wired suppression endpoints
+- `packages/frontend/context/FeedbackContext.tsx` — NEW (session-level survey state)
+- `packages/frontend/hooks/useFeedbackSurvey.ts` — NEW (trigger logic + suppression + cooldown + tier gate + all 10 survey definitions)
+- `packages/frontend/components/FeedbackSurvey.tsx` — NEW (portal modal, 3-button scale, auto-dismiss, focus trap, dark mode)
+- `packages/frontend/components/FeedbackMenu.tsx` — NEW (static feedback form for settings pages)
+- `packages/frontend/pages/_app.tsx` — FeedbackProvider + FeedbackSurvey portal added
+- `packages/frontend/pages/organizer/settings.tsx` — Help tab + FeedbackMenu integration
+- `packages/frontend/pages/shopper/settings.tsx` — Help & Support section + FeedbackMenu
+
+**S399 Migration Required:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S399 Deferred:**
+- 10 survey trigger integrations (OG-1 through SH-5) — infrastructure built, trigger calls not yet added to specific pages
+- Chrome QA: S398 dashboard changes + S399 review card + feedback system
+
+---
+
 **S398 COMPLETE (2026-04-05):** Dashboard overhaul, feedback system design, review card UX spec, CLAUDE.md dispatch routing fix
 
 **S398 Summary:**
@@ -1193,22 +1227,15 @@ Files changed S361:
 
 ---
 
-## Next Session (S399)
+## Next Session (S400)
 
-### S399 Priority 1 — Implement review card redesign
-UX spec at `claude_docs/ux-spotchecks/review-card-layout-spec.md`. Replace raw percentages/confidence with "Ready to Publish" / "Review Before Publishing" / "Cannot Publish Yet" status system. Plain English labels for what's missing.
+### S400 Priority 1 — Add 10 survey trigger integrations
+Infrastructure is built (S399). Wire `showSurvey()` calls into 10 pages: OG-1 (publish), OG-2 (10th item), OG-3 (mark sold), OG-4 (POS checkout), OG-5 (settings save), SH-1 (checkout success), SH-2 (favorite), SH-3 (bid), SH-4 (haul post), SH-5 (follow). See `claude_docs/FEEDBACK_DEV_QUICKSTART.md` trigger locations.
 
-### S399 Priority 2 — Build feedback collection system
-Schema migration (FeedbackSuppression table + User model extensions), backend endpoints, frontend survey components. Full specs in `claude_docs/FEEDBACK_SYSTEM_SPEC.md`, `FEEDBACK_DEV_QUICKSTART.md`. Architect approved at `claude_docs/ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md`.
-
-### S399 Priority 3 — Chrome QA: S398 dashboard changes
-- Welcome text small, no subtitle line
-- Button icons render (Clock, ShoppingCart, Megaphone), POS before Holds
-- LIVE badge links to public sale page, edit pencil links to edit page
-- Review Items card shows combined draft+unpublished count, card shows when only unpublished exist
-- Weather wraps to 2 lines (not truncated)
-- Other Sales card: LIVE badge small+inline+linked, no "Live now" text, stacked layout on mobile
-- Items/POS dropdown menus don't overflow container
+### S400 Priority 2 — Chrome QA: S398 dashboard + S399 review card + feedback system
+- Dashboard: welcome text, button icons, LIVE badge links, weather wrap, Other Sales card
+- Review page: status line colors, health breakdown sections, AI confidence in expanded panel only, blocked checkbox disabled
+- Feedback: settings Help tab opens form, form submits, dark mode
 
 ### Carry-forward QA backlog
 - S397: add-items sort, toolbar, dark mode, item row, link removal, back-nav

@@ -14,6 +14,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useLowBandwidth } from '@/contexts/LowBandwidthContext';
 import { useAuth } from '@/components/AuthContext';
+import FeedbackMenu from '@/components/FeedbackMenu';
 
 const SALE_CATEGORIES = [
   'furniture', 'decor', 'vintage', 'textiles', 'collectibles', 'art',
@@ -44,6 +45,7 @@ function SettingsPage() {
   const [profileSlug, setProfileSlug] = useState<string>('');
   const [collectorTitle, setCollectorTitle] = useState<string>('');
   const [purchasesVisible, setPurchasesVisible] = useState<boolean>(true);
+  const [isFeedbackMenuOpen, setIsFeedbackMenuOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -464,7 +466,30 @@ function SettingsPage() {
               </div>
             </div>
           </div>
+
+          {/* Help & Support Section */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Help & Support</h2>
+
+            <div className="space-y-4">
+              <div className="border border-gray-200 dark:border-gray-700 rounded p-4">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Send Feedback</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Help us improve FindA.Sale by sharing your feedback. Your thoughts directly shape our roadmap.
+                </p>
+                <button
+                  onClick={() => setIsFeedbackMenuOpen(true)}
+                  className="bg-sage-600 hover:bg-sage-700 text-white px-4 py-2 rounded font-medium transition"
+                >
+                  Open Feedback Form
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Feedback Menu Modal */}
+        <FeedbackMenu isOpen={isFeedbackMenuOpen} onClose={() => setIsFeedbackMenuOpen(false)} />
     </>
   );
 }

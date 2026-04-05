@@ -831,44 +831,27 @@ const ReviewPage = () => {
                                 </span>
                                 {' · '}<span className="inline-block truncate">{item.category || 'Uncategorized'}</span>
                               </p>
-                              {/* Sprint 1: Health score bar — compact on mobile */}
+                              {/* Status line — human-readable health score */}
                               {item.healthScore && (
-                                <div className="mt-1 sm:mt-2">
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1 h-1 sm:h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                                      <div
-                                        className={`h-full rounded-full transition-all ${
-                                          item.healthScore.grade === 'clear' ? 'bg-green-400' :
-                                          item.healthScore.grade === 'nudge' ? 'bg-amber-400' : 'bg-red-400'
-                                        }`}
-                                        style={{ width: `${item.healthScore.score}%` }}
-                                      />
-                                    </div>
-                                    <span className={`text-xs font-medium flex-shrink-0 ${
-                                      item.healthScore.grade === 'clear' ? 'text-green-600' :
-                                      item.healthScore.grade === 'nudge' ? 'text-amber-600' : 'text-red-600'
-                                    }`}>
-                                      {item.healthScore.score}
-                                    </span>
-                                  </div>
-                                  {item.healthScore.grade === 'blocked' && (
-                                    <p className="text-xs text-red-500 mt-1">Add a photo and title to publish</p>
-                                  )}
+                                <div className={`mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold ${
+                                  item.healthScore.grade === 'clear'
+                                    ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                                    : item.healthScore.grade === 'nudge'
+                                    ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
+                                    : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                                }`}>
+                                  <span className="text-lg font-bold leading-none">•</span>
+                                  <span>
+                                    {item.healthScore.grade === 'clear' ? 'Ready to Publish' :
+                                     item.healthScore.grade === 'nudge' ? 'Review Before Publishing' :
+                                     'Cannot Publish Yet'}
+                                  </span>
                                 </div>
-                              )}
-                              {/* Mobile-only AI confidence — hidden on sm+ (shown in right column there) */}
-                              {item.isAiTagged && (
-                                <p className={`text-xs font-semibold mt-1 sm:hidden ${conf.color}`}>
-                                  {conf.text}{item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
-                                </p>
                               )}
                             </div>
 
                             {/* Right column: actions + metadata (hidden on mobile, visible on sm+) */}
                             <div className="hidden sm:flex items-center gap-1 sm:gap-3 flex-shrink-0">
-                              <div className={`text-xs font-semibold ${conf.color}`}>
-                                {conf.text}{item.isAiTagged && item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
-                              </div>
                               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                 item.draftStatus === 'PUBLISHED'
                                   ? 'bg-green-100 text-green-700'
@@ -925,6 +908,103 @@ const ReviewPage = () => {
                                     initialPhotos={item.photoUrls || []}
                                   />
                                 </div>
+
+                                {/* Health Status Section */}
+                                {item.healthScore && (() => {
+                                  const hs = item.healthScore;
+
+                                  // Determine what's ready (at max value)
+                                  const readyItems = [];
+                                  if (hs.breakdown.photo === 40) readyItems.push(`${item.photoUrls.length} good photos ✓`);
+                                  if (hs.breakdown.photo > 0 && hs.breakdown.photo < 40) readyItems.push(`${item.photoUrls.length} photos ✓`);
+                                  if (hs.breakdown.title === 20) readyItems.push('Clear title ✓');
+                                  if (hs.breakdown.description === 20) readyItems.push('Full description ✓');
+                                  if (hs.breakdown.tags === 15) readyItems.push('3+ tags ✓');
+                                  if (hs.breakdown.price === 5) readyItems.push('Price set ✓');
+                                  if (hs.breakdown.conditionGrade === 5) readyItems.push('Condition graded ✓');
+
+                                  // Determine what must be fixed (at 0 value, only if blocked)
+                                  const mustFix = [];
+                                  if (hs.grade === 'blocked') {
+                                    if (hs.breakdown.photo === 0) mustFix.push('Add at least one photo');
+                                    if (hs.breakdown.title === 0) mustFix.push('Add a title to your item');
+                                    if (hs.breakdown.price === 0) mustFix.push('Set a price');
+                                    if (hs.breakdown.conditionGrade === 0) mustFix.push('Grade the condition');
+                                  }
+
+                                  // Determine improvements (not at max, only if nudge)
+                                  const improvements = [];
+                                  if (hs.grade === 'nudge') {
+                                    if (hs.breakdown.photo < 40 && hs.breakdown.photo > 0) improvements.push(`Add more photos (have ${item.photoUrls.length})`);
+                                    if (hs.breakdown.photo === 0) improvements.push('Add at least one photo');
+                                    if (hs.breakdown.title < 20 && hs.breakdown.title > 0) improvements.push('Make title longer (15+ chars)');
+                                    if (hs.breakdown.title === 0) improvements.push('Add a title');
+                                    if (hs.breakdown.description < 20 && hs.breakdown.description > 0) improvements.push('Add more details (50+ chars)');
+                                    if (hs.breakdown.description === 0) improvements.push('Add a description');
+                                    if (hs.breakdown.tags < 15 && hs.breakdown.tags > 0) improvements.push(`Add more tags (have ${(item.tags?.length) || 0})`);
+                                    if (hs.breakdown.tags === 0) improvements.push('Add tags');
+                                    if (hs.breakdown.price === 0) improvements.push('Set a price');
+                                    if (hs.breakdown.conditionGrade === 0) improvements.push('Grade the condition');
+                                  }
+
+                                  return (
+                                    <div className="border border-warm-200 dark:border-gray-700 rounded-md p-3 bg-white dark:bg-gray-800">
+                                      <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">Health Status</h4>
+
+                                      {/* What's Ready */}
+                                      {readyItems.length > 0 && (
+                                        <div className="mb-3">
+                                          <p className="text-xs font-medium text-green-600 dark:text-green-400 mb-1.5">What's Ready</p>
+                                          <ul className="space-y-0.5">
+                                            {readyItems.map((item, i) => (
+                                              <li key={i} className="text-xs text-warm-700 dark:text-warm-300">{item}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+
+                                      {/* Must Fix (only if blocked) */}
+                                      {hs.grade === 'blocked' && mustFix.length > 0 && (
+                                        <div className="mb-3 bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5">
+                                          <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Must Fix</p>
+                                          <ul className="space-y-0.5">
+                                            {mustFix.map((item, i) => (
+                                              <li key={i} className="text-xs text-red-700 dark:text-red-300">⚠️ {item}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+
+                                      {/* Improvements (only if nudge) */}
+                                      {hs.grade === 'nudge' && improvements.length > 0 && (
+                                        <div className="mb-3 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1.5">
+                                          <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">Improvements</p>
+                                          <ul className="space-y-0.5">
+                                            {improvements.map((item, i) => (
+                                              <li key={i} className="text-xs text-amber-700 dark:text-amber-300">→ {item}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+
+                                      {/* Optional (always show) */}
+                                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded px-2 py-1.5">
+                                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Optional</p>
+                                        <ul className="space-y-0.5">
+                                          <li className="text-xs text-gray-600 dark:text-gray-300">• Add tags (helps discovery)</li>
+                                          <li className="text-xs text-gray-600 dark:text-gray-300">• Add condition details (builds trust)</li>
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* AI Confidence — show only if AI-tagged */}
+                                {item.isAiTagged && item.aiConfidence != null && (
+                                  <div className="text-xs text-warm-600 dark:text-warm-400 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                                    AI suggested these fields ({Math.round(item.aiConfidence * 100)}% confidence). Review and adjust as needed.
+                                  </div>
+                                )}
 
                                 {/* Title */}
                                 <div>
@@ -1131,7 +1211,8 @@ const ReviewPage = () => {
                                     <button
                                       onClick={() => handlePublishItem(item)}
                                       disabled={updateItemMutation.isPending || item.healthScore?.grade === 'blocked'}
-                                      className={`px-3 py-1.5 text-sm font-medium rounded-lg disabled:opacity-50 ${
+                                      title={item.healthScore?.grade === 'blocked' ? 'This item must be reviewed before publishing' : ''}
+                                      className={`px-3 py-1.5 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ${
                                         item.draftStatus === 'PUBLISHED'
                                           ? 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200'
                                           : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400'
