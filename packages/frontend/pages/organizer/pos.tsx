@@ -592,88 +592,9 @@ export default function POSPage() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
       });
-
       videoRef.current.srcObject = stream;
-      const video = videoRef.current;
-
-      const scanLoop = () => {
-        if (!video || !canvasRef.current || !video.videoWidth) {
-          animationFrameRef.current = requestAnimationFrame(scanLoop);
-          return;
-        }
-
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-        if (!context) return;
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        // @ts-ignore - jsqr types may not be perfect
-        const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-        if (code) {
-          const qrText = code.data;
-          // Extract itemId from URL like https://finda.sale/qr/items/[itemId]
-          const match = qrText.match(/items\/([a-z0-9]+)$/i);
-          if (match) {
-            const itemId = match[1];
-            setQrScanStatus('found');
-            setQrScanMessage('Item found! Adding to cart…');
-
-            // Fetch item and add to cart
-            api
-              .get<Item>(`/items/${itemId}`)
-              .then(res => {
-                addToCart(res.data);
-                showToast('✓ Item added to cart', 'success');
-                setQrScanStatus('scanning');
-                setQrScanMessage('');
-                // Keep scanning open for next item
-                animationFrameRef.current = requestAnimationFrame(scanLoop);
-              })
-              .catch(err => {
-                setQrScanStatus('error');
-                setQrScanMessage('Item not found or already in cart');
-                console.error('[pos] QR item fetch error:', err);
-                setTimeout(() => {
-                  setQrScanStatus('scanning');
-                  setQrScanMessage('');
-                  animationFrameRef.current = requestAnimationFrame(scanLoop);
-                }, 2000);
-              });
-          } else {
-            // Check for price sheet misc-add QR (action=add-misc&price=X.XX)
-            const hasMiscAction = qrText.includes('action=add-misc');
-            const priceMatch = qrText.match(/[?&]price=([0-9.]+)/);
-            if (hasMiscAction && priceMatch) {
-              const price = parseFloat(priceMatch[1]);
-              if (!isNaN(price) && price > 0) {
-                quickAddMisc(price);
-                showToast(`✓ $${price.toFixed(2)} misc added to cart`, 'success');
-                setQrScanStatus('scanning');
-                setQrScanMessage('');
-                animationFrameRef.current = requestAnimationFrame(scanLoop);
-              }
-            } else {
-              setQrScanStatus('error');
-              setQrScanMessage('Invalid QR code format');
-              setTimeout(() => {
-                setQrScanStatus('scanning');
-                setQrScanMessage('');
-                animationFrameRef.current = requestAnimationFrame(scanLoop);
-              }, 2000);
-            }
-          }
-        } else {
-          animationFrameRef.current = requestAnimationFrame(scanLoop);
-        }
-      };
-
       setQrScanStatus('scanning');
-      animationFrameRef.current = requestAnimationFrame(scanLoop);
+      setQrScanMessage('');
     } catch (err: any) {
       setQrScanStatus('error');
       if (err.name === 'NotAllowedError') {
@@ -684,6 +605,74 @@ export default function POSPage() {
       console.error('[pos] Camera access error:', err);
     }
   }, []);
+
+  // Tap-to-scan: capture the current video frame and process it once
+  const scanOnTap = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !video.videoWidth) return;
+
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    // @ts-ignore - jsqr types may not be perfect
+    const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+    if (!code) {
+      setQrScanStatus('error');
+      setQrScanMessage('No QR code detected — try again');
+      setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 1500);
+      return;
+    }
+
+    const qrText = code.data;
+
+    // Item sticker QR
+    const match = qrText.match(/items\/([a-z0-9]+)$/i);
+    if (match) {
+      const itemId = match[1];
+      setQrScanStatus('found');
+      setQrScanMessage('Item found! Adding to cart…');
+      api
+        .get<Item>(`/items/${itemId}`)
+        .then(res => {
+          addToCart(res.data);
+          showToast('✓ Item added to cart', 'success');
+          setQrScanStatus('scanning');
+          setQrScanMessage('');
+        })
+        .catch(err => {
+          setQrScanStatus('error');
+          setQrScanMessage('Item not found or already in cart');
+          console.error('[pos] QR item fetch error:', err);
+          setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 2000);
+        });
+      return;
+    }
+
+    // Price sheet misc-add QR
+    const hasMiscAction = qrText.includes('action=add-misc');
+    const priceMatch = qrText.match(/[?&]price=([0-9.]+)/);
+    if (hasMiscAction && priceMatch) {
+      const price = parseFloat(priceMatch[1]);
+      if (!isNaN(price) && price > 0) {
+        quickAddMisc(price);
+        showToast(`✓ $${price.toFixed(2)} misc added to cart`, 'success');
+        setQrScanStatus('scanning');
+        setQrScanMessage('');
+        return;
+      }
+    }
+
+    setQrScanStatus('error');
+    setQrScanMessage('Invalid QR code format');
+    setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 2000);
+  }, [addToCart, quickAddMisc]);
 
   const stopQRScan = useCallback(() => {
     if (animationFrameRef.current) {
@@ -1358,7 +1347,7 @@ export default function POSPage() {
               ✕
             </button>
 
-            <div className="relative w-full">
+            <div className="relative w-full cursor-pointer" onClick={scanOnTap}>
               <video
                 ref={videoRef}
                 autoPlay
@@ -1391,7 +1380,7 @@ export default function POSPage() {
             </div>
 
             <p className="mt-4 text-white text-center text-sm">
-              Point at the white QR tag on the price label
+              Point at a QR code, then tap the screen to scan
             </p>
           </div>
         </div>
