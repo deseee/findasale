@@ -410,7 +410,11 @@ export default function POSPage() {
   };
 
   const quickAddMisc = (amount: number) => {
-    const label = amount >= 1 ? `$${amount.toFixed(0)}` : amount === 0.25 ? '25¢' : '50¢';
+    const label = amount < 1
+      ? `${Math.round(amount * 100)}¢`
+      : Number.isInteger(amount)
+        ? `$${amount.toFixed(0)}`
+        : `$${amount.toFixed(2)}`;
     addToCart({ title: `Misc ${label}`, amount });
   };
 
