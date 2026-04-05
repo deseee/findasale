@@ -7,6 +7,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S396 COMPLETE (2026-04-05):** Rapidfire batch hold fix, tier limit enforcement, upgrade CTAs, modal navigation fixes
+
+**S396 Summary:**
+
+Four fix areas shipped:
+
+1. **Rapidfire hold-analysis** — Photo 2+ no longer triggers AI during a batch. Root cause: backend `addItemPhoto` was calling `resetRapidDraftDebounce()` unconditionally even on held items. Fix adds a `heldAnalysisItems` Set to `uploadController.ts`; `holdAnalysis` adds to it, `releaseAnalysis` removes and fires debounce. Photo append respects hold state.
+
+2. **Tier limit enforcement + upgrade CTAs** — Photo limits (5 SIMPLE / 10 PRO+ala carte) now enforced in `addItemPhoto` backend with 403 + `upgradeRequired: true`. `RapidCapture` `maxPhotos` is now tier-aware (was hardcoded 20). Item limit 403 now shows upgrade CTA to PRO. AI tag limit check added to `processRapidDraft.ts` — skips AI and marks PENDING_REVIEW when exceeded. `tierEnforcement.ts` gains `checkAITagLimit()`.
+
+3. **Ala carte pricing copy** — Added "Payment of $9.99 is collected when you publish your sale." note below pricing page CTA. Ala carte flow itself is correct (pay at publish, not on create).
+
+4. **Modal navigation** — `OrganizerOnboardingModal` final button now routes to `/organizer/create-sale` (was just dismissing). `TeamsOnboardingWizard` "Complete Setup" now always navigates to `/organizer/workspace` (logic was inverted — only navigated if no `onComplete` callback).
+
+5. **Null bytes cleaned** — `PosManualCard.tsx` and `TierComparisonTable.tsx` had trailing `\x00` bytes; stripped.
+
+**S396 Files Changed (10 files):**
+- `packages/backend/src/controllers/uploadController.ts` — `heldAnalysisItems` Set + `resetRapidDraftDebounce` hold check
+- `packages/backend/src/controllers/itemController.ts` — `addItemPhoto` photo limit enforcement; `holdAnalysis`/`releaseAnalysis` track Set
+- `packages/backend/src/lib/tierEnforcement.ts` — `checkAITagLimit()` added
+- `packages/backend/src/jobs/processRapidDraft.ts` — AI tag limit pre-check; TS fix (`id` added to organizer select)
+- `packages/frontend/pages/organizer/pricing.tsx` — ala carte payment timing note
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — tier-aware `maxPhotosPerItem`; photo limit 403 upgrade toast; item limit 403 upgrade CTA
+- `packages/frontend/components/OrganizerOnboardingModal.tsx` — final button navigates to create-sale
+- `packages/frontend/components/TeamsOnboardingWizard.tsx` — complete setup always navigates to workspace
+- `packages/frontend/components/PosManualCard.tsx` — null bytes stripped
+- `packages/frontend/components/TierComparisonTable.tsx` — null bytes stripped
+
+**S396 QA Queue (Chrome — next session):**
+- Rapidfire: take 2+ photos while in add-mode — confirm AI does NOT fire until x pressed
+- SIMPLE organizer: attempt 6th photo on an item — confirm upgrade prompt shown
+- SIMPLE organizer: hit 200-item limit — confirm upgrade CTA appears (not silent 403)
+- First organizer sign-in modal: complete button → routes to create-sale ✅ (not just dismiss)
+- Teams onboarding: complete setup button → routes to workspace ✅
+
+---
+
 **S395 COMPLETE (2026-04-05):** Print kit fixes + POS QR scanner overhaul
 
 **S395 Summary:**
