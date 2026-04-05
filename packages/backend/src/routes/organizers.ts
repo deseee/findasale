@@ -133,6 +133,13 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       });
     });
 
+    // Find active sale (prefer PUBLISHED over DRAFT — match getDashboardState logic on frontend)
+    const activeSale = sales.find(
+      (s: any) => s.status === 'PUBLISHED'
+    ) || sales.find(
+      (s: any) => s.status === 'DRAFT'
+    );
+
     // Count items by status
     let totalItems = 0;
     let availableItems = 0;
@@ -142,7 +149,10 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       sale.items.forEach((item: any) => {
         totalItems++;
         if (item.draftStatus === 'DRAFT') {
-          draftItems++;
+          // Only count draft items from the active sale
+          if (activeSale && sale.id === activeSale.id) {
+            draftItems++;
+          }
         } else if (item.status === 'SOLD') {
           soldItems++;
         } else if (item.status === 'AVAILABLE') {
@@ -150,11 +160,6 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
         }
       });
     });
-
-    // Find active sale (DRAFT or PUBLISHED — match getDashboardState logic on frontend)
-    const activeSale = sales.find(
-      (s: any) => s.status === 'PUBLISHED' || s.status === 'DRAFT'
-    );
 
     let activeSaleData = null;
     if (activeSale) {

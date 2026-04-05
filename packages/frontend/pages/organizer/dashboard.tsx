@@ -963,7 +963,7 @@ const OrganizerDashboard = () => {
                           <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">You have {draft} items in draft.</p>
                           <p className="text-sm text-amber-700 dark:text-amber-300">Finish adding photos or publish when ready.</p>
                         </div>
-                        <Link href={`/organizer/add-items/${id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
+                        <Link href={`/organizer/add-items/${activeSale?.id ?? id}`} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0 ml-4">
                           Review Drafts
                         </Link>
                       </div>
