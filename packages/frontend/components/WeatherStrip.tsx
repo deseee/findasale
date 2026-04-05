@@ -59,14 +59,14 @@ export default function WeatherStrip({ saleStartDate, saleCity, status }: Weathe
   return (
     <div className="bg-gradient-to-r from-blue-50 to-sky-50 dark:from-gray-800 dark:to-gray-750 rounded-lg px-4 py-2 flex items-center gap-3 border border-blue-100 dark:border-gray-700 w-full overflow-hidden">
       <span className="text-xl flex-shrink-0">{weather.icon}</span>
-      <div className="flex-1 flex items-center gap-4 flex-wrap min-w-0 overflow-hidden">
+      <div className="flex-1 flex items-center gap-4 flex-wrap min-w-0">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-200 whitespace-nowrap">{dateStr}</span>
         <span className="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
           {weather.tempHigh}° / {weather.tempLow}°F
         </span>
-        <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{weather.condition}</span>
+        <span className="text-xs text-gray-500 dark:text-gray-400">{weather.condition}</span>
         {saleCity && (
-          <span className="text-xs text-gray-400 dark:text-gray-500 truncate">{saleCity}</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{saleCity}</span>
         )}
       </div>
     </div>

@@ -74,13 +74,14 @@ const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
             <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate flex-1">
               {sale.title}
             </h3>
-            <span
+            <Link
+              href={`/sales/${sale.id}`}
               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${getStatusBadgeColor(
                 sale.status
-              )}`}
+              )} hover:opacity-80 transition-opacity`}
             >
               {getStatusLabel(sale.status)}
-            </span>
+            </Link>
           </div>
 
           {/* City and date */}
@@ -116,13 +117,6 @@ const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
 
           {/* Action row */}
           <div className="flex gap-2 flex-wrap text-xs">
-            <Link
-              href={`/sales/${sale.id}`}
-              className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-            >
-              View Live
-            </Link>
-            <span className="text-gray-400">•</span>
             <Link
               href={`/organizer/add-items/${sale.id}`}
               className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
