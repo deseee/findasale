@@ -116,6 +116,27 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     router.push('/organizer/dashboard');
   };
 
+  // Download file with auth token
+  const downloadAuthenticatedFile = async (url: string, filename: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token || ''}` }
+      });
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      showToast('Failed to download file. Please try again.', 'error');
+      console.error('Download error:', error);
+    }
+  };
+
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
@@ -366,7 +387,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Yard Sign */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/yard`, '_blank')}
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/signs/yard`, 'yard-sign.pdf')}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       📋 Yard Sign
@@ -377,7 +398,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Directional Signs */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/directional`, '_blank')}
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/signs/directional`, 'directional-signs.pdf')}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       ➡️ Directional
@@ -388,7 +409,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Table Tents */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/table-tent`, '_blank')}
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/signs/table-tent`, 'table-tents.pdf')}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       🏕️ Table Tents
@@ -399,7 +420,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Hang Tags */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/hang-tag`, '_blank')}
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/signs/hang-tag`, 'hang-tags.pdf')}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       🏷️ Hang Tags
@@ -410,7 +431,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Full Kit */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/signs/full-kit`, '_blank')}
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/signs/full-kit`, 'full-kit.pdf')}
                       className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       📦 Full Kit
@@ -427,7 +448,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* 6-up Labels */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/sales/${saleId}/labels`, '_blank')}
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/sales/${saleId}/labels`, 'item-labels.pdf')}
                       className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       🏷️ 4×3" Labels (6-up)
@@ -438,7 +459,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {/* Avery 5160 Stickers */}
                   <div className="text-center">
                     <button
-                      onClick={() => window.open(`${apiBase}/organizers/${saleId}/print-kit`, '_blank')}
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/print-kit`, 'avery-5160-stickers.pdf')}
                       className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                     >
                       📌 Avery 5160 Stickers
