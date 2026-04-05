@@ -1778,53 +1778,57 @@ const AddItemsDetailPage = () => {
             </div>
           ) : items && items.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
-              <div className="p-4 border-b border-warm-200 dark:border-gray-700 flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={selectedItems.size === items.length && items.length > 0}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedItems(new Set(items.map((i: any) => i.id)));
-                    } else {
-                      setSelectedItems(new Set());
-                    }
-                  }}
-                  aria-label="Select all items"
-                  className="rounded cursor-pointer"
-                />
-                <h2 className="font-semibold text-warm-900 dark:text-warm-100">
-                  {items.length} Item{items.length !== 1 ? 's' : ''}
-                  {selectedItems.size > 0 && (
-                    <span className="ml-2 text-sm font-normal text-amber-600">
-                      ({selectedItems.size} selected)
-                    </span>
-                  )}
-                </h2>
-                <div className="flex items-center gap-2">
+              <div className="p-4 border-b border-warm-200 dark:border-gray-700 flex flex-col gap-2">
+                {/* Row 1: select-all + count + Review & Publish */}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedItems.size === items.length && items.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedItems(new Set(items.map((i: any) => i.id)));
+                      } else {
+                        setSelectedItems(new Set());
+                      }
+                    }}
+                    aria-label="Select all items"
+                    className="rounded cursor-pointer flex-shrink-0"
+                  />
+                  <h2 className="font-semibold text-warm-900 dark:text-warm-100 flex-1">
+                    {items.length} Item{items.length !== 1 ? 's' : ''}
+                    {selectedItems.size > 0 && (
+                      <span className="ml-2 text-sm font-normal text-amber-600">
+                        ({selectedItems.size} selected)
+                      </span>
+                    )}
+                  </h2>
+                  <Link
+                    href={`/organizer/add-items/${saleId}/review`}
+                    className="text-sm font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 hover:underline flex-shrink-0"
+                  >
+                    Review & Publish{unpublishedCount > 0 ? ` (${unpublishedCount})` : ''} &rarr;
+                  </Link>
+                </div>
+                {/* Row 2: secondary actions */}
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => setEbayExportOpen(true)}
-                    className="text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline px-3 py-1.5 border border-blue-300 rounded-lg hover:bg-blue-50"
+                    className="text-xs font-medium text-blue-700 dark:text-blue-400 hover:underline px-2 py-1 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
                   >
                     📦 Export to eBay
                   </button>
                   <Link
                     href={`/organizer/add-items/${saleId}/review?preview=true`}
-                    className="text-sm font-medium text-warm-700 dark:text-warm-300 hover:text-warm-900 dark:text-warm-100 hover:underline px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
+                    className="text-xs font-medium text-warm-600 dark:text-warm-400 hover:underline px-2 py-1 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700"
                   >
                     👁 Buyer Preview
-                  </Link>
-                  <Link
-                    href={`/organizer/add-items/${saleId}/review`}
-                    className="text-sm font-medium text-amber-700 hover:text-amber-900 hover:underline"
-                  >
-                    Review & Publish{unpublishedCount > 0 ? ` (${unpublishedCount})` : ''} &rarr;
                   </Link>
                 </div>
               </div>
 
               {/* Sticky Top Toolbar — positioned ABOVE table for proper sticky behavior */}
               {selectedItems.size > 0 && (
-                <div className="sticky top-0 z-30 bg-amber-600 text-white border-b border-amber-700 p-4 shadow-md">
+                <div className="sticky top-0 z-30 bg-amber-600 dark:bg-amber-800 text-white border-b border-amber-700 dark:border-amber-900 p-4 shadow-md">
                   <div className="flex items-center gap-3 flex-wrap">
                     <input
                       type="checkbox"
@@ -1885,7 +1889,7 @@ const AddItemsDetailPage = () => {
                           }
                         }}
                         disabled={bulkUpdateMutation.isPending || !bulkPrice}
-                        className="text-xs font-semibold text-amber-600 bg-white dark:bg-gray-800 hover:bg-amber-50 dark:bg-amber-900/20 disabled:opacity-50 px-2 py-1 rounded transition-colors"
+                        className="text-xs font-semibold text-amber-700 dark:text-amber-200 bg-white dark:bg-amber-900 hover:bg-amber-50 dark:hover:bg-amber-950 disabled:opacity-50 px-2 py-1 rounded transition-colors"
                       >
                         Set Price
                       </button>
