@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-03-29T11:57:31.618Z*
+*Generated at 2026-04-05T08:11:31.683Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -17,11 +17,11 @@ See report for details.
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: 
 ⚠ 10+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
-  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/controllers/authController.ts:422:    // TODO: Send email with reset link (non-blocking)
-  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/helpers/itemQueries.ts:43:// TODO: Make draftStatus String? (optional) or backfill NULLs before re-enabling.
-  /sessions/sweet-happy-franklin/mnt/FindaSale/packages/backend/src/jobs/fraudDetectionJob.ts:23:    // TODO: Integrate with node-cron:
+  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
+  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/helpers/itemQueries.ts:43:// TODO: Make draftStatus String? (optional) or backfill NULLs before re-enabling.
+  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/jobs/auctionJob.ts:61:          // TODO Phase 2: organizer dashboard UI to approve/relist
+  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/jobs/fraudDetectionJob.ts:23:    // TODO: Integrate with node-cron:
 
 ## Project File Tree
 ```
@@ -1016,31 +1016,21 @@ See report for details.
 │           └── SKILL.md
 ├── CLAUDE.md
 ├── README.md
-├── _tmp_17008_08453a9272e81ddede29e697bc75df3b
-├── _tmp_17008_68e99a0b6f56ac76db24afa22668ce8e
-├── _tmp_19825_1b42f7f27018650a050acda6c56bb042
-├── _tmp_19825_d4fa5d4bb5bbcc3577cc4308c8740ea3
-├── _tmp_19859_73093acdfd3598bc12b5fbdbe206ea00
-├── _tmp_19859_fde55055970563788e18f4d50f97d1b2
-├── _tmp_20883_8b5e2c736d8eacfe7cfb63163610dc51
-├── _tmp_20883_a5422550ee8c28a338c754488ad81595
-├── _tmp_22214_a1f14e2eec910bab06aff6790baa32c2
-├── _tmp_22214_b17ce583c13a1091e6e17065b84fc332
-├── _tmp_23454_136d73c317eecddad0c5d2f0cd4d8b31
-├── _tmp_23454_a4243f91b2825e163c03ddc29f0c635d
-├── _tmp_79153_b78de4bad81704a77606cd957038642b
-├── _tmp_79153_dd2c0afeeac46b8dda065f928d380dee
 ├── ai-config/
 │   └── global-instructions.md
 ├── camera-mode-mockup.jsx
 ├── claude_docs/
 │   ├── .last-wrap
+│   ├── COMPLETED_PHASES.md
 │   ├── CORE.md
+│   ├── PRICING_PAGE_UX_SPEC_S392.md
 │   ├── RECOVERY.md
 │   ├── S248-walkthrough-findings.md
 │   ├── SECURITY.md
 │   ├── STACK.md
 │   ├── STATE.md
+│   ├── UX/
+│   │   └── purchase-history-consolidation-spec.md
 │   ├── UX_MODERNIZATION_SPEC.md
 │   ├── UX_SPECS/
 │   │   ├── save-wishlist-item-card.md
@@ -1060,6 +1050,7 @@ See report for details.
 │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
 │   │   ├── ADR-PHASE4-BRIEF.md
 │   │   ├── ADR-roadmap-batch-d-72-75.md
+│   │   ├── AUCTION_WIN_SPEC.md
 │   │   ├── BATCH-D-SUMMARY.md
 │   │   ├── ItemCard-Unification-Spec.md
 │   │   ├── adr-072-dual-role-account-schema.md
@@ -1076,6 +1067,7 @@ See report for details.
 │   │   ├── README-QA-SESSION-2026-03-20.md
 │   │   ├── accessibility-audit-2026-03-18.md
 │   │   ├── brand-drift-2026-03-24.md
+│   │   ├── brand-drift-2026-03-31.md
 │   │   ├── business-plan-brand-review-2026-03-19.md
 │   │   ├── chrome-audit-2026-03-20-roadmap-updates.md
 │   │   ├── chrome-audit-2026-03-20.md
@@ -1084,6 +1076,7 @@ See report for details.
 │   │   ├── chrome-live-audit-2026-03-20.md
 │   │   ├── chrome-secondary-routes-s216.md
 │   │   ├── create-sale-verify-s216.md
+│   │   ├── daily-friction-audit-2026-04-03.md
 │   │   ├── design-critique-2026-03-18.md
 │   │   ├── doc-structure-audit-2026-03-22.md
 │   │   ├── frontend-pages-inventory-S294.html
@@ -1106,12 +1099,13 @@ See report for details.
 │   │   ├── s290-qa-retroaudit-s285-s289.md
 │   │   ├── ux-audit-nav-overload-2026-03-18.md
 │   │   ├── weekly-audit-2026-03-22.md
-│   │   └── weekly-audit-2026-03-26.md
+│   │   ├── weekly-audit-2026-03-26.md
+│   │   └── weekly-audit-2026-04-02.md
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (11 files)
 │   ├── brand-voice/
 │   │   └── COLLECTORS_GUILD_BRAND_VOICE.md
-│   ├── competitor-intel/ (4 files)
+│   ├── competitor-intel/ (5 files)
 │   ├── decisions-log.md
 │   ├── escalation-log.md
 │   ├── feature-decisions/
@@ -1125,48 +1119,63 @@ See report for details.
 │   │   ├── PUSH_COORDINATOR_DELIVERY_SUMMARY.md
 │   │   ├── PUSH_COORDINATOR_IMPLEMENTATION_NOTES.md
 │   │   ├── advisory-board-S236-print-kit-etsy.md
-│   │   └── demo-readiness-plan-S236.md
-│   ├── feature-notes/ (21 files)
+│   │   ├── demo-readiness-plan-S236.md
+│   │   └── ebay-quick-list-spec.md
+│   ├── feature-notes/ (32 files)
 │   ├── guides/ (1 files)
 │   ├── handoffs/
 │   │   └── 125_csv_export_handoff.md
-│   ├── health-reports/ (9 files)
+│   ├── health-reports/ (10 files)
 │   ├── human-QA-walkthrough-findings.md
-│   ├── improvement-memos/ (2 files)
+│   ├── improvement-memos/ (3 files)
+│   ├── legal-hold-to-pay-risk-review.md
 │   ├── logs/ (3 files)
 │   ├── marketing/
 │   │   └── content-pipeline/
 │   │       ├── content-2026-03-23.md
-│   │       └── content-2026-03-26.md
+│   │       ├── content-2026-03-26.md
+│   │       └── content-2026-04-02.md
+│   ├── monthly-digest-2026-04.md
 │   ├── next-session-brief.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (61 files)
+│   ├── operations/ (66 files)
 │   ├── patrick-dashboard.md
 │   ├── patrick-walkthrough-S248.md
-│   ├── research/ (37 files)
+│   ├── research/ (41 files)
 │   ├── self-healing/ (1 files)
 │   ├── session-log.md
 │   ├── skill-updates/
 │   │   ├── findasale-dev-SKILL.md
 │   │   └── findasale-qa-SKILL.md
-│   ├── skills-package/ (49 files)
-│   ├── strategy/ (19 files)
+│   ├── skills-package/ (48 files)
+│   ├── specs/
+│   │   ├── concurrent-sales-gate-spec.md
+│   │   ├── pos-upgrade-architecture-spec.md
+│   │   └── pos-upgrade-ux-flows.md
+│   ├── strategy/ (22 files)
 │   ├── ux-audits/
 │   │   └── explorer-guild-phase2-audit.md
 │   ├── ux-spotchecks/
 │   │   ├── 2026-03-25.md
+│   │   ├── 2026-04-01.md
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
 │   │   ├── S256-UX-HANDOFF.md
 │   │   ├── S256-UX-SPECS-41-items-onboarding.md
 │   │   ├── add-items-ux-audit-2026-03-15.md
 │   │   ├── comprehensive-frontend-audit-2026-03-20.md
+│   │   ├── dashboard-redesign-brief-s350.md
 │   │   ├── design-polish-vision-2026-03-19.md
+│   │   ├── findasale-ux-eval-review.html
 │   │   ├── nav-dashboard-consolidation-2026-03-20.md
+│   │   ├── organizer-guidance-spec-s350.md
+│   │   ├── photo-capture-protocol-s350.md
+│   │   ├── smart-photo-crop-ux-spec.md
 │   │   └── ux-audit-S236.md
 │   └── workflow-retrospectives/ (3 files)
 ├── conversation-defaults-SKILL-v8.md.tmp.35852.1773930503120
 ├── frontend-pages-inventory-S294.html
 ├── next
+├── orphaned-pages-audit-s380.html
 ├── package-lock.json
 ├── package.json
 ├── packages/
@@ -1191,7 +1200,7 @@ See report for details.
 │   │   │   ├── lib/ (12 files)
 │   │   │   ├── middleware/ (12 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (98 files)
+│   │   │   ├── routes/ (99 files)
 │   │   │   ├── services/ (56 files)
 │   │   │   ├── types/ (1 files)
 │   │   │   └── utils/ (5 files)
@@ -1210,7 +1219,7 @@ See report for details.
 │   │   │   │   └── regionConfig.ts
 │   │   │   ├── constants/
 │   │   │   │   └── tierLimits.ts
-│   │   │   ├── controllers/ (105 files)
+│   │   │   ├── controllers/ (110 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
@@ -1219,10 +1228,10 @@ See report for details.
 │   │   │   ├── lib/ (12 files)
 │   │   │   ├── middleware/ (12 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (99 files)
+│   │   │   ├── routes/ (100 files)
 │   │   │   ├── services/ (56 files)
 │   │   │   ├── types/ (1 files)
-│   │   │   └── utils/ (5 files)
+│   │   │   └── utils/ (6 files)
 │   │   └── tsconfig.json
 │   ├── database/
 │   │   ├── .env
@@ -1232,11 +1241,11 @@ See report for details.
 │   │   ├── package-lock.json
 │   │   ├── package.json
 │   │   ├── prisma/
+│   │   │   ├── EXPLORER_PROFILE_DECISION.md
 │   │   │   ├── fix-seed-city.ts
-│   │   │   ├── migrations/ (138 migrations)
+│   │   │   ├── migrations/ (149 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
-│   │   ├── test-query.cjs
 │   │   └── tsconfig.json
 │   ├── frontend/
 │   │   ├── .env.local
@@ -1245,16 +1254,16 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (178 files)
+│   │   ├── components/ (204 files)
 │   │   ├── context/ (1 files)
 │   │   ├── contexts/ (3 files)
-│   │   ├── hooks/ (60 files)
-│   │   ├── lib/ (10 files)
+│   │   ├── hooks/ (61 files)
+│   │   ├── lib/ (11 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js
 │   │   ├── next.config.js
 │   │   ├── package.json
-│   │   ├── pages/ (63 files)
+│   │   ├── pages/ (64 files)
 │   │   ├── postcss.config.js
 │   │   ├── public/ (14 files)
 │   │   ├── sentry.client.config.ts
@@ -1274,7 +1283,7 @@ See report for details.
 │       │   │   └── tagVocabulary.ts
 │       │   ├── index.ts
 │       │   ├── tierGate.ts
-│       │   └── types/ (4 files)
+│       │   └── types/ (5 files)
 │       └── tsconfig.json
 ├── pnpm
 ├── pnpm-workspace.yaml
@@ -1290,11 +1299,8 @@ See report for details.
 │   ├── statusline-token-usage.sh
 │   ├── stress-test.js
 │   └── update-context.js
-├── test_item.jpg
-├── updated-skills/
-├── ziSe4sNr
-├── zisZbNTx
-└── zixqMWik
+├── test-import.csv
+└── updated-skills/
 
 ```
 
