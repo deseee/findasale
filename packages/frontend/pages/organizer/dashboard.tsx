@@ -14,6 +14,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import { useMyWorkspace } from '../../hooks/useWorkspace';
 import useCountUp from '../../hooks/useCountUp';
 import { TierGatedButton } from '../../components/TierGatedNav';
 import SaleCard from '../../components/SaleCard';
@@ -73,6 +74,7 @@ const OrganizerDashboard = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { isSimple, canAccess } = useOrganizerTier();
+  const { data: existingWorkspace } = useMyWorkspace();
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
@@ -116,10 +118,10 @@ const OrganizerDashboard = () => {
       setShowOnboardingModal(true);
     }
     // Show TEAMS onboarding wizard for new TEAMS-tier organizers
-    if (user?.organizerTier === 'TEAMS' && !user?.teamsOnboardingComplete) {
+    if (user?.organizerTier === 'TEAMS' && !user?.teamsOnboardingComplete && !existingWorkspace) {
       setShowTeamsOnboardingWizard(true);
     }
-  }, [user?.organizerTier, user?.teamsOnboardingComplete]);
+  }, [user?.organizerTier, user?.teamsOnboardingComplete, existingWorkspace]);
 
   // Fetch organizer's sales
   const { data: salesData = [], isLoading: salesLoading } = useQuery<Sale[]>({
