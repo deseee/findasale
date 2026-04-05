@@ -443,9 +443,18 @@ const AddItemsDetailPage = () => {
       setBulkPrice('');
     },
     onError: (error: any) => {
-      const message =
+      let message =
         error.response?.data?.message || 'Failed to create item';
-      showToast(message, 'error');
+
+      // Feature #75: Handle tier limit exceeded with upgrade CTA
+      if (error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+        const limit = error.response?.data?.limit || 200;
+        message = `Item limit reached (${limit} items max for your tier). Upgrade to PRO for 500 items per sale.`;
+        showToast(message, 'error');
+        // Could optionally navigate to pricing: router.push('/organizer/pricing');
+      } else {
+        showToast(message, 'error');
+      }
     },
     onSettled: () => { inMutationFlight.current = false; },
   });
@@ -832,6 +841,11 @@ const AddItemsDetailPage = () => {
         const retryAfter = err.response.headers['retry-after'];
         const retryAfterSecs = retryAfter ? parseInt(retryAfter, 10) : 60;
         errorMessage = `Rate limited. Please wait ${retryAfterSecs}s before trying`;
+      } else if (err.response?.status === 403 && err.response?.data?.upgradeRequired) {
+        // Photo limit reached
+        const tier = err.response?.data?.tier || 'your tier';
+        const limit = err.response?.data?.limit || 0;
+        errorMessage = `Photo limit reached for ${tier} (${limit} photos max per item). Upgrade to PRO for 10 photos per item.`;
       }
 
       setRapidItems((prev) =>
@@ -1206,6 +1220,20 @@ const AddItemsDetailPage = () => {
       </div>
     );
   }
+
+  // Feature #75: Calculate tier-aware max photos per item
+  // SIMPLE tier: 5 photos (10 for ala carte sales)
+  // PRO tier: 10 photos
+  // TEAMS/ENTERPRISE: 20 photos (UI cap, backend allows unlimited)
+  const maxPhotosPerItem = (() => {
+    const isAlaCarte = sale?.purchaseModel === 'ALA_CARTE';
+    const tier = user?.organizerTier || 'SIMPLE';
+
+    if (tier === 'PRO') return 10;
+    if (tier === 'TEAMS' || tier === 'ENTERPRISE') return 20;
+    // SIMPLE: 5 normally, 10 for ala carte
+    return isAlaCarte ? 10 : 5;
+  })();
 
   return (
     <>
@@ -1639,7 +1667,7 @@ const AddItemsDetailPage = () => {
                 addingToItemIdRef.current = null;
                 setCameraOpen(false);
               }}
-              maxPhotos={captureMode === 'rapidfire' ? 20 : 5}
+              maxPhotos={captureMode === 'rapidfire' ? maxPhotosPerItem : 5}
               mode={captureMode}
               onModeChange={setCaptureMode}
               rapidItems={rapidItems}
