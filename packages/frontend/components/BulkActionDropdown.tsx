@@ -27,7 +27,7 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
   disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [openLeft, setOpenLeft] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -42,7 +42,6 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
         setIsOpen(false);
       }
     }
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -50,7 +49,15 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
   const handleToggle = () => {
     if (!isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      setOpenLeft(rect.left < window.innerWidth / 2);
+      const menuWidth = 192; // w-48
+      const spaceOnRight = window.innerWidth - rect.left;
+      const style: React.CSSProperties = { top: rect.bottom + 4 };
+      if (spaceOnRight >= menuWidth) {
+        style.left = rect.left;
+      } else {
+        style.right = window.innerWidth - rect.right;
+      }
+      setDropdownStyle(style);
     }
     setIsOpen(!isOpen);
   };
@@ -60,13 +67,15 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
     setIsOpen(false);
   };
 
+  const itemClass = "block w-full text-left px-4 py-3 text-sm text-gray-800 dark:text-gray-100 hover:bg-amber-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700";
+
   return (
     <div className="relative inline-block">
       <button
         ref={buttonRef}
         onClick={handleToggle}
         disabled={disabled}
-        className="text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 px-3 py-1 rounded transition-colors"
+        className="text-sm font-semibold text-white bg-amber-700 dark:bg-amber-900 hover:bg-amber-800 disabled:opacity-50 px-3 py-1 rounded transition-colors"
         title="More bulk actions"
       >
         ⋮ More Actions
@@ -75,45 +84,28 @@ const BulkActionDropdown: React.FC<BulkActionDropdownProps> = ({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className={`absolute mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-warm-200 dark:border-gray-700 z-[99] ${openLeft ? 'left-0' : 'right-0'}`}
+          style={dropdownStyle}
+          className="fixed w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 z-[9999]"
         >
-          <button
-            onClick={() => handleAction(onSetCategory)}
-            className="block w-full text-left px-4 py-2 text-sm text-warm-700 hover:bg-warm-50 first:rounded-t-lg transition-colors border-b border-warm-100"
-          >
+          <button onClick={() => handleAction(onSetCategory)} className={`${itemClass} first:rounded-t-lg`}>
             Set Category
           </button>
-          <button
-            onClick={() => handleAction(onSetStatus)}
-            className="block w-full text-left px-4 py-2 text-sm text-warm-700 hover:bg-warm-50 transition-colors border-b border-warm-100"
-          >
+          <button onClick={() => handleAction(onSetStatus)} className={itemClass}>
             Set Status
           </button>
-          <button
-            onClick={() => handleAction(onManageTags)}
-            className="block w-full text-left px-4 py-2 text-sm text-warm-700 hover:bg-warm-50 transition-colors border-b border-warm-100"
-          >
+          <button onClick={() => handleAction(onManageTags)} className={itemClass}>
             Manage Tags
           </button>
-          <button
-            onClick={() => handleAction(onManagePhotos)}
-            className="block w-full text-left px-4 py-2 text-sm text-warm-700 hover:bg-warm-50 transition-colors border-b border-warm-100"
-          >
+          <button onClick={() => handleAction(onManagePhotos)} className={itemClass}>
             Manage Photos
           </button>
           {onSetPrice && (
-            <button
-              onClick={() => handleAction(onSetPrice)}
-              className="block w-full text-left px-4 py-2 text-sm text-warm-700 hover:bg-warm-50 transition-colors border-b border-warm-100"
-            >
+            <button onClick={() => handleAction(onSetPrice)} className={itemClass}>
               Set Bulk Price
             </button>
           )}
           {onPrintLabels && (
-            <button
-              onClick={() => handleAction(onPrintLabels)}
-              className="block w-full text-left px-4 py-2 text-sm text-warm-700 hover:bg-warm-50 last:rounded-b-lg transition-colors"
-            >
+            <button onClick={() => handleAction(onPrintLabels)} className={`${itemClass} last:rounded-b-lg border-b-0`}>
               🖨️ Print Labels
             </button>
           )}
