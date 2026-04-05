@@ -74,7 +74,7 @@ const OrganizerDashboard = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const { isSimple, canAccess } = useOrganizerTier();
-  const { data: existingWorkspace } = useMyWorkspace();
+  const { data: existingWorkspace, isLoading: workspaceLoading } = useMyWorkspace();
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
   const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
@@ -118,10 +118,10 @@ const OrganizerDashboard = () => {
       setShowOnboardingModal(true);
     }
     // Show TEAMS onboarding wizard for new TEAMS-tier organizers
-    if (user?.organizerTier === 'TEAMS' && !user?.teamsOnboardingComplete && !existingWorkspace) {
+    if (user?.organizerTier === 'TEAMS' && !user?.teamsOnboardingComplete && !workspaceLoading && !existingWorkspace) {
       setShowTeamsOnboardingWizard(true);
     }
-  }, [user?.organizerTier, user?.teamsOnboardingComplete, existingWorkspace]);
+  }, [user?.organizerTier, user?.teamsOnboardingComplete, existingWorkspace, workspaceLoading]);
 
   // Fetch organizer's sales
   const { data: salesData = [], isLoading: salesLoading } = useQuery<Sale[]>({
