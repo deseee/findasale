@@ -606,11 +606,26 @@ export default function POSPage() {
     }
   }, []);
 
-  // Tap-to-scan: try up to 10 frames over 1 second after tap to find a QR code
-  const scanOnTap = useCallback(() => {
+  // Tap-to-scan: crop around the tap point so only the tapped QR is scanned
+  const scanOnTap = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || !video.videoWidth) return;
+
+    // Map tap position from display coords → video pixel coords
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const scaleX = video.videoWidth / rect.width;
+    const scaleY = video.videoHeight / rect.height;
+    const tapX = (e.clientX - rect.left) * scaleX;
+    const tapY = (e.clientY - rect.top) * scaleY;
+
+    // Crop a 35%-wide square around the tap — large enough to capture the QR,
+    // small enough to exclude neighbouring QR codes on the sheet
+    const cropSize = video.videoWidth * 0.35;
+    const cropX = Math.max(0, tapX - cropSize / 2);
+    const cropY = Math.max(0, tapY - cropSize / 2);
+    const cropW = Math.min(cropSize, video.videoWidth - cropX);
+    const cropH = Math.min(cropSize, video.videoHeight - cropY);
 
     setQrScanStatus('found');
     setQrScanMessage('Looking…');
@@ -663,9 +678,10 @@ export default function POSPage() {
     const tryFrame = () => {
       const context = canvas.getContext('2d');
       if (!context) return;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Draw only the cropped region so jsQR sees just what the user tapped
+      canvas.width = cropW;
+      canvas.height = cropH;
+      context.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
       // @ts-ignore
       const code = jsQR(imageData.data, canvas.width, canvas.height);
@@ -1359,7 +1375,7 @@ export default function POSPage() {
               ✕
             </button>
 
-            <div className="relative w-full cursor-pointer" onClick={scanOnTap}>
+            <div className="relative w-full cursor-pointer" onClick={(e) => scanOnTap(e)}>
               <video
                 ref={videoRef}
                 autoPlay
