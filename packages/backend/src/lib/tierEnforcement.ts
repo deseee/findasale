@@ -63,3 +63,43 @@ export async function checkItemOverPhotoLimit(
       : undefined,
   };
 }
+
+/**
+ * Check if an organizer exceeds their AI tag limit for this calendar month
+ */
+export async function checkAITagLimit(
+  organizerId: string,
+  tier: SubscriptionTier
+): Promise<{
+  isOverLimit: boolean;
+  tagCount: number;
+  limit: number;
+  message?: string;
+}> {
+  // Count items tagged with AI this calendar month
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const tagCount = await prisma.item.count({
+    where: {
+      sale: {
+        organizerId
+      },
+      isAiTagged: true,
+      createdAt: {
+        gte: monthStart
+      }
+    }
+  });
+
+  const limit = getTierLimit(tier, 'aiTagsPerMonth');
+
+  return {
+    isOverLimit: tagCount >= limit,
+    tagCount,
+    limit,
+    message: tagCount >= limit
+      ? `Used ${tagCount} AI tags this month (limit: ${limit})`
+      : undefined,
+  };
+}

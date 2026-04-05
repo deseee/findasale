@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { analyzeItemImage, analyzeItemImages } from '../services/cloudAIService';
+import { checkAITagLimit } from '../lib/tierEnforcement';
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -48,6 +49,25 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         data: { draftStatus: 'PENDING_REVIEW' }
       });
       return;
+    }
+
+    // Feature #75: Check AI tag limit before processing
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: item.sale.organizer.userId },
+      select: { subscriptionTier: true }
+    });
+
+    if (organizer) {
+      const aiTagLimit = await checkAITagLimit(organizer.id, organizer.subscriptionTier);
+      if (aiTagLimit.isOverLimit) {
+        // AI tag limit reached — skip AI analysis and mark as PENDING_REVIEW without tags
+        console.log(`[rapidfire] AI tag limit reached for item ${itemId}. Organizer ${organizer.id} has used ${aiTagLimit.tagCount}/${aiTagLimit.limit} tags this month.`);
+        await prisma.item.update({
+          where: { id: itemId },
+          data: { draftStatus: 'PENDING_REVIEW' }
+        });
+        return;
+      }
     }
 
     // AI tagging: Download ALL photos and analyze them together

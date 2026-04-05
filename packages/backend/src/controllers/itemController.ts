@@ -14,7 +14,7 @@ import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sa
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
-import { checkSaleOverLimit } from '../lib/tierEnforcement'; // Feature #75: Tier lapse enforcement
+import { checkSaleOverLimit, checkItemOverPhotoLimit } from '../lib/tierEnforcement'; // Feature #75: Tier lapse enforcement
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
 import { createNotification } from '../services/notificationService'; // P0: Bid notifications
 import { closeAuction } from '../services/auctionService'; // Auction close flow
@@ -1022,6 +1022,34 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
     }
     const item = await getItemForOrganizer(id, req.user.id);
     if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
+
+    // Feature #75: Check photo limit before adding
+    const sale = await prisma.sale.findUnique({
+      where: { id: item.saleId },
+      include: { organizer: { select: { subscriptionTier: true } } }
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    // Determine tier: use PRO tier limits for ala carte sales even if organizer is SIMPLE
+    let effectiveTier = sale.organizer.subscriptionTier;
+    if (sale.purchaseModel === 'ALA_CARTE') {
+      effectiveTier = 'PRO';
+    }
+
+    const photoLimit = await checkItemOverPhotoLimit(id, effectiveTier);
+    if (photoLimit.isOverLimit) {
+      return res.status(403).json({
+        error: 'Photo limit reached',
+        limit: photoLimit.limit,
+        tier: effectiveTier,
+        upgradeRequired: true,
+        message: `Item has reached the photo limit for ${effectiveTier} tier (${photoLimit.limit} photos)`
+      });
+    }
+
     const updated = await prisma.item.update({
       where: { id },
       data: { photoUrls: [...item.photoUrls, url] },

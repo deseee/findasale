@@ -492,6 +492,9 @@ const PricingPage = () => {
               >
                 Create a single sale
               </Link>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
+                Payment of $9.99 is collected when you publish your sale.
+              </p>
             </div>
           </div>
 
