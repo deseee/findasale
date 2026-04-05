@@ -760,37 +760,42 @@ const ReviewPage = () => {
                         >
                           {/* Collapsed row — always visible */}
                           <div
-                            className={`p-3 sm:p-4 flex items-center gap-2 sm:gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged).split(' ').slice(1).join(' ')}`}
+                            className={`p-3 sm:p-4 flex items-start gap-2 sm:gap-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-l-4 ${confidenceBorderClass(item.aiConfidence, item.isAiTagged).split(' ').slice(1).join(' ')}`}
                             onClick={() => handleToggleExpand(item.id)}
                           >
-                            <input
-                              type="checkbox"
-                              checked={selectedItems.has(item.id)}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                const next = new Set(selectedItems);
-                                if (e.target.checked) next.add(item.id);
-                                else next.delete(item.id);
-                                setSelectedItems(next);
-                              }}
-                              className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500"
-                              onClick={(e) => e.stopPropagation()}
-                            />
+                            {/* Left column: checkbox + expand/collapse arrow (narrow, vertically centered) */}
+                            <div className="flex flex-col items-center justify-center gap-1 flex-shrink-0 pt-1">
+                              <input
+                                type="checkbox"
+                                checked={selectedItems.has(item.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  const next = new Set(selectedItems);
+                                  if (e.target.checked) next.add(item.id);
+                                  else next.delete(item.id);
+                                  setSelectedItems(next);
+                                }}
+                                className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-amber-600 focus:ring-amber-500"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <span className="text-warm-400 text-xs">{expandedItemId === item.id ? '▲' : '▼'}</span>
+                            </div>
+
                             {/* Photo with mobile status badge below */}
-                            <div className="flex-shrink-0 w-16 flex flex-col items-stretch">
+                            <div className="flex-shrink-0 w-14 sm:w-16 flex flex-col items-stretch">
                               {item.photoUrls[0] ? (
                                 <img
                                   key={item.photoUrls[0]}
                                   src={item.photoUrls[0]}
                                   alt={item.title}
-                                  className="w-16 h-16 object-cover rounded"
+                                  className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded"
                                   referrerPolicy="no-referrer-when-downgrade"
                                   onError={(e) => {
                                     (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23e5e7eb"/%3E%3Ctext x="50%25" y="50%25" font-size="24" text-anchor="middle" dy=".3em" fill="%239ca3af"%3E📷%3C/text%3E%3C/svg%3E';
                                   }}
                                 />
                               ) : (
-                                <div className="w-16 h-16 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-2xl">📷</div>
+                                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xl sm:text-2xl">📷</div>
                               )}
                               {/* Status badge — mobile only, sits below thumbnail */}
                               <span className={`sm:hidden text-center text-[10px] font-bold py-0.5 rounded-b ${
@@ -801,9 +806,11 @@ const ReviewPage = () => {
                                 {item.draftStatus === 'PUBLISHED' ? 'Live' : item.draftStatus === 'PENDING_REVIEW' ? 'Pending' : 'Draft'}
                               </span>
                             </div>
+
+                            {/* Main content area: title, price, category, health bar */}
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
-                              <p className="text-sm text-warm-600 dark:text-warm-400">
+                              <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm sm:text-base truncate">{item.title}</p>
+                              <p className="text-xs sm:text-sm text-warm-600 dark:text-warm-400">
                                 <span className="flex items-center gap-1">
                                   {item.price != null ? (
                                     item.markdownApplied && item.priceBeforeMarkdown ? (
@@ -822,13 +829,13 @@ const ReviewPage = () => {
                                     'No price'
                                   )}
                                 </span>
-                                {' · '}{item.category || 'Uncategorized'}
+                                {' · '}<span className="inline-block truncate">{item.category || 'Uncategorized'}</span>
                               </p>
-                              {/* Sprint 1: Health score bar */}
+                              {/* Sprint 1: Health score bar — compact on mobile */}
                               {item.healthScore && (
-                                <div className="mt-2">
+                                <div className="mt-1 sm:mt-2">
                                   <div className="flex items-center gap-2">
-                                    <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                                    <div className="flex-1 h-1 sm:h-1.5 rounded-full bg-gray-200 overflow-hidden">
                                       <div
                                         className={`h-full rounded-full transition-all ${
                                           item.healthScore.grade === 'clear' ? 'bg-green-400' :
@@ -837,7 +844,7 @@ const ReviewPage = () => {
                                         style={{ width: `${item.healthScore.score}%` }}
                                       />
                                     </div>
-                                    <span className={`text-xs font-medium ${
+                                    <span className={`text-xs font-medium flex-shrink-0 ${
                                       item.healthScore.grade === 'clear' ? 'text-green-600' :
                                       item.healthScore.grade === 'nudge' ? 'text-amber-600' : 'text-red-600'
                                     }`}>
@@ -856,11 +863,13 @@ const ReviewPage = () => {
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
-                              <div className={`text-xs font-semibold hidden sm:block ${conf.color}`}>
+
+                            {/* Right column: actions + metadata (hidden on mobile, visible on sm+) */}
+                            <div className="hidden sm:flex items-center gap-1 sm:gap-3 flex-shrink-0">
+                              <div className={`text-xs font-semibold ${conf.color}`}>
                                 {conf.text}{item.isAiTagged && item.aiConfidence != null ? ` (${Math.round(item.aiConfidence * 100)}%)` : ''}
                               </div>
-                              <span className={`hidden sm:inline-flex text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                 item.draftStatus === 'PUBLISHED'
                                   ? 'bg-green-100 text-green-700'
                                   : item.draftStatus === 'PENDING_REVIEW'
@@ -883,8 +892,23 @@ const ReviewPage = () => {
                               >
                                 🗑️
                               </button>
-                              <span className="text-warm-400 text-sm">{expandedItemId === item.id ? '▲' : '▼'}</span>
                             </div>
+
+                            {/* Mobile: delete button in top-right */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
+                                  deleteMutation.mutate([item.id]);
+                                }
+                              }}
+                              disabled={deleteMutation.isPending}
+                              className="sm:hidden text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-1 flex-shrink-0"
+                              aria-label="Delete item"
+                            >
+                              🗑️
+                            </button>
                           </div>
 
                           {/* Expanded edit panel */}
