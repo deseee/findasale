@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
 
 interface OrganizerOnboardingModalProps {
@@ -57,18 +58,20 @@ const STEPS = [
  * OrganizerOnboardingModal
  * 3-screen modal for new organizers (0 sales).
  * Triggered on /organizer/dashboard if localStorage.onboardingModalDismissed is not set.
- * TODO: import OrganizerOnboardingModal in organizer/dashboard.tsx for State 1 (new organizer)
+ * Final button navigates to /organizer/create-sale to start first sale.
  */
 const OrganizerOnboardingModal: React.FC<OrganizerOnboardingModalProps> = ({ onDismiss }) => {
+  const router = useRouter();
   const [step, setStep] = useState(0);
 
   const handleNext = () => {
     if (step === STEPS.length - 1) {
-      // Complete onboarding — dismiss modal, stay on dashboard
+      // Complete onboarding — navigate to create-sale and persist dismissal
       if (typeof window !== 'undefined') {
         localStorage.setItem('onboardingModalDismissed', 'true');
       }
       onDismiss();
+      router.push('/organizer/create-sale');
       return;
     }
     setStep(step + 1);
