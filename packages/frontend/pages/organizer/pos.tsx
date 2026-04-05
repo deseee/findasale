@@ -651,6 +651,16 @@ export default function POSPage() {
     setQrScanMessage('');
   }, []);
 
+  // ─── Camera Modal Effect ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (cameraOpen) {
+      const timer = setTimeout(() => {
+        startQRScan();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [cameraOpen, startQRScan]);
+
   // ─── Payment QR Code Generation ────────────────────────────────────────────────────────
 
   const handleGeneratePaymentQr = async () => {
@@ -731,26 +741,23 @@ export default function POSPage() {
           <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 font-fraunces">POS</h1>
           <p className="text-sm text-warm-500 dark:text-warm-400">In-person payments</p>
         </div>
-        <span className={`text-xs px-3 py-1 rounded-full font-medium ${readerBadge.color}`}>
-          {readerBadge.label}
-        </span>
+        {(readerStatus === 'idle' || readerStatus === 'error' || readerStatus === 'disconnected') ? (
+          <button
+            onClick={initTerminal}
+            className={`text-xs px-3 py-1 rounded-full font-medium cursor-pointer hover:opacity-80 transition ${readerBadge.color}`}
+          >
+            {readerBadge.label}
+          </button>
+        ) : readerStatus === 'connecting' ? (
+          <span className={`text-xs px-3 py-1 rounded-full font-medium animate-pulse ${readerBadge.color}`}>
+            Connecting…
+          </span>
+        ) : (
+          <span className={`text-xs px-3 py-1 rounded-full font-medium ${readerBadge.color}`}>
+            {readerBadge.label}
+          </span>
+        )}
       </div>
-
-      {/* Connect reader button */}
-      {(readerStatus === 'idle' || readerStatus === 'error' || readerStatus === 'disconnected') && (
-        <button
-          onClick={initTerminal}
-          className="w-full mb-6 py-3 rounded-xl bg-sage-700 text-white font-semibold hover:bg-sage-800 transition"
-        >
-          Connect Reader
-        </button>
-      )}
-
-      {readerStatus === 'connecting' && (
-        <div className="w-full mb-6 py-3 rounded-xl bg-warm-200 text-warm-600 text-center text-sm animate-pulse">
-          Searching for reader…
-        </div>
-      )}
 
       {/* Sale selector */}
       <div className="mb-4">
@@ -792,7 +799,6 @@ export default function POSPage() {
             <button
               onClick={() => {
                 setCameraOpen(true);
-                startQRScan();
               }}
               className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-700 transition"
               title="Scan QR code on price label"
@@ -972,20 +978,6 @@ export default function POSPage() {
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => {
-                setPaymentMode('card');
-                setNumpadOpen(false);
-              }}
-              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
-                paymentMode === 'card'
-                  ? 'bg-sage-700 text-white'
-                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
-              }`}
-            >
-              <span className="text-xl">💳</span>
-              <span className="text-xs">Card Reader</span>
-            </button>
-            <button
-              onClick={() => {
                 setPaymentMode('cash');
                 setCashReceived(0);
                 setCashNumpadValue('');
@@ -1012,6 +1004,20 @@ export default function POSPage() {
             >
               <span className="text-xl">📲</span>
               <span className="text-xs">Send QR</span>
+            </button>
+            <button
+              onClick={() => {
+                setPaymentMode('card');
+                setNumpadOpen(false);
+              }}
+              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
+                paymentMode === 'card'
+                  ? 'bg-sage-700 text-white'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <span className="text-xl">💳</span>
+              <span className="text-xs">Card Reader</span>
             </button>
             <button
               onClick={() => setPaymentMode('invoice')}
@@ -1302,8 +1308,10 @@ export default function POSPage() {
               <video
                 ref={videoRef}
                 autoPlay
+                muted
                 playsInline
                 className="w-full rounded-lg"
+                style={{ minHeight: '200px' }}
               />
               <canvas ref={canvasRef} className="hidden" />
 
@@ -1315,7 +1323,9 @@ export default function POSPage() {
 
               {qrScanStatus === 'error' && qrScanMessage && (
                 <div className="absolute bottom-0 left-0 right-0 bg-red-600 text-white p-2 text-xs rounded-b-lg text-center">
-                  {qrScanMessage}
+                  {qrScanMessage?.includes('permission') || qrScanMessage?.includes('denied')
+                    ? 'Camera access denied. Please allow camera access in your browser settings and try again.'
+                    : qrScanMessage}
                 </div>
               )}
 
