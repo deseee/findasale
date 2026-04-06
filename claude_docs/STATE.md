@@ -7,6 +7,29 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S402 COMPLETE (2026-04-06):** Review/edit-item/pricing bug batch — health score, Price Research Panel, eBay integration
+
+**S402 Summary:**
+
+Seven bugs fixed across review page, pricing components, and eBay integration. (1) Health score: `category` field added (0–5 pts), placeholder "Select..." values now treated as empty for both category and conditionGrade. (2) AI confidence copy reworded in review.tsx from "AI suggested these fields (X% confidence)" to "X% confidence in auto suggested fields." (3) Price Research Panel overhauled: renamed to "Smart Pricing," explanatory copy added under each section, eBay button changed from full-width primary to compact outline, subtler dividers, "Platform Comps" → "Sales Comps." (4) ValuationWidget PRO gate fixed to include TEAMS tier. (5) eBay comps endpoint fixed — frontend was calling GET /items/ebay-comps (hitting /:id with id="ebay-comps") instead of POST /items/:id/comps. (6) eBay CSV export now filters to selected item IDs when provided. (7) Health breakdown UI updated — category and condition now appear as line items in the What's Ready/Must Fix/Improvements sections. Follow-on: removed "AI-generated" brand copy violation from PriceResearchPanel, switched eBay to sandbox endpoints, fixed TypeScript optional chaining on category/conditionGrade fields, Railway cache bust.
+
+**S402 Files Changed (9 files):**
+- `packages/backend/src/utils/listingHealthScore.ts` — category field + scoring, placeholder detection for category/conditionGrade
+- `packages/backend/src/controllers/ebayController.ts` — CSV itemIds filter, sandbox API URLs
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — AI confidence copy, health breakdown UI (category/condition rows), HealthBreakdown type + optional chaining fixes
+- `packages/frontend/components/PriceResearchPanel.tsx` — Smart Pricing rename, layout condensed, brand copy fix, eBay endpoint fix POST /items/:id/comps
+- `packages/frontend/components/ValuationWidget.tsx` — TEAMS tier added to PRO gate
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — eBay CSV export passes itemIds
+- `packages/frontend/pages/faq.tsx` — Patrick's local edits
+- `packages/frontend/pages/support.tsx` — Patrick's local edits
+- `packages/backend/Dockerfile.production` — Railway cache bust 2026-04-06
+
+**S402 No migration required.**
+
+**S402 eBay note:** Sandbox credentials configured in Railway. When ready for production, swap both eBay API URLs back to `api.ebay.com` and update Railway env vars to production app credentials.
+
+---
+
 **S401 COMPLETE (2026-04-06):** Camera thumbnail refresh, icon-only photo buttons, mobile swipe-back closes camera
 
 **S401 Summary:**
