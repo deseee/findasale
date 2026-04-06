@@ -502,7 +502,7 @@ const ReviewPage = () => {
               href={`/organizer/add-items/${saleId}`}
               className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
             >
-              &larr; Back to Capture
+              &larr; Back to + Items
             </Link>
             <button
               onClick={() => setShowBuyerPreview(true)}
@@ -711,8 +711,7 @@ const ReviewPage = () => {
                     )}
                     {/* Column headers removed — status line on each card replaces the old header row */}
                     {items.length > 0 && (
-                      <div className="flex items-center gap-2 flex-wrap mb-3">
-                        <span className="text-xs font-semibold text-warm-700 dark:text-warm-300">Sort by:</span>
+                      <div className="flex items-center gap-2 mb-3">
                         {(['name', 'price', 'status', 'date'] as const).map((option) => (
                           <button
                             key={option}
