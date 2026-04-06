@@ -4,11 +4,11 @@
 
 ## What Happened This Week
 
-Nine sessions shipped in two days (April 4–5), then a cleanup batch today. The big ones: POS system full rebuild; add-items mobile overhaul; review screen redesigned to plain-English status ("Ready to Publish" / "Needs Review" / "Cannot Publish"); feedback collection system fully built (infrastructure ready, 10 trigger wires deferred); rapidfire batching fixes; tier limit enforcement; upgrade prompts.
+Ten sessions shipped across April 4–6. The big ones: POS system full rebuild; add-items mobile overhaul; review screen redesigned to plain-English status ("Ready to Publish" / "Needs Review" / "Cannot Publish"); feedback collection system fully built (infrastructure ready, 10 trigger wires deferred); rapidfire batching fixes; tier limit enforcement; upgrade prompts.
 
-**Today (S399 continuation):** Six review-page bugs fixed — tag removal no longer wipes all tags, items with no price blocked from "Ready to Publish," amber status renamed "Needs Review," print label 404 fixed (route ordering), curated tag suggestion list removed, Add Photos now offers Upload / Camera / Rapidfire modes.
+**S400 (today):** Camera overhaul — QR codes moved to left side on Avery labels and price sheet cheat sheet. Camera and Rapidfire buttons on edit-item page and review cards now open inline (no page navigation). Photos append to the existing item. Thumbnail strip updates live. "X/5" counter starts from the item's actual existing photo count, not 0. "Analyze" renamed "Save."
 
-**All S399 code is unpushed.** Run the push block below to go live.
+**All S399 + S400 code is unpushed.** Run the push block below.
 
 ---
 
@@ -31,9 +31,14 @@ git add packages/frontend/components/FeedbackMenu.tsx
 git add packages/frontend/pages/_app.tsx
 git add packages/frontend/pages/organizer/settings.tsx
 git add packages/frontend/pages/shopper/settings.tsx
+git add packages/backend/src/controllers/printKitController.ts
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add "packages/frontend/pages/organizer/print-kit/[saleId].tsx"
+git add packages/frontend/pages/faq.tsx
+git add packages/frontend/components/RapidCapture.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S399: review card redesign, feedback system infrastructure, 6 review-page bug fixes"
+git commit -m "S399+S400: review card redesign, feedback system, camera inline append, QR left-align, thumbnail strip fix"
 .\push.ps1
 ```
 
@@ -57,7 +62,7 @@ npx prisma generate
 
 ## Action Items for Patrick
 
-- [ ] **Run push block above** — nothing from S399 is live until this runs
+- [ ] **Run push block above** — nothing from S399+S400 is live until this runs
 - [ ] **Run migration** — FeedbackSuppression table won't exist in Railway DB until you do
 - [ ] **Encyclopedia rename decision**
 - [ ] **Trademark call**
@@ -70,7 +75,7 @@ npx prisma generate
 ## Next Session Priorities
 
 1. Wire 10 feedback survey triggers (OG-1 through SH-5) to specific pages — infrastructure is done, just needs the hook calls added
-2. Chrome QA on S398 dashboard + S399 review card + all bug fixes
+2. Chrome QA on S398 dashboard + S399 review card + S400 camera fixes
 3. Social share template fix — hardcoded "estate sale" language on TikTok/Pinterest/Threads/Nextdoor share cards
 
-*Updated S399 — 2026-04-06*
+*Updated S400 — 2026-04-06*

@@ -7,6 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S400 COMPLETE (2026-04-06):** QR left-align on labels/price sheet, inline camera append fix, thumbnail strip live update, regular mode photo count awareness
+
+**S400 Summary:**
+
+Camera/upload fixes across edit-item and review pages. (1) Avery label stickers and price sheet cheat sheet: QR code moved from right side to left side; text repositioned right by 50pts to fill vacated space. (2) Label count copy corrected: "1 per page" → "6 per page", "12 per page" → "30 per page". (3) Edit-item and review page camera/rapidfire buttons now open inline RapidCapture overlay instead of navigating to add-items page. Photos append to the existing item, not create new items. (4) Rapidfire thumbnail strip now updates live on each capture (`inlineRapidItems` state — same pattern now on both edit-item and review pages). (5) Regular camera mode seeds `photosThisItem` from the item's existing photo count, so the "X/5" counter and coaching banner show the correct step from the first shot. (6) "Analyze" button renamed "Save". (7) Trailing null byte removed from print-kit page.
+
+**S400 Files Changed (7 files):**
+- `packages/backend/src/controllers/printKitController.ts` — QR left-aligned on Avery stickers + price sheet
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — URL param wiring to append rapidfire photos to existing item
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — inline camera overlay, `inlineRapidItems` state, `refetchOnMount: 'always'`
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — inline camera overlay, `inlineRapidItems` state, seed from existing count
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — label count copy fix + null byte removed
+- `packages/frontend/pages/faq.tsx` — Patrick's text edits + question rearrangement (restored from truncation)
+- `packages/frontend/components/RapidCapture.tsx` — `photosThisItem` seeds from existing photo count in regular mode; "Analyze" → "Save"
+
+**S400 No migration required.**
+
+---
+
 **S399 COMPLETE (2026-04-06):** Review card redesign + feedback system + 6 review-page bug fixes
 
 **S399 Summary:**
