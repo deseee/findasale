@@ -873,6 +873,10 @@ const AvatarDropdown: React.FC = () => {
                     <TrendingUp size={16} className="text-indigo-500" />
                     <span>Trending</span>
                   </Link>
+                  <Link href="/trails" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
+                    <Map size={16} className="text-indigo-500" />
+                    <span>Treasure Trails</span>
+                  </Link>
                   <Link href="/shopper/trails" className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors" onClick={() => setIsOpen(false)}>
                     <Compass size={16} className="text-indigo-500" />
                     <span>My Trails</span>

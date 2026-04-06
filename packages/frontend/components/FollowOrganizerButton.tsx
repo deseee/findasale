@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
+import { useFeedbackSurvey } from '../hooks/useFeedbackSurvey';
 
 interface Props {
   organizerId: string;
@@ -12,6 +13,7 @@ interface Props {
 const FollowOrganizerButton: React.FC<Props> = ({ organizerId, organizerName, size = 'md' }) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { showSurvey } = useFeedbackSurvey();
   const [isFollowing, setIsFollowing] = useState(false);
 
   const { isLoading: statusLoading, data: followData } = useQuery({
@@ -33,6 +35,9 @@ const FollowOrganizerButton: React.FC<Props> = ({ organizerId, organizerName, si
         ? api.delete(`/organizers/${organizerId}/follow`)
         : api.post(`/organizers/${organizerId}/follow`),
     onSuccess: () => {
+      if (!isFollowing) {
+        showSurvey('SH-5');
+      }
       setIsFollowing(!isFollowing);
       queryClient.invalidateQueries({ queryKey: ['follow-status', organizerId] });
       queryClient.invalidateQueries({ queryKey: ['my-follows'] });  // Must match useFollows() cache key

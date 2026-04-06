@@ -7,6 +7,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client'; // type-only — prevents SSR module crash
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
+import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import CheckoutModal from '../../components/CheckoutModal';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import CountdownTimer from '../../components/CountdownTimer'; // CD2: Live Drop
@@ -125,6 +126,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const { id } = router.query;
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { showSurvey } = useFeedbackSurvey();
   const queryClient = useQueryClient();
   const shopperCart = useShopperCart(); // Phase 1: Smart Cart
 
@@ -208,6 +210,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     },
     onSuccess: (data) => {
       showToast('Bid placed successfully!', 'success');
+      showSurvey('SH-3');
       refetchItem();
       refetchBids();
       setBidAmount(null);
@@ -228,6 +231,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
       return response.data;
     },
     onSuccess: () => {
+      showSurvey('SH-2');
       refetchFavoriteStatus();
       queryClient.invalidateQueries({ queryKey: ['favorites'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });

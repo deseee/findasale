@@ -7,37 +7,58 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S403 IN PROGRESS (2026-04-06):** Explorer's Guild full gamification design — Treasure Trails + XP economy
+**S404 COMPLETE (2026-04-06):** Explorer's Guild + Treasure Trails — full one-shot build + feedback survey triggers
 
-**S403 Summary so far:**
+**S404 Summary:**
+
+Three work batches. (1) **Master spec created:** `claude_docs/specs/explorers-guild-master-spec.md` — 403-line authoritative reference combining all locked XP economy, sink, Treasure Trails, API, and schema decisions. (2) **Treasure Trails implemented (one shot):** Schema (TreasureTrail extended + 5 new models: TrailStop, TrailCheckIn, TrailPhoto, TrailCompletion, TrailRating), migration SQL, PlacesService (Google Places API), trailController (11 endpoints), trails route, TrailCard component, trail discovery page (`/trails`), trail detail + check-in page (`/trails/[trailId]`), organizer trail builder (`/organizer/trails/[saleId]`), nav links added to AvatarDropdown + Layout. (3) **Feedback survey triggers wired:** 9/10 triggers wired (OG-3 deferred — mark-sold flow unclear).
+
+**S404 Files Changed (22 files, 8 new):**
+- `packages/database/prisma/schema.prisma` — TreasureTrail extended + 5 new models + User/Organizer/Sale relations
+- `packages/database/prisma/migrations/20260406_add_treasure_trails/migration.sql` — NEW
+- `packages/backend/src/lib/placesService.ts` — NEW (Google Places API, haversine)
+- `packages/backend/src/controllers/trailController.ts` — NEW (11 endpoints)
+- `packages/backend/src/routes/trails.ts` — NEW (replaces V1 placeholder)
+- `packages/frontend/components/TrailCard.tsx` — NEW
+- `packages/frontend/pages/trails/index.tsx` — NEW (public trail discovery)
+- `packages/frontend/pages/trails/[trailId].tsx` — NEW (trail detail + check-in)
+- `packages/frontend/pages/organizer/trails/[saleId].tsx` — NEW (organizer trail builder)
+- `packages/frontend/components/AvatarDropdown.tsx` — Treasure Trails nav link added
+- `packages/frontend/components/Layout.tsx` — Treasure Trails nav link added (mobile)
+- `packages/frontend/pages/organizer/edit-sale/[id].tsx` — OG-1 survey trigger (publish sale)
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — OG-2 survey trigger (10th item)
+- `packages/frontend/pages/organizer/pos.tsx` — OG-4 survey trigger (POS checkout)
+- `packages/frontend/pages/organizer/settings.tsx` — OG-5 survey trigger (settings save)
+- `packages/frontend/pages/shopper/checkout-success.tsx` — SH-1 survey trigger (purchase success)
+- `packages/frontend/pages/items/[id].tsx` — SH-2 + SH-3 survey triggers (favorite + bid)
+- `packages/frontend/pages/shopper/haul-posts/create.tsx` — SH-4 survey trigger (haul post)
+- `packages/frontend/components/FollowOrganizerButton.tsx` — SH-5 survey trigger (follow)
+- `claude_docs/specs/explorers-guild-master-spec.md` — NEW
+- `claude_docs/STATE.md` + `claude_docs/patrick-dashboard.md` — wrap docs
+
+**S404 Migration Required (run after push):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S404 Deferred:**
+- OG-3 survey trigger (after mark sold) — mark-sold flow location unclear; wire in next session
+- Chrome QA sweep (all sessions S396–S402) — deferred to S405 per Patrick
+
+---
+
+**S403 COMPLETE (2026-04-06):** Explorer's Guild full gamification design — Treasure Trails + XP economy
+
+**S403 Summary:**
 Full gamification deep dive. Multi-agent pass: Innovation → DA+Steelman (parallel) → Advisory Board. Advisory Board verdict: 8×+1, 3×0, 0×-1 — Conditional Proceed. Three non-negotiables: rank visibility opt-in, seasonal streaks (not calendar), Hunt Pass framed as "support indie sellers."
-
-**S403 Locked decisions:**
-- XP economy: $1=1 XP for purchases (validated via time-to-rank audit)
-- Dual XP eliminated — one currency for all users; organizer sinks require organizer account type
-- Seasonal Battle Pass eliminated as separate SKU — seasonal content folds into Hunt Pass ($4.99/mo)
-- Organizer signup XP cap removed — fraud gate = first purchase required
-- Hunt Pass stays $4.99/mo (financial math validated)
-- Rank floor model: `spendableXP = currentXP - rankFloor[rank]`
-- Virtual queue XP: on-time=10, early bonus=5, 3-streak=20; 100 XP/mo cap
-- Bounty system: organizer posts (50 XP cost or $1.99), shopper fulfills (25 XP), seasonal platform bounties (50–200 XP)
-
-**S403 Treasure Trails — full reframe (Patrick direction):**
-- NOT a sale route. A curated multi-stop local experience anchored by a FindA.Sale event.
-- Stops can include: FindA.Sale events, resale/antique shops, cafes, landmarks, photo spots — anything someone out for an afternoon might enjoy.
-- Works with only 1 sale in the area (non-sale POIs fill the trail).
-- Stop XP: sale=5, resale shop=3, POI/café=2, platform partner=4; +2 photo bonus at any stop.
-- Completion bonus scales by trail length: 3-stop=40 XP, 4=50, 5=60, 6=70, 7=80 XP.
-- Partial completion: per-stop XP always earned; completion bonus requires all stops; 7-day window.
-- 1 completion bonus per trail per user.
-- Trail creation: organizers build trails anchored to their sale; platform curates featured trails.
-- Architect feasibility check in progress (S403).
 
 **S403 Files created:**
 - `claude_docs/research/s403-gamification-research.md` — Innovation research memo (600 lines)
 - `claude_docs/feature-notes/gamedesign-decisions-2026-04-06.md` — Full XP economy, sinks, $ ratio table, locked decisions (Rev 2)
-
-**S403 Build plan:** ONE SHOT (not phased). Documentation session next. Architect feasibility check pending.
+- `claude_docs/feature-notes/treasure-trails-architect-adr.md` — schema + API contracts, architect feasibility verdict (GO)
 
 ---
 
@@ -1322,78 +1343,30 @@ Files changed S361:
 
 ---
 
-## Next Session (S404)
+## Next Session (S405)
 
-### S404 Priority 1 — EXPLORER'S GUILD + TREASURE TRAILS: DOC + DEV + VERIFY (parallel dispatch)
-
-S403 is complete. All design decisions are locked. S404 builds in one shot.
-
-**Step 1 — Create the master spec document first (before dev dispatch):**
-
-Dispatch `findasale-records` to produce `claude_docs/specs/explorers-guild-master-spec.md` — a single authoritative document combining:
-- All decisions from `claude_docs/feature-notes/gamedesign-decisions-2026-04-06.md`
-- Architect contracts from `claude_docs/feature-notes/treasure-trails-architect-adr.md`
-- Shopping Companion framing (3-mode: pre-sale/during-sale/post-sale)
-- Full XP earning table, sinks, $ ratio table
-- Treasure Trail definition, stop types, XP economy, creation flow
-- Schema plan (5 new Treasure Trail models + PointsTransaction event types)
-- API contracts (organizer trail builder + shopper trail discovery + check-in)
-- Hunt Pass integration (seasonal challenges included, trail discovery perks)
-
-**Step 2 — Dispatch findasale-dev in parallel with doc creation:**
-
-Dev prompt must include:
-1. Schema preflight: read schema.prisma, confirm every field before writing code
-2. Implement in this order: (a) schema + migration, (b) PointsTransaction event types, (c) XP service extensions, (d) Trail backend endpoints, (e) Trail frontend components, (f) trail builder in organizer flow
-3. Google Places API key: add to Railway env vars (key needs to be set — Patrick to create at console.cloud.google.com, project "FindA.Sale", Maps Platform, Places API)
-4. TS check gate before returning: `cd packages/frontend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules`
-5. Return explicit list of every file created or modified
-
-**Step 3 — After dev returns, verify:**
-- Math check: pick 3 representative user paths through the XP economy and verify the numbers add up correctly against rank thresholds
-- Schema check: confirm all 5 Treasure Trail models match the ADR spec
-- API check: confirm endpoint contracts match architect handoff
-- No removal gate violations: trail builder should ADD to organizer flow, not replace anything
-
-**Key source files for S404:**
-- `claude_docs/feature-notes/gamedesign-decisions-2026-04-06.md` — complete XP economy (Rev 2)
-- `claude_docs/feature-notes/treasure-trails-architect-adr.md` — schema + API contracts
-- `claude_docs/research/s403-gamification-research.md` — research context + Shopping Companion spec
-
-**Locked decisions to honor (do not revisit):**
-- Rank thresholds: 500/2000/5000/12000 XP (S388)
-- One XP currency (no org-XP vs shopper-XP split)
-- Hunt Pass $4.99/mo, no Seasonal Battle Pass SKU
-- Trail completion bonus scales 40→80 XP by stop count (3→7 stops)
-- Google Places API, $200/mo hard cap
-- Organizer earns +15 XP per unique trail completion
-- Trail creation: open (no paywall/rank gate), editorial review SLA 1–2 days
-- XP floor model: `spendableXP = currentXP - rankFloor[rank]`
-
----
-
-### S404 Priority 2 — Wire 10 feedback survey triggers (deferred from S399/S403)
-Infrastructure is built (S399). Wire `showSurvey()` into: OG-1 (publish), OG-2 (10th item), OG-3 (mark sold), OG-4 (POS checkout), OG-5 (settings save), SH-1 (checkout success), SH-2 (favorite), SH-3 (bid), SH-4 (haul post), SH-5 (follow). See `claude_docs/FEEDBACK_DEV_QUICKSTART.md`.
-
-### S404 Priority 3 — Chrome QA sweep
+### S405 Priority 1 — Chrome QA sweep (deferred from S404)
 - S402: Price Research Panel, health breakdown checklist, eBay sandbox button
 - S398 dashboard, S399 review card, S400–401 camera fixes
+- S404: Treasure Trails trail discovery page + check-in flow basic smoke test
 - QA carry-forward: S397 sort/toolbar/dark mode, S396 rapidfire hold/photo limit/onboarding modal, full POS walkthrough (4 payment modes)
+- Chrome concurrency rule: dispatch QA agents SEQUENTIALLY (one at a time, shared browser)
+
+### S405 Priority 2 — OG-3 feedback trigger (deferred from S404)
+Wire `showSurvey('OG-3')` after mark-sold. Needs investigation: find where the mark-sold action completes in the organizer flow. See `claude_docs/FEEDBACK_DEV_QUICKSTART.md`.
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app
 - Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
-- eBay: sandbox credentials live in Railway (EBAY_CLIENT_ID / EBAY_CLIENT_SECRET). URLs pointing at api.sandbox.ebay.com. Swap to api.ebay.com + production creds when ready to go live.
-- Backend route mounts: `app.use('/api/organizers', organizerRoutes)` and `app.use('/api/sales', saleRoutes)`
-- All migrations current ✅
-- Google Places API: Patrick needs to create API key at console.cloud.google.com → Maps Platform → Places API. Set $200/mo billing cap. Add to Railway as GOOGLE_PLACES_API_KEY.
-
-### S403 COMPLETE — what was accomplished
-Full gamification deep dive. Multi-agent pass: Innovation research → DA+Steelman (parallel) → Advisory Board (8×+1, 3×0, Conditional Proceed) → Game Designer (full XP economy) → Architect (Treasure Trails feasibility: GO). All design decisions locked. Three new spec files created. Build is one-shot, S404.
+- eBay: sandbox credentials live in Railway. Swap to api.ebay.com + production creds when ready.
+- Backend route mounts: `app.use('/api/organizers', organizerRoutes)` and `app.use('/api/sales', saleRoutes)` and `app.use('/api/trails', trailRoutes)`
+- **S399 migration still required** if not run: FeedbackSuppression table — run before testing feedback surveys
+- **S404 migration required:** `20260406_add_treasure_trails` — run before Treasure Trails work
+- Google Places API: Patrick needs to create key at console.cloud.google.com → Maps Platform → Places API. Set $200/mo billing cap. Add to Railway as `GOOGLE_PLACES_API_KEY`.
 
 ---
 
-## Next Session (S403) — COMPLETE — see S404 above
+## Next Session (S404) — COMPLETE — see S405 above
 
 ### S403 Priority 1 — GAMIFICATION DEEP DIVE (full board session)
 

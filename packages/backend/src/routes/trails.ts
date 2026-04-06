@@ -1,32 +1,34 @@
 import { Router } from 'express';
-import { authenticate, optionalAuthenticate } from '../middleware/auth';
-import {
-  createTrail,
-  getMyTrails,
-  getPublicTrail,
-  updateTrail,
-  deleteTrail,
-  completeTrail,
+import { 
+  createTrail, 
+  getTrail, 
+  listTrails, 
+  addStop, 
+  searchNearby, 
+  checkInAtStop, 
+  postStopPhoto, 
+  rateTrail, 
+  updateTrail, 
+  deleteTrail 
 } from '../controllers/trailController';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-// POST /api/trails — Create trail (auth required)
-router.post('/', authenticate, createTrail);
+// Trail CRUD
+router.post('/', authenticate, createTrail);                            // POST   /api/trails
+router.get('/:trailId', getTrail);                                      // GET    /api/trails/:trailId (public or auth)
+router.get('/', listTrails);                                            // GET    /api/trails (public)
+router.patch('/:trailId', authenticate, updateTrail);                   // PATCH  /api/trails/:trailId (organizer)
+router.delete('/:trailId', authenticate, deleteTrail);                  // DELETE /api/trails/:trailId (organizer)
 
-// GET /api/trails — Get my trails (auth required, paginated)
-router.get('/', authenticate, getMyTrails);
+// Trail stops
+router.post('/:trailId/stops', authenticate, addStop);                  // POST   /api/trails/:trailId/stops (organizer)
+router.get('/:trailId/search-nearby', authenticate, searchNearby);      // GET    /api/trails/:trailId/search-nearby (organizer)
 
-// GET /api/trails/public/:shareToken — Get public trail (no auth)
-router.get('/public/:shareToken', optionalAuthenticate, getPublicTrail);
-
-// PUT /api/trails/:trailId — Update trail (auth + ownership)
-router.put('/:trailId', authenticate, updateTrail);
-
-// DELETE /api/trails/:trailId — Delete trail (auth + ownership)
-router.delete('/:trailId', authenticate, deleteTrail);
-
-// POST /api/trails/:trailId/complete — Mark complete (auth + ownership)
-router.post('/:trailId/complete', authenticate, completeTrail);
+// Shopper interactions
+router.post('/:trailId/stops/:stopId/checkin', authenticate, checkInAtStop);       // POST /api/trails/:trailId/stops/:stopId/checkin
+router.post('/:trailId/stops/:stopId/photo', authenticate, postStopPhoto);         // POST /api/trails/:trailId/stops/:stopId/photo
+router.post('/:trailId/rate', authenticate, rateTrail);                            // POST /api/trails/:trailId/rate
 
 export default router;
