@@ -15,12 +15,15 @@ interface ItemPhotoManagerProps {
   itemId: string;
   initialPhotos: string[];
   onPhotosChange?: (photos: string[]) => void;
+  /** Replaces the default "+ Add Photos" button in the header when provided */
+  headerActions?: React.ReactNode;
 }
 
 const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
   itemId,
   initialPhotos,
   onPhotosChange,
+  headerActions,
 }) => {
   const [photos, setPhotos] = useState<string[]>(initialPhotos);
   const [uploading, setUploading] = useState(false);
@@ -111,14 +114,16 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
         <label className="block text-sm font-medium text-warm-700">
           Photos <span className="text-warm-400 font-normal">({photos.length})</span>
         </label>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="text-sm bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
-        >
-          {uploading ? 'Uploading\u2026' : '+ Add Photos'}
-        </button>
+        {headerActions ?? (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="text-sm bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+          >
+            {uploading ? 'Uploading\u2026' : '+ Add Photos'}
+          </button>
+        )}
         <input
           ref={fileInputRef}
           type="file"

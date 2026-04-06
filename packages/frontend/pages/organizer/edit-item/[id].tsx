@@ -111,6 +111,22 @@ const EditItemPage = () => {
     queryClient.invalidateQueries({ queryKey: ['item', id] });
   };
 
+  // Intercept mobile swipe-back so it closes the inline camera instead of navigating away
+  useEffect(() => {
+    if (!inlineCameraOpen) return;
+    const closedByBack = { current: false };
+    window.history.pushState({ inlineCameraOpen: true }, '');
+    const handlePopState = () => {
+      closedByBack.current = true;
+      setInlineCameraOpen(false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (!closedByBack.current) window.history.back();
+    };
+  }, [inlineCameraOpen]);
+
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
@@ -557,49 +573,54 @@ const EditItemPage = () => {
                         {/* Phase 16: Photo management */}
             {item && (
               <div>
-                {/* BUG 5 FIX: Add photo mode selector with dedicated hidden inputs */}
-                <div className="mb-4 flex gap-2 flex-wrap">
-                  <input
-                    ref={uploadInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    hidden
-                    onChange={(e) => handlePhotoUpload(e.target.files, 'upload')}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => uploadInputRef.current?.click()}
-                    className="px-3 py-2 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
-                  >
-                    📁 Upload Files
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
-                      setInlineCaptureMode('regular');
-                      setInlineCameraOpen(true);
-                    }}
-                    className="px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
-                  >
-                    📷 Camera
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
-                      setInlineCaptureMode('rapidfire');
-                      setInlineCameraOpen(true);
-                    }}
-                    className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
-                  >
-                    ⚡ Rapidfire
-                  </button>
-                </div>
+                {/* Hidden file input for upload-files button */}
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  hidden
+                  onChange={(e) => handlePhotoUpload(e.target.files, 'upload')}
+                />
                 <ItemPhotoManager
                   itemId={String(id)}
                   initialPhotos={item.photoUrls || []}
+                  headerActions={
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        title="Upload files"
+                        onClick={() => uploadInputRef.current?.click()}
+                        className="w-8 h-8 flex items-center justify-center bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-800 text-base"
+                      >
+                        📁
+                      </button>
+                      <button
+                        type="button"
+                        title="Camera"
+                        onClick={() => {
+                          setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
+                          setInlineCaptureMode('regular');
+                          setInlineCameraOpen(true);
+                        }}
+                        className="w-8 h-8 flex items-center justify-center bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 text-base"
+                      >
+                        📷
+                      </button>
+                      <button
+                        type="button"
+                        title="Rapidfire"
+                        onClick={() => {
+                          setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
+                          setInlineCaptureMode('rapidfire');
+                          setInlineCameraOpen(true);
+                        }}
+                        className="w-8 h-8 flex items-center justify-center bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800 text-base"
+                      >
+                        ⚡
+                      </button>
+                    </div>
+                  }
                 />
               </div>
             )}
