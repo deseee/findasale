@@ -957,14 +957,14 @@ const ReviewPage = () => {
                                     />
                                     <button
                                       type="button"
-                                      onClick={() => (window[`uploadInput_${item.id}`] as any)?.click()}
+                                      onClick={() => ((window as any)[`uploadInput_${item.id}`] as any)?.click()}
                                       className="px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded text-xs font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
                                     >
                                       📁 Upload
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => (window[`cameraInput_${item.id}`] as any)?.click()}
+                                      onClick={() => ((window as any)[`cameraInput_${item.id}`] as any)?.click()}
                                       className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                                     >
                                       📷 Camera
