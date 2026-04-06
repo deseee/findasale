@@ -45,8 +45,8 @@ npx prisma generate
 ```
 
 **S404 Continuation — additional fixes (same session):**
-- `packages/database/prisma/schema.prisma` — Prisma field conflict fixed: V1 `stops Json` renamed to `stopsJson @map("stops")` (allows `stops TrailStop[]` relation to coexist)
-- `packages/frontend/pages/shopper/hunt-pass.tsx` — Full XP earning table (all actions, Hunt Pass 1.5x column) + XP sinks section added
+- `packages/database/prisma/schema.prisma` — Prisma field conflict fixed: V1 `stops Json` renamed to `stopsJson @map("stops")` (allows `stops TrailStop[]` relation to coexist); TrailCheckIn circular FK fixed (removed photoId FK, replaced with back-reference `photos TrailPhoto[]`)
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — Full XP earning table (all actions, Hunt Pass 1.5x column) + XP sinks section added; auth gate removed (page now public; auth check moved to subscribe button)
 - `packages/frontend/pages/faq.tsx` — 11 AI text replacements + 5 new XP/Hunt Pass/Trails FAQ entries
 - `packages/frontend/pages/support.tsx` — AI text replacements
 - `packages/frontend/pages/inspiration.tsx` — AI text replacements
@@ -54,6 +54,10 @@ npx prisma generate
 - `packages/frontend/pages/organizer/fraud-signals.tsx` — AI text replacements
 - `packages/frontend/pages/organizer/typology.tsx` — AI text replacements
 - `packages/frontend/styles/support.module.css` — Organizer support page dark mode fixed
+- `packages/backend/src/services/xpService.ts` — `COUPON_GENERATE` cost corrected: 20 → 50 XP (per locked spec)
+- `packages/backend/src/controllers/couponController.ts` — (1) removed userId ownership lock from `validateCoupon` (coupons are now redeemable by any shopper with the code); (2) added `generateXpSinkCoupon` endpoint (50 XP, $1-off, 30-day, max 5/month per organizer); (3) disabled `issueLoyaltyCoupon` — not in spec, created undisclosed organizer payout liability
+- `packages/backend/src/controllers/stripeController.ts` — commented out `issueLoyaltyCoupon()` call
+- `packages/backend/src/routes/coupons.ts` — added `POST /generate` (requireOrganizer)
 
 **S404 Deferred:**
 - OG-3 survey trigger (after mark sold) — mark-sold flow location unclear; wire in next session

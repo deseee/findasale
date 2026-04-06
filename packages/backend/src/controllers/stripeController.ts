@@ -792,8 +792,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           awardStamp(purchase.userId, 'MAKE_PURCHASE', purchase.saleId ?? undefined)
             .catch(err => console.warn('[loyalty] Failed to award purchase stamp:', err));
 
-          issueLoyaltyCoupon(purchase.userId, purchase.id)
-            .catch(err => console.warn('[coupon] Failed to issue loyalty coupon:', err));
+          // issueLoyaltyCoupon disabled S404 — not in Explorer's Guild spec
+          // issueLoyaltyCoupon(purchase.userId, purchase.id)
+          //   .catch(err => console.warn('[coupon] Failed to issue loyalty coupon:', err));
 
           if (paymentIntent.metadata?.couponId) {
             markCouponUsed(paymentIntent.metadata.couponId, purchase.id)

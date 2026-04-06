@@ -64,7 +64,7 @@ export const XP_AWARDS = {
 
 // XP sink costs (per spec Decision 7)
 export const XP_SINKS = {
-  COUPON_GENERATE: 20, // Organizer spends 20 XP to create $1-off coupon
+  COUPON_GENERATE: 50, // Organizer spends 50 XP to create $1-off coupon (spec-locked S404)
   RARITY_BOOST: 15, // Shopper spends 15 XP for +2% legendary odds
   HUNT_PASS_DISCOUNT: 50, // Shopper spends 50 XP for $1 off Hunt Pass
 };
