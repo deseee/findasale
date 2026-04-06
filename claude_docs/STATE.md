@@ -7,6 +7,21 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S401 COMPLETE (2026-04-06):** Camera thumbnail refresh, icon-only photo buttons, mobile swipe-back closes camera
+
+**S401 Summary:**
+
+Three camera UX fixes. (1) Thumbnails now refresh without page reload after inline camera Save or X-close: `ItemPhotoManager` gained a `useEffect` keyed on photo URLs to sync local state when the parent query refetches; review and edit-item pages now fire an explicit `invalidateQueries` AFTER the camera closes, not just during upload. (2) Upload/Camera/Rapidfire buttons are now icon-only (📁 📷 ⚡) and live inside the `ItemPhotoManager` header — replacing the old separate "+ Add Photos" button. `ItemPhotoManager` got a new `headerActions` prop for this. (3) Mobile swipe-back in rapidfire/camera mode now closes the inline overlay instead of navigating to the previous page — both pages use `history.pushState` + `popstate` intercept.
+
+**S401 Files Changed (3 files):**
+- `packages/frontend/components/ItemPhotoManager.tsx` — `useEffect` to sync initialPhotos prop; `headerActions` prop replaces default "+ Add Photos" button
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — post-close invalidateQueries; icon-only headerActions; popstate swipe-back intercept
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — post-close invalidateQueries; icon-only headerActions; popstate swipe-back intercept
+
+**S401 No migration required.**
+
+---
+
 **S400 COMPLETE (2026-04-06):** QR left-align on labels/price sheet, inline camera append fix, thumbnail strip live update, regular mode photo count awareness
 
 **S400 Summary:**
