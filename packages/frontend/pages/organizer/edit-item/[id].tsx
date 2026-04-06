@@ -494,7 +494,7 @@ const EditItemPage = () => {
                 <div className="mb-4 flex gap-2 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => document.querySelector('input[type="file"]')?.click()}
+                    onClick={() => (document.querySelector('input[type="file"]') as HTMLElement)?.click()}
                     className="px-3 py-2 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
                   >
                     📁 Upload Files
