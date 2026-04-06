@@ -107,6 +107,8 @@ const EditItemPage = () => {
   const handleInlineCameraAnalyze = async (photos: { blob: Blob; previewUrl: string }[]) => {
     for (const photo of photos) await handleInlineCameraCapture(photo);
     setInlineCameraOpen(false);
+    // Explicit post-close refetch so thumbnails update without a page refresh
+    queryClient.invalidateQueries({ queryKey: ['item', id] });
   };
 
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -671,8 +673,8 @@ const EditItemPage = () => {
               onModeChange={setInlineCaptureMode}
               onPhotoCapture={inlineCaptureMode === 'rapidfire' ? handleInlineCameraCapture : undefined}
               onAnalyze={inlineCaptureMode === 'regular' ? handleInlineCameraAnalyze : undefined}
-              onComplete={() => setInlineCameraOpen(false)}
-              onCancel={() => setInlineCameraOpen(false)}
+              onComplete={() => { setInlineCameraOpen(false); queryClient.invalidateQueries({ queryKey: ['item', id] }); }}
+              onCancel={() => { setInlineCameraOpen(false); queryClient.invalidateQueries({ queryKey: ['item', id] }); }}
               onAddToItem={() => {}}
               onThumbnailTap={() => {}}
               onNavigateToReview={() => setInlineCameraOpen(false)}

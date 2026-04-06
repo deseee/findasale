@@ -7,7 +7,7 @@
  * - Reorder photos (first = cover photo shown on item cards)
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import api from '../lib/api';
 import { getThumbnailUrl } from '../lib/imageUtils';
 
@@ -24,6 +24,11 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
 }) => {
   const [photos, setPhotos] = useState<string[]>(initialPhotos);
   const [uploading, setUploading] = useState(false);
+
+  // Sync local photos state when parent updates initialPhotos (e.g. after inline camera save + query refetch)
+  const initialPhotosKey = initialPhotos.join(',');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setPhotos(initialPhotos); }, [initialPhotosKey]);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
