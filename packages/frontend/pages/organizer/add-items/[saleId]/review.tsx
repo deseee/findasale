@@ -900,7 +900,7 @@ const ReviewPage = () => {
                                   <div className="mb-3 flex gap-1 flex-wrap">
                                     <button
                                       type="button"
-                                      onClick={() => document.querySelector(`#photo-input-${item.id}`)?.click()}
+                                      onClick={() => (document.querySelector(`#photo-input-${item.id}`) as HTMLElement)?.click()}
                                       className="px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded text-xs font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
                                     >
                                       📁 Upload
