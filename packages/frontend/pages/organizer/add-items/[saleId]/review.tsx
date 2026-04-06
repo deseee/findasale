@@ -51,6 +51,7 @@ interface HealthBreakdown {
   tags: number;
   price: number;
   conditionGrade?: number; // #64
+  category?: number;
 }
 
 interface HealthScore {
