@@ -97,7 +97,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
 
       {/* Panel Content */}
       {!isCollapsed && (
-        <div className="border-t border-warm-200 dark:border-gray-700 p-4 space-y-4">
+        <div className="border-t border-warm-200 dark:border-gray-700 p-4 space-y-3">
           {/* AI Estimate */}
           {aiEstimate && (
             <>
@@ -113,17 +113,17 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                   </div>
                 </div>
               </div>
-              <hr className="border-warm-200 dark:border-gray-700" />
+              <hr className="border-warm-100 dark:border-gray-800" />
             </>
           )}
 
           {/* Smart Pricing (⚡) */}
           <div>
-            <p className="text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">
+            <p className="text-xs font-semibold text-warm-700 dark:text-warm-300 mb-2">
               ⚡ Smart Pricing
             </p>
             <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
-              AI-generated price based on title, category, and condition
+              Price estimate based on title, category & condition
             </p>
             <PriceSuggestion
               title={itemTitle}
@@ -139,18 +139,18 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
             />
           </div>
 
-          <hr className="border-warm-200 dark:border-gray-700" />
+          <hr className="border-warm-100 dark:border-gray-800" />
 
           {/* eBay Price Comps */}
           <div>
-            <p className="text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">
+            <p className="text-xs font-semibold text-warm-700 dark:text-warm-300 mb-2">
               💰 eBay Market Comps
             </p>
             <button
               type="button"
               onClick={handleGetPriceComps}
               disabled={compsLoading}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 text-sm"
+              className="px-3 py-1.5 border border-blue-500 text-blue-500 dark:text-blue-400 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
             >
               {compsLoading ? 'Searching eBay...' : 'Search eBay Sold Listings'}
             </button>
@@ -208,12 +208,12 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
             )}
           </div>
 
-          <hr className="border-warm-200 dark:border-gray-700" />
+          <hr className="border-warm-100 dark:border-gray-800" />
 
           {/* Platform Comps (ValuationWidget — PRO only) */}
           <div>
-            <p className="text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">
-              📊 Platform Comps (PRO)
+            <p className="text-xs font-semibold text-warm-700 dark:text-warm-300 mb-2">
+              📊 Sales Comps (PRO)
             </p>
             <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
               Comparable sale prices from within FindA.Sale
