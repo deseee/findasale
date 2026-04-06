@@ -50,10 +50,31 @@ git commit -m "S402: health score, price research panel, eBay comps + CSV, Railw
 
 ---
 
-## Next Session Priorities
+## Next Session (S403) — Gamification Deep Dive
 
-1. Wire 10 feedback survey triggers (OG-1 through SH-5) — infrastructure done, just needs hook calls on specific pages
-2. Chrome QA on S398 dashboard + S399 review card + S400–401 camera fixes + S402 pricing panel
-3. Social share template fix — hardcoded "estate sale" language on share cards
+**P1: Full board session on Shopping Companion / loyalty system design.**
+
+The session will run Innovation research → DA+Steelman → full Advisory Board review. No code. Pure strategy.
+
+**What's being researched:** Duolingo, Starbucks Stars, Whatnot, Poshmark Ambassador, Pokémon GO, Reddit karma, Foursquare Mayor (died), Robinhood confetti (cautionary). Every roadmap feature audited for XP/badge/companion-trigger potential.
+
+**The framing Patrick chose:** A "Shopping Companion" — something with agency that helps users, not just rewards them. Pre-sale alerts, during-sale coaching, post-sale haul summaries.
+
+**10 questions that will reshape the proposal:**
+- Is this solving churn or acquisition? (Different mechanics)
+- What happens when users max rank? (End-game problem — prestige? seasonal resets?)
+- Shopper-only or organizer XP too? (Can't mix without structural unfairness)
+- Does this cost FindA.Sale money or make money? (Economics must pencil first)
+- Does rewarding deal-finding depress organizer revenue? (Revenue tension)
+- Are badges visible to organizers? Leaderboards? (Virality vs. anxiety tradeoff)
+- What's the notification cadence? (Gamification dies without this answer)
+- Any legal/regulatory exposure if rewards have cash value? (Sweepstakes law)
+- Platform-wide XP or sale-scoped? (Retention vs. attribution)
+- Does "Explorer's Guild" work for non-gamer users? (Brand fit question)
+
+**Known locked decisions:** Rank thresholds 500/2000/5000/12000 XP (S388). PRO=$29, TEAMS=$79.
+
+**P2:** Wire 10 feedback survey triggers (infrastructure done, just needs hook calls)
+**P3:** Chrome QA sweep — S402 pricing panel, S399 review card, S400–401 camera, POS walkthrough
 
 *Updated S402 — 2026-04-06*

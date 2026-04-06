@@ -1288,27 +1288,62 @@ Files changed S361:
 
 ---
 
-## Next Session (S400)
+## Next Session (S403)
 
-### S400 Priority 1 — Add 10 survey trigger integrations
-Infrastructure is built (S399). Wire `showSurvey()` calls into 10 pages: OG-1 (publish), OG-2 (10th item), OG-3 (mark sold), OG-4 (POS checkout), OG-5 (settings save), SH-1 (checkout success), SH-2 (favorite), SH-3 (bid), SH-4 (haul post), SH-5 (follow). See `claude_docs/FEEDBACK_DEV_QUICKSTART.md` trigger locations.
+### S403 Priority 1 — GAMIFICATION DEEP DIVE (full board session)
 
-### S400 Priority 2 — Chrome QA: S398 dashboard + S399 review card + feedback system
-- Dashboard: welcome text, button icons, LIVE badge links, weather wrap, Other Sales card
-- Review page: status line colors, health breakdown sections, AI confidence in expanded panel only, blocked checkbox disabled
-- Feedback: settings Help tab opens form, form submits, dark mode
+Patrick wants a full strategic proposal for a sustainable, fun Shopping Companion / loyalty system for FindA.Sale shoppers. This is a multi-agent session. Fire in this order:
 
-### Carry-forward QA backlog
-- S397: add-items sort, toolbar, dark mode, item row, link removal, back-nav
-- S396: rapidfire hold, photo limit prompt, onboarding modal routes
-- Full POS walkthrough (4 payment modes)
-- Audit alerts: sale detail items below map, trending images, inspiration gallery, feed blur
+**Step 1 — Research (Innovation agent):** Research these reference programs before anything else:
+- Duolingo XP/leagues/streak psychology (anti-churn via streak freeze)
+- Starbucks Stars (purchase-tiered unlocks, seasonal specials, emotional attachment)
+- Whatnot live auction gamification (bidding streaks, heat signals, FOMO mechanics)
+- Poshmark Ambassador (community-driven status, social proof, zero cash cost)
+- Pokémon GO (location-based discovery, collection completion compulsion loop)
+- Foursquare Mayor → why it died (single axis of competition, no progression depth)
+- Robinhood confetti → negative example (trivializing serious decisions with rewards)
+- Reddit karma → zero monetary value, high social value — the "why it works" model
+
+**Step 2 — Roadmap feature audit through gamification lens:** For each feature below, determine if it can generate XP, unlock a badge, or trigger a companion event. Rank each: A (core XP driver), B (badge/achievement), C (companion notification trigger), D (not applicable):
+- Favorites, Holds, Purchases, Repeat-organizer purchases, Reviews/feedback, Haul posts, Referrals, Early-bird purchase (<1hr of sale open), Consecutive-sale streaks, Category collecting (10+ in one category), Hunt Pass (premium layer — already exists)
+
+**Step 3 — Shopping Companion framing:** A "Shopping Companion" implies the system has agency — it helps you, not just rewards you. This is meaningfully different from a loyalty card. The companion should have three modes:
+- Pre-sale: proactive alerts matching user favorites + rank context ("You're 3 XP from Silver — this sale has 4 items in your saved categories")
+- During sale: in-context coaching ("First In Door badge available — sale opens in 20 min")
+- Post-sale: haul summary + next-goal preview
+
+**Step 4 — Fire DA + Steelman together (co-fire rule):** Give both the full research output from Steps 1–3. Specific tensions to resolve: (a) Does gamification attract bargain hunters who depress organizer revenue? (b) Does an XP economy create unfair dynamics between power shoppers and casual ones? (c) Is "Explorer's Guild" the right brand for non-gamer users?
+
+**Step 5 — Full Advisory Board review:** Give the board the DA+Steelman outputs + the Shopping Companion spec. Ask the board specifically about: sustainable economics (does this cost FindA.Sale money?), regulatory exposure (sweepstakes/prize law), notification fatigue strategy, and social visibility design (are badges public to organizers?).
+
+**Questions Patrick hasn't asked that should alter the proposal:**
+1. **Retention vs. acquisition** — Is this solving churn or acquisition? These need different mechanics. What's the actual drop-off point in the shopper journey — first browse, first purchase, or post-purchase?
+2. **End-game problem** — What happens when users max rank (12,000 XP threshold confirmed S388)? Without prestige/seasonal systems, power users disengage at peak. Seasonal resets vs. prestige tracks vs. infinite XP — which?
+3. **Shopper vs. organizer economies** — Should organizers earn XP too, or is this shopper-only? Mixing creates structural unfairness (organizers transact more). Two parallel systems or one?
+4. **Monetization of the system itself** — Does the loyalty system cost FindA.Sale money (redeemable rewards, discounts) or generate revenue (premium badge unlocks, Hunt Pass upsell)? The economics must pencil out before design is locked.
+5. **Price depression risk** — Rewarding "deal finding" or volume purchasing could train buyers to lowball or wait for markdowns, actively hurting organizer revenue. Is the incentive structure aligned?
+6. **Social visibility design** — Are badges/rank visible to organizers? To other shoppers on a leaderboard? Visibility drives virality but also creates anxiety, cheating incentives, and exclusion for new users.
+7. **Notification cadence strategy** — Gamification dies without a smart notification strategy. Too many = unsubscribe. Too few = forgetting. What's the trigger matrix and opt-out design?
+8. **Legal/regulatory** — If any rewards have cash value or function like prizes, state sweepstakes law applies. Legal must review before launch.
+9. **Platform vs. sale-level loyalty** — XP scoped to a single sale drives short-term engagement. Platform-wide drives retention but is harder to attribute to organizer value. Which serves the business goal?
+10. **"Explorer's Guild" brand fit** — Has "Guild" been validated with non-gamer users? It may read as niche. Alternatives: "FindA.Sale Circle," "The Haul," "Collector Status."
+
+**Known decisions to honor:** Rank thresholds locked at 500/2000/5000/12000 XP (S388, board confirmed). PRO=$29, TEAMS=$79. Loyalty vs. explorer-passport consolidation still deferred.
+
+---
+
+### S403 Priority 2 — Wire 10 feedback survey triggers
+Infrastructure is built (S399). Wire `showSurvey()` into: OG-1 (publish), OG-2 (10th item), OG-3 (mark sold), OG-4 (POS checkout), OG-5 (settings save), SH-1 (checkout success), SH-2 (favorite), SH-3 (bid), SH-4 (haul post), SH-5 (follow). See `claude_docs/FEEDBACK_DEV_QUICKSTART.md`.
+
+### S403 Priority 3 — Chrome QA sweep
+- S402: Price Research Panel, health breakdown checklist, eBay sandbox button
+- S398 dashboard, S399 review card, S400–401 camera fixes
+- QA carry-forward: S397 sort/toolbar/dark mode, S396 rapidfire hold/photo limit/onboarding modal, full POS walkthrough (4 payment modes)
 
 ### Standing Notes
-- All Railway env vars ✅. Migrations ✅ (20260402_add_charity_donation deployed).
 - Railway backend: https://backend-production-153c9.up.railway.app
 - Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
-- eBay comps show mock data until Patrick sets EBAY_CLIENT_ID + EBAY_CLIENT_SECRET on Railway
+- eBay: sandbox credentials live in Railway (EBAY_CLIENT_ID / EBAY_CLIENT_SECRET). URLs pointing at api.sandbox.ebay.com. Swap to api.ebay.com + production creds when ready to go live.
 - Backend route mounts: `app.use('/api/organizers', organizerRoutes)` and `app.use('/api/sales', saleRoutes)`
-- Loyalty vs explorer-passport consolidation deferred
+- All migrations current ✅
 
