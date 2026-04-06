@@ -755,8 +755,8 @@ const ReviewPage = () => {
                             }`}
                             onClick={() => handleToggleExpand(item.id)}
                           >
-                            {/* Left column: checkbox + expand/collapse arrow (narrow, vertically centered) */}
-                            <div className="flex flex-col items-center justify-center gap-1 flex-shrink-0 pt-1">
+                            {/* Left column: checkbox + arrow + delete (narrow, stacked) */}
+                            <div className="flex flex-col items-center justify-start gap-1 flex-shrink-0 pt-1">
                               <input
                                 type="checkbox"
                                 checked={selectedItems.has(item.id)}
@@ -773,6 +773,20 @@ const ReviewPage = () => {
                                 onClick={(e) => e.stopPropagation()}
                               />
                               <span className="text-warm-400 text-xs">{expandedItemId === item.id ? '▲' : '▼'}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
+                                    deleteMutation.mutate([item.id]);
+                                  }
+                                }}
+                                disabled={deleteMutation.isPending}
+                                className="sm:hidden text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-0.5 mt-1"
+                                aria-label="Delete item"
+                              >
+                                🗑️
+                              </button>
                             </div>
 
                             {/* Photo with mobile status badge below */}
@@ -824,22 +838,22 @@ const ReviewPage = () => {
                                 <span>·</span>
                                 <span className="truncate">{item.category || 'Uncategorized'}</span>
                               </p>
-                              {/* Status line — human-readable health score */}
+                              {/* Status line — compact, single row */}
                               {item.healthScore && (
-                                <div className={`mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold ${
+                                <p className={`mt-1 text-xs font-semibold flex items-center gap-1 ${
                                   item.healthScore.grade === 'clear'
-                                    ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                                    ? 'text-green-600 dark:text-green-400'
                                     : item.healthScore.grade === 'nudge'
-                                    ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-                                    : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-red-600 dark:text-red-400'
                                 }`}>
-                                  <span className="text-lg font-bold leading-none">•</span>
+                                  <span>●</span>
                                   <span>
                                     {item.healthScore.grade === 'clear' ? 'Ready to Publish' :
                                      item.healthScore.grade === 'nudge' ? 'Review Before Publishing' :
                                      'Cannot Publish Yet'}
                                   </span>
-                                </div>
+                                </p>
                               )}
                             </div>
 
@@ -870,21 +884,7 @@ const ReviewPage = () => {
                               </button>
                             </div>
 
-                            {/* Mobile: delete button in top-right */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
-                                  deleteMutation.mutate([item.id]);
-                                }
-                              }}
-                              disabled={deleteMutation.isPending}
-                              className="sm:hidden text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-1 flex-shrink-0"
-                              aria-label="Delete item"
-                            >
-                              🗑️
-                            </button>
+                            {/* Mobile delete moved to left column above */}
                           </div>
 
                           {/* Expanded edit panel */}
