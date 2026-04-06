@@ -439,6 +439,17 @@ const AddItemsDetailPage = () => {
     }
   }, [router.isReady, saleId, router]);
 
+  // Auto-open camera when navigated from edit/review page with URL params
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (router.query.openCamera === '1') {
+      const mode = router.query.captureMode === 'rapidfire' ? 'rapidfire' : 'regular';
+      setCaptureMode(mode as 'rapidfire' | 'regular');
+      setActiveTab('camera');
+      setCameraOpen(true);
+    }
+  }, [router.isReady, router.query.openCamera, router.query.captureMode]);
+
   // Early returns after all hooks
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');

@@ -453,7 +453,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     >
                       🏷️ 4×3" Labels (6-up)
                     </button>
-                    <p className="text-sm text-warm-600 dark:text-warm-400">One label per page with QR code</p>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">6 labels per page with QR code</p>
                   </div>
 
                   {/* Avery 5160 Stickers */}
@@ -464,7 +464,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     >
                       📌 Avery 5160 Stickers
                     </button>
-                    <p className="text-sm text-warm-600 dark:text-warm-400">Price tags & item stickers (12 per page)</p>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Price tags & item stickers (30 per page)</p>
                   </div>
 
                   <div className="text-center">
