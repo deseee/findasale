@@ -14,6 +14,7 @@ export interface HealthBreakdown {
   tags: number; // 0–15
   price: number; // 0–5
   conditionGrade?: number; // 0–5
+  category?: number; // 0–5
 }
 
 export interface HealthResult {
@@ -33,6 +34,7 @@ interface ItemDraft {
   tags?: string[];
   price?: number | null;
   conditionGrade?: string | null;
+  category?: string | null;
 }
 
 /**
@@ -44,7 +46,8 @@ interface ItemDraft {
  * - No description → 0 pts; < 50 chars → 10 pts; ≥ 50 chars → 20 pts
  * - 0 tags → 0 pts; 1–2 tags → 7 pts; 3+ tags → 15 pts
  * - No price → 0 pts; price set → 5 pts
- * - No conditionGrade → 0 pts; grade set → 5 pts (#64)
+ * - No conditionGrade → 0 pts; placeholder (starts with "Select") → 0 pts; grade set → 5 pts
+ * - No category → 0 pts; placeholder (starts with "Select") → 0 pts; category set → 5 pts
  *
  * Gate logic:
  * - score < 40 → 'blocked' (cannot publish)
@@ -59,6 +62,7 @@ export function computeHealthScore(item: ItemDraft): HealthResult {
     tags: 0,
     price: 0,
     conditionGrade: 0,
+    category: 0,
   };
 
   // Photo score (0–40)
@@ -104,11 +108,16 @@ export function computeHealthScore(item: ItemDraft): HealthResult {
   // Price score (0–5)
   breakdown.price = item.price ? 5 : 0;
 
-  // Condition Grade score (0–5) — #64
-  breakdown.conditionGrade = item.conditionGrade ? 5 : 0;
+  // Condition Grade score (0–5) — treat "Select *" placeholder as empty
+  const isPlaceholderCondition = item.conditionGrade?.toLowerCase().startsWith('select');
+  breakdown.conditionGrade = item.conditionGrade && !isPlaceholderCondition ? 5 : 0;
 
-  // Total score
-  let score = breakdown.photo + breakdown.title + breakdown.description + breakdown.tags + breakdown.price + breakdown.conditionGrade;
+  // Category score (0–5) — treat "Select *" placeholder as empty
+  const isPlaceholderCategory = item.category?.toLowerCase().startsWith('select');
+  breakdown.category = item.category && !isPlaceholderCategory ? 5 : 0;
+
+  // Total score (max possible: 40 + 20 + 20 + 15 + 5 + 5 + 5 = 110)
+  let score = breakdown.photo + breakdown.title + breakdown.description + breakdown.tags + breakdown.price + breakdown.conditionGrade + breakdown.category;
 
   // BUG 2 FIX: Hard gate on price — no price means item cannot reach 'clear' grade
   // If price is missing/zero, cap score at 69 to force 'nudge' grade minimum

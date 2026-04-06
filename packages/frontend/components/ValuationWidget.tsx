@@ -28,8 +28,8 @@ export default function ValuationWidget({
   const [error, setError] = useState<string | null>(null);
   const [showWidget, setShowWidget] = useState(false);
 
-  // Check if organizer is PRO tier
-  const isPro = user?.organizerTier === 'PRO';
+  // Check if organizer is PRO or TEAMS tier
+  const isPro = user?.organizerTier === 'PRO' || user?.organizerTier === 'TEAMS';
 
   if (!isPro) {
     return (

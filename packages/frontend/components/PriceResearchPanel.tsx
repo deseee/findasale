@@ -69,9 +69,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
 
     setCompsLoading(true);
     try {
-      const response = await api.get('/items/ebay-comps', {
-        params: { title: itemTitle },
-      });
+      const response = await api.post(`/items/${itemId}/comps`);
       setCompsData(response.data);
       setShowCompsPanel(true);
     } catch (error: any) {
@@ -102,24 +100,30 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
         <div className="border-t border-warm-200 dark:border-gray-700 p-4 space-y-4">
           {/* AI Estimate */}
           {aiEstimate && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">
-                    🤖 AI Estimate
-                  </p>
-                  <p className="text-lg font-semibold text-blue-900 dark:text-blue-100">
-                    ${aiEstimate.toFixed(2)}
-                  </p>
+            <>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">
+                      🤖 AI Estimate
+                    </p>
+                    <p className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                      ${aiEstimate.toFixed(2)}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+              <hr className="border-warm-200 dark:border-gray-700" />
+            </>
           )}
 
-          {/* Suggest Price (💡) */}
+          {/* Smart Pricing (⚡) */}
           <div>
             <p className="text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">
-              💡 AI Price Suggestion
+              ⚡ Smart Pricing
+            </p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
+              AI-generated price based on title, category, and condition
             </p>
             <PriceSuggestion
               title={itemTitle}
@@ -135,6 +139,8 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
             />
           </div>
 
+          <hr className="border-warm-200 dark:border-gray-700" />
+
           {/* eBay Price Comps */}
           <div>
             <p className="text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">
@@ -146,8 +152,11 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
               disabled={compsLoading}
               className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 text-sm"
             >
-              {compsLoading ? 'Searching eBay...' : 'Get Price Comps'}
+              {compsLoading ? 'Searching eBay...' : 'Search eBay Sold Listings'}
             </button>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mt-1 mb-2">
+              Real sold prices from eBay for similar items
+            </p>
 
             {showCompsPanel && compsData && (
               <div
@@ -199,10 +208,15 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
             )}
           </div>
 
+          <hr className="border-warm-200 dark:border-gray-700" />
+
           {/* Platform Comps (ValuationWidget — PRO only) */}
           <div>
             <p className="text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">
-              📊 Comparable Sales (PRO)
+              📊 Platform Comps (PRO)
+            </p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
+              Comparable sale prices from within FindA.Sale
             </p>
             <ValuationWidget
               itemId={itemId}

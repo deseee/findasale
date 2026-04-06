@@ -703,7 +703,8 @@ const AddItemsDetailPage = () => {
   const handleEbayExport = async () => {
     try {
       setEbayExporting(true);
-      const response = await api.get(`/sales/${saleId}/ebay-export?photoMode=${ebayPhotoMode}`, {
+      const itemIdParam = selectedItems.size > 0 ? `&itemIds=${Array.from(selectedItems).join(',')}` : '';
+      const response = await api.get(`/sales/${saleId}/ebay-export?photoMode=${ebayPhotoMode}${itemIdParam}`, {
         responseType: 'blob',
       });
 
