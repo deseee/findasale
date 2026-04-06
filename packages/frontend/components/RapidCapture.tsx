@@ -130,6 +130,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const addingItem = inAddMode ? rapidItems.find((i) => i.id === addingToItemId) : null;
   const MAX_REGULAR = 5;
 
+  // Seed photosThisItem from existing photo count when entering regular mode on an existing item
+  useEffect(() => {
+    if (!isRapidfire && addingToItemId) {
+      const existingCount = rapidItems.find((i) => i.id === addingToItemId)?.photoUrls?.length ?? 0;
+      setPhotosThisItem(existingCount);
+    } else if (!isRapidfire) {
+      setPhotosThisItem(0);
+    }
+  }, [isRapidfire, addingToItemId, rapidItems]);
+
   // Start camera on mount and when facingMode changes
   // Auto-scroll carousel to show newest thumbnail (rightmost) on each capture
   useEffect(() => {
@@ -706,7 +716,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                     }}
                     className="text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 px-2 py-0.5 rounded font-semibold transition-colors"
                   >
-                    ✨ Analyze
+                    💾 Save
                   </button>
                 </>
               )}
