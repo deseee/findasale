@@ -40,6 +40,10 @@ export const postSupportChat = async (req: AuthRequest, res: Response) => {
         id: true,
         email: true,
         name: true,
+        role: true,
+        organizer: {
+          select: { subscriptionTier: true },
+        },
         roleSubscriptions: {
           select: {
             role: true,
@@ -53,10 +57,14 @@ export const postSupportChat = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check subscription tier — only PRO/TEAMS can use chat
-    const hasProOrTeams = user.roleSubscriptions.some(
-      (sub) => sub.subscriptionTier === 'PRO' || sub.subscriptionTier === 'TEAMS'
-    );
+    // Check subscription tier — only PRO/TEAMS can use chat (admin always allowed)
+    const hasProOrTeams =
+      user.role === 'ADMIN' ||
+      user.organizer?.subscriptionTier === 'PRO' ||
+      user.organizer?.subscriptionTier === 'TEAMS' ||
+      user.roleSubscriptions.some(
+        (sub) => sub.subscriptionTier === 'PRO' || sub.subscriptionTier === 'TEAMS'
+      );
 
     if (!hasProOrTeams) {
       return res.status(403).json({

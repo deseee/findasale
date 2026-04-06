@@ -515,23 +515,13 @@ const Support: React.FC = () => {
                 <p className={styles.upgradeNotice}>Available for PRO and TEAMS subscribers</p>
                 <button
                   className={styles.upgradeButton}
-                  onClick={() => router.push('/account/billing')}
+                  onClick={() => router.push('/pricing')}
                 >
                   Upgrade Now
                 </button>
               </div>
             )}
 
-            {/* Community Forum Link for TEAMS */}
-            {(user?.role === 'ADMIN' || user?.organizer?.subscriptionTier === 'TEAMS') && (
-              <div className={styles.communityLink}>
-                <h4>Community Forum</h4>
-                <p>Connect with other TEAMS members and share best practices.</p>
-                <a href="#" className={styles.forumLink}>
-                  Join Community Forum →
-                </a>
-              </div>
-            )}
           </div>
         </div>
       </div>
