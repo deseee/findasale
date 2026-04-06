@@ -442,7 +442,7 @@ export const postStopPhoto = async (req: AuthRequest, res: Response) => {
     // Link photo to check-in (for reference)
     await prisma.trailCheckIn.update({
       where: { id: checkIn.id },
-      data: { photoId: photo.id, photoXpAwarded: 2 },
+      data: { photoXpAwarded: 2 },
     });
 
     return res.status(201).json({ success: true, xpAwarded: 2 });
