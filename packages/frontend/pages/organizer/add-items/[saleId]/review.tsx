@@ -362,6 +362,22 @@ const ReviewPage = () => {
     queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
   };
 
+  // Intercept mobile swipe-back so it closes the inline camera instead of navigating away
+  useEffect(() => {
+    if (!inlineCameraOpen) return;
+    const closedByBack = { current: false };
+    window.history.pushState({ inlineCameraOpen: true }, '');
+    const handlePopState = () => {
+      closedByBack.current = true;
+      setInlineCameraOpen(false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (!closedByBack.current) window.history.back();
+    };
+  }, [inlineCameraOpen]);
+
   const getSortedItems = useCallback((itemsToSort: Item[]) => {
     return [...itemsToSort].sort((a, b) => {
       let comparison = 0;
@@ -969,46 +985,49 @@ const ReviewPage = () => {
 
                                 {/* Photos */}
                                 <div>
-                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">Photos</label>
-                                  {/* BUG 5 FIX: Add photo mode selector with dedicated hidden inputs */}
-                                  <div className="mb-3 flex gap-1 flex-wrap">
-                                    <input
-                                      ref={(ref) => {
-                                        if (ref && !(window as any)[`uploadInput_${item.id}`]) {
-                                          (window as any)[`uploadInput_${item.id}`] = ref;
-                                        }
-                                      }}
-                                      type="file"
-                                      accept="image/*"
-                                      multiple
-                                      hidden
-                                      onChange={(e) => handlePhotoUpload(item.id, e.target.files, 'upload')}
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => ((window as any)[`uploadInput_${item.id}`] as any)?.click()}
-                                      className="px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded text-xs font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
-                                    >
-                                      📁 Upload
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => { setInlineCaptureMode('regular'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
-                                      className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
-                                    >
-                                      📷 Camera
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
-                                      className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded text-xs font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
-                                    >
-                                      ⚡ Rapidfire
-                                    </button>
-                                  </div>
+                                  <input
+                                    ref={(ref) => {
+                                      if (ref && !(window as any)[`uploadInput_${item.id}`]) {
+                                        (window as any)[`uploadInput_${item.id}`] = ref;
+                                      }
+                                    }}
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    hidden
+                                    onChange={(e) => handlePhotoUpload(item.id, e.target.files, 'upload')}
+                                  />
                                   <ItemPhotoManager
                                     itemId={item.id}
                                     initialPhotos={item.photoUrls || []}
+                                    headerActions={
+                                      <div className="flex gap-1">
+                                        <button
+                                          type="button"
+                                          title="Upload files"
+                                          onClick={() => ((window as any)[`uploadInput_${item.id}`] as any)?.click()}
+                                          className="w-7 h-7 flex items-center justify-center bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded hover:bg-amber-200 dark:hover:bg-amber-800 text-sm"
+                                        >
+                                          📁
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Camera"
+                                          onClick={() => { setInlineCaptureMode('regular'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
+                                          className="w-7 h-7 flex items-center justify-center bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 text-sm"
+                                        >
+                                          📷
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Rapidfire"
+                                          onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
+                                          className="w-7 h-7 flex items-center justify-center bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded hover:bg-purple-200 dark:hover:bg-purple-800 text-sm"
+                                        >
+                                          ⚡
+                                        </button>
+                                      </div>
+                                    }
                                   />
                                 </div>
 
