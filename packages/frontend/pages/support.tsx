@@ -239,10 +239,10 @@ interface User {
   id: string;
   name: string;
   email: string;
-  roleSubscriptions: Array<{
-    role: string;
+  role: string;
+  organizer?: {
     subscriptionTier: string;
-  }>;
+  };
 }
 
 interface ChatMessage {
@@ -321,10 +321,11 @@ const Support: React.FC = () => {
     'Integrations & Webhooks',
   ];
 
-  // Check if user has PRO/TEAMS tier
-  const hasProOrTeams = user?.roleSubscriptions.some(
-    (sub) => sub.subscriptionTier === 'PRO' || sub.subscriptionTier === 'TEAMS'
-  );
+  // Check if user has PRO/TEAMS tier (or is admin)
+  const hasProOrTeams =
+    user?.role === 'ADMIN' ||
+    user?.organizer?.subscriptionTier === 'PRO' ||
+    user?.organizer?.subscriptionTier === 'TEAMS';
 
   // Handle chat message submit
   const handleChatSubmit = async (e: React.FormEvent) => {
@@ -522,7 +523,7 @@ const Support: React.FC = () => {
             )}
 
             {/* Community Forum Link for TEAMS */}
-            {user?.roleSubscriptions.some((sub) => sub.subscriptionTier === 'TEAMS') && (
+            {(user?.role === 'ADMIN' || user?.organizer?.subscriptionTier === 'TEAMS') && (
               <div className={styles.communityLink}>
                 <h4>Community Forum</h4>
                 <p>Connect with other TEAMS members and share best practices.</p>
