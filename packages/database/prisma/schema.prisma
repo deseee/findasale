@@ -2071,13 +2071,15 @@ model TrailCheckIn {
   baseXpAwarded  Int           // Base per-stop XP
   photoXpAwarded Int           @default(0) // 0 or 2 if photo posted
 
-  // Photo (optional)
-  photoId        String?       // Link to TrailPhoto if user posted one
-  photo          TrailPhoto?   @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  // XP tracking
+  // photoId removed — photos are queried via TrailPhoto.checkInId
 
   // Timing
   checkedInAt    DateTime      @default(now())
   createdAt      DateTime      @default(now())
+
+  // Relations
+  photos         TrailPhoto[]  // Photos posted at this check-in
 
   @@unique([trailId, stopId, userId]) // One check-in per user per stop per trail
   @@index([trailId, userId])
