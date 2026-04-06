@@ -113,7 +113,7 @@ const FraudSignalsPage = () => {
         <title>Fraud Signals - FindA.Sale</title>
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Fraud Signals" description="Monitor suspicious bidding patterns, flag potential fraud, and protect your sales with AI-powered detection.">
+      <TierGate requiredTier="PRO" featureName="Fraud Signals" description="Monitor suspicious bidding patterns, flag potential fraud, and protect your sales.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -131,7 +131,7 @@ const FraudSignalsPage = () => {
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-2">Bid Bot Detector</h2>
             <p className="text-warm-600 dark:text-gray-400">
-              AI-powered fraud detection for suspicious bidding patterns. Review signals to protect your sales.
+              Automated fraud detection for suspicious bidding patterns. Review signals to protect your sales.
             </p>
           </div>
 

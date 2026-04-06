@@ -62,7 +62,7 @@ const InspirationPage: React.FC<InspirationPageProps> = ({ initialItems = [], er
         <title>Inspiration Gallery | FindA.Sale</title>
         <meta
           name="description"
-          content="Browse beautiful items from upcoming sales near you. Discover unique finds curated by AI."
+          content="Browse beautiful items from upcoming sales near you. Discover unique finds."
         />
         <meta property="og:title" content="Inspiration Gallery | FindA.Sale" />
         <meta

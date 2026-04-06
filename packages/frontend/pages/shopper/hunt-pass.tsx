@@ -177,10 +177,541 @@ const HuntPassPage = () => {
             </div>
           </div>
 
+          {/* How to Earn XP - Complete Table */}
+          <div className="mb-12">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">
+              How to Earn XP
+            </h2>
+            <p className="text-warm-600 dark:text-warm-400 mb-6">
+              Every action in FindA.Sale earns XP. Hunt Pass members earn 1.5x on all actions. Here's the complete breakdown:
+            </p>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-warm-100 dark:bg-gray-700">
+                    <th className="px-6 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Action</th>
+                    <th className="px-6 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Standard XP</th>
+                    <th className="px-6 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Cap</th>
+                    <th className="px-6 py-3 text-left font-semibold text-purple-600 dark:text-purple-300">Hunt Pass XP</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                  {/* Shopping */}
+                  <tr className="bg-blue-50/30 dark:bg-blue-900/10">
+                    <td colSpan={4} className="px-6 py-2 font-bold text-warm-900 dark:text-warm-100 text-sm">
+                      Shopping
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Purchase ($1 spent)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">1 XP</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">None</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">1.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Visit a sale</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">5 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">2/day, 150/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">7.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Hold completed (pickup/purchase)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+7 XP</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">None</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+10.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">First purchase ever</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">One-time</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Auction win</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">15–20 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">22.5–30 XP</td>
+                  </tr>
+
+                  {/* Community */}
+                  <tr className="bg-green-50/30 dark:bg-green-900/10">
+                    <td colSpan={4} className="px-6 py-2 font-bold text-warm-900 dark:text-warm-100 text-sm">
+                      Community
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Haul post published</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Requires 2+ items + photo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Haul post 10+ likes</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+5 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">50/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+7.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Haul engagement (likes/comments on others' posts)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+0.5/like, +3/comment</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">20/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+0.75/like, +4.5/comment</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Item photo quality</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">3 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">30/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">4.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Condition grade submission</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">5 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">50/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">7.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Seller review (text)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">8 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">30/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">12 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Seller review (text + photo bonus)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+3 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Stacks</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+4.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Social share</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">200/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Referral (friend purchases)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">25 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">One-time per friend</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">37.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Referral (new organizer signup)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50 XP</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">None</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Referral (organizer's first sale bonus)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+50 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">One-time</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+75 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Community mentor session</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">25 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo (4 max)</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">37.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Public collection guide</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">One-time per guide</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Community valuation</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo (10 max)</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Bounty fulfillment (organizer-posted)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">25 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Supply-limited</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">37.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Bounty fulfillment (seasonal)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50–200 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Per-bounty</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75–300 XP</td>
+                  </tr>
+
+                  {/* Treasure Trails */}
+                  <tr className="bg-orange-50/30 dark:bg-orange-900/10">
+                    <td colSpan={4} className="px-6 py-2 font-bold text-warm-900 dark:text-warm-100 text-sm">
+                      Treasure Trails
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail stop – FindA.Sale event</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">5 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Purchase XP stacks</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">7.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail stop – resale/antique shop</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">3 XP + 2 with photo</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">—</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">4.5 XP + 3 with photo</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail stop – local POI (café, landmark)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">2 XP + 2 with photo</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">—</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">3 XP + 3 with photo</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail stop – platform-listed business</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">4 XP + 2 with photo</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">—</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">6 XP + 3 with photo</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail completion (3 stops)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+40 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x per trail per user</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+60 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail completion (4 stops)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+50 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x per trail per user</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+75 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail completion (5 stops)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+60 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x per trail per user</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+90 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail completion (6 stops)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+70 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x per trail per user</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+105 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Trail completion (7 stops)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+80 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x per trail per user</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+120 XP</td>
+                  </tr>
+
+                  {/* Streaks & Bonuses */}
+                  <tr className="bg-indigo-50/30 dark:bg-indigo-900/10">
+                    <td colSpan={4} className="px-6 py-2 font-bold text-warm-900 dark:text-warm-100 text-sm">
+                      Streaks & Special Bonuses
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">7-day streak bonus</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">100 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Once/month</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">150 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Streak multiplier (active week)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">1.2x all earned</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Weekly during streak</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">1.8x all earned</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">30-day active anniversary</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">250 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Once/month</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">375 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Virtual queue on-time</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Virtual queue early (+15m)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+5 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Stacks</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+7.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Virtual queue 3-streak bonus</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+20 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Once/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+30 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Collector passport specialty</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">25 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">200/yr (8 max)</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">37.5 XP</td>
+                  </tr>
+
+                  {/* Seasonal */}
+                  <tr className="bg-rose-50/30 dark:bg-rose-900/10">
+                    <td colSpan={4} className="px-6 py-2 font-bold text-warm-900 dark:text-warm-100 text-sm">
+                      Seasonal Challenges
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Seasonal challenge (easy)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">100 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x/season</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">150 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Seasonal challenge (medium)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">200 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x/season</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">300 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Seasonal challenge (hard)</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">300 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x/season</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">450 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Seasonal leaderboard top 10</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">500 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x/season</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">750 XP</td>
+                  </tr>
+
+                  {/* Organizer */}
+                  <tr className="bg-teal-50/30 dark:bg-teal-900/10">
+                    <td colSpan={4} className="px-6 py-2 font-bold text-warm-900 dark:text-warm-100 text-sm">
+                      Organizer Activities
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">[Org] First sale posted</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">100 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">One-time</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">150 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">[Org] Sale published</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">None</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">[Org] Shopper on-site signup</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">No cap (fraud-gated)</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">[Org] Haul from your sale</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">3 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">None</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">4.5 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">[Org] 5-star review received</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-6 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
+              <p className="text-sm text-purple-900 dark:text-purple-300">
+                <strong>Hunt Pass Multiplier:</strong> All XP earned is multiplied by 1.5x when you have an active Hunt Pass. The Hunt Pass XP column shows the result of this multiplier.
+              </p>
+            </div>
+          </div>
+
+          {/* XP Sinks - Spend Your XP */}
+          <div className="mb-12">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">
+              Spend Your XP — XP Sinks
+            </h2>
+            <p className="text-warm-600 dark:text-warm-400 mb-6">
+              Earn XP to unlock rewards, cosmetics, and premium features. Here's what you can spend your XP on:
+            </p>
+
+            <div className="space-y-4">
+              {/* Cosmetics */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-pink-50 dark:bg-pink-900/20 px-6 py-3 border-b border-warm-200 dark:border-gray-700">
+                  <h3 className="font-bold text-warm-900 dark:text-warm-100">Cosmetics & Profile</h3>
+                </div>
+                <div className="divide-y divide-warm-200 dark:divide-gray-700">
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Username Color</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Make your username stand out with a personalized color.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">25 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Ranger+ | Permanent</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Frame Badge</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Unlock an exclusive rare avatar frame for your profile.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">30 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Sage+ | Permanent | One choice</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Gameplay Boosts */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-blue-50 dark:bg-blue-900/20 px-6 py-3 border-b border-warm-200 dark:border-gray-700">
+                  <h3 className="font-bold text-warm-900 dark:text-warm-100">Gameplay Boosts</h3>
+                </div>
+                <div className="divide-y divide-warm-200 dark:divide-gray-700">
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Rarity Boost (1 Sale)</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Increase Legendary rarity odds by +2% for a single sale.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">15 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | Until sale ends | Stackable</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Haul Visibility Boost</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Feature your haul as "Trending" to reach more collectors.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">10 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | 7 days</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Bounty Visibility Boost</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Feature your bounty in "Hot Bounties" for higher fulfillment odds.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">5 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Scout+ | 7 days</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Creation & Gating */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-green-50 dark:bg-green-900/20 px-6 py-3 border-b border-warm-200 dark:border-gray-700">
+                  <h3 className="font-bold text-warm-900 dark:text-warm-100">Content Creation & Unlocks</h3>
+                </div>
+                <div className="divide-y divide-warm-200 dark:divide-gray-700">
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Seasonal Challenge Access</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Unlock this season's challenges, cosmetics, and leaderboard access (non-Hunt Pass only).</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ (non-Hunt Pass) | 1 season | Hunt Pass subscribers get free access</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Guide Publication</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Publish a hunting guide to share your expertise with the community.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">30 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Ranger+ | Permanent | Free for Sage+; Grandmaster unlimited</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hunt Pass */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-purple-50 dark:bg-purple-900/20 px-6 py-3 border-b border-warm-200 dark:border-gray-700">
+                  <h3 className="font-bold text-warm-900 dark:text-warm-100">Hunt Pass & Premium</h3>
+                </div>
+                <div className="divide-y divide-warm-200 dark:divide-gray-700">
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Hunt Pass Discount</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Get $1 off one month of Hunt Pass ($4.99 → $3.99).</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | One-time bridge to paid</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Organizer Sinks */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-amber-50 dark:bg-amber-900/20 px-6 py-3 border-b border-warm-200 dark:border-gray-700">
+                  <h3 className="font-bold text-warm-900 dark:text-warm-100">Organizer Features</h3>
+                </div>
+                <div className="divide-y divide-warm-200 dark:divide-gray-700">
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Coupon Generation</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Create a $1-off coupon to incentivize shoppers at your sale.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Trusted+ | 30 days (1-use) | Max 5/month</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Early Access Boost</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Feature your presale 1 week early with extra visibility to shoppers.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">75 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Elite+ | 1 week</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Listings Extension</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Add 10 more item listings beyond your plan limit.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Trusted+ | 1 month</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Event Sponsorship</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Create a flash sale or themed collection for maximum visibility.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">150 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Elite+ | 3 days | Exclusive bounties included</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+              <p className="text-sm text-amber-900 dark:text-amber-300">
+                <strong>Rank Floors:</strong> You can't spend XP below your rank's minimum threshold. Scout (500), Ranger (2,000), Sage (5,000), Grandmaster (12,000). This means you always retain enough XP to stay at your current rank.
+              </p>
+            </div>
+          </div>
+
           {/* XP Earning Matrix */}
           <div className="mb-12">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">
-              XP Earning Matrix
+              Quick Reference Matrix
             </h2>
             <p className="text-warm-600 dark:text-warm-400 mb-4">
               See how much XP you earn for each action with and without Hunt Pass.

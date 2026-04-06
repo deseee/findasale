@@ -90,12 +90,39 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is Hunt Pass and how do I earn points?',
     answer: (
       <>
-        Hunt Pass is the fun and competitive side of the Explorers Guild. Supercharge your XP gains
-        with bonus points for every purchase and action.  Post bounties for those 
-        hard to find items you've been looking for. Get rewarded when you find the bounties for others.
-        Participating organizers offer early access and priority pickup. 
-        View rare and legendary items before the general public. 
-        
+        Hunt Pass is the fun and competitive side of the Explorers Guild. For $4.99/month, you get 1.5x XP multiplier on all actions, 6-hour early access to rare and legendary items before the general public, seasonal challenges with exclusive cosmetics, and priority trail recommendations. Hunt Pass also unlocks Treasure Trails and early flash deal notifications.
+      </>
+    ),
+  },
+  {
+    question: 'How do I earn XP?',
+    answer: (
+      <>
+        You earn XP from a wide range of activities. Main sources include: purchasing items ($1 spent = 1 XP), visiting sales (5 XP per visit, max 2 per day), posting haul reviews with photos (10 XP + 5 bonus for likes), completing holds (7 XP), and seasonal challenges. You also earn XP from Treasure Trails and community activities like crowd appraisals, referrals, and streak bonuses. Visit your <strong>Account → Loyalty</strong> page to see all available actions and track your progress.
+      </>
+    ),
+  },
+  {
+    question: 'What are Treasure Trails?',
+    answer: (
+      <>
+        Treasure Trails are curated multi-stop local experiences anchored by a FindA.Sale event. A trail might combine an estate sale, a vintage resale shop, a scenic landmark, and a café into one adventure. You check in at each stop, earn XP per location (5 for sales, 3 for shops, 2 for cafes and landmarks), and bonus XP for completing the entire route. Hunt Pass subscribers get early access to featured trails and can create their own to earn XP every time someone completes one.
+      </>
+    ),
+  },
+  {
+    question: 'Can I spend my XP?',
+    answer: (
+      <>
+        Yes! You can redeem XP for rewards in the Explorer's Guild. Options include: rarity boosts (15 XP for +2% legendary odds), Hunt Pass discounts (50 XP for $1 off), custom cosmetics, visibility boosts for your hauls, and more. You cannot drop below your current rank's XP floor — spending is protected so you always retain your rank. Visit <strong>Account → Loyalty</strong> to see all redemption options.
+      </>
+    ),
+  },
+  {
+    question: 'What happens to my rank each year?',
+    answer: (
+      <>
+        The Explorer's Guild resets ranks on January 1st each year. If you're at Grandmaster, you drop one tier to Sage. Scout and Initiate ranks don't drop — they stay the same. Crucially, <strong>Grandmaster receives free Hunt Pass forever</strong>, even after dropping to Sage, so reaching the top tier is a permanent achievement with lasting value.
       </>
     ),
   },
@@ -189,14 +216,14 @@ const shopperFAQs: FAQItem[] = [
     question: 'What do item rarity tiers mean?',
     answer: (
       <>
-        Every item on FindA.Sale is automatically assigned a rarity tier based on its category, condition, estimated value, and AI analysis:
+        Every item on FindA.Sale is automatically assigned a rarity tier based on its category, condition, estimated value, and our Smart Pricing analysis:
         <ul className="mt-2 ml-4 space-y-1">
           <li><strong>Common</strong> — Everyday household items, standard furniture, common clothing</li>
           <li><strong>Uncommon</strong> — Quality pieces with good condition ratings, desirable but not rare</li>
           <li><strong>Rare</strong> — Vintage, collectible, or high-value items that don't come up often</li>
           <li><strong>Legendary</strong> — Museum-quality, one-of-a-kind, or exceptionally rare finds</li>
         </ul>
-        Higher rarity items are surfaced in the <strong>Rare Finds</strong> feed available to Hunt Pass subscribers. Rarity is set by our AI — organizers can't manually inflate it.
+        Higher rarity items are surfaced in the <strong>Rare Finds</strong> feed available to Hunt Pass subscribers. Rarity is set automatically — organizers can't manually inflate it.
       </>
     ),
   },
@@ -340,12 +367,12 @@ const organizerFAQs: FAQItem[] = [
     ),
   },
   {
-    question: 'How does auto-tagging work?',
+    question: 'How does Auto Tags work?',
     answer: (
       <>
         After you upload a photo, our system analyzes the image and suggests
         a title, description, category, and tags. You review each suggestion and apply, edit, or dismiss
-        as you see fit. Auto-tagging saves time on the first draft — you stay in control of the final listing.
+        as you see fit. Auto Tags saves time on the first draft — you stay in control of the final listing.
       </>
     ),
   },
@@ -446,7 +473,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'How does Rapid Capture work?',
     answer: (
       <>
-        Open your sale and tap the ⚡ icon in the photo controls. You'll enter rapid-fire camera mode — photograph items one after another without stopping. The AI analyzes each photo as you go. When you're done, you'll review AI suggestions (title, description, category, tags) for all captured items in a batch on the Review page. Approve, edit, or dismiss each one and publish. This is the fastest way to get a large inventory online — many organizers photograph 100+ items in under 30 minutes.
+        Open your sale and tap the ⚡ icon in the photo controls. You'll enter rapid-fire camera mode — photograph items one after another without stopping. Our system analyzes each photo as you go. When you're done, you'll review Auto Tag suggestions (title, description, category, tags) for all captured items in a batch on the Review page. Approve, edit, or dismiss each one and publish. This is the fastest way to get a large inventory online — many organizers photograph 100+ items in under 30 minutes.
       </>
     ),
   },

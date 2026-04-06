@@ -218,7 +218,7 @@ const AppraisalsPage = () => {
           disabled
           className="w-full text-sm px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-md cursor-not-allowed font-medium"
         >
-          AI Appraisal (Coming Soon)
+          Smart Appraisal (Coming Soon)
         </button>
       )}
 
@@ -241,7 +241,7 @@ const AppraisalsPage = () => {
         <title>Appraisals - FindA.Sale</title>
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Appraisals" description="Get community and AI-powered appraisals on items. Submit requests, browse the feed, and contribute your expertise.">
+      <TierGate requiredTier="PRO" featureName="Appraisals" description="Get community appraisals on items. Submit requests, browse the feed, and contribute your expertise.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
