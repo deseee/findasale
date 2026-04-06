@@ -407,12 +407,15 @@ function generateEbayCsv(
 export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
-    const { photoMode } = req.query as { photoMode?: string };
+    const { photoMode, itemIds } = req.query as { photoMode?: string; itemIds?: string };
     const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ message: 'Authentication required' });
     }
+
+    // Parse selected item IDs if provided
+    const selectedIds = itemIds ? itemIds.split(',').filter(Boolean) : null;
 
     // Fetch sale with organizer and items
     const sale = await prisma.sale.findUnique({
@@ -424,6 +427,7 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
         items: {
           where: {
             status: 'AVAILABLE',
+            ...(selectedIds && selectedIds.length > 0 ? { id: { in: selectedIds } } : {}),
           },
           select: {
             id: true,

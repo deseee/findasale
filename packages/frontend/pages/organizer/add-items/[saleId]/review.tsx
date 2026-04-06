@@ -1124,7 +1124,7 @@ const ReviewPage = () => {
                                 {/* AI Confidence — show only if AI-tagged */}
                                 {item.isAiTagged && item.aiConfidence != null && (
                                   <div className="text-xs text-warm-600 dark:text-warm-400 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                                    AI suggested these fields ({Math.round(item.aiConfidence * 100)}% confidence). Review and adjust as needed.
+                                    {Math.round(item.aiConfidence * 100)}% confidence in auto suggested fields. Review and adjust as needed.
                                   </div>
                                 )}
 
