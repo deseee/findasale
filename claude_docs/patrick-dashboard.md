@@ -2,79 +2,76 @@
 
 ---
 
-## What Happened This Week
+## What Happened This Session (S403)
 
-Eleven sessions across April 4–6. Big ones: POS rebuild, add-items mobile overhaul, review card redesigned to plain-English status, feedback system built, camera inline append, eBay integration.
+Full gamification strategy session. No code. All design.
 
-**S402 (today):** Pricing and review page bug batch. Health score now flags unset category and condition selects. Price Research Panel condensed and renamed (Smart Pricing, eBay Market Comps, Sales Comps) with explanatory copy under each section. eBay comps button fixed — was hitting a 404 due to wrong endpoint. eBay CSV export now respects selected items. TEAMS accounts no longer see the PRO upgrade gate on comparable sales. eBay sandbox credentials now wired and working.
+Ran a 5-agent pass: Innovation research → Devils Advocate + Steelman (parallel) → full Advisory Board → Game Designer (XP economy) → Architect (Treasure Trails feasibility). Every design decision from the Explorer's Guild system is now locked and documented.
+
+**Big calls made this session:**
+- Treasure Trails redefined — not a sale route, a curated local experience (cafés, antique shops, photo spots + the sale)
+- Dual XP eliminated — one currency for everyone
+- Seasonal Battle Pass killed as a separate product — folds into Hunt Pass
+- Organizer signup XP cap removed
+- Hunt Pass stays $4.99/mo (math validated)
+- Google Places API approved at $200/mo hard cap
+- Trail creation: open to all (no paywall), editorial review 1–2 days
+- Organizer earns +15 XP per unique shopper trail completion
+- Trail XP scales by length: 3-stop=+40 XP up to 7-stop=+80 XP bonus
+
+**Three new spec files created:**
+- `claude_docs/research/s403-gamification-research.md` — full research memo
+- `claude_docs/feature-notes/gamedesign-decisions-2026-04-06.md` — complete XP economy (Rev 2), all decisions locked
+- `claude_docs/feature-notes/treasure-trails-architect-adr.md` — schema plan, API contracts, feasibility verdict (GO)
 
 ---
 
-## Push Block (S402 — run now)
+## Push Block (S403 — run now)
+
+No code changes this session. Documentation files only.
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/utils/listingHealthScore.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
-git add packages/frontend/components/PriceResearchPanel.tsx
-git add packages/frontend/components/ValuationWidget.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add packages/frontend/pages/faq.tsx
-git add packages/frontend/pages/support.tsx
-git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S402: health score, price research panel, eBay comps + CSV, Railway cache bust"
+git add "claude_docs/feature-notes/gamedesign-decisions-2026-04-06.md"
+git add "claude_docs/feature-notes/treasure-trails-architect-adr.md"
+git add "claude_docs/research/s403-gamification-research.md"
+git commit -m "S403: Explorer's Guild full design — XP economy, Treasure Trails, architect ADR"
 .\push.ps1
 ```
-
----
-
-## Pending Decisions
-
-- **Encyclopedia rename** — "Resale Encyclopedia," "Secondhand Encyclopedia," or keep "Estate Sale Encyclopedia" for SEO? Dev blocked until decided.
-- **USPTO trademark** — File for FindA.Sale? ~$250–$400 per class.
-- **eBay production credentials** — When ready to go live with real eBay data, get production app credentials from developer.ebay.com and swap Railway env vars + two API URLs back to `api.ebay.com`.
 
 ---
 
 ## Action Items for Patrick
 
 - [ ] **Run push block above**
-- [ ] **Run S399 migration** if not already done — FeedbackSuppression table
-- [ ] **Encyclopedia rename decision**
-- [ ] **Trademark call**
+- [ ] **Create Google Places API key** — console.cloud.google.com → Maps Platform → Enable Places API → Create key → Set $200/mo billing cap → Add to Railway env as `GOOGLE_PLACES_API_KEY`
+- [ ] **Run S399 migration** if not already done — FeedbackSuppression table (see STATE.md S399)
+- [ ] **Encyclopedia rename decision** — "Resale Encyclopedia," "Secondhand Encyclopedia," or keep "Estate Sale Encyclopedia" for SEO? Dev blocked until decided.
+- [ ] **Trademark call** — File for FindA.Sale? ~$250–$400 per class.
 - [ ] **Set Railway env var:** `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`
 - [ ] **Stripe seat product** — $20/mo team member seat needs a Stripe product created
+- [ ] **eBay production credentials** — When ready for real eBay data, get production creds from developer.ebay.com and swap Railway env vars + two API URLs back to `api.ebay.com`
 
 ---
 
-## Next Session (S403) — Gamification Deep Dive
+## Next Session (S404) — Explorer's Guild Build + QA
 
-**P1: Full board session on Shopping Companion / loyalty system design.**
+**What S404 does:** One-shot build of the full Explorer's Guild + Treasure Trails system. All design is locked. Dev dispatches in parallel with documentation.
 
-The session will run Innovation research → DA+Steelman → full Advisory Board review. No code. Pure strategy.
+**Session opens with:**
+1. `findasale-records` creates master spec doc from the 3 design files
+2. `findasale-dev` dispatched in parallel to implement (schema → XP service → Trail backend → Trail frontend → trail builder in organizer flow)
+3. After dev returns: math verification, schema check, API contract check
 
-**What's being researched:** Duolingo, Starbucks Stars, Whatnot, Poshmark Ambassador, Pokémon GO, Reddit karma, Foursquare Mayor (died), Robinhood confetti (cautionary). Every roadmap feature audited for XP/badge/companion-trigger potential.
+**Before S404 starts you need:**
+- Google Places API key in Railway (see action item above)
+- Push block from this session run
 
-**The framing Patrick chose:** A "Shopping Companion" — something with agency that helps users, not just rewards them. Pre-sale alerts, during-sale coaching, post-sale haul summaries.
+**After S404 ships:**
+- Treasure Trails will be live in the organizer sale creation flow
+- XP economy will be wired across the platform
+- Explorer's Guild ranks will be functional
 
-**10 questions that will reshape the proposal:**
-- Is this solving churn or acquisition? (Different mechanics)
-- What happens when users max rank? (End-game problem — prestige? seasonal resets?)
-- Shopper-only or organizer XP too? (Can't mix without structural unfairness)
-- Does this cost FindA.Sale money or make money? (Economics must pencil first)
-- Does rewarding deal-finding depress organizer revenue? (Revenue tension)
-- Are badges visible to organizers? Leaderboards? (Virality vs. anxiety tradeoff)
-- What's the notification cadence? (Gamification dies without this answer)
-- Any legal/regulatory exposure if rewards have cash value? (Sweepstakes law)
-- Platform-wide XP or sale-scoped? (Retention vs. attribution)
-- Does "Explorer's Guild" work for non-gamer users? (Brand fit question)
-
-**Known locked decisions:** Rank thresholds 500/2000/5000/12000 XP (S388). PRO=$29, TEAMS=$79.
-
-**P2:** Wire 10 feedback survey triggers (infrastructure done, just needs hook calls)
-**P3:** Chrome QA sweep — S402 pricing panel, S399 review card, S400–401 camera, POS walkthrough
-
-*Updated S402 — 2026-04-06*
+*Updated S403 — 2026-04-06*
