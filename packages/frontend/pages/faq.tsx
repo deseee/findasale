@@ -18,7 +18,7 @@ const shopperFAQs: FAQItem[] = [
     answer: (
       <>
         Open the FindA.Sale app and use the map or search feature. Sales are sorted by proximity to
-        your location by default. You can also filter by sale type (regular or auction), date range,
+        your location by default. You can also filter by sale type, date range,
         or search for specific items or locations. Follow your favorite organizers to get notified
         when they post new sales.
       </>
@@ -28,7 +28,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'How do I search for specific items?',
     answer: (
       <>
-        Use the search bar to type what you're looking for — "vintage lamps," "oak furniture," "china dinnerware," etc.
+        Use the search bar to type what you're looking for — "vintage lamps," "oak furniture," "comic books," etc.
         Results show all matching items across current and upcoming sales in your area. Browse by
         category or use tags to narrow results further.
       </>
@@ -38,7 +38,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'How does bidding on auction items work?',
     answer: (
       <>
-        In an auction sale, items go to the highest bidder. Place a bid, and if someone outbids you,
+        In an auction, items go to the highest bidder. Place a bid, and if someone outbids you,
         you'll receive a notification. Bidding continues until the auction end time — the highest bid
         at closing wins. Auction end times are clearly marked so you always know the deadline.
       </>
@@ -69,8 +69,20 @@ const shopperFAQs: FAQItem[] = [
     answer: (
       <>
         FindA.Sale accepts all major credit and debit cards (Visa, Mastercard, American Express,
-        Discover) through Stripe. We do not accept cash, checks, or other payment methods through
-        the platform.
+        Discover) through Stripe. Cash, and other payment methods are handled at the sale location 
+        using the FindA.Sale Point of Sale platform.
+      </>
+    ),
+  },
+   {
+    question: 'What is the Explorer\'s Guild?',
+    answer: (
+      <>
+        The Explorer's Guild is our loyalty rewards program. You earn Guild XP by visiting sales, making 
+        purchases, and completing seasonal challenges. As you earn XP, you progress through ranks — 
+        Initiate, Scout, Ranger, Sage, and Grandmaster — each new rank unlocks perks like coupons, longer 
+        hold times, Hunt Pass discounts and more! Accumulate XP to unlock discounts on future purchases. 
+        View your balance and redemption options at <strong>Account → Loyalty</strong>.
       </>
     ),
   },
@@ -78,9 +90,12 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is Hunt Pass and how do I earn points?',
     answer: (
       <>
-        Hunt Pass is our loyalty rewards program. Every purchase earns points based on your spending.
-        Accumulate points to unlock discounts on future purchases. View your balance and redemption
-        options in <strong>Account → Hunt Pass</strong>.
+        Hunt Pass is the fun and competitive side of the Explorers Guild. Supercharge your XP gains
+        with bonus points for every purchase and action.  Post bounties for those 
+        hard to find items you've been looking for. Get rewarded when you find the bounties for others.
+        Participating organizers offer early access and priority pickup. 
+        View rare and legendary items before the general public. 
+        
       </>
     ),
   },
@@ -108,7 +123,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is the return and refund policy?',
     answer: (
       <>
-        Estate sale items are generally sold as-is. If an item arrives damaged or doesn't match its
+        Secondhand sale items are generally sold as-is. If an item arrives damaged or doesn't match its
         description, contact the organizer immediately with photos. The organizer may offer a refund
         at their discretion. If you can't resolve the issue, contact{' '}
         <Link href="/contact" className="text-amber-600 hover:underline">our support team</Link> for assistance.
@@ -137,18 +152,11 @@ const shopperFAQs: FAQItem[] = [
     ),
   },
   {
-    question: 'What is the Explorer\'s Guild?',
-    answer: (
-      <>
-        The Explorer's Guild is our loyalty program. You earn Guild XP by visiting sales, making purchases, and completing seasonal challenges. As you earn XP, you progress through ranks — Initiate, Scout, Ranger, Sage, and Grandmaster — each unlocking perks like longer hold times and Hunt Pass discounts.
-      </>
-    ),
-  },
-  {
     question: 'What are seasonal challenges?',
     answer: (
       <>
-        Each season (Spring, Summer, Fall, Winter) brings themed challenges — like visiting a certain number of sales or collecting items in specific categories. Complete challenges to earn bonus XP and exclusive seasonal badges.
+        Each season (Spring, Summer, Fall, Winter) brings themed challenges — like visiting a certain number of sales or collecting items in specific categories. 
+        Complete challenges to earn bonus XP and exclusive seasonal badges.
       </>
     ),
   },
@@ -164,7 +172,8 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is a Condition Rating?',
     answer: (
       <>
-        Every item on FindA.Sale has a condition rating: Excellent, Good, Fair, Poor, or As-Is. These help you know what to expect before you visit. See our full Condition Guide for details.
+        Every item on FindA.Sale has a condition rating: S = Like New, A = Excellent, B = Good, C = Fair, D = Poor,. These help you know what to expect before you visit. 
+        See our full Condition Guide for details.
       </>
     ),
   },
@@ -179,7 +188,7 @@ const organizerFAQs: FAQItem[] = [
         <Link href="/" className="text-amber-600 hover:underline">homepage</Link> or map,
         click into any sale to see items, then click <strong>Buy Now</strong> and complete checkout
         via Stripe. Once paid, the item is marked sold and they receive a confirmation. They coordinate
-        pickup directly with you.
+        pickup directly with you. Or select from available pickup times if you enable them.
       </>
     ),
   },
@@ -199,8 +208,7 @@ const organizerFAQs: FAQItem[] = [
     answer: (
       <>
         FindA.Sale charges a <strong>10% flat platform fee</strong> on each completed purchase, regardless of sale
-        type (fixed-price or auction). The fee is shown transparently in the checkout modal before the buyer
-        confirms payment.
+        type (fixed-price or auction). 
       </>
     ),
   },
@@ -250,7 +258,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'Can I connect FindA.Sale to Zapier or other apps?',
     answer: (
       <>
-        Yes. Go to <strong>Settings → Integrations → Webhooks</strong> and add your Zapier webhook URL.
+        Yes. Go to <strong>Teams → Webhooks</strong> and add your Zapier webhook URL.
         Select which events should trigger your Zap (purchase completed, sale published, auction won, etc.).
         Use Zapier to log sales to Google Sheets, send emails, post to Facebook, and more. See the full
         guide on your{' '}
@@ -283,7 +291,8 @@ const organizerFAQs: FAQItem[] = [
     question: 'What\'s the difference between SIMPLE, PRO, and TEAMS?',
     answer: (
       <>
-        SIMPLE is free — you get everything you need to run a single sale with up to 200 items. PRO ($29/month) unlocks bulk operations, analytics, the Command Center, export tools, and more. TEAMS ($79/month) adds multi-user workspaces with roles and permissions for organizations that run sales together.
+        SIMPLE is free — you get everything you need to run a single sale with up to 200 items. PRO ($29/month) unlocks bulk operations, analytics,, export tools, and more. 
+        TEAMS ($79/month) adds multi-user workspaces with roles and permissions and the Command Center for organizations that run sales together.
       </>
     ),
   },
@@ -299,7 +308,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'What is the Command Center?',
     answer: (
       <>
-        The Command Center is a PRO feature that gives you a real-time dashboard across all your active sales — track items, holds, messages, and performance in one place.
+        The Command Center is a Teams feature that gives you a real-time dashboard across all your active sales — track items, holds, messages, and performance in one place.
       </>
     ),
   },
