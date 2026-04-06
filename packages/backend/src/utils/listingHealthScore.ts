@@ -108,7 +108,13 @@ export function computeHealthScore(item: ItemDraft): HealthResult {
   breakdown.conditionGrade = item.conditionGrade ? 5 : 0;
 
   // Total score
-  const score = breakdown.photo + breakdown.title + breakdown.description + breakdown.tags + breakdown.price + breakdown.conditionGrade;
+  let score = breakdown.photo + breakdown.title + breakdown.description + breakdown.tags + breakdown.price + breakdown.conditionGrade;
+
+  // BUG 2 FIX: Hard gate on price — no price means item cannot reach 'clear' grade
+  // If price is missing/zero, cap score at 69 to force 'nudge' grade minimum
+  if (!item.price) {
+    score = Math.min(score, 69);
+  }
 
   // Determine grade
   let grade: 'blocked' | 'nudge' | 'clear';
