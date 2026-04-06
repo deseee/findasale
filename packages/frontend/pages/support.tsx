@@ -6,150 +6,232 @@ import styles from '../styles/support.module.css';
 
 // FAQ Data — searchable via fuse.js
 const FAQ_DATA = [
-  // Billing FAQs
+  // Getting Started FAQs
   {
-    id: 'billing-1',
-    category: 'Billing',
-    question: 'How much does FindA.Sale cost?',
+    id: 'getting-started-1',
+    category: 'Getting Started',
+    question: 'How do I set up payments before my first sale?',
     answer:
-      'FindA.Sale offers three tiers: SIMPLE (free, 10% platform fee), PRO ($29/month, 8% fee), and TEAMS ($79/month, 8% fee). Each tier includes different features for organizers. Shoppers always use FindA.Sale for free.',
+      'Before you can receive payments, you\'ll need to connect a Stripe account. From your Dashboard, click Setup Payments and follow the short onboarding flow. Stripe will verify your identity and bank account — this usually takes a few minutes. Once connected, your share of each sale deposits to your bank account within 2 business days. You only need to do this once.',
   },
   {
-    id: 'billing-2',
-    category: 'Billing',
-    question: 'What payment methods do you accept?',
-    answer: 'We accept all major credit and debit cards through Stripe. Billing is automatic and recurring.',
-  },
-  {
-    id: 'billing-3',
-    category: 'Billing',
-    question: 'Can I cancel my subscription anytime?',
-    answer: 'Yes, you can cancel your subscription at any time from your account settings. Cancellation takes effect at the end of your billing cycle.',
-  },
-  {
-    id: 'billing-4',
-    category: 'Billing',
-    question: 'Do you offer refunds?',
+    id: 'getting-started-2',
+    category: 'Getting Started',
+    question: 'What is the platform fee and how is it calculated?',
     answer:
-      'We offer a 30-day money-back guarantee for annual plans. Monthly subscriptions are non-refundable after purchase but can be cancelled anytime.',
+      'FindA.Sale charges a flat 10% platform fee on each completed purchase. If an item sells for $100, we keep $10 and you receive $90 (minus any Stripe payment processing fee, typically 2.9% + $0.30). There are no listing fees, no monthly fees on SIMPLE, and no per-photo charges. PRO and TEAMS plans reduce the fee to 8%.',
   },
   {
-    id: 'billing-5',
-    category: 'Billing',
-    question: 'Is there a discount for annual billing?',
+    id: 'getting-started-3',
+    category: 'Getting Started',
+    question: 'Can I run a sale without setting up Stripe first?',
     answer:
-      'Yes! Choose the annual plan during signup and save 20% compared to monthly billing. You can also contact support for multi-year discounts.',
+      'You can create and preview a sale without connecting Stripe, but the sale cannot go live and accept payments until your Stripe account is verified. We recommend completing Stripe onboarding before you start building your inventory so there\'s no delay when you\'re ready to publish.',
   },
 
   // Sales Management FAQs
   {
     id: 'sales-1',
     category: 'Sales Management',
-    question: 'How do I list a new sale on FindA.Sale?',
+    question: 'What\'s the difference between a Draft, a Hidden sale, and a Published sale?',
     answer:
-      'Go to your Dashboard and click "Create Sale". Fill in the sale details (title, date, location, category), add a description and photos, then publish. Your sale will appear in search results within 1 hour.',
+      'These are three distinct states that control who can see your sale. Draft — Your sale exists in your dashboard but is completely invisible to shoppers and search. Nothing is public. Use this while you\'re still building your inventory. Published — Your sale is live. It appears in search results, on the map, and can be found by shoppers. Items can be purchased. Hidden — Your sale is published (items can still be accessed and purchased by anyone with the direct link) but it does not appear in public search results or on the map. Use this when you want to soft-launch a preview for select shoppers before going fully public.',
   },
   {
     id: 'sales-2',
     category: 'Sales Management',
-    question: 'How many items can I list per sale?',
+    question: 'How do I publish or hide a sale?',
     answer:
-      'SIMPLE tier: unlimited items. PRO tier: add custom photos and descriptions. TEAMS tier: collaborate with team members on inventory management.',
+      'From your Dashboard, click into your sale and look for the Publish / Unpublish toggle. Published sales show a green "LIVE" badge. To hide a published sale from search without taking it fully offline, use the Hide from Search option in your sale settings.',
   },
   {
     id: 'sales-3',
     category: 'Sales Management',
-    question: 'Can I edit a sale after publishing?',
+    question: 'Can I schedule a sale to go live automatically?',
     answer:
-      'Yes, you can edit all sale details until the sale date. After the sale ends, the page becomes read-only but remains visible for 30 days.',
+      'Yes. When creating your sale, set the sale start date and time. You can pre-schedule the listing to appear in search results a set number of days before the sale starts — shoppers can see it, favorite it, and hold items before the doors open. The exact lead time is configurable per sale.',
   },
   {
     id: 'sales-4',
     category: 'Sales Management',
-    question: 'How do I track attendance and sales performance?',
+    question: 'How do I cancel a sale?',
     answer:
-      'PRO and TEAMS subscribers have access to the Command Center Dashboard, which shows real-time visitor counts, item views, questions, and sales metrics.',
+      'Go to your sale\'s settings and click Cancel Sale. Shoppers who have RSVP\'d or placed holds will be notified automatically. Any pending purchases that haven\'t been confirmed will be refunded. The sale page will be removed from search results within 10 minutes. Completed purchases are not affected.',
   },
   {
     id: 'sales-5',
     category: 'Sales Management',
-    question: 'What happens if I cancel my sale?',
+    question: 'Can I edit a sale after it\'s published?',
     answer:
-      'You can cancel a sale anytime from your Dashboard. Shoppers who RSVP will be notified, and the sale will be removed from search results within 10 minutes.',
+      'Yes — you can edit the sale title, description, dates, address, and photos at any time before the sale ends. Item prices, descriptions, and photos can be edited at any time. After the sale end date, the page becomes read-only but stays visible for 30 days so shoppers can reference what sold.',
   },
 
-  // Shopper FAQs
+  // Item Management FAQs
   {
-    id: 'shopper-1',
-    category: 'Shopper FAQs',
-    question: 'How do I find sales near me?',
+    id: 'item-mgmt-1',
+    category: 'Item Management',
+    question: 'What do the item status options mean — Available, Sold, and Unavailable?',
     answer:
-      'Use the Search page to filter by distance, category, and date. Turn on location services for the best results. You can also set preferred neighborhoods to get notified of new sales.',
+      'These three statuses control whether an item can be purchased, but they are separate from whether the item is visible to shoppers. Available — The item is for sale. Shoppers can view it, favorite it, hold it (if holds are enabled), and purchase it online. Sold — The item has been sold. This could mean it was purchased through FindA.Sale, or you\'ve manually marked it sold (for in-person sales). Sold items remain visible on your sale page as a record of what sold — shoppers can see them but cannot purchase. Unavailable — The item is temporarily not purchasable online. Shoppers can still see the listing but cannot buy it or place a hold. Use this when an item is being held for an offline buyer, is under dispute, or you\'re pulling it briefly for any reason without wanting to delete or mark it sold.',
   },
   {
-    id: 'shopper-2',
-    category: 'Shopper FAQs',
-    question: 'Can I reserve items before the sale starts?',
+    id: 'item-mgmt-2',
+    category: 'Item Management',
+    question: 'What\'s the difference between marking an item Unavailable and Unpublishing it?',
     answer:
-      'Yes, organizers can enable reservations (holds) for items. You can put items on hold from your Wishlist. Holds expire 24 hours after the sale starts.',
+      'Great question — these look similar but do different things. Unpublishing (setting an item back to Draft) hides the item completely. Shoppers cannot see it at all. The item disappears from your public sale listing. Marking Unavailable keeps the item visible to shoppers — they can see the photo, title, and description — but removes the ability to purchase or hold it. Think of "unavailable" as a soft pause and "unpublish" as a full removal from view. For a quick offline hold, use Unavailable. For a photo that needs to be retaken or a listing you\'re not ready to show, use Unpublish.',
   },
   {
-    id: 'shopper-3',
-    category: 'Shopper FAQs',
-    question: 'How do I get notifications about upcoming sales?',
+    id: 'item-mgmt-3',
+    category: 'Item Management',
+    question: 'What is Pending Review and when does it appear?',
     answer:
-      'Create saved searches, follow organizers you like, and enable push notifications in your settings. You\'ll get alerts when new sales match your interests.',
+      'Items captured via Rapid Capture (the rapid-fire photo mode) enter a Pending Review state automatically. This means the AI has analyzed the photo and generated a suggested title, description, category, and tags — but you haven\'t confirmed them yet. The item is in your inventory but is not visible to shoppers. Once you review and approve the AI suggestions on the Review page, the item moves to Published.',
   },
   {
-    id: 'shopper-4',
-    category: 'Shopper FAQs',
-    question: 'What does the "Hype Meter" show?',
+    id: 'item-mgmt-4',
+    category: 'Item Management',
+    question: 'How do I add items to my sale?',
     answer:
-      'The Hype Meter shows how many people are actively viewing a sale in real-time. A high hype meter means high competition — arrive early for popular items!',
+      'You have three ways to add items: 1. Manual add — Click Add Item in your sale and fill in the details yourself. 2. Camera / Rapid Capture — Photograph items one by one (regular mode) or in rapid-fire mode. The AI suggests titles, descriptions, categories, and tags from each photo. You review in batches on the Review page. 3. Bulk import — Upload a CSV with item data for larger inventory sets (PRO/TEAMS).',
   },
   {
-    id: 'shopper-5',
-    category: 'Shopper FAQs',
-    question: 'Can I earn rewards as a shopper?',
+    id: 'item-mgmt-5',
+    category: 'Item Management',
+    question: 'How does AI auto-tagging work?',
     answer:
-      'Yes! Every purchase earns you points toward rewards. Loyalty Passport members earn stamps at each sale. Refer friends to earn even more bonuses.',
+      'When you take a photo or upload an image, FindA.Sale\'s AI analyzes the visual content and generates a suggested title, description, category, and tags. You\'ll see these suggestions on the review screen. You can accept them as-is, edit any field, or dismiss and start fresh. You stay in control — the AI gives you a first draft, not a final listing. Auto-tagging saves significant time on large inventories where writing every description manually isn\'t practical.',
+  },
+  {
+    id: 'item-mgmt-6',
+    category: 'Item Management',
+    question: 'How many photos can I add per item?',
+    answer:
+      'Up to 5 photos per item. The first photo is the primary thumbnail that appears in search results. Additional photos give shoppers more detail — recommended for high-value, collectible, or condition-sensitive items.',
+  },
+  {
+    id: 'item-mgmt-7',
+    category: 'Item Management',
+    question: 'How do I bulk edit or delete items?',
+    answer:
+      'From your sale\'s item list, check the boxes next to multiple items to select them. The bulk action bar appears at the top — use it to change status, delete, move items between sales, or export selected items. Bulk operations are available on PRO and TEAMS plans.',
   },
 
-  // Technical FAQs
+  // Photos & Rapid Capture FAQs
   {
-    id: 'tech-1',
-    category: 'Technical',
-    question: 'What devices does FindA.Sale work on?',
+    id: 'photos-1',
+    category: 'Photos & Rapid Capture',
+    question: 'What is Rapid Capture mode?',
     answer:
-      'FindA.Sale is a Progressive Web App (PWA) that works on all smartphones, tablets, and desktop browsers. Install it to your home screen for app-like performance.',
+      'Rapid Capture is a high-speed photo workflow designed for large inventories. Open your camera in Rapid Capture mode and photograph items one after another without stopping to fill in details. The AI analyzes each photo in the background. When you\'re done shooting, go to the Review page and confirm, edit, or dismiss the AI suggestions in bulk. This is the fastest way to get 50+ items online quickly.',
   },
   {
-    id: 'tech-2',
-    category: 'Technical',
-    question: 'Does FindA.Sale work offline?',
+    id: 'photos-2',
+    category: 'Photos & Rapid Capture',
+    question: 'How do I use the inline camera on the edit page?',
     answer:
-      'Yes, you can search sales and view saved items offline. New data syncs automatically when you reconnect to the internet.',
+      'On any item\'s edit page, the photo section has three buttons: 📁 (upload from files), 📷 (regular camera), and ⚡ (rapid capture). Tap either camera button to open the camera inline — photos you take are added directly to that item without leaving the page. No need to go to a separate add-items flow for existing items.',
   },
   {
-    id: 'tech-3',
-    category: 'Technical',
-    question: 'How do I report a bug or suggest a feature?',
+    id: 'photos-3',
+    category: 'Photos & Rapid Capture',
+    question: 'What makes a good item photo?',
     answer:
-      'Use the Feedback button in the app or contact support@finda.sale. We read every suggestion and prioritize based on community demand.',
+      'Good lighting and a plain background help the AI give better suggestions and help shoppers make decisions. For sellable items: shoot in natural daylight if possible, place the item against a neutral surface (floor, table, wall), and photograph from a slight angle to show dimension. For condition-sensitive items, include close-ups of any wear or damage — shoppers appreciate honesty and it reduces disputes.',
+  },
+
+  // Holds & Reservations FAQs
+  {
+    id: 'holds-1',
+    category: 'Holds & Reservations',
+    question: 'How do I enable holds for my sale?',
+    answer:
+      'In your sale settings, toggle on Allow Holds. When enabled, shoppers can request to hold items from their Wishlist or item detail page. You\'ll receive a notification to accept or decline each request. Holds you accept are marked on the item listing so other shoppers can see it\'s spoken for.',
   },
   {
-    id: 'tech-4',
-    category: 'Technical',
-    question: 'Is my data secure on FindA.Sale?',
+    id: 'holds-2',
+    category: 'Holds & Reservations',
+    question: 'How long do holds last?',
     answer:
-      'Yes, we use industry-standard encryption (HTTPS), secure password hashing, and follow GDPR privacy standards. Your data is never sold to third parties.',
+      'By default, accepted holds expire 24 hours after the sale opens. You can customize the hold duration in your sale settings. If a shopper doesn\'t complete their purchase within the hold window, the item becomes available again automatically.',
   },
   {
-    id: 'tech-5',
-    category: 'Technical',
-    question: 'How do I delete my account?',
+    id: 'holds-3',
+    category: 'Holds & Reservations',
+    question: 'Can I cancel a hold I already accepted?',
     answer:
-      'Go to Settings > Account > Delete Account. Your account will be permanently deleted within 30 days. Historical transactions are preserved for legal compliance.',
+      'Yes. From your Dashboard, go to the sale\'s Holds section. Find the hold and click Cancel Hold. The shopper is notified that the hold has been released. The item status returns to Available automatically.',
+  },
+
+  // Print Kit & QR Codes FAQs
+  {
+    id: 'print-kit-1',
+    category: 'Print Kit & QR Codes',
+    question: 'What is the Print Kit?',
+    answer:
+      'The Print Kit generates printable materials for your sale: Avery-style label stickers for each item (with QR codes that link directly to the item listing), a price sheet / cheat sheet for quick reference, and promotional signage. Access it from your sale\'s dashboard under Print Kit.',
+  },
+  {
+    id: 'print-kit-2',
+    category: 'Print Kit & QR Codes',
+    question: 'How do I use QR stickers at my sale?',
+    answer:
+      'Print the item sticker sheet, cut the labels, and stick them on each item. When a shopper scans a sticker with their phone camera, they\'re taken directly to that item\'s listing where they can view details, check pricing, and purchase online. QR stickers make it easy for shoppers to self-serve on pricing and avoid crowding you with questions.',
+  },
+
+  // Analytics & Command Center FAQs
+  {
+    id: 'analytics-1',
+    category: 'Analytics & Command Center',
+    question: 'How do I see how many people are viewing my sale?',
+    answer:
+      'The Hype Meter shows real-time viewer count on your live sale page — you can see it from the sale detail page. PRO and TEAMS subscribers have full analytics in the Command Center Dashboard: visit counts, item view rankings, hold rates, purchase conversion, and revenue over time.',
+  },
+  {
+    id: 'analytics-2',
+    category: 'Analytics & Command Center',
+    question: 'What is the Command Center?',
+    answer:
+      'The Command Center is a real-time operations dashboard available to TEAMS subscribers. It gives you a live view across all your active sales — track items, holds, messages, purchases, and performance metrics in one place. Useful for estate sale companies running multiple concurrent sales or teams managing large inventories together.',
+  },
+  {
+    id: 'analytics-3',
+    category: 'Analytics & Command Center',
+    question: 'Can I export my sales data?',
+    answer:
+      'Yes. From your sale dashboard, click Export to download a CSV of your full inventory including titles, descriptions, prices, categories, tags, and sold status. Useful for accounting, record-keeping, or importing into other systems.',
+  },
+
+  // Teams & Permissions FAQs
+  {
+    id: 'teams-1',
+    category: 'Teams & Permissions',
+    question: 'How do I add team members to my sale?',
+    answer:
+      'On a TEAMS plan, go to Settings → Team and invite members by email. You can assign roles: Admin (full access), Manager (add/edit items, manage holds), or Staff (view only). Team members log in with their own accounts — no shared passwords needed.',
+  },
+  {
+    id: 'teams-2',
+    category: 'Teams & Permissions',
+    question: 'Can team members work on multiple sales at once?',
+    answer:
+      'Yes. Team members you\'ve added can access all sales in your workspace. The Command Center lets you and your team see everything happening across all active sales simultaneously.',
+  },
+
+  // Integrations & Webhooks FAQs
+  {
+    id: 'integrations-1',
+    category: 'Integrations & Webhooks',
+    question: 'How do I connect FindA.Sale to Zapier?',
+    answer:
+      'Go to Settings → Webhooks and add your Zapier webhook URL. Select which events should fire the Zap (purchase completed, sale published, auction won, hold accepted, etc.). Use Zapier to log sales to Google Sheets, send notification emails, post to Facebook, update a CRM, or any other automation you need. Full event list is on your Webhooks settings page.',
+  },
+  {
+    id: 'integrations-2',
+    category: 'Integrations & Webhooks',
+    question: 'Does FindA.Sale have an API?',
+    answer:
+      'A public API is available to GRANDMASTER rank users and TEAMS plan subscribers. It allows read access to your sale and inventory data for custom integrations. Contact support for API documentation and credentials.',
   },
 ];
 
@@ -227,7 +309,17 @@ const Support: React.FC = () => {
     return results;
   }, [searchQuery, selectedCategory, fuse]);
 
-  const categories = ['Billing', 'Sales Management', 'Shopper FAQs', 'Technical'];
+  const categories = [
+    'Getting Started',
+    'Sales Management',
+    'Item Management',
+    'Photos & Rapid Capture',
+    'Holds & Reservations',
+    'Print Kit & QR Codes',
+    'Analytics & Command Center',
+    'Teams & Permissions',
+    'Integrations & Webhooks',
+  ];
 
   // Check if user has PRO/TEAMS tier
   const hasProOrTeams = user?.roleSubscriptions.some(
