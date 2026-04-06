@@ -288,6 +288,39 @@ const ReviewPage = () => {
     }
   }, [expandedItemId]);
 
+  const handlePhotoUpload = async (itemId: string, files: FileList | null, mode: 'upload' | 'camera') => {
+    if (!files || files.length === 0) return;
+
+    try {
+      let currentPhotos: string[] = [];
+      const targetItem = items.find((i) => i.id === itemId);
+      if (!targetItem) return;
+      currentPhotos = [...(targetItem.photoUrls || [])];
+
+      for (const file of Array.from(files)) {
+        // Step 1: Upload to Cloudinary
+        const formData = new FormData();
+        formData.append('photo', file);
+        const uploadRes = await api.post('/upload/item-photo', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const url: string = uploadRes.data.url;
+
+        // Step 2: Append URL to item's photoUrls
+        const addRes = await api.post(`/items/${itemId}/photos`, { url });
+        currentPhotos = addRes.data.photoUrls;
+      }
+
+      // Refetch items to reflect new photos
+      await queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+      showToast(`${mode === 'camera' ? 'Camera' : 'Photo'} uploaded successfully`, 'success');
+    } catch (err: any) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
+      const message = serverMsg ? `Upload failed: ${serverMsg}` : 'Photo upload failed. Please try again.';
+      showToast(message, 'error');
+    }
+  };
+
   const getSortedItems = useCallback((itemsToSort: Item[]) => {
     return [...itemsToSort].sort((a, b) => {
       let comparison = 0;
@@ -896,35 +929,52 @@ const ReviewPage = () => {
                                 {/* Photos */}
                                 <div>
                                   <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">Photos</label>
-                                  {/* BUG 5 FIX: Add photo mode selector — Upload Files / Camera / Rapidfire */}
+                                  {/* BUG 5 FIX: Add photo mode selector with dedicated hidden inputs */}
                                   <div className="mb-3 flex gap-1 flex-wrap">
+                                    <input
+                                      ref={(ref) => {
+                                        if (ref && !window[`uploadInput_${item.id}`]) {
+                                          window[`uploadInput_${item.id}`] = ref;
+                                        }
+                                      }}
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      hidden
+                                      onChange={(e) => handlePhotoUpload(item.id, e.target.files, 'upload')}
+                                    />
+                                    <input
+                                      ref={(ref) => {
+                                        if (ref && !window[`cameraInput_${item.id}`]) {
+                                          window[`cameraInput_${item.id}`] = ref;
+                                        }
+                                      }}
+                                      type="file"
+                                      accept="image/*"
+                                      capture="environment"
+                                      hidden
+                                      onChange={(e) => handlePhotoUpload(item.id, e.target.files, 'camera')}
+                                    />
                                     <button
                                       type="button"
-                                      onClick={() => (document.querySelector(`#photo-input-${item.id}`) as HTMLElement)?.click()}
+                                      onClick={() => (window[`uploadInput_${item.id}`] as any)?.click()}
                                       className="px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded text-xs font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
                                     >
                                       📁 Upload
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        sessionStorage.setItem('photoMode', 'camera');
-                                        sessionStorage.setItem('reviewItemId', item.id);
-                                      }}
+                                      onClick={() => (window[`cameraInput_${item.id}`] as any)?.click()}
                                       className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                                     >
                                       📷 Camera
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        sessionStorage.setItem('photoMode', 'rapidfire');
-                                        sessionStorage.setItem('reviewItemId', item.id);
-                                      }}
+                                    <Link
+                                      href={`/organizer/add-items/${saleId}?openCamera=1&captureMode=rapidfire&returnTo=/organizer/add-items/${saleId}/review`}
                                       className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded text-xs font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
                                     >
                                       ⚡ Rapidfire
-                                    </button>
+                                    </Link>
                                   </div>
                                   <ItemPhotoManager
                                     itemId={item.id}

@@ -7,7 +7,7 @@
  * - Update status (active, sold, etc.)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -43,6 +43,39 @@ const EditItemPage = () => {
     qrEmbedEnabled: true,
   });
 
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = async (files: FileList | null, mode: 'upload' | 'camera') => {
+    if (!files || files.length === 0 || !id) return;
+
+    try {
+      for (const file of Array.from(files)) {
+        // Step 1: Upload to Cloudinary
+        const formData = new FormData();
+        formData.append('photo', file);
+        const uploadRes = await api.post('/upload/item-photo', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const url: string = uploadRes.data.url;
+
+        // Step 2: Append URL to item's photoUrls
+        await api.post(`/items/${id}/photos`, { url });
+      }
+
+      // Refetch item to reflect new photos
+      await queryClient.invalidateQueries({ queryKey: ['item', id] });
+      showToast(`${mode === 'camera' ? 'Camera' : 'Photo'} uploaded successfully`, 'success');
+
+      // Reset file inputs
+      if (uploadInputRef.current) uploadInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+    } catch (err: any) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
+      const message = serverMsg ? `Upload failed: ${serverMsg}` : 'Photo upload failed. Please try again.';
+      showToast(message, 'error');
+    }
+  };
 
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
@@ -490,33 +523,40 @@ const EditItemPage = () => {
                         {/* Phase 16: Photo management */}
             {item && (
               <div>
-                {/* BUG 5 FIX: Add photo mode selector — Upload Files / Camera / Rapidfire */}
+                {/* BUG 5 FIX: Add photo mode selector with dedicated hidden inputs */}
                 <div className="mb-4 flex gap-2 flex-wrap">
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    hidden
+                    onChange={(e) => handlePhotoUpload(e.target.files, 'upload')}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    hidden
+                    onChange={(e) => handlePhotoUpload(e.target.files, 'camera')}
+                  />
                   <button
                     type="button"
-                    onClick={() => (document.querySelector('input[type="file"]') as HTMLElement)?.click()}
+                    onClick={() => uploadInputRef.current?.click()}
                     className="px-3 py-2 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
                   >
                     📁 Upload Files
                   </button>
-                  <Link
-                    href={`/organizer/add-items/${item.saleId || ''}`}
-                    onClick={(e) => {
-                      // Store that user wants to go to camera
-                      sessionStorage.setItem('photoMode', 'camera');
-                      sessionStorage.setItem('editItemId', String(id));
-                    }}
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
                     className="px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                   >
                     📷 Camera
-                  </Link>
+                  </button>
                   <Link
-                    href={`/organizer/add-items/${item.saleId || ''}`}
-                    onClick={(e) => {
-                      // Store that user wants to go to rapidfire
-                      sessionStorage.setItem('photoMode', 'rapidfire');
-                      sessionStorage.setItem('editItemId', String(id));
-                    }}
+                    href={`/organizer/add-items/${item.saleId}?openCamera=1&captureMode=rapidfire&returnTo=/organizer/edit-item/${id}`}
                     className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
                   >
                     ⚡ Rapidfire
