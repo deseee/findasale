@@ -732,20 +732,24 @@ const AddItemsDetailPage = () => {
   const handleRegularAnalyze = (capturedPhotos: { blob: Blob; previewUrl: string }[]) => {
     if (capturedPhotos.length === 0) return;
 
+    const appendId = addingToItemIdRef.current;
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-    // Add cover thumbnail to carousel immediately — collapses to left of shutter
-    setRapidItems((prev) => [
-      ...prev,
-      { id: tempId, thumbnailUrl: capturedPhotos[0].previewUrl, draftStatus: 'DRAFT' },
-    ]);
+    if (!appendId) {
+      // Normal mode: add cover thumbnail to carousel immediately
+      setRapidItems((prev) => [
+        ...prev,
+        { id: tempId, thumbnailUrl: capturedPhotos[0].previewUrl, draftStatus: 'DRAFT' },
+      ]);
+    }
+    // Append mode: skip temp entry — target item is already in rapidItems
 
-    // Non-blocking background pipeline (same as rapidfire)
-    // Additional photos (2–5) are appended to the item after it's created
+    // Non-blocking background pipeline
+    // appendId non-null → appends to existing item; null → creates new item
     processAndUploadRapidPhoto(
       capturedPhotos[0],
       tempId,
-      null,
+      appendId,
       capturedPhotos.length > 1 ? capturedPhotos.slice(1) : undefined
     );
   };

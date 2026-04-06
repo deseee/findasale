@@ -203,6 +203,7 @@ const ReviewPage = () => {
       return (response.data || []) as Item[];
     },
     enabled: !!saleId,
+    refetchOnMount: 'always',
   });
 
   const updateItemMutation = useMutation({
