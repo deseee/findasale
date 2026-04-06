@@ -184,6 +184,7 @@ const ReviewPage = () => {
   const [inlineCaptureMode, setInlineCaptureMode] = useState<'rapidfire' | 'regular'>('regular');
   const [inlineCaptureItemId, setInlineCaptureItemId] = useState<string | null>(null);
   const [inlineCaptureItem, setInlineCaptureItem] = useState<Item | null>(null);
+  const [inlineRapidItems, setInlineRapidItems] = useState<RapidItem[]>([]);
 
   // Auto-enable buyer preview on mount if preview=true in query
   useEffect(() => {
@@ -329,6 +330,9 @@ const ReviewPage = () => {
 
   const handleInlineCameraCapture = async (photo: { blob: Blob; previewUrl: string }) => {
     if (!inlineCaptureItemId || !saleId) return;
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // Add temp thumbnail immediately so the strip updates
+    setInlineRapidItems(prev => [...prev, { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' }]);
     try {
       const fd = new FormData();
       fd.append('photos', photo.blob, 'capture.jpg');
@@ -337,9 +341,16 @@ const ReviewPage = () => {
       const urls: string[] = res.data?.urls || [];
       if (urls[0]) {
         await api.post(`/items/${inlineCaptureItemId}/photos`, { url: urls[0] });
+        // Remove temp entry, update target item's photoUrls
+        setInlineRapidItems(prev =>
+          prev.filter(i => i.id !== tempId).map(i =>
+            i.id === inlineCaptureItemId ? { ...i, photoUrls: [...(i.photoUrls || []), urls[0]] } : i
+          )
+        );
         queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       }
     } catch (err: any) {
+      setInlineRapidItems(prev => prev.filter(i => i.id !== tempId));
       showToast('Photo upload failed', 'error');
     }
   };
@@ -980,14 +991,14 @@ const ReviewPage = () => {
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => { setInlineCaptureMode('regular'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineCameraOpen(true); }}
+                                      onClick={() => { setInlineCaptureMode('regular'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
                                       className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                                     >
                                       📷 Camera
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineCameraOpen(true); }}
+                                      onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineRapidItems([{ id: item.id, thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls || [] }]); setInlineCameraOpen(true); }}
                                       className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded text-xs font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
                                     >
                                       ⚡ Rapidfire
@@ -1319,7 +1330,7 @@ const ReviewPage = () => {
 
         {inlineCameraOpen && inlineCaptureItemId && (
           <RapidCapture
-            rapidItems={inlineCaptureItem ? [{ id: inlineCaptureItem.id, thumbnailUrl: inlineCaptureItem.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: inlineCaptureItem.title, photoUrls: inlineCaptureItem.photoUrls || [] }] : []}
+            rapidItems={inlineRapidItems}
             addingToItemId={inlineCaptureItemId}
             mode={inlineCaptureMode}
             onModeChange={setInlineCaptureMode}
