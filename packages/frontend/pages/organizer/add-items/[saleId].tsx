@@ -34,6 +34,7 @@ import CSVImportModal from '../../../components/CSVImportModal';
 import SmartInventoryUpload from '../../../components/SmartInventoryUpload';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import { useFeedbackSurvey } from '../../../hooks/useFeedbackSurvey';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
@@ -281,6 +282,7 @@ const AddItemsDetailPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const { showSurvey } = useFeedbackSurvey();
   const inMutationFlight = useRef<boolean>(false);
 
   // Feature #42: Voice-to-tag input
@@ -465,6 +467,16 @@ const AddItemsDetailPage = () => {
       setCameraOpen(true);
     }
   }, [router.isReady, router.query.openCamera, router.query.captureMode, router.query.appendToItemId]);
+
+  // OG-2: Fire survey when 10th item is added
+  const itemCountRef = useRef<number>(0);
+  useEffect(() => {
+    if (items.length === 10 && itemCountRef.current !== 10) {
+      itemCountRef.current = 10;
+      showSurvey('OG-2');
+    }
+    itemCountRef.current = items.length;
+  }, [items.length, showSurvey]);
 
   // Early returns after all hooks
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {

@@ -111,6 +111,11 @@ model User {
   fraudReviewsGiven FraudSignal[]  @relation("FraudReviewsBy")
   // Feature #48: Treasure Trail Route Builder — user-created trails
   trails         TreasureTrail[]   @relation("UserTrails")
+  // Feature #48: Treasure Trails — check-ins, photos, completions, ratings
+  trailCheckIns     TrailCheckIn[]
+  trailPhotos       TrailPhoto[]
+  trailCompletions  TrailCompletion[]
+  trailRatings      TrailRating[]
   // Feature #85: Treasure Hunt QR — per-sale scavenger hunt scans
   treasureHuntQRScans TreasureHuntQRScan[] @relation("TreasureHuntQRScans")
   // Feature #87: Brand & Designer Tracking
@@ -264,6 +269,8 @@ model Organizer {
   // POS Upgrade: Open Cart sessions and payment links
   posSessions     POSSession[]
   posPaymentLinks POSPaymentLink[]
+  // Feature #48: Treasure Trails — organizer-created discovery trails
+  trails          TreasureTrail[] @relation("OrganizerTrails")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -429,6 +436,9 @@ model Sale {
   // Feature #371: Auto High-Value Item Flagging
   highValueThresholdUSD Decimal @default(500)
   autoFlagHighValue     Boolean @default(true)
+  // Feature #48: Treasure Trails — discovery trails anchored to this sale
+  trails            TreasureTrail[] @relation("SaleTrails")
+  trailStops        TrailStop[]     @relation("SaleTrailStops")
   // POS Upgrade: Open Cart sessions and payment links
   posSessions     POSSession[]
   posPaymentLinks POSPaymentLink[]
@@ -786,7 +796,7 @@ model PointsTransaction {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  type        String   // "VISIT", "FAVORITE", "PURCHASE", "SHARE", "REVIEW", "COUPON_GENERATE", "RARITY_BOOST", "HUNT_PASS_DISCOUNT_REDEEM"
+  type        String   // "VISIT", "FAVORITE", "PURCHASE", "SHARE", "REVIEW", "COUPON_GENERATE", "RARITY_BOOST", "HUNT_PASS_DISCOUNT_REDEEM", "TRAIL_STOP_CHECKIN", "TRAIL_COMPLETION"
   points      Int
   saleId      String?
   itemId      String?
@@ -1938,24 +1948,218 @@ model SaleHubMembership {
 // Feature #48: Treasure Trail Route Builder — shopper's custom route through multiple sales
 model TreasureTrail {
   id               String         @id @default(cuid())
+  // Legacy route-based trail (V1)
   userId           String
   user             User           @relation("UserTrails", fields: [userId], references: [id], onDelete: Cascade)
+  // New discovery-based trail (V2) — organizer-anchored
+  organizerId      String?        // Organizer who created the trail (V2 only; null for legacy V1)
+  organizer        Organizer?     @relation("OrganizerTrails", fields: [organizerId], references: [id], onDelete: Restrict)
+  saleId           String?        // Anchored sale (V2 only; null for legacy V1)
+  sale             Sale?          @relation("SaleTrails", fields: [saleId], references: [id], onDelete: Cascade)
+
+  // Trail metadata
   name             String
   description      String?        @db.VarChar(500)
+  heroImageUrl     String?        // Cloudinary URL for trail card display
+
+  // Trail type: "DISCOVERY" (V2 local POI tour) or "ROUTE" (V1 multi-sale route)
+  type             String         @default("ROUTE")
+
+  // Legacy route-specific fields (V1)
   stops            Json           @default("[]") // [{saleId, order, timeEstimateMin, highlightItemIds: []}]
   totalDistanceKm  Float?         // Cached from OSRM call
   totalDurationMin Int?           // Cached from OSRM call
-  isPublic         Boolean        @default(false)
-  shareToken       String?        @unique @db.VarChar(32) // Random token for public link
   completedSaleIds String[]       @default([])
   isCompleted      Boolean        @default(false)
   completedAt      DateTime?
+
+  // Discovery-specific fields (V2)
+  minStopsRequired Int            @default(3)   // Minimum stops to complete
+  maxStops         Int            @default(7)   // Max stops (affects bonus scaling)
+  windowDays       Int            @default(7)   // Days to complete from first check-in
+
+  // Completion tracking
+  isActive         Boolean        @default(true)
+  isFeatured       Boolean        @default(false) // Platform-curated featured trails
+  isPublic         Boolean        @default(false)
+  shareToken       String?        @unique @db.VarChar(32) // Random token for public link
+
+  // Stats
+  viewCount        Int            @default(0)
+  completionCount  Int            @default(0)
+  avgRating        Decimal?       // Shopper ratings post-completion
+
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
+
+  // Relations
   highlights       TrailHighlight[]
+  stops            TrailStop[]    // New V2 stops (distinct from legacy stops_json)
+  checkIns         TrailCheckIn[]
+  completions      TrailCompletion[]
+  ratings          TrailRating[]
 
   @@index([userId])
-  @@index([isPublic])
+  @@index([organizerId])
+  @@index([saleId])
+  @@index([isPublic, isFeatured])
+  @@index([type])
+}
+
+// Feature #48: Treasure Trails — individual stops on a discovery trail
+model TrailStop {
+  id              String         @id @default(cuid())
+  trailId         String
+  trail           TreasureTrail  @relation(fields: [trailId], references: [id], onDelete: Cascade)
+
+  // Stop identification
+  stopType        String         // "SALE" | "RESALE_SHOP" | "LANDMARK" | "CAFE" | "PARTNER"
+  stopName        String
+  stopDescription String?        @db.VarChar(300)
+  address         String?
+
+  // Geolocation
+  latitude        Float
+  longitude       Float
+
+  // External reference (if applicable)
+  saleId          String?        // For SALE type only
+  sale            Sale?          @relation("SaleTrailStops", fields: [saleId], references: [id], onDelete: SetNull)
+  googlePlaceId   String?        // For non-sale stops (RESALE_SHOP, LANDMARK, CAFE)
+  googleRating    Decimal?       // Cached from Places API
+  googlePhone     String?        // Cached from Places API
+
+  // XP reward
+  baseXp          Int            // 5=sale, 3=resale, 2=POI, 4=partner (locked per type)
+  photoXpBonus    Int            @default(2)
+
+  // Sequence
+  order           Int            // 0-based ordering in trail
+
+  // Organizer note
+  organizer_note  String?        @db.VarChar(200) // "Hidden gem", "Great coffee", etc.
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  // Relations
+  checkIns        TrailCheckIn[]
+  photos          TrailPhoto[]
+
+  @@unique([trailId, order])
+  @@index([trailId])
+  @@index([stopType])
+  @@index([googlePlaceId])
+}
+
+// Feature #48: Treasure Trails — user check-in at a stop
+model TrailCheckIn {
+  id             String        @id @default(cuid())
+  trailId        String
+  trail          TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+  stopId         String
+  stop           TrailStop     @relation(fields: [stopId], references: [id], onDelete: Cascade)
+
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // GPS data
+  latitude       Float
+  longitude      Float
+
+  // XP awarded
+  baseXpAwarded  Int           // Base per-stop XP
+  photoXpAwarded Int           @default(0) // 0 or 2 if photo posted
+
+  // Photo (optional)
+  photoId        String?       // Link to TrailPhoto if user posted one
+  photo          TrailPhoto?   @relation(fields: [photoId], references: [id], onDelete: SetNull)
+
+  // Timing
+  checkedInAt    DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+
+  @@unique([trailId, stopId, userId]) // One check-in per user per stop per trail
+  @@index([trailId, userId])
+  @@index([stopId])
+  @@index([userId])
+  @@index([checkedInAt])
+}
+
+// Feature #48: Treasure Trails — photos posted by shoppers at stops
+model TrailPhoto {
+  id             String        @id @default(cuid())
+  checkInId      String
+  checkIn        TrailCheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  stopId         String
+  stop           TrailStop     @relation(fields: [stopId], references: [id], onDelete: Cascade)
+
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Photo storage
+  cloudinaryUrl  String        // Cloudinary CDN URL
+  cloudinaryId   String        // For deletion reference
+
+  // Social
+  postedToFeed   Boolean       @default(true) // Shopper chose to share publicly
+  likeCount      Int           @default(0)
+  commentCount   Int           @default(0)
+
+  createdAt      DateTime      @default(now())
+
+  @@index([userId])
+  @@index([stopId])
+  @@index([createdAt])
+}
+
+// Feature #48: Treasure Trails — completion tracking for user+trail
+model TrailCompletion {
+  id                     String        @id @default(cuid())
+  trailId                String
+  trail                  TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+
+  userId                 String
+  user                   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Completion metadata
+  completionBonusXp      Int           // 40–80 XP based on stop count
+  totalXpEarned          Int           // Sum of all stop XP + bonus
+  stopCountCompleted     Int           // Number of stops checked in
+  photoCountPosted       Int           // Number of photos posted
+
+  firstCheckInAt         DateTime      // When user completed first stop
+  completedAt            DateTime      // When user completed last stop
+  daysToComplete         Int           // Computed: (completedAt - firstCheckInAt).days
+
+  rating                 Int?          // 1-5 star rating post-completion
+  review                 String?       @db.VarChar(300)
+
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  @@unique([trailId, userId])
+  @@index([trailId])
+  @@index([userId])
+  @@index([completedAt])
+}
+
+// Feature #48: Treasure Trails — shopper ratings of trails
+model TrailRating {
+  id             String        @id @default(cuid())
+  trailId        String
+  trail          TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  rating         Int           // 1–5
+  review         String?       @db.VarChar(500)
+
+  createdAt      DateTime      @default(now())
+
+  @@unique([trailId, userId]) // One rating per user per trail
+  @@index([trailId, rating])
 }
 
 // Feature #48: Track items highlighted on trails

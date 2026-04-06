@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
 
@@ -20,6 +21,7 @@ const CheckoutSuccessPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { showSurvey } = useFeedbackSurvey();
   const { purchaseId } = router.query;
 
   const { data: purchase, isLoading, isError } = useQuery({
@@ -51,6 +53,13 @@ const CheckoutSuccessPage = () => {
       router.replace(`/purchases/${purchaseId}`);
     }
   }, [purchaseId, isLoading, isError, purchase, router]);
+
+  // SH-1: Fire survey when purchase completes
+  useEffect(() => {
+    if (!isLoading && purchase && user?.id) {
+      showSurvey('SH-1');
+    }
+  }, [purchase, isLoading, user?.id, showSurvey]);
 
   if (authLoading || isLoading) {
     return (

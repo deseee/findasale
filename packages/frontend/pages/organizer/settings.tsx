@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import { useTheme } from '../../hooks/useTheme';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useNetworkQuality } from '../../hooks/useNetworkQuality';
@@ -29,6 +30,7 @@ const OrganizerSettingsPage = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const { showToast } = useToast();
+  const { showSurvey } = useFeedbackSurvey();
   const { tier, isPro } = useOrganizerTier();
   const { isLowBandwidth, networkType, toggleLowBandwidth } = useNetworkQuality();
   const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help'>('payments');
@@ -155,6 +157,7 @@ const OrganizerSettingsPage = () => {
         setEtsy(response.data.etsy || '');
       }
       showToast('Profile updated', 'success');
+      showSurvey('OG-5');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to update profile', 'error');
     } finally {

@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import { useFeedbackSurvey } from '../../../hooks/useFeedbackSurvey';
 import Head from 'next/head';
 import Link from 'next/link';
 import PickupSlotManager from '../../../components/PickupSlotManager';
@@ -30,6 +31,7 @@ const EditSalePage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const { showSurvey } = useFeedbackSurvey();
   const [isCloning, setIsCloning] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
@@ -320,6 +322,7 @@ const EditSalePage = () => {
       // Show celebration only when publishing (transitioning to PUBLISHED)
       if (newStatus === 'PUBLISHED') {
         setShowPublishCelebration(true);
+        showSurvey('OG-1');
       } else {
         showToast('Sale is now hidden', 'success');
         // Refetch the sale data
@@ -354,6 +357,7 @@ const EditSalePage = () => {
       await api.patch(`/sales/${id}/status`, { status: 'PUBLISHED' });
       setShowAlaCarteModal(false);
       setShowPublishCelebration(true);
+      showSurvey('OG-1');
     } catch (error: any) {
       // Feature #249: Handle concurrent sales tier limit (409)
       if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {

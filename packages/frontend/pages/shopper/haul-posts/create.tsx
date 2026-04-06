@@ -4,12 +4,14 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useAuth } from '@/components/AuthContext';
 import { useToast } from '@/components/ToastContext';
+import { useFeedbackSurvey } from '@/hooks/useFeedbackSurvey';
 import { useCreateHaulPost } from '@/hooks/useHaulPosts';
 
 function CreateHaulPostPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { showSurvey } = useFeedbackSurvey();
   const createHaul = useCreateHaulPost();
 
   const [mounted, setMounted] = useState(false);
@@ -55,6 +57,7 @@ function CreateHaulPostPage() {
       });
 
       showToast('Haul posted successfully!', 'success');
+      showSurvey('SH-4');
       router.push('/shopper/haul-posts');
     } catch (err) {
       console.error('Error creating haul post:', err);

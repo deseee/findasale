@@ -21,6 +21,7 @@ import { Elements } from '@stripe/react-stripe-js';
 import jsQR from 'jsqr';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import api from '../../lib/api';
 import PosTierGates from '../../components/PosTierGates';
 import PosInvoiceModal from '../../components/PosInvoiceModal';
@@ -103,6 +104,7 @@ export default function POSPage() {
   const { user, isLoading: loading } = useAuth();
   const router = useRouter();
   const { showToast } = useToast();
+  const { showSurvey } = useFeedbackSurvey();
 
   // Sale + item state
   const [sales, setSales] = useState<Sale[]>([]);
@@ -512,6 +514,7 @@ export default function POSPage() {
         `✅ Card payment of $${cartTotal.toFixed(2)} accepted${buyerEmail.trim() ? ` — receipt sent to ${buyerEmail.trim()}` : ''}.`
       );
 
+      showSurvey('OG-4');
       clearCart();
     } catch (err: any) {
       console.error('[pos] Payment error:', err);
@@ -550,6 +553,7 @@ export default function POSPage() {
         `✅ Cash sale recorded for $${cartTotal.toFixed(2)}. Change: $${change}${buyerEmail.trim() ? ` — receipt sent to ${buyerEmail.trim()}` : ''}.`
       );
 
+      showSurvey('OG-4');
       clearCart();
     } catch (err: any) {
       console.error('[pos] Cash payment error:', err);
