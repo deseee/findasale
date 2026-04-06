@@ -851,7 +851,7 @@ const ReviewPage = () => {
                                   <span>
                                     {item.healthScore.grade === 'clear' ? 'Ready to Publish' :
                                      item.healthScore.grade === 'nudge' ? 'Review Before Publishing' :
-                                     'Cannot Publish Yet'}
+                                     'Cannot Publish'}
                                   </span>
                                 </p>
                               )}
