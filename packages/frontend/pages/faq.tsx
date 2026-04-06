@@ -172,8 +172,125 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is a Condition Rating?',
     answer: (
       <>
-        Every item on FindA.Sale has a condition rating: S = Like New, A = Excellent, B = Good, C = Fair, D = Poor,. These help you know what to expect before you visit. 
+        Every item on FindA.Sale has a condition rating: S = Like New, A = Excellent, B = Good, C = Fair, D = Poor,. These help you know what to expect before you visit.
         See our full Condition Guide for details.
+      </>
+    ),
+  },
+  {
+    question: 'What are Treasure Trails?',
+    answer: (
+      <>
+        Treasure Trails are curated routes that combine estate sale shopping, thrift store visits, and local points of interest into one adventure. A Trail might take you from a Saturday morning estate sale to a vintage shop downtown to a scenic overlook on the way home. Each stop is mapped. You check in at locations along the way, rate the trail when you're done, and earn XP for completing it. Hunt Pass subscribers can create their own trails and share them with the community — and earn XP every time someone new completes a trail they built.
+      </>
+    ),
+  },
+  {
+    question: 'What do item rarity tiers mean?',
+    answer: (
+      <>
+        Every item on FindA.Sale is automatically assigned a rarity tier based on its category, condition, estimated value, and AI analysis:
+        <ul className="mt-2 ml-4 space-y-1">
+          <li><strong>Common</strong> — Everyday household items, standard furniture, common clothing</li>
+          <li><strong>Uncommon</strong> — Quality pieces with good condition ratings, desirable but not rare</li>
+          <li><strong>Rare</strong> — Vintage, collectible, or high-value items that don't come up often</li>
+          <li><strong>Legendary</strong> — Museum-quality, one-of-a-kind, or exceptionally rare finds</li>
+        </ul>
+        Higher rarity items are surfaced in the <strong>Rare Finds</strong> feed available to Hunt Pass subscribers. Rarity is set by our AI — organizers can't manually inflate it.
+      </>
+    ),
+  },
+  {
+    question: 'What is the Rare Finds feed?',
+    answer: (
+      <>
+        Rare Finds is a curated feed exclusively for Hunt Pass subscribers that shows RARE and LEGENDARY items from sales in your area. Hunt Pass members see Rare items 6 hours early and Legendary items 12 hours early — before the general public. It's the best way to stay ahead of serious competition on the finds that matter most.
+      </>
+    ),
+  },
+  {
+    question: 'What is a Treasure Hunt scan and how do QR codes work?',
+    answer: (
+      <>
+        Each item at a participating sale has a QR sticker printed by the organizer. When you scan an item's QR code at the sale, you earn 25 XP (Hunt Pass: 28 XP). Scanning also pulls up the item's full listing so you can check price, condition, and description right from your phone. It's like a built-in shopping assistant at every sale you attend.
+      </>
+    ),
+  },
+  {
+    question: 'What is a Bounty?',
+    answer: (
+      <>
+        A Bounty is a request you post for a specific item you've been hunting for. Describe what you're looking for — "vintage Danish modern dining table," "1960s Pyrex set in pink" — and participating organizers can match and fulfill your request if they come across it. You get notified when a match is found. It's a way to turn passive hunting into active discovery.
+      </>
+    ),
+  },
+  {
+    question: 'What are Flash Deals?',
+    answer: (
+      <>
+        Flash Deals are time-limited discounts posted by organizers — usually on the last day of a sale when they want to move remaining inventory fast. Standard users are notified when a Flash Deal goes live. Hunt Pass subscribers are notified 6 hours early, giving them first access to the best deals before the crowd.
+      </>
+    ),
+  },
+  {
+    question: 'What is the Loot Legend?',
+    answer: (
+      <>
+        The Loot Legend is your personal collection showcase. Every notable purchase, earned badge, and completed challenge adds to it. You can make your Loot Legend public so other collectors can see your best finds, or keep it private. It's your FindA.Sale identity — a record of your collecting history.
+      </>
+    ),
+  },
+  {
+    question: 'What are Crowd Appraisals?',
+    answer: (
+      <>
+        Crowd Appraisals let the FindA.Sale community weigh in on an item's estimated value. When a buyer or organizer marks an item for appraisal, community members with SCOUT rank or above can submit their valuation. The community votes on submissions, and the requester picks the appraisal they find most useful. Submitting earns XP — and if yours is selected, you earn a significant XP bonus. It's a way for experienced collectors to share their knowledge and get recognized for it.
+      </>
+    ),
+  },
+  {
+    question: 'What can I spend my XP on?',
+    answer: (
+      <>
+        XP isn't just for rank progression — you can redeem it for real rewards in the Explorer's Guild. Current redemption options:
+        <ul className="mt-2 ml-4 space-y-1">
+          <li><strong>75 XP → $5 off</strong> at any participating sale (min $20 purchase)</li>
+          <li><strong>15 XP → Rarity Boost</strong> — +2% Legendary item odds for your next sale visit</li>
+          <li><strong>25 XP → Trail Boost</strong> — Feature your Treasure Trail at the top of the discovery feed for 48 hours</li>
+          <li><strong>50 XP → Hunt Pass Discount</strong> — $1 off your next Hunt Pass billing cycle (stackable up to 3 times)</li>
+        </ul>
+        Redeem XP from <strong>Account → Loyalty</strong>.
+      </>
+    ),
+  },
+  {
+    question: 'What are Explorer\'s Guild ranks and what do I unlock at each level?',
+    answer: (
+      <>
+        There are five ranks in the Explorer's Guild, each unlocking new perks:
+        <ul className="mt-2 ml-4 space-y-1">
+          <li><strong>Initiate (0 XP)</strong> — Full access to the platform, join the community</li>
+          <li><strong>Scout (500 XP)</strong> — 5% Hunt Pass discount, early access to 1 sale per week</li>
+          <li><strong>Ranger (2,000 XP)</strong> — 10% Hunt Pass discount, early access to 3 sales per week</li>
+          <li><strong>Sage (5,000 XP)</strong> — 15% Hunt Pass discount, unlimited early access, 48-hour advance sale alerts, ability to publish Sourcebook hunting guides</li>
+          <li><strong>Grandmaster (12,000 XP)</strong> — Permanent free Hunt Pass, all Sage perks, priority support</li>
+        </ul>
+      </>
+    ),
+  },
+  {
+    question: 'What is the Collector Passport?',
+    answer: (
+      <>
+        Your Collector Passport is your public identity on FindA.Sale — it shows your Explorer rank, specialty badges, earned achievements, and collection highlights. Share it with other collectors or use it as your profile when messaging organizers.
+      </>
+    ),
+  },
+  {
+    question: 'How do I cancel a hold?',
+    answer: (
+      <>
+        Holds you've placed on items can be cancelled from your account under <strong>Account → Holds</strong>. Find the item, click <strong>Cancel Hold</strong>, and the item is released back to Available status. Note that organizers can also cancel holds — you'll be notified if that happens.
       </>
     ),
   },
@@ -309,6 +426,64 @@ const organizerFAQs: FAQItem[] = [
     answer: (
       <>
         The Command Center is a Teams feature that gives you a real-time dashboard across all your active sales — track items, holds, messages, and performance in one place.
+      </>
+    ),
+  },
+  {
+    question: 'What\'s the difference between item status (Available / Sold / Unavailable) and draft status (Draft / Published)?',
+    answer: (
+      <>
+        These are two separate controls that often get confused.
+        <ul className="mt-2 ml-4 space-y-1">
+          <li><strong>Draft status</strong> controls whether shoppers can see the item at all. A Draft item is invisible to shoppers. A Published item is visible.</li>
+          <li><strong>Item status</strong> controls what shoppers can do with a visible item. Available = purchasable. Sold = sold, display only. Unavailable = visible but temporarily not for sale.</li>
+        </ul>
+        So: Published + Available = shoppers can buy it. Published + Unavailable = shoppers can see it but can't purchase. Draft = shoppers can't see it at all, regardless of status.
+      </>
+    ),
+  },
+  {
+    question: 'How does Rapid Capture work?',
+    answer: (
+      <>
+        Open your sale and tap the ⚡ icon in the photo controls. You'll enter rapid-fire camera mode — photograph items one after another without stopping. The AI analyzes each photo as you go. When you're done, you'll review AI suggestions (title, description, category, tags) for all captured items in a batch on the Review page. Approve, edit, or dismiss each one and publish. This is the fastest way to get a large inventory online — many organizers photograph 100+ items in under 30 minutes.
+      </>
+    ),
+  },
+  {
+    question: 'How do I use the Print Kit?',
+    answer: (
+      <>
+        From your sale dashboard, click <strong>Print Kit</strong>. You can generate:
+        <ul className="mt-2 ml-4 space-y-1">
+          <li><strong>Item label stickers</strong> — Avery-format adhesive labels with QR codes for each item (6 per page, 30 per page options). Shoppers scan these at the sale to view item details and price on their phone.</li>
+          <li><strong>Price sheet / cheat sheet</strong> — A printed reference grid of all items with prices, useful for you and staff during the sale.</li>
+        </ul>
+        Print the sticker sheet, cut the labels, and apply them to items before the sale. The QR code links directly to that item's listing.
+      </>
+    ),
+  },
+  {
+    question: 'How do I manage holds and reservations?',
+    answer: (
+      <>
+        Enable holds in your sale settings under <strong>Allow Holds</strong>. Once enabled, shoppers can request holds from any item detail page. You'll receive a notification for each request — you can accept or decline. Accepted holds are marked on the listing and hold the item for a configurable window (default: 24 hours after sale opens). Manage all active holds from your sale's <strong>Holds</strong> tab. You can cancel any hold at any time.
+      </>
+    ),
+  },
+  {
+    question: 'How does in-person / Point of Sale checkout work?',
+    answer: (
+      <>
+        The FindA.Sale POS lets you process sales at the event using your phone or tablet. From your sale dashboard, tap <strong>POS</strong> to open the point-of-sale view. You can search your inventory, add items to a cart, accept payment (card via Stripe or cash recorded manually), and mark items sold — all from the same screen. POS transactions sync with your online inventory in real time, so an item sold in person won't show as available online.
+      </>
+    ),
+  },
+  {
+    question: 'How does the feedback and survey system work?',
+    answer: (
+      <>
+        FindA.Sale occasionally prompts users with brief micro-surveys to help you understand shopper experience. These are triggered by real actions (a purchase completed, a hold placed, a sale visited). You can view aggregated feedback signals from your shoppers in your dashboard. To give us feedback about your own organizer experience, use <strong>Settings → Help & Support → Send Feedback</strong>. Feedback is reviewed and prioritized by the team weekly.
       </>
     ),
   },
