@@ -21,6 +21,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 import { CURATED_TAGS } from '../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
+import RapidCapture, { RapidItem } from '../../../components/RapidCapture';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -44,6 +45,8 @@ const EditItemPage = () => {
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const [inlineCameraOpen, setInlineCameraOpen] = useState(false);
+  const [inlineCaptureMode, setInlineCaptureMode] = useState<'rapidfire' | 'regular'>('regular');
 
   const handlePhotoUpload = async (files: FileList | null, mode: 'upload' | 'camera') => {
     if (!files || files.length === 0 || !id) return;
@@ -73,6 +76,28 @@ const EditItemPage = () => {
       const message = serverMsg ? `Upload failed: ${serverMsg}` : 'Photo upload failed. Please try again.';
       showToast(message, 'error');
     }
+  };
+
+  const handleInlineCameraCapture = async (photo: { blob: Blob; previewUrl: string }) => {
+    if (!id || !item) return;
+    try {
+      const fd = new FormData();
+      fd.append('photos', photo.blob, 'capture.jpg');
+      fd.append('saleId', String(item.saleId));
+      const res = await api.post('/upload/sale-photos', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const urls: string[] = res.data?.urls || [];
+      if (urls[0]) {
+        await api.post(`/items/${id}/photos`, { url: urls[0] });
+        queryClient.invalidateQueries({ queryKey: ['item', id] });
+      }
+    } catch (err: any) {
+      showToast('Photo upload failed', 'error');
+    }
+  };
+
+  const handleInlineCameraAnalyze = async (photos: { blob: Blob; previewUrl: string }[]) => {
+    for (const photo of photos) await handleInlineCameraCapture(photo);
+    setInlineCameraOpen(false);
   };
 
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -538,18 +563,20 @@ const EditItemPage = () => {
                   >
                     📁 Upload Files
                   </button>
-                  <Link
-                    href={`/organizer/add-items/${item.saleId}?openCamera=1&captureMode=regular&appendToItemId=${id}`}
+                  <button
+                    type="button"
+                    onClick={() => { setInlineCaptureMode('regular'); setInlineCameraOpen(true); }}
                     className="px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                   >
                     📷 Camera
-                  </Link>
-                  <Link
-                    href={`/organizer/add-items/${item.saleId}?openCamera=1&captureMode=rapidfire&appendToItemId=${id}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCameraOpen(true); }}
                     className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
                   >
                     ⚡ Rapidfire
-                  </Link>
+                  </button>
                 </div>
                 <ItemPhotoManager
                   itemId={String(id)}
@@ -618,6 +645,24 @@ const EditItemPage = () => {
               </button>
             </div>
           </form>
+
+          {inlineCameraOpen && (
+            <RapidCapture
+              rapidItems={item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []}
+              addingToItemId={String(id)}
+              mode={inlineCaptureMode}
+              onModeChange={setInlineCaptureMode}
+              onPhotoCapture={inlineCaptureMode === 'rapidfire' ? handleInlineCameraCapture : undefined}
+              onAnalyze={inlineCaptureMode === 'regular' ? handleInlineCameraAnalyze : undefined}
+              onComplete={() => setInlineCameraOpen(false)}
+              onCancel={() => setInlineCameraOpen(false)}
+              onAddToItem={() => {}}
+              onThumbnailTap={() => {}}
+              onNavigateToReview={() => setInlineCameraOpen(false)}
+              readyCount={0}
+              isAnalyzing={false}
+            />
+          )}
         </div>
       </div>
     </>
