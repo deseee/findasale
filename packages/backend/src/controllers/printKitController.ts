@@ -119,7 +119,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
         .font('Helvetica')
         .fontSize(7)
         .fillColor('#1a1a2e')
-        .text(titleText, sX + 8, sY + 6, { width: 129, lineBreak: false });
+        .text(titleText, sX + 58, sY + 6, { width: 123, lineBreak: false });
 
       // Price
       const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'N/A';
@@ -127,17 +127,17 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
         .font('Helvetica-Bold')
         .fontSize(14)
         .fillColor('#16a34a')
-        .text(priceText, sX + 8, sY + 20, { width: 100, lineBreak: false });
+        .text(priceText, sX + 58, sY + 20, { width: 100, lineBreak: false });
 
       // Item ID
       doc
         .font('Helvetica')
         .fontSize(5)
         .fillColor('#999999')
-        .text(item.id, sX + 8, sY + 46, { width: 129, lineBreak: false });
+        .text(item.id, sX + 58, sY + 46, { width: 123, lineBreak: false });
 
-      // QR — right side, vertically centered
-      doc.image(itemQrBuffers[i], sX + 137, sY + 12, { width: QR_SIZE, height: QR_SIZE });
+      // QR — left side, vertically centered
+      doc.image(itemQrBuffers[i], sX + 4, sY + 12, { width: QR_SIZE, height: QR_SIZE });
     }
 
     doc.end();
@@ -975,7 +975,7 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
         .font('Helvetica')
         .fontSize(6)
         .fillColor('#666666')
-        .text(sale.title, cellX + 8, cellY + 5, { width: 129, lineBreak: false });
+        .text(sale.title, cellX + 58, cellY + 5, { width: 123, lineBreak: false });
 
       // Price — large bold, left-aligned
       const priceText = `$${prices[i].toFixed(2)}`;
@@ -983,16 +983,16 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
         .font('Helvetica-Bold')
         .fontSize(18)
         .fillColor('#1a1a2e')
-        .text(priceText, cellX + 8, cellY + 18, { width: 100, lineBreak: false });
+        .text(priceText, cellX + 58, cellY + 18, { width: 100, lineBreak: false });
 
       // finda.sale — bottom left, tiny
       doc
         .font('Helvetica')
         .fontSize(5)
         .fillColor('#999999')
-        .text('finda.sale', cellX + 8, cellY + 56, { width: 80, lineBreak: false });
+        .text('finda.sale', cellX + 58, cellY + 56, { width: 80, lineBreak: false });
 
-      // QR code — right side, 48×48, vertically centered
+      // QR code — left side, 48×48, vertically centered
       // Encodes POS misc-add action with price for this cell
       const miscQrUrl = `${frontendUrl}/pos/${saleId}?action=add-misc&price=${prices[i].toFixed(2)}`;
       const miscQrBuffer = await QRCode.toBuffer(miscQrUrl, {
@@ -1001,7 +1001,7 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
         margin: 1,
         color: { dark: '#1a1a2e', light: '#ffffff' },
       });
-      doc.image(miscQrBuffer, cellX + 137, cellY + 12, { width: QR_SIZE, height: QR_SIZE });
+      doc.image(miscQrBuffer, cellX + 4, cellY + 12, { width: QR_SIZE, height: QR_SIZE });
     }
 
     doc.end();
