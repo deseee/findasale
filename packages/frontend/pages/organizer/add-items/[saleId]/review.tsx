@@ -1043,6 +1043,7 @@ const ReviewPage = () => {
                                   if (hs.breakdown.description === 20) readyItems.push('Full description ✓');
                                   if (hs.breakdown.tags === 15) readyItems.push('3+ tags ✓');
                                   if (hs.breakdown.price === 5) readyItems.push('Price set ✓');
+                                  if (hs.breakdown.category === 5) readyItems.push('Category selected ✓');
                                   if (hs.breakdown.conditionGrade === 5) readyItems.push('Condition graded ✓');
 
                                   // Determine what must be fixed (at 0 value, only if blocked)
@@ -1051,6 +1052,7 @@ const ReviewPage = () => {
                                     if (hs.breakdown.photo === 0) mustFix.push('Add at least one photo');
                                     if (hs.breakdown.title === 0) mustFix.push('Add a title to your item');
                                     if (hs.breakdown.price === 0) mustFix.push('Set a price');
+                                    if (hs.breakdown.category === 0) mustFix.push('Select a category');
                                     if (hs.breakdown.conditionGrade === 0) mustFix.push('Grade the condition');
                                   }
 
@@ -1066,6 +1068,9 @@ const ReviewPage = () => {
                                     if (hs.breakdown.tags < 15 && hs.breakdown.tags > 0) improvements.push(`Add more tags (have ${(item.tags?.length) || 0})`);
                                     if (hs.breakdown.tags === 0) improvements.push('Add tags');
                                     if (hs.breakdown.price === 0) improvements.push('Set a price');
+                                    if (hs.breakdown.category < 5 && hs.breakdown.category > 0) improvements.push('Choose a more specific category');
+                                    if (hs.breakdown.category === 0) improvements.push('Select a category');
+                                    if (hs.breakdown.conditionGrade < 5 && hs.breakdown.conditionGrade > 0) improvements.push('Grade the condition more completely');
                                     if (hs.breakdown.conditionGrade === 0) improvements.push('Grade the condition');
                                   }
 
