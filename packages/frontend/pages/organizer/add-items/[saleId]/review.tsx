@@ -1069,9 +1069,9 @@ const ReviewPage = () => {
                                     if (hs.breakdown.tags < 15 && hs.breakdown.tags > 0) improvements.push(`Add more tags (have ${(item.tags?.length) || 0})`);
                                     if (hs.breakdown.tags === 0) improvements.push('Add tags');
                                     if (hs.breakdown.price === 0) improvements.push('Set a price');
-                                    if (hs.breakdown.category < 5 && hs.breakdown.category > 0) improvements.push('Choose a more specific category');
-                                    if (hs.breakdown.category === 0) improvements.push('Select a category');
-                                    if (hs.breakdown.conditionGrade < 5 && hs.breakdown.conditionGrade > 0) improvements.push('Grade the condition more completely');
+                                    if ((hs.breakdown.category ?? 0) < 5 && (hs.breakdown.category ?? 0) > 0) improvements.push('Choose a more specific category');
+                                    if ((hs.breakdown.category ?? 0) === 0) improvements.push('Select a category');
+                                    if ((hs.breakdown.conditionGrade ?? 0) < 5 && (hs.breakdown.conditionGrade ?? 0) > 0) improvements.push('Grade the condition more completely');
                                     if (hs.breakdown.conditionGrade === 0) improvements.push('Grade the condition');
                                   }
 
