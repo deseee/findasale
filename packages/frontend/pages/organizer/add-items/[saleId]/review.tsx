@@ -943,18 +943,6 @@ const ReviewPage = () => {
                                       hidden
                                       onChange={(e) => handlePhotoUpload(item.id, e.target.files, 'upload')}
                                     />
-                                    <input
-                                      ref={(ref) => {
-                                        if (ref && !(window as any)[`cameraInput_${item.id}`]) {
-                                          (window as any)[`cameraInput_${item.id}`] = ref;
-                                        }
-                                      }}
-                                      type="file"
-                                      accept="image/*"
-                                      capture="environment"
-                                      hidden
-                                      onChange={(e) => handlePhotoUpload(item.id, e.target.files, 'camera')}
-                                    />
                                     <button
                                       type="button"
                                       onClick={() => ((window as any)[`uploadInput_${item.id}`] as any)?.click()}
@@ -962,15 +950,14 @@ const ReviewPage = () => {
                                     >
                                       📁 Upload
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => ((window as any)[`cameraInput_${item.id}`] as any)?.click()}
+                                    <Link
+                                      href={`/organizer/add-items/${saleId}?openCamera=1&captureMode=regular&appendToItemId=${item.id}`}
                                       className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                                     >
                                       📷 Camera
-                                    </button>
+                                    </Link>
                                     <Link
-                                      href={`/organizer/add-items/${saleId}?openCamera=1&captureMode=rapidfire&returnTo=/organizer/add-items/${saleId}/review`}
+                                      href={`/organizer/add-items/${saleId}?openCamera=1&captureMode=rapidfire&appendToItemId=${item.id}`}
                                       className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded text-xs font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
                                     >
                                       ⚡ Rapidfire

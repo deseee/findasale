@@ -444,11 +444,27 @@ const AddItemsDetailPage = () => {
     if (!router.isReady) return;
     if (router.query.openCamera === '1') {
       const mode = router.query.captureMode === 'rapidfire' ? 'rapidfire' : 'regular';
+      const appendId = router.query.appendToItemId as string | undefined;
       setCaptureMode(mode as 'rapidfire' | 'regular');
       setActiveTab('camera');
+      if (appendId) {
+        // Pre-load the target item into the thumbnail strip and set it as append target
+        api.get(`/items/${appendId}`).then((res) => {
+          const it = res.data;
+          setRapidItems([{
+            id: it.id,
+            thumbnailUrl: it.photoUrls?.[0] || it.thumbnailUrl,
+            draftStatus: it.draftStatus || 'PENDING_REVIEW',
+            title: it.title,
+            photoUrls: it.photoUrls || [],
+          }]);
+          setAddingToItemId(appendId);
+          addingToItemIdRef.current = appendId;
+        }).catch(() => {});
+      }
       setCameraOpen(true);
     }
-  }, [router.isReady, router.query.openCamera, router.query.captureMode]);
+  }, [router.isReady, router.query.openCamera, router.query.captureMode, router.query.appendToItemId]);
 
   // Early returns after all hooks
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {

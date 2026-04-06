@@ -44,7 +44,6 @@ const EditItemPage = () => {
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoUpload = async (files: FileList | null, mode: 'upload' | 'camera') => {
     if (!files || files.length === 0 || !id) return;
@@ -69,7 +68,6 @@ const EditItemPage = () => {
 
       // Reset file inputs
       if (uploadInputRef.current) uploadInputRef.current.value = '';
-      if (cameraInputRef.current) cameraInputRef.current.value = '';
     } catch (err: any) {
       const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
       const message = serverMsg ? `Upload failed: ${serverMsg}` : 'Photo upload failed. Please try again.';
@@ -533,14 +531,6 @@ const EditItemPage = () => {
                     hidden
                     onChange={(e) => handlePhotoUpload(e.target.files, 'upload')}
                   />
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    hidden
-                    onChange={(e) => handlePhotoUpload(e.target.files, 'camera')}
-                  />
                   <button
                     type="button"
                     onClick={() => uploadInputRef.current?.click()}
@@ -548,15 +538,14 @@ const EditItemPage = () => {
                   >
                     📁 Upload Files
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => cameraInputRef.current?.click()}
+                  <Link
+                    href={`/organizer/add-items/${item.saleId}?openCamera=1&captureMode=regular&appendToItemId=${id}`}
                     className="px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                   >
                     📷 Camera
-                  </button>
+                  </Link>
                   <Link
-                    href={`/organizer/add-items/${item.saleId}?openCamera=1&captureMode=rapidfire&returnTo=/organizer/edit-item/${id}`}
+                    href={`/organizer/add-items/${item.saleId}?openCamera=1&captureMode=rapidfire&appendToItemId=${id}`}
                     className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
                   >
                     ⚡ Rapidfire
