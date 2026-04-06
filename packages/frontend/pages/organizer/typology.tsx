@@ -261,11 +261,11 @@ const TypologyPage = () => {
   const activeSale = sales.find((s) => s.id === selectedSaleId);
 
   return (
-    <TierGate requiredTier="PRO" featureName="Typology Classifier" description="AI-powered item classification that helps you categorize estate sale items into collector types for better targeting.">
+    <TierGate requiredTier="PRO" featureName="Typology Classifier" description="Smart item classification that helps you categorize estate sale items into collector types for better targeting.">
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>Typology Classifier — FindA.Sale</title>
-        <meta name="description" content="AI-powered typology classification for your estate sale items" />
+        <meta name="description" content="Smart typology classification for your estate sale items" />
       </Head>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -275,7 +275,7 @@ const TypologyPage = () => {
             Treasure Typology Classifier
           </h1>
           <p className="mt-1 text-warm-500 dark:text-warm-300 text-sm">
-            AI-powered style classification for your items — Art Deco, Mid-Century Modern, Americana, and more.
+            Smart style classification for your items — Art Deco, Mid-Century Modern, Americana, and more.
           </p>
         </div>
 

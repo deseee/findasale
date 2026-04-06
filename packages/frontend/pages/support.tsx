@@ -86,21 +86,21 @@ const FAQ_DATA = [
     category: 'Item Management',
     question: 'What is Pending Review and when does it appear?',
     answer:
-      'Items captured via Rapid Capture (the rapid-fire photo mode) enter a Pending Review state automatically. This means the AI has analyzed the photo and generated a suggested title, description, category, and tags — but you haven\'t confirmed them yet. The item is in your inventory but is not visible to shoppers. Once you review and approve the AI suggestions on the Review page, the item moves to Published.',
+      'Items captured via Rapid Capture (the rapid-fire photo mode) enter a Pending Review state automatically. This means the system has analyzed the photo and generated a suggested title, description, category, and tags — but you haven\'t confirmed them yet. The item is in your inventory but is not visible to shoppers. Once you review and approve the Auto Tag suggestions on the Review page, the item moves to Published.',
   },
   {
     id: 'item-mgmt-4',
     category: 'Item Management',
     question: 'How do I add items to my sale?',
     answer:
-      'You have three ways to add items: 1. Manual add — Click Add Item in your sale and fill in the details yourself. 2. Camera / Rapid Capture — Photograph items one by one (regular mode) or in rapid-fire mode. The AI suggests titles, descriptions, categories, and tags from each photo. You review in batches on the Review page. 3. Bulk import — Upload a CSV with item data for larger inventory sets (PRO/TEAMS).',
+      'You have three ways to add items: 1. Manual add — Click Add Item in your sale and fill in the details yourself. 2. Camera / Rapid Capture — Photograph items one by one (regular mode) or in rapid-fire mode. Auto Tags suggests titles, descriptions, categories, and tags from each photo. You review in batches on the Review page. 3. Bulk import — Upload a CSV with item data for larger inventory sets (PRO/TEAMS).',
   },
   {
     id: 'item-mgmt-5',
     category: 'Item Management',
-    question: 'How does AI auto-tagging work?',
+    question: 'How does Auto Tags work?',
     answer:
-      'When you take a photo or upload an image, FindA.Sale\'s AI analyzes the visual content and generates a suggested title, description, category, and tags. You\'ll see these suggestions on the review screen. You can accept them as-is, edit any field, or dismiss and start fresh. You stay in control — the AI gives you a first draft, not a final listing. Auto-tagging saves significant time on large inventories where writing every description manually isn\'t practical.',
+      'When you take a photo or upload an image, FindA.Sale\'s system analyzes the visual content and generates a suggested title, description, category, and tags. You\'ll see these suggestions on the review screen. You can accept them as-is, edit any field, or dismiss and start fresh. You stay in control — Auto Tags gives you a first draft, not a final listing. This feature saves significant time on large inventories where writing every description manually isn\'t practical.',
   },
   {
     id: 'item-mgmt-6',
@@ -123,7 +123,7 @@ const FAQ_DATA = [
     category: 'Photos & Rapid Capture',
     question: 'What is Rapid Capture mode?',
     answer:
-      'Rapid Capture is a high-speed photo workflow designed for large inventories. Open your camera in Rapid Capture mode and photograph items one after another without stopping to fill in details. The AI analyzes each photo in the background. When you\'re done shooting, go to the Review page and confirm, edit, or dismiss the AI suggestions in bulk. This is the fastest way to get 50+ items online quickly.',
+      'Rapid Capture is a high-speed photo workflow designed for large inventories. Open your camera in Rapid Capture mode and photograph items one after another without stopping to fill in details. Our system analyzes each photo in the background. When you\'re done shooting, go to the Review page and confirm, edit, or dismiss the Auto Tag suggestions in bulk. This is the fastest way to get 50+ items online quickly.',
   },
   {
     id: 'photos-2',
@@ -137,7 +137,7 @@ const FAQ_DATA = [
     category: 'Photos & Rapid Capture',
     question: 'What makes a good item photo?',
     answer:
-      'Good lighting and a plain background help the AI give better suggestions and help shoppers make decisions. For sellable items: shoot in natural daylight if possible, place the item against a neutral surface (floor, table, wall), and photograph from a slight angle to show dimension. For condition-sensitive items, include close-ups of any wear or damage — shoppers appreciate honesty and it reduces disputes.',
+      'Good lighting and a plain background help Auto Tags give better suggestions and help shoppers make decisions. For sellable items: shoot in natural daylight if possible, place the item against a neutral surface (floor, table, wall), and photograph from a slight angle to show dimension. For condition-sensitive items, include close-ups of any wear or damage — shoppers appreciate honesty and it reduces disputes.',
   },
 
   // Holds & Reservations FAQs
@@ -510,7 +510,7 @@ const Support: React.FC = () => {
             ) : (
               <div className={styles.upgradePrompt}>
                 <h3>Chat Support</h3>
-                <p>Chat with our AI-powered support team to get answers fast.</p>
+                <p>Chat with our support team to get answers fast.</p>
                 <p className={styles.upgradeNotice}>Available for PRO and TEAMS subscribers</p>
                 <button
                   className={styles.upgradeButton}

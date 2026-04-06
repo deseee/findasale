@@ -1966,7 +1966,7 @@ model TreasureTrail {
   type             String         @default("ROUTE")
 
   // Legacy route-specific fields (V1)
-  stops            Json           @default("[]") // [{saleId, order, timeEstimateMin, highlightItemIds: []}]
+  stopsJson        Json           @default("[]") @map("stops") // V1 legacy: [{saleId, order, timeEstimateMin, highlightItemIds: []}]
   totalDistanceKm  Float?         // Cached from OSRM call
   totalDurationMin Int?           // Cached from OSRM call
   completedSaleIds String[]       @default([])

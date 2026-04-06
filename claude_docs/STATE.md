@@ -44,6 +44,17 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
+**S404 Continuation — additional fixes (same session):**
+- `packages/database/prisma/schema.prisma` — Prisma field conflict fixed: V1 `stops Json` renamed to `stopsJson @map("stops")` (allows `stops TrailStop[]` relation to coexist)
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — Full XP earning table (all actions, Hunt Pass 1.5x column) + XP sinks section added
+- `packages/frontend/pages/faq.tsx` — 11 AI text replacements + 5 new XP/Hunt Pass/Trails FAQ entries
+- `packages/frontend/pages/support.tsx` — AI text replacements
+- `packages/frontend/pages/inspiration.tsx` — AI text replacements
+- `packages/frontend/pages/organizer/appraisals.tsx` — AI text replacements
+- `packages/frontend/pages/organizer/fraud-signals.tsx` — AI text replacements
+- `packages/frontend/pages/organizer/typology.tsx` — AI text replacements
+- `packages/frontend/styles/support.module.css` — Organizer support page dark mode fixed
+
 **S404 Deferred:**
 - OG-3 survey trigger (after mark sold) — mark-sold flow location unclear; wire in next session
 - Chrome QA sweep (all sessions S396–S402) — deferred to S405 per Patrick

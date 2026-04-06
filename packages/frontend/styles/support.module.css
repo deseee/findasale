@@ -383,3 +383,164 @@
 .forumLink:hover {
   color: #065f46;
 }
+
+/* Dark Mode Styles */
+@media (prefers-color-scheme: dark) {
+  .header h1 {
+    color: #f3f4f6;
+  }
+
+  .header p {
+    color: #d1d5db;
+  }
+
+  .searchInput {
+    background: #374151;
+    color: #f3f4f6;
+    border-color: #4b5563;
+  }
+
+  .searchInput:focus {
+    border-color: #818cf8;
+  }
+
+  .categoryButton {
+    background: #1f2937;
+    color: #e5e7eb;
+    border-color: #4b5563;
+  }
+
+  .categoryButton:hover {
+    border-color: #818cf8;
+    color: #818cf8;
+  }
+
+  .categoryButton.active {
+    background: #4f46e5;
+    border-color: #4f46e5;
+    color: white;
+  }
+
+  .faqItem {
+    background: #1f2937;
+    border-left-color: #818cf8;
+  }
+
+  .faqItem:hover {
+    background: #2d3748;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .faqItem h3 {
+    color: #f3f4f6;
+  }
+
+  .faqItem p {
+    color: #d1d5db;
+  }
+
+  .categoryBadge {
+    background: #374151;
+    color: #e5e7eb;
+  }
+
+  .noResults {
+    color: #9ca3af;
+  }
+
+  .chatWidget {
+    background: #1f2937;
+    border-color: #4b5563;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+
+  .chatHeader {
+    background: #111827;
+    border-bottom-color: #4b5563;
+    color: #f3f4f6;
+  }
+
+  .chatHeader h3 {
+    color: #f3f4f6;
+  }
+
+  .closeChat {
+    color: #6b7280;
+  }
+
+  .closeChat:hover {
+    color: #f3f4f6;
+  }
+
+  .chatWelcome {
+    color: #9ca3af;
+  }
+
+  .chatMessage.assistant {
+    background: #374151;
+    color: #f3f4f6;
+  }
+
+  .chatMessage p {
+    color: inherit;
+  }
+
+  .chatSpinner {
+    color: #9ca3af;
+  }
+
+  .chatError {
+    background: #7f1d1d;
+    color: #fecaca;
+  }
+
+  .chatFooter {
+    background: #111827;
+    border-top-color: #4b5563;
+  }
+
+  .requestsLeft {
+    color: #9ca3af;
+  }
+
+  .chatInput {
+    background: #374151;
+    color: #f3f4f6;
+    border-color: #4b5563;
+  }
+
+  .chatInput:focus {
+    border-color: #818cf8;
+  }
+
+  .chatInput:disabled {
+    background: #2d3748;
+    color: #6b7280;
+  }
+
+  .chatSubmit:disabled {
+    background: #4b5563;
+    color: #9ca3af;
+  }
+
+  .communityLink {
+    background: #064e3b;
+    border-color: #10b981;
+  }
+
+  .communityLink h4 {
+    color: #a7f3d0;
+  }
+
+  .communityLink p {
+    color: #6ee7b7;
+  }
+
+  .forumLink {
+    color: #6ee7b7;
+  }
+
+  .forumLink:hover {
+    color: #a7f3d0;
+  }
+}
