@@ -18,12 +18,15 @@ const HuntPassPage = () => {
   const { user, isLoading } = useAuth();
   const [showModal, setShowModal] = useState(false);
 
-  if (!isLoading && !user) {
-    router.push('/login?redirect=/shopper/hunt-pass');
-    return null;
-  }
-
   const huntPassPrice = 4.99;
+
+  const handleSubscribeClick = () => {
+    if (!user) {
+      router.push('/login?redirect=/shopper/hunt-pass');
+      return;
+    }
+    setShowModal(true);
+  };
 
   return (
     <>
@@ -56,7 +59,7 @@ const HuntPassPage = () => {
             </div>
 
             <button
-              onClick={() => setShowModal(true)}
+              onClick={handleSubscribeClick}
               className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
             >
               Upgrade to Hunt Pass
@@ -822,7 +825,7 @@ const HuntPassPage = () => {
               Ready to hunt smarter?
             </p>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={handleSubscribeClick}
               className="py-3 px-8 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors text-lg"
             >
               Upgrade to Hunt Pass
