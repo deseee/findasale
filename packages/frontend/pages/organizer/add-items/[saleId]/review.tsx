@@ -358,6 +358,8 @@ const ReviewPage = () => {
   const handleInlineCameraAnalyze = async (photos: { blob: Blob; previewUrl: string }[]) => {
     for (const photo of photos) await handleInlineCameraCapture(photo);
     setInlineCameraOpen(false);
+    // Explicit post-close refetch so thumbnails update without a page refresh
+    queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
   };
 
   const getSortedItems = useCallback((itemsToSort: Item[]) => {
@@ -1336,11 +1338,11 @@ const ReviewPage = () => {
             onModeChange={setInlineCaptureMode}
             onPhotoCapture={inlineCaptureMode === 'rapidfire' ? handleInlineCameraCapture : undefined}
             onAnalyze={inlineCaptureMode === 'regular' ? handleInlineCameraAnalyze : undefined}
-            onComplete={() => setInlineCameraOpen(false)}
-            onCancel={() => setInlineCameraOpen(false)}
+            onComplete={() => { setInlineCameraOpen(false); queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] }); }}
+            onCancel={() => { setInlineCameraOpen(false); queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] }); }}
             onAddToItem={() => {}}
             onThumbnailTap={() => {}}
-            onNavigateToReview={() => setInlineCameraOpen(false)}
+            onNavigateToReview={() => { setInlineCameraOpen(false); queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] }); }}
             readyCount={0}
             isAnalyzing={false}
           />
