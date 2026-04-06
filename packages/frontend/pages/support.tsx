@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Fuse from 'fuse.js';
+import api from '../lib/api';
 import styles from '../styles/support.module.css';
 
 // FAQ Data — searchable via fuse.js
@@ -269,11 +270,8 @@ const Support: React.FC = () => {
   React.useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch('/api/users/me');
-        if (res.ok) {
-          const userData = await res.json();
-          setUser(userData);
-        }
+        const res = await api.get('/users/me');
+        setUser(res.data);
       } catch (error) {
         console.error('Failed to fetch user:', error);
       } finally {
