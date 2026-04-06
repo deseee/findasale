@@ -355,6 +355,7 @@ const ReviewPage = () => {
         contrast: 50,
         backgroundRemoved: item.backgroundRemoved,
         autoEnhanced: item.autoEnhanced,
+        tags: item.tags || [], // BUG 1 FIX: Initialize tags to preserve them on save
       });
       setEditStates(new Map(editStates));
     }
@@ -849,7 +850,7 @@ const ReviewPage = () => {
                                   <span>●</span>
                                   <span>
                                     {item.healthScore.grade === 'clear' ? 'Ready to Publish' :
-                                     item.healthScore.grade === 'nudge' ? 'Review Before Publishing' :
+                                     item.healthScore.grade === 'nudge' ? 'Needs Review' :
                                      'Cannot Publish'}
                                   </span>
                                 </p>
@@ -895,6 +896,36 @@ const ReviewPage = () => {
                                 {/* Photos */}
                                 <div>
                                   <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">Photos</label>
+                                  {/* BUG 5 FIX: Add photo mode selector — Upload Files / Camera / Rapidfire */}
+                                  <div className="mb-3 flex gap-1 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => document.querySelector(`#photo-input-${item.id}`)?.click()}
+                                      className="px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded text-xs font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
+                                    >
+                                      📁 Upload
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        sessionStorage.setItem('photoMode', 'camera');
+                                        sessionStorage.setItem('reviewItemId', item.id);
+                                      }}
+                                      className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
+                                    >
+                                      📷 Camera
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        sessionStorage.setItem('photoMode', 'rapidfire');
+                                        sessionStorage.setItem('reviewItemId', item.id);
+                                      }}
+                                      className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded text-xs font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
+                                    >
+                                      ⚡ Rapidfire
+                                    </button>
+                                  </div>
                                   <ItemPhotoManager
                                     itemId={item.id}
                                     initialPhotos={item.photoUrls || []}
@@ -1132,23 +1163,7 @@ const ReviewPage = () => {
                                     </div>
                                   )}
 
-                                  {/* Curated tag grid — show top 20 visible, scrollable */}
-                                  <div className="grid grid-cols-3 gap-1 mb-2 max-h-32 overflow-y-auto pb-1">
-                                    {(CURATED_TAGS as readonly string[]).slice(0, 20).map(tag => (
-                                      <button
-                                        key={tag}
-                                        onClick={() => handleAddTag(item.id, tag)}
-                                        className={`text-xs px-2 py-1 rounded border truncate transition-colors
-                                          ${(getEditState(item).tags || item.tags || []).includes(tag)
-                                            ? 'bg-indigo-100 border-indigo-400 text-indigo-700 font-medium'
-                                            : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 hover:border-indigo-300'
-                                          }`}
-                                      >
-                                        {tag}
-                                      </button>
-                                    ))}
-                                  </div>
-
+                                  {/* BUG 4 FIX: Removed curated tag list (AI already suggests tags) */}
                                   {/* Custom tag input */}
                                   <input
                                     type="text"

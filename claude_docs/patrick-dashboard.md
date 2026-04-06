@@ -1,33 +1,27 @@
-# Patrick's Dashboard — S399 Complete (2026-04-05)
+# Patrick's Dashboard — April 6, 2026
 
 ---
 
-## Status
+## What Happened This Week
 
-- **Vercel:** ⏳ S399 changes ready to push (review card redesign + feedback system frontend)
-- **Railway:** ⏳ Backend changes ready to push (feedbackController + feedback routes)
-- **DB:** ⏳ Migration required (FeedbackSuppression table + User model extensions)
+Nine sessions shipped in two days (April 4–5), then a cleanup batch today. The big ones: POS system full rebuild; add-items mobile overhaul; review screen redesigned to plain-English status ("Ready to Publish" / "Needs Review" / "Cannot Publish"); feedback collection system fully built (infrastructure ready, 10 trigger wires deferred); rapidfire batching fixes; tier limit enforcement; upgrade prompts.
 
----
+**Today (S399 continuation):** Six review-page bugs fixed — tag removal no longer wipes all tags, items with no price blocked from "Ready to Publish," amber status renamed "Needs Review," print label 404 fixed (route ordering), curated tag suggestion list removed, Add Photos now offers Upload / Camera / Rapidfire modes.
 
-## What Happened This Session (S399)
-
-**Review card redesign + feedback collection system built.**
-
-- **Review card redesign (review.tsx)** — Raw health score percentages and AI confidence numbers replaced with human-readable status: "Ready to Publish" (green), "Review Before Publishing" (orange), "Cannot Publish Yet" (red). Expanded cards show breakdown: What's Ready, Must Fix, Improvements, Optional. AI confidence moved to expanded panel only. Blocked items have disabled checkboxes.
-- **Feedback system infrastructure** — FeedbackSuppression model + User extensions in schema. Backend: submitFeedback extended (surveyType, dontAskAgain, device detection), new suppression endpoints. Frontend: FeedbackSurvey portal modal (3-button scale, 10s auto-dismiss, focus trap), FeedbackMenu (settings form), useFeedbackSurvey hook (cooldown, suppression, tier gate), FeedbackContext provider. Integrated into _app.tsx and both settings pages.
-- **Deferred:** 10 survey trigger integrations into specific pages (infrastructure built, wiring next session).
+**All S399 code is unpushed.** Run the push block below to go live.
 
 ---
 
-## Patrick Action Items
+## Push Block (run now)
 
-### Step 1: Push the code
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/backend/src/utils/listingHealthScore.ts
+git add packages/backend/src/routes/items.ts
 git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260405_add_feedback_system/migration.sql
+git add "packages/database/prisma/migrations/20260405_add_feedback_system/migration.sql"
 git add packages/backend/src/controllers/feedbackController.ts
 git add packages/backend/src/routes/feedback.ts
 git add packages/frontend/context/FeedbackContext.tsx
@@ -39,11 +33,12 @@ git add packages/frontend/pages/organizer/settings.tsx
 git add packages/frontend/pages/shopper/settings.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S399: Review card status redesign + feedback collection system infrastructure"
+git commit -m "S399: review card redesign, feedback system infrastructure, 6 review-page bug fixes"
 .\push.ps1
 ```
 
-### Step 2: Run the migration
+## Migration (run after push)
+
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -51,9 +46,31 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**Other open items (carry-forward):**
-- [ ] **eBay Developer App:** Create app at https://developer.ebay.com → get `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET` → set as Railway env vars
-- [ ] **Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway**
-- [ ] **Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway**
-- [ ] **Trademark decision (#82):** File USPTO trademark for FindA.Sale? ~$250–400/class
-- [ ] **$20/mo purchasable team member seat:** Stripe product setup needed
+---
+
+## Pending Decisions
+
+- **Encyclopedia rename** — "Resale Encyclopedia," "Secondhand Encyclopedia," or keep "Estate Sale Encyclopedia" for SEO? Dev blocked until decided.
+- **USPTO trademark** — File for FindA.Sale? ~$250–$400 per class.
+
+---
+
+## Action Items for Patrick
+
+- [ ] **Run push block above** — nothing from S399 is live until this runs
+- [ ] **Run migration** — FeedbackSuppression table won't exist in Railway DB until you do
+- [ ] **Encyclopedia rename decision**
+- [ ] **Trademark call**
+- [ ] **eBay Developer App** — developer.ebay.com → Client ID + Secret → Railway env vars
+- [ ] **Set Railway env var:** `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`
+- [ ] **Stripe seat product** — $20/mo team member seat needs a Stripe product created
+
+---
+
+## Next Session Priorities
+
+1. Wire 10 feedback survey triggers (OG-1 through SH-5) to specific pages — infrastructure is done, just needs the hook calls added
+2. Chrome QA on S398 dashboard + S399 review card + all bug fixes
+3. Social share template fix — hardcoded "estate sale" language on TikTok/Pinterest/Threads/Nextdoor share cards
+
+*Updated S399 — 2026-04-06*

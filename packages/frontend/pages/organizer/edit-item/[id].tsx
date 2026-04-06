@@ -364,30 +364,7 @@ const EditItemPage = () => {
             <div>
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Tags</label>
 
-              {/* Curated tag grid — show top 20 visible, scrollable */}
-              <div className="grid grid-cols-3 gap-1 mb-2 max-h-32 overflow-y-auto pb-1">
-                {(CURATED_TAGS as readonly string[]).slice(0, 20).map(tag => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => {
-                      if (formData.tags.includes(tag)) {
-                        setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
-                      } else {
-                        setFormData({ ...formData, tags: [...formData.tags, tag] });
-                      }
-                    }}
-                    className={`text-xs px-2 py-1 rounded border truncate transition-colors
-                      ${formData.tags.includes(tag)
-                        ? 'bg-indigo-100 dark:bg-indigo-900 border-indigo-400 text-indigo-700 dark:text-indigo-200 font-medium'
-                        : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 hover:border-indigo-300'
-                      }`}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-
+              {/* BUG 4 FIX: Removed curated tag list (AI already suggests tags) */}
               {/* Custom tag input */}
               <input
                 type="text"
@@ -513,6 +490,38 @@ const EditItemPage = () => {
                         {/* Phase 16: Photo management */}
             {item && (
               <div>
+                {/* BUG 5 FIX: Add photo mode selector — Upload Files / Camera / Rapidfire */}
+                <div className="mb-4 flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => document.querySelector('input[type="file"]')?.click()}
+                    className="px-3 py-2 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800"
+                  >
+                    📁 Upload Files
+                  </button>
+                  <Link
+                    href={`/organizer/add-items/${item.saleId || ''}`}
+                    onClick={(e) => {
+                      // Store that user wants to go to camera
+                      sessionStorage.setItem('photoMode', 'camera');
+                      sessionStorage.setItem('editItemId', String(id));
+                    }}
+                    className="px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
+                  >
+                    📷 Camera
+                  </Link>
+                  <Link
+                    href={`/organizer/add-items/${item.saleId || ''}`}
+                    onClick={(e) => {
+                      // Store that user wants to go to rapidfire
+                      sessionStorage.setItem('photoMode', 'rapidfire');
+                      sessionStorage.setItem('editItemId', String(id));
+                    }}
+                    className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
+                  >
+                    ⚡ Rapidfire
+                  </Link>
+                </div>
                 <ItemPhotoManager
                   itemId={String(id)}
                   initialPhotos={item.photoUrls || []}

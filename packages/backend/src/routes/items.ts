@@ -723,6 +723,10 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
   }
 });
 
+// BUG 3 FIX: Label route must come BEFORE generic /:id route to avoid being shadowed
+// W2: Label PDF
+router.get('/:id/label', authenticate, getSingleItemLabel);
+
 router.get('/:id', optionalAuthenticate, getItemById);
 router.get('/', getItemsBySaleId);
 router.post('/', authenticate, upload.array('images', 5), createItem);
@@ -740,9 +744,6 @@ router.patch('/:id/photos/reorder', authenticate, reorderItemPhotos);
 
 // CSV import endpoint
 router.post('/:saleId/import-items', authenticate, upload.single('csv'), importItemsFromCSV);
-
-// W2: Label PDF
-router.get('/:id/label', authenticate, getSingleItemLabel);
 
 // CD2 Phase 3: AI Price suggestions
 router.post('/ai/price-suggest', authenticate, async (req, res) => {

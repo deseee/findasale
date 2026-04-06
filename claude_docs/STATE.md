@@ -7,27 +7,31 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S399 COMPLETE (2026-04-05):** Review card redesign + feedback collection system infrastructure
+**S399 COMPLETE (2026-04-06):** Review card redesign + feedback system + 6 review-page bug fixes
 
 **S399 Summary:**
 
-Two major implementations shipped. Review card redesign replaces raw health scores/AI confidence percentages with human-readable status system ("Ready to Publish" / "Review Before Publishing" / "Cannot Publish Yet") with color-coded breakdown sections. Feedback collection system: schema migration (FeedbackSuppression table + User model extensions), backend endpoints (submit with surveyType/dontAskAgain, suppression CRUD), frontend infrastructure (FeedbackSurvey portal modal, FeedbackMenu settings form, useFeedbackSurvey hook with cooldown/suppression/tier-gate logic, FeedbackContext provider). 10 survey trigger integrations into specific pages deferred to next dispatch.
+Three work batches in one session. (1) Review card redesign: replaces raw health scores/AI confidence with "Ready to Publish" / "Needs Review" / "Cannot Publish" status system, color-coded breakdown sections. (2) Feedback collection system: schema migration (FeedbackSuppression table + User extensions), backend endpoints (submit/suppression CRUD), frontend infrastructure (FeedbackSurvey portal, FeedbackMenu, useFeedbackSurvey hook, FeedbackContext). 10 trigger integrations deferred. (3) Six review-page bug fixes: tag removal fixed, no-price items blocked from "Ready to Publish", "Needs Review" label, print label route reordered (was 404), curated tag list removed, camera/rapidfire mode selector added to Add Photos.
 
-**S399 Files Changed (12 files, 5 new):**
-- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — Status line replaces health bar, health breakdown sections (What's Ready/Must Fix/Improvements/Optional), AI confidence moved to expanded panel, blocked checkbox disabled
-- `packages/database/prisma/schema.prisma` — FeedbackSuppression model, User extensions (firstSalePublished, lastSurveyShownAt, feedbackSuppressions relation), Feedback extensions (surveyType, deviceType, userTierAtTime)
+**S399 Files Changed (16 files, 5 new):**
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — Full review card redesign + 4 bug fixes (tag removal, "Needs Review" label, curated tags removed, camera mode selector)
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — Curated tags removed, camera mode selector added
+- `packages/backend/src/utils/listingHealthScore.ts` — No-price hard gate (items without price capped at grade "nudge")
+- `packages/backend/src/routes/items.ts` — Label route reordered before /:id catch-all (fixed 404)
+- `packages/database/prisma/schema.prisma` — FeedbackSuppression model, User extensions, Feedback extensions
 - `packages/database/prisma/migrations/20260405_add_feedback_system/migration.sql` — NEW
-- `packages/backend/src/controllers/feedbackController.ts` — Extended submitFeedback (surveyType, dontAskAgain, device detection, tier capture); new createSuppression + listSuppressions endpoints
-- `packages/backend/src/routes/feedback.ts` — Wired suppression endpoints
-- `packages/frontend/context/FeedbackContext.tsx` — NEW (session-level survey state)
-- `packages/frontend/hooks/useFeedbackSurvey.ts` — NEW (trigger logic + suppression + cooldown + tier gate + all 10 survey definitions)
-- `packages/frontend/components/FeedbackSurvey.tsx` — NEW (portal modal, 3-button scale, auto-dismiss, focus trap, dark mode)
-- `packages/frontend/components/FeedbackMenu.tsx` — NEW (static feedback form for settings pages)
-- `packages/frontend/pages/_app.tsx` — FeedbackProvider + FeedbackSurvey portal added
-- `packages/frontend/pages/organizer/settings.tsx` — Help tab + FeedbackMenu integration
-- `packages/frontend/pages/shopper/settings.tsx` — Help & Support section + FeedbackMenu
+- `packages/backend/src/controllers/feedbackController.ts` — submitFeedback extended; createSuppression + listSuppressions
+- `packages/backend/src/routes/feedback.ts` — Suppression endpoints wired
+- `packages/frontend/context/FeedbackContext.tsx` — NEW
+- `packages/frontend/hooks/useFeedbackSurvey.ts` — NEW
+- `packages/frontend/components/FeedbackSurvey.tsx` — NEW
+- `packages/frontend/components/FeedbackMenu.tsx` — NEW
+- `packages/frontend/pages/_app.tsx` — FeedbackProvider + FeedbackSurvey portal
+- `packages/frontend/pages/organizer/settings.tsx` — Help tab + FeedbackMenu
+- `packages/frontend/pages/shopper/settings.tsx` — Help & Support + FeedbackMenu
+- `claude_docs/STATE.md` + `claude_docs/patrick-dashboard.md` — wrap docs
 
-**S399 Migration Required:**
+**S399 Migration Required (run after push):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -36,8 +40,8 @@ npx prisma generate
 ```
 
 **S399 Deferred:**
-- 10 survey trigger integrations (OG-1 through SH-5) — infrastructure built, trigger calls not yet added to specific pages
-- Chrome QA: S398 dashboard changes + S399 review card + feedback system
+- 10 survey trigger integrations (OG-1 through SH-5) — infrastructure built, triggers not yet wired to specific pages
+- Chrome QA: S398 dashboard + S399 review card + feedback system + bug fixes
 
 ---
 
