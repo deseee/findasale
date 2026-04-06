@@ -47,6 +47,7 @@ const EditItemPage = () => {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [inlineCameraOpen, setInlineCameraOpen] = useState(false);
   const [inlineCaptureMode, setInlineCaptureMode] = useState<'rapidfire' | 'regular'>('regular');
+  const [inlineRapidItems, setInlineRapidItems] = useState<RapidItem[]>([]);
 
   const handlePhotoUpload = async (files: FileList | null, mode: 'upload' | 'camera') => {
     if (!files || files.length === 0 || !id) return;
@@ -80,6 +81,8 @@ const EditItemPage = () => {
 
   const handleInlineCameraCapture = async (photo: { blob: Blob; previewUrl: string }) => {
     if (!id || !item) return;
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setInlineRapidItems(prev => [...prev, { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' }]);
     try {
       const fd = new FormData();
       fd.append('photos', photo.blob, 'capture.jpg');
@@ -88,9 +91,15 @@ const EditItemPage = () => {
       const urls: string[] = res.data?.urls || [];
       if (urls[0]) {
         await api.post(`/items/${id}/photos`, { url: urls[0] });
+        setInlineRapidItems(prev =>
+          prev.filter(i => i.id !== tempId).map(i =>
+            i.id === String(id) ? { ...i, photoUrls: [...(i.photoUrls || []), urls[0]] } : i
+          )
+        );
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       }
     } catch (err: any) {
+      setInlineRapidItems(prev => prev.filter(i => i.id !== tempId));
       showToast('Photo upload failed', 'error');
     }
   };
@@ -565,14 +574,22 @@ const EditItemPage = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setInlineCaptureMode('regular'); setInlineCameraOpen(true); }}
+                    onClick={() => {
+                      setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
+                      setInlineCaptureMode('regular');
+                      setInlineCameraOpen(true);
+                    }}
                     className="px-3 py-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                   >
                     📷 Camera
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCameraOpen(true); }}
+                    onClick={() => {
+                      setInlineRapidItems(item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []);
+                      setInlineCaptureMode('rapidfire');
+                      setInlineCameraOpen(true);
+                    }}
                     className="px-3 py-2 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
                   >
                     ⚡ Rapidfire
@@ -648,7 +665,7 @@ const EditItemPage = () => {
 
           {inlineCameraOpen && (
             <RapidCapture
-              rapidItems={item ? [{ id: String(id), thumbnailUrl: item.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: item.title, photoUrls: item.photoUrls }] : []}
+              rapidItems={inlineRapidItems}
               addingToItemId={String(id)}
               mode={inlineCaptureMode}
               onModeChange={setInlineCaptureMode}
