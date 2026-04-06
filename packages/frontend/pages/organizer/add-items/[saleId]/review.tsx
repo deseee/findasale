@@ -933,8 +933,8 @@ const ReviewPage = () => {
                                   <div className="mb-3 flex gap-1 flex-wrap">
                                     <input
                                       ref={(ref) => {
-                                        if (ref && !window[`uploadInput_${item.id}`]) {
-                                          window[`uploadInput_${item.id}`] = ref;
+                                        if (ref && !(window as any)[`uploadInput_${item.id}`]) {
+                                          (window as any)[`uploadInput_${item.id}`] = ref;
                                         }
                                       }}
                                       type="file"
@@ -945,8 +945,8 @@ const ReviewPage = () => {
                                     />
                                     <input
                                       ref={(ref) => {
-                                        if (ref && !window[`cameraInput_${item.id}`]) {
-                                          window[`cameraInput_${item.id}`] = ref;
+                                        if (ref && !(window as any)[`cameraInput_${item.id}`]) {
+                                          (window as any)[`cameraInput_${item.id}`] = ref;
                                         }
                                       }}
                                       type="file"
