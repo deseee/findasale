@@ -24,6 +24,7 @@ import ItemPhotoManager from '../../../../components/ItemPhotoManager'; // Phase
 import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Phase 3
 import PriceResearchPanel from '../../../../components/PriceResearchPanel';
 import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
+import RapidCapture, { RapidItem } from '../../../../components/RapidCapture';
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
 
@@ -179,6 +180,10 @@ const ReviewPage = () => {
   const [showBuyerPreview, setShowBuyerPreview] = useState(router.query.preview === 'true');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'status' | 'date'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [inlineCameraOpen, setInlineCameraOpen] = useState(false);
+  const [inlineCaptureMode, setInlineCaptureMode] = useState<'rapidfire' | 'regular'>('regular');
+  const [inlineCaptureItemId, setInlineCaptureItemId] = useState<string | null>(null);
+  const [inlineCaptureItem, setInlineCaptureItem] = useState<Item | null>(null);
 
   // Auto-enable buyer preview on mount if preview=true in query
   useEffect(() => {
@@ -320,6 +325,28 @@ const ReviewPage = () => {
       const message = serverMsg ? `Upload failed: ${serverMsg}` : 'Photo upload failed. Please try again.';
       showToast(message, 'error');
     }
+  };
+
+  const handleInlineCameraCapture = async (photo: { blob: Blob; previewUrl: string }) => {
+    if (!inlineCaptureItemId || !saleId) return;
+    try {
+      const fd = new FormData();
+      fd.append('photos', photo.blob, 'capture.jpg');
+      fd.append('saleId', String(saleId));
+      const res = await api.post('/upload/sale-photos', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const urls: string[] = res.data?.urls || [];
+      if (urls[0]) {
+        await api.post(`/items/${inlineCaptureItemId}/photos`, { url: urls[0] });
+        queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+      }
+    } catch (err: any) {
+      showToast('Photo upload failed', 'error');
+    }
+  };
+
+  const handleInlineCameraAnalyze = async (photos: { blob: Blob; previewUrl: string }[]) => {
+    for (const photo of photos) await handleInlineCameraCapture(photo);
+    setInlineCameraOpen(false);
   };
 
   const getSortedItems = useCallback((itemsToSort: Item[]) => {
@@ -951,18 +978,20 @@ const ReviewPage = () => {
                                     >
                                       📁 Upload
                                     </button>
-                                    <Link
-                                      href={`/organizer/add-items/${saleId}?openCamera=1&captureMode=regular&appendToItemId=${item.id}`}
+                                    <button
+                                      type="button"
+                                      onClick={() => { setInlineCaptureMode('regular'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineCameraOpen(true); }}
                                       className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800"
                                     >
                                       📷 Camera
-                                    </Link>
-                                    <Link
-                                      href={`/organizer/add-items/${saleId}?openCamera=1&captureMode=rapidfire&appendToItemId=${item.id}`}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setInlineCaptureMode('rapidfire'); setInlineCaptureItemId(item.id); setInlineCaptureItem(item); setInlineCameraOpen(true); }}
                                       className="px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded text-xs font-medium hover:bg-purple-200 dark:hover:bg-purple-800"
                                     >
                                       ⚡ Rapidfire
-                                    </Link>
+                                    </button>
                                   </div>
                                   <ItemPhotoManager
                                     itemId={item.id}
@@ -1287,6 +1316,24 @@ const ReviewPage = () => {
             </>
           )}
         </div>
+
+        {inlineCameraOpen && inlineCaptureItemId && (
+          <RapidCapture
+            rapidItems={inlineCaptureItem ? [{ id: inlineCaptureItem.id, thumbnailUrl: inlineCaptureItem.photoUrls?.[0], draftStatus: 'PENDING_REVIEW', title: inlineCaptureItem.title, photoUrls: inlineCaptureItem.photoUrls || [] }] : []}
+            addingToItemId={inlineCaptureItemId}
+            mode={inlineCaptureMode}
+            onModeChange={setInlineCaptureMode}
+            onPhotoCapture={inlineCaptureMode === 'rapidfire' ? handleInlineCameraCapture : undefined}
+            onAnalyze={inlineCaptureMode === 'regular' ? handleInlineCameraAnalyze : undefined}
+            onComplete={() => setInlineCameraOpen(false)}
+            onCancel={() => setInlineCameraOpen(false)}
+            onAddToItem={() => {}}
+            onThumbnailTap={() => {}}
+            onNavigateToReview={() => setInlineCameraOpen(false)}
+            readyCount={0}
+            isAnalyzing={false}
+          />
+        )}
       </main>
     </>
   );
