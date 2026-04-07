@@ -147,6 +147,10 @@ export default function POSPage() {
   const [paymentLinkStatus, setPaymentLinkStatus] = useState<'idle' | 'generating' | 'waiting' | 'paid'>('idle');
   const [paymentLinkPollInterval, setPaymentLinkPollInterval] = useState<NodeJS.Timeout | null>(null);
 
+  // Linked Shopper QR state (shopper account QR scan)
+  const [linkedShopperData, setLinkedShopperData] = useState<any | null>(null);
+  const [showLinkedShopper, setShowLinkedShopper] = useState(false);
+
   // Invoice/Holds state
   const [holds, setHolds] = useState<HoldItem[]>([]);
   const [holdsLoading, setHoldsLoading] = useState(false);
@@ -639,6 +643,28 @@ export default function POSPage() {
     setQrScanMessage('Looking…');
 
     const processCode = (qrText: string) => {
+      // Shopper account QR code
+      const userQRMatch = qrText.match(/findasale:\/\/user\/([a-z0-9]+)/i);
+      if (userQRMatch) {
+        const userId = userQRMatch[1];
+        setQrScanMessage('Loading shopper account…');
+        api
+          .get<any>(`/users/qr/${userId}`)
+          .then(res => {
+            setLinkedShopperData(res.data);
+            setShowLinkedShopper(true);
+            setQrScanStatus('scanning');
+            setQrScanMessage('');
+          })
+          .catch(err => {
+            setQrScanStatus('error');
+            setQrScanMessage('Shopper not found or has no active holds');
+            console.error('[pos] QR shopper fetch error:', err);
+            setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 2000);
+          });
+        return;
+      }
+
       // Item sticker QR
       const match = qrText.match(/items\/([a-z0-9]+)$/i);
       if (match) {

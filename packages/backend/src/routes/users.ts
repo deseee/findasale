@@ -6,7 +6,8 @@ import {
   getLeaderboard,
   getPublicShopperProfile,
   getBadges,
-  activateHuntPassTrial
+  activateHuntPassTrial,
+  getUserQRData
 } from '../controllers/userController';
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -71,6 +72,10 @@ router.get('/purchases/:purchaseId', authenticate, async (req: AuthRequest, res:
 router.get('/favorites', authenticate, getFavorites);
 router.get('/me', authenticate, getUserProfile);
 router.get('/leaderboard', getLeaderboard);
+
+// Public endpoint: Shopper QR code data for POS scanning
+// Must come before /:id catch-all to avoid route stealing
+router.get('/qr/:userId', getUserQRData);
 
 // Public endpoint — must come after /me to avoid route collision
 router.get('/:id/public', getPublicShopperProfile);
