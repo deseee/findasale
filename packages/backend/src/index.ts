@@ -176,6 +176,7 @@ import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly 
 import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly check
 import './jobs/weeklyEmailJob'; // CD2 Phase 2: Weekly personalized shopper digest — Sundays 6 PM
 import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily batch processing and warnings
+import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transaction detection at 2 AM
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 import { scheduleAuctionCloseCron } from './jobs/auctionCloseCron'; // Auction auto-close
