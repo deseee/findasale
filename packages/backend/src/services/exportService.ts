@@ -1,6 +1,6 @@
 import { Item } from '@prisma/client';
 
-type ExportFormat = 'ebay' | 'amazon' | 'facebook';
+type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
 
 /**
  * CSV Escape Helper — standard CSV escaping
@@ -112,6 +112,40 @@ function formatFacebookCsv(items: Item[]): string {
 }
 
 /**
+ * QuickBooks Format: Account, Name, Amount, Date, Memo, Class
+ * Pre-wire for QuickBooks integration — account code hardcoded to '4100' (Sales Income)
+ */
+function formatQuickBooksCsv(items: Item[]): string {
+  const headers = ['Account', 'Name', 'Amount', 'Date', 'Memo', 'Class'];
+  const rows: string[] = [headers.map(escapeCsvField).join(',')];
+
+  items.forEach((item) => {
+    // Account code: hardcoded to '4100' (Sales Income) — Pre-wire: will be configurable when QB feature activates
+    const accountCode = '4100';
+    const name = item.title;
+    const amount = item.price ?? '';
+    // Date: use item.updatedAt ISO date split at 'T' for YYYY-MM-DD
+    const dateStr = item.updatedAt ? new Date(item.updatedAt).toISOString().split('T')[0] : '';
+    // Memo: category or 'Item'
+    const memo = `${item.category || 'Item'} - ${item.title}`;
+    // Class: empty string (configurable in future)
+    const classCode = '';
+
+    const row = [
+      escapeCsvField(accountCode),
+      escapeCsvField(name),
+      escapeCsvField(amount),
+      escapeCsvField(dateStr),
+      escapeCsvField(memo),
+      escapeCsvField(classCode),
+    ];
+    rows.push(row.join(','));
+  });
+
+  return rows.join('\n');
+}
+
+/**
  * Main export function — routes to format-specific generators
  */
 export function generateCsvExport(items: Item[], format: ExportFormat): string {
@@ -122,6 +156,8 @@ export function generateCsvExport(items: Item[], format: ExportFormat): string {
       return formatAmazonCsv(items);
     case 'facebook':
       return formatFacebookCsv(items);
+    case 'quickbooks':
+      return formatQuickBooksCsv(items);
     default:
       throw new Error(`Unknown export format: ${format}`);
   }

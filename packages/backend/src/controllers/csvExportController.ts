@@ -3,7 +3,7 @@ import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
 import { generateCsvExport, generateCsvFilename } from '../services/exportService';
 
-type ExportFormat = 'ebay' | 'amazon' | 'facebook';
+type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
 
 /**
  * GET /api/organizer/export/csv?saleId=X&format=ebay|amazon|facebook
@@ -26,8 +26,8 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
       return res.status(400).json({ message: 'saleId query parameter is required' });
     }
 
-    if (!format || typeof format !== 'string' || !['ebay', 'amazon', 'facebook'].includes(format)) {
-      return res.status(400).json({ message: 'format must be one of: ebay, amazon, facebook' });
+    if (!format || typeof format !== 'string' || !['ebay', 'amazon', 'facebook', 'quickbooks'].includes(format)) {
+      return res.status(400).json({ message: 'format must be one of: ebay, amazon, facebook, quickbooks' });
     }
 
     // Fetch organizer

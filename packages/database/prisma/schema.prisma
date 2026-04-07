@@ -233,6 +233,7 @@ model Organizer {
   verifiedAt         DateTime?
   // Feature #83: Estate Planning — executor account stub
   executorUserId     String?
+  estateId           String?       // Pre-wire: Estate Planning Toolkit — references future Estate model
   // Onboarding wizard
   onboardingComplete Boolean @default(false)
   // Feature #11: Referral discount — fee waived for 3 months when referred by/referring another organizer
