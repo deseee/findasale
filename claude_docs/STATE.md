@@ -7,6 +7,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S409 IN PROGRESS (2026-04-07):** Dark mode fix, Signage Kit rename, roadmap v99, eBay CSV format fix, TEAMS watermark gate, QuickBooks UI, watermark utility fix, Railway TS build error fixed. Social platform respec (TikTok/Pinterest/Threads + photo + Facebook CSV photo + Amazon removal) dispatched but NOT YET IMPLEMENTED — continue next session.
+
+**S409 Summary:**
+
+Six dev tasks completed. (1) **PremiumCTA dark mode:** full dark: variant pass on all sage-* classes. (2) **Signage Kit rename:** TierComparisonTable "Sale Print Kit" → "Signage Kit". (3) **Roadmap v98→v99:** #133 Hunt Pass Redesign, #213 Hunt Pass, #287 Add-Items Sort Controls moved from UNTESTED to "Only Human Left" (Chrome-verified S407). (4) **eBay CSV format fix:** complete rewrite of `formatEbayCsv` to match eBay Seller Hub bulk upload template (4 #INFO lines, correct column header `Action(SiteID=US|...)`, Draft action per row) — fixes BAF.Error.5 rejection. (5) **TEAMS watermark gate:** `ebayController.ts` was comparing `organizer.tier` (activity rank) instead of `organizer.subscriptionTier` — fixed. Watermark removal gate changed from PRO → TEAMS. (6) **QuickBooks UI wired:** PRO+ gated export button + modal with QuickBooks import instructions added to add-items page. (7) **Watermark utility fix:** `exportService.ts` now uses `getWatermarkedUrl()` from `cloudinaryWatermark.ts` instead of broken `?wm=finda.sale` query string. (8) **Railway TS build error fixed:** `ebayController.ts` line 486 was comparing `subscriptionTier` against `'ENTERPRISE'` which doesn't exist in the enum — removed, build unblocked. (9) **#72/#74 status:** both already fully implemented (schema, auth controller, registration UI) — just need Chrome QA next QA session.
+
+**PENDING for S410 — Social platform respec (dev work started but not completed):**
+- Add TikTok, Pinterest, Threads to `socialPostController.ts` platform guidelines + `SocialPostGenerator.tsx` platform selector
+- Return watermarked photo URL in both social controllers (tier-aware: FindA.Sale watermark for FREE/SIMPLE/PRO, brand kit overlay for TEAMS)
+- Platform-specific Cloudinary crops: Pinterest 2:3, TikTok 9:16, Instagram 4:5
+- Show photo in social post UI panel with copy-link action
+- Fix `formatFacebookCsv` to include `image_url` column (watermarked)
+- Remove Amazon from export UI (keep backend dormant)
+
+**S409 Files Changed (6 files):**
+- `packages/frontend/components/PremiumCTA.tsx` — dark mode variants
+- `packages/frontend/components/TierComparisonTable.tsx` — Signage Kit rename
+- `claude_docs/strategy/roadmap.md` — v99
+- `packages/backend/src/services/exportService.ts` — eBay format rewrite + getWatermarkedUrl import + watermark fix
+- `packages/backend/src/controllers/ebayController.ts` — subscriptionTier fix + TEAMS gate + ENTERPRISE TS error fix
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — QuickBooks UI
+
 **S408 COMPLETE (2026-04-07):** Roadmap audit v97→v98, FAQ cleanup, scroll fix confirmed, roadmap gate rule added to CLAUDE.md.
 
 **S408 Summary:**
@@ -1489,28 +1511,28 @@ Files changed S361:
 
 ---
 
-## Next Session (S409)
+## Next Session (S409) — COMPLETE — see S409 above
 
-### Patrick Actions First (push S408 changes)
+## Next Session (S410)
+
+### Patrick Actions First — push S409 changes
+
+**S409 push block (includes the Railway build fix — push this first):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260407_add_estate_id_to_organizer/migration.sql
-git add packages/backend/src/services/exportService.ts
-git add packages/backend/src/controllers/csvExportController.ts
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/frontend/components/PremiumCTA.tsx
 git add packages/frontend/components/TierComparisonTable.tsx
-git add packages/frontend/pages/faq.tsx
-git add CLAUDE.md
 git add claude_docs/strategy/roadmap.md
+git add packages/backend/src/services/exportService.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/pages/organizer/add-items/[saleId].tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S407+S408: P1 modal fix, P2 layout fix, pre-wires, roadmap v98, FAQ cleanup, pricing rows, roadmap gate rule"
+git commit -m "S409: dark mode, Signage Kit, roadmap v99, eBay CSV fix, TEAMS watermark gate, QuickBooks UI, watermark utility, Railway TS build fix"
 .\push.ps1
 ```
 
-**Then run Railway migration for estateId:**
+**No new migrations this session.** S407 migration still pending if not yet run:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -1518,26 +1540,56 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**Migrations: ALL CURRENT as of S407 (2026-04-07)**
-- S399 FeedbackSuppression ✅ deployed
-- S404 `20260406_add_treasure_trails` ✅ deployed
-- S405 `20260406_add_pos_payment_request` ✅ deployed
-- S407 `20260407_add_estate_id_to_organizer` — PENDING (Patrick must run after push)
+### S410 Priority 1 — Social platform respec (dev dispatch — continue from S409)
 
-### S409 Priority 1 — Roadmap restructure
-Audit roadmap.md and move all fully Chrome-verified features from "Pending Chrome QA" or other statuses into the "SHIPPED & VERIFIED" section. Goal: have a clean, accurate picture of what's done vs. what QA still needs to verify. Update version to v99.
+Dispatch `findasale-dev` with this spec:
 
-### S409 Priority 2 — Post-push Chrome verification (Patrick doing this himself during peak hours)
-- Pricing page: confirm "Sale Print Kit" and "Price Tags & Yard Signs" rows appear
-- Onboarding modal: dismiss, reload, confirm persists
-- FAQ page: confirm no duplicate Treasure Trails question, Collector Passport questions gone, Loot Legend present
+**Files to modify:**
+- `packages/backend/src/controllers/socialPostController.ts`
+- `packages/backend/src/controllers/socialController.ts`
+- `packages/frontend/components/SocialPostGenerator.tsx`
+- `packages/backend/src/services/exportService.ts` (formatFacebookCsv — add image_url)
+- Find and remove Amazon from the export UI (search add-items page for "amazon")
 
-### S409 Priority 3 — QA carry-forward
-- S396 rapidfire hold/photo limit QA
-- Shopper referrals (#7/#265) — `/shopper/referrals`
-- Haul Posts (#277) — `/shopper/haul-posts`
-- Organizer dashboard widgets QA
-- Camera hardware items (UNVERIFIED queue) — require real device
+**Spec:**
+
+1. **Add TikTok, Pinterest, Threads to `socialPostController.ts`:**
+   - TikTok: hook-first caption (start with a strong opening line), max 150 chars, 3–5 hashtags, note it's for video caption use
+   - Pinterest: keyword-rich description for search discovery, include item category + condition, 5–10 hashtags, suggest pin board name, max 500 chars
+   - Threads: short punchy caption, 1–2 hashtags, max 500 chars, conversational tone
+   - Add to `platformGuidelines` Record. Add platform limits for each.
+
+2. **Return watermarked photo URL from both social controllers:**
+   - `socialPostController.ts`: fetch `sale.items` photos too, return `photoUrl` (first available item photo, watermarked)
+   - `socialController.ts`: already returns `photoUrl` but raw — wrap it in `getWatermarkedUrl(photoUrl)` before returning
+   - Tier logic: `getWatermarkedUrl()` for all tiers (TEAMS brand kit is future work — for now same watermark)
+   - Platform-specific Cloudinary crops: append transformation before the version segment
+     - Pinterest: `ar_2:3,c_fill`
+     - TikTok: `ar_9:16,c_fill`
+     - Instagram: `ar_4:5,c_fill`
+     - Facebook/Threads/Nextdoor: no crop (use original aspect ratio)
+
+3. **Update `SocialPostGenerator.tsx` UI:**
+   - Add TikTok, Pinterest, Threads to `PLATFORMS` array
+   - After post is generated, show the watermarked photo below the text (if `photoUrl` returned)
+   - Add "Copy image link" button next to the text copy button
+   - Add platform-specific tip text (e.g., "Pinterest: paste this link when creating a Pin")
+
+4. **Fix `formatFacebookCsv` in `exportService.ts`:**
+   - Add `image_url` as the last column header
+   - Populate with `getWatermarkedUrl(item.photoUrls[0])` (skip if no photo)
+   - Import `getWatermarkedUrl` (already imported in S409)
+
+5. **Remove Amazon from export UI:**
+   - Find the Amazon export button/option in `add-items/[saleId].tsx` — remove it from the UI
+   - Leave `formatAmazonCsv` in `exportService.ts` dormant (don't delete backend code)
+
+Run `npx tsc --noEmit --skipLibCheck` in both backend and frontend before returning.
+
+### S410 Priority 2 — QA (no Chrome QA delay continues — Patrick's call when to resume)
+- #72 Dual-Role Account: schema + auth + registration all confirmed implemented in S409. Needs Chrome QA only.
+- #74 Role-Aware Registration Consent: same — fully implemented, needs Chrome QA only.
+- Queue: shopper referrals (#7/#265), haul posts (#277), S396 rapidfire
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app
