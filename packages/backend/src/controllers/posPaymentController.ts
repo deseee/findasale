@@ -93,7 +93,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     // Verify sale exists, is PUBLISHED, and belongs to organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true, status: true, organizerId: true, title: true, location: true },
+      select: { id: true, status: true, organizerId: true, title: true, address: true, city: true, state: true },
     });
 
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
@@ -238,7 +238,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
         requestId: posRequest.id,
         organizerName: `${organizer.userId}`, // Will use sale.organizer.businessName in prod
         saleName: sale.title,
-        saleLocation: sale.location || undefined,
+        saleLocation: [sale.address, sale.city, sale.state].filter(Boolean).join(', ') || undefined,
         itemNames,
         totalAmountCents,
         displayAmount: `$${(totalAmountCents / 100).toFixed(2)}`,
@@ -302,7 +302,7 @@ export const getPaymentRequest = async (req: AuthRequest, res: Response) => {
           select: { id: true, name: true },
         },
         sale: {
-          select: { id: true, title: true, location: true },
+          select: { id: true, title: true, address: true, city: true, state: true },
         },
       },
     });
@@ -321,7 +321,7 @@ export const getPaymentRequest = async (req: AuthRequest, res: Response) => {
       id: request.id,
       organizerName: request.organizer?.name || 'Unknown Organizer',
       saleName: request.sale?.title,
-      saleLocation: request.sale?.location,
+      saleLocation: request.sale ? [request.sale.address, request.sale.city, request.sale.state].filter(Boolean).join(', ') : undefined,
       itemIds: request.itemIds,
       totalAmountCents: request.totalAmountCents,
       displayAmount: `$${(request.totalAmountCents / 100).toFixed(2)}`,
