@@ -48,6 +48,7 @@ const ShopperDashboard = () => {
   const [isReferralDismissed, setIsReferralDismissed] = useState(false);
   const [isGuildOnboardingDismissed, setIsGuildOnboardingDismissed] = useState(false);
   const [referralLink, setReferralLink] = useState<string | null>(null);
+  const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
@@ -100,6 +101,23 @@ const ShopperDashboard = () => {
       fetchReferralCode();
     }
   }, [user?.id, isReferralDismissed]);
+
+  // Fetch shopper QR code
+  useEffect(() => {
+    if (user?.id) {
+      const fetchQRCode = async () => {
+        try {
+          const response = await api.get(`/users/qr/${user.id}`);
+          if (response.data?.qrCodeDataUrl) {
+            setShopperQRCodeDataUrl(response.data.qrCodeDataUrl);
+          }
+        } catch (error) {
+          console.error('Failed to fetch QR code:', error);
+        }
+      };
+      fetchQRCode();
+    }
+  }, [user?.id]);
 
   const handleDismissHuntPass = () => {
     localStorage.setItem('huntpass_cta_dismissed', 'true');
@@ -312,6 +330,26 @@ const ShopperDashboard = () => {
                   </Link>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* My QR Code — Show this at checkout */}
+          {shopperQRCodeDataUrl && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
+              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">📱 My QR Code</h2>
+              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+                Show this to the organizer at checkout to instantly load your active holds and cart items.
+              </p>
+              <div className="flex justify-center mb-4">
+                <img
+                  src={shopperQRCodeDataUrl}
+                  alt="Your personal QR code for checkout"
+                  className="w-48 h-48 border-2 border-warm-200 dark:border-gray-600 rounded-lg"
+                />
+              </div>
+              <p className="text-xs text-warm-500 dark:text-warm-500 text-center">
+                Scan to verify your account and active holds at POS
+              </p>
             </div>
           )}
 

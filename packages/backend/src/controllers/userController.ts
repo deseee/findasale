@@ -604,3 +604,80 @@ export const activateHuntPassTrial = async (req: AuthRequest, res: Response) => 
     res.status(500).json({ message: 'Server error while activating trial' });
   }
 };
+
+// Feature: Shopper Account QR Code — POS Integration
+// Public endpoint: GET /api/users/qr/:userId
+// Returns shopper name + active holds for POS scanning
+export const getUserQRData = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    // Fetch user and active holds (PENDING or CONFIRMED status only)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Fetch active holds (PENDING or CONFIRMED) with item details
+    const holds = await prisma.itemReservation.findMany({
+      where: {
+        userId,
+        status: {
+          in: ['PENDING', 'CONFIRMED'],
+        },
+      },
+      include: {
+        item: {
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            saleId: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Format holds response
+    const formattedHolds = holds.map((hold) => ({
+      id: hold.id,
+      itemId: hold.item.id,
+      itemTitle: hold.item.title,
+      price: hold.item.price,
+      saleId: hold.item.saleId,
+      status: hold.status,
+    }));
+
+    // Generate QR code data URL for the shopper's profile
+    const qrcode = require('qrcode');
+    const qrPayload = `findasale://user/${userId}`;
+    let qrCodeDataUrl: string | undefined;
+
+    try {
+      qrCodeDataUrl = await qrcode.toDataURL(qrPayload);
+    } catch (qrErr) {
+      console.warn('[getUserQRData] QR code generation failed:', qrErr);
+      // Graceful degradation — QR is optional
+    }
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      holds: formattedHolds,
+      qrCodeDataUrl,
+    });
+  } catch (error) {
+    console.error('Error fetching user QR data:', error);
+    res.status(500).json({ message: 'Server error while fetching user QR data' });
+  }
+};
