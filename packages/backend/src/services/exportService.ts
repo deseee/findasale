@@ -1,4 +1,5 @@
 import { Item } from '@prisma/client';
+import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
 
 type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
 
@@ -70,10 +71,9 @@ function formatEbayCsv(items: Item[], includeWatermark: boolean = false): string
     let photoUrl = '';
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
-      // Add watermark if requested (e.g., ?wm=finda.sale)
+      // Apply Cloudinary watermark overlay if requested
       if (includeWatermark && photoUrl) {
-        const separator = photoUrl.includes('?') ? '&' : '?';
-        photoUrl = `${photoUrl}${separator}wm=finda.sale`;
+        photoUrl = getWatermarkedUrl(photoUrl);
       }
     }
 
