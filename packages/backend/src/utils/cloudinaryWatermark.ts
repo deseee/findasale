@@ -35,7 +35,7 @@ export function getWatermarkedUrl(originalUrl: string): string {
 
     // Build watermark transformation
     const watermarkTransformation =
-      'l_text:Arial_18:FindA.Sale,g_south_east,x_20,y_20,o_70';
+      'l_text:Arial_30:FindA.Sale,co_white,g_south_east,x_20,y_20,o_80';
 
     // Insert transformation before the version segment
     const watermarkedUrl =
