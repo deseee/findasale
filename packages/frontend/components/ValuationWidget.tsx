@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { useAuth } from './AuthContext';
 
 interface ValuationData {
@@ -51,7 +51,7 @@ export default function ValuationWidget({
     setLoading(true);
     setError(null);
     try {
-      const { data } = await axios.get(`/api/items/${itemId}/valuation`);
+      const { data } = await api.get(`/items/${itemId}/valuation`);
       if (data.status === 'INSUFFICIENT_DATA') {
         setError(`Not enough comparable sales yet (found ${data.comparableCount})`);
       } else if (data.data) {
@@ -82,7 +82,7 @@ export default function ValuationWidget({
             setShowWidget(true);
             loadValuation();
           }}
-          className="text-sm text-sage-600 dark:text-sage-400 hover:underline"
+          className="text-sm text-gray-600 dark:text-gray-400 hover:underline"
         >
           💡 See comparable sales pricing
         </button>
@@ -91,19 +91,19 @@ export default function ValuationWidget({
   }
 
   return (
-    <div className="p-4 rounded-lg bg-sage-50 border border-sage-200 dark:bg-sage-950 dark:border-sage-700 mt-4">
+    <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 dark:bg-gray-800 dark:border-gray-600 mt-4">
       <div className="flex justify-between items-start">
-        <h3 className="font-semibold text-sage-900 dark:text-sage-100">Comparable Pricing</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100">Comparable Pricing</h3>
         <button
           onClick={() => setShowWidget(false)}
-          className="text-xs text-sage-500 dark:text-sage-400"
+          className="text-xs text-gray-500 dark:text-gray-400"
         >
           ✕
         </button>
       </div>
 
       {loading && (
-        <div className="mt-3 text-sm text-sage-700 dark:text-sage-300">
+        <div className="mt-3 text-sm text-gray-700 dark:text-gray-300">
           Loading comparable sales...
         </div>
       )}
@@ -116,42 +116,42 @@ export default function ValuationWidget({
 
       {valuation && !loading && (
         <div className="mt-3 space-y-3">
-          <div className="bg-white dark:bg-slate-800 p-3 rounded">
-            <p className="text-xs text-sage-600 dark:text-sage-400 mb-2">Price Range</p>
-            <div className="text-lg font-semibold text-sage-900 dark:text-sage-100">
+          <div className="bg-white dark:bg-gray-700 p-3 rounded">
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Price Range</p>
+            <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {formatPrice(valuation.priceLow)} — {formatPrice(valuation.priceHigh)}
             </div>
-            <div className="text-sm text-sage-700 dark:text-sage-300 mt-1">
+            <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
               Median: <strong>{formatPrice(valuation.priceMedian)}</strong>
             </div>
           </div>
 
           <div className="flex gap-4">
             <div className="flex-1">
-              <p className="text-xs text-sage-600 dark:text-sage-400 mb-1">Confidence</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Confidence</p>
               <div className="flex items-center gap-2">
-                <div className="flex-1 h-2 bg-sage-200 dark:bg-sage-700 rounded-full overflow-hidden">
+                <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-sage-500 dark:bg-sage-400 transition-all"
+                    className="h-full bg-green-500 dark:bg-green-400 transition-all"
                     style={{ width: `${valuation.confidenceScore}%` }}
                   />
                 </div>
-                <span className="text-xs font-semibold text-sage-900 dark:text-sage-100">
+                <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">
                   {getConfidenceLevel(valuation.confidenceScore)}
                 </span>
               </div>
             </div>
           </div>
 
-          <p className="text-xs text-sage-600 dark:text-sage-400">
+          <p className="text-xs text-gray-600 dark:text-gray-400">
             Based on {valuation.comparableCount} recent comparable sales
           </p>
 
           {onPriceSelect && (
-            <div className="pt-2 border-t border-sage-200 dark:border-sage-700 flex gap-2">
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-600 flex gap-2">
               <button
                 onClick={() => onPriceSelect(valuation.priceMedian)}
-                className="flex-1 px-3 py-2 text-xs font-semibold bg-sage-600 dark:bg-sage-500 text-white rounded hover:bg-sage-700 dark:hover:bg-sage-600 transition"
+                className="flex-1 px-3 py-2 text-xs font-semibold bg-green-600 dark:bg-green-500 text-white rounded hover:bg-green-700 dark:hover:bg-green-600 transition"
               >
                 Use Median ({formatPrice(valuation.priceMedian)})
               </button>
