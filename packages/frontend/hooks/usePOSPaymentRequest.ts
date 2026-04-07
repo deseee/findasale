@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { io, Socket } from 'socket.io-client';
 import api from '../lib/api';
-import { useSocket } from './useSocket';
 
 export interface POSPaymentRequestData {
   id: string;
@@ -32,7 +32,7 @@ export interface UsePOSPaymentRequestResult {
 }
 
 export const usePOSPaymentRequest = (requestId: string | undefined): UsePOSPaymentRequestResult => {
-  const socket = useSocket();
+  const socketRef = useRef<Socket | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
@@ -54,7 +54,23 @@ export const usePOSPaymentRequest = (requestId: string | undefined): UsePOSPayme
   });
 
   useEffect(() => {
-    if (!socket || !requestId) return;
+    if (!requestId) return;
+
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/^http/, 'ws');
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+    if (!socketRef.current) {
+      socketRef.current = io(socketUrl, {
+        auth: { token: token || undefined },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+      });
+    }
 
     const handlePaymentStatus = (event: any) => {
       if (event.requestId === requestId) {
@@ -62,12 +78,16 @@ export const usePOSPaymentRequest = (requestId: string | undefined): UsePOSPayme
       }
     };
 
-    socket.on('POS_PAYMENT_STATUS', handlePaymentStatus);
+    socketRef.current.on('POS_PAYMENT_STATUS', handlePaymentStatus);
 
     return () => {
-      socket.off('POS_PAYMENT_STATUS', handlePaymentStatus);
+      if (socketRef.current) {
+        socketRef.current.off('POS_PAYMENT_STATUS', handlePaymentStatus);
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
-  }, [socket, requestId]);
+  }, [requestId]);
 
   const currentStatus = status || data?.status || null;
   const isExpired = data?.isExpired || false;
