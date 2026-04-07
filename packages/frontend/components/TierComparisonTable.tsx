@@ -68,6 +68,18 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
+    name: 'Sale Print Kit',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'Price Tags & Yard Signs',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
     name: 'Holds & reservations',
     simple: true,
     pro: true,
