@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S406 COMPLETE (2026-04-07):** Condition field standardization, health score category fix, ValuationWidget auth+dark mode, eBay production switch, deletion endpoint
+
+**S406 Summary:**
+
+Eight fixes across review page, health score, pricing, and eBay integration. (1) **ValuationWidget 401 + dark mode:** switched from raw `axios` to authenticated `api` helper; replaced non-existent `sage-*` Tailwind classes with `gray-*`/`green-*`. (2) **Health score always flagging category:** `computeHealthScore()` in `itemController.ts` was never passed `category` field — added `category: item.category ?? undefined`. (3) **Health score gate:** capped score at 69 when category OR conditionGrade missing so Improvements section fires. (4) **Condition field mismatch:** review page used `NEW/LIKE_NEW/GOOD/FAIR/POOR`; edit-item used `NEW/USED/REFURBISHED/PARTS_OR_REPAIR`. Standardized entire codebase to canonical set including AI prompts, upload controllers, and schema comment. (5) **Review page condition options not updated:** dev agent updated array/map but not JSX `<option>` elements — fixed inline. (6) **Legacy condition mapping in getEditState:** items with old DB values (GOOD→USED, LIKE_NEW→NEW, POOR→PARTS_OR_REPAIR) now map correctly when loaded in review page. (7) **Dynamic category fallback:** AI-suggested categories not in the curated list (e.g. "Linens") now appear as a dynamic `<option>` in the review page dropdown. (8) **eBay production switch:** switched token + Browse API URLs from `api.sandbox.ebay.com` → `api.ebay.com`; added eBay marketplace account deletion endpoint (`GET/POST /api/ebay/account-deletion`) required to unlock production keyset.
+
+**S406 Files Changed (10 files, 2 new):**
+- `packages/frontend/components/ValuationWidget.tsx` — axios→api, sage-*→gray-* dark mode
+- `packages/backend/src/controllers/itemController.ts` — category field added to computeHealthScore call
+- `packages/backend/src/utils/listingHealthScore.ts` — cap at 69 when category/conditionGrade missing
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — CONDITIONS canonical, CONDITION_MAP, legacy mapping in getEditState, option elements, dynamic category fallback
+- `packages/frontend/components/SmartInventoryUpload.tsx` — CONDITIONS canonical
+- `packages/backend/src/controllers/uploadController.ts` — validation messages
+- `packages/backend/src/controllers/batchAnalyzeController.ts` — fallback defaults
+- `packages/backend/src/services/cloudAIService.ts` — AI prompts
+- `packages/database/prisma/schema.prisma` — condition field comments
+- `packages/backend/src/controllers/ebayController.ts` — sandbox→production URLs + deletion endpoint handlers
+- `packages/backend/src/routes/ebay.ts` — NEW (GET/POST /account-deletion)
+- `packages/backend/src/index.ts` — registered /api/ebay routes
+
+**S406 No migration required.**
+
+**S406 eBay status:** Production credentials set in Railway. Deletion endpoint live at `https://backend-production-153c9.up.railway.app/api/ebay/account-deletion`. Patrick must go to eBay Alerts & Notifications page and click Save to complete keyset validation. Once validated, Browse API will return real eBay listings.
+
 **S405 COMPLETE (2026-04-07):** TrailCheckIn fix, support chat gate, treasure hunt race condition, POS shopper QR, in-app payment request, Vercel build fixes
 
 **S405 Summary:**
