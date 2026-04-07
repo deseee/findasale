@@ -23,28 +23,29 @@ function escapeCsvField(value: any): string {
 }
 
 /**
- * Map condition grades to eBay Condition IDs
+ * Map condition grades to eBay Seller Hub bulk upload Condition strings
+ * eBay Seller Hub CSV format requires human-readable condition values, NOT numeric IDs
  * FindA.Sale uses letter grades (A, B, C, D, etc.) and plain text conditions
  */
-function mapConditionToEbayId(condition: string | null | undefined): string {
-  if (!condition) return '3000'; // Default to Used
+function mapConditionToEbayString(condition: string | null | undefined): string {
+  if (!condition) return 'Used'; // Default to Used
 
   const conditionMap: Record<string, string> = {
-    'NEW': '1000',
-    'LIKE_NEW': '2000',
-    'A': '2000', // Like New
-    'GOOD': '3000',
-    'USED': '3000',
-    'B': '3000', // Good
-    'REFURBISHED': '2500',
-    'FAIR': '6000',
-    'C': '6000', // Fair
-    'POOR': '7000',
-    'D': '7000', // Poor
-    'PARTS_OR_REPAIR': '7000',
+    'NEW': 'New',
+    'LIKE_NEW': 'Like New',
+    'A': 'Like New', // Like New
+    'GOOD': 'Very Good',
+    'USED': 'Used',
+    'B': 'Very Good', // Good
+    'REFURBISHED': 'Manufacturer refurbished',
+    'FAIR': 'Good',
+    'C': 'Good', // Fair
+    'POOR': 'For parts or not working',
+    'D': 'For parts or not working', // Poor
+    'PARTS_OR_REPAIR': 'For parts or not working',
   };
 
-  return conditionMap[condition.toUpperCase()] || '3000'; // Default to Used
+  return conditionMap[condition.toUpperCase()] || 'Used'; // Default to Used
 }
 
 /**
@@ -62,7 +63,7 @@ function formatEbayCsv(items: Item[], includeWatermark: boolean = false): string
   ];
 
   // Column header row (exact format required by eBay)
-  const headerRow = 'Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format';
+  const headerRow = 'Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,*Title,UPC,*Price,*Quantity,Item photo URL,*Condition,Description,*Format';
 
   const rows: string[] = [...infoRows, headerRow];
 
@@ -104,7 +105,7 @@ function formatEbayCsv(items: Item[], includeWatermark: boolean = false): string
       escapeCsvField(formattedPrice), // Price
       escapeCsvField('1'), // Quantity
       escapeCsvField(photoUrl), // Item photo URL
-      escapeCsvField(mapConditionToEbayId(item.condition)), // Condition ID
+      escapeCsvField(mapConditionToEbayString(item.condition)), // Condition
       escapeCsvField(cleanDescription), // Description
       escapeCsvField('FixedPrice'), // Format
     ];
@@ -166,14 +167,21 @@ function formatAmazonCsv(items: Item[]): string {
 }
 
 /**
- * Facebook Marketplace Format: title, price, category, condition, description, availability
+ * Facebook Marketplace Format: title, price, category, condition, description, availability, image_url
  */
 function formatFacebookCsv(items: Item[]): string {
-  const headers = ['title', 'price', 'category', 'condition', 'description', 'availability'];
+  const headers = ['title', 'price', 'category', 'condition', 'description', 'availability', 'image_url'];
   const rows: string[] = [headers.map(escapeCsvField).join(',')];
 
   items.forEach((item) => {
     const availability = item.status === 'AVAILABLE' ? 'In Stock' : 'Out of Stock';
+
+    // Get watermarked photo URL
+    let photoUrl = '';
+    if (item.photoUrls && item.photoUrls.length > 0) {
+      photoUrl = item.photoUrls[0];
+      photoUrl = getWatermarkedUrl(photoUrl);
+    }
 
     const row = [
       escapeCsvField(item.title),
@@ -182,6 +190,7 @@ function formatFacebookCsv(items: Item[]): string {
       escapeCsvField(mapConditionLabel(item.condition)),
       escapeCsvField(item.description || ''),
       escapeCsvField(availability),
+      escapeCsvField(photoUrl),
     ];
     rows.push(row.join(','));
   });
