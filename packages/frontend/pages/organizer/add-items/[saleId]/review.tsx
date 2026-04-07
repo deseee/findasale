@@ -432,11 +432,21 @@ const ReviewPage = () => {
         normalizedCategory = match || normalizedCategory; // Use exact match if found, else keep original
       }
 
-      // Normalize condition: match against CONDITIONS array case-insensitively
-      let normalizedCondition = item.condition ?? '';
-      if (normalizedCondition) {
-        const match = CONDITIONS.find(cond => cond.toLowerCase() === normalizedCondition.toLowerCase());
-        normalizedCondition = match || normalizedCondition; // Use exact match if found, else keep original
+      // Normalize condition to match standard values: NEW, USED, REFURBISHED, PARTS_OR_REPAIR
+      let normalizedCondition = '';
+      if (item.condition) {
+        const condUpper = item.condition.toUpperCase().trim().replace(/\s+/g, '_');
+        const validConditions = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
+        if (validConditions.includes(condUpper)) {
+          normalizedCondition = condUpper;
+        } else {
+          // Map legacy values
+          const legacyMap: Record<string, string> = {
+            LIKE_NEW: 'NEW', EXCELLENT: 'NEW',
+            GOOD: 'USED', FAIR: 'USED', POOR: 'PARTS_OR_REPAIR',
+          };
+          normalizedCondition = legacyMap[condUpper] || '';
+        }
       }
 
       editStates.set(item.id, {
