@@ -174,7 +174,7 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
   "title": "short descriptive item title",
   "description": "1-2 sentence description mentioning condition and notable features",
   "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Other",
-  "condition": "one of: NEW, LIKE_NEW, GOOD, FAIR, POOR",
+  "condition": "one of: NEW, USED, REFURBISHED, PARTS_OR_REPAIR",
   "suggestedPrice": 12.50
 }`;
 
@@ -279,7 +279,7 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
   "title": "short descriptive item title",
   "description": "1-2 sentence description mentioning condition and notable features",
   "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Other",
-  "condition": "one of: NEW, LIKE_NEW, GOOD, FAIR, POOR",
+  "condition": "one of: NEW, USED, REFURBISHED, PARTS_OR_REPAIR",
   "suggestedPrice": 12.50
 }`;
 

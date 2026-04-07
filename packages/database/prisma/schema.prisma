@@ -491,7 +491,7 @@ model Item {
   auctionClosed    Boolean   @default(false)
   status           String    @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED, DONATED
   category         String?   // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
-  condition        String?   // mint, excellent, good, fair, poor
+  condition        String?   // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
   conditionGrade   String?   // S | A | B | C | D — null for items not yet graded
   rarity           ItemRarity @default(COMMON) // Feature #57: Shiny/Rare badges
   photoUrls        String[]
@@ -2295,7 +2295,7 @@ model PriceBenchmark {
   entryId     String
   entry       EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
-  condition   String   // mint, excellent, good, fair, poor
+  condition   String   // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
   region      String   // Northeast, Midwest, South, West, National
 
   priceRangeLow   Int

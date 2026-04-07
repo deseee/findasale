@@ -67,7 +67,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
   "title": "short specific title (include material, era, or maker if visible)",
   "description": "1-2 sentence description mentioning condition and notable features",
   "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other",
-  "condition": "one of: NEW, LIKE_NEW, GOOD, FAIR, POOR",
+  "condition": "one of: NEW, USED, REFURBISHED, PARTS_OR_REPAIR",
   "suggestedPrice": 12.50,
   "suggestedTags": ["Tag1", "Tag2", "Tag3"]
 }`;
@@ -155,7 +155,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             suggestedDescription:
               (ai.description as string) || 'No description available',
             suggestedCategory: (ai.category as string) || 'Other',
-            suggestedCondition: (ai.condition as string) || 'GOOD',
+            suggestedCondition: (ai.condition as string) || 'USED',
             suggestedPrice: (ai.suggestedPrice as number) || 10,
             // CB5-fix: cloud AI returns 'tags', Ollama returns 'suggestedTags' — handle both
             suggestedTags: Array.isArray(ai.tags)
@@ -181,7 +181,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             suggestedTitle: 'Error',
             suggestedDescription: (r.reason as Error)?.message ?? 'Analysis failed',
             suggestedCategory: 'Other',
-            suggestedCondition: 'GOOD',
+            suggestedCondition: 'USED',
             suggestedPrice: 10,
             suggestedTags: [],
             confidence: 0.4,

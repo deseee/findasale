@@ -53,7 +53,7 @@ const CATEGORIES = [
   'Other',
 ];
 
-const CONDITIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR'];
+const CONDITIONS = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
 
 const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
   saleId,
