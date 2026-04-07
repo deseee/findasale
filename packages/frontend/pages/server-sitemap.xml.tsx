@@ -1,7 +1,7 @@
 import { getServerSideSitemap } from 'next-sitemap';
 import api from '../lib/api';
 
-export async function getServerSideProps(ctx: any) {
+export async function getServerSideProps() {
   try {
     // Fetch all sales and tags to generate URLs
     const salesResponse = await api.get('/sales');
@@ -69,7 +69,7 @@ export async function getServerSideProps(ctx: any) {
 
     const fields = [...staticUrls, ...saleUrls, ...cityUrls, ...zipUrls, ...tagUrls];
 
-    return getServerSideSitemap(ctx, fields);
+    return getServerSideSitemap(fields);
   } catch (error) {
     console.error('Error generating sitemap:', error);
     // Return empty sitemap if there's an error
