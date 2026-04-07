@@ -2309,7 +2309,7 @@ const AddItemsDetailPage = () => {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md">
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">Export to eBay</h3>
             <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
-              Export {items.filter((i: any) => i.status === 'AVAILABLE').length} available items as eBay CSV
+              Export {selectedItems.size > 0 ? selectedItems.size : items.filter((i: any) => i.status === 'AVAILABLE').length} {selectedItems.size > 0 ? 'selected' : 'available'} items as eBay CSV
             </p>
 
             <div className="mb-4 space-y-2">
@@ -2334,13 +2334,13 @@ const AddItemsDetailPage = () => {
                   checked={ebayPhotoMode === 'clean'}
                   onChange={() => setEbayPhotoMode('clean')}
                   className="w-4 h-4"
-                  disabled={true}
+                  disabled={user?.organizerTier !== 'TEAMS' && user?.organizerTier !== 'ENTERPRISE'}
                 />
                 <span className="text-sm font-medium text-warm-700 dark:text-warm-300">
                   Remove watermark
                 </span>
                 <span className="text-xs text-amber-600 dark:text-amber-400">
-                  PRO only
+                  TEAMS only
                 </span>
               </label>
             </div>

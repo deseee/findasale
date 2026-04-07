@@ -453,17 +453,17 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
     // userId is User.id, but sale.organizerId is Organizer.id, so we need to look up the organizer first
     const organizer = await prisma.organizer.findUnique({
       where: { userId },
-      select: { id: true, tier: true },
+      select: { id: true, subscriptionTier: true },
     });
     if (!organizer || sale.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Not authorized to export this sale' });
     }
 
-    // Check tier for clean photo export (PRO only)
+    // Check tier for clean photo export (TEAMS only)
     if (photoMode === 'clean') {
-      if (organizer.tier !== 'PRO') {
+      if (organizer.subscriptionTier !== 'TEAMS' && organizer.subscriptionTier !== 'ENTERPRISE') {
         return res.status(403).json({
-          message: 'Clean photo export requires PRO tier',
+          message: 'Clean photo export requires TEAMS tier',
         });
       }
     }
