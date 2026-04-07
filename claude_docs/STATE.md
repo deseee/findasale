@@ -7,6 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S411 COMPLETE (2026-04-07):** S409+S410 Chrome smoke test + Social Post Generator trigger bug fix.
+
+**S411 Summary:** Mandatory §10 post-fix smoke test of S409+S410 changes. Dashboard ✅, Calendar auth guard ✅, Watermark ✅, Add-items/QuickBooks ✅, Listing Type on Full Edit ✅, Promote page template social ✅. Bug found: Social Post Generator modal (added S410) had no trigger button — `setSocialPostSale` was never called with an actual sale object. Added "📱 Social Posts" button to PUBLISHED sale card action row in `dashboard.tsx`. TypeScript check: zero errors. Also clarified architecture: two separate social systems exist (AI modal with 6 platforms vs template system with 2) — both correct, not a bug.
+
+**S411 Files Changed (1 file):**
+- `packages/frontend/pages/organizer/dashboard.tsx` — "📱 Social Posts" button wired to setSocialPostSale
+
+---
+
 **S410 COMPLETE (2026-04-07):** Social platform respec, eBay 400 fix, watermark font fix (was broken since launch), Listing Type on edit/review pages.
 
 **S410 Summary:**
@@ -30,7 +39,7 @@ Five work items. (1) **Social platform respec:** TikTok, Pinterest, Threads adde
 - `packages/frontend/pages/organizer/ugc-moderation.tsx` — auth guard added (was missing)
 - `claude_docs/strategy/roadmap.md` — #27a updated
 
-**S410 Chrome smoke test:** UNVERIFIED — Chrome extension not connected this session. S409 + S410 changes pending smoke test next session.
+**S410 Chrome smoke test:** ✅ COMPLETE (S411). Dashboard ✅, Calendar auth guard ✅, Watermark ✅ (Patrick-confirmed), Add-items page ✅ (QuickBooks visible), Listing Type ✅ (Full Edit: Fixed Price/Auction/Reverse Auction confirmed in DOM), Promote page social ✅ (instagram/facebook template system — correct, backend validates only those 2). **BUG FOUND & FIXED (S411):** Social Post Generator modal had no trigger — `setSocialPostSale` was never called with an actual sale object. The "📱 Social Posts" button was missing from the dashboard sale card action row entirely. Fix: added button in `dashboard.tsx` PUBLISHED sale action buttons. Note: SocialPostGenerator.tsx (AI modal) is architecturally separate from [saleId].tsx promote page (template system) — the AI modal supports 6 platforms (instagram/facebook/nextdoor/tiktok/pinterest/threads), the template system correctly stays at instagram/facebook because `socialController.ts` only supports those 2.
 
 **S410 Deferred:** Remove organizer rarity control from manual add-items form (rarity is auto-assigned — organizer dropdown there is now misleading).
 
@@ -1534,83 +1543,31 @@ Files changed S361:
 
 ## Next Session (S409) — COMPLETE — see S409 above
 
-## Next Session (S410)
+## Next Session (S410) — COMPLETE — see S410 smoke test in S411 above
 
-### Patrick Actions First — push S409 changes
+## Next Session (S412)
 
-**S409 push block (includes the Railway build fix — push this first):**
+### Patrick Actions First — push S411 fix
+
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/PremiumCTA.tsx
-git add packages/frontend/components/TierComparisonTable.tsx
-git add claude_docs/strategy/roadmap.md
-git add packages/backend/src/services/exportService.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S409: dark mode, Signage Kit, roadmap v99, eBay CSV fix, TEAMS watermark gate, QuickBooks UI, watermark utility, Railway TS build fix"
+git commit -m "S411: wire Social Post Generator modal trigger in dashboard
+
+Add missing 'Social Posts' button to PUBLISHED sale card action row.
+Modal existed but had no trigger — setSocialPostSale was never called
+with an actual sale object."
 .\push.ps1
 ```
 
-**No new migrations this session.** S407 migration still pending if not yet run:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+**No new migrations this session.**
 
-### S410 Priority 1 — Social platform respec (dev dispatch — continue from S409)
-
-Dispatch `findasale-dev` with this spec:
-
-**Files to modify:**
-- `packages/backend/src/controllers/socialPostController.ts`
-- `packages/backend/src/controllers/socialController.ts`
-- `packages/frontend/components/SocialPostGenerator.tsx`
-- `packages/backend/src/services/exportService.ts` (formatFacebookCsv — add image_url)
-- Find and remove Amazon from the export UI (search add-items page for "amazon")
-
-**Spec:**
-
-1. **Add TikTok, Pinterest, Threads to `socialPostController.ts`:**
-   - TikTok: hook-first caption (start with a strong opening line), max 150 chars, 3–5 hashtags, note it's for video caption use
-   - Pinterest: keyword-rich description for search discovery, include item category + condition, 5–10 hashtags, suggest pin board name, max 500 chars
-   - Threads: short punchy caption, 1–2 hashtags, max 500 chars, conversational tone
-   - Add to `platformGuidelines` Record. Add platform limits for each.
-
-2. **Return watermarked photo URL from both social controllers:**
-   - `socialPostController.ts`: fetch `sale.items` photos too, return `photoUrl` (first available item photo, watermarked)
-   - `socialController.ts`: already returns `photoUrl` but raw — wrap it in `getWatermarkedUrl(photoUrl)` before returning
-   - Tier logic: `getWatermarkedUrl()` for all tiers (TEAMS brand kit is future work — for now same watermark)
-   - Platform-specific Cloudinary crops: append transformation before the version segment
-     - Pinterest: `ar_2:3,c_fill`
-     - TikTok: `ar_9:16,c_fill`
-     - Instagram: `ar_4:5,c_fill`
-     - Facebook/Threads/Nextdoor: no crop (use original aspect ratio)
-
-3. **Update `SocialPostGenerator.tsx` UI:**
-   - Add TikTok, Pinterest, Threads to `PLATFORMS` array
-   - After post is generated, show the watermarked photo below the text (if `photoUrl` returned)
-   - Add "Copy image link" button next to the text copy button
-   - Add platform-specific tip text (e.g., "Pinterest: paste this link when creating a Pin")
-
-4. **Fix `formatFacebookCsv` in `exportService.ts`:**
-   - Add `image_url` as the last column header
-   - Populate with `getWatermarkedUrl(item.photoUrls[0])` (skip if no photo)
-   - Import `getWatermarkedUrl` (already imported in S409)
-
-5. **Remove Amazon from export UI:**
-   - Find the Amazon export button/option in `add-items/[saleId].tsx` — remove it from the UI
-   - Leave `formatAmazonCsv` in `exportService.ts` dormant (don't delete backend code)
-
-Run `npx tsc --noEmit --skipLibCheck` in both backend and frontend before returning.
-
-### S410 Priority 2 — QA (no Chrome QA delay continues — Patrick's call when to resume)
-- #72 Dual-Role Account: schema + auth + registration all confirmed implemented in S409. Needs Chrome QA only.
-- #74 Role-Aware Registration Consent: same — fully implemented, needs Chrome QA only.
-- Queue: shopper referrals (#7/#265), haul posts (#277), S396 rapidfire
+### S412 Priority 1 — Chrome QA carry-forward
+- #72 Dual-Role Account: schema + auth + registration all confirmed implemented. Needs Chrome QA only.
+- #74 Role-Aware Registration Consent: fully implemented, needs Chrome QA only.
+- S396 rapidfire hold/photo limit QA
+- Shopper referrals (#7/#265), haul posts (#277)
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app
