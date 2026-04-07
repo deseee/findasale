@@ -1220,10 +1220,9 @@ const ReviewPage = () => {
                                     >
                                       <option value="">Select condition...</option>
                                       <option value="NEW">New</option>
-                                      <option value="LIKE_NEW">Like New</option>
-                                      <option value="GOOD">Good</option>
-                                      <option value="FAIR">Fair</option>
-                                      <option value="POOR">Poor</option>
+                                      <option value="USED">Used</option>
+                                      <option value="REFURBISHED">Refurbished</option>
+                                      <option value="PARTS_OR_REPAIR">Parts or Repair</option>
                                     </select>
                                   </div>
                                 </div>
