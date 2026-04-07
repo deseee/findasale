@@ -2,7 +2,19 @@
 
 ---
 
-## What Happened This Session (S407 — QA sweep + pre-wires + bug fixes)
+## What Happened This Session (S408 — Roadmap audit + documentation catch-up)
+
+Audited sessions S392–S407 against the roadmap. Found the roadmap was 16 sessions stale (last updated S391, April 3rd). QA was NOT rubber-stamped — recent Chrome sessions had real evidence. Pure documentation lag.
+
+**Roadmap updated (v97→v98):**
+- POS #162: Chrome-verified S406b+S407 ✅ (all 4 tiles, Cash tile lights green on click)
+- Hunt Pass #133: Chrome-verified S407 ✅ — and the ⚠️ "page still says 2x XP" warning is cleared (copy was fixed in S390, never removed from roadmap)
+- Hunt Pass #213: Chrome-verified S407 ✅
+- 4 new entries added: #284 Feedback Survey System, #285 POS In-App Payment Request, #286 Shopper QR Code, #287 Add-Items Sort Controls
+
+---
+
+## Previous Session (S407 — QA sweep + pre-wires + bug fixes)
 
 Chrome QA continued, two bucket-4 pre-wires shipped, and two bugs fixed.
 
@@ -25,7 +37,7 @@ Chrome QA continued, two bucket-4 pre-wires shipped, and two bugs fixed.
 
 ---
 
-## Push Block (S407)
+## Push Block (S407 + S408)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -35,9 +47,10 @@ git add packages/backend/src/services/exportService.ts
 git add packages/backend/src/controllers/csvExportController.ts
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S407: P1 modal fix, P2 layout fix, QuickBooks CSV pre-wire, estateId pre-wire"
+git commit -m "S407+S408: P1 modal fix, P2 layout fix, QuickBooks CSV pre-wire, estateId pre-wire, roadmap v98 audit"
 .\push.ps1
 ```
 
@@ -85,12 +98,13 @@ npx prisma generate
 
 ---
 
-## Next Session (S408)
+## Next Session (S409)
 
-1. Push S407 changes + run migration (block above)
+1. Push S407+S408 changes + run S407 migration (block above)
 2. Post-push Chrome verify: modal dismiss persists, edit-item black area gone
 3. Dispatch findasale-dev: broader black-area scroll fix (POS + add-items + any other affected pages)
-4. QA backlog: shopper referrals, haul posts, S396 rapidfire
+4. QA backlog: shopper referrals (#7), haul posts (#88), S396 rapidfire, Feedback Survey trigger (OG-3 still deferred)
 5. Bucket 4 remaining: Affiliate Program arch decision, Audit Library design
+6. Establish wrap discipline: roadmap.md must be included in every session push block going forward
 
-*Updated S407 — 2026-04-07*
+*Updated S408 — 2026-04-07*

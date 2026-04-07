@@ -7,6 +7,19 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S408 COMPLETE (2026-04-07):** Roadmap audit + update — v97→v98. 16-session documentation lag resolved.
+
+**S408 Summary:**
+
+Audit confirmed roadmap was 16 sessions stale (last update v97, S391, April 3rd). QA rubber-stamp check found NO fabrication — S406b and S407 QA had real Chrome evidence (specific dollar amounts, element-level behavior, real data values). The problem was pure documentation lag: zero wrap discipline fired in S392–S407.
+
+Roadmap changes applied: (1) Version header updated v97→v98 with S392–S407 summary. (2) #162 POS: updated to Chrome-verified S406b+S407 with full evidence. (3) #133 Hunt Pass Redesign: updated to Chrome-verified S407, removed ⚠️ "2x XP" false alarm (copy was fixed in S390). (4) #213 Hunt Pass: updated to Chrome-verified S407. (5) New entries added: #284 Feedback Survey System (S399/S404), #285 POS In-App Payment Request (S405), #286 Shopper QR Code (S405), #287 Add-Items Sort Controls S397 (Chrome-verified S407).
+
+**S408 Files Changed (1 file):**
+- `claude_docs/strategy/roadmap.md` — v98, 5 targeted edits (header + 3 entry updates + 4 new entries)
+
+---
+
 **S407 COMPLETE (2026-04-07):** Chrome QA sweep (POS/sort/Hunt Pass/À la carte), bucket 4 pre-wires (estateId + QuickBooks CSV), P1 modal fix + P2 layout fix
 
 **S407 Summary:**
