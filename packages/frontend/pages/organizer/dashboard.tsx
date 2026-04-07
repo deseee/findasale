@@ -853,6 +853,15 @@ const OrganizerDashboard = () => {
                     )}
                     {activeSale.status === 'PUBLISHED' && (
                       <button
+                        onClick={() => setSocialPostSale({ id: activeSale.id, title: activeSale.title })}
+                        className="text-sm px-3 py-1 bg-pink-100 dark:bg-pink-900 text-pink-700 dark:text-pink-300 rounded-full hover:bg-pink-200 dark:hover:bg-pink-800 transition-colors"
+                        title="Generate AI social media posts for this sale"
+                      >
+                        📱 Social Posts
+                      </button>
+                    )}
+                    {activeSale.status === 'PUBLISHED' && (
+                      <button
                         onClick={async () => {
                           const confirmed = window.confirm('Close this sale early? You can reopen it later from your dashboard.');
                           if (!confirmed) return;
