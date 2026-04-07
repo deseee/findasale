@@ -400,6 +400,9 @@ const AddItemsDetailPage = () => {
   const [ebayExportOpen, setEbayExportOpen] = useState(false);
   const [ebayPhotoMode, setEbayPhotoMode] = useState<'watermarked' | 'clean'>('watermarked');
   const [ebayExporting, setEbayExporting] = useState(false);
+  // QuickBooks CSV export state
+  const [quickbooksExportOpen, setQuickbooksExportOpen] = useState(false);
+  const [quickbooksExporting, setQuickbooksExporting] = useState(false);
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
   const [bulkCategoryModalOpen, setBulkCategoryModalOpen] = useState(false);
   const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
@@ -737,6 +740,34 @@ const AddItemsDetailPage = () => {
       showToast(message, 'error');
     } finally {
       setEbayExporting(false);
+    }
+  };
+
+  const handleQuickbooksExport = async () => {
+    try {
+      setQuickbooksExporting(true);
+      const itemIdParam = selectedItems.size > 0 ? `&itemIds=${Array.from(selectedItems).join(',')}` : '';
+      const response = await api.get(`/organizer/export/csv?saleId=${saleId}&format=quickbooks${itemIdParam}`, {
+        responseType: 'blob',
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `quickbooks-export-${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      showToast('CSV ready. Import into QuickBooks.', 'success');
+      setQuickbooksExportOpen(false);
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to export to QuickBooks';
+      showToast(message, 'error');
+    } finally {
+      setQuickbooksExporting(false);
     }
   };
 
@@ -1856,6 +1887,23 @@ const AddItemsDetailPage = () => {
                   >
                     📦 Export to eBay
                   </button>
+                  {(user?.organizerTier === 'PRO' || user?.organizerTier === 'TEAMS' || user?.organizerTier === 'ENTERPRISE') ? (
+                    <button
+                      onClick={() => setQuickbooksExportOpen(true)}
+                      className="text-xs font-medium text-green-700 dark:text-green-400 hover:underline px-2 py-1 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20"
+                    >
+                      💼 Export to QuickBooks
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setEbayExportOpen(false)}
+                      className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-lg opacity-60 cursor-not-allowed"
+                      disabled
+                      title="QuickBooks export requires PRO tier"
+                    >
+                      💼 Export to QuickBooks
+                    </button>
+                  )}
                   <Link
                     href={`/organizer/add-items/${saleId}/review?preview=true`}
                     className="text-xs font-medium text-warm-600 dark:text-warm-400 hover:underline px-2 py-1 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700"
@@ -2362,6 +2410,38 @@ const AddItemsDetailPage = () => {
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {ebayExporting ? 'Generating...' : 'Download CSV'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QuickBooks CSV Export Modal */}
+      {quickbooksExportOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-3">Export to QuickBooks</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
+              Export {selectedItems.size > 0 ? selectedItems.size : items.filter((i: any) => i.status === 'AVAILABLE').length} {selectedItems.size > 0 ? 'selected' : 'available'} items as QuickBooks CSV
+            </p>
+
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-6">
+              Download CSV to import inventory and pricing into QuickBooks.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setQuickbooksExportOpen(false)}
+                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-warm-700 dark:text-warm-300 font-medium hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleQuickbooksExport}
+                disabled={quickbooksExporting}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {quickbooksExporting ? 'Generating...' : 'Download CSV'}
               </button>
             </div>
           </div>
