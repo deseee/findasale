@@ -9,26 +9,37 @@ interface Props {
   onClose: () => void;
 }
 
-type Platform = 'instagram' | 'facebook' | 'nextdoor';
+interface GeneratedPostData {
+  post: string;
+  platform: string;
+  photoUrl?: string;
+}
+
+type Platform = 'instagram' | 'facebook' | 'nextdoor' | 'tiktok' | 'pinterest' | 'threads';
 
 const PLATFORMS: { id: Platform; label: string; icon: string; color: string }[] = [
   { id: 'instagram', label: 'Instagram', icon: '📸', color: 'bg-pink-500' },
   { id: 'facebook', label: 'Facebook', icon: '👥', color: 'bg-blue-600' },
   { id: 'nextdoor', label: 'Nextdoor', icon: '🏘️', color: 'bg-green-600' },
+  { id: 'tiktok', label: 'TikTok', icon: '🎵', color: 'bg-black' },
+  { id: 'pinterest', label: 'Pinterest', icon: '📌', color: 'bg-red-600' },
+  { id: 'threads', label: 'Threads', icon: '💬', color: 'bg-purple-600' },
 ];
 
 const SocialPostGenerator: React.FC<Props> = ({ saleId, saleTitle, onClose }) => {
   const [platform, setPlatform] = useState<Platform>('facebook');
   const [highlights, setHighlights] = useState('');
   const [generatedPost, setGeneratedPost] = useState('');
+  const [photoUrl, setPhotoUrl] = useState<string | undefined>();
   const [copied, setCopied] = useState(false);
   const { showToast } = useToast();
 
   const generateMutation = useMutation({
     mutationFn: () =>
-      api.post('/social-post/generate', { saleId, platform, highlights }).then(r => r.data),
+      api.post('/social-post/generate', { saleId, platform, highlights }).then(r => r.data as GeneratedPostData),
     onSuccess: (data) => {
       setGeneratedPost(data.post);
+      setPhotoUrl(data.photoUrl);
       setCopied(false);
     },
     onError: () => showToast('Failed to generate post', 'error'),
@@ -41,8 +52,16 @@ const SocialPostGenerator: React.FC<Props> = ({ saleId, saleTitle, onClose }) =>
     setTimeout(() => setCopied(false), 3000);
   };
 
+  const handleCopyPhotoLink = async () => {
+    if (photoUrl) {
+      await navigator.clipboard.writeText(photoUrl);
+      showToast('Photo link copied!', 'success');
+    }
+  };
+
   const handleRegenerate = () => {
     setGeneratedPost('');
+    setPhotoUrl(undefined);
     generateMutation.mutate();
   };
 
@@ -116,6 +135,27 @@ const SocialPostGenerator: React.FC<Props> = ({ saleId, saleTitle, onClose }) =>
           {/* Generated post */}
           {generatedPost && (
             <div className="space-y-3">
+              {/* Photo preview */}
+              {photoUrl ? (
+                <div className="space-y-2">
+                  <img
+                    src={photoUrl}
+                    alt="Item preview for social post"
+                    className="w-full h-48 object-cover rounded-xl border-2 border-amber-200"
+                  />
+                  <button
+                    onClick={handleCopyPhotoLink}
+                    className="w-full py-1.5 px-3 bg-warm-100 hover:bg-warm-200 text-warm-700 rounded-lg text-xs font-medium transition"
+                  >
+                    🔗 Copy Photo Link
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full h-32 bg-warm-100 rounded-xl flex items-center justify-center border-2 border-dashed border-warm-300">
+                  <span className="text-sm text-warm-500">No photo available</span>
+                </div>
+              )}
+
               <div className="border-2 border-amber-200 rounded-xl p-4 bg-amber-50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">

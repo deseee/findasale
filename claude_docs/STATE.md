@@ -7,19 +7,26 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S409 IN PROGRESS (2026-04-07):** Dark mode fix, Signage Kit rename, roadmap v99, eBay CSV format fix, TEAMS watermark gate, QuickBooks UI, watermark utility fix, Railway TS build error fixed. Social platform respec (TikTok/Pinterest/Threads + photo + Facebook CSV photo + Amazon removal) dispatched but NOT YET IMPLEMENTED — continue next session.
+**S410 COMPLETE (2026-04-07):** Social platform respec shipped + eBay 400 fix.
+
+**S410 Summary:**
+
+Two work items. (1) **Social platform respec:** TikTok, Pinterest, Threads added to `socialPostController.ts` platform guidelines + `SocialPostGenerator.tsx` platform selector (icons + buttons). Platform-specific Cloudinary crops applied to returned `photoUrl` (Pinterest 2:3, TikTok 9:16, Instagram 4:5, others original). `photoUrl` returned tier-aware (FindA.Sale watermark FREE/SIMPLE/PRO, TEAMS falls back to same with note). Photo preview added to UI with "Copy Photo Link" button + no-photo fallback. `formatFacebookCsv` updated to include `image_url` column (watermarked). Amazon confirmed already dormant — not in UI, no change needed. Roadmap #27a updated: UNTESTED → Shipped S410, Pending Chrome QA. (2) **eBay 400 fix:** `formatEbayCsv` was sending numeric eBay condition IDs (1000, 3000 etc.) which are for the API — Seller Hub bulk upload requires human-readable strings (`New`, `Used`, `For parts or not working`, etc.). Fixed mapping + updated column header asterisk format + left Category ID blank (eBay allows this).
+
+**S410 Files Changed (3 files):**
+- `packages/backend/src/controllers/socialPostController.ts` — TikTok/Pinterest/Threads guidelines + photoUrl + Cloudinary crops
+- `packages/frontend/components/SocialPostGenerator.tsx` — 3 new platforms, photo preview, copy-link
+- `packages/backend/src/services/exportService.ts` — Facebook CSV image_url + eBay condition strings + header format fix
+
+**S410 Chrome smoke test:** UNVERIFIED — Chrome extension not connected this session. S409 changes pending smoke test next session.
+
+---
+
+**S409 COMPLETE (2026-04-07):** Dark mode fix, Signage Kit rename, roadmap v99, eBay CSV format fix, TEAMS watermark gate, QuickBooks UI, watermark utility fix, Railway TS build error fixed.
 
 **S409 Summary:**
 
 Six dev tasks completed. (1) **PremiumCTA dark mode:** full dark: variant pass on all sage-* classes. (2) **Signage Kit rename:** TierComparisonTable "Sale Print Kit" → "Signage Kit". (3) **Roadmap v98→v99:** #133 Hunt Pass Redesign, #213 Hunt Pass, #287 Add-Items Sort Controls moved from UNTESTED to "Only Human Left" (Chrome-verified S407). (4) **eBay CSV format fix:** complete rewrite of `formatEbayCsv` to match eBay Seller Hub bulk upload template (4 #INFO lines, correct column header `Action(SiteID=US|...)`, Draft action per row) — fixes BAF.Error.5 rejection. (5) **TEAMS watermark gate:** `ebayController.ts` was comparing `organizer.tier` (activity rank) instead of `organizer.subscriptionTier` — fixed. Watermark removal gate changed from PRO → TEAMS. (6) **QuickBooks UI wired:** PRO+ gated export button + modal with QuickBooks import instructions added to add-items page. (7) **Watermark utility fix:** `exportService.ts` now uses `getWatermarkedUrl()` from `cloudinaryWatermark.ts` instead of broken `?wm=finda.sale` query string. (8) **Railway TS build error fixed:** `ebayController.ts` line 486 was comparing `subscriptionTier` against `'ENTERPRISE'` which doesn't exist in the enum — removed, build unblocked. (9) **#72/#74 status:** both already fully implemented (schema, auth controller, registration UI) — just need Chrome QA next QA session.
-
-**PENDING for S410 — Social platform respec (dev work started but not completed):**
-- Add TikTok, Pinterest, Threads to `socialPostController.ts` platform guidelines + `SocialPostGenerator.tsx` platform selector
-- Return watermarked photo URL in both social controllers (tier-aware: FindA.Sale watermark for FREE/SIMPLE/PRO, brand kit overlay for TEAMS)
-- Platform-specific Cloudinary crops: Pinterest 2:3, TikTok 9:16, Instagram 4:5
-- Show photo in social post UI panel with copy-link action
-- Fix `formatFacebookCsv` to include `image_url` column (watermarked)
-- Remove Amazon from export UI (keep backend dormant)
 
 **S409 Files Changed (6 files):**
 - `packages/frontend/components/PremiumCTA.tsx` — dark mode variants

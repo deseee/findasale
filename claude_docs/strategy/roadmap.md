@@ -263,7 +263,7 @@ Features built but never browser-tested or Chrome test is stale (>3 sessions old
 | 171 | ✅ | ✅ | ✅ | 📋 | ⬜ | ⬜ | UNTESTED | Payout PDF Export | ORG | PRO | Chrome QA: verify PDF generation, content, download |  | 
 |  18 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | UNTESTED | Post Performance Analytics | ORG | PRO | Chrome QA: verify UTM tracking on social template downloads |  | 
 | 136 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | QR Code Auto-Embedding in Exports | ORG | SIMPLE | Chrome QA: verify QR overlay, export with QR embedded |  | 
-| 27a | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Social Templates (3 tones × 2 platforms) | ORG | SIMPLE | Chrome QA: verify 3 tone variants, Instagram/Facebook copy | |
+| 27a | -— | ⬜ | ✅ | -— | ⬜ | ⬜ | Shipped S410 — Pending Chrome QA | Social Templates (5 platforms + photos) | ORG | SIMPLE | Chrome QA: verify 3 tone variants, Instagram/Facebook/TikTok/Pinterest/Threads copy + photo preview + copy-link | S410: TikTok, Pinterest, Threads added to SocialPostGenerator. Platform-specific Cloudinary crops (Pinterest 2:3, TikTok 9:16, Instagram 4:5). Photos returned (tier-aware watermark). Facebook CSV gets image_url column. |
 | 27b | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | Cloudinary Watermark on Photo Exports | ORG | SIMPLE | Chrome QA: verify watermark applied, brand protection visible | |
 | 27c | -— | ⬜ | ⬜ | -— | ⬜ | ⬜ | UNTESTED | CSV/JSON Listing Exports (Listing Factory) | ORG | SIMPLE | Chrome QA: verify multi-platform export formats | |
 |  33 | NA | ✅ | ✅ | NA | ⬜ | ⬜ | UNTESTED | Share Card Factory (OG Tags) | ORG | SIMPLE | Chrome QA: verify branded social previews, OG images |  | 

@@ -1,40 +1,26 @@
-# Patrick's Dashboard — April 7, 2026 (S409)
+# Patrick's Dashboard — April 7, 2026 (S410)
 
 ---
 
-## What Happened This Session (S409)
+## What Happened This Session (S410)
 
-**Railway build unblocked** — TS error in ebayController.ts was comparing against `'ENTERPRISE'` which doesn't exist in the SubscriptionTier enum. Fixed. Build should go green after push.
+**Social post generator expanded** — TikTok, Pinterest, and Threads are now in the platform selector. Each generates a platform-optimized caption. Photos are included in the generated post data (watermarked, platform-specific crop). A photo preview with "Copy Photo Link" button now appears in the UI. Facebook CSV export now includes an `image_url` column.
 
-**eBay CSV working** — Complete rewrite to match eBay Seller Hub bulk upload format. Fixes the BAF.Error.5 error you were getting. Now generates the 4 #INFO header lines + correct column format that eBay requires for draft listings.
-
-**Watermark now actually works** — Was appending `?wm=finda.sale` to the URL (does nothing on Cloudinary). Now uses the real `getWatermarkedUrl()` utility that applies the Cloudinary text overlay transformation.
-
-**TEAMS watermark gate** — Fixed: the check was reading `organizer.tier` (activity rank: BRONZE/SILVER/GOLD) instead of `organizer.subscriptionTier` (SIMPLE/PRO/TEAMS). Watermark removal is now correctly gated to TEAMS only.
-
-**QuickBooks UI wired** — Export button added to add-items page (PRO+ gated). Includes a modal with step-by-step QuickBooks import instructions.
-
-**Roadmap v99** — #133, #213, #287 moved to "Only Human Left" (Chrome-verified S407).
-
-**Dark mode + Signage Kit** — PremiumCTA component now handles dark mode correctly. "Sale Print Kit" → "Signage Kit" in the pricing comparison table.
-
-**Social platform respec planned but NOT yet implemented** — Session ended before dispatch. Full spec is written in STATE.md Next Session. S410 picks it up immediately.
+**eBay 400 error fixed** — The Seller Hub bulk upload was getting a 400 because the condition values were numeric eBay API IDs (like `1000`, `3000`) instead of the human-readable strings Seller Hub requires (`New`, `Used`, `For parts or not working`, etc.). Fixed the mapping. Column headers also cleaned up. Category ID is left blank — Seller Hub allows that and the organizer assigns categories there.
 
 ---
 
-## Push Block (S409) — **Push this now — it fixes the Railway build**
+## Push Block (S410)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/PremiumCTA.tsx
-git add packages/frontend/components/TierComparisonTable.tsx
-git add claude_docs/strategy/roadmap.md
+git add packages/backend/src/controllers/socialPostController.ts
+git add packages/frontend/components/SocialPostGenerator.tsx
 git add packages/backend/src/services/exportService.ts
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S409: dark mode, Signage Kit, roadmap v99, eBay CSV fix, TEAMS watermark gate, QuickBooks UI, watermark utility, Railway TS build fix"
+git commit -m "S410: social platform respec (TikTok/Pinterest/Threads + photos), eBay 400 fix (condition strings + headers), roadmap v100"
 .\push.ps1
 ```
 
@@ -55,7 +41,8 @@ npx prisma generate
 
 ## Action Items for Patrick
 
-- [ ] **Push S409 block above** (fixes Railway build)
+- [ ] **Push S410 block above**
+- [ ] **Test eBay export** — 400 should be gone now. Condition values are now human-readable strings.
 - [ ] **Run S407 migration** if not done (estateId on Organizer)
 - [ ] **Complete eBay keyset activation** — developer.ebay.com → Alerts & Notifications → endpoint `https://backend-production-153c9.up.railway.app/api/ebay/account-deletion` → token `findasale-ebay-verify-2026-primary` → Save
 - [ ] **Create Google Places API key** — console.cloud.google.com → Maps Platform → Places API → Add to Railway as `GOOGLE_PLACES_API_KEY`
@@ -64,11 +51,9 @@ npx prisma generate
 
 ---
 
-## What's Coming in S410
+## What's Coming in S411
 
-Social platform respec — TikTok, Pinterest, Threads added to social post generator. Photos included in templates (watermarked). Platform-specific image crops (Pinterest 2:3, TikTok 9:16, Instagram 4:5). Facebook CSV gets photo column. Amazon removed from export UI.
-
-Chrome QA remains paused per your call. #72 and #74 confirmed fully implemented — ready whenever QA resumes.
+Chrome QA session — #27a (social templates), #72/#74 (confirmed implemented, just needs verification), plus smoke test of S409 changes (Chrome was down this session).
 
 ---
 
@@ -80,4 +65,4 @@ Chrome QA remains paused per your call. #72 and #74 confirmed fully implemented 
 - Camera thumbnail refresh — real device required
 - POS QR scan — real device required
 
-*Updated S409 — 2026-04-07*
+*Updated S410 — 2026-04-07*
