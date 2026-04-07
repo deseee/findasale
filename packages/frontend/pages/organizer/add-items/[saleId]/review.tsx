@@ -37,6 +37,8 @@ interface ItemEditState {
   conditionGrade?: string; // #64: S | A | B | C | D
   quantity: number;
   listingType: string; // FIXED | AUCTION | REVERSE_AUCTION
+  reverseDailyDrop?: number; // cents per day for REVERSE_AUCTION
+  reverseFloorPrice?: number; // minimum price in cents for REVERSE_AUCTION
   aspectRatio: AspectRatio;
   brightness: number;
   contrast: number;
@@ -71,6 +73,8 @@ interface Item {
   conditionGrade?: string | null; // #64: S | A | B | C | D
   quantity: number;
   listingType?: string; // FIXED | AUCTION | REVERSE_AUCTION
+  reverseDailyDrop?: number | null; // cents per day for REVERSE_AUCTION
+  reverseFloorPrice?: number | null; // minimum price in cents for REVERSE_AUCTION
   photoUrls: string[];
   aiConfidence: number | null;
   isAiTagged: boolean;
@@ -460,6 +464,8 @@ const ReviewPage = () => {
         conditionGrade: item.conditionGrade ?? undefined, // #64
         quantity: item.quantity ?? 1,
         listingType: item.listingType ?? 'FIXED',
+        reverseDailyDrop: item.reverseDailyDrop ?? undefined,
+        reverseFloorPrice: item.reverseFloorPrice ?? undefined,
         aspectRatio: '4:3',
         brightness: 50,
         contrast: 50,
@@ -492,6 +498,8 @@ const ReviewPage = () => {
         conditionGrade: editState.conditionGrade, // #64: Persist condition grade on save
         quantity: editState.quantity,
         listingType: editState.listingType,
+        reverseDailyDrop: editState.reverseDailyDrop,
+        reverseFloorPrice: editState.reverseFloorPrice,
         backgroundRemoved: editState.backgroundRemoved,
         tags: editState.tags, // Sprint 1: Save tags
       },
@@ -1281,6 +1289,46 @@ const ReviewPage = () => {
                                     <option value="REVERSE_AUCTION">Reverse Auction</option>
                                   </select>
                                 </div>
+
+                                {/* Reverse Auction Sub-fields */}
+                                {editState.listingType === 'REVERSE_AUCTION' && (
+                                  <div className="mt-3 space-y-2">
+                                    <div>
+                                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                                        Daily drop ($)
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={(editState.reverseDailyDrop || 0) / 100}
+                                        onChange={(e) => {
+                                          const cents = Math.round(parseFloat(e.target.value || '0') * 100);
+                                          handleEditChange(item.id, 'reverseDailyDrop', cents);
+                                        }}
+                                        placeholder="0.00"
+                                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                                        Floor price ($)
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={(editState.reverseFloorPrice || 0) / 100}
+                                        onChange={(e) => {
+                                          const cents = Math.round(parseFloat(e.target.value || '0') * 100);
+                                          handleEditChange(item.id, 'reverseFloorPrice', cents);
+                                        }}
+                                        placeholder="0.00"
+                                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
 
                                 {/* Sprint 1: Tag Picker */}
                                 <div className="mt-3">
