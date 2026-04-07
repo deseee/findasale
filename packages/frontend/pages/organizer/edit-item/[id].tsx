@@ -40,6 +40,7 @@ const EditItemPage = () => {
     conditionGrade: '',
     tags: [] as string[],
     status: 'AVAILABLE',
+    listingType: 'FIXED',
     auctionEndTime: '',
     qrEmbedEnabled: true,
   });
@@ -186,6 +187,7 @@ const EditItemPage = () => {
         conditionGrade: item.conditionGrade || '',
         tags: item.tags || [],
         status: item.status || 'AVAILABLE',
+        listingType: item.listingType || 'FIXED',
         auctionEndTime: item.auctionEndTime ? new Date(item.auctionEndTime).toISOString().slice(0, 16) : '',
         qrEmbedEnabled: item.qrEmbedEnabled !== false,
       });
@@ -552,8 +554,25 @@ const EditItemPage = () => {
               </select>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                Listing Type
+              </label>
+              <select
+                value={formData.listingType}
+                onChange={(e) =>
+                  setFormData({ ...formData, listingType: e.target.value })
+                }
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="FIXED">Fixed Price</option>
+                <option value="AUCTION">Auction</option>
+                <option value="REVERSE_AUCTION">Reverse Auction</option>
+              </select>
+            </div>
+
             {/* Auction End Time - show only for auction items */}
-            {item?.listingType === 'AUCTION' && (
+            {(formData.listingType === 'AUCTION' || formData.listingType === 'REVERSE_AUCTION') && (
               <div>
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
                   Auction End Time
