@@ -607,7 +607,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               where: { id: requestId },
               include: {
                 shopper: { select: { id: true, email: true, name: true } },
-                organizer: { select: { id: true, userId: true, name: true } },
+                organizer: { select: { id: true, name: true } },
                 sale: { select: { id: true, title: true } },
               },
             });
