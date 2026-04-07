@@ -483,7 +483,7 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
 
     // Check tier for clean photo export (TEAMS only)
     if (photoMode === 'clean') {
-      if (organizer.subscriptionTier !== 'TEAMS' && organizer.subscriptionTier !== 'ENTERPRISE') {
+      if (organizer.subscriptionTier !== 'TEAMS') {
         return res.status(403).json({
           message: 'Clean photo export requires TEAMS tier',
         });
