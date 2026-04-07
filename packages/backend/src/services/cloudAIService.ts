@@ -148,7 +148,7 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
 Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include decade if identifiable (1950s, 1960s, Victorian). Avoid vague words like "Beautiful" or "Nice".
 Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other.
-Condition: NEW = unused with tags. LIKE_NEW = minimal wear. GOOD = normal use, no damage. FAIR = noticeable wear/scratches. POOR = damaged but functional.
+Condition: NEW = unused with tags. USED = minimal to normal wear. REFURBISHED = restored/refurbished by seller. PARTS_OR_REPAIR = damaged, functional only for parts/repair.
 Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
@@ -157,7 +157,7 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
   "title": "short specific title",
   "description": "1-2 sentence description with condition details",
   "category": "best matching category",
-  "condition": "NEW | LIKE_NEW | GOOD | FAIR | POOR",
+  "condition": "NEW | USED | REFURBISHED | PARTS_OR_REPAIR",
   "suggestedConditionGrade": "A | B | C | D | F",
   "suggestedPrice": 12.50,
   "tags": ["Tag1", "Tag2", "Tag3"],
@@ -544,7 +544,7 @@ Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include decade if identifiable (1950s, 1960s, Victorian). Avoid vague words like "Beautiful" or "Nice".
 Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other.
-Condition: NEW = unused with tags. LIKE_NEW = minimal wear. GOOD = normal use, no damage. FAIR = noticeable wear/scratches. POOR = damaged but functional.
+Condition: NEW = unused with tags. USED = minimal to normal wear. REFURBISHED = restored/refurbished by seller. PARTS_OR_REPAIR = damaged, functional only for parts/repair.
 Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
@@ -553,7 +553,7 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
   "title": "short specific title",
   "description": "1-2 sentence description with condition details",
   "category": "best matching category",
-  "condition": "NEW | LIKE_NEW | GOOD | FAIR | POOR",
+  "condition": "NEW | USED | REFURBISHED | PARTS_OR_REPAIR",
   "suggestedConditionGrade": "A | B | C | D | F",
   "suggestedPrice": 12.50,
   "tags": ["Tag1", "Tag2", "Tag3"],

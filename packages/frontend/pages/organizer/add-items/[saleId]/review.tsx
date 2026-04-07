@@ -97,7 +97,7 @@ const CATEGORIES = [
   'Other',
 ];
 
-const CONDITIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR'];
+const CONDITIONS = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
 
 // BUG 6: Map condition codes to human-readable labels
 const CONDITION_MAP: { [key: string]: string } = {
@@ -106,10 +106,16 @@ const CONDITION_MAP: { [key: string]: string } = {
   'B': 'Good',
   'C': 'Fair',
   'D': 'Poor',
-  'EXCELLENT': 'Excellent',
-  'GOOD': 'Good',
-  'FAIR': 'Fair',
-  'POOR': 'Poor',
+  'NEW': 'New',
+  'USED': 'Used',
+  'REFURBISHED': 'Refurbished',
+  'PARTS_OR_REPAIR': 'Parts or Repair',
+  // Legacy mappings for backward compatibility with existing DB records
+  'LIKE_NEW': 'New',
+  'EXCELLENT': 'New',
+  'GOOD': 'Used',
+  'FAIR': 'Used',
+  'POOR': 'Parts or Repair',
   'FOR_PARTS': 'For Parts / As-Is',
 };
 
