@@ -596,6 +596,129 @@ export const webhookHandler = async (req: Request, res: Response) => {
   switch (event.type) {
     case 'payment_intent.succeeded': {
       const paymentIntent = event.data.object;
+
+      // POS In-App Payment Request: check if this is a POS payment request
+      if (paymentIntent.metadata?.source === 'pos_payment_request') {
+        const requestId = paymentIntent.metadata.requestId;
+        if (requestId) {
+          try {
+            // Lookup POSPaymentRequest
+            const posRequest = await prisma.pOSPaymentRequest.findUnique({
+              where: { id: requestId },
+              include: {
+                shopper: { select: { id: true, email: true, name: true } },
+                organizer: { select: { id: true, userId: true, name: true } },
+                sale: { select: { id: true, title: true } },
+              },
+            });
+
+            if (posRequest) {
+              // Mark POS request as PAID
+              await prisma.pOSPaymentRequest.update({
+                where: { id: requestId },
+                data: {
+                  status: 'PAID',
+                  paidAt: new Date(),
+                },
+              });
+
+              // Create Purchase records for each item
+              const items = await prisma.item.findMany({
+                where: { id: { in: posRequest.itemIds }, saleId: posRequest.saleId },
+                select: { id: true, price: true },
+              });
+
+              for (const item of items) {
+                try {
+                  await prisma.purchase.create({
+                    data: {
+                      userId: posRequest.shopperUserId,
+                      itemId: item.id,
+                      saleId: posRequest.saleId,
+                      amount: item.price || 0,
+                      platformFeeAmount: posRequest.platformFeeCents / 100,
+                      stripePaymentIntentId: paymentIntent.id,
+                      source: 'POS',
+                      status: 'PAID',
+                    },
+                  });
+
+                  // Mark item as SOLD
+                  await prisma.item.update({
+                    where: { id: item.id },
+                    data: { status: 'SOLD' },
+                  });
+
+                  // Update ItemReservation if exists
+                  await prisma.itemReservation.updateMany({
+                    where: { itemId: item.id, userId: posRequest.shopperUserId },
+                    data: { status: 'COMPLETED' },
+                  });
+                } catch (err: any) {
+                  console.error(`[pos-payment] Failed to mark item ${item.id} as sold:`, err);
+                }
+              }
+
+              // Award XP to shopper for purchase
+              if (posRequest.shopperUserId) {
+                try {
+                  const baseXp = XP_AWARDS.PURCHASE;
+                  const multipliedXp = await applyHuntPassMultiplier(posRequest.shopperUserId, baseXp);
+                  awardXp(posRequest.shopperUserId, 'PURCHASE_COMPLETED', multipliedXp, {
+                    saleId: posRequest.saleId,
+                  }).catch((err: any) =>
+                    console.error('[XP] Failed to award XP for POS purchase:', err)
+                  );
+                } catch (err: any) {
+                  console.warn('[pos-payment] Failed to award XP:', err.message);
+                }
+              }
+
+              // Emit socket event to both organizer and shopper
+              try {
+                const io = getIO();
+                io.to(`user:${posRequest.organizerUserId}`).emit('POS_PAYMENT_STATUS', {
+                  type: 'POS_PAYMENT_STATUS',
+                  requestId,
+                  status: 'PAID',
+                  totalAmountCents: posRequest.totalAmountCents,
+                  paidAt: new Date().toISOString(),
+                });
+                io.to(`user:${posRequest.shopperUserId}`).emit('POS_PAYMENT_STATUS', {
+                  type: 'POS_PAYMENT_STATUS',
+                  requestId,
+                  status: 'PAID',
+                  totalAmountCents: posRequest.totalAmountCents,
+                  paidAt: new Date().toISOString(),
+                });
+              } catch (err: any) {
+                console.warn('[pos-payment] Failed to emit socket event:', err.message);
+              }
+
+              // Create notification to organizer
+              try {
+                await createNotification({
+                  userId: posRequest.organizerUserId,
+                  type: 'pos_payment_completed',
+                  title: 'Payment Received',
+                  body: `${posRequest.shopper?.name || 'Shopper'} paid $${(posRequest.totalAmountCents / 100).toFixed(2)} for ${posRequest.itemIds.length} item(s)`,
+                  link: `/organizer/pos`,
+                  channel: 'OPERATIONAL',
+                });
+              } catch (err: any) {
+                console.warn('[pos-payment] Failed to create organizer notification:', err.message);
+              }
+
+              console.log(`[pos-payment] POS payment request ${requestId} completed`);
+              break; // Exit case — POS payment handled
+            }
+          } catch (err: any) {
+            console.error(`[pos-payment] Failed to process POS payment request:`, err);
+          }
+        }
+      }
+
+      // Standard Purchase: handle existing purchase records
       const purchase = await prisma.purchase.findUnique({
         where: { stripePaymentIntentId: paymentIntent.id },
         include: {
