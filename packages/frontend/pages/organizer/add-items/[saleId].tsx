@@ -220,7 +220,20 @@ const CATEGORIES = [
   'Other',
 ];
 
-const CONDITIONS = ['New', 'Used', 'Refurbished', 'Parts or Repair'];
+// Canonical condition enum values (S406 standardization)
+const CONDITIONS = ['NEW', 'LIKE_NEW', 'USED', 'GOOD', 'FAIR', 'POOR', 'REFURBISHED', 'PARTS_OR_REPAIR'];
+
+// Display labels for conditions
+const CONDITION_LABELS: Record<string, string> = {
+  'NEW': 'New',
+  'LIKE_NEW': 'Like New',
+  'USED': 'Used',
+  'GOOD': 'Good',
+  'FAIR': 'Fair',
+  'POOR': 'Poor',
+  'REFURBISHED': 'Refurbished',
+  'PARTS_OR_REPAIR': 'For Parts or Repair',
+};
 
 const normalizeToArray = (value: string | undefined, arr: string[]): string => {
   if (!value) return '';
@@ -1535,7 +1548,7 @@ const AddItemsDetailPage = () => {
                       >
                         <option value="">Condition</option>
                         {CONDITIONS.map((cond) => (
-                          <option key={cond} value={cond}>{cond}</option>
+                          <option key={cond} value={cond}>{CONDITION_LABELS[cond]}</option>
                         ))}
                       </select>
                     </div>
@@ -2130,7 +2143,7 @@ const AddItemsDetailPage = () => {
                                 className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                               >
                                 <option value="">Select condition</option>
-                                {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                                {CONDITIONS.map((c) => <option key={c} value={c}>{CONDITION_LABELS[c]}</option>)}
                               </select>
                             </div>
                           </div>
