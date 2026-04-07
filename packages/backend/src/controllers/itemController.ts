@@ -1447,6 +1447,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         tags: item.tags,
         price: item.price,
         conditionGrade: item.conditionGrade, // #64
+        category: item.category ?? undefined,
       }),
     }));
 
