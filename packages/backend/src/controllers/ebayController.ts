@@ -306,7 +306,25 @@ export const getComps = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * Map condition grade to eBay Condition ID
+ */
+function mapConditionGradeToEbayId(grade: string | null | undefined): string {
+  if (!grade) return '3000'; // Default to Used
+
+  const gradeMap: Record<string, string> = {
+    'S': '1000', // New
+    'A': '2000', // Like New
+    'B': '3000', // Good
+    'C': '5000', // Acceptable
+    'D': '6000', // Acceptable (Poor)
+  };
+
+  return gradeMap[grade.toUpperCase()] || '3000'; // Default to Used
+}
+
+/**
  * Generate eBay CSV for a sale's items
+ * Matches eBay Seller Hub bulk upload draft listings template format
  */
 function generateEbayCsv(
   items: Array<{
@@ -320,70 +338,9 @@ function generateEbayCsv(
     estimatedValue: any;
     aiSuggestedPrice: any;
   }>,
-  saleTitle: string
+  saleTitle: string,
+  includeWatermark: boolean = false
 ): string {
-  const csvHeaders = [
-    '*Action',
-    '*Category',
-    'PicURL',
-    '*Title',
-    'Description',
-    '*StartPrice',
-    '*Quantity',
-    '*ConditionID',
-    '*ListingDuration',
-    '*ReturnsAcceptedOption',
-    '*Format',
-    'SKU',
-    'ItemSpecifics:Brand',
-    'ItemSpecifics:Condition Description',
-  ];
-
-  const rows = items.map((item) => {
-    const conditionId = CONDITION_ID_MAP[item.conditionGrade || 'B'] || '5000';
-    const categoryId = EBAY_CATEGORY_MAP[item.category || 'Other'] || '99';
-
-    // Determine price: use aiSuggestedPrice > estimatedValue > price > default
-    let startPrice = 0.99;
-    if (item.aiSuggestedPrice) {
-      startPrice = Number(item.aiSuggestedPrice);
-    } else if (item.estimatedValue) {
-      startPrice = Number(item.estimatedValue);
-    } else if (item.price) {
-      startPrice = item.price;
-    }
-
-    // Get first photo URL or empty
-    const photoUrl = item.photoUrls?.[0] || '';
-
-    // Truncate title to 80 chars for eBay
-    const truncatedTitle = item.title.substring(0, 80);
-
-    // Strip description (remove any internal tags)
-    const cleanDescription = (item.description || '')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .trim()
-      .substring(0, 4000);
-
-    return [
-      'ADD',
-      categoryId,
-      photoUrl,
-      truncatedTitle,
-      cleanDescription,
-      startPrice.toFixed(2),
-      '1',
-      conditionId,
-      'GTC',
-      'ReturnsAccepted',
-      'FixedPrice',
-      `FAS-${item.id}`,
-      '',
-      '',
-    ];
-  });
-
   // Escape CSV values (quote if contains comma, quote, or newline)
   const escapeCsvValue = (value: string | number): string => {
     const str = String(value);
@@ -393,12 +350,77 @@ function generateEbayCsv(
     return str;
   };
 
-  const headerLine = csvHeaders.map(escapeCsvValue).join(',');
-  const dataLines = rows
-    .map((row) => row.map(escapeCsvValue).join(','))
-    .join('\n');
+  // eBay template header rows (required for Seller Hub bulk upload)
+  const infoRows: string[] = [
+    '#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,',
+    '#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,',
+    '"#INFO After you\'ve successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,',
+    '#INFO,,,,,,,,,,',
+  ];
 
-  return `${headerLine}\n${dataLines}`;
+  // Column header row (exact format required by eBay)
+  const headerLine = 'Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format';
+
+  const rows: string[] = [...infoRows, headerLine];
+
+  items.forEach((item) => {
+    // Extract first photo URL or use empty string
+    let photoUrl = '';
+    if (item.photoUrls && item.photoUrls.length > 0) {
+      photoUrl = item.photoUrls[0];
+      // Add watermark if requested (e.g., ?wm=finda.sale)
+      if (includeWatermark && photoUrl) {
+        const separator = photoUrl.includes('?') ? '&' : '?';
+        photoUrl = `${photoUrl}${separator}wm=finda.sale`;
+      }
+    }
+
+    // Truncate title to 80 chars for eBay
+    const truncatedTitle = item.title.substring(0, 80);
+
+    // Clean description: strip HTML tags, limit to 500 chars
+    const cleanDescription = (item.description || '')
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .trim()
+      .substring(0, 500);
+
+    // Determine price: use aiSuggestedPrice > estimatedValue > price > default
+    let price = 0.99;
+    if (item.aiSuggestedPrice) {
+      price = Number(item.aiSuggestedPrice);
+    } else if (item.estimatedValue) {
+      price = Number(item.estimatedValue);
+    } else if (item.price) {
+      price = item.price;
+    }
+
+    // Get condition ID mapping
+    const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
+
+    // Build data row in correct column order
+    const row = [
+      escapeCsvValue('Draft'), // Action
+      escapeCsvValue(item.id.substring(0, 12)), // Custom label (SKU) — use truncated ID
+      escapeCsvValue(''), // Category ID (organizer fills in)
+      escapeCsvValue(truncatedTitle), // Title
+      escapeCsvValue(''), // UPC
+      escapeCsvValue(price.toFixed(2)), // Price
+      escapeCsvValue('1'), // Quantity
+      escapeCsvValue(photoUrl), // Item photo URL
+      escapeCsvValue(conditionId), // Condition ID
+      escapeCsvValue(cleanDescription), // Description
+      escapeCsvValue('FixedPrice'), // Format
+    ];
+
+    rows.push(row.join(','));
+  });
+
+  return rows.join('\n');
 }
 
 /**
@@ -474,8 +496,9 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Generate CSV
-    const csv = generateEbayCsv(sale.items, sale.title);
+    // Generate CSV (includeWatermark = true when photoMode is not 'clean')
+    const includeWatermark = photoMode !== 'clean';
+    const csv = generateEbayCsv(sale.items, sale.title, includeWatermark);
 
     // Set response headers for file download
     const timestamp = new Date().toISOString().split('T')[0];

@@ -22,43 +22,121 @@ function escapeCsvField(value: any): string {
 }
 
 /**
- * Map condition codes to human-readable labels
+ * Map condition grades to eBay Condition IDs
+ * FindA.Sale uses letter grades (A, B, C, D, etc.) and plain text conditions
  */
-function mapCondition(condition: string | null | undefined): string {
-  if (!condition) return 'Unknown';
+function mapConditionToEbayId(condition: string | null | undefined): string {
+  if (!condition) return '3000'; // Default to Used
 
   const conditionMap: Record<string, string> = {
-    mint: 'Mint',
-    excellent: 'Excellent',
-    good: 'Good',
-    fair: 'Fair',
-    poor: 'Poor',
+    'NEW': '1000',
+    'LIKE_NEW': '2000',
+    'A': '2000', // Like New
+    'GOOD': '3000',
+    'USED': '3000',
+    'B': '3000', // Good
+    'REFURBISHED': '2500',
+    'FAIR': '6000',
+    'C': '6000', // Fair
+    'POOR': '7000',
+    'D': '7000', // Poor
+    'PARTS_OR_REPAIR': '7000',
   };
 
-  return conditionMap[condition.toLowerCase()] || 'Unknown';
+  return conditionMap[condition.toUpperCase()] || '3000'; // Default to Used
 }
 
 /**
- * eBay Format: Title, Description, Price, Condition, Category, UPC, Item Specifics
+ * eBay Draft Listings Template Format
+ * Matches eBay's official Seller Hub bulk upload template
+ * https://www.ebay.com/help/selling/listings/creating-managing-listings/upload-listings
  */
-function formatEbayCsv(items: Item[]): string {
-  const headers = ['Title', 'Description', 'Price', 'Condition', 'Category', 'UPC', 'Item Specifics'];
-  const rows: string[] = [headers.map(escapeCsvField).join(',')];
+function formatEbayCsv(items: Item[], includeWatermark: boolean = false): string {
+  // eBay template header rows (required for Seller Hub bulk upload)
+  const infoRows: string[] = [
+    '#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,',
+    '#INFO Action and Category ID are required fields. 1) Set Action to Draft 2) Please find the category ID for your listings here: https://pages.ebay.com/sellerinformation/news/categorychanges.html,,,,,,,,,,',
+    '"#INFO After you\'ve successfully uploaded your draft from the Seller Hub Reports tab, complete your drafts to active listings here: https://www.ebay.com/sh/lst/drafts",,,,,,,,,,',
+    '#INFO,,,,,,,,,,',
+  ];
+
+  // Column header row (exact format required by eBay)
+  const headerRow = 'Action(SiteID=US|Country=US|Currency=USD|Version=1193|CC=UTF-8),Custom label (SKU),Category ID,Title,UPC,Price,Quantity,Item photo URL,Condition ID,Description,Format';
+
+  const rows: string[] = [...infoRows, headerRow];
 
   items.forEach((item) => {
+    // Extract first photo URL or use empty string
+    let photoUrl = '';
+    if (item.photoUrls && item.photoUrls.length > 0) {
+      photoUrl = item.photoUrls[0];
+      // Add watermark if requested (e.g., ?wm=finda.sale)
+      if (includeWatermark && photoUrl) {
+        const separator = photoUrl.includes('?') ? '&' : '?';
+        photoUrl = `${photoUrl}${separator}wm=finda.sale`;
+      }
+    }
+
+    // Truncate title to 80 chars (eBay limit)
+    const truncatedTitle = item.title.substring(0, 80);
+
+    // Clean description: strip HTML tags, limit to 500 chars
+    const cleanDescription = (item.description || '')
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .trim()
+      .substring(0, 500);
+
+    // Format price as plain number (e.g., "19.99")
+    const formattedPrice = item.price ? parseFloat(String(item.price)).toFixed(2) : '';
+
+    // Build data row
     const row = [
-      escapeCsvField(item.title),
-      escapeCsvField(item.description || ''),
-      escapeCsvField(item.price ?? ''),
-      escapeCsvField(mapCondition(item.condition)),
-      escapeCsvField(item.category || ''),
-      escapeCsvField(item.sku || ''),
-      escapeCsvField(''), // Item Specifics placeholder
+      escapeCsvField('Draft'), // Action
+      escapeCsvField(item.sku || item.id), // Custom label (SKU)
+      escapeCsvField(''), // Category ID (organizer fills in)
+      escapeCsvField(truncatedTitle), // Title
+      escapeCsvField(''), // UPC (we don't have this)
+      escapeCsvField(formattedPrice), // Price
+      escapeCsvField('1'), // Quantity
+      escapeCsvField(photoUrl), // Item photo URL
+      escapeCsvField(mapConditionToEbayId(item.condition)), // Condition ID
+      escapeCsvField(cleanDescription), // Description
+      escapeCsvField('FixedPrice'), // Format
     ];
+
     rows.push(row.join(','));
   });
 
   return rows.join('\n');
+}
+
+/**
+ * Map condition to human-readable label for Amazon/Facebook exports
+ */
+function mapConditionLabel(condition: string | null | undefined): string {
+  if (!condition) return 'Used';
+
+  const conditionMap: Record<string, string> = {
+    'NEW': 'New',
+    'LIKE_NEW': 'Like New',
+    'A': 'Like New',
+    'GOOD': 'Good',
+    'USED': 'Used',
+    'B': 'Good',
+    'REFURBISHED': 'Refurbished',
+    'FAIR': 'Fair',
+    'C': 'Fair',
+    'POOR': 'Poor',
+    'D': 'Poor',
+    'PARTS_OR_REPAIR': 'Parts or Not Working',
+  };
+
+  return conditionMap[condition.toUpperCase()] || 'Used';
 }
 
 /**
@@ -76,7 +154,7 @@ function formatAmazonCsv(items: Item[]): string {
     const row = [
       escapeCsvField(productId),
       escapeCsvField('SellerSKU'),
-      escapeCsvField(mapCondition(item.condition)),
+      escapeCsvField(mapConditionLabel(item.condition)),
       escapeCsvField(item.price ?? ''),
       escapeCsvField(description),
       escapeCsvField(shippingValue),
@@ -101,7 +179,7 @@ function formatFacebookCsv(items: Item[]): string {
       escapeCsvField(item.title),
       escapeCsvField(item.price ?? ''),
       escapeCsvField(item.category || ''),
-      escapeCsvField(mapCondition(item.condition)),
+      escapeCsvField(mapConditionLabel(item.condition)),
       escapeCsvField(item.description || ''),
       escapeCsvField(availability),
     ];
@@ -148,10 +226,10 @@ function formatQuickBooksCsv(items: Item[]): string {
 /**
  * Main export function — routes to format-specific generators
  */
-export function generateCsvExport(items: Item[], format: ExportFormat): string {
+export function generateCsvExport(items: Item[], format: ExportFormat, includeWatermark: boolean = false): string {
   switch (format) {
     case 'ebay':
-      return formatEbayCsv(items);
+      return formatEbayCsv(items, includeWatermark);
     case 'amazon':
       return formatAmazonCsv(items);
     case 'facebook':
