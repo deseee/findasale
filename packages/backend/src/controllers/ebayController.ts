@@ -64,7 +64,7 @@ async function getEbayAccessToken(): Promise<string | null> {
 
     // Request new token
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const response = await fetch('https://api.sandbox.ebay.com/identity/v1/oauth2/token', {
+    const response = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${credentials}`,
@@ -132,7 +132,7 @@ async function getEbayPriceComps(
     const query = encodeURIComponent(title);
 
     const url =
-      `https://api.sandbox.ebay.com/buy/browse/v1/item_summary/search?` +
+      `https://api.ebay.com/buy/browse/v1/item_summary/search?` +
       `q=${query}&` +
       `filter=conditionIds:${conditionId},buyingOptions:FIXED_PRICE,price:[5..],priceCurrency:USD&` +
       `sort=endDate&` +
