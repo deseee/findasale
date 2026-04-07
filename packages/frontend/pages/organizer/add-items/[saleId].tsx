@@ -222,16 +222,6 @@ const CATEGORIES = [
 
 const CONDITIONS = ['New', 'Used', 'Refurbished', 'Parts or Repair'];
 
-// Feature #57: Rarity tiers — empty string means auto-assign from price
-const RARITY_OPTIONS = [
-  { value: '', label: 'Auto-assign from price' },
-  { value: 'COMMON', label: 'Common' },
-  { value: 'UNCOMMON', label: 'Uncommon' },
-  { value: 'RARE', label: 'Rare' },
-  { value: 'ULTRA_RARE', label: 'Ultra Rare' },
-  { value: 'LEGENDARY', label: 'Legendary' },
-];
-
 const normalizeToArray = (value: string | undefined, arr: string[]): string => {
   if (!value) return '';
   const lowerValue = value.toLowerCase();
@@ -265,7 +255,6 @@ const emptyForm = {
   price: '',
   quantity: 1,
   listingType: 'FIXED',
-  rarity: '', // Feature #57: Rarity — empty means auto-assign from price
   startingBid: '',
   reservePrice: '',
   reverseDailyDrop: '',
@@ -1662,20 +1651,6 @@ const AddItemsDetailPage = () => {
                         className="px-2 py-1.5 rounded text-sm"
                       />
                     </div>
-                  </div>
-
-                  {/* Rarity — less prominent */}
-                  <div>
-                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Rarity Badge</label>
-                    <select
-                      value={formData.rarity}
-                      onChange={(e) => setFormData({ ...formData, rarity: e.target.value })}
-                      className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
-                    >
-                      {RARITY_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
                   </div>
                 </div>
 
