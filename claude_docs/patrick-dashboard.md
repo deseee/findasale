@@ -2,67 +2,66 @@
 
 ---
 
-## What Happened This Session (S406b — QA + fixes)
+## What Happened This Session (S407 — QA sweep + pre-wires + bug fixes)
 
-Chrome QA sweep across S396–S406 features, plus two code fixes.
+Chrome QA continued, two bucket-4 pre-wires shipped, and two bugs fixed.
 
 **QA results:**
-- **eBay production** ✅ — 10 real sold listings returned ($32.39–$96.11, median $60.99). Production Browse API is live.
-- **Shopper QR code** ✅ — 188×188px QR code confirmed on shopper dashboard.
-- **POS full UI** ✅ — All 4 payment tiles render in correct order (Cash / Stripe QR / Card Reader / Invoice).
-- **Support chat gate** ✅ — "20 requests left today" gate shows for non-TEAMS users.
-- **Treasure Trails pages** ✅ — Discovery page, trail detail, and share token route all handle empty/not-found states correctly.
+- **eBay production** ✅ — Re-confirmed. 10 real sold listings ($32.39–$96.11, median $60.99).
+- **POS full walkthrough** ✅ — All 4 payment tiles (Cash/Stripe QR/Card Reader/Invoice) confirmed. Cash tile selects green on click. Reload resets cleanly.
+- **S397 Sort controls** ✅ — Name sort (Z→A), Price sort ($418→$130 descending), 4 buttons present. Toolbar visible in dark mode.
+- **Hunt Pass page** ✅ — $4.99/month, 1.5x XP, flash deals, XP matrix all confirmed. Upgrade button visible.
+- **À la carte pricing** ✅ — SIMPLE + $29 PRO + $79 TEAMS + $9.99 À la carte section all confirmed on pricing page.
 
-**Still unverified (need camera hardware or test data):**
-- ValuationWidget — needs a TEAMS user with a draft item in review
-- Treasure Trails check-in flow — no trails in DB yet; needs organizer to create one
-- Review card redesign — no draft items for any test account
-- Camera thumbnail refresh — needs real device camera
-- POS QR scan — needs real device camera
+**Bugs fixed:**
+- **P1 — Onboarding modal** — Added localStorage safety check so modal dismissal persists reliably across reloads.
+- **P2 — Edit-item black area** — Changed RapidCapture `&&` → ternary. Forces proper DOM unmount when camera closes. Fixes the scroll rendering bug on edit-item page.
 
-**Code fixes:**
-- **OG-3 survey trigger** — `HoldToPayModal.tsx` now fires `showSurvey('OG-3')` after a successful mark-sold. Deferred since S404, now done.
-- **Organizer onboarding modal P1** — Modal was appearing for organizers with existing sales because `salesData` is briefly `undefined` while loading. Added `!isLoading` guard so it only shows after load confirms 0 sales.
+**New P2 found:** The same black area on scroll appears on POS and add-items pages too (possibly all pages). The fix was only applied to edit-item this session. A broader audit + fix is needed next session.
+
+**Bucket 4 pre-wires shipped (dormant — no UI yet):**
+- `estateId String?` added to Organizer schema — Estate Planning Toolkit ready to activate
+- QuickBooks CSV export format added to backend — activate by adding "QuickBooks" to export UI
 
 ---
 
-## Push Block
-
-Run this now to push today's fixes:
+## Push Block (S407)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/HoldToPayModal.tsx
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260407_add_estate_id_to_organizer/migration.sql
+git add packages/backend/src/services/exportService.ts
+git add packages/backend/src/controllers/csvExportController.ts
 git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S406 wrap: OG-3 survey trigger + onboarding modal loading fix + QA sweep"
+git commit -m "S407: P1 modal fix, P2 layout fix, QuickBooks CSV pre-wire, estateId pre-wire"
 .\push.ps1
 ```
 
 ---
 
-## Pending Migrations (if not already run)
+## Migration Required (S407)
 
-If you haven't run these yet, run them in order:
+Run after pushing:
 
-**S399** — FeedbackSuppression table:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
-(Run once — covers S399, S404, S405 migrations in sequence)
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **Run push block above**
+- [ ] **Run push block above** (S407 changes)
+- [ ] **Run S407 migration** (estateId on Organizer)
 - [ ] **Complete eBay keyset activation** — developer.ebay.com → Alerts & Notifications → endpoint `https://backend-production-153c9.up.railway.app/api/ebay/account-deletion` → token `findasale-ebay-verify-2026-primary` → Save
-- [ ] **Run pending migrations** if not done (S399/S404/S405)
-- [ ] **Create Google Places API key** — console.cloud.google.com → Maps Platform → Places API → Create key → Add to Railway as `GOOGLE_PLACES_API_KEY`
+- [ ] **Create Google Places API key** — console.cloud.google.com → Maps Platform → Places API → Add to Railway as `GOOGLE_PLACES_API_KEY`
 - [ ] **Set Railway env var:** `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`
 - [ ] **Stripe seat product** — $20/mo team member seat needs a Stripe product created
 
@@ -70,27 +69,28 @@ npx prisma generate
 
 ## What's Blocked Until Real Camera / Test Data
 
-These features are code-complete but can't be verified without:
-- A real estate sale item captured via camera → draft pipeline → review card
-- A trail created by an organizer → shopper check-in flow
-- Real device for camera scan (POS QR, camera thumbnail refresh)
+- ValuationWidget — TEAMS user with a draft item in review page
+- Treasure Trails check-in — organizer must create a trail first
+- Review card redesign — need camera-captured item in DRAFT state
+- Camera thumbnail refresh — real device required
+- POS QR scan — real device required
 
 ---
 
 ## Brand Drift — Still Unresolved
 
-~20 D-001 violations remain. `SharePromoteModal.tsx` + `sales/[id].tsx` still hardcode "estate sale" in all social share templates. One dev dispatch clears it.
+~20 D-001 violations remain. `SharePromoteModal.tsx` + `sales/[id].tsx` hardcode "estate sale" in social share templates.
 
 **Full findings:** `claude_docs/audits/brand-drift-2026-04-07.md`
 
 ---
 
-## Next Session (S407)
+## Next Session (S408)
 
-1. Push this session's changes (block above)
-2. Clear unverified queue items that can be done without camera hardware (ValuationWidget with TEAMS user, Treasure Trails after creating a trail)
-3. S397 sort/toolbar QA — sort by Name/Price/Status/Date on add-items page
-4. Full POS walkthrough — 4 payment modes
-5. Brand drift fix dispatch — SharePromoteModal + meta tags (one dev agent, ~16 copy changes)
+1. Push S407 changes + run migration (block above)
+2. Post-push Chrome verify: modal dismiss persists, edit-item black area gone
+3. Dispatch findasale-dev: broader black-area scroll fix (POS + add-items + any other affected pages)
+4. QA backlog: shopper referrals, haul posts, S396 rapidfire
+5. Bucket 4 remaining: Affiliate Program arch decision, Audit Library design
 
-*Updated S406b — 2026-04-07*
+*Updated S407 — 2026-04-07*

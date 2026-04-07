@@ -7,6 +7,22 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S407 COMPLETE (2026-04-07):** Chrome QA sweep (POS/sort/Hunt Pass/À la carte), bucket 4 pre-wires (estateId + QuickBooks CSV), P1 modal fix + P2 layout fix
+
+**S407 Summary:**
+
+Five areas completed. (1) **eBay production re-confirmed:** 10 real sold listings ($32.39–$96.11, median $60.99) returned from api.ebay.com — consistent with S406 confirmation. (2) **Chrome QA sweep:** POS page ✅ PASS (all 4 tiles Cash/Stripe QR/Card Reader/Invoice confirmed, Cash tile highlights green on click); S397 sort/toolbar ✅ PASS (Name Z→A, Price $418→$130 descending, 4 sort buttons present, toolbar visible in dark mode); Hunt Pass ✅ PASS ($4.99/month, 1.5x XP, flash deals, XP matrix all confirmed); À la carte pricing ✅ PASS (SIMPLE + $29 PRO + $79 TEAMS + $9.99 À la carte all confirmed). (3) **Bucket 4 pre-wires shipped:** `estateId String?` added to Organizer model + migration `20260407_add_estate_id_to_organizer` (dormant); QuickBooks CSV export format added to exportService.ts + csvExportController.ts (dormant until UI wired). (4) **P1 fix:** Onboarding modal localStorage safety guard added to dashboard.tsx (renders correctly during SSR + CSR). (5) **P2 fix:** edit-item RapidCapture `&&` → ternary — forces proper unmount, should fix black area scroll bug on edit-item page. (6) **New P2 found:** Black area on scroll affects POS and add-items pages too (same root cause — needs ternary fix on those pages as well).
+
+**S407 Files Changed (6 files, 1 new dir):**
+- `packages/database/prisma/schema.prisma` — estateId pre-wire on Organizer
+- `packages/database/prisma/migrations/20260407_add_estate_id_to_organizer/migration.sql` — NEW
+- `packages/backend/src/services/exportService.ts` — QuickBooks CSV format
+- `packages/backend/src/controllers/csvExportController.ts` — quickbooks format validation
+- `packages/frontend/pages/organizer/dashboard.tsx` — P1 localStorage safety guard
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — P2 ternary fix for RapidCapture
+
+**S407 migration required:** `20260407_add_estate_id_to_organizer` — Patrick must run Railway migration after push.
+
 **S406 COMPLETE (2026-04-07):** QA sweep (S396–S406 features), OG-3 survey trigger wired, onboarding modal P1 fix
 
 **S406 QA Session Summary (S406b):**
@@ -1453,23 +1469,24 @@ Files changed S361:
 
 ---
 
-## Next Session (S407)
+## Next Session (S408)
 
-### Patrick Actions First (push this session's changes)
+### Patrick Actions First (push S407 changes)
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/HoldToPayModal.tsx
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260407_add_estate_id_to_organizer/migration.sql
+git add packages/backend/src/services/exportService.ts
+git add packages/backend/src/controllers/csvExportController.ts
 git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S406 wrap: OG-3 survey trigger + onboarding modal loading fix + QA sweep"
+git commit -m "S407: P1 modal fix, P2 layout fix, QuickBooks CSV pre-wire, estateId pre-wire"
 .\push.ps1
 ```
 
-**Pending migrations (if not already run):**
-- S399: FeedbackSuppression table
-- S404: `20260406_add_treasure_trails`
-- S405: `20260406_add_pos_payment_request`
+**Then run Railway migration for estateId:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -1477,26 +1494,33 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
+**Migrations: ALL CURRENT as of S407 (2026-04-07)**
+- S399 FeedbackSuppression ✅ deployed
+- S404 `20260406_add_treasure_trails` ✅ deployed
+- S405 `20260406_add_pos_payment_request` ✅ deployed
+- S407 `20260407_add_estate_id_to_organizer` — PENDING (Patrick must run after push)
+
 **Google Places API key still needed:** console.cloud.google.com → Maps Platform → Places API. Set $200/mo billing cap. Add to Railway as `GOOGLE_PLACES_API_KEY`.
 
-### S407 Priority 1 — QA carry-forward (camera hardware items need real device)
-Items in Blocked/Unverified Queue that can be cleared next session:
-- ValuationWidget — TEAMS user with draft item needed
-- Treasure Trails check-in — create a trail first, then test
-- Review card redesign — camera-capture a new item to get a DRAFT
-- Camera thumbnail refresh — real camera hardware
-- POS QR scan — real camera hardware
+### S408 Priority 1 — Post-push Chrome verification
+After Patrick pushes S407:
+- user2 organizer dashboard: confirm onboarding modal dismisses and stays dismissed on reload
+- edit-item page: confirm no black area at 1168×1036 viewport after ternary fix
 
-### S407 Priority 2 — Roadmap work
-- S397 sort/toolbar QA (Chrome — sort by Name/Price/Status/Date on add-items page)
-- S396 rapidfire hold/photo limit/onboarding modal QA
-- Full POS walkthrough: 4 payment modes (Cash, Stripe QR, Card Reader, Invoice)
-- eBay production: Patrick's keyset validation (Alerts & Notifications → Save) should now be complete — verify Browse API is returning real listings
+### S408 Priority 2 — P2 dispatch: black area on scroll (broader fix)
+Black area on scroll confirmed on POS, add-items, AND Hunt Pass pages (not just edit-item). Root cause may be broader than RapidCapture — investigate whether all pages are affected or only those with camera components. Dispatch findasale-dev to audit and apply ternary fix where needed.
+
+### S408 Priority 3 — QA carry-forward
+- S396 rapidfire hold/photo limit QA
+- Shopper referrals (#7/#265) — `/shopper/referrals`
+- Haul Posts (#277) — `/shopper/haul-posts`
+- Organizer dashboard widgets QA
+- Camera hardware items (UNVERIFIED queue) — require real device
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app
 - Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
-- eBay: production credentials live in Railway. Browse API returning real listings (verified S406b).
+- eBay: production credentials live in Railway. Browse API returning real listings (verified S406b + S407).
 - Backend route mounts: `app.use('/api/organizers', organizerRoutes)` and `app.use('/api/sales', saleRoutes)` and `app.use('/api/trails', trailRoutes)`
 
 ## Next Session (S406) — COMPLETE — see S406b above
