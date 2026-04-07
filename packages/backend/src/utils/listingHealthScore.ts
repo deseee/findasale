@@ -125,6 +125,14 @@ export function computeHealthScore(item: ItemDraft): HealthResult {
     score = Math.min(score, 69);
   }
 
+  // Hard gate: missing category or conditionGrade caps at nudge (same pattern as price)
+  // Forces items without these fields to show Improvements section
+  const hasCategory = breakdown.category && breakdown.category > 0;
+  const hasCondition = breakdown.conditionGrade !== undefined && breakdown.conditionGrade > 0;
+  if (!hasCategory || !hasCondition) {
+    score = Math.min(score, 69);
+  }
+
   // Determine grade
   let grade: 'blocked' | 'nudge' | 'clear';
   if (score < 40) {
