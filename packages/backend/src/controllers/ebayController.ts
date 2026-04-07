@@ -1,4 +1,5 @@
-import { Response } from 'express';
+import crypto from 'crypto';
+import express, { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 
@@ -487,4 +488,42 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
     console.error('[eBay] Export error:', error);
     res.status(500).json({ message: 'Failed to generate CSV export' });
   }
+};
+
+/**
+ * GET /api/ebay/account-deletion
+ * eBay marketplace account deletion verification handshake
+ * Required for eBay production keyset GDPR compliance
+ */
+export const handleEbayAccountDeletionVerification = (req: express.Request, res: Response): void => {
+  const challengeCode = req.query.challenge_code as string;
+  if (!challengeCode) {
+    res.status(400).json({ error: 'challenge_code required' });
+    return;
+  }
+
+  const verificationToken = process.env.EBAY_VERIFICATION_TOKEN;
+  const endpointUrl = process.env.EBAY_DELETION_ENDPOINT_URL;
+
+  if (!verificationToken || !endpointUrl) {
+    console.error('[eBay] EBAY_VERIFICATION_TOKEN or EBAY_DELETION_ENDPOINT_URL not configured');
+    res.status(500).json({ error: 'Endpoint not configured' });
+    return;
+  }
+
+  const hash = crypto
+    .createHash('sha256')
+    .update(challengeCode + verificationToken + endpointUrl)
+    .digest('hex');
+
+  res.json({ challengeResponse: hash });
+};
+
+/**
+ * POST /api/ebay/account-deletion
+ * eBay marketplace account deletion notification
+ * FindA.Sale does not store eBay member data — acknowledge and discard
+ */
+export const handleEbayAccountDeletion = (_req: express.Request, res: Response): void => {
+  res.status(200).json({});
 };

@@ -154,6 +154,7 @@ import supportRoutes from './routes/support';                  // #128: Automate
 import posTiersRoutes from './routes/posTiers';               // POS Tier Status tracking
 import settlementRoutes from './routes/settlement';           // Feature #228: Settlement Hub
 import posRoutes from './routes/pos';                         // POS Upgrade: Open Cart & Payment Links
+import ebayRoutes from './routes/ebay';                       // eBay Marketplace Account Deletion
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -473,6 +474,7 @@ app.use('/api/bids', bidsRoutes);                                      // Shoppe
 app.use('/api/xp', xpController);                                      // Phase 2a: Explorer's Guild XP system
 app.use('/api/support', supportRoutes);                                 // #128: Automated Support Stack
 app.use('/api/sales', settlementRoutes);                                   // Feature #228: Settlement Hub
+app.use('/api/ebay', ebayRoutes);                                          // eBay Marketplace Account Deletion
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
