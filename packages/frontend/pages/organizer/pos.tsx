@@ -1009,12 +1009,12 @@ export default function POSPage() {
 
       {/* Linked shopper account banner */}
       {linkedShopperData && (
-        <div className="mb-4 p-3 rounded-xl bg-sage-50 dark:bg-sage-900/30 border border-sage-300 dark:border-sage-700 flex items-center justify-between gap-3">
+        <div className="mb-4 p-3 rounded-xl bg-sage-50 dark:bg-gray-800 border border-sage-300 dark:border-gray-600 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg">👤</span>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-sage-900 dark:text-sage-100 truncate">{linkedShopperData.name}</p>
-              <p className="text-xs text-sage-600 dark:text-sage-400">
+              <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">{linkedShopperData.name}</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400">
                 {linkedShopperData.holds?.length > 0
                   ? `${linkedShopperData.holds.length} active hold${linkedShopperData.holds.length !== 1 ? 's' : ''}`
                   : 'No active holds — account linked for XP'}
@@ -1023,7 +1023,7 @@ export default function POSPage() {
           </div>
           <button
             onClick={() => setLinkedShopperData(null)}
-            className="text-sage-400 hover:text-sage-600 dark:hover:text-sage-200 text-xs shrink-0"
+            className="text-warm-400 hover:text-warm-600 dark:hover:text-warm-200 text-xs shrink-0"
             title="Unlink account"
           >
             ✕
