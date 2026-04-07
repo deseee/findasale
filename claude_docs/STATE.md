@@ -7,7 +7,31 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S406 COMPLETE (2026-04-07):** Condition field standardization, health score category fix, ValuationWidget auth+dark mode, eBay production switch, deletion endpoint
+**S406 COMPLETE (2026-04-07):** QA sweep (S396–S406 features), OG-3 survey trigger wired, onboarding modal P1 fix
+
+**S406 QA Session Summary (S406b):**
+
+Chrome QA sweep + 2 code fixes shipped.
+
+**QA Results:**
+- eBay production API: ✅ PASS — 10 sold listings returned ($32.39–$96.11 range, median $60.99), production Browse API confirmed live
+- Condition field (S406): ✅ PASS — confirmed prior session
+- Shopper QR code (S405): ✅ PASS — 188×188px PNG QR data URI confirmed on shopper dashboard
+- POS full UI (S405): ✅ PASS — all 4 payment tiles render, correct order (Cash/Stripe QR/Card Reader/Invoice)
+- Support chat gate (S405): ✅ PASS — "20 requests left today" gate visible for non-TEAMS users
+- Treasure Trails routes (S404): ✅ PASS — /trails empty state, /trails/[id] "Trail not found" + back link, /trail/[shareToken] "Trail Not Found" all correct
+- ValuationWidget (S406): UNVERIFIED — no draft items available for user2; requires TEAMS user with item in review page
+- Treasure Trails check-in (S404): UNVERIFIED — no trail data in DB; requires organizer to create a trail first
+- Review card redesign (S399): UNVERIFIED — user2 has no draft items (all 11 are Live/published)
+- Camera thumbnail refresh (S400/S401): UNVERIFIED — requires real camera hardware
+- POS camera/QR scan (S405): UNVERIFIED — requires camera hardware
+
+**Code fixes this session:**
+- `HoldToPayModal.tsx` — OG-3 survey trigger wired after mark-sold success
+- `organizer/dashboard.tsx` — P1 onboarding modal loading race fixed (`!isLoading` guard)
+- TypeScript check: zero errors
+
+**S406 (dev session) COMPLETE (2026-04-07):** Condition field standardization, health score category fix, ValuationWidget auth+dark mode, eBay production switch, deletion endpoint
 
 **S406 Summary:**
 
@@ -1328,6 +1352,11 @@ Preserved: `loot-log/[purchaseId].tsx` (reused as detail page), `loot-log/public
 | #143 AI confidence — Camera mode | cloudAIService.ts fix is code-correct; processRapidDraft passes aiConfidence through. Can't test without real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" or similar. | S314 |
 | Single-item publish fix | S326 code fix deployed. S327 confirmed API call fires but no DRAFT items exist to test the button. Manual Entry creates AVAILABLE items, skipping draft pipeline. | Camera-capture an item → go to Review & Publish → click Publish on single item → confirm status changes + toast. | S326/S327 |
 | Mark Sold → POS/Invoice evolution | Patrick wants markSold to become POS cart item (POS organizers) or Stripe checkout link (non-POS organizers). | Architect spec needed — touches POS, Stripe, holds, notifications, checkout flow. Future session. | S339 |
+| ValuationWidget (S406) | No draft items in user2's sales (all 11 are Live). TEAMS tier required. | TEAMS organizer with draft item → Review page → confirm ValuationWidget renders with auth fix + dark mode. | S406 |
+| Treasure Trails check-in (S404) | No trail data in DB. | Organizer creates a trail → shopper navigates to /trails/[id] → checks in at a stop → confirm XP awarded. | S406 |
+| Review card redesign (S399) | No draft items for any test organizer. | Camera-capture an item → go to Review page → confirm new card redesign (Ready/Needs Review/Cannot Publish) renders. | S406 |
+| Camera thumbnail refresh (S400/S401) | Requires real camera hardware in Chrome MCP. | Capture photo in rapidfire → confirm thumbnail strip updates live without page reload. | S406 |
+| POS camera/QR scan (S405) | Camera hardware required for scan flow. | Organizer opens POS → taps QR tile → camera opens → scan item sticker → confirm added to cart. | S406 |
 
 **S326 COMPLETE (2026-03-28):** 3 bugs fixed + 1 test item cleanup. (1) **P1 Buyer Preview placeholder — ROOT CAUSE FIXED:** `buildCloudinaryUrl()` in review.tsx was replacing `:` with `_` in aspect ratio transforms (`ar_4_3` → Cloudinary rejects). Removed the `.replace(':', '_')` so it sends correct `ar_4:3`. Chrome-verified: Buyer Preview grid now shows real Cloudinary photos (ss_7201mwej2, ss_6354i4qpv). (2) **Face-detection blob URL fix (secondary):** `handleFaceUploadAnyway` in [saleId].tsx was storing blob URLs instead of Cloudinary URLs returned by API. Now stores `res.data.photoUrl`. (3) **P1 Single-item Publish button — FIXED:** `handlePublishItem` was sending `draftStatus` via generic PUT `/items/:id`, but backend `updateItem` didn't include `draftStatus` in destructured fields — silently dropped. Fix: frontend now uses dedicated `POST /items/:itemId/publish` endpoint for publishing, generic PUT for unpublishing (with `draftStatus` added to backend's accepted fields). Also relaxed publish gate to allow DRAFT + PENDING_REVIEW items (was PENDING_REVIEW-only). NEEDS CHROME VERIFY after deploy. (4) **P2 Nav search — already working:** S322/S323 fixed this. Desktop has no nav search (mobile-only) — logged as P3 gap. (5) **Test item cleanup:** Deleted 2 of 3 test lighters per Patrick, kept 1. Sale now has 14 items. Files: review.tsx, [saleId].tsx, itemController.ts. Pushblock provided.
 
@@ -1424,39 +1453,53 @@ Files changed S361:
 
 ---
 
-## Next Session (S406)
+## Next Session (S407)
 
-### Patrick Actions First
-1. Run S405 migration (POSPaymentRequest):
+### Patrick Actions First (push this session's changes)
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/HoldToPayModal.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S406 wrap: OG-3 survey trigger + onboarding modal loading fix + QA sweep"
+.\push.ps1
+```
+
+**Pending migrations (if not already run):**
+- S399: FeedbackSuppression table
+- S404: `20260406_add_treasure_trails`
+- S405: `20260406_add_pos_payment_request`
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
-2. Create Google Places API key: console.cloud.google.com → Maps Platform → Places API. Set $200/mo billing cap. Add to Railway as `GOOGLE_PLACES_API_KEY`.
 
-### S406 Priority 1 — Vercel smoke test + Chrome QA sweep (long-deferred)
-- Confirm Vercel is green (sitemap fix was last push — verify deploy succeeded)
-- S402: Price Research Panel, health breakdown checklist, eBay sandbox button
-- S398 dashboard, S399 review card, S400–401 camera fixes
-- S404: Treasure Trails trail discovery page + check-in flow basic smoke test
-- S405: Shopper QR on dashboard, POS shopper QR scan + banner, support chat gate for admin
-- QA carry-forward: S397 sort/toolbar/dark mode, S396 rapidfire hold/photo limit/onboarding modal, full POS walkthrough (4 payment modes)
-- Chrome concurrency rule: dispatch QA agents SEQUENTIALLY (one at a time, shared browser)
+**Google Places API key still needed:** console.cloud.google.com → Maps Platform → Places API. Set $200/mo billing cap. Add to Railway as `GOOGLE_PLACES_API_KEY`.
 
-### S406 Priority 2 — OG-3 feedback trigger (deferred from S404)
-Wire `showSurvey('OG-3')` after mark-sold. Find where mark-sold completes in organizer flow. See `claude_docs/FEEDBACK_DEV_QUICKSTART.md`.
+### S407 Priority 1 — QA carry-forward (camera hardware items need real device)
+Items in Blocked/Unverified Queue that can be cleared next session:
+- ValuationWidget — TEAMS user with draft item needed
+- Treasure Trails check-in — create a trail first, then test
+- Review card redesign — camera-capture a new item to get a DRAFT
+- Camera thumbnail refresh — real camera hardware
+- POS QR scan — real camera hardware
+
+### S407 Priority 2 — Roadmap work
+- S397 sort/toolbar QA (Chrome — sort by Name/Price/Status/Date on add-items page)
+- S396 rapidfire hold/photo limit/onboarding modal QA
+- Full POS walkthrough: 4 payment modes (Cash, Stripe QR, Card Reader, Invoice)
+- eBay production: Patrick's keyset validation (Alerts & Notifications → Save) should now be complete — verify Browse API is returning real listings
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app
 - Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
-- eBay: sandbox credentials live in Railway. Swap to api.ebay.com + production creds when ready.
+- eBay: production credentials live in Railway. Browse API returning real listings (verified S406b).
 - Backend route mounts: `app.use('/api/organizers', organizerRoutes)` and `app.use('/api/sales', saleRoutes)` and `app.use('/api/trails', trailRoutes)`
-- **S399 migration still required** if not run: FeedbackSuppression table
-- **S404 migration required:** `20260406_add_treasure_trails`
-- **S405 migration required:** `20260406_add_pos_payment_request` (POSPaymentRequest)
-- Google Places API: Patrick needs to create key (see Patrick Actions above)
+
+## Next Session (S406) — COMPLETE — see S406b above
 
 ---
 
