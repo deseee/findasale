@@ -14,6 +14,7 @@ import {
   markSoldAndCreateInvoice,
   getInvoiceDetails,
   getMyInvoices,
+  getMyHoldsFull,
   getItemInvoiceStatus,
   releaseInvoice,
 } from '../controllers/reservationController';
@@ -27,7 +28,8 @@ router.get('/invoice-status/item/:itemId', getItemInvoiceStatus); // unauthentic
 // All other reservation routes require auth
 router.use(authenticate);
 
-// Shopper invoice routes
+// Shopper holds and invoice routes
+router.get('/my-holds-full', getMyHoldsFull);                  // Shopper: full holds detail for CartDrawer
 router.get('/my-invoices', getMyInvoices);                     // Shopper: list their pending invoices
 
 // Invoice detail route (auth required: shopper or organizer)

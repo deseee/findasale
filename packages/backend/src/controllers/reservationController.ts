@@ -1250,3 +1250,62 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// GET /api/reservations/my-holds-full — shopper's active holds with full item/sale detail
+// Auth: authenticated shopper (JWT)
+// Used by CartDrawer to poll every 30 seconds for hold status updates
+export const getMyHoldsFull = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const holds = await prisma.itemReservation.findMany({
+      where: {
+        userId: req.user.id,
+        status: { in: ['PENDING', 'CONFIRMED'] }, // Only active holds
+      },
+      include: {
+        item: {
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            photoUrls: true,
+            status: true,
+            sale: {
+              select: {
+                id: true,
+                title: true,
+                startDate: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Transform response to match CartDrawer interface
+    const response = holds.map(hold => ({
+      id: hold.id,
+      expiresAt: hold.expiresAt,
+      createdAt: hold.createdAt,
+      status: hold.status,
+      item: {
+        id: hold.item.id,
+        title: hold.item.title,
+        price: hold.item.price,
+        photoUrls: hold.item.photoUrls,
+        status: hold.item.status,
+        sale: {
+          id: hold.item.sale.id,
+          title: hold.item.sale.title,
+        },
+      },
+    }));
+
+    res.json(response);
+  } catch (error: any) {
+    console.error('[reservations] getMyHoldsFull error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
