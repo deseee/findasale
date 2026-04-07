@@ -90,7 +90,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is Hunt Pass and how do I earn points?',
     answer: (
       <>
-        Hunt Pass is the fun and competitive side of the Explorers Guild. For $4.99/month, you get 1.5x XP multiplier on all actions, 6-hour early access to rare and legendary items before the general public, seasonal challenges with exclusive cosmetics, and priority trail recommendations. Hunt Pass also unlocks Treasure Trails and early flash deal notifications.
+        Hunt Pass is the fun and competitive side of the Explorers Guild. For $4.99/month, you get 1.5x XP multiplier on all actions, 6-hour early access to Rare items and 12-hour early access to Legendary items before the general public, seasonal challenges with exclusive cosmetics, and priority trail recommendations. Hunt Pass also unlocks Treasure Trails and early flash deal notifications.
       </>
     ),
   },
@@ -99,22 +99,6 @@ const shopperFAQs: FAQItem[] = [
     answer: (
       <>
         You earn XP from a wide range of activities. Main sources include: purchasing items ($1 spent = 1 XP), visiting sales (5 XP per visit, max 2 per day), posting haul reviews with photos (10 XP + 5 bonus for likes), completing holds (7 XP), and seasonal challenges. You also earn XP from Treasure Trails and community activities like crowd appraisals, referrals, and streak bonuses. Visit your <strong>Account → Loyalty</strong> page to see all available actions and track your progress.
-      </>
-    ),
-  },
-  {
-    question: 'What are Treasure Trails?',
-    answer: (
-      <>
-        Treasure Trails are curated multi-stop local experiences anchored by a FindA.Sale event. A trail might combine an estate sale, a vintage resale shop, a scenic landmark, and a café into one adventure. You check in at each stop, earn XP per location (5 for sales, 3 for shops, 2 for cafes and landmarks), and bonus XP for completing the entire route. Hunt Pass subscribers get early access to featured trails and can create their own to earn XP every time someone completes one.
-      </>
-    ),
-  },
-  {
-    question: 'Can I spend my XP?',
-    answer: (
-      <>
-        Yes! You can redeem XP for rewards in the Explorer's Guild. Options include: rarity boosts (15 XP for +2% legendary odds), Hunt Pass discounts (50 XP for $1 off), custom cosmetics, visibility boosts for your hauls, and more. You cannot drop below your current rank's XP floor — spending is protected so you always retain your rank. Visit <strong>Account → Loyalty</strong> to see all redemption options.
       </>
     ),
   },
@@ -184,14 +168,6 @@ const shopperFAQs: FAQItem[] = [
       <>
         Each season (Spring, Summer, Fall, Winter) brings themed challenges — like visiting a certain number of sales or collecting items in specific categories. 
         Complete challenges to earn bonus XP and exclusive seasonal badges.
-      </>
-    ),
-  },
-  {
-    question: 'What is the Collector Passport?',
-    answer: (
-      <>
-        Your Collector Passport is your personal profile showing your Explorer rank, earned badges, specialties, and collection highlights. It's your identity in the FindA.Sale community.
       </>
     ),
   },
@@ -302,14 +278,6 @@ const shopperFAQs: FAQItem[] = [
           <li><strong>Sage (5,000 XP)</strong> — 15% Hunt Pass discount, unlimited early access, 48-hour advance sale alerts, ability to publish Sourcebook hunting guides</li>
           <li><strong>Grandmaster (12,000 XP)</strong> — Permanent free Hunt Pass, all Sage perks, priority support</li>
         </ul>
-      </>
-    ),
-  },
-  {
-    question: 'What is the Collector Passport?',
-    answer: (
-      <>
-        Your Collector Passport is your public identity on FindA.Sale — it shows your Explorer rank, specialty badges, earned achievements, and collection highlights. Share it with other collectors or use it as your profile when messaging organizers.
       </>
     ),
   },
@@ -494,7 +462,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'How do I manage holds and reservations?',
     answer: (
       <>
-        Enable holds in your sale settings under <strong>Allow Holds</strong>. Once enabled, shoppers can request holds from any item detail page. You'll receive a notification for each request — you can accept or decline. Accepted holds are marked on the listing and hold the item for a configurable window (default: 24 hours after sale opens). Manage all active holds from your sale's <strong>Holds</strong> tab. You can cancel any hold at any time.
+        Enable holds in your sale settings under <strong>Allow Holds</strong>. Once enabled, shoppers can request holds from any item detail page. You'll receive a notification for each request — you can accept or decline. Accepted holds are marked on the listing and the hold window is determined by the shopper's Explorer Rank (30–90 minutes depending on rank). Manage all active holds from your sale's <strong>Holds</strong> tab. You can cancel any hold at any time.
       </>
     ),
   },
