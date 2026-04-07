@@ -73,6 +73,11 @@ Write-without-read is a rule violation, not a guideline.
 stops: (a) needs Patrick's input, (b) ambiguous failure, (c) batch complete.
 Do not ask "shall I continue?" mid-batch.
 
+**Roadmap update gate (two triggers only):**
+1. **Session ships a new feature** → add or update the roadmap entry at wrap. Include `claude_docs/strategy/roadmap.md` in the push block.
+2. **Chrome QA confirms a feature** → update the roadmap Chrome QA column immediately (not deferred to wrap). Include roadmap.md in that push block.
+Pure planning, research, doc-only, or small bug-fix sessions with no corresponding roadmap entry do NOT require a roadmap update.
+
 **Environment gate:** Before any shell, PowerShell, or Prisma command — STOP. Verify dev-environment skill is loaded this session. If not, invoke Skill('dev-environment') immediately. Do not proceed without it active.
 
 **Never tell Patrick to manually resolve git issues.** Use Read + Edit + MCP push to fix merge conflicts, stale branches, and rebase errors yourself. Exception: genuine repo corruption requiring `git init`.
