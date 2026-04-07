@@ -431,7 +431,7 @@ const OrganizerDashboard = () => {
       </Head>
 
       {/* Onboarding Modal — 3-screen intro for new organizers */}
-      {showOnboardingModal && dashboardState === 'new' && (
+      {showOnboardingModal && !isLoading && dashboardState === 'new' && (
         <OrganizerOnboardingModal onDismiss={() => setShowOnboardingModal(false)} />
       )}
 

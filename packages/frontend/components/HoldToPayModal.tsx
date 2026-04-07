@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import { useFeedbackSurvey } from '../hooks/useFeedbackSurvey';
 
 interface HoldToPayModalProps {
   itemId: string;
@@ -50,6 +51,7 @@ export default function HoldToPayModal({
   isAuction = false,
 }: HoldToPayModalProps) {
   const { showToast } = useToast();
+  const { showSurvey } = useFeedbackSurvey();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,6 +75,7 @@ export default function HoldToPayModal({
 
       onClose();
       onSuccess?.();
+      showSurvey('OG-3').catch(() => {});
     } catch (err: any) {
       const message =
         err.response?.data?.message || 'Failed to send invoice. Please try again.';
