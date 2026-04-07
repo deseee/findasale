@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import express, { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -311,12 +312,14 @@ export const getComps = async (req: AuthRequest, res: Response) => {
 function mapConditionGradeToEbayId(grade: string | null | undefined): string {
   if (!grade) return '3000'; // Default to Used
 
+  // Universal eBay condition IDs — valid across all categories
+  // (2000/4000/5000/6000 are category-specific and rejected when category is unknown)
   const gradeMap: Record<string, string> = {
     'S': '1000', // New
-    'A': '2000', // Like New
-    'B': '3000', // Good
-    'C': '5000', // Acceptable
-    'D': '6000', // Acceptable (Poor)
+    'A': '1000', // Like New → New (safest universal for eBay)
+    'B': '3000', // Good → Used
+    'C': '3000', // Fair → Used
+    'D': '7000', // Poor → For parts or not working
   };
 
   return gradeMap[grade.toUpperCase()] || '3000'; // Default to Used
@@ -368,10 +371,8 @@ function generateEbayCsv(
     let photoUrl = '';
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
-      // Add watermark if requested (e.g., ?wm=finda.sale)
       if (includeWatermark && photoUrl) {
-        const separator = photoUrl.includes('?') ? '&' : '?';
-        photoUrl = `${photoUrl}${separator}wm=finda.sale`;
+        photoUrl = getWatermarkedUrl(photoUrl);
       }
     }
 
@@ -406,7 +407,7 @@ function generateEbayCsv(
     const row = [
       escapeCsvValue('Draft'), // Action
       escapeCsvValue(item.id.substring(0, 12)), // Custom label (SKU) — use truncated ID
-      escapeCsvValue(''), // Category ID (organizer fills in)
+      escapeCsvValue(EBAY_CATEGORY_MAP[item.category || ''] || '1'), // Category ID (default: Collectibles)
       escapeCsvValue(truncatedTitle), // Title
       escapeCsvValue(''), // UPC
       escapeCsvValue(price.toFixed(2)), // Price
