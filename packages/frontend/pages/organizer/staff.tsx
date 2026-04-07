@@ -1,7 +1,18 @@
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useAuth } from '../../components/AuthContext';
 
 export default function OrganizerStaffPage() {
+  const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
+
+  if (authLoading) return null;
+  if (!user || !user.roles?.includes('ORGANIZER')) {
+    router.push('/login');
+    return null;
+  }
+
   return (
     <>
       <Head>

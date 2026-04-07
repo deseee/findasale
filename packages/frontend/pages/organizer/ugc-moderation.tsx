@@ -1,12 +1,22 @@
 import React, { useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useAuth } from '../../components/AuthContext';
 import { usePendingModerationPhotos, useModeratePhoto } from '../../hooks/useUGCPhotos';
 
 export default function UGCModerationPage() {
+  const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const { data: photos = [], isLoading, error } = usePendingModerationPhotos();
   const moderateMutation = useModeratePhoto();
   const [actionPhotoId, setActionPhotoId] = useState<number | null>(null);
+
+  if (authLoading) return null;
+  if (!user || !user.roles?.includes('ORGANIZER')) {
+    router.push('/login');
+    return null;
+  }
 
   const handleApprove = async (photoId: number) => {
     try {

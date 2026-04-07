@@ -13,14 +13,21 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 Five work items. (1) **Social platform respec:** TikTok, Pinterest, Threads added to `socialPostController.ts` + `SocialPostGenerator.tsx`. Platform-specific Cloudinary crops (Pinterest 2:3, TikTok 9:16, Instagram 4:5). Photos returned tier-aware watermarked. Facebook CSV gets `image_url` column. Amazon already dormant. Roadmap #27a: UNTESTED → Shipped S410. (2) **eBay 400 fix (two parts):** `ebayController.ts` `generateEbayCsv` was using category-specific condition IDs — changed to universal (S/A→1000, B/C→3000, D→7000). Category ID now populated from `EBAY_CATEGORY_MAP` (default: Collectibles/1). `exportService.ts` `formatEbayCsv` same condition string fix. (3) **Watermark font fix (critical):** `cloudinaryWatermark.ts` used `Montserrat_bold_18` — not configured in Cloudinary account. Every watermarked URL was returning 400 since launch. Confirmed via live URL test. Fixed to `Arial_30, co_white, o_80` — 200 verified. All platform watermarks now working. (4) **Railway TS hotfix:** `socialPostController.ts` missing `id` in organizer Prisma select. (5) **Listing Type on edit/review pages:** `listingType` dropdown added to Edit Item (drives Auction End Time conditional) and Review & Publish (compact text-xs). Rarity confirmed auto-assigned in schema — COMMON/UNCOMMON/RARE/LEGENDARY already correct. No enum mismatch.
 
-**S410 Files Changed (8 files):**
+**S410 Files Changed (14 files):**
 - `packages/backend/src/controllers/socialPostController.ts` — TikTok/Pinterest/Threads + photoUrl + id select fix
 - `packages/frontend/components/SocialPostGenerator.tsx` — 3 new platforms, photo preview, copy-link
 - `packages/backend/src/services/exportService.ts` — Facebook CSV image_url + eBay condition strings
 - `packages/backend/src/controllers/ebayController.ts` — condition IDs, category map, watermark import
 - `packages/backend/src/utils/cloudinaryWatermark.ts` — Montserrat→Arial_30 white (was broken 400 since launch)
 - `packages/frontend/pages/organizer/edit-item/[id].tsx` — Listing Type dropdown
-- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — Listing Type dropdown
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — Listing Type dropdown (+ reverse auction sub-fields) + rarity dropdown removed + CONDITIONS canonical (8 values) + CONDITION_LABELS map
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — rarity removed from form + CONDITIONS canonical (8 values)
+- `packages/frontend/pages/organizer/calendar.tsx` — auth guard added (was missing)
+- `packages/frontend/pages/organizer/earnings.tsx` — auth guard added (was missing)
+- `packages/frontend/pages/organizer/qr-codes.tsx` — auth guard added (was missing)
+- `packages/frontend/pages/organizer/staff.tsx` — auth guard added (was missing)
+- `packages/frontend/pages/organizer/ripples.tsx` — auth guard added (was missing)
+- `packages/frontend/pages/organizer/ugc-moderation.tsx` — auth guard added (was missing)
 - `claude_docs/strategy/roadmap.md` — #27a updated
 
 **S410 Chrome smoke test:** UNVERIFIED — Chrome extension not connected this session. S409 + S410 changes pending smoke test next session.

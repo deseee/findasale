@@ -12,25 +12,34 @@
 
 **Listing Type on Edit Item + Review pages** — Organizers can now select Fixed Price / Auction / Reverse Auction from both the Edit Item page and the Review & Publish page. Auction End Time field shows/hides correctly based on the selection.
 
-**Rarity badges — auto-assigned, confirmed** — The schema already has COMMON / UNCOMMON / RARE / LEGENDARY correctly implemented. Auto-assignment logic is live in `itemController.ts`. Organizers don't control rarity. The only cleanup left: the manual add-items form still shows a rarity dropdown that organizers shouldn't be touching — that gets removed next session.
+**Rarity badges — auto-assigned, confirmed** — The schema already has COMMON / UNCOMMON / RARE / LEGENDARY correctly implemented. Auto-assignment logic is live in `itemController.ts`. Organizers don't control rarity. The add-items form rarity dropdown was removed this session — rarity is fully auto-assigned now.
+
+**Auth guards on 6 unprotected organizer pages** — calendar, earnings, qr-codes, staff, ripples, and ugc-moderation were all publicly accessible without login. All 6 now redirect unauthenticated visitors to `/login`.
 
 ---
 
-## Push Block (S410)
+## Push Block (S410 — Final)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/socialPostController.ts
 git add packages/frontend/components/SocialPostGenerator.tsx
 git add packages/backend/src/services/exportService.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/backend/src/utils/cloudinaryWatermark.ts
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/frontend/pages/organizer/calendar.tsx
+git add packages/frontend/pages/organizer/earnings.tsx
+git add packages/frontend/pages/organizer/qr-codes.tsx
+git add packages/frontend/pages/organizer/staff.tsx
+git add packages/frontend/pages/organizer/ripples.tsx
+git add packages/frontend/pages/organizer/ugc-moderation.tsx
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/utils/cloudinaryWatermark.ts
-git add packages/frontend/pages/organizer/edit-item/[id].tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
-git commit -m "S410: social respec, eBay fix, watermark font fix (Arial white — was broken since launch), Listing Type on edit+review pages"
+git commit -m "S410: social respec (5 platforms+photos), eBay fix, watermarks (Arial white, was 400 since launch), Listing Type selector, rarity auto-assign, auth guards on 6 organizer pages"
 .\push.ps1
 ```
 

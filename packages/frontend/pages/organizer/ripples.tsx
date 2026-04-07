@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { useAuth } from '../../components/AuthContext';
 import {
   BarChart,
   Bar,
@@ -57,8 +58,15 @@ interface SaleWithRipples extends RippleSummaryDTO {
  */
 export default function RipplesPage() {
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [trendHours, setTrendHours] = useState(24);
+
+  if (authLoading) return null;
+  if (!user || !user.roles?.includes('ORGANIZER')) {
+    router.push('/login');
+    return null;
+  }
 
   // Fetch organizer's sales with ripple summaries
   const {
