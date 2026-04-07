@@ -73,7 +73,7 @@ export async function getServerSideProps() {
   } catch (error) {
     console.error('Error generating sitemap:', error);
     // Return empty sitemap if there's an error
-    return getServerSideSitemap(ctx, []);
+    return getServerSideSitemap([]);
   }
 }
 
