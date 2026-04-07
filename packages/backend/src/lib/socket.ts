@@ -51,6 +51,8 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
         const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
         socket.data.userId = decoded.id;
         socket.data.role = decoded.role;
+        // Auto-join authenticated users to their personal user room for direct notifications (POS payment requests, etc.)
+        socket.join(`user:${decoded.id}`);
       } catch (err) {
         // Invalid/expired token — log silently, allow connection for public feed access
         console.log('[socket] Invalid token on connection:', (err as any).message);

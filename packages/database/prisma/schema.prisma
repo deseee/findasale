@@ -152,6 +152,9 @@ model User {
   saleTransactions SaleTransaction[]
   // POS Upgrade: Shopper cart sessions
   shopperPOSSessions POSSession[] @relation("ShopperPOSSessions")
+  // POS In-App Payment Requests
+  posPaymentRequestsAsSender POSPaymentRequest[] @relation("OrganizerPaymentRequests")
+  posPaymentRequestsAsReceiver POSPaymentRequest[] @relation("ShopperPaymentRequests")
 
   // Phase 2a: Explorer's Guild — XP Economy
   guildXp         Int           @default(0)         // Phase 2a: Cumulative XP, never resets, used for rank calculation
@@ -442,6 +445,7 @@ model Sale {
   // POS Upgrade: Open Cart sessions and payment links
   posSessions     POSSession[]
   posPaymentLinks POSPaymentLink[]
+  posPaymentRequests POSPaymentRequest[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -2762,4 +2766,36 @@ model POSPaymentLink {
 
   @@index([organizerId, status])
   @@index([saleId])
+}
+
+model POSPaymentRequest {
+  id                    String   @id @default(cuid())
+  organizerId           String
+  organizerUserId       String   // For socket room targeting (POS organizer)
+  shopperUserId         String
+  saleId                String
+  itemIds               String[]   // Array of item IDs
+  totalAmountCents      Int
+  platformFeeCents      Int       // 10% of totalAmountCents
+  stripeFeeEstimate     Int?
+  stripePaymentIntentId String?   @unique
+  clientSecret          String?   @db.VarChar(255)
+  status                String    @default("PENDING") // PENDING | ACCEPTED | PAID | DECLINED | EXPIRED | CANCELLED
+  expiresAt             DateTime
+  requestedAt           DateTime  @default(now())
+  acceptedAt            DateTime?
+  paidAt                DateTime?
+  declineReason         String?   // SHOPPER_CANCEL | TIMEOUT | PAYMENT_FAILED | USER_CANCEL | INSUFFICIENT_FUNDS | PAYMENT_CONCERN | OTHER
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  organizer User     @relation("OrganizerPaymentRequests", fields: [organizerUserId], references: [id], onDelete: Cascade)
+  shopper   User     @relation("ShopperPaymentRequests", fields: [shopperUserId], references: [id], onDelete: Cascade)
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId, saleId])
+  @@index([organizerUserId, saleId])
+  @@index([shopperUserId, status])
+  @@index([status, expiresAt])
+  @@index([stripePaymentIntentId])
 }

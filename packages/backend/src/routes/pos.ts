@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { requireOrganizer } from '../middleware/auth';
 import {
   shareCart,
   getLinkedCarts,
@@ -9,6 +10,12 @@ import {
   getActiveHolds,
   sendHoldInvoice,
 } from '../controllers/posController';
+import {
+  createPaymentRequest,
+  getPaymentRequest,
+  acceptPaymentRequest,
+  declinePaymentRequest,
+} from '../controllers/posPaymentController';
 
 const router = Router();
 
@@ -22,5 +29,11 @@ router.post('/payment-links', authenticate, createPaymentLink);
 router.get('/payment-links/:linkId', authenticate, getPaymentLink);
 router.get('/holds', authenticate, getActiveHolds);
 router.post('/holds/:reservationId/invoice', authenticate, sendHoldInvoice);
+
+// POS Payment Request endpoints
+router.post('/payment-request', authenticate, requireOrganizer, createPaymentRequest);
+router.get('/payment-request/:requestId', authenticate, getPaymentRequest);
+router.post('/payment-request/:requestId/accept', authenticate, acceptPaymentRequest);
+router.post('/payment-request/:requestId/decline', authenticate, declinePaymentRequest);
 
 export default router;
