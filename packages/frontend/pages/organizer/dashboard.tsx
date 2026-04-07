@@ -114,8 +114,8 @@ const OrganizerDashboard = () => {
 
   useEffect(() => {
     setIsClient(true);
-    // Show onboarding modal once for new organizers
-    if (!localStorage.getItem('onboardingModalDismissed')) {
+    // Show onboarding modal once for new organizers — only if localStorage hasn't marked it dismissed
+    if (typeof window !== 'undefined' && !localStorage.getItem('onboardingModalDismissed')) {
       setShowOnboardingModal(true);
     }
     // Show TEAMS onboarding wizard for new TEAMS-tier organizers
@@ -431,7 +431,7 @@ const OrganizerDashboard = () => {
       </Head>
 
       {/* Onboarding Modal — 3-screen intro for new organizers */}
-      {showOnboardingModal && !isLoading && dashboardState === 'new' && (
+      {showOnboardingModal && !isLoading && dashboardState === 'new' && !(typeof window !== 'undefined' && localStorage.getItem('onboardingModalDismissed')) && (
         <OrganizerOnboardingModal onDismiss={() => setShowOnboardingModal(false)} />
       )}
 

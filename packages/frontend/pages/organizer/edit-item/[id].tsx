@@ -686,7 +686,7 @@ const EditItemPage = () => {
             </div>
           </form>
 
-          {inlineCameraOpen && (
+          {inlineCameraOpen ? (
             <RapidCapture
               rapidItems={inlineRapidItems}
               addingToItemId={String(id)}
@@ -702,7 +702,7 @@ const EditItemPage = () => {
               readyCount={0}
               isAnalyzing={false}
             />
-          )}
+          ) : null}
         </div>
       </div>
     </>
