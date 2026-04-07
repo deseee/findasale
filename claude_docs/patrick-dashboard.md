@@ -1,16 +1,28 @@
-# Patrick's Dashboard — April 7, 2026
+# Patrick's Dashboard — April 7, 2026 (S408)
 
 ---
 
-## What Happened This Session (S408 — Roadmap audit + documentation catch-up)
+## What Happened This Session (S408 — Roadmap audit, FAQ cleanup, pricing rows)
 
-Audited sessions S392–S407 against the roadmap. Found the roadmap was 16 sessions stale (last updated S391, April 3rd). QA was NOT rubber-stamped — recent Chrome sessions had real evidence. Pure documentation lag.
+Audited S392–S407 against the roadmap. 16-session lag resolved. QA NOT rubber-stamped. FAQ cleaned up. Pricing table updated.
 
 **Roadmap updated (v97→v98):**
-- POS #162: Chrome-verified S406b+S407 ✅ (all 4 tiles, Cash tile lights green on click)
-- Hunt Pass #133: Chrome-verified S407 ✅ — and the ⚠️ "page still says 2x XP" warning is cleared (copy was fixed in S390, never removed from roadmap)
-- Hunt Pass #213: Chrome-verified S407 ✅
-- 4 new entries added: #284 Feedback Survey System, #285 POS In-App Payment Request, #286 Shopper QR Code, #287 Add-Items Sort Controls
+- POS #162: Chrome-verified S406b+S407 ✅
+- Hunt Pass #133 + #213: Chrome-verified S407 ✅ — ⚠️ "2x XP" false alarm cleared
+- 4 new entries: #284 Feedback Survey, #285 POS In-App Payment Request, #286 Shopper QR Code, #287 Sort Controls
+
+**FAQ cleaned up:**
+- Removed duplicate Treasure Trails question
+- Removed both "Collector Passport" questions (stale — renamed Loot Legend per D-S268)
+- Removed duplicate XP spending question
+- Fixed Hunt Pass early access timing (6h Rare / 12h Legendary)
+- Fixed hold duration in organizer FAQ (was "24h default" → now "30–90 min by rank")
+
+**Pricing table:** Added "Sale Print Kit" and "Price Tags & Yard Signs" rows below POS (all tiers = true).
+
+**Scroll fix check:** POS and add-items pages already had the correct ternary pattern — scroll bug was already fixed project-wide. Nothing to dispatch.
+
+**CLAUDE.md:** Added roadmap update gate rule to §4 — only fires on (a) feature shipped or (b) Chrome QA confirms. Prevents future lag.
 
 ---
 
@@ -47,10 +59,13 @@ git add packages/backend/src/services/exportService.ts
 git add packages/backend/src/controllers/csvExportController.ts
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/frontend/components/TierComparisonTable.tsx
+git add packages/frontend/pages/faq.tsx
+git add CLAUDE.md
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S407+S408: P1 modal fix, P2 layout fix, QuickBooks CSV pre-wire, estateId pre-wire, roadmap v98 audit"
+git commit -m "S407+S408: P1 modal fix, P2 layout fix, pre-wires, roadmap v98, FAQ cleanup, pricing rows, roadmap gate rule"
 .\push.ps1
 ```
 
@@ -100,11 +115,11 @@ npx prisma generate
 
 ## Next Session (S409)
 
-1. Push S407+S408 changes + run S407 migration (block above)
-2. Post-push Chrome verify: modal dismiss persists, edit-item black area gone
-3. Dispatch findasale-dev: broader black-area scroll fix (POS + add-items + any other affected pages)
-4. QA backlog: shopper referrals (#7), haul posts (#88), S396 rapidfire, Feedback Survey trigger (OG-3 still deferred)
-5. Bucket 4 remaining: Affiliate Program arch decision, Audit Library design
-6. Establish wrap discipline: roadmap.md must be included in every session push block going forward
+**S409 focus: roadmap.md restructure** — Move all Chrome-verified features into the SHIPPED & VERIFIED section. Goal: clear picture of what's done vs. what still needs QA. v99 update.
+
+1. Push S407+S408 (block above) + run S407 migration
+2. Roadmap restructure: slot verified items into SHIPPED & VERIFIED, surface remaining QA queue
+3. QA backlog (Patrick doing some of this himself during peak hours): pricing page print kit rows, onboarding modal persist, FAQ cleanup visible
+4. After roadmap is clean: QA priority list — referrals (#7), haul posts (#88), S396 rapidfire
 
 *Updated S408 — 2026-04-07*

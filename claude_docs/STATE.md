@@ -7,16 +7,23 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S408 COMPLETE (2026-04-07):** Roadmap audit + update — v97→v98. 16-session documentation lag resolved.
+**S408 COMPLETE (2026-04-07):** Roadmap audit v97→v98, FAQ cleanup, scroll fix confirmed, roadmap gate rule added to CLAUDE.md.
 
 **S408 Summary:**
 
-Audit confirmed roadmap was 16 sessions stale (last update v97, S391, April 3rd). QA rubber-stamp check found NO fabrication — S406b and S407 QA had real Chrome evidence (specific dollar amounts, element-level behavior, real data values). The problem was pure documentation lag: zero wrap discipline fired in S392–S407.
+Audit confirmed roadmap was 16 sessions stale (last update v97, S391, April 3rd). QA rubber-stamp check found NO fabrication — S406b and S407 QA had real Chrome evidence. Pure documentation lag. New "Roadmap update gate (two triggers only)" rule added to CLAUDE.md §4 to prevent recurrence.
 
-Roadmap changes applied: (1) Version header updated v97→v98 with S392–S407 summary. (2) #162 POS: updated to Chrome-verified S406b+S407 with full evidence. (3) #133 Hunt Pass Redesign: updated to Chrome-verified S407, removed ⚠️ "2x XP" false alarm (copy was fixed in S390). (4) #213 Hunt Pass: updated to Chrome-verified S407. (5) New entries added: #284 Feedback Survey System (S399/S404), #285 POS In-App Payment Request (S405), #286 Shopper QR Code (S405), #287 Add-Items Sort Controls S397 (Chrome-verified S407).
+Roadmap changes applied: (1) Version header updated v97→v98 with S392–S407 summary. (2) #162 POS: Chrome-verified S406b+S407. (3) #133 Hunt Pass Redesign: Chrome-verified S407, removed ⚠️ false alarm. (4) #213 Hunt Pass: Chrome-verified S407. (5) New entries: #284 Feedback Survey, #285 POS In-App Payment Request, #286 Shopper QR Code, #287 Add-Items Sort Controls.
 
-**S408 Files Changed (1 file):**
-- `claude_docs/strategy/roadmap.md` — v98, 5 targeted edits (header + 3 entry updates + 4 new entries)
+FAQ cleanup: Removed 3 duplicate questions (Treasure Trails ×2, Collector Passport ×2 — stale name per D-S268, Loot Legend is canonical; XP spending ×2). Fixed Hunt Pass early access timing (6h Rare / 12h Legendary). Fixed organizer FAQ hold duration (24h default → rank-gated 30–90 min per D-S369). TierComparisonTable: added "Sale Print Kit" and "Price Tags & Yard Signs" rows below POS.
+
+Scroll fix audit: POS and add-items pages already had the correct ternary pattern — fix was already applied project-wide. No additional dev work needed.
+
+**S408 Files Changed (4 files):**
+- `claude_docs/strategy/roadmap.md` — v98 audit
+- `CLAUDE.md` — §4 roadmap update gate rule added
+- `packages/frontend/components/TierComparisonTable.tsx` — Sale Print Kit + Price Tags rows
+- `packages/frontend/pages/faq.tsx` — duplicate removal, Collector Passport→Loot Legend, early access fix, hold duration fix
 
 ---
 
@@ -1482,7 +1489,63 @@ Files changed S361:
 
 ---
 
-## Next Session (S408)
+## Next Session (S409)
+
+### Patrick Actions First (push S408 changes)
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260407_add_estate_id_to_organizer/migration.sql
+git add packages/backend/src/services/exportService.ts
+git add packages/backend/src/controllers/csvExportController.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/frontend/components/TierComparisonTable.tsx
+git add packages/frontend/pages/faq.tsx
+git add CLAUDE.md
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S407+S408: P1 modal fix, P2 layout fix, pre-wires, roadmap v98, FAQ cleanup, pricing rows, roadmap gate rule"
+.\push.ps1
+```
+
+**Then run Railway migration for estateId:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Migrations: ALL CURRENT as of S407 (2026-04-07)**
+- S399 FeedbackSuppression ✅ deployed
+- S404 `20260406_add_treasure_trails` ✅ deployed
+- S405 `20260406_add_pos_payment_request` ✅ deployed
+- S407 `20260407_add_estate_id_to_organizer` — PENDING (Patrick must run after push)
+
+### S409 Priority 1 — Roadmap restructure
+Audit roadmap.md and move all fully Chrome-verified features from "Pending Chrome QA" or other statuses into the "SHIPPED & VERIFIED" section. Goal: have a clean, accurate picture of what's done vs. what QA still needs to verify. Update version to v99.
+
+### S409 Priority 2 — Post-push Chrome verification (Patrick doing this himself during peak hours)
+- Pricing page: confirm "Sale Print Kit" and "Price Tags & Yard Signs" rows appear
+- Onboarding modal: dismiss, reload, confirm persists
+- FAQ page: confirm no duplicate Treasure Trails question, Collector Passport questions gone, Loot Legend present
+
+### S409 Priority 3 — QA carry-forward
+- S396 rapidfire hold/photo limit QA
+- Shopper referrals (#7/#265) — `/shopper/referrals`
+- Haul Posts (#277) — `/shopper/haul-posts`
+- Organizer dashboard widgets QA
+- Camera hardware items (UNVERIFIED queue) — require real device
+
+### Standing Notes
+- Railway backend: https://backend-production-153c9.up.railway.app
+- Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
+- eBay: production credentials live in Railway. Browse API returning real listings (verified S406b + S407).
+- Backend route mounts: `app.use('/api/organizers', organizerRoutes)` and `app.use('/api/sales', saleRoutes)` and `app.use('/api/trails', trailRoutes)`
+
+## Next Session (S408) — COMPLETE — see S408 above
 
 ### Patrick Actions First (push S407 changes)
 ```powershell
