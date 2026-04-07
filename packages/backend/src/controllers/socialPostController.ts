@@ -78,7 +78,7 @@ export const generateSocialPost = async (req: AuthRequest, res: Response) => {
     // Fetch organizer subscription tier
     const organizer = await prisma.organizer.findUnique({
       where: { userId },
-      select: { subscriptionTier: true },
+      select: { id: true, subscriptionTier: true },
     });
 
     if (!organizer) {
