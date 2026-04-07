@@ -4,9 +4,15 @@
 
 ## What Happened This Session (S410)
 
-**Social post generator expanded** — TikTok, Pinterest, and Threads are now in the platform selector. Each generates a platform-optimized caption. Photos are included in the generated post data (watermarked, platform-specific crop). A photo preview with "Copy Photo Link" button now appears in the UI. Facebook CSV export now includes an `image_url` column.
+**Social post generator expanded** — TikTok, Pinterest, and Threads are now in the platform selector. Each generates a platform-optimized caption. Photos are included (watermarked, platform-specific crop). Photo preview + "Copy Photo Link" in the UI. Facebook CSV export now includes `image_url`.
 
-**eBay 400 error fixed** — The Seller Hub bulk upload was getting a 400 because the condition values were numeric eBay API IDs (like `1000`, `3000`) instead of the human-readable strings Seller Hub requires (`New`, `Used`, `For parts or not working`, etc.). Fixed the mapping. Column headers also cleaned up. Category ID is left blank — Seller Hub allows that and the organizer assigns categories there.
+**eBay export working** — Draft lands on eBay with correct condition values and category. Photo shows with FindA.Sale watermark.
+
+**Watermarks fixed (was broken since launch)** — The watermark font `Montserrat_bold_18` was never configured in your Cloudinary account. Every watermarked URL has been returning 400 since the feature was built. Confirmed by live URL test. Fixed to white Arial 30px — verified 200. All watermarks across the platform (eBay, social, Facebook CSV) are now working for the first time.
+
+**Listing Type on Edit Item + Review pages** — Organizers can now select Fixed Price / Auction / Reverse Auction from both the Edit Item page and the Review & Publish page. Auction End Time field shows/hides correctly based on the selection.
+
+**Rarity badges — auto-assigned, confirmed** — The schema already has COMMON / UNCOMMON / RARE / LEGENDARY correctly implemented. Auto-assignment logic is live in `itemController.ts`. Organizers don't control rarity. The only cleanup left: the manual add-items form still shows a rarity dropdown that organizers shouldn't be touching — that gets removed next session.
 
 ---
 
@@ -20,7 +26,11 @@ git add packages/backend/src/services/exportService.ts
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S410: social platform respec (TikTok/Pinterest/Threads + photos), eBay 400 fix (condition strings + headers), roadmap v100"
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/backend/src/utils/cloudinaryWatermark.ts
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git commit -m "S410: social respec, eBay fix, watermark font fix (Arial white — was broken since launch), Listing Type on edit+review pages"
 .\push.ps1
 ```
 

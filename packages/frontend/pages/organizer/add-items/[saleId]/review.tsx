@@ -36,6 +36,7 @@ interface ItemEditState {
   condition: string;
   conditionGrade?: string; // #64: S | A | B | C | D
   quantity: number;
+  listingType: string; // FIXED | AUCTION | REVERSE_AUCTION
   aspectRatio: AspectRatio;
   brightness: number;
   contrast: number;
@@ -69,6 +70,7 @@ interface Item {
   condition: string | null;
   conditionGrade?: string | null; // #64: S | A | B | C | D
   quantity: number;
+  listingType?: string; // FIXED | AUCTION | REVERSE_AUCTION
   photoUrls: string[];
   aiConfidence: number | null;
   isAiTagged: boolean;
@@ -457,6 +459,7 @@ const ReviewPage = () => {
         condition: normalizedCondition,
         conditionGrade: item.conditionGrade ?? undefined, // #64
         quantity: item.quantity ?? 1,
+        listingType: item.listingType ?? 'FIXED',
         aspectRatio: '4:3',
         brightness: 50,
         contrast: 50,
@@ -488,6 +491,7 @@ const ReviewPage = () => {
         condition: editState.condition,
         conditionGrade: editState.conditionGrade, // #64: Persist condition grade on save
         quantity: editState.quantity,
+        listingType: editState.listingType,
         backgroundRemoved: editState.backgroundRemoved,
         tags: editState.tags, // Sprint 1: Save tags
       },
@@ -1260,6 +1264,22 @@ const ReviewPage = () => {
                                       return `${g}=${labels[g]}`;
                                     }).join(' · ')}
                                   </div>
+                                </div>
+
+                                {/* Listing Type Dropdown */}
+                                <div className="mt-3">
+                                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                                    Listing Type
+                                  </label>
+                                  <select
+                                    value={editState.listingType}
+                                    onChange={(e) => handleEditChange(item.id, 'listingType', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                  >
+                                    <option value="FIXED">Fixed Price</option>
+                                    <option value="AUCTION">Auction</option>
+                                    <option value="REVERSE_AUCTION">Reverse Auction</option>
+                                  </select>
                                 </div>
 
                                 {/* Sprint 1: Tag Picker */}
