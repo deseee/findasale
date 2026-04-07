@@ -1,68 +1,29 @@
-# Patrick's Dashboard — April 6, 2026
+# Patrick's Dashboard — April 7, 2026
 
 ---
 
-## What Happened This Session (S404)
+## What Happened This Session (S405)
 
-Big build session + coupon spec compliance fix.
+Bug fix session that ended up fighting Vercel build failures most of the time. Eight fixes shipped plus the POS in-app payment request feature.
 
 **What shipped:**
-- **Treasure Trails** — full backend + frontend in one shot. Schema (6 models), migration SQL, Google Places API service, 11 trail endpoints, trail discovery page, trail detail + check-in page, organizer trail builder, nav links added.
-- **Explorer's Guild master spec** — single 403-line reference doc combining all locked XP decisions, schema plan, API contracts, and implementation order.
-- **Feedback survey triggers** — 9 of 10 wired (OG-3 mark-sold deferred). Surveys now fire after: publish sale, 10th item, POS checkout, settings save, Stripe checkout success, favorite, bid, haul post, follow.
-- **Hunt Pass page** — Full XP earning table (all ~35 actions, 1.5x column), XP sinks section. Now publicly viewable — auth check only fires when you click Subscribe.
-- **Coupon system fixed per spec:**
-  - `generateXpSinkCoupon` endpoint added — organizer spends 50 XP → gets an 8-char code → shares with any shopper → shopper redeems at checkout → $1 comes off organizer's payout. Max 5/month enforced.
-  - Removed userId lock from coupon validation (codes are now redeemable by anyone who has them).
-  - Disabled the old $5 auto-loyalty coupon — it wasn't in the spec and was silently deducting $5 from organizer payouts on every purchase.
-  - Fixed XP cost: 20 XP → 50 XP (per locked spec).
-- **Support page dark mode** — fixed for organizers.
-- **Chrome QA sweep** — deferred to S405 per your request.
-
-**You need to run the migration** before Treasure Trails will work in production (see push block below).
-
-**You need to add a Google Places API key** before the "Search Nearby" stop-search feature works. Without it, the app gracefully falls back to manual stop entry — so trails still work, just no Place search.
+- **TrailCheckIn TS error on Railway** — `photoId` field was removed from schema in S404 but the controller still referenced it. Removed.
+- **Support page chat gate broken for admin/TEAMS** — The page was calling the wrong API (`fetch('/api/users/me')` → Next.js 404 instead of the backend). Also was reading `roleSubscriptions` which isn't in the response. Fixed to use `api.get()` and check `organizer.subscriptionTier`. Removed the dead "Teams Community Forum" block (no forum exists).
+- **TreasureHunt race condition crash** — Concurrent requests on the same date were both trying to `create` the same daily hunt record → P2002 unique constraint error. Fixed with `upsert`.
+- **GET /reservations/my-holds-full missing** — Frontend was getting 404s. Endpoint added and registered.
+- **POS shopper QR scan** — Organizer can now scan a shopper's QR code in POS to load their account. QR format is `findasale://user/{userId}`. Toast shows on scan, linked shopper banner now persists even when cart is empty. Dark mode colors fixed on the banner.
+- **Shopper QR code on dashboard** — Shoppers now have a "My QR Code" section on their dashboard that organizers can scan at the POS.
+- **POS in-app payment request** — When a shopper's account is loaded in POS, the organizer can send them a payment notification through the app. Shopper gets a real-time push (Socket.io) with a countdown timer, accept/decline, and a Stripe payment form. New `POSPaymentRequest` model + migration. Full backend (4 endpoints) + frontend (hook, form component, dedicated page at `/shopper/pay-request/[requestId]`).
+- **Vercel build fixed (two separate issues):**
+  - `server-sitemap.xml.tsx` catch block still had `ctx` argument (removed in next-sitemap v4)
+  - `usePOSPaymentRequest.ts` was importing from `./useSocket` which doesn't exist — replaced with direct `socket.io-client` pattern
 
 ---
 
-## Push Block (S404 — run now)
+## Run This Now — S405 Migration
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add "packages/database/prisma/migrations/20260406_add_treasure_trails/migration.sql"
-git add packages/backend/src/lib/placesService.ts
-git add packages/backend/src/controllers/trailController.ts
-git add packages/backend/src/routes/trails.ts
-git add packages/frontend/components/TrailCard.tsx
-git add "packages/frontend/pages/trails/index.tsx"
-git add "packages/frontend/pages/trails/[trailId].tsx"
-git add "packages/frontend/pages/organizer/trails/[saleId].tsx"
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/Layout.tsx
-git add "packages/frontend/pages/organizer/edit-sale/[id].tsx"
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add packages/frontend/pages/organizer/pos.tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/frontend/pages/shopper/checkout-success.tsx
-git add "packages/frontend/pages/items/[id].tsx"
-git add packages/frontend/pages/shopper/haul-posts/create.tsx
-git add packages/frontend/components/FollowOrganizerButton.tsx
-git add "claude_docs/specs/explorers-guild-master-spec.md"
-git add packages/backend/src/services/xpService.ts
-git add packages/backend/src/controllers/couponController.ts
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/backend/src/routes/coupons.ts
-git add packages/frontend/pages/shopper/hunt-pass.tsx
-git add packages/frontend/pages/faq.tsx
-git add packages/frontend/styles/support.module.css
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S404: Treasure Trails + Explorer's Guild + coupon spec fix + Hunt Pass + FAQ dark mode"
-.\push.ps1
-```
+The POS payment request feature needs a new database table before it will work:
 
-**Then run the migration:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -74,10 +35,12 @@ npx prisma generate
 
 ## Action Items for Patrick
 
-- [ ] **Run push block + migration above**
-- [ ] **Create Google Places API key** — console.cloud.google.com → Maps Platform → Enable Places API → Create key → Set $200/mo billing cap → Add to Railway env as `GOOGLE_PLACES_API_KEY` (trails work without it, but "Search Nearby" stops won't find places)
-- [ ] **Run S399 migration** if not already done — FeedbackSuppression table (required for feedback surveys to work)
-- [ ] **Encyclopedia rename decision** — "Resale Encyclopedia," "Secondhand Encyclopedia," or keep "Estate Sale Encyclopedia" for SEO? Dev blocked until decided.
+- [ ] **Run S405 migration above** (POSPaymentRequest table)
+- [ ] **Verify Vercel is green** — last push was the sitemap fix; confirm the deployment succeeded
+- [ ] **Create Google Places API key** — console.cloud.google.com → Maps Platform → Enable Places API → Create key → Set $200/mo billing cap → Add to Railway env as `GOOGLE_PLACES_API_KEY` (Treasure Trails work without it, but "Search Nearby" stops won't find places)
+- [ ] **Run S399 migration** if not already done — FeedbackSuppression table (required for feedback surveys)
+- [ ] **Run S404 migration** if not already done — `20260406_add_treasure_trails`
+- [ ] **Encyclopedia rename decision** — "Resale Encyclopedia," "Secondhand Encyclopedia," or keep "Estate Sale Encyclopedia" for SEO?
 - [ ] **Trademark call** — File for FindA.Sale? ~$250–$400 per class.
 - [ ] **Set Railway env var:** `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`
 - [ ] **Stripe seat product** — $20/mo team member seat needs a Stripe product created
@@ -85,26 +48,10 @@ npx prisma generate
 
 ---
 
-## Coupon Flow (how it works now)
+## Next Session (S406) — Chrome QA Sweep (finally)
 
-**Organizer generates a coupon:**
-- Dashboard → `POST /api/coupons/generate`
-- Costs 50 XP from organizer's balance
-- Returns a code like `A3F2C891` — organizer shares this with a shopper
-- Max 5 codes per organizer per calendar month
-- Code expires in 30 days
+S405 was supposed to be all QA but the build was broken. S406 opens with:
+1. Vercel smoke test — confirm the build is actually green
+2. Chrome QA sweep across S396–S405 — POS full walkthrough (4 payment modes + shopper QR + payment request), Treasure Trails discovery + check-in, dashboard, review card, camera flow, support chat gate
 
-**Shopper redeems:**
-- At checkout, enter the code
-- `POST /api/coupons/validate` — validates the code (no ownership lock — any shopper can use it)
-- $1 comes off the shopper's charge, which reduces the organizer's Stripe payout by $1
-
-**No more $5 auto-coupons** — disabled. The old system was issuing a $5 coupon after every purchase without telling organizers, who were silently absorbing the cost.
-
----
-
-## Next Session (S405) — Chrome QA Sweep
-
-S405 is all QA. Sessions S396–S404 have stacked up without browser verification. Priority: smoke test the most important features first — POS full walkthrough, Treasure Trails discovery + check-in, dashboard, review card, camera flow.
-
-*Updated S404 — 2026-04-06*
+*Updated S405 — 2026-04-07*

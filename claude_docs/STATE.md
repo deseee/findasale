@@ -7,6 +7,48 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S405 COMPLETE (2026-04-07):** TrailCheckIn fix, support chat gate, treasure hunt race condition, POS shopper QR, in-app payment request, Vercel build fixes
+
+**S405 Summary:**
+
+Eight fixes + one new feature shipped. (1) **TrailCheckIn photoId TS error:** `photoId` removed from `trailCheckIn.update` — field was removed from schema in S404 but controller still referenced it. (2) **Support chat gate broken for admin/TEAMS:** `support.tsx` was using `fetch('/api/users/me')` (Next.js 404) instead of `api.get('/users/me')`; also reading `roleSubscriptions` which isn't in the API response — fixed to check `user.organizer?.subscriptionTier`. Backend `supportController.ts` updated to include organizer in user query. Removed dead Community Forum block. (3) **TreasureHunt P2002 race condition:** `findUnique` + `create` replaced with `upsert` — concurrent requests for same date record no longer crash with unique constraint error. (4) **GET /reservations/my-holds-full missing:** 404s on frontend — endpoint added to `reservationController.ts` and registered in routes before catch-all. (5) **POS shopper QR scan:** `GET /users/qr/:userId` endpoint added. Organizer scans `findasale://user/{userId}` QR in POS — toast fires and linked shopper banner persists even when cart is empty. Dark mode fix on banner (`dark:bg-gray-800/border-gray-600/text-warm-100`). (6) **Shopper QR code on dashboard:** "My QR Code" section added to shopper dashboard — fetches QR data URL from backend. (7) **POS in-app payment request:** Architect-approved feature. `POSPaymentRequest` schema + migration. `posPaymentController.ts` (4 endpoints: create/get/accept/decline). Stripe webhook branch in `stripeController.ts`. Socket.io real-time `POS_PAYMENT_REQUEST` / `POS_PAYMENT_STATUS` events via `user:${userId}` rooms. Frontend: `usePOSPaymentRequest` hook, `PaymentRequestForm` component, `shopper/pay-request/[requestId]` page. (8) **Vercel build fixes:** Two errors resolved — `server-sitemap.xml.tsx` `catch` block still called `getServerSideSitemap(ctx, [])` (ctx is undefined in v4 — removed); `usePOSPaymentRequest.ts` imported from `./useSocket` which doesn't exist — replaced with direct `socket.io-client` pattern matching `useLiveFeed.ts`.
+
+**S405 Files Changed (19 files, 5 new):**
+- `packages/backend/src/controllers/trailController.ts` — removed photoId from trailCheckIn.update
+- `packages/frontend/pages/support.tsx` — api.get fix, chat gate subscriptionTier check, CTA /pricing, forum block removed
+- `packages/backend/src/controllers/supportController.ts` — organizer.subscriptionTier in user query + tier check
+- `packages/backend/src/services/treasureHuntService.ts` — findUnique+create → upsert
+- `packages/backend/src/controllers/reservationController.ts` — getMyHoldsFull added
+- `packages/backend/src/routes/reservations.ts` — GET /my-holds-full registered before catch-all
+- `packages/backend/src/controllers/userController.ts` — getUserQRData endpoint added
+- `packages/backend/src/routes/users.ts` — GET /qr/:userId registered before /:id catch-all
+- `packages/frontend/pages/organizer/pos.tsx` — findasale://user/ QR branch, persistent linked shopper banner, dark mode
+- `packages/frontend/pages/shopper/dashboard.tsx` — "My QR Code" section added
+- `packages/database/prisma/schema.prisma` — POSPaymentRequest model + relations
+- `packages/database/prisma/migrations/20260406_add_pos_payment_request/migration.sql` — NEW
+- `packages/backend/src/controllers/posPaymentController.ts` — NEW (create/get/accept/decline)
+- `packages/backend/src/controllers/stripeController.ts` — POS payment webhook branch
+- `packages/backend/src/routes/pos.ts` — 4 new payment-request endpoints
+- `packages/frontend/hooks/usePOSPaymentRequest.ts` — NEW (direct socket.io-client, no useSocket)
+- `packages/frontend/components/PaymentRequestForm.tsx` — NEW (Stripe CardElement form)
+- `packages/frontend/pages/shopper/pay-request/[requestId].tsx` — NEW (countdown + accept/decline + payment)
+- `packages/frontend/pages/server-sitemap.xml.tsx` — ctx removed from catch block
+
+**S405 Migration Required — run BEFORE testing POS payment request:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S405 Deferred:**
+- Chrome QA sweep (S396–S404) — deferred again; Vercel build repairs took the session
+- OG-3 survey trigger (mark-sold) — still deferred from S404
+- Google Places API key — Patrick needs to create (console.cloud.google.com → Maps Platform → Places API)
+
+---
+
 **S404 COMPLETE (2026-04-06):** Explorer's Guild + Treasure Trails — full one-shot build + feedback survey triggers
 
 **S404 Summary:**
@@ -1358,30 +1400,43 @@ Files changed S361:
 
 ---
 
-## Next Session (S405)
+## Next Session (S406)
 
-### S405 Priority 1 — Chrome QA sweep (deferred from S404)
+### Patrick Actions First
+1. Run S405 migration (POSPaymentRequest):
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+2. Create Google Places API key: console.cloud.google.com → Maps Platform → Places API. Set $200/mo billing cap. Add to Railway as `GOOGLE_PLACES_API_KEY`.
+
+### S406 Priority 1 — Vercel smoke test + Chrome QA sweep (long-deferred)
+- Confirm Vercel is green (sitemap fix was last push — verify deploy succeeded)
 - S402: Price Research Panel, health breakdown checklist, eBay sandbox button
 - S398 dashboard, S399 review card, S400–401 camera fixes
 - S404: Treasure Trails trail discovery page + check-in flow basic smoke test
+- S405: Shopper QR on dashboard, POS shopper QR scan + banner, support chat gate for admin
 - QA carry-forward: S397 sort/toolbar/dark mode, S396 rapidfire hold/photo limit/onboarding modal, full POS walkthrough (4 payment modes)
 - Chrome concurrency rule: dispatch QA agents SEQUENTIALLY (one at a time, shared browser)
 
-### S405 Priority 2 — OG-3 feedback trigger (deferred from S404)
-Wire `showSurvey('OG-3')` after mark-sold. Needs investigation: find where the mark-sold action completes in the organizer flow. See `claude_docs/FEEDBACK_DEV_QUICKSTART.md`.
+### S406 Priority 2 — OG-3 feedback trigger (deferred from S404)
+Wire `showSurvey('OG-3')` after mark-sold. Find where mark-sold completes in organizer flow. See `claude_docs/FEEDBACK_DEV_QUICKSTART.md`.
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app
 - Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
 - eBay: sandbox credentials live in Railway. Swap to api.ebay.com + production creds when ready.
 - Backend route mounts: `app.use('/api/organizers', organizerRoutes)` and `app.use('/api/sales', saleRoutes)` and `app.use('/api/trails', trailRoutes)`
-- **S399 migration still required** if not run: FeedbackSuppression table — run before testing feedback surveys
-- **S404 migration required:** `20260406_add_treasure_trails` — run before Treasure Trails work
-- Google Places API: Patrick needs to create key at console.cloud.google.com → Maps Platform → Places API. Set $200/mo billing cap. Add to Railway as `GOOGLE_PLACES_API_KEY`.
+- **S399 migration still required** if not run: FeedbackSuppression table
+- **S404 migration required:** `20260406_add_treasure_trails`
+- **S405 migration required:** `20260406_add_pos_payment_request` (POSPaymentRequest)
+- Google Places API: Patrick needs to create key (see Patrick Actions above)
 
 ---
 
-## Next Session (S404) — COMPLETE — see S405 above
+## Next Session (S405) — COMPLETE — see S406 above
 
 ### S403 Priority 1 — GAMIFICATION DEEP DIVE (full board session)
 
