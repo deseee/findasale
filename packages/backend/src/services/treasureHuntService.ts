@@ -110,22 +110,24 @@ export async function getTodayHunt(): Promise<any> {
   const today = new Date();
   const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  let hunt = await prisma.treasureHunt.findUnique({
-    where: { date: dateStr },
-  });
+  // Check if today's hunt already exists before generating (avoid unnecessary AI call)
+  let hunt = await prisma.treasureHunt.findUnique({ where: { date: dateStr } });
+  if (hunt) return hunt;
 
-  if (!hunt) {
-    const generated = await generateDailyClue(dateStr);
-    hunt = await prisma.treasureHunt.create({
-      data: {
-        date: dateStr,
-        clue: generated.clue,
-        category: generated.category,
-        keywords: generated.keywords,
-        pointReward: 50,
-      },
-    });
-  }
+  const generated = await generateDailyClue(dateStr);
+
+  // upsert is atomic — handles concurrent requests hitting this simultaneously
+  hunt = await prisma.treasureHunt.upsert({
+    where: { date: dateStr },
+    update: {},
+    create: {
+      date: dateStr,
+      clue: generated.clue,
+      category: generated.category,
+      keywords: generated.keywords,
+      pointReward: 50,
+    },
+  });
 
   return hunt;
 }
