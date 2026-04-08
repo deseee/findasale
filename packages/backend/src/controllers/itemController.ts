@@ -1570,7 +1570,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     const alreadyScannedToday = await prisma.pointsTransaction.findFirst({
       where: {
         userId,
-        type: 'ITEM_SCANNED',
+        type: 'TREASURE_HUNT_SCAN',
         itemId,
         createdAt: {
           gte: today,
@@ -1598,7 +1598,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     // Apply rank-based multiplier to base XP
-    const baseXp = XP_AWARDS.ITEM_SCANNED;
+    const baseXp = XP_AWARDS.TREASURE_HUNT_SCAN;
     const rankMultiplier = getRankXpMultiplier(user.explorerRank);
     let multipliedXp = Math.round(baseXp * rankMultiplier);
 
@@ -1607,8 +1607,8 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       multipliedXp = Math.round(multipliedXp * 1.1);
     }
 
-    // Check daily cap for ITEM_SCANNED XP
-    const dailyRemaining = await checkDailyXpCap(userId, 'ITEM_SCANNED');
+    // Check daily cap for TREASURE_HUNT_SCAN XP
+    const dailyRemaining = await checkDailyXpCap(userId, 'TREASURE_HUNT_SCAN');
     const xpToAward = Math.min(multipliedXp, dailyRemaining);
 
     if (xpToAward === 0) {
@@ -1620,7 +1620,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     // Award XP (respecting daily cap and rank multiplier)
-    const xpResult = await awardXp(userId, 'ITEM_SCANNED', xpToAward, { itemId });
+    const xpResult = await awardXp(userId, 'TREASURE_HUNT_SCAN', xpToAward, { itemId });
 
     // Find or create "Item Scout" badge
     let badge = await prisma.badge.findUnique({
