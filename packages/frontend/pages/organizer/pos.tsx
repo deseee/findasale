@@ -842,7 +842,7 @@ export default function POSPage() {
       await api.post('/pos/payment-request', {
         shopperUserId: shopperId,
         saleId: selectedSaleId,
-        itemIds: itemIds.length > 0 ? itemIds : ['custom'],
+        itemIds, // may be empty for custom-amount carts — backend handles gracefully
         totalAmountCents,
       });
 
