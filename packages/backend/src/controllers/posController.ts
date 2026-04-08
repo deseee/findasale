@@ -82,7 +82,7 @@ export const shareCart = async (req: AuthRequest, res: Response) => {
     // Verify sale exists and is PUBLISHED
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, organizerId: true },
     });
 
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
@@ -94,7 +94,7 @@ export const shareCart = async (req: AuthRequest, res: Response) => {
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 hours
     const session = await prisma.pOSSession.create({
       data: {
-        organizerId: sale.id, // Will be updated by frontend — temporarily use saleId lookup
+        organizerId: sale.organizerId,
         saleId,
         shopperId: req.user.id,
         cartItems,
