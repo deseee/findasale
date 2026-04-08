@@ -83,7 +83,7 @@ export const XP_SINKS = {
   RARITY_BOOST: 15,            // Shopper gets +2% legendary odds for one sale
   HUNT_PASS_DISCOUNT: 50,      // Shopper gets $1 off Hunt Pass subscription
   HAUL_VISIBILITY_BOOST: 10,   // Shopper boosts haul post visibility for 7 days
-  SEASONAL_CHALLENGE_ACCESS: 100, // Shopper unlocks seasonal challenge tier
+  SEASONAL_CHALLENGE_ACCESS: 250, // Shopper unlocks seasonal challenge tier (gamedesign S418)
   GUIDE_PUBLICATION: 50,       // Shopper publishes a collection guide (raised from 30)
 
   // Cosmetic sinks (permanent — Sage+ only)
