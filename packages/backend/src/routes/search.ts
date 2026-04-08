@@ -78,10 +78,10 @@ router.get('/', async (req: Request, res: Response) => {
     };
 
     // Apply price filters
-    if (priceMin !== null || priceMax !== null) {
+    if (priceMin != null || priceMax != null) {
       itemWhere.price = {};
-      if (priceMin !== null) itemWhere.price.gte = priceMin / 100;
-      if (priceMax !== null) itemWhere.price.lte = priceMax / 100;
+      if (priceMin != null) itemWhere.price.gte = priceMin / 100;
+      if (priceMax != null) itemWhere.price.lte = priceMax / 100;
     }
 
     // Apply condition filter

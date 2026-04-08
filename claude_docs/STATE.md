@@ -7,6 +7,58 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S415 COMPLETE (2026-04-08):** Full tech debt audit + Phase 1 & 2 quick wins shipped. 30 files changed. Two post-agent TS errors caught and fixed inline.
+
+**S415 Summary:**
+Full monorepo tech debt audit (821 files). Scored 12 debt items. Shipped Phase 1 (inline) and Phase 2 (5 parallel agents) in same session.
+
+Phase 1 inline fixes: stripeController hardcoded Stripe price IDs → env vars (6 locations); fraudDetectionJob wired to node-cron 2AM daily (was never scheduled); organizerWeeklyDigestJob shifted Monday 8AM→9AM (was colliding with curatorEmailJob); healthController + viewerController added try/catch; .env.example synced with 13 missing vars.
+
+Phase 2 parallel agents: (1) Auction cron dedup — auctionCloseCron.ts deprecated, auctionJob.ts kept as authoritative (had reserve price, XP awards, Stripe PaymentIntent — closer was missing all of this); (2) Zod validation added to 5 backend routes (contact, auth, organizers, items, search); (3) next/image migration — 9 components/pages migrated from raw img tags; (4) Condition constants centralized — lib/itemConstants.ts created with 4 canonical DB values, 3 components/pages consolidated; (5) Account deletion implemented — DELETE /api/users/me + settings.tsx wired.
+
+Post-agent TS fixes: add-items/[saleId].tsx — `import Image` aliased to `import NextImage` (shadowed native Image constructor); search.ts:83-84 — `!== null` → `!= null` (Zod optional values are undefined not null).
+
+**S415 Files Changed (30 files):**
+Backend:
+- `packages/backend/src/controllers/stripeController.ts` — 6 hardcoded price IDs → env vars
+- `packages/backend/src/jobs/fraudDetectionJob.ts` — wired to node-cron
+- `packages/backend/src/jobs/organizerWeeklyDigestJob.ts` — Monday 8AM→9AM
+- `packages/backend/src/controllers/healthController.ts` — try/catch added
+- `packages/backend/src/controllers/viewerController.ts` — try/catch added
+- `packages/backend/.env.example` — 13 missing vars added
+- `packages/backend/src/index.ts` — auctionCloseCron import removed
+- `packages/backend/src/jobs/auctionCloseCron.ts` — deprecated stub (auctionJob.ts is authoritative)
+- `packages/backend/src/routes/contact.ts` — Zod schema
+- `packages/backend/src/routes/auth.ts` — Zod schema
+- `packages/backend/src/routes/organizers.ts` — Zod schema
+- `packages/backend/src/routes/items.ts` — Zod schema
+- `packages/backend/src/routes/search.ts` — Zod schema + undefined fix (lines 83-84)
+- `packages/backend/src/controllers/userController.ts` — deleteAccount function
+- `packages/backend/src/routes/users.ts` — DELETE /me route
+
+Frontend:
+- `packages/frontend/components/HaulPostCard.tsx` — img→NextImage
+- `packages/frontend/components/HighValueTrackerWidget.tsx` — img→NextImage
+- `packages/frontend/components/InstallPrompt.tsx` — img→NextImage
+- `packages/frontend/components/SaleQRCode.tsx` — img→NextImage (JSX only; print template literal left as img)
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — img→NextImage + aliased import (Image→NextImage to avoid native constructor conflict)
+- `packages/frontend/pages/organizer/dashboard.tsx` — img→NextImage
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — img→NextImage
+- `packages/frontend/pages/profile.tsx` — img→NextImage
+- `packages/frontend/pages/shopper/history.tsx` — img→NextImage
+- `packages/frontend/pages/shopper/settings.tsx` — deleteAccount wired (modal + API call + redirect)
+- `packages/frontend/lib/itemConstants.ts` — NEW: canonical CONDITIONS, CONDITION_LABELS, CONDITION_MAP, formatCondition, CATEGORIES
+- `packages/frontend/components/camera/PreviewModal.tsx` — local CONDITIONS → itemConstants import
+- `packages/frontend/components/SmartInventoryUpload.tsx` — local CONDITIONS → itemConstants import
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — local CONDITIONS/CONDITION_MAP → itemConstants import
+
+Docs:
+- `claude_docs/research/tech-debt-audit-s413.md` — NEW: full scored audit with phased remediation plan
+
+**S415 Chrome smoke test:** NOT RUN — no user-facing feature was added (all tech debt cleanup). Account deletion needs QA before beta users can reach it.
+
+---
+
 **S414 COMPLETE (2026-04-07):** Brand-spreading decision locked, console.log sweep, eBay category picker shipped, Map UX spec.
 
 **S414 Summary:**
