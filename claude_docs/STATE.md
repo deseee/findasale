@@ -7,6 +7,37 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S421 COMPLETE (2026-04-08):** POS "Send to Phone" flow — bug fix sprint. 4 files changed. All pushed.
+
+**S421 Root cause fixed — stuck "Processing..." on pay-request page:**
+- `handlePaymentSuccess` was a no-op waiting for a webhook. POS PaymentIntents are created on the connected account (`stripeAccount`), so `payment_intent.succeeded` fires as a Connect webhook, not a platform webhook. Platform `STRIPE_WEBHOOK_SECRET` never catches it → status never updates in DB → shopper stuck forever.
+- Fix: redirect client-side immediately after `stripe.confirmCardPayment` succeeds. No webhook dependency for UX flow.
+
+**S421 Other fixes:**
+- Platform fee line removed from pay-request page (internal cost, not shopper-facing)
+- Item names now shown on pay-request page instead of "0 item(s)" (backend fetches titles when itemIds present)
+- 60-second timeout added to `confirmCardPayment` as escape hatch for any future hangs
+- `organizerStripeAccountId` on `POSPaymentRequestData` interface already existed; `itemNames: string[]` added
+
+**S421 Files Changed (all pushed):**
+- `packages/backend/src/controllers/posPaymentController.ts` — itemNames in getPaymentRequest response
+- `packages/frontend/hooks/usePOSPaymentRequest.ts` — itemNames: string[] added to interface
+- `packages/frontend/pages/shopper/pay-request/[requestId].tsx` — removed fee breakdown, show item names, redirect on success
+- `packages/frontend/components/PaymentRequestForm.tsx` — 60s timeout + proper status handling
+
+**S421 Ops action needed (Stripe Connect webhook):**
+To get items marked SOLD + Purchase records created after POS payment, configure Connect webhook in Stripe Dashboard:
+- URL: `https://backend-production-153c9.up.railway.app/api/webhooks/stripe`
+- Listen to: Events on Connected accounts
+- Event: `payment_intent.succeeded`
+- Copy signing secret → Railway env var `STRIPE_CONNECT_WEBHOOK_SECRET` (needs separate handler, or update existing `webhookHandler` to accept both secrets)
+
+**S421 QA needed:**
+- Send to Phone flow end-to-end: organizer pulls cart → Send to Phone → shopper sees overlay → Accept & Pay → card form → submit → redirect to /shopper/purchases ✅ no stuck Processing
+- Pay-request page: shows item names (when itemIds present), no platform fee line, shows total only
+
+---
+
 **S420 COMPLETE (2026-04-08):** Lucky Roll full build + S419 audit + 3 new XP sinks (Custom Map Pin, Profile Showcase Slot, Treasure Trail Sponsor) + Guild/Crew ADR. 16 files changed across 2 batches.
 
 **S420 Batch 1 (PUSHED):**
@@ -1856,9 +1887,64 @@ Files changed S361:
 
 ---
 
-## Next Session (S419)
+## Next Session (S422)
 
-### Patrick Actions First — push S418 final block
+### Patrick Action First — Stripe Connect webhook (unblocks items-marked-SOLD after POS payment)
+In Stripe Dashboard → Developers → Webhooks → Add endpoint:
+- URL: `https://backend-production-153c9.up.railway.app/api/webhooks/stripe`
+- Listen to: **Events on Connected accounts**
+- Event: `payment_intent.succeeded`
+- Copy signing secret → set as Railway env var `STRIPE_CONNECT_WEBHOOK_SECRET`
+- The webhook handler code already exists (`posPaymentController.ts` → marks request PAID, creates Purchase records, marks items SOLD, awards XP). Just needs the Connect webhook pointing to it.
+
+### S422 Priority 1 — POS end-to-end QA
+Chrome QA the full Send to Phone flow with a fresh payment request:
+1. Organizer pulls shopper cart in POS → Send to Phone fires
+2. Shopper sees fullscreen overlay (test both socket path and polling fallback)
+3. Shopper taps Pay Now → accept → card form → 4242 test card → submit
+4. Verify: redirect to /shopper/purchases (no stuck Processing)
+5. Verify: item names show on pay-request page, total only (no platform fee)
+
+### S422 Priority 2 — S420 Batch 2 QA (if not yet run)
+- Lucky Roll page: roll button, odds table, weekly cap countdown
+- Custom Map Pin: POST endpoint, XP spend stores to DB
+- Showcase Slot unlock: XP spend progression
+- Treasure Trail: creation blocked if <100 XP
+- Hunt Pass page: all 3 new sink rows visible
+
+### S422 Priority 3 — S420 Batch 2 push (if not yet pushed)
+```powershell
+git add packages/database/prisma/schema.prisma
+git add "packages/database/prisma/migrations/20260408_add_xp_sinks_showcase_mappin/migration.sql"
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/controllers/trailController.ts
+git add packages/backend/src/routes/users.ts
+git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add claude_docs/feature-notes/ADR-guild-crew-creation-S420.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat(S420): XP sinks (custom map pin, showcase slots, treasure trail sponsor) + guild/crew ADR"
+.\push.ps1
+```
+Then run migration:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+### Standing Notes
+- Railway backend: https://backend-production-153c9.up.railway.app
+- Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
+- eBay: production credentials live in Railway.
+- POS test: Organizer must have Stripe Connect account configured, shopper must be linked via QR scan first
+
+---
+
+## Next Session (S419) — COMPLETE — see S419 above
+
+### Patrick Actions First — push S418 final block (COMPLETE)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
