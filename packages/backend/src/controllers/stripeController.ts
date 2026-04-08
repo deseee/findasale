@@ -565,9 +565,10 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
 // Webhook handler for Stripe events
 export const webhookHandler = async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'] as string;
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const platformSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const connectSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
 
-  if (!endpointSecret) {
+  if (!platformSecret) {
     console.error('STRIPE_WEBHOOK_SECRET is not configured — webhook verification cannot proceed');
     return res.status(500).send('Webhook Error: STRIPE_WEBHOOK_SECRET not configured');
   }
@@ -575,10 +576,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
   let event;
 
   try {
-    event = stripe().webhooks.constructEvent(req.body, sig, endpointSecret);
-  } catch (err: any) {
-    console.error('Webhook signature verification failed.', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    event = stripe().webhooks.constructEvent(req.body, sig, platformSecret);
+  } catch (platformErr: any) {
+    // POS payments are created on a connected account — their payment_intent.succeeded
+    // events are signed with STRIPE_CONNECT_WEBHOOK_SECRET, not the platform secret.
+    if (connectSecret) {
+      try {
+        event = stripe().webhooks.constructEvent(req.body, sig, connectSecret);
+      } catch (connectErr: any) {
+        console.error('Webhook signature verification failed (both platform and connect secrets).', connectErr.message);
+        return res.status(400).send(`Webhook Error: ${connectErr.message}`);
+      }
+    } else {
+      console.error('Webhook signature verification failed.', platformErr.message);
+      return res.status(400).send(`Webhook Error: ${platformErr.message}`);
+    }
   }
 
   try {
