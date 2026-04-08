@@ -322,6 +322,16 @@ export const getPaymentRequest = async (req: AuthRequest, res: Response) => {
       select: { stripeConnectId: true },
     });
 
+    // Fetch item names when itemIds are present
+    let itemNames: string[] = [];
+    if (request.itemIds && request.itemIds.length > 0) {
+      const items = await prisma.item.findMany({
+        where: { id: { in: request.itemIds } },
+        select: { title: true },
+      });
+      itemNames = items.map((i) => i.title);
+    }
+
     // Check expiration
     const isExpired = new Date() > request.expiresAt;
 
@@ -331,6 +341,7 @@ export const getPaymentRequest = async (req: AuthRequest, res: Response) => {
       saleName: request.sale?.title,
       saleLocation: request.sale ? [request.sale.address, request.sale.city, request.sale.state].filter(Boolean).join(', ') : undefined,
       itemIds: request.itemIds,
+      itemNames,
       totalAmountCents: request.totalAmountCents,
       displayAmount: `$${(request.totalAmountCents / 100).toFixed(2)}`,
       platformFeeCents: request.platformFeeCents,

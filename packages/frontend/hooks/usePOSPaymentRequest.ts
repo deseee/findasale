@@ -9,6 +9,7 @@ export interface POSPaymentRequestData {
   saleName: string;
   saleLocation?: string;
   itemIds: string[];
+  itemNames: string[];
   totalAmountCents: number;
   displayAmount: string;
   platformFeeCents: number;
