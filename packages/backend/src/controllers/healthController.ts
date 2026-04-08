@@ -23,24 +23,29 @@ let isDegraded = false;
  * }
  */
 export async function getLatencyStatus(req: Request, res: Response): Promise<void> {
-  const startTime = Date.now();
+  try {
+    const startTime = Date.now();
 
-  // Simulate minimal processing to measure baseline latency
-  // In production, this would include DB connection checks, cache verification, etc.
-  await Promise.resolve();
+    // Simulate minimal processing to measure baseline latency
+    // In production, this would include DB connection checks, cache verification, etc.
+    await Promise.resolve();
 
-  const endTime = Date.now();
-  const latencyMs = endTime - startTime;
+    const endTime = Date.now();
+    const latencyMs = endTime - startTime;
 
-  // Determine degradation state: either latency spike OR module flag already set
-  const degraded = latencyMs > 2000 || isDegraded;
+    // Determine degradation state: either latency spike OR module flag already set
+    const degraded = latencyMs > 2000 || isDegraded;
 
-  res.json({
-    status: 'ok',
-    latencyMs,
-    degraded,
-    timestamp: endTime,
-  });
+    res.json({
+      status: 'ok',
+      latencyMs,
+      degraded,
+      timestamp: endTime,
+    });
+  } catch (err) {
+    console.error('[healthController] getLatencyStatus error:', err);
+    res.status(500).json({ message: 'Health check failed' });
+  }
 }
 
 /**

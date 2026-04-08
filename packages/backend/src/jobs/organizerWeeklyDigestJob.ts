@@ -5,7 +5,7 @@
 import cron from 'node-cron';
 import { sendOrganizerWeeklyDigest } from '../services/organizerAnalyticsService';
 
-cron.schedule('0 8 * * 1', async () => {
+cron.schedule('0 9 * * 1', async () => {
   console.log('📧 Running organizer weekly digest job...');
   try {
     await sendOrganizerWeeklyDigest();
