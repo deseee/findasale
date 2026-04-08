@@ -28,8 +28,6 @@ import PosInvoiceModal from '../../components/PosInvoiceModal';
 import PosOpenCarts from '../../components/PosOpenCarts';
 import PosPaymentQr from '../../components/PosPaymentQr';
 import PosManualCard from '../../components/PosManualCard';
-import SplitPaymentToggle from '../../components/SplitPaymentToggle';
-import SplitPaymentInput from '../../components/SplitPaymentInput';
 import { PosTierStatus } from '../../lib/types/posTiers';
 
 // ─── Types ────────────────────────────────────────────────────────────────────────────
@@ -192,10 +190,6 @@ export default function POSPage() {
 
   // Sound toggle state (persisted in localStorage)
   const [soundEnabled, setSoundEnabled] = useState(true);
-
-  // Split payment state
-  const [splitPaymentActive, setSplitPaymentActive] = useState(false);
-  const [splitCashAmountCents, setSplitCashAmountCents] = useState(0);
 
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
@@ -797,6 +791,7 @@ export default function POSPage() {
     setErrorMessage('');
     setSuccessMessage('');
     setLastCashFee(null);
+    setCashGiven('');
   };
 
   // ─── QR Code Scanning ─────────────────────────────────────────────────────────────────────
@@ -1039,10 +1034,12 @@ export default function POSPage() {
     try {
       const itemIds = cart.filter(c => c.itemId).map(c => c.itemId!);
       const totalAmountCents = Math.round(cartTotal * 100);
+      const cashGivenCents = Math.round(parseFloat(cashGiven || '0') * 100);
 
-      const splitCardAmountCents = splitPaymentActive
-        ? Math.max(0, totalAmountCents - splitCashAmountCents)
-        : totalAmountCents;
+      // Calculate remaining balance: if cashGiven < cartTotal, card charges the remainder
+      const remainingCents = cashGivenCents > 0 && cashGivenCents < totalAmountCents
+        ? totalAmountCents - cashGivenCents
+        : 0;
 
       const payload: any = {
         shopperUserId: shopperId,
@@ -1051,18 +1048,19 @@ export default function POSPage() {
         totalAmountCents,
       };
 
-      if (splitPaymentActive && splitCashAmountCents > 0) {
+      // If split payment (cash + card), include split details
+      if (remainingCents > 0) {
         payload.isSplitPayment = true;
-        payload.cashAmountCents = splitCashAmountCents;
-        payload.cardAmountCents = splitCardAmountCents;
+        payload.cashAmountCents = cashGivenCents;
+        payload.cardAmountCents = remainingCents;
       }
 
       await api.post('/pos/payment-request', payload);
 
       setPaymentStatus('success');
       const shopperName = linkedShopperData?.name || buyerEmail || 'shopper';
-      if (splitPaymentActive && splitCashAmountCents > 0) {
-        setSuccessMessage(`📱 Split payment request of $${(splitCardAmountCents / 100).toFixed(2)} (card) sent to ${shopperName}'s phone.`);
+      if (remainingCents > 0) {
+        setSuccessMessage(`📱 Split payment request of $${(remainingCents / 100).toFixed(2)} (card) sent to ${shopperName}'s phone. Cash received: $${(cashGivenCents / 100).toFixed(2)}.`);
       } else {
         setSuccessMessage(`📱 Payment request of $${cartTotal.toFixed(2)} sent to ${shopperName}'s phone.`);
       }
@@ -1491,46 +1489,27 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Split Payment Toggle and Input */}
-      {selectedSaleId && cart.length > 0 && cartTotal > 0 && (
-        <>
-          <SplitPaymentToggle
-            active={splitPaymentActive}
-            onToggle={setSplitPaymentActive}
-          />
-          {splitPaymentActive && (
-            <SplitPaymentInput
-              totalAmountCents={Math.round(cartTotal * 100)}
-              cashAmountCents={splitCashAmountCents}
-              onCashChange={setSplitCashAmountCents}
-            />
-          )}
-        </>
-      )}
-
       {/* Payment method selector (2×2 grid) */}
       {selectedSaleId && (
         <div className="mb-4">
           <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">How are they paying?</h3>
           <div className="grid grid-cols-2 gap-2">
-            {/* Cash button — hidden when split payment is active */}
-            {!splitPaymentActive && (
-              <button
-                onClick={() => {
-                  setPaymentMode('cash');
-                  setCashReceived(0);
-                  setCashNumpadValue('');
-                }}
-                className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
-                  paymentMode === 'cash'
-                    ? 'bg-sage-700 text-white'
-                    : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
-                }`}
-              >
-                <span className="text-xl">💵</span>
-                <span className="text-xs">Cash</span>
-              </button>
-            )}
+            {/* Cash button */}
+            <button
+              onClick={() => {
+                setPaymentMode('cash');
+                setCashReceived(0);
+                setCashNumpadValue('');
+              }}
+              className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
+                paymentMode === 'cash'
+                  ? 'bg-sage-700 text-white'
+                  : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              <span className="text-xl">💵</span>
+              <span className="text-xs">Cash</span>
+            </button>
             <button
               onClick={() => setPaymentMode('qr')}
               disabled={cart.length === 0}
@@ -1595,7 +1574,16 @@ export default function POSPage() {
                 <span className="text-xs">
                   {paymentStatus === 'creating'
                     ? 'Sending…'
-                    : `Send $${cartTotal.toFixed(2)} to Phone`}
+                    : (() => {
+                        const cashGivenCents = Math.round(parseFloat(cashGiven || '0') * 100);
+                        const totalCents = Math.round(cartTotal * 100);
+                        const remainingCents = cashGivenCents > 0 && cashGivenCents < totalCents
+                          ? totalCents - cashGivenCents
+                          : 0;
+                        return remainingCents > 0
+                          ? `Send $${(remainingCents / 100).toFixed(2)} to Phone`
+                          : `Send $${cartTotal.toFixed(2)} to Phone`;
+                      })()}
                 </span>
               </button>
             )}
@@ -1632,17 +1620,20 @@ export default function POSPage() {
             />
           </div>
           {cashGiven && parseFloat(cashGiven) > 0 && (
-            <div
-              className={`p-3 rounded-lg text-center text-sm font-semibold ${
-                parseFloat(cashGiven) >= cartTotal
-                  ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
-              }`}
-            >
-              {parseFloat(cashGiven) >= cartTotal
-                ? `Change: $${(parseFloat(cashGiven) - cartTotal).toFixed(2)}`
-                : `Short: $${(cartTotal - parseFloat(cashGiven)).toFixed(2)}`}
-            </div>
+            <>
+              {parseFloat(cashGiven) >= cartTotal ? (
+                // Full cash payment: show change
+                <div className="p-3 rounded-lg text-center text-sm font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">
+                  Change: ${(parseFloat(cashGiven) - cartTotal).toFixed(2)}
+                </div>
+              ) : (
+                // Split payment: show remaining balance for card
+                <div className="p-3 rounded-lg text-center text-sm font-semibold bg-sage-50 dark:bg-sage-900/20 text-sage-700 dark:text-sage-400">
+                  <p className="font-medium">Cash received: ${parseFloat(cashGiven).toFixed(2)}</p>
+                  <p className="mt-1 font-semibold text-sage-700 dark:text-sage-300">Remaining: ${(cartTotal - parseFloat(cashGiven)).toFixed(2)}</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
