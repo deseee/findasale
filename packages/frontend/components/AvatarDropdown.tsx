@@ -668,11 +668,11 @@ const AvatarDropdown: React.FC = () => {
                   </Link>
                   <Link
                     href="/organizer/line-queue"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <Users size={16} className="text-purple-400" />
-                    <span>Virtual Queue <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Line Queue</span>
                   </Link>
                 </>
               )}

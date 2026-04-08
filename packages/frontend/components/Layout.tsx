@@ -390,9 +390,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Printer size={16} className="text-amber-600 dark:text-amber-400" />
               <span>Print & Labels</span>
             </Link>
-            <Link href="/organizer/line-queue" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed" title="Virtual line management — coming soon">
+            <Link href="/organizer/line-queue" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Virtual line management for your sale">
               <List size={16} className="text-amber-400" />
-              <span>Line Queue <span className="text-xs text-gray-400">(Soon)</span></span>
+              <span>Line Queue</span>
             </Link>
           </>
         )}
@@ -985,8 +985,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/sale-hubs" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                       <Network size={14} className="inline mr-2 text-purple-400" /> Sale Hubs <span className="text-xs text-gray-400">(Soon)</span>
                     </Link>
-                    <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Users size={14} className="inline mr-2 text-purple-400" /> Virtual Queue <span className="text-xs text-gray-400">(Soon)</span>
+                    <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Users size={14} className="inline mr-2 text-purple-400" /> Line Queue
                     </Link>
                   </>
                 )}
