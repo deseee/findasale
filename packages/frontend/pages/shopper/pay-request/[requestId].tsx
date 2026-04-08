@@ -63,10 +63,11 @@ export default function PaymentRequestPage() {
 
   // Auto-show payment form when status is ACCEPTED (handles page reload or direct link navigation)
   useEffect(() => {
-    if (isAccepted && request?.clientSecret) {
+    const accepted = status === 'ACCEPTED' || request?.status === 'ACCEPTED';
+    if (accepted && request?.clientSecret) {
       setShowPaymentForm(true);
     }
-  }, [isAccepted, request?.clientSecret]);
+  }, [status, request?.status, request?.clientSecret]);
 
   const handleAccept = async () => {
     if (!requestId) return;
