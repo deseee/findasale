@@ -47,6 +47,20 @@ export const useShopperCart = () => {
     setIsHydrated(true);
   }, []);
 
+  // Sync across same-tab instances (e.g. Layout + item page both mount useShopperCart)
+  // The browser only fires 'storage' for other tabs — we dispatch manually from mutations
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleSync = () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) setCart(JSON.parse(stored) as CartState);
+      } catch {}
+    };
+    window.addEventListener('fas_cart_sync', handleSync);
+    return () => window.removeEventListener('fas_cart_sync', handleSync);
+  }, []);
+
   // Persist to localStorage whenever cart changes
   useEffect(() => {
     if (!isHydrated) return;
@@ -58,40 +72,39 @@ export const useShopperCart = () => {
     }
   }, [cart, isHydrated]);
 
+  const notifySync = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('fas_cart_sync'));
+    }
+  }, []);
+
   const addItem = useCallback(
     (item: CartItem) => {
       setCart((prev) => {
-        // If cart has items from a different sale, return the current state
-        // (the component will handle showing a confirmation modal)
-        if (prev.saleId && prev.saleId !== item.saleId) {
-          return prev;
-        }
-
-        // Check if item already in cart
-        const exists = prev.items.some((i) => i.id === item.id);
-        if (exists) {
-          return prev;
-        }
-
-        return {
-          saleId: item.saleId,
-          items: [...prev.items, item],
-        };
+        if (prev.saleId && prev.saleId !== item.saleId) return prev;
+        if (prev.items.some((i) => i.id === item.id)) return prev;
+        return { saleId: item.saleId, items: [...prev.items, item] };
       });
+      // Notify other instances after state flush (next microtask)
+      setTimeout(notifySync, 0);
     },
-    []
+    [notifySync]
   );
 
   const removeItem = useCallback((itemId: string) => {
-    setCart((prev) => ({
-      ...prev,
-      items: prev.items.filter((i) => i.id !== itemId),
-    }));
-  }, []);
+    setCart((prev) => ({ ...prev, items: prev.items.filter((i) => i.id !== itemId) }));
+    setTimeout(notifySync, 0);
+  }, [notifySync]);
 
   const clearCart = useCallback(() => {
     setCart({ items: [], saleId: null });
-  }, []);
+    setTimeout(notifySync, 0);
+  }, [notifySync]);
+
+  const switchSale = useCallback((newSaleId: string) => {
+    setCart({ items: [], saleId: newSaleId });
+    setTimeout(notifySync, 0);
+  }, [notifySync]);
 
   const getTotal = useCallback((): number => {
     return cart.items.reduce((sum, item) => sum + (item.price || 0), 0);
@@ -106,10 +119,6 @@ export const useShopperCart = () => {
     return !cart.saleId || cart.saleId === newSaleId;
   }, [cart.saleId]);
 
-  const switchSale = useCallback((newSaleId: string) => {
-    // Clear cart and switch to new sale
-    setCart({ items: [], saleId: newSaleId });
-  }, []);
 
   const cartCount = cart.items.length;
   const saleId = cart.saleId;

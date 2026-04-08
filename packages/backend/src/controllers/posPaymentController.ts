@@ -504,3 +504,47 @@ export const declinePaymentRequest = async (req: AuthRequest, res: Response) => 
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+/**
+ * GET /api/pos/payment-request/pending
+ * Shopper polls for any PENDING, non-expired payment requests directed at them.
+ * Used as a socket fallback for mobile PWA where WebSocket may be suspended.
+ */
+export const getPendingPaymentRequests = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const requests = await prisma.pOSPaymentRequest.findMany({
+      where: {
+        shopperUserId: req.user.id,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        sale: { select: { id: true, title: true, address: true, city: true, state: true } },
+        organizer: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+
+    const formatted = requests.map((r) => ({
+      requestId: r.id,
+      organizerName: r.organizer?.name || 'Organizer',
+      saleName: r.sale?.title || 'Sale',
+      saleLocation: r.sale
+        ? [r.sale.address, r.sale.city, r.sale.state].filter(Boolean).join(', ')
+        : undefined,
+      itemNames: [] as string[], // itemIds stored, not names — keep lightweight for polling
+      totalAmountCents: r.totalAmountCents,
+      displayAmount: `$${(r.totalAmountCents / 100).toFixed(2)}`,
+      expiresAt: r.expiresAt.toISOString(),
+      deepLink: `/shopper/pay-request/${r.id}`,
+    }));
+
+    return res.json({ requests: formatted });
+  } catch (err: any) {
+    console.error('[pos-payment] getPendingPaymentRequests error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
