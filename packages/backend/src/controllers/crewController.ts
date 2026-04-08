@@ -449,7 +449,7 @@ export async function getCrewFeed(req: any, res: Response) {
         id: p.id,
         photoUrl: p.photoUrl,
         caption: p.caption,
-        likes: p.likeCount || 0,
+        likes: p.likesCount || 0,
         createdAt: p.createdAt,
         user: p.user,
       })),
