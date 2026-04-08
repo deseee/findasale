@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -766,7 +767,7 @@ const OrganizerDashboard = () => {
                       {/* Photo Thumbnail */}
                       {activeSale.photoUrls && activeSale.photoUrls[0] && (
                         <div className="md:w-32 flex-shrink-0">
-                          <img src={activeSale.photoUrls[0]} alt={activeSale.title} className="w-full h-32 object-cover rounded-lg" />
+                          <Image src={activeSale.photoUrls[0]} alt={activeSale.title} width={128} height={128} className="w-full h-32 object-cover rounded-lg" unoptimized />
                         </div>
                       )}
 

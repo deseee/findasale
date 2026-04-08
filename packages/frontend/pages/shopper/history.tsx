@@ -267,7 +267,7 @@ const PurchaseHistoryPage = () => {
                       <Link href={`/shopper/loot-log/${purchase.id}`}>
                         <div className="bg-white dark:bg-gray-800 border border-warm-300 dark:border-gray-700 card p-4 flex items-center gap-4 hover:shadow-md transition cursor-pointer">
                           {purchase.item?.photoUrls?.[0] ? (
-                            <img src={purchase.item.photoUrls[0]} alt={purchase.item?.title || 'Item'} className="w-16 h-16 object-cover rounded flex-shrink-0" />
+                            <Image src={purchase.item.photoUrls[0]} alt={purchase.item?.title || 'Item'} width={64} height={64} className="w-16 h-16 object-cover rounded flex-shrink-0" unoptimized />
                           ) : (
                             <div className="w-16 h-16 rounded bg-warm-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center text-xl">🏷️</div>
                           )}

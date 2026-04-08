@@ -14,6 +14,7 @@
  */
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -528,7 +529,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     {pageItems.map((item) => (
                       <div key={item.id} className="item-tag">
                         {item.photoUrl && (
-                          <img key={item.photoUrl} src={item.photoUrl} alt={item.title} className="item-photo" />
+                          <Image key={item.photoUrl} src={item.photoUrl} alt={item.title} width={200} height={200} className="item-photo" unoptimized />
                         )}
                         <div className="item-title">{item.title}</div>
                         <div className="item-price">${item.price != null ? item.price.toFixed(2) : 'N/A'}</div>

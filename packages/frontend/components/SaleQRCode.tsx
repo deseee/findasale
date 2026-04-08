@@ -8,6 +8,7 @@
  */
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 
 interface SaleQRCodeProps {
   saleId: string;
@@ -101,14 +102,12 @@ const SaleQRCode: React.FC<SaleQRCodeProps> = ({
         onClick={() => setEnlarged(true)}
         title="Click to enlarge"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={qrSrc}
           alt={`QR code for ${saleTitle}`}
           width={size}
           height={size}
           className="block"
-          loading="lazy"
         />
       </div>
 
@@ -148,8 +147,7 @@ const SaleQRCode: React.FC<SaleQRCodeProps> = ({
           <div className="bg-white rounded-2xl p-6 shadow-2xl text-center max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-warm-900 mb-1">{saleTitle}</h3>
             <p className="text-xs text-warm-400 mb-4">Scan to browse this sale on your phone</p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrSrcLarge} alt={`QR code for ${saleTitle}`} className="mx-auto rounded-lg" width={280} height={280} />
+            <Image src={qrSrcLarge} alt={`QR code for ${saleTitle}`} width={280} height={280} className="mx-auto rounded-lg" />
             <div className="flex gap-2 mt-4 justify-center">
               <button onClick={handleDownload} className="px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700">
                 ↓ Download

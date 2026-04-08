@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { getVisionLabels } from '../services/cloudAIService';
 import { upload } from '../controllers/uploadController';
@@ -8,29 +9,43 @@ import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidf
 
 const router = Router();
 
+// Search query validation schemas
+const searchQuerySchema = z.object({
+  q: z.string().min(2, 'Search query must be at least 2 characters'),
+  type: z.enum(['all', 'sales', 'items']).optional().default('all'),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().min(1).max(20).optional().default(10),
+  priceMin: z.coerce.number().int().optional(),
+  priceMax: z.coerce.number().int().optional(),
+  condition: z.string().optional(),
+  category: z.string().optional(),
+  saleStatus: z.string().optional().default('all'),
+  sortBy: z.string().optional().default('recent'),
+});
+
+const categoriesQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().min(1).max(30).optional().default(20),
+});
+
+const randomQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(24).optional().default(12),
+  maxPrice: z.coerce.number().positive().optional(),
+  category: z.string().optional(),
+  lat: z.coerce.number().optional(),
+  lng: z.coerce.number().optional(),
+  radiusMiles: z.coerce.number().positive().optional(),
+});
+
 /**
  * GET /api/search?q=&type=all|sales|items&page=&limit=&priceMin=&priceMax=&condition=&category=&saleStatus=&sortBy=
  * Phase 29: Full-text search across published sales and available items with advanced filters.
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const q = ((req.query.q as string) || '').trim();
-    const type = (req.query.type as string) || 'all';
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 10));
+    const validatedQuery = searchQuerySchema.parse(req.query);
+    const { q, type, page, limit, priceMin, priceMax, condition, category, saleStatus, sortBy } = validatedQuery;
     const skip = (page - 1) * limit;
-
-    // Parse filter params
-    const priceMin = req.query.priceMin ? parseInt(req.query.priceMin as string) : null;
-    const priceMax = req.query.priceMax ? parseInt(req.query.priceMax as string) : null;
-    const condition = (req.query.condition as string)?.trim() || null;
-    const category = (req.query.category as string)?.trim() || null;
-    const saleStatus = (req.query.saleStatus as string) || 'all';
-    const sortBy = (req.query.sortBy as string) || 'recent';
-
-    if (!q || q.length < 2) {
-      return res.status(400).json({ message: 'q must be at least 2 characters' });
-    }
 
     const textWhere = {
       OR: [
@@ -217,6 +232,9 @@ router.get('/', async (req: Request, res: Response) => {
       })),
     });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: err.errors });
+    }
     console.error('GET /api/search error:', err);
     res.status(500).json({ message: 'Server error' });
   }
@@ -229,8 +247,8 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/categories/:category', async (req: Request, res: Response) => {
   try {
     const { category } = req.params;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(30, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const validatedQuery = categoriesQuerySchema.parse(req.query);
+    const { page, limit } = validatedQuery;
     const skip = (page - 1) * limit;
 
     const where = {
@@ -283,6 +301,9 @@ router.get('/categories/:category', async (req: Request, res: Response) => {
       },
     });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: err.errors });
+    }
     console.error('GET /api/search/categories error:', err);
     res.status(500).json({ message: 'Server error' });
   }
@@ -296,12 +317,8 @@ router.get('/categories/:category', async (req: Request, res: Response) => {
  */
 router.get('/random', async (req: Request, res: Response) => {
   try {
-    const limit = Math.min(24, Math.max(1, parseInt(req.query.limit as string) || 12));
-    const maxPrice = req.query.maxPrice ? parseFloat(req.query.maxPrice as string) : null;
-    const category = (req.query.category as string)?.trim() || null;
-    const lat = req.query.lat ? parseFloat(req.query.lat as string) : null;
-    const lng = req.query.lng ? parseFloat(req.query.lng as string) : null;
-    const radiusMiles = req.query.radiusMiles ? parseFloat(req.query.radiusMiles as string) : null;
+    const validatedQuery = randomQuerySchema.parse(req.query);
+    const { limit, maxPrice, category, lat, lng, radiusMiles } = validatedQuery;
 
     type RawItem = {
       id: string;
@@ -320,7 +337,7 @@ router.get('/random', async (req: Request, res: Response) => {
     };
 
     // Build optional SQL fragments using Prisma.sql for safe parameterization
-    const priceCondition = maxPrice !== null && !isNaN(maxPrice)
+    const priceCondition = maxPrice !== undefined && !isNaN(maxPrice)
       ? Prisma.sql`AND i.price <= ${maxPrice}`
       : Prisma.empty;
 
@@ -329,17 +346,16 @@ router.get('/random', async (req: Request, res: Response) => {
       : Prisma.empty;
 
     // If location filter requested, add haversine distance condition
-    const useLocation = lat !== null && lng !== null && radiusMiles !== null
-      && !isNaN(lat!) && !isNaN(lng!) && !isNaN(radiusMiles!);
+    const useLocation = lat !== undefined && lng !== undefined && radiusMiles !== undefined;
 
-    const radiusKm = useLocation ? radiusMiles! * 1.60934 : 0;
+    const radiusKm = useLocation ? (radiusMiles as number) * 1.60934 : 0;
 
     const locationCondition = useLocation
       ? Prisma.sql`AND (
           6371 * acos(
-            LEAST(1.0, cos(radians(${lat})) * cos(radians(s.lat)) *
-            cos(radians(s.lng) - radians(${lng})) +
-            sin(radians(${lat})) * sin(radians(s.lat)))
+            LEAST(1.0, cos(radians(${lat as number})) * cos(radians(s.lat)) *
+            cos(radians(s.lng) - radians(${lng as number})) +
+            sin(radians(${lat as number})) * sin(radians(s.lat)))
           )
         ) <= ${radiusKm}`
       : Prisma.empty;
@@ -394,6 +410,9 @@ router.get('/random', async (req: Request, res: Response) => {
 
     return res.json({ items, count: items.length });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: err.errors });
+    }
     console.error('GET /api/search/random error:', err);
     res.status(500).json({ message: 'Server error' });
   }

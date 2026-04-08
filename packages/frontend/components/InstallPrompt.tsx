@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 
 const DISMISS_KEY = 'findasale_install_dismissed_until';
 const DISMISS_DAYS = 7;
@@ -114,7 +115,7 @@ export default function InstallPrompt() {
         className="fixed bottom-16 left-0 right-0 z-50 bg-white border-t border-warm-200 shadow-lg px-4 py-4 flex items-center gap-4 sm:bottom-4 sm:max-w-md sm:mx-auto sm:rounded-xl sm:border"
       >
         {/* App icon */}
-        <img src="/icons/icon-72x72.png" alt="FindA.Sale icon" className="w-12 h-12 rounded-xl flex-shrink-0"  loading="lazy"/>
+        <Image src="/icons/icon-72x72.png" alt="FindA.Sale icon" width={48} height={48} className="w-12 h-12 rounded-xl flex-shrink-0" />
 
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-warm-900 text-sm leading-tight">Add FindA.Sale to your home screen</p>

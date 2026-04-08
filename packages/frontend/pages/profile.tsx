@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -248,7 +249,7 @@ const ProfilePage = () => {
                 {badgesData.badges.map((badge: any) => (
                   <div key={badge.id} className="flex items-center bg-warm-50 dark:bg-gray-700 rounded-lg p-3">
                     {badge.iconUrl ? (
-                      <img src={badge.iconUrl} alt={badge.name} className="w-10 h-10 mr-3" loading="lazy"/>
+                      <Image src={badge.iconUrl} alt={badge.name} width={40} height={40} className="w-10 h-10 mr-3" />
                     ) : (
                       <div className="bg-warm-200 dark:bg-warm-900/30 border-2 border-dashed rounded-xl w-10 h-10 mr-3" />
                     )}

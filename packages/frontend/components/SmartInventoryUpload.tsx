@@ -13,6 +13,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/router';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import { CATEGORIES, CONDITIONS } from '../lib/itemConstants';
 
 interface AIAnalysis {
   photoUrl: string;
@@ -39,21 +40,6 @@ interface SmartInventoryUploadProps {
   saleId: string;
   onComplete?: () => void;
 }
-
-const CATEGORIES = [
-  'Furniture',
-  'Jewelry',
-  'Art & Decor',
-  'Clothing',
-  'Kitchenware',
-  'Tools & Hardware',
-  'Collectibles',
-  'Electronics',
-  'Books & Media',
-  'Other',
-];
-
-const CONDITIONS = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
 
 const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
   saleId,

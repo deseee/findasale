@@ -1,8 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { Resend } from 'resend';
 import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 
 const router = Router();
+
+// Contact form validation schema
+const contactFormSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email address'),
+  subject: z.string().min(1, 'Subject is required'),
+  message: z.string().min(1, 'Message is required').max(5000, 'Message must be 5000 characters or less'),
+});
 
 let _resend: any = null;
 const getResend = () => {
@@ -24,19 +33,8 @@ const contactLimiter = rateLimit({
 // POST /api/contact — public contact form submission
 router.post('/', contactLimiter, async (req: Request, res: Response) => {
   try {
-    const { name, email, subject, message } = req.body;
-
-    if (!name || !email || !subject || !message) {
-      return res.status(400).json({ message: 'All fields are required.' });
-    }
-
-    if (typeof email !== 'string' || !email.includes('@')) {
-      return res.status(400).json({ message: 'Invalid email address.' });
-    }
-
-    if (message.length > 5000) {
-      return res.status(400).json({ message: 'Message too long (max 5000 characters).' });
-    }
+    const validatedData = contactFormSchema.parse(req.body);
+    const { name, email, subject, message } = validatedData;
 
     const supportEmail = process.env.SUPPORT_EMAIL || 'support@finda.sale';
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
@@ -84,6 +82,9 @@ router.post('/', contactLimiter, async (req: Request, res: Response) => {
 
     res.json({ message: 'Message sent successfully.' });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('Contact form error:', error);
     res.status(500).json({ message: 'Failed to send message. Please try again.' });
   }

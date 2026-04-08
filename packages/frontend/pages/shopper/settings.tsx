@@ -46,6 +46,7 @@ function SettingsPage() {
   const [collectorTitle, setCollectorTitle] = useState<string>('');
   const [purchasesVisible, setPurchasesVisible] = useState<boolean>(true);
   const [isFeedbackMenuOpen, setIsFeedbackMenuOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState<string>('');
 
   useEffect(() => {
     setMounted(true);
@@ -94,6 +95,26 @@ function SettingsPage() {
     },
     onError: (error: any) => {
       const message = error.response?.data?.message || 'Failed to save profile settings';
+      setSuccessMessage(message);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    }
+  });
+
+  // Mutation for deleting account
+  const deleteAccountMutation = useMutation({
+    mutationFn: async (password: string) => {
+      const response = await api.delete('/users/me', {
+        data: { password }
+      });
+      return response.data;
+    },
+    onSuccess: async () => {
+      // Clear auth and redirect to home
+      localStorage.removeItem('authToken');
+      window.location.href = '/';
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to delete account';
       setSuccessMessage(message);
       setTimeout(() => setSuccessMessage(''), 3000);
     }
@@ -449,19 +470,23 @@ function SettingsPage() {
                   These actions cannot be undone. Please proceed with caution.
                 </p>
                 <button
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => {
-                    if (
-                      confirm(
-                        'Are you sure you want to delete your account? This action cannot be undone.'
-                      )
-                    ) {
-                      // TODO: Implement account deletion
-                      alert('Account deletion coming soon');
+                    const confirmed = confirm(
+                      'Are you sure you want to delete your account? This action cannot be undone. All your data will be permanently deleted.'
+                    );
+                    if (confirmed) {
+                      // Prompt for password confirmation
+                      const password = prompt('Please enter your password to confirm account deletion:');
+                      if (password) {
+                        setDeletePassword(password);
+                        deleteAccountMutation.mutate(password);
+                      }
                     }
                   }}
+                  disabled={deleteAccountMutation.isPending}
                 >
-                  Delete Account
+                  {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete Account'}
                 </button>
               </div>
             </div>
