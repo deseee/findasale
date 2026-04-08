@@ -17,6 +17,7 @@ export interface POSPaymentRequestData {
   isExpired: boolean;
   stripePaymentIntentId: string | null;
   clientSecret: string | null;
+  organizerStripeAccountId: string | null;
   createdAt: string;
   acceptedAt: string | null;
   paidAt: string | null;
