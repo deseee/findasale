@@ -26,6 +26,7 @@ interface Sale {
   organizer: {
     id: string;
     businessName: string;
+    customMapPin?: string;
   };
   tags?: string[];
   isAuctionSale?: boolean;
@@ -198,6 +199,7 @@ const MapPage = () => {
           hasActiveTrail: s.hasActiveTrail ?? false,
           trailShareToken: s.trailShareToken,
           hasFeaturedBoost: featuredSaleIds.has(s.id),
+          customMapPin: s.organizer?.customMapPin,
         };
       });
     setFilteredPins(pins);

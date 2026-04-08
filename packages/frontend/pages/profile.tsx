@@ -28,16 +28,80 @@ interface Referral {
   createdAt: string;
 }
 
+interface UGCPhoto {
+  id: string;
+  photoUrl: string;
+  caption?: string;
+}
+
+interface ShowcaseSlot {
+  id?: string;
+  slotIndex: number;
+  ugcPhotoId?: string;
+  ugcPhoto?: UGCPhoto;
+}
+
 const ProfilePage = () => {
   const { user } = useAuth();
   const { canAccess } = useOrganizerTier();
+  const [showShowcaseModal, setShowShowcaseModal] = useState(false);
+  const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
 
   // Fetch full user profile (includes verificationStatus not in JWT)
   const { data: profileData } = useQuery({
     queryKey: ['user-profile'],
     queryFn: async () => {
       const response = await api.get('/users/me');
-      return response.data as { verificationStatus?: string };
+      return response.data as { verificationStatus?: string; showcaseSlots?: number };
+    },
+  });
+
+  // Fetch user's showcase slots
+  const { data: showcaseData, refetch: refetchShowcase } = useQuery({
+    queryKey: ['user-showcase', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return { slots: [] };
+      const response = await api.get(`/users/${user.id}/showcase`);
+      return response.data as { slots: ShowcaseSlot[] };
+    },
+    enabled: !!user?.id,
+  });
+
+  // Fetch UGC photos for modal
+  const { data: ugcPhotos = [] } = useQuery({
+    queryKey: ['user-ugc-photos'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/users/me/ugc-photos');
+        return response.data as UGCPhoto[];
+      } catch {
+        return [];
+      }
+    },
+    enabled: showShowcaseModal,
+  });
+
+  // Mutation to set showcase photo
+  const setShowcaseMutation = useMutation({
+    mutationFn: async ({ slotIndex, ugcPhotoId }: { slotIndex: number; ugcPhotoId: string }) => {
+      const response = await api.put(`/users/me/showcase/${slotIndex}`, { ugcPhotoId });
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchShowcase();
+      setShowShowcaseModal(false);
+      setSelectedSlotIndex(null);
+    },
+  });
+
+  // Mutation to unlock showcase slot
+  const unlockSlotMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.post('/users/me/showcase-slot/unlock', {});
+      return response.data;
+    },
+    onSuccess: () => {
+      refetchShowcase();
     },
   });
 
@@ -111,6 +175,113 @@ const ProfilePage = () => {
             </div>
           </div>
         </div>
+
+        {/* Showcase Section */}
+        {!isOrganizerOnly && showcaseData && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Showcase</h2>
+            <div className="flex gap-4">
+              {[0, 1, 2].map((slotIndex) => {
+                const slot = showcaseData.slots?.find((s) => s.slotIndex === slotIndex);
+                const isUnlocked = (profileData?.showcaseSlots ?? 1) > slotIndex;
+                const isFilled = slot?.ugcPhoto;
+
+                return (
+                  <div key={slotIndex} className="flex-shrink-0">
+                    {isFilled ? (
+                      <div
+                        className="w-24 h-24 rounded-lg border border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-700 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          setSelectedSlotIndex(slotIndex);
+                          setShowShowcaseModal(true);
+                        }}
+                        title={slot.ugcPhoto!.caption || 'Click to change'}
+                      >
+                        <img
+                          src={slot.ugcPhoto!.photoUrl}
+                          alt={slot.ugcPhoto!.caption || `Showcase slot ${slotIndex + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : isUnlocked ? (
+                      <button
+                        onClick={() => {
+                          setSelectedSlotIndex(slotIndex);
+                          setShowShowcaseModal(true);
+                        }}
+                        className="w-24 h-24 rounded-lg border-2 border-dashed border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-700 flex items-center justify-center hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors text-warm-600 dark:text-warm-400 text-2xl font-light"
+                      >
+                        +
+                      </button>
+                    ) : (
+                      <div
+                        className="w-24 h-24 rounded-lg border-2 border-dashed border-warm-200 dark:border-gray-700 bg-warm-50 dark:bg-gray-800 flex flex-col items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => unlockSlotMutation.mutate()}
+                      >
+                        <span className="text-2xl mb-1">🔒</span>
+                        <span className="text-xs text-center text-warm-500 dark:text-warm-500">
+                          {slotIndex === 1 ? '50 XP' : '150 XP'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Showcase Modal */}
+            {showShowcaseModal && selectedSlotIndex !== null && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">
+                      Select a photo for slot {selectedSlotIndex + 1}
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setShowShowcaseModal(false);
+                        setSelectedSlotIndex(null);
+                      }}
+                      className="text-warm-500 hover:text-warm-700 dark:hover:text-warm-300 text-2xl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto space-y-2">
+                    {ugcPhotos.length === 0 ? (
+                      <p className="text-center py-8 text-warm-500 dark:text-warm-400">
+                        No photos yet. Upload some photos to your haul log first.
+                      </p>
+                    ) : (
+                      ugcPhotos.map((photo) => (
+                        <button
+                          key={photo.id}
+                          onClick={() =>
+                            setShowcaseMutation.mutate({
+                              slotIndex: selectedSlotIndex,
+                              ugcPhotoId: photo.id,
+                            })
+                          }
+                          disabled={setShowcaseMutation.isPending}
+                          className="w-full flex items-center gap-3 p-3 rounded-lg border border-warm-200 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                          <img
+                            src={photo.photoUrl}
+                            alt={photo.caption || 'Photo'}
+                            className="w-12 h-12 rounded object-cover"
+                          />
+                          <span className="text-sm text-warm-700 dark:text-warm-300 flex-1 text-left truncate">
+                            {photo.caption || 'Untitled'}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ORGANIZER SECTIONS */}
         {isOrganizerOnly && (
