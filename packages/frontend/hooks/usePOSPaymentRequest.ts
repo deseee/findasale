@@ -22,6 +22,10 @@ export interface POSPaymentRequestData {
   createdAt: string;
   acceptedAt: string | null;
   paidAt: string | null;
+  isSplitPayment: boolean;
+  cashAmountCents?: number;
+  cardAmountCents?: number;
+  cardDisplayAmount?: string;
 }
 
 export interface UsePOSPaymentRequestResult {
