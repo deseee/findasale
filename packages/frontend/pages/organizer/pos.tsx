@@ -632,8 +632,6 @@ export default function POSPage() {
     setBuyerEmail('');
     setItemSearch('');
     setSearchResults([]);
-    setSplitPaymentActive(false);
-    setSplitCashAmountCents(0);
   };
 
   const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
