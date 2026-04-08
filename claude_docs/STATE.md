@@ -1776,44 +1776,91 @@ Files changed S361:
 
 ## Next Session (S419)
 
-### Patrick Actions First — push S415 + S416 + S418
+### Patrick Actions First — push S418 final block
 
-**S415 push (if not done — run first):**
-See S415 push block below (unchanged from S417 section).
-
-**S416 push (if not done):**
-See S416 push block below (unchanged from S417 section).
-
-**S418 push:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add packages/backend/src/services/xpService.ts
 git add packages/frontend/pages/faq.tsx
 git add packages/frontend/components/TierComparisonTable.tsx
 git add claude_docs/strategy/BUSINESS_PLAN.md
-git add .checkpoint-manifest.json
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/feature-notes/gamedesign-decisions-2026-04-08.md
+git add claude_docs/feature-notes/ADR-featured-boost-dual-rail-S418.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S418: hunt-pass staleness fixes + doc sweep (5 files)
+git commit -m "S418 Pass 4-6: exchange-rate calibration + dual-rail boost ADR + coupon system
 
-hunt-pass: Loot Legend rename, TH scan XP 25->12, matrix corrections,
-1.5x Multiplier label fix, added Treasure Hunt QR section to full table.
-faq.tsx: Brand Kit tier fix (PRO+ only), double comma typo.
-TierComparisonTable: 'additonal' typo.
-BUSINESS_PLAN.md: Auto Tags rename, support model updated per D-S392."
+Pass 4 - Exchange rate (1 XP = `$0.01):
+- hunt-pass.tsx: Username Color 50->100, Frame Badge 75->200,
+  Haul Visibility 10->25, Event Sponsorship 150->500
+- xpService.ts: COUPON_CLAIM_SHOPPER 25->100, HUNT_PASS_DISCOUNT 50->100,
+  HAUL_VISIBILITY_BOOST 10->25, EVENT_SPONSORSHIP 150->500,
+  SEASONAL_CHALLENGE_ACCESS 100->250
+- Removed phantom 'Public collection guide' earning row (sink only)
+
+Pass 5 - Dual-rail BoostPurchase ADR:
+- Unified service for 8 promotional boost types
+- 2 payment rails: XP via xpService.spendXp, Stripe via platform paymentIntent
+- 7 new sinks approved + Lucky Roll deferred
+- New BoostPurchase model + 3 enums + migration plan + rollback
+
+Pass 6 - Coupon system + refund policy locked:
+- 3 shopper coupon tiers with min purchase + monthly caps
+- Refund policy: Stripe admin-only + 5min undo, XP no refunds
+
+Roadmap: 4 new entries (#288 BoostPurchase, #289 Coupon Generation,
+#290 Hunt Pass dual-rail column, #291 Lucky Roll gacha)."
 .\push.ps1
 ```
 
-### S419 Priority 1 — Chrome QA of S416 fixes (still pending)
-- Loot-log detail page: navigate to `/shopper/history` as user11 → click a purchase → confirm detail page loads with correct data
-- Dispute filing: open a ReceiptCard → confirm "Report Issue" button appears → confirm modal opens
-- Map trail badge: visit `/map` → check for amber trail badge on pins
-- PRO nudge: log in as SIMPLE organizer with 3+ completed sales → confirm nudge banner
+### S419 Priority 1 — Parallel Dispatch (4 work streams)
 
-### S419 Priority 2 — Patrick as first organizer
+**Goal:** Start all 4 S418-spec'd items simultaneously since they have minimal cross-file overlap. The dispatches can be issued in a single message at session start.
+
+**Dependency map (dispatch sequencing):**
+- **Stream A (Lucky Roll design)** — pure design, no code, no file conflicts. Dispatch findasale-gamedesign first, runs in parallel with everything else.
+- **Stream B (BoostPurchase implementation)** — touches schema.prisma, new backend service files, new routes file, frontend modal. Dispatch findasale-dev second.
+- **Stream C (Coupon generation)** — touches schema.prisma, existing couponController, frontend coupon UI. **Schema conflict with Stream B** — both modify schema.prisma. Resolve by either: (a) batching B+C in a single dev dispatch, or (b) running B first to land schema, then C as a follow-up. **Recommendation: batch B+C in one dispatch with explicit "schema migration includes BOTH BoostPurchase model AND Coupon field additions in one migration file."**
+- **Stream D (Hunt-pass dual-rail column)** — depends on B shipping (needs /api/boosts/quote endpoint). Dispatch as a follow-up after B+C return, NOT in parallel.
+
+**Practical S419 opening sequence:**
+1. Push S418 block (Patrick).
+2. Live-site smoke test of S416 fixes (loot-log detail, dispute filing, map trail badge, PRO nudge) — mandatory per CLAUDE.md §10 post-fix verification rule.
+3. Dispatch findasale-gamedesign for Lucky Roll (Stream A).
+4. Dispatch findasale-dev for combined BoostPurchase + Coupon Generation (Streams B+C, single migration file).
+5. While both subagents run, main session updates roadmap rows for #288/#289.
+6. When dev returns, dispatch follow-up findasale-dev for hunt-pass dual-rail column (Stream D).
+7. When gamedesign returns, dispatch findasale-architect for Lucky Roll implementation spec.
+
+### S419 Lucky Roll Gamedesign Brief (for findasale-gamedesign dispatch)
+
+**Required outputs:**
+- Pity counter mechanics (guaranteed legendary on 10th roll? or shifted distribution?)
+- Reward table with weighted probabilities (50/100/200/500 XP, free $1 coupon, rare cosmetic, "nothing this time" — what % each?)
+- Weekly cap (1 roll/week? 3/week? Hunt Pass 2x cap?)
+- Fairness model (server-side seeded RNG, not client-side)
+- Regulatory check: loot box laws by jurisdiction (Belgium, Netherlands ban; UK requires disclosure; US varies by state). Recommend approach (e.g., transparent odds always shown).
+- Cost: 100 XP per roll locked. Cash rail? (Recommend: XP-only — gacha + cash = predatory)
+- Anti-frustration: streak protection (guaranteed non-"nothing" reward every N rolls)
+- Cooldown UX: visible countdown, push notification when next roll available
+
+**Constraints:**
+- Must NOT introduce real-money gambling mechanics
+- Must show odds transparently before each roll
+- Must not be available to accounts under 30 days old (anti-fraud)
+- Must integrate with existing PointsTransaction ledger via xpService.spendXp
+
+### S419 Priority 2 — Patrick as first organizer (carryover from S418)
 - Patrick creates organizer account on finda.sale
 - Lists real items (own eBay inventory) as a real sale
 - Seeds the homepage AND validates core organizer workflow end-to-end
+
+### Standing Notes
+- Railway backend: https://backend-production-153c9.up.railway.app
+- Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
+- eBay: production credentials live in Railway.
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app
