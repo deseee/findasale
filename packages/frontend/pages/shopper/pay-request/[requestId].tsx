@@ -56,7 +56,7 @@ export default function PaymentRequestPage() {
     if (status === 'PAID') {
       showToast('Payment successful! Redirecting...', 'success');
       setTimeout(() => {
-        router.push('/shopper/purchases');
+        router.push('/shopper/dashboard');
       }, 2000);
     }
   }, [status, router, showToast]);
@@ -106,7 +106,7 @@ export default function PaymentRequestPage() {
     // Redirect immediately after Stripe confirms — don't wait for webhook
     showToast('Payment successful! Redirecting...', 'success');
     setTimeout(() => {
-      router.push('/shopper/purchases');
+      router.push('/shopper/dashboard');
     }, 1500);
   };
 

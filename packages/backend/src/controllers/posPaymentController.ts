@@ -566,3 +566,47 @@ export const getPendingPaymentRequests = async (req: AuthRequest, res: Response)
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+/**
+ * GET /api/pos/payment-requests/active
+ * Organizer sees their PENDING + ACCEPTED requests from the last 90 minutes.
+ * Used by POS UI to display the pending payments panel.
+ */
+export const getOrganizerActiveRequests = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const organizer = await resolveOrganizer(req, res);
+    if (!organizer) return;
+
+    // Fetch PENDING and ACCEPTED requests from the last 90 minutes
+    const ninetyMinutesAgo = new Date(Date.now() - 90 * 60 * 1000);
+
+    const requests = await prisma.pOSPaymentRequest.findMany({
+      where: {
+        organizerId: organizer.id,
+        status: { in: ['PENDING', 'ACCEPTED'] },
+        createdAt: { gte: ninetyMinutesAgo },
+      },
+      include: {
+        shopper: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const formatted = requests.map((r) => ({
+      id: r.id,
+      shopperName: r.shopper?.name || 'Unknown Shopper',
+      totalAmountCents: r.totalAmountCents,
+      displayAmount: `$${(r.totalAmountCents / 100).toFixed(2)}`,
+      status: r.status,
+      expiresAt: r.expiresAt.toISOString(),
+      isExpired: new Date() > r.expiresAt,
+    }));
+
+    return res.json(formatted);
+  } catch (err: any) {
+    console.error('[pos-payment] getOrganizerActiveRequests error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};

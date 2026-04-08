@@ -88,6 +88,16 @@ interface LinkedCart {
   createdAt: string;
 }
 
+interface PendingPayment {
+  id: string;
+  shopperName: string;
+  totalAmountCents: number;
+  displayAmount: string;
+  status: 'PENDING' | 'ACCEPTED';
+  expiresAt: string;
+  isExpired: boolean;
+}
+
 // ─── Stripe Helper ────────────────────────────────────────────────────────────────
 
 // Lazy-initialize Stripe on client-side only to avoid SSR errors
@@ -163,6 +173,11 @@ export default function POSPage() {
   const [linkedCarts, setLinkedCarts] = useState<LinkedCart[]>([]);
   const [linkedCartsPollInterval, setLinkedCartsPollInterval] = useState<NodeJS.Timeout | null>(null);
 
+  // Pending Payments state
+  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const [pendingPaymentsPanelOpen, setPendingPaymentsPanelOpen] = useState(true);
+  const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
+
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
   const sdkLoadedRef = useRef(false);
@@ -180,6 +195,32 @@ export default function POSPage() {
     enabled: !!user && user.roles?.includes('ORGANIZER'),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  // Pending Payments polling
+  const { data: activePendingPayments = [] } = useQuery<PendingPayment[]>({
+    queryKey: ['pos-active-payment-requests'],
+    queryFn: async () => {
+      const res = await api.get<PendingPayment[]>('/pos/payment-requests/active');
+      return res.data;
+    },
+    enabled: !!user && user.roles?.includes('ORGANIZER'),
+    refetchInterval: (data) => {
+      // Stop polling if no active requests
+      return data && data.length > 0 ? 5000 : false;
+    },
+    staleTime: 0, // Always refetch
+  });
+
+  // Update local state when query returns new data
+  useEffect(() => {
+    if (activePendingPayments) {
+      setPendingPayments(activePendingPayments);
+      // Keep panel expanded while there are active requests
+      if (activePendingPayments.length > 0) {
+        setPendingPaymentsPanelOpen(true);
+      }
+    }
+  }, [activePendingPayments]);
 
   // ─── Auth guard ────────────────────────────────────────────────────────────────────
 
@@ -377,6 +418,66 @@ export default function POSPage() {
     setLinkedCartsPollInterval(interval);
     return () => clearInterval(interval);
   }, [selectedSaleId]);
+
+  // ─── Socket listener for payment status updates ────────────────────────────────────────
+
+  useEffect(() => {
+    if (!user || !user.roles?.includes('ORGANIZER')) return;
+
+    let isMounted = true;
+
+    // Dynamic import to avoid SSR issues
+    import('socket.io-client').then(({ io }) => {
+      if (!isMounted) return;
+
+      const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+      const socket = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5,
+      });
+
+      const handlePaymentStatus = (event: any) => {
+        if (!isMounted) return;
+
+        const { requestId, status } = event;
+
+        if (status === 'PAID') {
+          // Show success toast
+          const payment = pendingPayments.find(p => p.id === requestId);
+          if (payment) {
+            showToast(`💳 Payment received! ${payment.displayAmount} paid.`, 'success');
+          }
+
+          // Mark for visual feedback briefly, then remove
+          setSuccessPaymentId(requestId);
+          const timer = setTimeout(() => {
+            setSuccessPaymentId(null);
+            // Trigger refetch to update the list
+            setPendingPayments(prev => prev.filter(p => p.id !== requestId));
+          }, 3000);
+          return () => clearTimeout(timer);
+        } else if (status === 'ACCEPTED') {
+          // Update status in list for visual feedback
+          setPendingPayments(prev =>
+            prev.map(p => (p.id === requestId ? { ...p, status: 'ACCEPTED' } : p))
+          );
+        }
+      };
+
+      socket.on('POS_PAYMENT_STATUS', handlePaymentStatus);
+
+      return () => {
+        isMounted = false;
+        socket.off('POS_PAYMENT_STATUS', handlePaymentStatus);
+        socket.disconnect();
+      };
+    }).catch((err) => {
+      console.error('[pos] Failed to load socket.io-client:', err);
+    });
+  }, [user, pendingPayments, showToast]);
 
   // ─── Cart operations ────────────────────────────────────────────────────────────────────
 
@@ -1134,6 +1235,88 @@ export default function POSPage() {
             placeholder="buyer@email.com"
             className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
           />
+        </div>
+      )}
+
+      {/* Pending Payments Panel */}
+      {pendingPayments.length > 0 && (
+        <div className="mb-4 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+          <button
+            onClick={() => setPendingPaymentsPanelOpen(!pendingPaymentsPanelOpen)}
+            className="w-full flex items-center justify-between mb-0"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⏳</span>
+              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                Pending Payments ({pendingPayments.length})
+              </h3>
+            </div>
+            <span className="text-blue-600 dark:text-blue-400">
+              {pendingPaymentsPanelOpen ? '▼' : '▶'}
+            </span>
+          </button>
+
+          {pendingPaymentsPanelOpen && (
+            <div className="mt-3 space-y-2">
+              {pendingPayments.map((payment) => {
+                const expiresAt = new Date(payment.expiresAt);
+                const now = new Date();
+                const secondsLeft = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000));
+                const minutesLeft = Math.floor(secondsLeft / 60);
+                const secondsDisplay = secondsLeft % 60;
+
+                return (
+                  <div
+                    key={payment.id}
+                    className={`p-3 rounded-lg border transition ${
+                      successPaymentId === payment.id
+                        ? 'bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-700'
+                        : payment.status === 'ACCEPTED'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700'
+                        : 'bg-white dark:bg-gray-800 border-blue-200 dark:border-blue-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          {payment.shopperName}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-gray-900 dark:text-gray-100 ml-2">
+                        {payment.displayAmount}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-semibold ${
+                            successPaymentId === payment.id
+                              ? 'bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100'
+                              : payment.status === 'ACCEPTED'
+                              ? 'bg-blue-200 text-blue-900 dark:bg-blue-800 dark:text-blue-100'
+                              : 'bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100'
+                          }`}
+                        >
+                          {successPaymentId === payment.id ? '✓ Paid' : payment.status}
+                        </span>
+                      </div>
+
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {successPaymentId === payment.id
+                          ? 'Processing...'
+                          : payment.isExpired
+                          ? 'Expired'
+                          : minutesLeft > 0
+                          ? `${minutesLeft}m ${secondsDisplay}s left`
+                          : `${secondsDisplay}s left`}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
