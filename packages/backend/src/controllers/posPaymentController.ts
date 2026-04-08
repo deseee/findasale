@@ -316,6 +316,12 @@ export const getPaymentRequest = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Fetch the Organizer record to get stripeConnectId (needed for frontend Stripe Elements)
+    const organizerRecord = await prisma.organizer.findUnique({
+      where: { id: request.organizerId },
+      select: { stripeConnectId: true },
+    });
+
     // Check expiration
     const isExpired = new Date() > request.expiresAt;
 
@@ -333,6 +339,7 @@ export const getPaymentRequest = async (req: AuthRequest, res: Response) => {
       isExpired,
       stripePaymentIntentId: request.stripePaymentIntentId,
       clientSecret: request.clientSecret,
+      organizerStripeAccountId: organizerRecord?.stripeConnectId || null,
       createdAt: request.createdAt.toISOString(),
       acceptedAt: request.acceptedAt?.toISOString() || null,
       paidAt: request.paidAt?.toISOString() || null,

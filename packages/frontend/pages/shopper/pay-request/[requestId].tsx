@@ -224,6 +224,7 @@ export default function PaymentRequestPage() {
                 requestId={request.id}
                 clientSecret={request.clientSecret}
                 totalAmountCents={request.totalAmountCents}
+                stripeAccountId={request.organizerStripeAccountId}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
                 isProcessing={isPaid}

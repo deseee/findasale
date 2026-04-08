@@ -1,14 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { useToast } from './ToastContext';
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface PaymentRequestFormProps {
   requestId: string;
   clientSecret: string;
   totalAmountCents: number;
+  stripeAccountId?: string | null; // connected account — PI lives here
   onSuccess: () => void;
   onError?: (error: string) => void;
   isProcessing?: boolean;
@@ -24,14 +23,13 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
 }) => {
   const stripe = useStripe();
   const elements = useElements();
-  const { showToast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!stripe || !elements) {
-      showToast('Stripe not loaded', 'error');
+      onError?.('Stripe not loaded');
       return;
     }
 
@@ -46,23 +44,19 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
       });
 
       if (error) {
-        showToast(error.message || 'Payment failed', 'error');
         onError?.(error.message || 'Payment failed');
         setIsSubmitting(false);
         return;
       }
 
       if (paymentIntent?.status === 'succeeded') {
-        showToast('Payment successful!', 'success');
         onSuccess();
       } else {
-        showToast('Payment incomplete', 'error');
         onError?.('Payment incomplete');
         setIsSubmitting(false);
       }
     } catch (err: any) {
       console.error('Payment error:', err);
-      showToast(err.message || 'Payment processing failed', 'error');
       onError?.(err.message || 'Payment processing failed');
       setIsSubmitting(false);
     }
@@ -106,6 +100,17 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
 };
 
 export const PaymentRequestForm: React.FC<PaymentRequestFormProps> = (props) => {
+  // Create a Stripe instance scoped to the connected account that owns the PaymentIntent.
+  // loadStripe is memoized so it only re-runs when the account ID changes.
+  const stripePromise = useMemo(
+    () =>
+      loadStripe(
+        process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+        props.stripeAccountId ? { stripeAccount: props.stripeAccountId } : undefined
+      ),
+    [props.stripeAccountId]
+  );
+
   return (
     <Elements stripe={stripePromise}>
       <PaymentForm {...props} />
