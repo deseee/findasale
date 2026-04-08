@@ -56,7 +56,7 @@ export default function PaymentRequestPage() {
     if (status === 'PAID') {
       showToast('Payment successful! Redirecting...', 'success');
       setTimeout(() => {
-        router.push('/shopper/dashboard');
+        router.push('/shopper/history?view=receipts&paid=1');
       }, 2000);
     }
   }, [status, router, showToast]);
@@ -94,7 +94,7 @@ export default function PaymentRequestPage() {
         reason: 'USER_CANCEL',
       });
       showToast('Request declined', 'info');
-      router.push('/shopper/dashboard');
+      router.push('/shopper/history?view=receipts&paid=1');
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to decline request', 'error');
     } finally {
@@ -106,7 +106,7 @@ export default function PaymentRequestPage() {
     // Redirect immediately after Stripe confirms — don't wait for webhook
     showToast('Payment successful! Redirecting...', 'success');
     setTimeout(() => {
-      router.push('/shopper/dashboard');
+      router.push('/shopper/history?view=receipts&paid=1');
     }, 1500);
   };
 
@@ -132,7 +132,7 @@ export default function PaymentRequestPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Payment Request Not Found</h1>
           <p className="text-gray-600 mb-6">This payment request could not be loaded.</p>
           <button
-            onClick={() => router.push('/shopper/dashboard')}
+            onClick={() => router.push('/shopper/history?view=receipts&paid=1')}
             className="bg-sage-600 hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg"
           >
             Return to Dashboard
@@ -281,7 +281,7 @@ export default function PaymentRequestPage() {
           {/* Return to Dashboard */}
           {(isExpired || isPaid || isDeclined) && (
             <button
-              onClick={() => router.push('/shopper/dashboard')}
+              onClick={() => router.push('/shopper/history?view=receipts&paid=1')}
               className="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
             >
               Return to Dashboard
