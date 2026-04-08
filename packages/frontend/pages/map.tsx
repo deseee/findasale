@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
@@ -96,6 +96,25 @@ const MapPage = () => {
     staleTime: 5 * 60 * 1000, // 5 min — boosts don't change frequently
     retry: 0,
   });
+
+  // Auto-locate only when permission is already granted.
+  // Avoids the iOS Safari race condition (getCurrentPosition fires PERMISSION_DENIED
+  // before the user can tap Allow on the dialog). Older iOS without the Permissions
+  // API falls through the .catch silently — user taps My Location instead.
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.permissions
+      ?.query({ name: 'geolocation' as PermissionName })
+      .then((result) => {
+        if (result.state === 'granted') {
+          navigator.geolocation.getCurrentPosition(
+            (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
+            () => {} // granted but position failed — silent
+          );
+        }
+      })
+      .catch(() => {}); // Permissions API unsupported (older iOS) — skip auto-request
+  }, []);
 
   // Filter sales by date, sale type, and geo-location
   const filteredSales = useMemo(() => {
