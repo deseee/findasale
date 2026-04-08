@@ -95,6 +95,9 @@ export const XP_SINKS = {
   PROFILE_SHOWCASE_SLOT_2: 50,  // Shopper unlocks 2nd profile showcase slot for pinned haul
   PROFILE_SHOWCASE_SLOT_3: 150, // Shopper unlocks 3rd profile showcase slot for pinned haul
   TREASURE_TRAIL_SPONSOR: 100,  // Organizer pays to create a Treasure Trail
+
+  // Phase 2a Social Retention: Explorer's Guild
+  CREW_CREATION: 500,   // Shopper creates a named collector crew (S420)
 };
 
 // Monthly XP caps (per spec — gamedesign S417 updated)

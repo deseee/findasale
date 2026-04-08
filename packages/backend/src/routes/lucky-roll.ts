@@ -14,12 +14,12 @@ const router = Router();
  * GET /api/lucky-roll/eligibility
  * Public. Returns roll availability, XP balance, odds table, legal notice.
  */
-router.get('/eligibility', authenticate({ required: true }), getEligibilityHandler);
+router.get('/eligibility', authenticate, getEligibilityHandler);
 
 /**
  * POST /api/lucky-roll/roll
  * Auth required. Performs the roll.
  */
-router.post('/roll', authenticate({ required: true }), rollHandler);
+router.post('/roll', authenticate, rollHandler);
 
 export default router;

@@ -162,6 +162,8 @@ model User {
   seasonalResetAt DateTime?                         // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
   rarityBoosts    RarityBoost[]  @relation("RarityBoosts")  // Phase 2a: Active rarity boosts for upcoming sales
   passportCompleted Boolean      @default(false)    // Phase 2a: Collector Passport completed (earned COLLECTOR_PASSPORT_COMPLETE 50 XP)
+  foundedCrews    Crew[]       @relation("CrewFounder")
+  crewMemberships CrewMember[] @relation("CrewMemberships")
 
   // Platform Safety #99: Export Rate Limiting (1 per month per account)
   lastExportAt DateTime?
@@ -308,6 +310,39 @@ model UserShowcase {
   updatedAt  DateTime @updatedAt
 
   @@unique([userId, slotIndex])
+  @@index([userId])
+}
+
+// Phase 2a Social Retention: Explorer's Guild — Crew Creation
+model Crew {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  slug          String   @unique
+  description   String?  @db.VarChar(500)
+  founderUserId String
+  founder       User     @relation("CrewFounder", fields: [founderUserId], references: [id], onDelete: Cascade)
+  isPublic      Boolean  @default(true)
+  memberCount   Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  members       CrewMember[]
+  bounties      MissingListingBounty[]
+
+  @@index([isPublic])
+  @@index([createdAt])
+}
+
+model CrewMember {
+  id       String   @id @default(cuid())
+  crewId   String
+  crew     Crew     @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation("CrewMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+
+  @@unique([crewId, userId])
+  @@index([crewId])
   @@index([userId])
 }
 
@@ -996,6 +1031,8 @@ model MissingListingBounty {
   status      String   @default("OPEN") // OPEN, FULFILLED, CANCELLED
   itemId      String?  // Linked by organizer when fulfilled
   item        Item?    @relation(fields: [itemId], references: [id])
+  crewId      String?
+  crew        Crew?    @relation(fields: [crewId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

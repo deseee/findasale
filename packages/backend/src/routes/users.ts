@@ -519,7 +519,7 @@ router.put('/me/showcase/:slotIndex', authenticate, async (req: AuthRequest, res
 });
 
 // Phase 2c: Profile Showcase Slots — Get shopper's showcase (public endpoint)
-router.get('/:userId/showcase', async (req: Request, res: Response) => {
+router.get('/:userId/showcase', async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
 

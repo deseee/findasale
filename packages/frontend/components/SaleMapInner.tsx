@@ -231,7 +231,10 @@ const SaleMapInner = ({
                       loading="lazy"
                     />
                   )}
-                  <strong style={{ display: 'block', marginBottom: '4px' }}>{pin.title}</strong>
+                  <strong style={{ display: 'block', marginBottom: '4px' }}>
+                    {pin.customMapPin && <span style={{ marginRight: '6px' }}>{pin.customMapPin}</span>}
+                    {pin.title}
+                  </strong>
                   <span style={{ fontSize: '12px', color: '#666', display: 'block' }}>
                     {pin.city}, {pin.state}
                   </span>

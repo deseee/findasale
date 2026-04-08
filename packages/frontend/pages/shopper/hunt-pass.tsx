@@ -711,6 +711,27 @@ const HuntPassPage = () => {
                 </div>
               </div>
 
+              {/* Guild & Social */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-purple-50 dark:bg-purple-900/20 px-6 py-3 border-b border-warm-200 dark:border-gray-700">
+                  <h3 className="font-bold text-warm-900 dark:text-warm-100">Guild & Social</h3>
+                </div>
+                <div className="divide-y divide-warm-200 dark:divide-gray-700">
+                  <Link href="/shopper/crews">
+                    <div className="px-6 py-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="font-semibold text-warm-900 dark:text-warm-100">Guild/Crew Creation</p>
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Create a named collector crew with a shared leaderboard and member feed.</p>
+                        </div>
+                        <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">500 XP</span>
+                      </div>
+                      <p className="text-xs text-warm-500 dark:text-warm-400">One-time | Max 50 members | XP-only</p>
+                    </div>
+                  </Link>
+                </div>
+              </div>
+
               {/* Organizer Sinks */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
                 <div className="bg-amber-50 dark:bg-amber-900/20 px-6 py-3 border-b border-warm-200 dark:border-gray-700">

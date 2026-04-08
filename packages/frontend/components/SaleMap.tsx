@@ -20,6 +20,8 @@ export interface SalePin {
   trailShareToken?: string;
   /** Phase 2b: true = this sale has an active SALE_BUMP boost */
   hasFeaturedBoost?: boolean;
+  /** Feature A: organizer's custom map pin emoji (e.g. 🏛, 🎪) */
+  customMapPin?: string;
 }
 
 interface SaleMapProps {
