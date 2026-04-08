@@ -144,7 +144,7 @@ export const getLinkedCarts = async (req: AuthRequest, res: Response) => {
         expiresAt: { gt: new Date() },
       },
       include: {
-        shopper: { select: { id: true, name: true } },
+        shopper: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -161,6 +161,7 @@ export const getLinkedCarts = async (req: AuthRequest, res: Response) => {
         id: s.id,
         shopperId: s.shopperId,
         shopperName: s.shopper?.name || 'Guest',
+        shopperEmail: s.shopper?.email || '',
         cartItems,
         cartTotal: parseFloat(cartTotal.toFixed(2)),
         createdAt: s.createdAt,

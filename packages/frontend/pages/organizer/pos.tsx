@@ -59,7 +59,7 @@ interface CartItem {
 
 type ReaderStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 type PaymentStatus = 'idle' | 'creating' | 'waiting_for_card' | 'processing' | 'success' | 'error' | 'cancelled';
-type PaymentMode = 'card' | 'manual_card' | 'cash' | 'qr' | 'invoice';
+type PaymentMode = 'card' | 'manual_card' | 'cash' | 'qr' | 'invoice' | 'phone';
 type NumpadMode = 'price';
 
 interface CashPaymentResponse {
@@ -80,7 +80,9 @@ interface HoldItem {
 
 interface LinkedCart {
   id: string;
+  shopperId: string;
   shopperName: string;
+  shopperEmail: string;
   cartItems: Array<{ id: string; title: string; price: number; photoUrl?: string; saleId: string }>;
   cartTotal: number;
   createdAt: string;
@@ -149,6 +151,8 @@ export default function POSPage() {
 
   // Linked Shopper QR state (shopper account QR scan)
   const [linkedShopperData, setLinkedShopperData] = useState<any | null>(null);
+  // Track the shopper userId for Send to Phone (set from QR scan or cart pull)
+  const [linkedShopperId, setLinkedShopperId] = useState<string | null>(null);
 
   // Invoice/Holds state
   const [holds, setHolds] = useState<HoldItem[]>([]);
@@ -651,6 +655,8 @@ export default function POSPage() {
           .get<any>(`/users/qr/${userId}`)
           .then(res => {
             setLinkedShopperData(res.data);
+            setLinkedShopperId(res.data.id || null);
+            if (res.data.email) setBuyerEmail(res.data.email);
             setQrScanStatus('scanning');
             setQrScanMessage('');
           })
@@ -795,7 +801,12 @@ export default function POSPage() {
 
   // ─── Linked Cart Addition ─────────────────────────────────────────────────────────────
 
-  const handleAddLinkedCart = async (sessionId: string, cartItems: LinkedCart['cartItems']) => {
+  const handleAddLinkedCart = async (
+    sessionId: string,
+    cartItems: LinkedCart['cartItems'],
+    shopperId: string,
+    shopperEmail: string,
+  ) => {
     try {
       await api.post(`/pos/sessions/${sessionId}/pull`);
       // Add items to cart
@@ -805,10 +816,44 @@ export default function POSPage() {
           amount: item.price,
         });
       });
+      // Autofill shopper context for Send to Phone
+      setLinkedShopperId(shopperId || null);
+      if (shopperEmail) setBuyerEmail(shopperEmail);
       showToast(`${cartItems.length} item${cartItems.length !== 1 ? 's' : ''} added to cart`, 'success');
     } catch (err) {
       console.error('[pos] Add linked cart error:', err);
       setErrorMessage('Failed to add items from linked cart');
+    }
+  };
+
+  // ─── Send to Phone ────────────────────────────────────────────────────────────────────────
+
+  const handleSendToPhone = async () => {
+    const shopperId = linkedShopperId || linkedShopperData?.id;
+    if (!shopperId || !selectedSaleId || cart.length === 0) return;
+
+    setPaymentStatus('creating');
+    setErrorMessage('');
+
+    try {
+      const itemIds = cart.filter(c => c.itemId).map(c => c.itemId!);
+      const totalAmountCents = Math.round(cartTotal * 100);
+
+      await api.post('/pos/payment-request', {
+        shopperUserId: shopperId,
+        saleId: selectedSaleId,
+        itemIds: itemIds.length > 0 ? itemIds : ['custom'],
+        totalAmountCents,
+      });
+
+      setPaymentStatus('success');
+      const shopperName = linkedShopperData?.name || buyerEmail || 'shopper';
+      setSuccessMessage(`📱 Payment request of $${cartTotal.toFixed(2)} sent to ${shopperName}'s phone.`);
+    } catch (err: any) {
+      console.error('[pos] Send to Phone error:', err);
+      setPaymentStatus('error');
+      const msg = err?.response?.data?.message || 'Failed to send payment request';
+      setErrorMessage(msg);
     }
   };
 
@@ -1160,6 +1205,26 @@ export default function POSPage() {
               <span className="text-xl">📧</span>
               <span className="text-xs">Invoice</span>
             </button>
+            {/* Send to Phone — visible only when a shopper is linked via QR or cart pull */}
+            {(linkedShopperId || linkedShopperData?.id) && (
+              <button
+                onClick={handleSendToPhone}
+                disabled={cart.length === 0 || paymentStatus === 'creating'}
+                title={cart.length === 0 ? 'Add items to cart first' : `Send $${cartTotal.toFixed(2)} to ${linkedShopperData?.name || buyerEmail || 'shopper'}'s phone`}
+                className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 col-span-2 ${
+                  cart.length === 0 || paymentStatus === 'creating'
+                    ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
+                }`}
+              >
+                <span className="text-xl">📱</span>
+                <span className="text-xs">
+                  {paymentStatus === 'creating'
+                    ? 'Sending…'
+                    : `Send $${cartTotal.toFixed(2)} to Phone`}
+                </span>
+              </button>
+            )}
           </div>
           {/* Manual card entry link (below Card Reader button) */}
           <div className="mt-2">

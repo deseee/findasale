@@ -618,6 +618,7 @@ export const getUserQRData = async (req: Request, res: Response) => {
       select: {
         id: true,
         name: true,
+        email: true,
       },
     });
 
@@ -673,6 +674,7 @@ export const getUserQRData = async (req: Request, res: Response) => {
     res.json({
       id: user.id,
       name: user.name,
+      email: user.email,
       holds: formattedHolds,
       qrCodeDataUrl,
     });
