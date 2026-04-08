@@ -7,8 +7,10 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
+import { useQuery } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import api from '../lib/api';
 
 interface POSRequestPayload {
   requestId: string;
@@ -27,14 +29,37 @@ export function PosPaymentRequestAlert() {
   const router = useRouter();
   const [pending, setPending] = useState<POSRequestPayload | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  // Track shown request IDs to avoid showing the same request twice (socket + poll)
+  const seenRef = useRef<Set<string>>(new Set());
 
+  const isShopper =
+    !!user &&
+    !user.roles?.includes('ORGANIZER') &&
+    user.role !== 'ORGANIZER' &&
+    !user.roles?.includes('ADMIN') &&
+    user.role !== 'ADMIN';
+
+  const showRequest = (payload: POSRequestPayload) => {
+    if (seenRef.current.has(payload.requestId)) return;
+    seenRef.current.add(payload.requestId);
+    setPending(payload);
+
+    if (
+      typeof document !== 'undefined' &&
+      document.hidden &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted'
+    ) {
+      new Notification('💳 Payment Request', {
+        body: `${payload.displayAmount} from ${payload.saleName}`,
+        icon: '/icons/icon-192x192.png',
+      });
+    }
+  };
+
+  // Socket connection — fast path
   useEffect(() => {
-    if (!user) return;
-
-    // Only activate for shoppers — organizers have their own POS view
-    const isOrganizer = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
-    const isAdmin = user.roles?.includes('ADMIN') || user.role === 'ADMIN';
-    if (isOrganizer || isAdmin) return;
+    if (!isShopper) return;
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) return;
@@ -52,28 +77,30 @@ export function PosPaymentRequestAlert() {
       reconnectionAttempts: 10,
     });
 
-    socketRef.current.on('POS_PAYMENT_REQUEST', (payload: POSRequestPayload) => {
-      setPending(payload);
-
-      // Fire a browser notification if the tab is backgrounded
-      if (
-        typeof document !== 'undefined' &&
-        document.hidden &&
-        typeof Notification !== 'undefined' &&
-        Notification.permission === 'granted'
-      ) {
-        new Notification('💳 Payment Request', {
-          body: `${payload.displayAmount} from ${payload.saleName}`,
-          icon: '/icons/icon-192x192.png',
-        });
-      }
-    });
+    socketRef.current.on('POS_PAYMENT_REQUEST', showRequest);
 
     return () => {
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
-  }, [user?.id]); // reconnect only if user changes
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Polling fallback — catches events missed when socket is suspended (mobile PWA)
+  useQuery({
+    queryKey: ['pos-pending-requests', user?.id],
+    queryFn: async () => {
+      const res = await api.get<{ requests: POSRequestPayload[] }>('/pos/payment-request/pending');
+      return res.data.requests;
+    },
+    enabled: isShopper,
+    refetchInterval: 5000,
+    staleTime: 0,
+    select: (requests) => {
+      // Show the first unseen request
+      if (requests.length > 0) showRequest(requests[0]);
+      return requests;
+    },
+  });
 
   if (!pending) return null;
 
