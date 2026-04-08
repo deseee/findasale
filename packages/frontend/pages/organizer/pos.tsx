@@ -183,7 +183,6 @@ export default function POSPage() {
 
   // Cash calculator state
   const [cashCalculatorVisible, setCashCalculatorVisible] = useState(false);
-  const [cashGiven, setCashGiven] = useState('');
 
   // Pending payment cancel state
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -789,7 +788,8 @@ export default function POSPage() {
     setErrorMessage('');
     setSuccessMessage('');
     setLastCashFee(null);
-    setCashGiven('');
+    setCashNumpadValue('');
+    clearCart();
   };
 
   // ─── QR Code Scanning ─────────────────────────────────────────────────────────────────────
@@ -1032,11 +1032,11 @@ export default function POSPage() {
     try {
       const itemIds = cart.filter(c => c.itemId).map(c => c.itemId!);
       const totalAmountCents = Math.round(cartTotal * 100);
-      const cashGivenCents = Math.round(parseFloat(cashGiven || '0') * 100);
+      const cashReceivedCents = Math.round(cashReceived * 100);
 
-      // Calculate remaining balance: if cashGiven < cartTotal, card charges the remainder
-      const remainingCents = cashGivenCents > 0 && cashGivenCents < totalAmountCents
-        ? totalAmountCents - cashGivenCents
+      // Calculate remaining balance: if cashReceived < cartTotal, card charges the remainder
+      const remainingCents = cashReceivedCents > 0 && cashReceivedCents < totalAmountCents
+        ? totalAmountCents - cashReceivedCents
         : 0;
 
       const payload: any = {
@@ -1049,7 +1049,7 @@ export default function POSPage() {
       // If split payment (cash + card), include split details
       if (remainingCents > 0) {
         payload.isSplitPayment = true;
-        payload.cashAmountCents = cashGivenCents;
+        payload.cashAmountCents = cashReceivedCents;
         payload.cardAmountCents = remainingCents;
       }
 
@@ -1058,7 +1058,7 @@ export default function POSPage() {
       setPaymentStatus('success');
       const shopperName = linkedShopperData?.name || buyerEmail || 'shopper';
       if (remainingCents > 0) {
-        setSuccessMessage(`📱 Split payment request of $${(remainingCents / 100).toFixed(2)} (card) sent to ${shopperName}'s phone. Cash received: $${(cashGivenCents / 100).toFixed(2)}.`);
+        setSuccessMessage(`📱 Split payment request of $${(remainingCents / 100).toFixed(2)} (card) sent to ${shopperName}'s phone. Cash received: $${(cashReceivedCents / 100).toFixed(2)}.`);
       } else {
         setSuccessMessage(`📱 Payment request of $${cartTotal.toFixed(2)} sent to ${shopperName}'s phone.`);
       }
@@ -1573,10 +1573,10 @@ export default function POSPage() {
                   {paymentStatus === 'creating'
                     ? 'Sending…'
                     : (() => {
-                        const cashGivenCents = Math.round(parseFloat(cashGiven || '0') * 100);
+                        const cashReceivedCents = Math.round(cashReceived * 100);
                         const totalCents = Math.round(cartTotal * 100);
-                        const remainingCents = cashGivenCents > 0 && cashGivenCents < totalCents
-                          ? totalCents - cashGivenCents
+                        const remainingCents = cashReceivedCents > 0 && cashReceivedCents < totalCents
+                          ? totalCents - cashReceivedCents
                           : 0;
                         return remainingCents > 0
                           ? `Send $${(remainingCents / 100).toFixed(2)} to Phone`
@@ -1598,41 +1598,6 @@ export default function POSPage() {
               No reader? Enter card manually
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Cash Calculator (visible when cash mode selected) */}
-      {paymentMode === 'cash' && selectedSaleId && (
-        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 shadow-sm">
-          <div className="mb-3">
-            <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">
-              Cash given
-            </label>
-            <input
-              type="number"
-              inputMode="decimal"
-              value={cashGiven}
-              onChange={(e) => setCashGiven(e.target.value)}
-              placeholder="$0.00"
-              className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-3 text-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
-            />
-          </div>
-          {cashGiven && parseFloat(cashGiven) > 0 && (
-            <>
-              {parseFloat(cashGiven) >= cartTotal ? (
-                // Full cash payment: show change
-                <div className="p-3 rounded-lg text-center text-sm font-semibold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">
-                  Change: ${(parseFloat(cashGiven) - cartTotal).toFixed(2)}
-                </div>
-              ) : (
-                // Split payment: show remaining balance for card
-                <div className="p-3 rounded-lg text-center text-sm font-semibold bg-sage-50 dark:bg-sage-900/20 text-sage-700 dark:text-sage-400">
-                  <p className="font-medium">Cash received: ${parseFloat(cashGiven).toFixed(2)}</p>
-                  <p className="mt-1 font-semibold text-sage-700 dark:text-sage-300">Remaining: ${(cartTotal - parseFloat(cashGiven)).toFixed(2)}</p>
-                </div>
-              )}
-            </>
-          )}
         </div>
       )}
 
@@ -1806,6 +1771,11 @@ export default function POSPage() {
                         ? `Change: $${cartChange.toFixed(2)}`
                         : `Short $${(cartTotal - cashReceived).toFixed(2)}`}
                     </p>
+                    {cashReceived > 0 && cashReceived < cartTotal && (linkedShopperId || linkedShopperData?.id) && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        Tap "Send to Phone" to charge ${(cartTotal - cashReceived).toFixed(2)} to their card
+                      </p>
+                    )}
                   </div>
                 )}
 
