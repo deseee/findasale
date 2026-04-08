@@ -1,8 +1,16 @@
-# Patrick's Dashboard — April 8, 2026 (S421 COMPLETE)
+# Patrick's Dashboard — April 8, 2026 (S422 COMPLETE)
 
 ## What You Need to Do Right Now
 
-**1. Configure Stripe Connect webhook (unlocks items-marked-SOLD after POS payment)**
+**1. Run the split payment migration (if not done yet):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**2. Configure Stripe Connect webhook (unlocks items-marked-SOLD after POS payment)**
 
 In Stripe Dashboard → Developers → Webhooks → Add endpoint:
 - URL: `https://backend-production-153c9.up.railway.app/api/webhooks/stripe`
@@ -34,6 +42,20 @@ $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev
 npx prisma migrate deploy
 npx prisma generate
 ```
+
+---
+
+## What Happened This Session (S422)
+
+**POS payment UX — split payment, notifications, dark mode, infrastructure fixes.**
+
+- **Split payment working:** Enter cash on the numpad → if it's less than the total, "Send to Phone" automatically charges the remaining balance to the shopper's card. No separate toggle needed.
+- **POS success banner fixed:** The green flash and toast weren't showing because the socket event arrived before the pending payments list was populated. Fixed with a React ref — now fires immediately every time.
+- **New transaction button** now clears the cart and email field properly.
+- **Dark mode** fixed on the shopper pay-request page (was white/hard to read).
+- **After payment**, shoppers land on their receipts page with a success flash and CTAs: "Post your haul," "Share your collection," "Find more sales."
+- **Rate limit 429 errors fixed:** Authenticated users now get 3000 req/15min (was 500 — too tight for dashboard + POS polling). POS pending poll slowed from every 5s to every 30s since socket handles real-time.
+- **eBay 403 fixed:** eBay's compliance pings to `/api/ebay/account-deletion` were being blocked by CSRF middleware. Exempted.
 
 ---
 

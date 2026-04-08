@@ -7,6 +7,51 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S422 COMPLETE (2026-04-08):** POS payment UX — split payment, pending panel, success notifications, dark mode, rate limit fixes. All pushed.
+
+**S422 Key fixes:**
+- Split payment: cashier enters cash via existing numpad → remaining auto-routes to card via "Send to Phone"
+- POS success banner race condition fixed: ref-based pending payments lookup, banner fires regardless of list state, falls back to event `totalAmountCents`
+- Removed duplicate `cashGiven` text input (dev agent added it on top of existing numpad)
+- `handleNewTransaction` now calls `clearCart()` — cart/email reset on new transaction
+- Dark mode: shopper pay-request page background, card, text colors all fixed
+- Post-payment redirect: `/shopper/history?view=receipts&paid=1` with success flash + CTAs (haul post, share collection, find more sales)
+- eBay account-deletion endpoint exempted from CSRF middleware (was returning 403 on every eBay compliance ping)
+- Authenticated rate limit raised: 3000 req/15min (was 500) — eliminates self-rate-limiting on dashboard + POS
+- POS pending poll slowed from 5s → 30s (socket handles real-time)
+- Schema: `isSplitPayment`, `cashAmountCents`, `cardAmountCents` added to `POSPaymentRequest`
+
+**S422 Files changed (all pushed):**
+- `packages/frontend/pages/organizer/pos.tsx`
+- `packages/frontend/pages/shopper/pay-request/[requestId].tsx`
+- `packages/frontend/pages/shopper/history.tsx`
+- `packages/backend/src/index.ts` — auth rate limit
+- `packages/backend/src/middleware/csrf.ts` — eBay exemption
+- `packages/backend/src/controllers/posPaymentController.ts` — split payment, pending, cancel, today summary
+- `packages/backend/src/routes/pos.ts` — new routes
+- `packages/frontend/hooks/usePOSPaymentRequest.ts` — split payment interface fields
+- `packages/database/prisma/schema.prisma` — split payment fields
+- `packages/database/prisma/migrations/20260408_add_split_payment/migration.sql` — NEW
+
+**S422 Migration still needed (if not run):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+---
+
+## Next Session Priority
+
+**iPhone XS geolocation bug (Safari/iOS):**
+Unauthenticated user on web, has accepted location permission, but gets: "location access denied — use the My Location button to share your location or browse sales near you / unable to access your location, please check your browser permissions."
+
+Start by reading the geolocation/map code — likely `SaleMap`, `SaleMapInner`, or a `useGeolocation` hook. Safari on iOS handles the Geolocation API differently: permission state can be `prompt` on every page load (no persistent grant on older iOS), the API requires HTTPS (prod should be fine), and `getCurrentPosition` can return `PERMISSION_DENIED` even after the user taps Allow if the request fires before the permission dialog resolves. Also check if there's a try/catch swallowing a `PositionError` code 1 (denied) vs code 2 (unavailable) vs code 3 (timeout) — each needs different error messaging.
+
+---
+
 **S421 COMPLETE (2026-04-08):** POS "Send to Phone" flow — bug fix sprint. 4 files changed. All pushed.
 
 **S421 Root cause fixed — stuck "Processing..." on pay-request page:**
