@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
@@ -41,7 +41,6 @@ type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'c
 const MapPage = () => {
   const { showToast } = useToast();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [isGeolocationRequested, setIsGeolocationRequested] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
   const [filteredPins, setFilteredPins] = useState<SalePin[]>([]);
@@ -97,31 +96,6 @@ const MapPage = () => {
     staleTime: 5 * 60 * 1000, // 5 min — boosts don't change frequently
     retry: 0,
   });
-
-  // Auto-request geolocation on mount
-  useEffect(() => {
-    if (!isGeolocationRequested && navigator.geolocation) {
-      setIsGeolocationRequested(true);
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        },
-        (error) => {
-          // Safari/iOS resets permission state on every page load and can fire
-          // PERMISSION_DENIED (code 1) even after the user taps Allow due to a
-          // race condition between the prompt dialog and the API callback.
-          // Fail silently on auto-request — user can tap "My Location" to retry.
-          if (error.code !== 1) {
-            console.warn('Geolocation unavailable on auto-request:', error);
-          }
-        },
-        { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false }
-      );
-    }
-  }, [isGeolocationRequested]);
 
   // Filter sales by date, sale type, and geo-location
   const filteredSales = useMemo(() => {
