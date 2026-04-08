@@ -96,6 +96,7 @@ interface SaleMapInnerProps {
   onHeatmapCellClick?: (tile: HeatmapTile) => void;
   /** Feature #39: Photo Op Stations */
   photoOpStations?: PhotoOpStation[];
+  // (hasFeaturedBoost is passed through SalePin — no extra prop needed)
 }
 
 const SaleMapInner = ({
@@ -179,6 +180,26 @@ const SaleMapInner = ({
             <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={markerIcon}>
               <Popup>
                 <div style={{ minWidth: '180px', position: 'relative' }}>
+                  {/* Phase 2b: Featured Boost Badge (SALE_BUMP) */}
+                  {pin.hasFeaturedBoost && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        left: '4px',
+                        backgroundColor: '#f59e0b',
+                        borderRadius: '3px',
+                        padding: '1px 5px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '2px',
+                      }}
+                      title="Featured sale"
+                    >
+                      <span style={{ fontSize: '9px', color: '#fff', fontWeight: 'bold' }}>⭐ Featured</span>
+                    </div>
+                  )}
+
                   {/* Treasure Trail Badge */}
                   {pin.hasActiveTrail && (
                     <div

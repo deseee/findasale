@@ -18,6 +18,8 @@ export interface SalePin {
   status?: 'active' | 'upcoming-soon' | 'upcoming';
   hasActiveTrail?: boolean;
   trailShareToken?: string;
+  /** Phase 2b: true = this sale has an active SALE_BUMP boost */
+  hasFeaturedBoost?: boolean;
 }
 
 interface SaleMapProps {

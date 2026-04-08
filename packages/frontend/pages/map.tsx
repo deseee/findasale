@@ -82,6 +82,21 @@ const MapPage = () => {
     retry: 1,
   });
 
+  // Phase 2b: Fetch active SALE_BUMP boosts (public endpoint, no auth required)
+  const { data: featuredBoosts } = useQuery({
+    queryKey: ['active-boosts', 'SALE'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/boosts/active?targetType=SALE');
+        return (response.data.boosts ?? []) as Array<{ targetId: string | null }>;
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 min — boosts don't change frequently
+    retry: 0,
+  });
+
   // Auto-request geolocation on mount
   useEffect(() => {
     if (!isGeolocationRequested && navigator.geolocation) {
@@ -151,6 +166,13 @@ const MapPage = () => {
 
   // Convert filtered sales to map pins
   useMemo(() => {
+    // Build a Set of sale IDs that have an active SALE_BUMP boost
+    const featuredSaleIds = new Set(
+      (featuredBoosts ?? [])
+        .filter((b) => b.targetId != null)
+        .map((b) => b.targetId as string)
+    );
+
     const pins = filteredSales
       .filter((s) => s.lat && s.lng)
       .map((s): SalePin => {
@@ -175,10 +197,11 @@ const MapPage = () => {
           status: isActive ? 'active' : isWithin7Days ? 'upcoming-soon' : 'upcoming',
           hasActiveTrail: s.hasActiveTrail ?? false,
           trailShareToken: s.trailShareToken,
+          hasFeaturedBoost: featuredSaleIds.has(s.id),
         };
       });
     setFilteredPins(pins);
-  }, [filteredSales]);
+  }, [filteredSales, featuredBoosts]);
 
   const handleUseLocation = () => {
     if (navigator.geolocation) {
