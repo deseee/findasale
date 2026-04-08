@@ -154,12 +154,12 @@ export default function PaymentRequestPage() {
         <title>Payment Request - FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-br from-sage-50 to-gray-50 py-8 px-4 sm:px-6">
+      <div className="min-h-screen bg-gradient-to-br from-sage-50 to-gray-50 dark:from-gray-900 dark:to-gray-800 py-8 px-4 sm:px-6">
         <div className="max-w-md mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Payment Request</h1>
-            <p className="text-gray-600">{request.organizerName}</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Payment Request</h1>
+            <p className="text-gray-600 dark:text-gray-300">{request.organizerName}</p>
           </div>
 
           {/* Status Banner */}
@@ -182,34 +182,34 @@ export default function PaymentRequestPage() {
           )}
 
           {/* Payment Details Card */}
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-none p-6 mb-6">
             {/* Sale Info */}
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-2">{request.saleName}</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{request.saleName}</h2>
               {request.saleLocation && (
-                <p className="text-sm text-gray-600">{request.saleLocation}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{request.saleLocation}</p>
               )}
             </div>
 
             {/* Items List */}
             {request.itemNames && request.itemNames.length > 0 && (
-              <div className="mb-6 pb-6 border-b border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Items</h3>
+              <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Items</h3>
                 <ul className="space-y-1">
                   {request.itemNames.map((name, i) => (
-                    <li key={i} className="text-sm text-gray-600">• {name}</li>
+                    <li key={i} className="text-sm text-gray-600 dark:text-gray-400">• {name}</li>
                   ))}
                 </ul>
               </div>
             )}
 
             {/* Total and Split Payment Info */}
-            <div className="mb-6 pb-6 border-b border-gray-200">
+            <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
               {request.isSplitPayment && request.cardDisplayAmount ? (
                 <>
-                  <div className="flex justify-between text-lg font-bold mb-3">
+                  <div className="flex justify-between text-lg font-bold mb-3 dark:text-white">
                     <span>Total</span>
-                    <span className="text-gray-700">{request.displayAmount}</span>
+                    <span className="text-gray-700 dark:text-gray-200">{request.displayAmount}</span>
                   </div>
                   <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                     <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">Split Payment</p>
@@ -224,9 +224,9 @@ export default function PaymentRequestPage() {
                   </div>
                 </>
               ) : (
-                <div className="flex justify-between text-lg font-bold">
+                <div className="flex justify-between text-lg font-bold dark:text-white">
                   <span>Total</span>
-                  <span className="text-sage-600">{request.displayAmount}</span>
+                  <span className="text-sage-600 dark:text-sage-400">{request.displayAmount}</span>
                 </div>
               )}
             </div>
@@ -234,7 +234,7 @@ export default function PaymentRequestPage() {
             {/* Countdown Timer */}
             {countdown && !isExpired && !isPaid && !isDeclined && (
               <div className="mb-6">
-                <p className="text-sm text-gray-600 mb-2">Expires in</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Expires in</p>
                 <div className="text-3xl font-bold text-sage-600">
                   {countdown.hours > 0 && `${countdown.hours}h `}
                   {countdown.minutes}m {countdown.seconds}s
