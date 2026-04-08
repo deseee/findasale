@@ -287,9 +287,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <BookOpen size={16} className="text-amber-500" />
               <span>Item Library</span>
             </Link>
-            <Link href="/organizer/inventory" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed" title="Persistent inventory across sales (coming soon)">
+            <Link href="/organizer/inventory" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Persistent inventory across sales">
               <Package size={16} className="text-amber-400" />
-              <span>Inventory <span className="text-xs text-gray-400">(Soon)</span></span>
+              <span>Inventory</span>
             </Link>
             <Link href="/organizer/reputation" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your organizer rating and trust score">
               <Star size={16} className="text-amber-500" />
@@ -304,17 +304,21 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <span>Manage Photos</span>
             </Link>
 
-            <SectionHeader icon={BarChart2} label="Insights" color="purple" />
-            <Link href="/organizer/insights" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Advanced analytics and sale performance insights — PRO">
-              <BarChart2 size={16} className="text-purple-400" />
-              <span>Advanced Analytics</span>
-            </Link>
+            {canAccess('PRO') && (
+              <>
+                <SectionHeader icon={BarChart2} label="Insights" color="purple" />
+                <Link href="/organizer/insights" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Advanced analytics and sale performance insights">
+                  <BarChart2 size={16} className="text-purple-400" />
+                  <span>Advanced Analytics</span>
+                </Link>
 
-            <SectionHeader icon={Palette} label="Branding" color="purple" />
-            <Link href="/organizer/brand-kit" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Custom logos, colors, and banners for your sale pages — PRO">
-              <Palette size={16} className="text-purple-400" />
-              <span>Brand Kit</span>
-            </Link>
+                <SectionHeader icon={Palette} label="Branding" color="purple" />
+                <Link href="/organizer/brand-kit" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Custom logos, colors, and banners for your sale pages">
+                  <Palette size={16} className="text-purple-400" />
+                  <span>Brand Kit</span>
+                </Link>
+              </>
+            )}
 
             <SectionHeader icon={Sparkles} label="Pro Tools" color="purple" />
             <Link href="/organizer/ripples" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Free sale performance analytics">
@@ -325,10 +329,26 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <TrendingUp size={16} className="text-purple-400" />
               <span>Flip Report</span>
             </Link>
-            <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals — PRO">
-              <Scale size={16} className="text-purple-400" />
-              <span>Appraisals</span>
-            </Link>
+            {canAccess('PRO') && (
+              <>
+                <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals">
+                  <Scale size={16} className="text-purple-400" />
+                  <span>Appraisals</span>
+                </Link>
+                <Link href="/organizer/command-center" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-sale overview dashboard">
+                  <LayoutDashboard size={16} className="text-purple-400" />
+                  <span>Command Center</span>
+                </Link>
+                <Link href="/organizer/typology" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Item type and category classifier">
+                  <Tag size={16} className="text-purple-400" />
+                  <span>Typology</span>
+                </Link>
+                <Link href="/organizer/fraud-signals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Bid bot and fraud detection">
+                  <ShieldAlert size={16} className="text-purple-400" />
+                  <span>Fraud Signals</span>
+                </Link>
+              </>
+            )}
             <Link href="/organizer/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Buyer bounty requests for your sale items">
               <Trophy size={16} className="text-purple-400" />
               <span>Bounties</span>
@@ -336,18 +356,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/organizer/email-digest-preview" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Preview your email digest before it sends">
               <MessageSquare size={16} className="text-purple-400" />
               <span>Email Digest</span>
-            </Link>
-            <Link href="/organizer/command-center" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-sale overview dashboard — PRO">
-              <LayoutDashboard size={16} className="text-purple-400" />
-              <span>Command Center</span>
-            </Link>
-            <Link href="/organizer/typology" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="AI item type and category classifier — PRO">
-              <Tag size={16} className="text-purple-400" />
-              <span>Typology</span>
-            </Link>
-            <Link href="/organizer/fraud-signals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="AI bid bot and fraud detection — PRO">
-              <ShieldAlert size={16} className="text-purple-400" />
-              <span>Fraud Signals</span>
             </Link>
 
             {canAccess('TEAMS') && (
@@ -366,17 +374,17 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             )}
 
             <SectionHeader icon={Share2} label="Sale Context" />
-            <Link href="/organizer/promote" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed" title="Accessed from your sale management page">
+            <Link href="/organizer/promote" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Share and promote your sale">
               <Share2 size={16} className="text-amber-400" />
-              <span>Share & Promote <span className="text-xs text-gray-400">(In Sale)</span></span>
+              <span>Share & Promote</span>
             </Link>
-            <Link href="/organizer/send-update" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed" title="Accessed from your sale management page">
+            <Link href="/organizer/send-update" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send updates to buyers">
               <Send size={16} className="text-amber-400" />
-              <span>Send Update <span className="text-xs text-gray-400">(In Sale)</span></span>
+              <span>Send Update</span>
             </Link>
-            <Link href="/organizer/photo-ops" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed" title="Accessed from your sale management page">
+            <Link href="/organizer/photo-ops" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Manage photo opportunities for your sale">
               <Camera size={16} className="text-amber-400" />
-              <span>Photo Ops <span className="text-xs text-gray-400">(In Sale)</span></span>
+              <span>Photo Ops</span>
             </Link>
             <Link href="/organizer/print-inventory" className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Print labels and signage for your items">
               <Printer size={16} className="text-amber-600 dark:text-amber-400" />
@@ -877,17 +885,17 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileInSaleToolsOpen && (
                   <>
-                    <Link href="/organizer/promote" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Share2 size={14} className="inline mr-2 text-amber-400" /> Share & Promote <span className="text-xs text-gray-400">(Soon)</span>
+                    <Link href="/organizer/promote" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Share2 size={14} className="inline mr-2 text-amber-400" /> Share & Promote
                     </Link>
-                    <Link href="/organizer/send-update" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Send size={14} className="inline mr-2 text-amber-400" /> Send Update <span className="text-xs text-gray-400">(Soon)</span>
+                    <Link href="/organizer/send-update" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Send size={14} className="inline mr-2 text-amber-400" /> Send Update
                     </Link>
-                    <Link href="/organizer/photo-ops" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Camera size={14} className="inline mr-2 text-amber-400" /> Photo Ops <span className="text-xs text-gray-400">(Soon)</span>
+                    <Link href="/organizer/photo-ops" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Camera size={14} className="inline mr-2 text-amber-400" /> Photo Ops
                     </Link>
-                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Tag size={14} className="inline mr-2 text-amber-400" /> Price Tags <span className="text-xs text-gray-400">(Soon)</span>
+                    <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Tag size={14} className="inline mr-2 text-amber-400" /> Price Tags
                     </Link>
                     <Link href="/organizer/print-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Printer size={14} className="inline mr-2 text-amber-500" /> Print Kit
@@ -912,7 +920,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <Printer size={14} className="inline mr-2 text-amber-500" /> Print & Labels
                     </Link>
                     <Link href="/organizer/earnings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <DollarSign size={14} className="inline mr-2 text-amber-500" /> Earnings <span className="text-xs text-gray-400">(Soon)</span>
+                      <DollarSign size={14} className="inline mr-2 text-amber-500" /> Earnings
                     </Link>
                     <Link href="/organizer/payouts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Wallet size={14} className="inline mr-2 text-amber-500" /> Payouts
@@ -998,11 +1006,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileTeamsOpen && (
                       <>
-                        <Link href="/organizer/calendar" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                          <Calendar size={14} className="inline mr-2 text-gray-400" /> Calendar <span className="text-xs text-gray-400">(Soon)</span>
+                        <Link href="/organizer/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Calendar size={14} className="inline mr-2 text-amber-500" /> Calendar
                         </Link>
-                        <Link href="/organizer/staff" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                          <UserPlus size={14} className="inline mr-2 text-gray-400" /> Staff Accounts <span className="text-xs text-gray-400">(Soon)</span>
+                        <Link href="/organizer/staff" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <UserPlus size={14} className="inline mr-2 text-amber-500" /> Staff Accounts
                         </Link>
                         <Link href="/organizer/webhooks" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Webhook size={14} className="inline mr-2 text-gray-500" /> Webhooks
