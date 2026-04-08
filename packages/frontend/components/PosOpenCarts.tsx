@@ -4,7 +4,9 @@ import React, { useState } from 'react';
 
 interface LinkedCart {
   id: string;
+  shopperId: string;
   shopperName: string;
+  shopperEmail: string;
   cartItems: Array<{ id: string; title: string; price: number; photoUrl?: string; saleId: string }>;
   cartTotal: number;
   createdAt: string;
@@ -12,7 +14,7 @@ interface LinkedCart {
 
 interface PosOpenCartsProps {
   linkedCarts: LinkedCart[];
-  onPullCart: (sessionId: string, cartItems: LinkedCart['cartItems']) => void;
+  onPullCart: (sessionId: string, cartItems: LinkedCart['cartItems'], shopperId: string, shopperEmail: string) => void;
 }
 
 // Helper: Calculate relative time ("2 min ago", "1 hour ago", etc.)
@@ -36,7 +38,7 @@ function CartCard({
   onPullCart,
 }: {
   cart: LinkedCart;
-  onPullCart: (sessionId: string, cartItems: LinkedCart['cartItems']) => void;
+  onPullCart: (sessionId: string, cartItems: LinkedCart['cartItems'], shopperId: string, shopperEmail: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -97,7 +99,7 @@ function CartCard({
           <button
             onClick={e => {
               e.stopPropagation();
-              onPullCart(cart.id, cart.cartItems);
+              onPullCart(cart.id, cart.cartItems, cart.shopperId, cart.shopperEmail);
             }}
             className="w-full px-4 py-2 rounded-lg bg-sage-700 dark:bg-sage-600 text-white dark:text-gray-100 text-sm font-semibold hover:bg-sage-800 dark:hover:bg-sage-500 transition-colors"
           >
