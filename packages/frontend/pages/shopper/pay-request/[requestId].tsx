@@ -203,12 +203,32 @@ export default function PaymentRequestPage() {
               </div>
             )}
 
-            {/* Total */}
+            {/* Total and Split Payment Info */}
             <div className="mb-6 pb-6 border-b border-gray-200">
-              <div className="flex justify-between text-lg font-bold">
-                <span>Total</span>
-                <span className="text-sage-600">{request.displayAmount}</span>
-              </div>
+              {request.isSplitPayment && request.cardDisplayAmount ? (
+                <>
+                  <div className="flex justify-between text-lg font-bold mb-3">
+                    <span>Total</span>
+                    <span className="text-gray-700">{request.displayAmount}</span>
+                  </div>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mb-2">Split Payment</p>
+                    <div className="flex justify-between text-sm font-semibold mb-2">
+                      <span className="text-gray-700 dark:text-gray-300">Cash (in person):</span>
+                      <span className="text-gray-700 dark:text-gray-300">${((request.totalAmountCents - request.cardAmountCents!) / 100).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-semibold text-sage-700 dark:text-sage-400">
+                      <span>Card charge:</span>
+                      <span>{request.cardDisplayAmount}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between text-lg font-bold">
+                  <span>Total</span>
+                  <span className="text-sage-600">{request.displayAmount}</span>
+                </div>
+              )}
             </div>
 
             {/* Countdown Timer */}
@@ -229,7 +249,7 @@ export default function PaymentRequestPage() {
               <PaymentRequestForm
                 requestId={request.id}
                 clientSecret={request.clientSecret}
-                totalAmountCents={request.totalAmountCents}
+                totalAmountCents={request.isSplitPayment && request.cardAmountCents ? request.cardAmountCents : request.totalAmountCents}
                 stripeAccountId={request.organizerStripeAccountId}
                 onSuccess={handlePaymentSuccess}
                 onError={handlePaymentError}
