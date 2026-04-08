@@ -109,7 +109,7 @@ export default function HighValueTrackerWidget({ saleId }: HighValueTrackerWidge
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{item.title}</p>
                 {/* Feature #371: Auto-flag source indicator */}
                 {item.highValueSource === 'AUTO' && (
-                  <span title="Auto-flagged by AI" className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 whitespace-nowrap">
+                  <span title="Auto-flagged" className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 whitespace-nowrap">
                     Auto
                   </span>
                 )}

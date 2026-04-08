@@ -5,6 +5,14 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-04-07 (S413) — Brand-Spreading Features Are Never Tier-Gated
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Features that spread the FindA.Sale brand organically — social post generator, referral sharing, invite flows, and similar — must never be gated behind a paid tier, regardless of backend cost implications (Anthropic API tokens, Cloudinary, etc.). The acquisition value of brand spreading exceeds the marginal cost. This decision supersedes any generic "gate expensive AI features" guidance. Backend routes for these features use `authenticate` only (no `requireTier`). Frontend shows no `TierGate`. Applies to: Social Post Generator (`/api/social-post/generate`), referral sharing. When in doubt about a new feature, ask: "Does using this feature put FindA.Sale in front of new eyes?" — if yes, it stays ungated.
+
+---
+
 ## 2026-04-04 (S392) — TEAMS Default Member Limit Reduced to 5 + Purchasable Upgrade
 
 **Status:** LOCKED

@@ -74,7 +74,6 @@ export const useLiveFeed = (saleId: string | undefined): UseLiveFeedReturn => {
 
       // Handle connection
       socketRef.current.on('connect', () => {
-        console.log('[useLiveFeed] Connected to socket server');
         setConnected(true);
         setLoading(false);
         // Emit JOIN_SALE_FEED after connection
@@ -85,13 +84,11 @@ export const useLiveFeed = (saleId: string | undefined): UseLiveFeedReturn => {
 
       // Handle disconnection
       socketRef.current.on('disconnect', () => {
-        console.log('[useLiveFeed] Disconnected from socket server');
         setConnected(false);
       });
 
       // Handle feed events — store reference for cleanup
       const handleFeedEvent = (event: any) => {
-        console.log('[useLiveFeed] Received event:', event);
         // Convert timestamp string to Date if needed
         const feedEvent: FeedEvent = {
           ...event,

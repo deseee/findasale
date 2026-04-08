@@ -159,7 +159,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         {/* Error banner */}
         {aiErrored && (
           <div className="bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-900 p-4 text-sm text-red-700 dark:text-red-400">
-            AI analysis failed. Please review and fill in details manually.
+            Analysis failed. Please review and fill in details manually.
             <button
               onClick={() => onRetake(item.id)}
               className="block mt-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"

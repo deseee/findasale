@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
+import TierGate from '../../../components/TierGate';
 import type { PhotoOpStation } from '../../../hooks/usePhotoOps';
 
 const PhotoOpsPage: React.FC = () => {
@@ -94,6 +95,7 @@ const PhotoOpsPage: React.FC = () => {
 
   return (
     <>
+      <TierGate requiredTier="PRO" featureName="Photo Ops" description="Mark your best photo spots on the map and let shoppers know where to find the most Instagrammable finds at your sale.">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {!isPro ? (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg p-6">
@@ -264,6 +266,7 @@ const PhotoOpsPage: React.FC = () => {
           </div>
         )}
       </div>
+      </TierGate>
     </>
   );
 };

@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S414 COMPLETE (2026-04-07):** Brand-spreading decision locked, console.log sweep, eBay category picker shipped, Map UX spec.
+
+**S414 Summary:**
+Continuation of S413 wrap items. (1) **Decisions-log:** Added D-S413 brand-spreading features never tier-gated — Social Post Generator stays authenticate-only regardless of API cost; applies to referrals, invite flows, and any feature that puts FindA.Sale in front of new eyes. (2) **console.log sweep:** Scanned all 476 frontend TS/TSX files — only 2 hook files had console.log (not 54 as estimated). `useLiveFeed.ts` (3 socket debug logs) and `useSaleStatus.ts` (2 socket debug logs) cleaned inline. Pages were already clean. (3) **eBay category hierarchy shipped:** 7 files created/modified. Static category JSON at `public/ebay-categories.json` (~30 top-level + children). Searchable `EbayCategoryPicker` component. `ebayController.ts` now uses real eBay category IDs via local `utils/ebayCategoryMap.ts` (not hardcoded 12-entry map). Edit-item page wired with picker replacing hardcoded select. Forbidden `@findasale/shared` import caught and fixed — category function inlined to backend utils. TypeScript: zero errors. (4) **Map UX spec:** Full spec for Treasure Trails badge on map pins (Simple, 1 session) + Start from My Location toggle (Simple-Med, 1-1.5 sessions). Spec saved to `feature-notes/map-enhancements-ux-spec.md`.
+
+**S414 Files Changed:**
+- `claude_docs/decisions-log.md` — D-S413 brand-spreading features never tier-gated
+- `packages/frontend/hooks/useLiveFeed.ts` — 3 console.log removed
+- `packages/frontend/hooks/useSaleStatus.ts` — 2 console.log removed
+- `packages/frontend/public/ebay-categories.json` — NEW: top-2-level eBay hierarchy JSON
+- `packages/shared/src/types/ebayCategories.ts` — NEW: EbayCategory TypeScript interfaces
+- `packages/shared/src/constants/ebayCategories.ts` — NEW: 300+ category name→ID map + helper
+- `packages/shared/src/index.ts` — exports for new types/constants added
+- `packages/frontend/components/EbayCategoryPicker.tsx` — NEW: searchable 2-level picker
+- `packages/backend/src/utils/ebayCategoryMap.ts` — NEW: local copy of category map (avoids forbidden @findasale/shared import)
+- `packages/backend/src/controllers/ebayController.ts` — import fixed (shared→local utils), now uses real eBay IDs
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — hardcoded category select → EbayCategoryPicker
+- `claude_docs/feature-notes/ebay-category-picker-spec.md` — NEW: implementation spec
+- `claude_docs/feature-notes/map-enhancements-ux-spec.md` — NEW: Treasure Trails + Route Planning spec
+
+**S414 Chrome smoke test:** PENDING — eBay category picker in edit-item should be verified.
+
+---
+
 **S413 COMPLETE (2026-04-07):** Second-pass orphan audit + admin nav gaps filled + 4 confirmed orphans removed.
 
 **S413 Summary:**
@@ -19,19 +43,49 @@ Full 173-page inventory audit using Explore agent. 19 orphaned routes identified
 - FeedbackWidget.tsx was 237 lines of dead code — replaced by FeedbackSurvey (event-triggered) + FeedbackMenu (settings)
 - /notifications vs /shopper/notifications: intentionally different — leaving both
 
-**S413 Files Changed (5 edited, 4 deleted):**
-- `packages/frontend/components/AvatarDropdown.tsx` — 4 admin nav links added
-- `packages/frontend/components/Layout.tsx` — 4 admin nav links added
-- `packages/frontend/pages/referral-dashboard.tsx` — redesigned with gradient hero, XP copy, share buttons (replica of the better shopper/referrals design); nav stays pointing here
-- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — RapidCapture `&&` → ternary (S407 P2 scroll bug, deferred)
-- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — RapidCapture `&&` → ternary (same fix)
-- `claude_docs/strategy/roadmap.md` — v101: #71 Reputation + #148 Checklist updated for S412 work
-- DELETED: `packages/frontend/pages/shopper/referrals.tsx` — design promoted to referral-dashboard.tsx
-- DELETED: `packages/frontend/pages/shopper/disputes.tsx`
-- DELETED: `packages/frontend/pages/shopper/messages.tsx`
-- DELETED: `packages/frontend/components/FeedbackWidget.tsx`
+**S413 Files Changed (19 edited, 4 deleted):**
 
-**Also confirmed clean (S410 deferred):** Rarity dropdown already removed from add-items form in S410 — confirmed absent in both [saleId].tsx and review.tsx.
+Nav/cleanup:
+- `packages/frontend/components/AvatarDropdown.tsx` — 4 admin nav links; referral href stays /referral-dashboard
+- `packages/frontend/components/Layout.tsx` — same
+- `packages/frontend/pages/referral-dashboard.tsx` — redesigned (gradient hero, XP copy, share buttons)
+
+Scroll fix (S407 P2 deferred):
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — RapidCapture && → ternary
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — same fix
+
+Label + dates:
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — label URL fixed (relative /api → NEXT_PUBLIC_API_URL)
+- `packages/frontend/components/SecondarySaleCard.tsx` — dates now show on LIVE/PUBLISHED cards (start–end)
+
+AI terminology (10 violations fixed):
+- `packages/frontend/components/ItemCard.tsx` — AI badge → Auto
+- `packages/frontend/components/PriceResearchPanel.tsx` — AI Estimate → Smart Estimate
+- `packages/frontend/pages/organizer/dashboard.tsx` — AI tags/month → Auto Tags/month; social tooltip cleaned
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — AI suggests → Auto-suggests; AI suggested → Suggested
+- `packages/frontend/components/RapidCapture.tsx` — AI won't → Our system won't
+- `packages/frontend/components/Layout.tsx` — Flip Report tooltip cleaned
+- `packages/frontend/components/HighValueTrackerWidget.tsx` — Auto-flagged by AI → Auto-flagged
+- `packages/frontend/components/camera/PreviewModal.tsx` — AI analysis failed → Analysis failed
+- `packages/frontend/pages/auth/oauth-callback.tsx` — console.log removed
+
+Feature gating (2 fixes; social post intentionally ungated — brand-spreading):
+- `packages/backend/src/routes/socialPost.ts` — stays authenticate-only (DECISION: brand-spreading features never gated)
+- `packages/backend/src/routes/brandKit.ts` — requireTier('PRO') added to all write routes
+- `packages/frontend/pages/organizer/photo-ops/index.tsx` — TierGate PRO added
+- `packages/frontend/pages/organizer/photo-ops/[saleId].tsx` — TierGate PRO added
+
+Docs:
+- `claude_docs/strategy/roadmap.md` — v101: #71 Reputation + #148 Checklist updated
+- `claude_docs/strategy/BUSINESS_PLAN.md` — 8 stale fixes: Neon→Railway, SLA promises removed, Collector Passport→Loot Legend, AI valuations→Smart Pricing
+
+Deleted:
+- `packages/frontend/pages/shopper/referrals.tsx` — design promoted to referral-dashboard.tsx
+- `packages/frontend/pages/shopper/disputes.tsx` — covered by history tab
+- `packages/frontend/pages/shopper/messages.tsx` — zero references
+- `packages/frontend/components/FeedbackWidget.tsx` — dead code
+
+**console.log:** ✅ DONE S414 — full sweep found only 2 hook files (useLiveFeed, useSaleStatus). Pages were already clean. next/image migration deferred (post-beta).
 
 **S413 Chrome smoke test:** PENDING — admin dropdown additions should be spot-checked.
 

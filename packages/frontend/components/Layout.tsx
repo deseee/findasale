@@ -335,7 +335,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Activity size={16} className="text-purple-400" />
               <span>Sale Ripples</span>
             </Link>
-            <Link href="/organizer/flip-report" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="AI analysis of your best-performing item categories">
+            <Link href="/organizer/flip-report" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Smart analysis of your best-performing item categories">
               <TrendingUp size={16} className="text-purple-400" />
               <span>Flip Report</span>
             </Link>

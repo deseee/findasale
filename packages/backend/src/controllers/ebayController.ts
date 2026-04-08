@@ -3,10 +3,12 @@ import express, { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+import { getEbayCategoryId } from '../utils/ebayCategoryMap';
 
 /**
  * Feature #229: AI Price Comps Tool
  * Feature #244 Phase 1: eBay CSV Export
+ * Feature #244 Phase 2: eBay Category Hierarchy Picker
  *
  * eBay API integration for price comparison and CSV export.
  */
@@ -26,22 +28,6 @@ const CONDITION_ID_MAP: Record<string, string> = {
   'B': '4000', // Very Good
   'C': '5000', // Good
   'D': '6000', // Acceptable
-};
-
-// eBay category mapping table
-const EBAY_CATEGORY_MAP: Record<string, string> = {
-  'Furniture': '3197',
-  'Electronics': '58058',
-  'Clothing': '11450',
-  'Jewelry': '281',
-  'Art': '550',
-  'Books': '267',
-  'Toys': '220',
-  'Kitchen': '20625',
-  'Tools': '631',
-  'Sports': '888',
-  'Collectibles': '1',
-  'Other': '99',
 };
 
 /**
@@ -403,11 +389,14 @@ function generateEbayCsv(
     // Get condition ID mapping
     const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
 
+    // Get eBay category ID from category name
+    const ebayCategoryId = getEbayCategoryId(item.category);
+
     // Build data row in correct column order
     const row = [
       escapeCsvValue('Draft'), // Action
       escapeCsvValue(item.id.substring(0, 12)), // Custom label (SKU) — use truncated ID
-      escapeCsvValue(EBAY_CATEGORY_MAP[item.category || ''] || '1'), // Category ID (default: Collectibles)
+      escapeCsvValue(ebayCategoryId), // Category ID (mapped from FindA.Sale category name)
       escapeCsvValue(truncatedTitle), // Title
       escapeCsvValue(''), // UPC
       escapeCsvValue(price.toFixed(2)), // Price

@@ -41,7 +41,6 @@ const OAuthCallbackPage = () => {
             console.error('Failed to redeem invite code:', errorData);
             setError(errorData.message || 'Failed to redeem invite code');
           } else {
-            console.log('Invite code redeemed successfully');
             // Clear the stored invite code
             sessionStorage.removeItem('pendingInviteCode');
           }

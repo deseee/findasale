@@ -103,7 +103,7 @@ FindA.Sale operates as a two-sided marketplace with asymmetric fee structure:
 **Deployment:**
 - Frontend: Vercel (finda.sale) — PWA installable, offline-capable, low bandwidth mode
 - Backend: Railway (Node.js/Express) — Payment processing, real-time auctions, email/SMS
-- Database: Neon PostgreSQL (35 migrations applied, 100% schema-complete)
+- Database: Railway PostgreSQL (35 migrations applied, 100% schema-complete)
 - Image Storage: Cloudinary (CDN-delivered photos with watermarking, transformations)
 - Payments: Stripe Connect Express (organizer identity verification, instant payouts)
 - Monitoring: Sentry (error tracking), UptimeRobot (uptime monitoring)
@@ -190,7 +190,7 @@ At the heart of FindA.Sale is a radical simplification: **photos are the primary
 
 **Subscription Tiers:**
 - **Simple (Free):** Core operations, basic analytics, 10% fee
-- **Pro ($29/month):** Advanced analytics, batch operations, inventory library, voice-to-tag, flip report, AI valuations, 10% fee
+- **Pro ($29/month):** Advanced analytics, batch operations, inventory library, voice-to-tag, flip report, Smart Pricing, 10% fee
 - **Teams ($79/month):** Multi-user workspace, role management, team analytics, 10% fee
 
 ### Shopper Tools (Complete Feature Set)
@@ -260,7 +260,7 @@ At the heart of FindA.Sale is a radical simplification: **photos are the primary
 **Architecture:** Monorepo (pnpm workspaces) with four packages:
 - **Frontend:** Next.js 14 (Pages Router), React, TailwindCSS, @tanstack/react-query, Socket.io client (live auctions)
 - **Backend:** Node.js + Express, Prisma ORM, JWT + OAuth (Google, Facebook), rate limiting, Stripe integration
-- **Database:** PostgreSQL (schema-as-code via Prisma migrations, Neon hosted)
+- **Database:** PostgreSQL (schema-as-code via Prisma migrations, Railway hosted)
 - **Shared:** TypeScript types, API contracts, Zod validation
 
 **Key Infrastructure:**
@@ -374,7 +374,7 @@ FindA.Sale treats platform safety and cost discipline as core infrastructure —
 - Cloudinary bandwidth monitoring with alerts before overage bills accumulate
 - Photo compression at upload (auto-compress on-device; reject out-of-spec files)
 - Bot/scraper CDN rate limiting on image endpoints prevents bandwidth spikes
-- Database record archival (quarterly soft-delete of stale sales/items reduces Neon compute)
+- Database record archival (quarterly soft-delete of stale sales/items reduces Railway compute)
 - Async AI tagging queue prevents Claude API rate limiting during peak batch uploads
 - Tiered photo storage migration (Cloudinary → Backblaze B2 + Bunny CDN for warm/cold storage): targets ~70% storage cost reduction at scale
 
@@ -765,7 +765,7 @@ Example: $100K GMV with 30% PRO/TEAMS = ($100K × 0.097) + ($870/mo sub) = $10.6
 |------|------|-------|
 | Vercel (Frontend) | $0–20 | Free tier sufficient for beta scale |
 | Railway (Backend) | $5–50 | Node.js/Express, cron jobs |
-| Neon PostgreSQL | $0–20 | Free tier (10GB) → paid at growth |
+| Railway PostgreSQL | $0–20 | Free tier (10GB) → paid at growth |
 | Cloudinary (Images) | $0–30 | Free tier (25GB) → paid at scale |
 | Resend (Email) | $0–25 | 100 emails/day free → $20/month at scale |
 | Twilio (SMS) | $0–10 | Virtual queue updates |
@@ -868,14 +868,6 @@ $4,000 ÷ $5,000 (avg sale) = 0.8 sales/month
 - In-app feedback form (linked to ticketing)
 - Phone: Google Voice (for urgent organizer issues during sales)
 
-**SLA by Issue Type:**
-| Type | Response Time | Example |
-|------|---|---|
-| Payment/Payout Issues | <1 hour | "Payout not showing up" |
-| Account Access | <2 hours | "I forgot my password" |
-| Feature Questions | <4 hours | "How do I enable the virtual queue?" |
-| Product Feedback | <24 hours | "This feature would help..." |
-| Bug Reports | <2 hours | "Page won't load" |
 
 ### Geographic Expansion Plan
 
@@ -1019,7 +1011,7 @@ These features are designed and specced. They are deferred because they require 
 - **Multi-Language Support (Spanish First)** — 42M native Spanish speakers in U.S. i18n framework. Trigger: before national expansion, Q1 2027.
 
 **Shopper & Community Features:**
-- **Book Club & Vinyl Community Hubs** — moderated collector hubs with feeds, swaps, events. Trigger: Collector Passport proves specialty-interest demand (Collector Passport shipped — eligible for evaluation).
+- **Book Club & Vinyl Community Hubs** — moderated collector hubs with feeds, swaps, events. Trigger: Loot Legend proves specialty-interest demand (Loot Legend shipped — eligible for evaluation).
 - **Restoration & Upcycling Marketplace** — before/after project gallery; "Studio Pro" creator tier. Trigger: UGC Photo Tags proves community appetite (UGC Photo Tags shipped — eligible for evaluation).
 - **TikTok-Style Item Reveal Feed** — vertical swipe discovery. Trigger: Rapidfire + Listing Factory drive item photo quality high enough (both shipped — eligible for evaluation).
 - **Organizer AMAs (Reddit-Style Q&A)** — pre-sale preview + Q&A sessions. Trigger: 10+ active organizers.
@@ -1111,7 +1103,7 @@ These streams don't require building anything today — they require collecting 
 The long-term vision is a multi-sided ecosystem — organizers + buyers + restorers + appraisers + shippers + designers — where FindA.Sale is the operating infrastructure for the entire secondhand economy. This is not a feature; it's what happens when all three tiers (B2C marketplace, B2B data, B2E intelligence) are proven viable.
 
 **AI Buying Agent Scout (Premium $9.99/mo):**
-Personal AI shopping agent that learns the shopper's taste profile, proactively monitors new sales, and notifies on matches before they sell. Requires Wishlist Alerts + Collector Passport + sold-item data (both shipped; data accrual begins in beta). Trigger: ML pipeline and 6+ months behavioral data.
+Personal AI shopping agent that learns the shopper's taste profile, proactively monitors new sales, and notifies on matches before they sell. Requires Wishlist Alerts + Loot Legend + sold-item data (both shipped; data accrual begins in beta). Trigger: ML pipeline and 6+ months behavioral data.
 
 **Estate Planning Toolkit:**
 Heir/executor liquidation assistant: inventory builder, appraisal integration, tax reporting. Upstream demand creation (reaches people before they need the marketplace). Trigger: core organizer features stable.

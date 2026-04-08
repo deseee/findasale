@@ -26,6 +26,14 @@ export type {
 // Sprint 1: Listing Factory tag vocabulary
 export { CURATED_TAGS, MAX_CUSTOM_TAGS, type CuratedTag } from './constants/tagVocabulary';
 
+// Feature #244 Phase 2: eBay category hierarchy picker
+export {
+  EBAY_CATEGORY_ID_MAP,
+  getEbayCategoryId,
+} from './constants/ebayCategories';
+
+export type { EbayCategory, EbayCategoryChild, EbayCategoryList } from './types/ebayCategories';
+
 // B1 ADR: Sale type categories
 export enum SaleType {
   ESTATE = 'ESTATE',
