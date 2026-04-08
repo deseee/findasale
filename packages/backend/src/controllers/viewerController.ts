@@ -34,23 +34,28 @@ setInterval(() => {
  * Only returns count >= 2 (hide single viewers for privacy).
  */
 export const getViewerCount = (req: Request, res: Response) => {
-  const { saleId } = req.params;
+  try {
+    const { saleId } = req.params;
 
-  if (!saleId) {
-    return res.status(400).json({ message: 'saleId is required' });
+    if (!saleId) {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+
+    const viewers = saleViewers.get(saleId);
+    const count = viewers ? viewers.size : 0;
+
+    // Filter by minimum threshold: only show "2 or more"
+    const displayCount = count >= 2 ? count : 0;
+
+    res.json({
+      saleId,
+      count: displayCount,
+      threshold: 2,
+    });
+  } catch (err) {
+    console.error('[viewerController] getViewerCount error:', err);
+    res.status(500).json({ message: 'Failed to get viewer count' });
   }
-
-  const viewers = saleViewers.get(saleId);
-  const count = viewers ? viewers.size : 0;
-
-  // Filter by minimum threshold: only show "2 or more"
-  const displayCount = count >= 2 ? count : 0;
-
-  res.json({
-    saleId,
-    count: displayCount,
-    threshold: 2,
-  });
 };
 
 /**

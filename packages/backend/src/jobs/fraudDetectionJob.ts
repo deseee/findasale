@@ -1,3 +1,4 @@
+import cron from 'node-cron';
 import { detectOffPlatformTransactions } from '../services/fraudService';
 
 /**
@@ -20,11 +21,12 @@ export async function runFraudDetectionJob(): Promise<void> {
  */
 export async function initFraudDetectionSchedule(): Promise<void> {
   try {
-    // TODO: Integrate with node-cron:
-    // import cron from 'node-cron';
-    // cron.schedule('0 2 * * *', () => runFraudDetectionJob()); // 2 AM daily
+    cron.schedule('0 2 * * *', () => runFraudDetectionJob()); // 2 AM daily
     console.log('[fraudDetectionJob] Scheduled daily off-platform detection at 2 AM');
   } catch (err) {
     console.error('[fraudDetectionJob] Failed to initialize schedule:', err);
   }
 }
+
+// Self-schedule on module load (matches pattern of other job files)
+initFraudDetectionSchedule();

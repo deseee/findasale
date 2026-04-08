@@ -1178,8 +1178,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
         let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
         if (subscription.items?.data?.[0]?.price?.id) {
           const priceId = subscription.items.data[0].price.id;
-          if (priceId === 'price_1TDUQsLTUdEUnHOTzG6cVDwu') newTier = 'PRO';
-          else if (priceId === 'price_1TDUQtLTUdEUnHOTCEoNL6oz') newTier = 'TEAMS';
+          if (priceId === process.env.STRIPE_PRO_MONTHLY_PRICE_ID) newTier = 'PRO';
+          else if (priceId === process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID) newTier = 'TEAMS';
         }
 
         await prisma.organizer.update({
@@ -1212,8 +1212,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
         let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
         if (subscription.items?.data?.[0]?.price?.id) {
           const priceId = subscription.items.data[0].price.id;
-          if (priceId === 'price_1TDUQsLTUdEUnHOTzG6cVDwu') newTier = 'PRO';
-          else if (priceId === 'price_1TDUQtLTUdEUnHOTCEoNL6oz') newTier = 'TEAMS';
+          if (priceId === process.env.STRIPE_PRO_MONTHLY_PRICE_ID) newTier = 'PRO';
+          else if (priceId === process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID) newTier = 'TEAMS';
         }
 
         await prisma.organizer.update({
@@ -1666,9 +1666,9 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
 
     // Validate priceId is one of the allowed subscription prices
     const allowedPrices = [
-      'price_1TDUQsLTUdEUnHOTzG6cVDwu', // PRO
-      'price_1TDUQtLTUdEUnHOTCEoNL6oz', // TEAMS
-    ];
+      process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
+      process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID,
+    ].filter(Boolean) as string[];
     if (!allowedPrices.includes(priceId)) {
       return res.status(400).json({ message: 'Invalid price ID' });
     }
