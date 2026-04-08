@@ -831,3 +831,163 @@ Shipping as monthly one-shot first (user re-buys each month). Revisit Stripe Sub
 
 Hard-coded to **max 5 featured pins per viewport** initially. Adjustable via env var. Validate against first 10 organizers' usage before tuning.
 
+---
+
+## Section 4 — S419 Lucky Roll / Mystery Box Design (2026-04-08)
+
+Locked design session. Lucky Roll is XP-only (no cash rail). Requires separate architect spec before dev.
+
+---
+
+### Lucky Roll — Cash Rail Decision
+
+DECISION: **XP-only. No cash purchase option. Ever.**
+PLAYER EXPERIENCE: Shoppers spend earned loyalty points for a chance at bonus rewards — this is a loyalty perk, not a slot machine.
+RATIONALE: Gacha + real money = predatory by definition. Belgium and Netherlands have outright banned paid loot boxes. XP-only keeps us clearly in "loyalty program" territory, not "gambling product," in every jurisdiction. This is non-negotiable.
+IMPACT: LOW on revenue (Lucky Roll is a sink to burn accumulated XP, not a revenue line). HIGH on legal and brand safety.
+
+---
+
+### Lucky Roll — Reward Table
+
+DECISION: 7-outcome table with the following probabilities and XP equivalents:
+
+| Outcome | Probability | XP Value | Notes |
+|---|---|---|---|
+| Consolation: 10 XP back | 35% | 10 | Never feel truly empty-handed |
+| 50 XP | 28% | 50 | Most common "good" outcome |
+| 100 XP (break-even) | 15% | 100 | Paid 100, got 100 back |
+| 200 XP | 10% | 200 | Strong win |
+| $1 off coupon | 7% | ~100 | Real-world value; requires $10 min purchase |
+| 500 XP jackpot | 4% | 500 | Rare but visible — drives social sharing |
+| Rare cosmetic | 1% | ~150–200 | Frame badge or username color they'd pay 100–200 XP for |
+
+**Expected return:** ~81 XP per 100 XP spent. Net sink rate: ~19%. Not punitive, not inflationary.
+
+PLAYER EXPERIENCE: Most rolls give something. Bad streaks are protected by pity counter. The 500 XP jackpot and rare cosmetic are rare enough to create "did you see what I got?!" moments.
+RATIONALE: 35% consolation means fewer than 1-in-3 rolls feels bad. The 81 XP expected return means the economy drains slowly without players feeling cheated. Jackpot at 4% is visible enough to be aspirational but rare enough to stay special.
+IMPACT: MEDIUM on XP economy. Rewards power users who accumulate XP. Rare cosmetic drops reinforce status at Grandmaster+.
+
+---
+
+### Lucky Roll — Pity Counter
+
+DECISION: Two-layer pity system, fully server-side:
+
+**Layer 1 (anti-frustration):** If a player gets "consolation" 2 consecutive rolls, the 3rd roll removes consolation from the table entirely. Its 35% weight is redistributed proportionally across all other outcomes. Pity resets after any non-consolation outcome.
+
+**Layer 2 (jackpot guarantee):** Every 10th roll within a calendar year is guaranteed to produce either 200 XP, $1 coupon, 500 XP, or rare cosmetic (combined ~22% of table, so pity only fires ~78% of the time at roll 10). Counter stored in DB. Resets January 1 UTC with seasonal reset.
+
+**Storage:** Add `luckyRollPityCount Int @default(0)` and `luckyRollPityJackpot Int @default(0)` to User model in a future migration. Track consecutive consolation count and cumulative annual rolls respectively.
+
+PLAYER EXPERIENCE: A player can never have 3 bad rolls in a row. A dedicated player who does 10 rolls across the year is guaranteed at least one "big" outcome.
+RATIONALE: Pity counters are now standard in all major loyalty systems (Pokémon GO, Genshin Impact, Apple Arcade). Without it, variance creates vocal negative experiences that hurt retention more than the upside of big wins.
+IMPACT: LOW-MEDIUM on economics (guarantees occasionally fire but at high roll counts most players won't reach at 1/week).
+
+---
+
+### Lucky Roll — Weekly Cap
+
+DECISION: **1 roll per week base. Hunt Pass subscribers: 2 rolls per week.**
+
+Weekly reset: Sunday 11:59:59 PM UTC.
+
+PLAYER EXPERIENCE: Shoppers have a clear weekly ritual. Hunt Pass feels more valuable because it doubles the lucky roll allowance.
+RATIONALE: 1/week creates a return habit without creating a farming problem. The Hunt Pass double reinforces the subscription value prop without making the feature feel inaccessible to non-subscribers.
+IMPACT: LOW-MEDIUM. At 52 rolls/year maximum (Hunt Pass), expected XP outflow is ≈ 52 × 81 = 4,212 XP average awarded. At 26 rolls/year (no HP), ≈ 2,106 XP. Both are manageable against the weekly earning potential (~300–400 XP for an active shopper).
+
+---
+
+### Lucky Roll — Fairness Model (Server-Side RNG)
+
+DECISION: All randomness is generated server-side using `crypto.randomBytes`. The roll outcome is determined before the animation plays. Seed and outcome hash are logged in the PointsTransaction `description` field for auditability.
+
+**Implementation spec:**
+```
+1. On POST /api/lucky-roll/roll:
+   - Verify user eligibility (guildXp ≥ 100, roll not used this week, account ≥ 30 days old)
+   - Apply pity counter adjustments to probability table
+   - Generate 4 random bytes → integer → mod 10000 → bucket lookup against probability table (integers 0–9999 → 3500 consolation, next 2800 = 50 XP, etc.)
+   - Deduct 100 XP via xpService.spendXp before returning result
+   - Award outcome via xpService.awardXp or couponController.generateXpSinkCoupon or cosmetic grant
+   - Log PointsTransaction with description: "LuckyRoll outcome=<type> roll=<rollNumber> seed=<sha256(seed)>"
+2. Client receives outcome AFTER server has committed it. No client-side randomness.
+```
+
+PLAYER EXPERIENCE: The player sees the animation. The server already decided the outcome. No way to intercept or manipulate.
+RATIONALE: Client-side RNG is trivially exploitable. Server-side means the audit trail is in the DB. SHA256 of seed (not raw seed) in description means it's verifiable but not reversible.
+IMPACT: LOW complexity. crypto.randomBytes is available in Node stdlib, no new dependencies.
+
+---
+
+### Lucky Roll — Regulatory Compliance
+
+DECISION: **Transparent odds always shown. XP-only. Account age gate 30 days. No minors.**
+
+Jurisdiction analysis:
+- **Belgium:** Bans loot boxes with real-money purchase AND real-money-equivalent prizes. Lucky Roll uses XP (not real money) and prizes are XP/coupons/cosmetics with no cash-out path. Currently outside the ban. However: show all odds always as a precaution.
+- **Netherlands:** Same framework as Belgium. Same analysis — outside current ban given XP-only.
+- **UK:** "50/50" guidance + voluntary loot box transparency code. Show full probability table on the roll UI. Compliant.
+- **US:** No federal law. Most conservative states (Hawaii, Indiana bills) target paid loot boxes. XP-only keeps us safe.
+- **Canada:** No law. Transparency best practice.
+
+**Safeguard requirements (hard rules for implementation):**
+1. Full probability table visible on the Lucky Roll page at all times (not hidden behind a tooltip).
+2. "No real-money purchase required. XP cannot be exchanged for cash." text visible on page.
+3. Account age ≥ 30 days server-enforced (prevents fresh account farming).
+4. ToS 18+ clause applies.
+5. Odds shown as percentages (35%, 28%, 15%, 10%, 7%, 4%, 1%) — not described as "rare," "common" without a number.
+
+PLAYER EXPERIENCE: "You can see exactly what you're rolling for. No surprises, no tricks."
+RATIONALE: Transparency is both legally prudent and good UX for this demographic (35–65, value-focused, skeptical of dark patterns).
+IMPACT: LOW cost to implement. HIGH brand safety upside.
+
+---
+
+### Lucky Roll — Anti-Frustration Rules
+
+DECISION: Three anti-frustration mechanisms:
+
+1. **Pity protection (see Pity Counter above):** No 3 consecutive consolation rolls ever.
+2. **Consolation is never truly empty:** 10 XP back on "nothing" outcomes. The message reads "Not this time — but here's 10 XP for trying!" Never "You won nothing."
+3. **Streak protection:** If a user has rolled 5+ consecutive below-break-even outcomes (consolation or 50 XP), the next roll's jackpot probability doubles (4% → 8%) for that single roll only. Not disclosed to user — purely mechanical.
+
+PLAYER EXPERIENCE: Rolling never feels punishing. The worst experience is "I got 10 XP and I'll try again next week."
+RATIONALE: Player frustration with RNG mechanics is the #1 reason loyalty features die. These three mechanisms minimize downside without materially affecting expected value.
+IMPACT: LOW-MEDIUM on economics. Hidden streak protection affects ~5% of all rolls at most.
+
+---
+
+### Lucky Roll — Cooldown UX
+
+DECISION: Clear visual countdown shown on the Lucky Roll page and on the Hunt Pass page under the sink description.
+
+**UX spec:**
+- If roll available: large "Roll Now" CTA with animated shake effect (subtle, not aggressive).
+- If roll not available: greyed button + "Next roll available in [X days, Y hours]" countdown updating live.
+- 15 minutes before reset: push notification fires if user has push enabled: "🎲 Your weekly Lucky Roll resets in 15 minutes!"
+- After roll: 5-second celebration animation → outcome reveal → "Come back [day] for your next roll."
+
+PLAYER EXPERIENCE: Every visit to the Lucky Roll page has a clear CTA or a clear countdown. No ambiguity about when you can roll next.
+RATIONALE: Countdown timers are the standard UX for weekly-gated content (Pokémon GO raids, Wordle, etc.). They create a habit loop without annoying users.
+IMPACT: LOW. Pure frontend + push notification wiring.
+
+---
+
+### ADR Patrick Decisions (S419)
+
+| Decision | Choice | Locked |
+|---|---|---|
+| Cash rail for Lucky Roll | XP-only, no cash ever | ✅ |
+| Consolation XP | 10 XP back (never truly empty) | ✅ |
+| Weekly cap | 1/week base, 2/week Hunt Pass | ✅ |
+| Pity counter — anti-frustration | No 3× consolation in a row | ✅ |
+| Pity counter — jackpot guarantee | Every 10th annual roll is ≥200 XP outcome | ✅ |
+| RNG method | crypto.randomBytes server-side | ✅ |
+| Odds transparency | Full table always shown (not tooltip-hidden) | ✅ |
+| Account gate | 30 days minimum, 18+ ToS | ✅ |
+| Rare cosmetic drop | Frame badge or username color (not custom map pin — that's its own sink) | ✅ |
+| Streak protection | Hidden 2× jackpot boost after 5× below-break-even streak | ✅ |
+
+**Next step:** Dispatch findasale-architect for Lucky Roll schema spec (pityCount/pityJackpot fields on User, LuckyRoll event log model, /api/lucky-roll route contract).
+
