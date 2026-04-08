@@ -1,16 +1,41 @@
-# Patrick's Dashboard — April 8, 2026 (S418 WRAPPED)
+# Patrick's Dashboard — April 8, 2026 (S419 WRAPPED)
 
-## What's Next — S419
+## What You Need to Do Right Now
 
-**Push S418 final block first** (full block in STATE.md "Next Session (S419)" section). Then S419 opens with parallel dispatches:
+**1. Run the migration** (after you push):
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-1. **Mandatory live-site smoke test** of S416 fixes (loot-log detail, dispute filing, map trail badge, PRO nudge) before any new work.
-2. **Stream A — Lucky Roll gamedesign** (parallel, no code conflicts) — pity counter, reward table, weekly cap, regulatory check.
-3. **Streams B+C combined dev dispatch** — BoostPurchase service + Coupon generation in a single migration (both touch schema.prisma so they ship together).
-4. **Stream D follow-up** — Hunt-pass dual-rail cash column (depends on B shipping first).
-5. **Then findasale-architect** for Lucky Roll implementation spec once gamedesign returns.
+**2. Push S419 (full block at bottom of this file)**
 
-You requested all four in parallel — Streams A, B+C are truly parallel; Stream D and Lucky Roll architecture are sequential because they depend on upstream output. Full sequencing notes in STATE.md.
+## What's Next — S420
+
+1. **Smoke test** — Chrome QA the boost system: buy a SALE_BUMP boost via XP from dashboard, verify badge appears on map. Test POST /coupons/generate-from-xp for all 3 tiers.
+2. **Lucky Roll dev dispatch** — ADR is written (`ADR-lucky-roll-schema-S419.md`). Dispatch findasale-dev with schema + full implementation sequence.
+
+---
+
+## What Happened This Session (S419)
+
+**BoostPurchase dual-rail system + Shopper coupon generation + Hunt Pass cash prices + Lucky Roll spec.** 20 files changed.
+
+**BoostPurchase system (complete):**
+Full promotional boost service supporting 8 boost types. Two payment rails — spend XP (instant ACTIVE) or pay via Stripe (PENDING → webhook ACTIVE). Organizer can click ⭐ Boost Sale on any published sale in the dashboard. The boost shows as "⭐ Featured" on the map popup. Cron sweeper expires boosts hourly.
+
+**Shopper coupon generation (complete):**
+New endpoint `POST /api/coupons/generate-from-xp`. Three XP tiers: 100 XP → $1 off $10+, 150 XP → $1.50 off $20+, 500 XP → $5 off $50+. Monthly caps enforced server-side. Tagged as `generatedFromXp: true` in the database.
+
+**Hunt Pass page (updated):**
+Rarity Boost, Haul Visibility, Bounty Visibility, and Event Sponsorship all now show "or $X.XX via card" next to the XP cost. Shopper coupon section updated to show the full 3-tier breakdown.
+
+**Lucky Roll (spec complete, build pending):**
+Game design locked (Section 4 of gamedesign-decisions-2026-04-08.md): 7-outcome table, 19% house edge, 2-layer pity counter, hidden streak protection, server-side crypto.randomBytes RNG, full regulatory transparency. Architect ADR written (`ADR-lucky-roll-schema-S419.md`) — schema, migration, API contracts, dev sequence all ready. Dispatch findasale-dev in S420.
+
+---
 
 ---
 

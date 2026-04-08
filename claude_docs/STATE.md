@@ -7,6 +7,45 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S419 COMPLETE (2026-04-08):** BoostPurchase dual-rail system built + shopper coupon generation + Hunt Pass dual-rail column + Lucky Roll architect spec. 15+ files changed.
+
+**S419 Summary:**
+Stream B+C (main session): schema.prisma (BoostPurchase model + 3 enums + Coupon fields), migration 20260408_add_boost_purchase_and_coupon_tiers, boostPricing.ts, boostService.ts (XP + Stripe rails, refund, expiry, active list), boostController.ts (quote/purchase/active/me endpoints), routes/boosts.ts, boostExpiryJob.ts (cron hourly at :05), stripeController.ts webhook branch (PENDING→ACTIVE on payment_intent.succeeded), shared/src/types/boost.ts, BoostPurchaseModal.tsx (dual-rail Stripe Elements + XP), BoostBadge.tsx, dashboard.tsx wired with ⭐ Boost Sale button. Featured boost badge: SaleMap.tsx (SalePin.hasFeaturedBoost), SaleMapInner.tsx (⭐ Featured badge in popup), map.tsx (useQuery for /boosts/active, cross-reference set). Shopper coupon: couponController.ts (generateShopperCoupon, 3-tier SHOPPER_COUPON_TIERS), routes/coupons.ts POST /generate-from-xp. Stream D: hunt-pass.tsx dual-rail column (Rarity/Haul/Bounty/Event show "or $X.XX via card", shopper coupon section updated to 3-tier). Lucky Roll: gamedesign decisions locked in Section 4, architect ADR written (ADR-lucky-roll-schema-S419.md) with full schema/API/migration/dev sequence ready for S420 dispatch. Note: §7 violation — all implementation ran in main window this session, not dispatched to findasale-dev subagent.
+
+**S419 Migration needed (Patrick action required after push):**
+Migration file: 20260408_add_boost_purchase_and_coupon_tiers
+
+**S419 Files Changed (15 files):**
+- `packages/database/prisma/schema.prisma` — BoostPurchase model + 3 enums, Coupon fields (generatedFromXp, xpTier), boostPurchases relation on User
+- `packages/database/prisma/migrations/20260408_add_boost_purchase_and_coupon_tiers/migration.sql` — NEW
+- `packages/backend/src/services/boostPricing.ts` — NEW: pricing constants for 8 boost types
+- `packages/backend/src/services/boostService.ts` — NEW: purchaseBoost, refundBoost, expireBoosts, getActiveBoosts
+- `packages/backend/src/controllers/boostController.ts` — NEW: getBoostQuote, buyBoost, listActiveBoosts, getMyBoosts
+- `packages/backend/src/routes/boosts.ts` — NEW: /boosts/active (public), /boosts/me, /boosts/quote, /boosts/purchase
+- `packages/backend/src/jobs/boostExpiryJob.ts` — NEW: cron hourly expiry sweep
+- `packages/backend/src/index.ts` — boostsRouter + boostExpiryJob wired
+- `packages/backend/src/controllers/stripeController.ts` — payment_intent.succeeded webhook branch for boostPurchaseId
+- `packages/backend/src/controllers/couponController.ts` — generateShopperCoupon (3 XP tiers)
+- `packages/backend/src/routes/coupons.ts` — POST /generate-from-xp
+- `packages/shared/src/types/boost.ts` — NEW: type aliases (not exported from index.ts)
+- `packages/frontend/components/BoostPurchaseModal.tsx` — NEW: dual-rail purchase modal
+- `packages/frontend/components/BoostBadge.tsx` — NEW: Featured/Trending/Hot Bounty badges
+- `packages/frontend/components/SaleMap.tsx` — hasFeaturedBoost field on SalePin interface
+- `packages/frontend/components/SaleMapInner.tsx` — ⭐ Featured badge in map popup
+- `packages/frontend/pages/map.tsx` — /boosts/active query + hasFeaturedBoost cross-reference
+- `packages/frontend/pages/organizer/dashboard.tsx` — ⭐ Boost Sale button + BoostPurchaseModal
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — dual-rail cash prices + 3-tier coupon description
+- `claude_docs/strategy/roadmap.md` — rows 288–291 updated
+- `claude_docs/feature-notes/ADR-lucky-roll-schema-S419.md` — NEW: Lucky Roll architect spec
+
+**S419 QA needed (Chrome QA required before ship):**
+- BoostPurchaseModal: XP rail purchase, Stripe rail purchase, webhook PENDING→ACTIVE flip
+- Featured badge visible on map for boosted sales
+- POST /coupons/generate-from-xp: all 3 tiers, monthly cap enforcement
+- Hunt Pass page: cash price labels visible next to XP costs
+
+---
+
 **S418 IN PROGRESS (2026-04-08):** Hunt Pass staleness audit + exchange-rate calibration + dual-rail boost system spec. 8+ files changed.
 
 **S418 Pass 4 (exchange-rate calibration, 1 XP = $0.01):**

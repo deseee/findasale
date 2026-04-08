@@ -191,6 +191,9 @@ model User {
   firstSalePublished   Boolean @default(false)  // For OG-1 trigger gate
   lastSurveyShownAt    DateTime?               // For session/cooldown logic
 
+  // Phase 2b: Boost Purchase — XP or Stripe promotional boosts
+  boostPurchases BoostPurchase[]
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
@@ -1404,6 +1407,9 @@ model Coupon {
   updatedAt          DateTime  @updatedAt
   xpSpent            Int?      // Phase 2a: XP cost if this coupon was generated via XP sink (20 XP typical)
   pointsTransactions PointsTransaction[] // Phase 2a: Reference from PointsTransaction via couponId
+  // Phase 2b: Shopper self-service XP coupon tiers
+  generatedFromXp    Boolean   @default(false)  // true = shopper spent XP to generate this; false = organizer-issued or loyalty
+  xpTier             String?   // "DOLLAR_OFF_TEN" | "ONE_FIFTY_OFF_TWENTY" | "FIVE_OFF_FIFTY" (null for organizer coupons)
 
   @@index([userId, status])
   @@index([code])
@@ -2799,4 +2805,55 @@ model POSPaymentRequest {
   @@index([shopperUserId, status])
   @@index([status, expiresAt])
   @@index([stripePaymentIntentId])
+}
+
+// Phase 2b: Explorer's Guild — Promotional Boost Purchases (dual-rail: XP or Stripe)
+// Architect ADR: claude_docs/feature-notes/ADR-featured-boost-dual-rail-S418.md
+model BoostPurchase {
+  id                    String        @id @default(cuid())
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  boostType             BoostType
+  targetType            String?       // "SALE" | "HAUL" | "BOUNTY" | "GUIDE" | "WISHLIST" | null for global boosts
+  targetId              String?       // FK string (sale id, haul id, etc.) — nullable for non-targeted boosts
+  paymentMethod         PaymentMethod
+  xpCost                Int?          // populated if paymentMethod = XP
+  stripeAmountCents     Int?          // populated if paymentMethod = STRIPE (e.g. 50 = $0.50)
+  stripePaymentIntentId String?       @unique
+  durationDays          Int           // how long the boost runs
+  activatedAt           DateTime      @default(now())
+  expiresAt             DateTime      // activatedAt + durationDays
+  status                BoostStatus   @default(ACTIVE)
+  refundedAt            DateTime?
+  refundReason          String?
+  createdAt             DateTime      @default(now())
+
+  @@index([userId, status])
+  @@index([boostType, status, expiresAt])
+  @@index([targetType, targetId, status])
+  @@index([expiresAt])
+}
+
+enum BoostType {
+  SALE_BUMP
+  HAUL_VISIBILITY
+  BOUNTY_VISIBILITY
+  EVENT_SPONSORSHIP
+  WISHLIST_NOTIFICATION
+  SEASONAL_CHALLENGE_ACCESS
+  GUIDE_PUBLICATION
+  RARITY_BOOST
+}
+
+enum PaymentMethod {
+  XP
+  STRIPE
+}
+
+enum BoostStatus {
+  ACTIVE
+  EXPIRED
+  REFUNDED
+  FAILED
+  PENDING
 }

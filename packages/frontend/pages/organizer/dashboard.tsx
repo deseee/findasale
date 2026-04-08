@@ -38,6 +38,7 @@ import EmptyState from '../../components/EmptyState';
 import Skeleton from '../../components/Skeleton';
 import { AnimatedCounter } from '../../components/AnimatedCounter';
 import SalePulseWidget from '../../components/SalePulseWidget';
+import BoostPurchaseModal from '../../components/BoostPurchaseModal';
 import SmartBuyerWidget from '../../components/SmartBuyerWidget';
 import HighValueTrackerWidget from '../../components/HighValueTrackerWidget';
 import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget';
@@ -93,6 +94,7 @@ const OrganizerDashboard = () => {
     enabled: !!flashDealSaleId,
   });
   const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
+  const [boostSaleId, setBoostSaleId] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [cloningId, setCloningId] = useState<string | null>(null);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
@@ -475,6 +477,17 @@ const OrganizerDashboard = () => {
           saleId={socialPostSale.id}
           saleTitle={socialPostSale.title}
           onClose={() => setSocialPostSale(null)}
+        />
+      )}
+
+      {/* Boost Sale modal */}
+      {boostSaleId && (
+        <BoostPurchaseModal
+          boostType="SALE_BUMP"
+          targetType="SALE"
+          targetId={boostSaleId}
+          onClose={() => setBoostSaleId(null)}
+          onSuccess={() => { setBoostSaleId(null); }}
         />
       )}
 
@@ -909,6 +922,15 @@ const OrganizerDashboard = () => {
                         title="Generate social media posts for this sale"
                       >
                         📱 Social Posts
+                      </button>
+                    )}
+                    {activeSale.status === 'PUBLISHED' && (
+                      <button
+                        onClick={() => setBoostSaleId(activeSale.id)}
+                        className="text-sm px-3 py-1 bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 rounded-full hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
+                        title="Boost this sale to the top of search and map results"
+                      >
+                        ⭐ Boost Sale
                       </button>
                     )}
                     {activeSale.status === 'PUBLISHED' && (

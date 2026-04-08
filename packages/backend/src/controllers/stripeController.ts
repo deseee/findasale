@@ -718,6 +718,41 @@ export const webhookHandler = async (req: Request, res: Response) => {
         }
       }
 
+      // Phase 2b: Boost Purchase — flip PENDING → ACTIVE on confirmed payment
+      if (paymentIntent.metadata?.boostPurchaseId) {
+        const boostPurchaseId = paymentIntent.metadata.boostPurchaseId;
+        try {
+          const boost = await prisma.boostPurchase.findUnique({
+            where: { id: boostPurchaseId },
+          });
+
+          if (boost && boost.status === 'PENDING') {
+            const now = new Date();
+            const expiresAt = new Date(now);
+            if (boost.durationDays === 999) {
+              expiresAt.setFullYear(expiresAt.getFullYear() + 2);
+            } else if (boost.durationDays <= 1) {
+              expiresAt.setTime(now.getTime() + 60 * 60 * 1000); // 1-hour bump
+            } else {
+              expiresAt.setDate(expiresAt.getDate() + boost.durationDays);
+            }
+
+            await prisma.boostPurchase.update({
+              where: { id: boostPurchaseId },
+              data: {
+                status: 'ACTIVE',
+                activatedAt: now,
+                expiresAt,
+              },
+            });
+            console.log(`[boost-webhook] Boost ${boostPurchaseId} (${boost.boostType}) activated via Stripe`);
+          }
+        } catch (err) {
+          console.error(`[boost-webhook] Failed to activate boost ${boostPurchaseId}:`, err);
+        }
+        break; // Boost handled — exit case
+      }
+
       // Standard Purchase: handle existing purchase records
       const purchase = await prisma.purchase.findUnique({
         where: { stripePaymentIntentId: paymentIntent.id },

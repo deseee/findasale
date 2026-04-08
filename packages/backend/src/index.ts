@@ -96,6 +96,7 @@ import pickupRoutes from './routes/pickup'; // Pickup Appointment Scheduling
 import inviteRoutes from './routes/invites'; // Beta invite code validation
 import socialPostRoutes from './routes/socialPost'; // Social media post generator
 import couponsRouter from './routes/coupons';          // Sprint 3: Shopper Loyalty Coupons
+import boostsRouter from './routes/boosts';            // Phase 2b: Dual-rail boost system
 import routeRoutes from './routes/routes';             // D3: Map route planning
 import viewersRouter from './routes/viewers';           // Feature 34: Hype Meter
 import exportRouter from './routes/export';             // Sprint 2: Export features
@@ -177,6 +178,7 @@ import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly 
 import './jobs/weeklyEmailJob'; // CD2 Phase 2: Weekly personalized shopper digest — Sundays 6 PM
 import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily batch processing and warnings
 import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transaction detection at 2 AM
+import './jobs/boostExpiryJob';   // Phase 2b: Expire stale ACTIVE BoostPurchase records hourly
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 // REMOVED: Auction auto-close — merged into auctionJob.ts which handles the complete payment flow (Stripe, XP, emails, reserve checks)
@@ -420,6 +422,7 @@ app.use('/api/pickup', pickupRoutes); // Pickup Appointment Scheduling
 app.use('/api/invites', inviteRoutes); // Beta invite code validation (public)
 app.use('/api/social-post', socialPostRoutes); // Social media post generator
 app.use('/api/coupons', couponsRouter);         // Sprint 3: Shopper Loyalty Coupons
+app.use('/api/boosts', boostsRouter);           // Phase 2b: Dual-rail boost system
 app.use('/api/routes', routeRoutes);            // D3: Map route planning
 app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hype Meter viewer counts
 app.use('/api/export', exportRouter);                            // Sprint 2: Export features

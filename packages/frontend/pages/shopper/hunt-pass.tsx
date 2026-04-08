@@ -579,7 +579,10 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Rarity Boost (1 Sale)</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Increase Legendary rarity odds by +2% for a single sale.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">15 XP</span>
+                      <div className="text-right whitespace-nowrap ml-4">
+                        <span className="font-bold text-purple-600 dark:text-purple-300 block">15 XP</span>
+                        <span className="text-xs text-blue-500 dark:text-blue-400">or $0.15 via card</span>
+                      </div>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | Until sale ends | Stackable</p>
                   </div>
@@ -589,7 +592,10 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Haul Visibility Boost</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Feature your haul as "Trending" to reach more collectors.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">25 XP</span>
+                      <div className="text-right whitespace-nowrap ml-4">
+                        <span className="font-bold text-purple-600 dark:text-purple-300 block">25 XP</span>
+                        <span className="text-xs text-blue-500 dark:text-blue-400">or $0.25 via card</span>
+                      </div>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | 7 days</p>
                   </div>
@@ -599,7 +605,10 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Bounty Visibility Boost</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Feature your bounty in "Hot Bounties" for higher fulfillment odds.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">15 XP</span>
+                      <div className="text-right whitespace-nowrap ml-4">
+                        <span className="font-bold text-purple-600 dark:text-purple-300 block">15 XP</span>
+                        <span className="text-xs text-blue-500 dark:text-blue-400">or $0.15 via card</span>
+                      </div>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Scout+ | 7 days</p>
                   </div>
@@ -644,12 +653,17 @@ const HuntPassPage = () => {
                   <div className="px-6 py-4">
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <p className="font-semibold text-warm-900 dark:text-warm-100">$1 Off Any Purchase</p>
-                        <p className="text-sm text-warm-600 dark:text-warm-400">Redeem your XP for $1 off any purchase on FindA.Sale.</p>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Shopper Coupon (3 Tiers)</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Generate a personal coupon code to use at checkout.</p>
+                        <ul className="mt-1 space-y-0.5 text-xs text-warm-500 dark:text-warm-400">
+                          <li>• 100 XP → $1.00 off orders $10+ (max 3/month)</li>
+                          <li>• 150 XP → $1.50 off orders $20+ (max 2/month)</li>
+                          <li>• 500 XP → $5.00 off orders $50+ (max 1/month)</li>
+                        </ul>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100–500 XP</span>
                     </div>
-                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | One per calendar month | Applied at checkout</p>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | Single-use, 30-day expiry | XP-only (no cash rail)</p>
                   </div>
                   <div className="px-6 py-4">
                     <div className="flex justify-between items-start mb-2">
@@ -696,7 +710,10 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Event Sponsorship</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Create a flash sale or themed collection for maximum visibility.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">500 XP</span>
+                      <div className="text-right whitespace-nowrap ml-4">
+                        <span className="font-bold text-purple-600 dark:text-purple-300 block">500 XP</span>
+                        <span className="text-xs text-blue-500 dark:text-blue-400">or $5.00 via card</span>
+                      </div>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Elite+ | 3 days | Exclusive bounties included</p>
                   </div>

@@ -227,6 +227,135 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
 };
 
 // ---------------------------------------------------------------------------
+// POST /api/coupons/generate-from-xp — shopper XP sink: spend XP → personal coupon
+//
+// Three tiers (gamedesign S419 spec, 1 XP = $0.01 anchor):
+//   DOLLAR_OFF_TEN:       100 XP → $1.00 off, min $10,  cap 3/month
+//   ONE_FIFTY_OFF_TWENTY: 150 XP → $1.50 off, min $20,  cap 2/month
+//   FIVE_OFF_FIFTY:       500 XP → $5.00 off, min $50,  cap 1/month
+//
+// Unlike organizer coupons, shopper coupons are tied to the shopper's userId
+// and can only be redeemed by shoppers (validateCoupon is userId-agnostic, but
+// the coupon is tagged generatedFromXp: true + xpTier for analytics).
+// ---------------------------------------------------------------------------
+
+const SHOPPER_COUPON_TIERS = {
+  DOLLAR_OFF_TEN:       { xpCost: 100, discount: 1.00, minPurchase: 10,  monthlyLimit: 3 },
+  ONE_FIFTY_OFF_TWENTY: { xpCost: 150, discount: 1.50, minPurchase: 20,  monthlyLimit: 2 },
+  FIVE_OFF_FIFTY:       { xpCost: 500, discount: 5.00, minPurchase: 50,  monthlyLimit: 1 },
+} as const;
+
+type ShopperCouponTier = keyof typeof SHOPPER_COUPON_TIERS;
+
+export const generateShopperCoupon = async (req: AuthRequest, res: Response) => {
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+  const { tier } = req.body as { tier?: string };
+
+  if (!tier || !(tier in SHOPPER_COUPON_TIERS)) {
+    return res.status(400).json({
+      message: 'Invalid tier. Must be one of: DOLLAR_OFF_TEN, ONE_FIFTY_OFF_TWENTY, FIVE_OFF_FIFTY',
+      validTiers: Object.keys(SHOPPER_COUPON_TIERS),
+    });
+  }
+
+  const shopperTier = tier as ShopperCouponTier;
+  const config = SHOPPER_COUPON_TIERS[shopperTier];
+  const shopperId = req.user.id;
+
+  try {
+    // Enforce per-tier monthly cap
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const thisMonthCount = await prisma.coupon.count({
+      where: {
+        userId: shopperId,
+        generatedFromXp: true,
+        xpTier: shopperTier,
+        createdAt: { gte: monthStart },
+      },
+    });
+
+    if (thisMonthCount >= config.monthlyLimit) {
+      return res.status(429).json({
+        message: `Monthly limit reached for this tier (${config.monthlyLimit}/month). Try a different tier or come back next month.`,
+        generated: thisMonthCount,
+        limit: config.monthlyLimit,
+        tier: shopperTier,
+      });
+    }
+
+    // Spend XP — spendXp returns false if insufficient balance
+    const spent = await spendXp(shopperId, config.xpCost, 'COUPON_GENERATE', {
+      description: `Generated shopper coupon tier ${shopperTier}: $${config.discount.toFixed(2)} off $${config.minPurchase}+`,
+    });
+
+    if (!spent) {
+      return res.status(400).json({
+        message: `Not enough XP. This tier requires ${config.xpCost} XP.`,
+        required: config.xpCost,
+      });
+    }
+
+    // Generate unique code — retry up to 3 times on collision
+    let code = '';
+    let existing = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      code = generateCouponCode();
+      existing = await prisma.coupon.findUnique({ where: { code } });
+      if (!existing) break;
+    }
+    if (existing) {
+      console.error('[coupon] Failed to generate unique shopper coupon code after 3 attempts');
+      return res.status(500).json({ message: 'Failed to generate coupon code — please try again' });
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30); // 30-day expiry
+
+    const coupon = await prisma.coupon.create({
+      data: {
+        code,
+        userId: shopperId,
+        discountType: 'FIXED',
+        discountValue: config.discount,
+        minPurchaseAmount: config.minPurchase,
+        status: 'ACTIVE',
+        sourcePurchaseId: null,
+        generatedFromXp: true,
+        xpTier: shopperTier,
+        xpSpent: config.xpCost,
+        expiresAt,
+      },
+      select: {
+        code: true,
+        discountValue: true,
+        minPurchaseAmount: true,
+        expiresAt: true,
+        xpTier: true,
+      },
+    });
+
+    res.json({
+      code: coupon.code,
+      discountValue: coupon.discountValue,
+      minPurchaseAmount: coupon.minPurchaseAmount,
+      expiresAt: coupon.expiresAt,
+      xpSpent: config.xpCost,
+      tier: shopperTier,
+      generatedThisMonth: thisMonthCount + 1,
+      monthlyLimit: config.monthlyLimit,
+      message: `Coupon ready! Use code ${coupon.code} at checkout for $${config.discount.toFixed(2)} off orders over $${config.minPurchase}. Valid for 30 days.`,
+    });
+  } catch (err) {
+    console.error('[coupon] generateShopperCoupon error:', err);
+    res.status(500).json({ message: 'Failed to generate coupon' });
+  }
+};
+
+// ---------------------------------------------------------------------------
 // markCouponUsed — called from stripeController after payment_intent.succeeded
 // Fire-and-forget: caller must .catch() this
 // ---------------------------------------------------------------------------
