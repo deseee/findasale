@@ -180,25 +180,19 @@ export default function PaymentRequestPage() {
             </div>
 
             {/* Items List */}
-            <div className="mb-6 pb-6 border-b border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Items</h3>
-              <div className="text-sm text-gray-600">{request.itemIds.length} item(s)</div>
-            </div>
+            {request.itemNames && request.itemNames.length > 0 && (
+              <div className="mb-6 pb-6 border-b border-gray-200">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Items</h3>
+                <ul className="space-y-1">
+                  {request.itemNames.map((name, i) => (
+                    <li key={i} className="text-sm text-gray-600">• {name}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-            {/* Pricing Breakdown */}
-            <div className="space-y-2 mb-6 pb-6 border-b border-gray-200">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium text-gray-900">
-                  ${((request.totalAmountCents - request.platformFeeCents) / 100).toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Platform Fee</span>
-                <span className="font-medium text-gray-900">
-                  ${(request.platformFeeCents / 100).toFixed(2)}
-                </span>
-              </div>
+            {/* Total */}
+            <div className="mb-6 pb-6 border-b border-gray-200">
               <div className="flex justify-between text-lg font-bold">
                 <span>Total</span>
                 <span className="text-sage-600">{request.displayAmount}</span>

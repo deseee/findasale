@@ -35,6 +35,12 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
 
     setIsSubmitting(true);
 
+    // 60-second timeout — prevents the button from being stuck forever
+    const timeoutId = setTimeout(() => {
+      setIsSubmitting(false);
+      onError?.('Payment timed out. Please try again.');
+    }, 60000);
+
     try {
       const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
@@ -42,6 +48,8 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
           billing_details: {},
         },
       });
+
+      clearTimeout(timeoutId);
 
       if (error) {
         onError?.(error.message || 'Payment failed');
@@ -51,11 +59,15 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
 
       if (paymentIntent?.status === 'succeeded') {
         onSuccess();
+      } else if (paymentIntent?.status === 'requires_action') {
+        // 3DS or redirect — Stripe will handle it; wait for webhook to confirm
+        onSuccess();
       } else {
-        onError?.('Payment incomplete');
+        onError?.(`Payment not completed (status: ${paymentIntent?.status ?? 'unknown'}). Please try again.`);
         setIsSubmitting(false);
       }
     } catch (err: any) {
+      clearTimeout(timeoutId);
       console.error('Payment error:', err);
       onError?.(err.message || 'Payment processing failed');
       setIsSubmitting(false);
