@@ -150,14 +150,19 @@ export const getLinkedCarts = async (req: AuthRequest, res: Response) => {
     });
 
     const result = sessions.map(s => {
-      const cartItems = Array.isArray(s.cartItems) ? s.cartItems : [];
+      const rawItems = Array.isArray(s.cartItems) ? s.cartItems : [];
+      // Prices stored in cents from shopper — convert to dollars for organizer POS display and pull
+      const cartItems = rawItems.map((item: any) => ({
+        ...item,
+        price: parseFloat(((item.price ?? 0) / 100).toFixed(2)),
+      }));
       const cartTotal = cartItems.reduce((sum, item: any) => sum + (item.price || 0), 0);
       return {
         id: s.id,
         shopperId: s.shopperId,
         shopperName: s.shopper?.name || 'Guest',
         cartItems,
-        cartTotal,
+        cartTotal: parseFloat(cartTotal.toFixed(2)),
         createdAt: s.createdAt,
       };
     });
