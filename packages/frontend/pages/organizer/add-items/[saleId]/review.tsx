@@ -1441,7 +1441,7 @@ const ReviewPage = () => {
           )}
         </div>
 
-        {inlineCameraOpen && inlineCaptureItemId && (
+        {inlineCameraOpen && inlineCaptureItemId ? (
           <RapidCapture
             rapidItems={inlineRapidItems}
             addingToItemId={inlineCaptureItemId}
@@ -1457,7 +1457,7 @@ const ReviewPage = () => {
             readyCount={0}
             isAnalyzing={false}
           />
-        )}
+        ) : null}
       </main>
     </>
   );

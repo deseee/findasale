@@ -1746,7 +1746,7 @@ const AddItemsDetailPage = () => {
           {/* Quality overlays are now rendered inside RapidCapture via qualityOverlay prop */}
 
           {/* RapidCapture fullscreen overlay */}
-          {cameraOpen && (
+          {cameraOpen ? (
             <RapidCapture
               onComplete={handleRapidCameraComplete}
               onCancel={() => {
@@ -1830,7 +1830,7 @@ const AddItemsDetailPage = () => {
                   : null
               }
             />
-          )}
+          ) : null}
 
           {/* Items List */}
           {itemsLoading ? (

@@ -299,6 +299,38 @@ const AvatarDropdown: React.FC = () => {
                     <MessageSquare size={14} className="text-red-400" />
                     <span>Broadcast Message <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
                   </Link>
+                  <Link
+                    href="/admin/ab-tests"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Lightbulb size={14} className="text-red-400" />
+                    <span>A/B Tests</span>
+                  </Link>
+                  <Link
+                    href="/admin/bid-review"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <MessageSquare size={14} className="text-red-400" />
+                    <span>Bid Review</span>
+                  </Link>
+                  <Link
+                    href="/admin/disputes"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <MessageSquare size={14} className="text-red-400" />
+                    <span>Disputes</span>
+                  </Link>
+                  <Link
+                    href="/admin/invites"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Users size={14} className="text-red-400" />
+                    <span>Invites</span>
+                  </Link>
                 </>
               )}
               <hr className="my-2 border-warm-200 dark:border-gray-700" />

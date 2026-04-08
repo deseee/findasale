@@ -549,6 +549,22 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <MessageSquare size={16} className="text-red-500" />
               <span>Broadcast Message</span>
             </Link>
+            <Link href="/admin/ab-tests" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Lightbulb size={16} className="text-red-500" />
+              <span>A/B Tests</span>
+            </Link>
+            <Link href="/admin/bid-review" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <MessageSquare size={16} className="text-red-500" />
+              <span>Bid Review</span>
+            </Link>
+            <Link href="/admin/disputes" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <MessageSquare size={16} className="text-red-500" />
+              <span>Disputes</span>
+            </Link>
+            <Link href="/admin/invites" className="flex items-center gap-2 px-3 py-2 text-red-600 dark:text-red-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Users size={16} className="text-red-500" />
+              <span>Invites</span>
+            </Link>
           </>
         )}
       </>
@@ -837,6 +853,18 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         </Link>
                         <Link href="/admin/broadcast" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <MessageSquare size={14} className="inline mr-2" /> Broadcast Message <span className="text-xs text-gray-400">(Soon)</span>
+                        </Link>
+                        <Link href="/admin/ab-tests" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Lightbulb size={14} className="inline mr-2" /> A/B Tests
+                        </Link>
+                        <Link href="/admin/bid-review" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <MessageSquare size={14} className="inline mr-2" /> Bid Review
+                        </Link>
+                        <Link href="/admin/disputes" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <MessageSquare size={14} className="inline mr-2" /> Disputes
+                        </Link>
+                        <Link href="/admin/invites" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Users size={14} className="inline mr-2" /> Invites
                         </Link>
                       </>
                     )}
