@@ -68,12 +68,18 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       itemIds,
       totalAmountCents,
       expiresInSeconds = 900, // 15 minutes default
+      isSplitPayment = false,
+      cashAmountCents,
+      cardAmountCents,
     } = req.body as {
       shopperUserId?: string;
       saleId?: string;
       itemIds?: string[];
       totalAmountCents?: number;
       expiresInSeconds?: number;
+      isSplitPayment?: boolean;
+      cashAmountCents?: number;
+      cardAmountCents?: number;
     };
 
     // Validation
@@ -88,6 +94,35 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     }
     if (typeof totalAmountCents !== 'number' || totalAmountCents <= 0) {
       return res.status(400).json({ message: 'totalAmountCents must be > 0' });
+    }
+
+    // Validate split payment amounts if split is enabled
+    let splitCashAmountCents = cashAmountCents;
+    let splitCardAmountCents = cardAmountCents;
+
+    if (isSplitPayment) {
+      if (!splitCashAmountCents || !splitCardAmountCents) {
+        return res.status(400).json({
+          message: 'When isSplitPayment is true, both cashAmountCents and cardAmountCents are required',
+        });
+      }
+
+      if (splitCashAmountCents <= 0 || splitCardAmountCents <= 0) {
+        return res.status(400).json({
+          message: 'Both cash and card amounts must be greater than 0',
+        });
+      }
+
+      // Verify sum equals total (within 1 cent rounding tolerance)
+      const sum = splitCashAmountCents + splitCardAmountCents;
+      if (Math.abs(sum - totalAmountCents) > 1) {
+        return res.status(400).json({
+          message: `Split amounts must sum to total. Got ${splitCashAmountCents} + ${splitCardAmountCents} = ${sum}, expected ${totalAmountCents}`,
+        });
+      }
+    } else {
+      // Non-split: card amount is total
+      splitCardAmountCents = totalAmountCents;
     }
 
     // Verify sale exists, is PUBLISHED, and belongs to organizer
@@ -157,18 +192,18 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Calculate platform fee (10%)
+    // Platform fee: 10% flat on total transaction amount (locked — never a different rate)
     const platformFeeCents = Math.round(totalAmountCents * 0.1);
 
-    // Create Stripe Payment Intent
+    // Create Stripe Payment Intent (for card amount only)
     let paymentIntent;
     try {
       paymentIntent = await stripe().paymentIntents.create(
         {
-          amount: totalAmountCents,
+          amount: splitCardAmountCents, // Card amount only (not total if split)
           currency: 'usd',
           payment_method_types: ['card'],
-          application_fee_amount: platformFeeCents, // 10% platform fee
+          application_fee_amount: platformFeeCents, // 10% of card amount
           metadata: {
             requestId: '', // will be filled in after DB creation
             organizerId: organizer.id,
@@ -176,6 +211,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
             shopperId: shopperUserId,
             saleId,
             source: 'pos_payment_request',
+            isSplitPayment: isSplitPayment ? 'true' : 'false',
           },
         },
         {
@@ -206,6 +242,9 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
           expiresAt,
           stripePaymentIntentId: paymentIntent.id,
           clientSecret: paymentIntent.client_secret!,
+          isSplitPayment,
+          cashAmountCents: isSplitPayment ? splitCashAmountCents : null,
+          cardAmountCents: isSplitPayment ? splitCardAmountCents : null,
         },
       });
 
@@ -273,6 +312,11 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       status: 'PENDING',
       shopperName: shopper.name,
       totalAmountCents,
+      isSplitPayment,
+      cashAmountCents: isSplitPayment ? splitCashAmountCents : undefined,
+      cardAmountCents: isSplitPayment ? splitCardAmountCents : undefined,
+      cardDisplayAmount: isSplitPayment ? `$${(splitCardAmountCents / 100).toFixed(2)}` : undefined,
+      displayAmount: `$${(totalAmountCents / 100).toFixed(2)}`,
       expiresAt: expiresAt.toISOString(),
       stripePaymentIntentId: paymentIntent.id,
       stripePaymentIntentSecret: paymentIntent.client_secret,
@@ -344,6 +388,10 @@ export const getPaymentRequest = async (req: AuthRequest, res: Response) => {
       itemNames,
       totalAmountCents: request.totalAmountCents,
       displayAmount: `$${(request.totalAmountCents / 100).toFixed(2)}`,
+      isSplitPayment: request.isSplitPayment,
+      cashAmountCents: request.cashAmountCents ?? undefined,
+      cardAmountCents: request.cardAmountCents ?? undefined,
+      cardDisplayAmount: request.cardAmountCents ? `$${(request.cardAmountCents / 100).toFixed(2)}` : undefined,
       platformFeeCents: request.platformFeeCents,
       status: request.status,
       expiresAt: request.expiresAt.toISOString(),

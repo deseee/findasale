@@ -2850,7 +2850,7 @@ model POSPaymentRequest {
   saleId                String
   itemIds               String[]   // Array of item IDs
   totalAmountCents      Int
-  platformFeeCents      Int       // 10% of totalAmountCents
+  platformFeeCents      Int       // 10% of cardAmountCents (or totalAmountCents if not split)
   stripeFeeEstimate     Int?
   stripePaymentIntentId String?   @unique
   clientSecret          String?   @db.VarChar(255)
@@ -2860,6 +2860,10 @@ model POSPaymentRequest {
   acceptedAt            DateTime?
   paidAt                DateTime?
   declineReason         String?   // SHOPPER_CANCEL | TIMEOUT | PAYMENT_FAILED | USER_CANCEL | INSUFFICIENT_FUNDS | PAYMENT_CONCERN | OTHER
+  // Split payment fields
+  isSplitPayment        Boolean   @default(false)
+  cashAmountCents       Int?
+  cardAmountCents       Int?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -2872,6 +2876,7 @@ model POSPaymentRequest {
   @@index([shopperUserId, status])
   @@index([status, expiresAt])
   @@index([stripePaymentIntentId])
+  @@index([isSplitPayment])
 }
 
 // Phase 2b: Explorer's Guild — Promotional Boost Purchases (dual-rail: XP or Stripe)
