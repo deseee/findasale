@@ -83,8 +83,8 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     if (!saleId || typeof saleId !== 'string') {
       return res.status(400).json({ message: 'saleId is required' });
     }
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      return res.status(400).json({ message: 'itemIds must be non-empty array' });
+    if (!itemIds || !Array.isArray(itemIds)) {
+      return res.status(400).json({ message: 'itemIds must be an array' });
     }
     if (typeof totalAmountCents !== 'number' || totalAmountCents <= 0) {
       return res.status(400).json({ message: 'totalAmountCents must be > 0' });
@@ -104,27 +104,30 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'You do not own this sale' });
     }
 
-    // Verify all items exist in the sale and are available
-    const items = await prisma.item.findMany({
-      where: {
-        id: { in: itemIds },
-        saleId,
-      },
-      select: { id: true, title: true, status: true, price: true },
-    });
-
-    if (items.length !== itemIds.length) {
-      return res.status(400).json({ message: 'One or more items not found or not in this sale' });
-    }
-
-    const unavailableItems = items.filter(
-      (item) => !['AVAILABLE', 'RESERVED'].includes(item.status)
-    );
-    if (unavailableItems.length > 0) {
-      return res.status(400).json({
-        message: 'One or more items are no longer available',
-        unavailableItemIds: unavailableItems.map((i) => i.id),
+    // Verify items only when itemIds are provided (POS carts may contain custom-amount items with no DB id)
+    let items: Array<{ id: string; title: string; status: string; price: number | null }> = [];
+    if (itemIds.length > 0) {
+      items = await prisma.item.findMany({
+        where: {
+          id: { in: itemIds },
+          saleId,
+        },
+        select: { id: true, title: true, status: true, price: true },
       });
+
+      if (items.length !== itemIds.length) {
+        return res.status(400).json({ message: 'One or more items not found or not in this sale' });
+      }
+
+      const unavailableItems = items.filter(
+        (item) => !['AVAILABLE', 'RESERVED'].includes(item.status)
+      );
+      if (unavailableItems.length > 0) {
+        return res.status(400).json({
+          message: 'One or more items are no longer available',
+          unavailableItemIds: unavailableItems.map((i) => i.id),
+        });
+      }
     }
 
     // Verify shopper exists
