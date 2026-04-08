@@ -178,6 +178,19 @@ export default function POSPage() {
   const [pendingPaymentsPanelOpen, setPendingPaymentsPanelOpen] = useState(true);
   const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
 
+  // Paid banner state (slide-in success notification)
+  const [paidBanner, setPaidBanner] = useState<{ shopperName: string; displayAmount: string } | null>(null);
+
+  // Cash calculator state
+  const [cashCalculatorVisible, setCashCalculatorVisible] = useState(false);
+  const [cashGiven, setCashGiven] = useState('');
+
+  // Pending payment cancel state
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // Sound toggle state (persisted in localStorage)
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
   const sdkLoadedRef = useRef(false);
@@ -222,6 +235,27 @@ export default function POSPage() {
       }
     }
   }, [activePendingPayments]);
+
+  // ─── Initialize sound preference from localStorage ────────────────────────────────
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pos_sound_enabled');
+      if (saved !== null) {
+        setSoundEnabled(JSON.parse(saved));
+      }
+    }
+  }, []);
+
+  // ─── Auto-dismiss paid banner after 5 seconds ──────────────────────────────────────
+
+  useEffect(() => {
+    if (!paidBanner) return;
+    const timer = setTimeout(() => {
+      setPaidBanner(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [paidBanner]);
 
   // ─── Auth guard ────────────────────────────────────────────────────────────────────
 
@@ -420,6 +454,26 @@ export default function POSPage() {
     return () => clearInterval(interval);
   }, [selectedSaleId]);
 
+  // ─── Play success chime (Web Audio API) ────────────────────────────────────────────
+
+  const playSuccessChime = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      oscillator.frequency.setValueAtTime(1108, ctx.currentTime + 0.1);
+      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.4);
+    } catch (e) {
+      // Audio not available — fail silently
+    }
+  }, []);
+
   // ─── Socket listener for payment status updates ────────────────────────────────────────
 
   useEffect(() => {
@@ -446,10 +500,17 @@ export default function POSPage() {
         const { requestId, status } = event;
 
         if (status === 'PAID') {
-          // Show success toast
+          // Show slide-in success banner instead of toast
           const payment = pendingPayments.find(p => p.id === requestId);
           if (payment) {
-            showToast(`💳 Payment received! ${payment.displayAmount} paid.`, 'success');
+            setPaidBanner({
+              shopperName: payment.shopperName,
+              displayAmount: payment.displayAmount,
+            });
+            // Play success chime if sound is enabled
+            if (soundEnabled) {
+              playSuccessChime();
+            }
           }
 
           // Mark for visual feedback briefly, then remove
@@ -478,7 +539,37 @@ export default function POSPage() {
     }).catch((err) => {
       console.error('[pos] Failed to load socket.io-client:', err);
     });
-  }, [user, pendingPayments, showToast]);
+  }, [user, pendingPayments, soundEnabled, playSuccessChime]);
+
+  // ─── Today's total summary query (30s polling) ────────────────────────────────────────
+
+  const { data: todaySummary } = useQuery({
+    queryKey: ['pos-today-summary'],
+    queryFn: async () => {
+      const res = await api.get<{ totalAmountCents: number; transactionCount: number }>('/pos/transactions/today-summary');
+      return res.data;
+    },
+    enabled: !!user && user.roles?.includes('ORGANIZER'),
+    refetchInterval: 30000,
+    staleTime: 0,
+  });
+
+  // ─── Cancel pending payment ──────────────────────────────────────────────────────────
+
+  const handleCancelPayment = async (paymentId: string) => {
+    setCancellingId(paymentId);
+    try {
+      await api.post(`/pos/payment-request/${paymentId}/cancel`, { reason: 'ORGANIZER_CANCEL' });
+      // Refetch pending payments
+      setPendingPayments(prev => prev.filter(p => p.id !== paymentId));
+      showToast('Request cancelled', 'info');
+    } catch (err) {
+      console.error('[pos] Cancel payment error:', err);
+      showToast('Failed to cancel request', 'error');
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   // ─── Cart operations ────────────────────────────────────────────────────────────────────
 
@@ -985,22 +1076,40 @@ export default function POSPage() {
           <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100 font-fraunces">POS</h1>
           <p className="text-sm text-warm-500 dark:text-warm-400">In-person payments</p>
         </div>
-        {(readerStatus === 'idle' || readerStatus === 'error' || readerStatus === 'disconnected') ? (
+        <div className="flex items-center gap-3">
+          {/* Sound toggle */}
           <button
-            onClick={initTerminal}
-            className={`text-xs px-3 py-1 rounded-full font-medium cursor-pointer hover:opacity-80 transition ${readerBadge.color}`}
+            onClick={() => {
+              const newState = !soundEnabled;
+              setSoundEnabled(newState);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('pos_sound_enabled', JSON.stringify(newState));
+              }
+            }}
+            className="text-xl p-2 hover:opacity-75 transition"
+            aria-label={soundEnabled ? 'Sound on' : 'Sound off'}
           >
-            {readerBadge.label}
+            {soundEnabled ? '🔔' : '🔇'}
           </button>
-        ) : readerStatus === 'connecting' ? (
-          <span className={`text-xs px-3 py-1 rounded-full font-medium animate-pulse ${readerBadge.color}`}>
-            Connecting…
-          </span>
-        ) : (
-          <span className={`text-xs px-3 py-1 rounded-full font-medium ${readerBadge.color}`}>
-            {readerBadge.label}
-          </span>
-        )}
+
+          {/* Reader status */}
+          {(readerStatus === 'idle' || readerStatus === 'error' || readerStatus === 'disconnected') ? (
+            <button
+              onClick={initTerminal}
+              className={`text-xs px-3 py-1 rounded-full font-medium cursor-pointer hover:opacity-80 transition ${readerBadge.color}`}
+            >
+              {readerBadge.label}
+            </button>
+          ) : readerStatus === 'connecting' ? (
+            <span className={`text-xs px-3 py-1 rounded-full font-medium animate-pulse ${readerBadge.color}`}>
+              Connecting…
+            </span>
+          ) : (
+            <span className={`text-xs px-3 py-1 rounded-full font-medium ${readerBadge.color}`}>
+              {readerBadge.label}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Sale selector */}
@@ -1220,6 +1329,13 @@ export default function POSPage() {
               <span>${cartTotal.toFixed(2)}</span>
             </div>
           </div>
+
+          {/* Today's summary bar */}
+          {todaySummary && todaySummary.transactionCount > 0 && (
+            <div className="mt-3 pt-3 border-t border-warm-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 text-center">
+              Today: ${(todaySummary.totalAmountCents / 100).toFixed(2)} · {todaySummary.transactionCount} sales
+            </div>
+          )}
         </div>
       )}
 
@@ -1236,6 +1352,23 @@ export default function POSPage() {
             placeholder="buyer@email.com"
             className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
           />
+        </div>
+      )}
+
+      {/* Slide-in success banner (paid) */}
+      {paidBanner && (
+        <div className="mb-4 overflow-hidden rounded-xl">
+          <div className="translate-y-0 transition-all duration-300 bg-green-800 text-white p-4 flex items-center gap-3 h-20">
+            <span className="text-2xl">✓</span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold">
+                {paidBanner.shopperName} · {paidBanner.displayAmount} · Paid
+              </p>
+              <div className="mt-2 h-1 bg-green-700 rounded-full overflow-hidden">
+                <div className="h-full bg-green-400 animate-pulse" style={{ animation: 'none' }} />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1286,6 +1419,19 @@ export default function POSPage() {
                       <span className="text-sm font-bold text-gray-900 dark:text-gray-100 ml-2">
                         {payment.displayAmount}
                       </span>
+                      {/* Cancel button */}
+                      {cancellingId === payment.id ? (
+                        <span className="text-gray-400 ml-2">⏳</span>
+                      ) : (
+                        <button
+                          onClick={() => handleCancelPayment(payment.id)}
+                          disabled={successPaymentId === payment.id}
+                          className="ml-2 text-gray-400 hover:text-red-500 transition text-lg leading-none p-1 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          aria-label="Cancel payment request"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between text-xs">
@@ -1422,6 +1568,38 @@ export default function POSPage() {
               No reader? Enter card manually
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Cash Calculator (visible when cash mode selected) */}
+      {paymentMode === 'cash' && selectedSaleId && (
+        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 shadow-sm">
+          <div className="mb-3">
+            <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-2">
+              Cash given
+            </label>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={cashGiven}
+              onChange={(e) => setCashGiven(e.target.value)}
+              placeholder="$0.00"
+              className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-3 text-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+            />
+          </div>
+          {cashGiven && parseFloat(cashGiven) > 0 && (
+            <div
+              className={`p-3 rounded-lg text-center text-sm font-semibold ${
+                parseFloat(cashGiven) >= cartTotal
+                  ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+              }`}
+            >
+              {parseFloat(cashGiven) >= cartTotal
+                ? `Change: $${(parseFloat(cashGiven) - cartTotal).toFixed(2)}`
+                : `Short: $${(cartTotal - parseFloat(cashGiven)).toFixed(2)}`}
+            </div>
+          )}
         </div>
       )}
 

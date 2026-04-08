@@ -17,6 +17,8 @@ import {
   declinePaymentRequest,
   getPendingPaymentRequests,
   getOrganizerActiveRequests,
+  getTodaySummary,
+  cancelPaymentRequest,
 } from '../controllers/posPaymentController';
 
 const router = Router();
@@ -34,11 +36,15 @@ router.post('/holds/:reservationId/invoice', authenticate, sendHoldInvoice);
 
 // POS Payment Request endpoints
 router.post('/payment-request', authenticate, requireOrganizer, createPaymentRequest);
+// Transaction summary — organizer only
+router.get('/transactions/today-summary', authenticate, requireOrganizer, getTodaySummary);
 // 'active' and 'pending' must be registered before '/:requestId' to avoid param collision
 router.get('/payment-requests/active', authenticate, requireOrganizer, getOrganizerActiveRequests);
 router.get('/payment-request/pending', authenticate, getPendingPaymentRequests);
+// Parameterized routes — must come last
 router.get('/payment-request/:requestId', authenticate, getPaymentRequest);
 router.post('/payment-request/:requestId/accept', authenticate, acceptPaymentRequest);
 router.post('/payment-request/:requestId/decline', authenticate, declinePaymentRequest);
+router.post('/payment-request/:id/cancel', authenticate, requireOrganizer, cancelPaymentRequest);
 
 export default router;

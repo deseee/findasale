@@ -610,3 +610,131 @@ export const getOrganizerActiveRequests = async (req: AuthRequest, res: Response
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+/**
+ * GET /api/pos/transactions/today-summary
+ * Returns today's completed POS payment totals for the authenticated organizer.
+ * "Today" = midnight UTC.
+ */
+export const getTodaySummary = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const organizer = await resolveOrganizer(req, res);
+    if (!organizer) return;
+
+    // Calculate today's midnight UTC
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    // Query for PAID transactions since today's midnight
+    const result = await prisma.pOSPaymentRequest.aggregate({
+      where: {
+        organizerId: organizer.id,
+        status: 'PAID',
+        paidAt: {
+          gte: today,
+        },
+      },
+      _sum: {
+        totalAmountCents: true,
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    return res.json({
+      totalAmountCents: result._sum.totalAmountCents || 0,
+      transactionCount: result._count.id || 0,
+    });
+  } catch (err: any) {
+    console.error('[pos-payment] getTodaySummary error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * POST /api/pos/payment-request/:id/cancel
+ * Organizer cancels a pending or accepted payment request.
+ * Body: { reason?: string }
+ */
+export const cancelPaymentRequest = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const organizer = await resolveOrganizer(req, res);
+    if (!organizer) return;
+
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ message: 'id is required' });
+
+    const { reason } = req.body as { reason?: string };
+
+    // Find the payment request
+    const request = await prisma.pOSPaymentRequest.findUnique({
+      where: { id },
+    });
+
+    if (!request) return res.status(404).json({ message: 'Payment request not found' });
+
+    // Verify organizer owns this request
+    if (request.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Verify status is PENDING or ACCEPTED (cannot cancel PAID/DECLINED/EXPIRED/CANCELLED)
+    if (!['PENDING', 'ACCEPTED'].includes(request.status)) {
+      return res.status(400).json({
+        message: `Cannot cancel request with status ${request.status}`,
+      });
+    }
+
+    const cancelReason = reason || 'ORGANIZER_CANCEL';
+
+    // Update status to CANCELLED
+    const updated = await prisma.pOSPaymentRequest.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        declineReason: cancelReason,
+      },
+    });
+
+    // Emit socket event to shopper
+    try {
+      const io = getIO();
+      io.to(`user:${request.shopperUserId}`).emit('POS_PAYMENT_STATUS', {
+        type: 'POS_PAYMENT_STATUS',
+        requestId: id,
+        status: 'CANCELLED',
+        reason: cancelReason,
+      });
+    } catch (err: any) {
+      console.warn('[pos-payment] Failed to emit cancel socket event:', err.message);
+    }
+
+    // Create notification to shopper
+    try {
+      await createNotification({
+        userId: request.shopperUserId,
+        type: 'pos_payment_cancelled',
+        title: 'Payment Request Cancelled',
+        body: `The payment request for $${(request.totalAmountCents / 100).toFixed(2)} was cancelled`,
+        link: `/shopper/pay-request/${id}`,
+        channel: 'OPERATIONAL',
+      });
+    } catch (err: any) {
+      console.warn('[pos-payment] Failed to create cancel notification:', err.message);
+    }
+
+    return res.json({
+      requestId: id,
+      status: 'CANCELLED',
+      reason: cancelReason,
+    });
+  } catch (err: any) {
+    console.error('[pos-payment] cancelPaymentRequest error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
