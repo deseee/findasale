@@ -9,22 +9,11 @@
  * All operations are wrapped in Prisma $transaction so ledger and BoostPurchase land atomically.
  */
 
-import Stripe from 'stripe';
 import { prisma } from '../lib/prisma';
 import { spendXp, awardXp } from './xpService';
 import { getBoostPrice, getEffectiveDurationDays } from './boostPricing';
+import { getStripe } from '../utils/stripe';
 import { BoostType, PaymentMethod } from '@prisma/client';
-
-let _stripe: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!_stripe) {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('[boostService] STRIPE_SECRET_KEY not set');
-    }
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' });
-  }
-  return _stripe;
-}
 
 export interface PurchaseBoostParams {
   boostType: BoostType;
@@ -243,17 +232,10 @@ export async function expireBoosts(): Promise<number> {
 export async function getActiveBoosts(targetType?: string) {
   const MAX_FEATURED = parseInt(process.env.MAX_FEATURED_BOOSTS ?? '5', 10);
 
-  const where: Record<string, unknown> = {
-    status: 'ACTIVE',
-    expiresAt: { gt: new Date() },
-  };
-
-  if (targetType) {
-    where.targetType = targetType;
-  }
-
   const boosts = await prisma.boostPurchase.findMany({
-    where: where as Parameters<typeof prisma.boostPurchase.findMany>[0]['where'],
+    where: targetType
+      ? { status: 'ACTIVE', expiresAt: { gt: new Date() }, targetType }
+      : { status: 'ACTIVE', expiresAt: { gt: new Date() } },
     orderBy: { activatedAt: 'desc' },
     take: targetType === 'SALE' ? MAX_FEATURED : undefined,
     select: {
