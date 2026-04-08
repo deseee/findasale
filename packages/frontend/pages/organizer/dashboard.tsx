@@ -100,6 +100,7 @@ const OrganizerDashboard = () => {
   const [showTeamsOnboardingWizard, setShowTeamsOnboardingWizard] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
   const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
+  const [dismissedProNudge, setDismissedProNudge] = useState(false);
   const [manualPrimaryId, setManualPrimaryId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('dashboard_primarySaleId');
@@ -275,7 +276,21 @@ const OrganizerDashboard = () => {
     if (ctaDismissed) {
       setShowUpgradeCTA(false);
     }
-  }, []);
+    // Load PRO nudge dismiss state (30-day expiry)
+    if (user?.id) {
+      const dismissalKey = `proNudgeDismissed_${user.id}`;
+      const dismissedAt = localStorage.getItem(dismissalKey);
+      if (dismissedAt) {
+        const dismissedTime = parseInt(dismissedAt, 10);
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        if (Date.now() - dismissedTime < thirtyDaysMs) {
+          setDismissedProNudge(true);
+        } else {
+          localStorage.removeItem(dismissalKey);
+        }
+      }
+    }
+  }, [user?.id]);
 
   // Handle Stripe checkout success redirect
   useEffect(() => {
@@ -652,6 +667,41 @@ const OrganizerDashboard = () => {
                 <Link href="/organizer/pricing" className="flex-shrink-0 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
                   Upgrade to PRO
                 </Link>
+              </div>
+            </div>
+          )}
+
+          {/* PRO Upgrade Nudge — shown to SIMPLE tier organizers with 3+ completed sales */}
+          {isClient && user?.organizerTier === 'SIMPLE' && analyticsData?.completedSalesCount >= 3 && !dismissedProNudge && (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6 mb-8">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">You're saving money as a PRO</h3>
+                    <span className="text-2xl">💰</span>
+                  </div>
+                  <p className="text-sm text-warm-700 dark:text-warm-300 mb-3">
+                    You've completed {analyticsData.completedSalesCount} sales and earned <strong>${(analyticsData.totalGMV || 0).toFixed(2)}</strong>.
+                  </p>
+                  <p className="text-sm text-warm-700 dark:text-warm-300">
+                    At SIMPLE, you paid <strong>${((analyticsData.totalGMV || 0) * 0.1).toFixed(2)}</strong> in fees (10%). On PRO, you'd pay just <strong>${((analyticsData.totalGMV || 0) * 0.08).toFixed(2)}</strong> (8%) — that's <strong>${(((analyticsData.totalGMV || 0) * 0.1) - ((analyticsData.totalGMV || 0) * 0.08) - 29).toFixed(2)}</strong> saved per month at your current volume.
+                  </p>
+                </div>
+                <div className="flex-shrink-0 flex gap-2">
+                  <Link href="/organizer/pricing" className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
+                    Upgrade Now
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setDismissedProNudge(true);
+                      const dismissalKey = `proNudgeDismissed_${user.id}`;
+                      localStorage.setItem(dismissalKey, Date.now().toString());
+                    }}
+                    className="px-4 py-2 text-warm-600 dark:text-warm-400 hover:bg-warm-100 dark:hover:bg-gray-700 font-medium rounded-lg transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
             </div>
           )}

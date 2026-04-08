@@ -7,6 +7,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S416 COMPLETE (2026-04-08):** Phase 3 integration tests, Map MVP, investor analysis, 3 bug fixes, pricing transparency, PRO nudge. 16 files changed.
+
+**S416 Summary:**
+Investor analysis of live PWA — YELLOW verdict. Strong product, zero commercial validation. Top findings: fix empty homepage, get 5 organizers before more features, show all-in pricing, add PRO upgrade nudge, critical path tests. Patrick will be first organizer (own eBay inventory). Two live bugs found by Patrick and fixed: loot-log detail page (imageUrl field mapping mismatch in controller) and dispute filing (ReportIssue button missing from ReceiptCard — restored). Investor items #3 and #4 shipped. Item #5 (tests) shipped earlier in session.
+
+Phase 3 tech debt item #11: 4 integration test files (1,722 lines) for auth, payments, auction closing, reservations — purely additive, zero TS errors.
+
+Map MVP: Treasure Trails amber badge on sale pins with active public trails, "View Treasure Trail" CTA in popup. RouteBuilder "Start from my location" toggle with reverse geocode via Nominatim. Backend saleController extended with hasActiveTrail + trailShareToken.
+
+**S416 Files Changed (16 files):**
+Backend:
+- `packages/backend/src/controllers/saleController.ts` — trails Prisma include + hasActiveTrail/trailShareToken mapping
+- `packages/backend/src/controllers/lootLogController.ts` — imageUrl field mapping fix (photoUrls[0] → imageUrl)
+- `packages/backend/src/routes/organizers.ts` — /me/analytics returns completedSalesCount + totalGMV
+- `packages/backend/src/__tests__/auth.integration.ts` — NEW: auth integration tests
+- `packages/backend/src/__tests__/payment.integration.ts` — NEW: payment integration tests
+- `packages/backend/src/__tests__/auctionClosing.integration.ts` — NEW: auction closing integration tests
+- `packages/backend/src/__tests__/reservation.integration.ts` — NEW: reservation integration tests
+
+Frontend:
+- `packages/frontend/components/SaleMap.tsx` — SalePin interface extended
+- `packages/frontend/pages/map.tsx` — Sale interface + pin creation with trail data
+- `packages/frontend/components/SaleMapInner.tsx` — trail badge + "View Treasure Trail" CTA
+- `packages/frontend/components/RouteBuilder.tsx` — Start from My Location toggle
+- `packages/frontend/components/ReceiptCard.tsx` — "Report Issue" dispute button restored
+- `packages/frontend/pages/organizer/pricing.tsx` — all-in fee transparency callouts
+- `packages/frontend/pages/organizer/dashboard.tsx` — PRO upgrade nudge banner (3+ completed sales)
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — CATEGORIES type cast fix (TS build error)
+
+Docs:
+- `claude_docs/STATE.md` — this update
+- `claude_docs/patrick-dashboard.md` — this update
+
+**S416 Chrome smoke test:** NOT RUN — no new user-facing flows tested by Claude this session. Loot-log fix, dispute filing, map trail badge, and PRO nudge all need QA.
+
+---
+
 **S415 COMPLETE (2026-04-08):** Full tech debt audit + Phase 1 & 2 quick wins shipped. 30 files changed. Two post-agent TS errors caught and fixed inline.
 
 **S415 Summary:**
@@ -1699,6 +1736,95 @@ Files changed S361:
 (4) **CRITICAL: Repo wipe recovered.** `3ceae665` deleted 1,483 files on push (second occurrence this project). Recovery: `git reset --hard cadddf6e` + `git push origin main --force` via Patrick's PowerShell. 10 S362 files saved to VM temp before reset, restored to disk. Pushblock provided — Patrick must run it. Root cause locked in CLAUDE.md §5: subagent git ban (hard rule).
 
 ---
+
+## Next Session (S417)
+
+### Patrick Actions First — push S415 + S416
+
+**S415 push (if not done):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/jobs/fraudDetectionJob.ts
+git add packages/backend/src/jobs/organizerWeeklyDigestJob.ts
+git add packages/backend/src/controllers/healthController.ts
+git add packages/backend/src/controllers/viewerController.ts
+git add packages/backend/.env.example
+git add packages/backend/src/index.ts
+git add packages/backend/src/jobs/auctionCloseCron.ts
+git add packages/backend/src/routes/contact.ts
+git add packages/backend/src/routes/auth.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/backend/src/routes/items.ts
+git add packages/backend/src/routes/search.ts
+git add packages/backend/src/controllers/userController.ts
+git add packages/backend/src/routes/users.ts
+git add packages/frontend/components/HaulPostCard.tsx
+git add packages/frontend/components/HighValueTrackerWidget.tsx
+git add packages/frontend/components/InstallPrompt.tsx
+git add packages/frontend/components/SaleQRCode.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add "packages/frontend/pages/organizer/print-kit/[saleId].tsx"
+git add packages/frontend/pages/profile.tsx
+git add packages/frontend/pages/shopper/history.tsx
+git add packages/frontend/pages/shopper/settings.tsx
+git add packages/frontend/lib/itemConstants.ts
+git add packages/frontend/components/camera/PreviewModal.tsx
+git add packages/frontend/components/SmartInventoryUpload.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add claude_docs/research/tech-debt-audit-s413.md
+git commit -m "S415: tech debt audit + phase 1+2 quick wins (30 files)"
+.\push.ps1
+```
+
+**S416 push (this session):**
+```powershell
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/lootLogController.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/backend/src/__tests__/auth.integration.ts
+git add packages/backend/src/__tests__/payment.integration.ts
+git add packages/backend/src/__tests__/auctionClosing.integration.ts
+git add packages/backend/src/__tests__/reservation.integration.ts
+git add packages/frontend/components/SaleMap.tsx
+git add packages/frontend/pages/map.tsx
+git add packages/frontend/components/SaleMapInner.tsx
+git add packages/frontend/components/RouteBuilder.tsx
+git add packages/frontend/components/ReceiptCard.tsx
+git add packages/frontend/pages/organizer/pricing.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S416: map MVP, Phase 3 tests, bug fixes, pricing transparency, PRO nudge
+
+Map: Treasure Trails badge on sale pins + Start from My Location in RouteBuilder.
+Phase 3: 4 integration test files (auth, payments, auctions, reservations).
+Bug fixes: loot-log detail imageUrl mapping, dispute filing restored to ReceiptCard.
+Investor #3: all-in pricing transparency (10%+3.2%=13.2%) on pricing page.
+Investor #4: PRO upgrade nudge banner on dashboard (3+ completed sales trigger).
+TS fix: CATEGORIES type cast in review.tsx."
+.\push.ps1
+```
+
+**No new migrations this session.**
+
+### S417 Priority 1 — Chrome QA of S416 fixes
+- Loot-log detail page: navigate to `/shopper/history` as user11 → click a purchase → confirm detail page loads with correct data
+- Dispute filing: open a ReceiptCard → confirm "Report Issue" button appears → confirm modal opens and form submits
+- Map trail badge: visit `/map` → check if any pins show amber trail badge (may need a trail in DB first)
+- PRO nudge: log in as SIMPLE organizer with 3+ completed sales → confirm nudge banner shows with correct fee math
+
+### S417 Priority 2 — Patrick as first organizer
+- Patrick creates organizer account on finda.sale
+- Lists real items (own eBay inventory) as a real sale
+- This seeds the homepage AND validates the core organizer workflow end-to-end
+
+### Standing Notes
+- Railway backend: https://backend-production-153c9.up.railway.app
+- Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
+- eBay: production credentials live in Railway.
 
 ## Next Session (S409) — COMPLETE — see S409 above
 

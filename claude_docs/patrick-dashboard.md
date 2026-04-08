@@ -1,36 +1,45 @@
-# Patrick's Dashboard — April 8, 2026 (S415)
+# Patrick's Dashboard — April 8, 2026 (S416)
 
 ---
 
-## What Happened This Session (S415)
+## What Happened This Session (S416)
 
-**Full tech debt audit completed.** Scanned all 821 files across the monorepo and scored 12 debt items using a priority formula. Full report saved to `claude_docs/research/tech-debt-audit-s413.md`. Phase 3 (structural refactors) is deferred until post-beta.
+**Investor analysis of live PWA.** YELLOW verdict — strong product, zero commercial validation. Key findings summarized below under "Investor Verdict."
 
-**Phase 1 quick wins shipped (inline):**
-- Stripe price IDs were hardcoded in 6 places in `stripeController.ts` — now use env vars (lower billing bug risk)
-- `fraudDetectionJob` was imported but the cron was commented out — now actually runs daily at 2AM
-- Monday 8AM email collision fixed — organizer weekly digest shifted to 9AM (was fighting curator digest for Resend bandwidth)
-- `healthController` and `viewerController` missing try/catch — added
-- `.env.example` updated with 13 missing vars that production actually requires
+**Phase 3 integration tests shipped.** 4 new test files (1,722 lines): auth, payments, auction closing, reservations. Purely additive — no source changes. Zero TS errors.
 
-**Phase 2 sprints shipped (5 parallel agents):**
-- **Auction cron dedup:** Found two cron jobs both firing every 5 minutes to close auctions. `auctionCloseCron.ts` was missing reserve price validation, XP awards, and Stripe PaymentIntents — deprecated it. `auctionJob.ts` is now the only auction closer.
-- **Zod validation:** 5 backend routes that used manual `if (!field)` checks now use proper Zod schemas (contact, auth, organizers, items, search).
-- **next/image migration:** 9 components/pages migrated from raw `<img>` tags to Next.js `<Image>` — improves Core Web Vitals and Vercel image optimization.
-- **Condition constants centralized:** `lib/itemConstants.ts` created with 4 canonical DB condition values. 3 components that each had their own local definitions now import from one place.
-- **Account deletion implemented:** `DELETE /api/users/me` backend endpoint + settings.tsx frontend wired. Confirmation modal, password verification, Stripe subscription cancel on organizer delete. ⚠️ Needs QA before beta users can reach it.
+**Map MVP shipped.** Treasure Trails amber badge on map pins with active public trails. "View Treasure Trail" green CTA added to pin popup. RouteBuilder gets "Start from my location" toggle with reverse geocode via Nominatim.
 
-**Two TypeScript errors caught and fixed before wrap:**
-- `add-items/[saleId].tsx` — `import Image from 'next/image'` was shadowing the native browser `Image()` constructor used in the canvas enhancement pipeline. Aliased to `NextImage`.
-- `search.ts:83-84` — Zod optional values are `undefined` not `null`; fixed `!== null` to `!= null`.
+**2 live bugs Patrick found — fixed:**
+- `/shopper/loot-log/[id]` was blank — root cause was controller returning `photoUrls[]` array but page expected `imageUrl` string. Fixed in `lootLogController.ts`.
+- No way to file a dispute — `DisputeForm` existed but wasn't wired into `ReceiptCard`. "Report Issue" button restored.
+
+**Investor items #3 and #4 shipped:**
+- Pricing page now shows all-in cost: "10% platform + ~3.2% payment processing = ~13.2% total per sale" with competitor context.
+- PRO upgrade nudge banner on organizer dashboard fires when SIMPLE tier organizer has 3+ completed sales — shows actual fee math and savings.
+
+**TS build error fixed inline:** `CATEGORIES.includes()` type mismatch in review.tsx — cast to `readonly string[]`.
 
 ---
 
-## Full Push Block (S415 — this session only)
+## Investor Verdict (Quick Summary)
 
+🟡 **YELLOW — Don't invest today. Here's what changes that:**
+
+- Product: extraordinary for a solo AI-assisted build. Genuine competitive advantage on workflow.
+- Revenue model: solid. 10% fee-on-sale is well-positioned vs competitors (MaxSold 20–30%).
+- **Fatal gap: zero paying customers, zero transactions.** The market hasn't answered "will organizers pay 10%?" yet.
+- CAC: D grade. No organizer outreach has happened. Homepage shows empty sales — looks abandoned.
+- Gamification: B+ as a long-term retention play, C as a current priority. Built loyalty system for users who don't exist yet.
+- **What changes it to GREEN:** 5 recurring organizers + any transaction showing repeat use. Patrick listing his own eBay inventory is the right first move.
+
+---
+
+## Full Push Block (S415 + S416)
+
+### Push S415 first (if not done):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-
 git add packages/backend/src/controllers/stripeController.ts
 git add packages/backend/src/jobs/fraudDetectionJob.ts
 git add packages/backend/src/jobs/organizerWeeklyDigestJob.ts
@@ -61,20 +70,37 @@ git add packages/frontend/components/camera/PreviewModal.tsx
 git add packages/frontend/components/SmartInventoryUpload.tsx
 git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
 git add claude_docs/research/tech-debt-audit-s413.md
+git commit -m "S415: tech debt audit + phase 1+2 quick wins (30 files)"
+.\push.ps1
+```
+
+### Then push S416:
+```powershell
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/lootLogController.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/backend/src/__tests__/auth.integration.ts
+git add packages/backend/src/__tests__/payment.integration.ts
+git add packages/backend/src/__tests__/auctionClosing.integration.ts
+git add packages/backend/src/__tests__/reservation.integration.ts
+git add packages/frontend/components/SaleMap.tsx
+git add packages/frontend/pages/map.tsx
+git add packages/frontend/components/SaleMapInner.tsx
+git add packages/frontend/components/RouteBuilder.tsx
+git add packages/frontend/components/ReceiptCard.tsx
+git add packages/frontend/pages/organizer/pricing.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S415: tech debt audit + phase 1+2 quick wins (30 files)
+git commit -m "S416: map MVP, Phase 3 tests, bug fixes, pricing transparency, PRO nudge
 
-Phase 1 inline: stripe price IDs to env vars, fraudDetectionJob wired to
-cron, email job timing collision fixed, try/catch on bare controllers,
-.env.example synced with 13 missing vars.
-
-Phase 2 parallel agents: auction cron dedup (auctionCloseCron deprecated),
-Zod validation on 5 routes, next/image migration (9 files), condition
-constants centralized to lib/itemConstants.ts, account deletion implemented.
-
-Post-agent TS fixes: NextImage alias (native Image constructor conflict),
-search.ts undefined vs null for Zod optional values."
+Map: Treasure Trails badge on sale pins + Start from My Location in RouteBuilder.
+Phase 3: 4 integration test files (auth, payments, auctions, reservations).
+Bug fixes: loot-log detail imageUrl mapping, dispute filing restored to ReceiptCard.
+Investor #3: all-in pricing transparency (10%+3.2%=13.2%) on pricing page.
+Investor #4: PRO upgrade nudge banner on dashboard (3+ completed sales trigger).
+TS fix: CATEGORIES type cast in review.tsx."
 .\push.ps1
 ```
 
@@ -82,36 +108,40 @@ search.ts undefined vs null for Zod optional values."
 
 ## Action Items for Patrick
 
-- [ ] **Run the push block above** (includes S415 changes)
-- [ ] **QA account deletion before beta** — dispatch `findasale-qa` to test DELETE /api/users/me (OAuth user, email user, organizer with Stripe sub)
-- [ ] **Previous carryover still pending:**
-  - Complete eBay keyset activation (developer.ebay.com → Alerts & Notifications → endpoint + token)
-  - Set Railway env var: `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831`
-  - Stripe seat product ($20/mo team member seat)
+- [ ] **Push S415 block** (if not done — 30 files)
+- [ ] **Push S416 block** (this session — 16 files)
+- [ ] **Create organizer account on finda.sale** — list real items from your eBay inventory to seed the homepage
+- [ ] **Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway** (still pending)
+- [ ] **eBay keyset activation** — developer.ebay.com → Alerts & Notifications → endpoint + token
 
 ---
 
-## Decisions Needed from Patrick
+## What Needs QA Next Session
 
-**Map MVP dispatch?** Treasure Trails badge on map pins + Start-from-my-location route planning. Full spec in `claude_docs/feature-notes/map-enhancements-ux-spec.md`. Both ready to dispatch.
+| Feature | How to Test |
+|---|---|
+| Loot-log detail page | /shopper/history as user11 → click purchase card → confirm page loads |
+| Dispute filing | Open ReceiptCard → confirm "Report Issue" button → modal + submit |
+| Map trail badge | /map → look for amber badge on any pin with active trail |
+| PRO nudge | SIMPLE organizer with 3+ completed sales → dashboard |
+| Account deletion | /shopper/settings → delete account flow (shipped S415, never QA'd) |
 
 ---
 
-## What's Coming (S416)
+## What's Coming (S417)
 
-Options in priority order:
-1. QA pass on account deletion + S412/S413/S414 smoke test (admin dropdown, newly unblocked pages, shopper reputation, eBay picker)
-2. Map features dispatch (Treasure Trails badge + Start from location)
-3. Phase 3 tech debt (post-beta: controller decomposition, route refactoring, test coverage for critical paths)
+1. Chrome QA of S416 fixes (above table)
+2. Patrick lists first real sale as organizer — validates core flow, seeds homepage
+3. Bug sweep of core organizer loop (create sale → add items → publish → payment) before inviting external organizers
 
 ---
 
 ## What's Blocked Until Real Camera / Test Data
 
-- ValuationWidget — TEAMS user with a draft item in review page
+- ValuationWidget — TEAMS user with draft item in review page
 - Treasure Trails check-in — organizer must create a trail first
 - Review card redesign — need camera-captured item in DRAFT state
 - Camera thumbnail refresh — real device required
 - POS QR scan — real device required
 
-*Updated S415 — 2026-04-08*
+*Updated S416 — 2026-04-08*
