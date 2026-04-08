@@ -179,7 +179,7 @@ import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily b
 import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transaction detection at 2 AM
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
-import { scheduleAuctionCloseCron } from './jobs/auctionCloseCron'; // Auction auto-close
+// REMOVED: Auction auto-close — merged into auctionJob.ts which handles the complete payment flow (Stripe, XP, emails, reserve checks)
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
@@ -516,8 +516,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // Phase 2B: Register cleanup cron for stale DRAFT items
   scheduleCleanupCron();
 
-  // Auction auto-close cron
-  scheduleAuctionCloseCron();
+  // Auction auto-close cron — handled by auctionJob.ts (which registers its own cron with full payment flow)
 
   // Feature #103: Register photo retention cron
   schedulePhotoRetentionCron();

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { z } from 'zod';
 import {
   getItemById,
   getItemsBySaleId,
@@ -34,6 +35,32 @@ import { itemEndpointLimiter } from '../middleware/rateLimiter'; // #111: Bot ra
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
+
+// Bulk operations validation schemas
+const bulkItemsSchema = z.object({
+  itemIds: z.array(z.string()).min(1, 'itemIds must be a non-empty array'),
+  operation: z.string().min(1, 'operation is required'),
+  value: z.any().optional(),
+  dryRun: z.boolean().optional(),
+});
+
+const bulkPhotosSchema = z.object({
+  itemIds: z.array(z.string()).min(1, 'itemIds must be a non-empty array'),
+  operation: z.enum(['add', 'remove'], { errorMap: () => ({ message: 'operation must be "add" or "remove"' }) }),
+  photoUrls: z.array(z.string()).min(1, 'photoUrls must be a non-empty array'),
+  dryRun: z.boolean().optional(),
+});
+
+const pricesuggestionSchema = z.object({
+  title: z.string().min(1, 'title is required'),
+  category: z.string().min(1, 'category is required'),
+  condition: z.string().min(1, 'condition is required'),
+});
+
+const highValueSchema = z.object({
+  isHighValue: z.boolean().optional(),
+  threshold: z.number().optional(),
+});
 // P2 #10: CURATED_TAGS — single source of truth (shared package not yet wired into backend tsconfig rootDir)
 // TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
 const CURATED_TAGS = [
@@ -86,19 +113,8 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), async (req, res) => {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
-    const { itemIds, operation, value, dryRun } = req.body as {
-      itemIds?: string[];
-      operation?: string;
-      value?: unknown;
-      dryRun?: boolean;
-    };
-
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      return res.status(400).json({ message: 'itemIds (non-empty array) is required.' });
-    }
-    if (!operation) {
-      return res.status(400).json({ message: 'operation is required.' });
-    }
+    const validatedData = bulkItemsSchema.parse(req.body);
+    const { itemIds, operation, value, dryRun } = validatedData;
 
     const { prisma } = await import('../index');
 
@@ -580,6 +596,9 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), async (req, res) => {
         return res.status(400).json({ message: `Unknown operation: ${operation}` });
     }
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('Bulk item operation error:', error);
     res.status(500).json({ message: 'Server error during bulk operation.' });
   }
@@ -594,22 +613,8 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
-    const { itemIds, operation, photoUrls, dryRun } = req.body as {
-      itemIds?: string[];
-      operation?: string;
-      photoUrls?: string[];
-      dryRun?: boolean;
-    };
-
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      return res.status(400).json({ message: 'itemIds (non-empty array) is required.' });
-    }
-    if (!operation) {
-      return res.status(400).json({ message: 'operation is required.' });
-    }
-    if (!photoUrls || !Array.isArray(photoUrls) || photoUrls.length === 0) {
-      return res.status(400).json({ message: 'photoUrls (non-empty array) is required.' });
-    }
+    const validatedData = bulkPhotosSchema.parse(req.body);
+    const { itemIds, operation, photoUrls, dryRun } = validatedData;
 
     // Phase 2 constraints per spec
     if (itemIds.length > 50) {
@@ -718,6 +723,9 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
       });
     }
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('Bulk photos operation error:', error);
     res.status(500).json({ message: 'Server error during bulk photos operation.' });
   }
@@ -748,13 +756,8 @@ router.post('/:saleId/import-items', authenticate, upload.single('csv'), importI
 // CD2 Phase 3: AI Price suggestions
 router.post('/ai/price-suggest', authenticate, async (req, res) => {
   try {
-    const { title, category, condition } = req.body;
-
-    if (!title || !category || !condition) {
-      return res.status(400).json({
-        error: 'title, category, and condition are required',
-      });
-    }
+    const validatedData = pricesuggestionSchema.parse(req.body);
+    const { title, category, condition } = validatedData;
 
     // Fetch up to 5 recently sold items in the same category for comparable pricing
     const { prisma } = await import('../index');
@@ -781,6 +784,9 @@ router.post('/ai/price-suggest', authenticate, async (req, res) => {
 
     res.json(suggestion);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('Price suggestion error:', error);
     res.status(500).json({
       error: 'Failed to generate price suggestion',
@@ -812,7 +818,8 @@ router.get('/:itemId/qr/scan', authenticate, recordQrScan);
 router.patch('/:itemId/high-value', authenticate, async (req: AuthRequest, res) => {
   try {
     const { itemId } = req.params;
-    const { isHighValue, threshold } = req.body;
+    const validatedData = highValueSchema.parse(req.body);
+    const { isHighValue, threshold } = validatedData;
 
     // Verify organizer owns this item
     const item = await prisma.item.findFirst({
@@ -854,6 +861,9 @@ router.patch('/:itemId/high-value', authenticate, async (req: AuthRequest, res) 
 
     res.json(updated);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('high-value toggle error:', error);
     res.status(500).json({ message: 'Server error' });
   }

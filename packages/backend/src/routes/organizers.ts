@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { z } from 'zod';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getPerformanceMetricsHandler } from '../controllers/performanceController';
@@ -10,6 +11,31 @@ import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, ge
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
 
 const router = Router();
+
+// Organizer profile validation schema
+const organizerProfileSchema = z.object({
+  businessName: z.string().optional(),
+  phone: z.string().optional(),
+  bio: z.string().optional(),
+  onboardingComplete: z.boolean().optional(),
+  website: z.string().url().optional().or(z.literal('')),
+  facebook: z.string().optional(),
+  instagram: z.string().optional(),
+  etsy: z.string().optional(),
+  brandLogoUrl: z.string().url().optional().or(z.literal('')),
+  brandPrimaryColor: z.string().optional(),
+  brandSecondaryColor: z.string().optional(),
+  customStorefrontSlug: z.string().optional(),
+  brandFontFamily: z.string().optional(),
+  brandBannerImageUrl: z.string().url().optional().or(z.literal('')),
+  brandAccentColor: z.string().optional(),
+}).strict();
+
+const awardBadgesSchema = z.object({
+  userId: z.string().min(1, 'User ID is required'),
+  badgeId: z.string().min(1, 'Badge ID is required'),
+  earnedAt: z.string().datetime().optional(),
+});
 
 // Authenticated: get revenue analytics for the current organizer
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response) => {
@@ -228,7 +254,8 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
-    const { businessName, phone, bio, onboardingComplete, website, facebook, instagram, etsy, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor } = req.body;
+    const validatedData = organizerProfileSchema.parse(req.body);
+    const { businessName, phone, bio, onboardingComplete, website, facebook, instagram, etsy, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -261,6 +288,9 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
 
     res.json(updated);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('Error updating organizer profile:', error);
     res.status(500).json({ message: 'Server error' });
   }

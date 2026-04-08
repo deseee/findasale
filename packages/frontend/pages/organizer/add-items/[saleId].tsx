@@ -27,6 +27,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
@@ -1420,7 +1421,7 @@ const AddItemsDetailPage = () => {
                     <div className="flex gap-2 flex-wrap">
                       {formData.photoUrls.map((url, i) => (
                         <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-warm-200 dark:border-gray-700">
-                          <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                          <Image src={url} alt={`Photo ${i + 1}`} width={80} height={80} className="w-full h-full object-cover" unoptimized />
                           <button
                             type="button"
                             onClick={() => handleRemovePhoto(i)}

@@ -25,6 +25,7 @@ import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Pha
 import PriceResearchPanel from '../../../../components/PriceResearchPanel';
 import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 import RapidCapture, { RapidItem } from '../../../../components/RapidCapture';
+import { CATEGORIES, CONDITIONS, CONDITION_LABELS, CONDITION_MAP, formatCondition } from '../../../../lib/itemConstants';
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
 
@@ -90,45 +91,6 @@ interface Item {
   createdAt?: string;
 }
 
-const CATEGORIES = [
-  'Furniture',
-  'Jewelry',
-  'Art & Decor',
-  'Clothing',
-  'Kitchenware',
-  'Tools & Hardware',
-  'Collectibles',
-  'Electronics',
-  'Books & Media',
-  'Other',
-];
-
-const CONDITIONS = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
-
-// BUG 6: Map condition codes to human-readable labels
-const CONDITION_MAP: { [key: string]: string } = {
-  'S': 'Excellent',
-  'A': 'Excellent',
-  'B': 'Good',
-  'C': 'Fair',
-  'D': 'Poor',
-  'NEW': 'New',
-  'USED': 'Used',
-  'REFURBISHED': 'Refurbished',
-  'PARTS_OR_REPAIR': 'Parts or Repair',
-  // Legacy mappings for backward compatibility with existing DB records
-  'LIKE_NEW': 'New',
-  'EXCELLENT': 'New',
-  'GOOD': 'Used',
-  'FAIR': 'Used',
-  'POOR': 'Parts or Repair',
-  'FOR_PARTS': 'For Parts / As-Is',
-};
-
-function formatCondition(value: string | null | undefined): string {
-  if (!value) return 'Not specified';
-  return CONDITION_MAP[value] || value;
-}
 
 function buildCloudinaryUrl(
   url: string,

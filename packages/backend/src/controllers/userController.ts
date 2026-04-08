@@ -681,3 +681,52 @@ export const getUserQRData = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error while fetching user QR data' });
   }
 };
+
+export const deleteAccount = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { password } = req.body;
+
+    // If user has a password (email/password auth), require password verification
+    if (req.user.password) {
+      if (!password) {
+        return res.status(400).json({ message: 'Password is required to delete account' });
+      }
+
+      const bcrypt = require('bcryptjs');
+      const isPasswordValid = await bcrypt.compare(password, req.user.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: 'Incorrect password' });
+      }
+    }
+    // If user logged in via OAuth (no password), skip password verification
+
+    // Cancel Stripe subscription if user is an organizer with active subscription
+    if (req.user.organizer && req.user.organizer.stripeSubscriptionId) {
+      try {
+        const { getStripe } = require('../utils/stripe');
+        const stripe = getStripe();
+        await stripe.subscriptions.cancel(req.user.organizer.stripeSubscriptionId);
+        console.info(`[Account Deletion] Cancelled Stripe subscription ${req.user.organizer.stripeSubscriptionId} for user ${req.user.id}`);
+      } catch (stripeError: any) {
+        console.error(`[Account Deletion] Failed to cancel Stripe subscription:`, stripeError);
+        // Log but continue with deletion — Stripe can be cleaned up separately if needed
+      }
+    }
+
+    // Delete user — Prisma cascade rules will handle related records
+    await prisma.user.delete({
+      where: { id: req.user.id }
+    });
+
+    console.info(`[Account Deletion] Successfully deleted account for user ${req.user.id} (${req.user.email})`);
+
+    res.status(200).json({ message: 'Account deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ message: 'Server error while deleting account' });
+  }
+};

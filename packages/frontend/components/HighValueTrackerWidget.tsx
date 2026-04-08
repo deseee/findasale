@@ -3,6 +3,7 @@
  * Compact item list with photo thumbnails, inline status buttons, threshold display
  */
 import React from 'react';
+import Image from 'next/image';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
@@ -97,7 +98,7 @@ export default function HighValueTrackerWidget({ saleId }: HighValueTrackerWidge
             {/* Thumbnail */}
             <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 overflow-hidden flex-shrink-0">
               {item.photoUrls?.[0] ? (
-                <img src={item.photoUrls[0]} alt={item.title} className="w-full h-full object-cover" />
+                <Image src={item.photoUrls[0]} alt={item.title} width={40} height={40} className="w-full h-full object-cover" unoptimized />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No img</div>
               )}

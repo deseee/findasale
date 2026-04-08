@@ -14,6 +14,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../ToastContext';
 import api from '../../lib/api';
+import { CATEGORIES, CONDITIONS, CONDITION_LABELS } from '../../lib/itemConstants';
 
 export interface PreviewModalProps {
   isOpen: boolean;
@@ -38,21 +39,6 @@ export interface PreviewModalProps {
   onDelete: (itemId: string) => void;
   onRetake: (itemId: string) => void;
 }
-
-const CATEGORIES = [
-  'Furniture',
-  'Jewelry',
-  'Art & Decor',
-  'Clothing',
-  'Kitchenware',
-  'Tools & Hardware',
-  'Collectibles',
-  'Electronics',
-  'Books & Media',
-  'Other',
-];
-
-const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
   isOpen,
@@ -348,7 +334,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   <option value="">Select condition</option>
                   {CONDITIONS.map((cond) => (
                     <option key={cond} value={cond}>
-                      {cond}
+                      {CONDITION_LABELS[cond]}
                     </option>
                   ))}
                 </select>

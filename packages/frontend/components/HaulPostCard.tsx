@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface HaulPost {
   id: number;
@@ -30,7 +31,7 @@ const HaulPostCard: React.FC<Props> = ({ haul, onLike, isLiked = false, isLoadin
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden hover:shadow-lg transition-shadow">
-      <img key={haul.photoUrl} src={haul.photoUrl} alt="Haul" className="w-full h-48 object-cover" />
+      <Image key={haul.photoUrl} src={haul.photoUrl} alt="Haul" width={400} height={192} className="w-full h-48 object-cover" unoptimized />
       <div className="p-4">
         {haul.caption && (
           <p className="text-sm text-gray-700 dark:text-gray-300 mb-2 line-clamp-2">{haul.caption}</p>

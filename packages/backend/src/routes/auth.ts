@@ -6,6 +6,25 @@ import bcrypt from 'bcryptjs';
 import { Resend } from 'resend';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+
+// Auth validation schemas
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters'),
+}).refine(data => data.currentPassword !== data.newPassword, {
+  message: 'New password must be different from current password',
+  path: ['newPassword'],
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Valid email is required'),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+});
 
 // C2: Tight rate limit specifically for password reset — prevents email enumeration abuse and account takeover attempts
 const forgotPasswordLimiter = rateLimit({
@@ -32,15 +51,8 @@ router.post('/redeem-invite', authenticate, redeemInvite); // Redeem beta invite
 // Change password — requires current password for verification
 router.post('/change-password', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current password and new password are required' });
-    }
-
-    if (newPassword.length < 8) {
-      return res.status(400).json({ message: 'New password must be at least 8 characters' });
-    }
+    const validatedData = changePasswordSchema.parse(req.body);
+    const { currentPassword, newPassword } = validatedData;
 
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user || !user.password) {
@@ -61,6 +73,9 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
 
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('Change password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error' });
   }
@@ -69,8 +84,8 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
 // POST /api/auth/forgot-password — send a reset link
 router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ message: 'Email is required.' });
+    const validatedData = forgotPasswordSchema.parse(req.body);
+    const { email } = validatedData;
 
     const user = await prisma.user.findUnique({ where: { email } });
     // Always respond with 200 to prevent email enumeration
@@ -110,6 +125,9 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
 
     res.json({ message: 'If that email exists, a reset link has been sent.' });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('Forgot password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error.' });
   }
@@ -118,13 +136,8 @@ router.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res:
 // POST /api/auth/reset-password — verify token and set new password
 router.post('/reset-password', async (req: Request, res: Response) => {
   try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) {
-      return res.status(400).json({ message: 'Token and new password are required.' });
-    }
-    if (newPassword.length < 8) {
-      return res.status(400).json({ message: 'Password must be at least 8 characters.' });
-    }
+    const validatedData = resetPasswordSchema.parse(req.body);
+    const { token, newPassword } = validatedData;
 
     const user = await prisma.user.findUnique({ where: { resetToken: token } });
     if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
@@ -145,6 +158,9 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
     res.json({ message: 'Password reset successfully. You can now log in.' });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
     console.error('Reset password error:', error instanceof Error ? error.message : 'Unknown error');
     res.status(500).json({ message: 'Server error.' });
   }

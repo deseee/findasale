@@ -7,7 +7,8 @@ import {
   getPublicShopperProfile,
   getBadges,
   activateHuntPassTrial,
-  getUserQRData
+  getUserQRData,
+  deleteAccount
 } from '../controllers/userController';
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -333,5 +334,8 @@ router.post('/hunt-pass/trial', authenticate, activateHuntPassTrial);
 router.get('/:userId/brand-follows', authenticate, getBrandFollows);
 router.post('/:userId/brand-follows', authenticate, addBrandFollow);
 router.delete('/:userId/brand-follows/:brandFollowId', authenticate, removeBrandFollow);
+
+// Account deletion
+router.delete('/me', authenticate, deleteAccount);
 
 export default router;
