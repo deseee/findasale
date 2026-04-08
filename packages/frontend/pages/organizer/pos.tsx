@@ -204,9 +204,10 @@ export default function POSPage() {
       return res.data;
     },
     enabled: !!user && user.roles?.includes('ORGANIZER'),
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Stop polling if no active requests
-      return data && data.length > 0 ? 5000 : false;
+      const d = (query as any).state?.data as PendingPayment[] | undefined;
+      return d && d.length > 0 ? 5000 : false;
     },
     staleTime: 0, // Always refetch
   });
