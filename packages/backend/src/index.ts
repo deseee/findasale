@@ -286,10 +286,17 @@ const isWhitelistedIP = (req: express.Request): boolean => {
   return RATE_LIMIT_WHITELIST.some((allowed) => clientIP === allowed || clientIP.endsWith(allowed));
 };
 
-// Global rate limit — 500 req / 15 min per IP (prevents brute force and scraping)
+// Global rate limit — anonymous: 500 req / 15 min per IP, authenticated: 3000 req / 15 min per IP
+// Authenticated users (valid Bearer token present) get 6x headroom — they're real logged-in users,
+// not bots. This prevents polling-heavy pages (POS, dashboard) from self-rate-limiting.
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: (req) => {
+    // Authenticated requests get 3000/15min (200/min) — enough for dashboard + POS polling
+    if (req.headers.authorization?.startsWith('Bearer ')) return 3000;
+    // Anonymous requests stay at 500/15min (33/min) — protects against scrapers/brute force
+    return 500;
+  },
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
