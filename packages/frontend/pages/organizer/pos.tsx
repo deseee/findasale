@@ -175,6 +175,7 @@ export default function POSPage() {
 
   // Pending Payments state
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const pendingPaymentsRef = useRef<PendingPayment[]>([]);
   const [pendingPaymentsPanelOpen, setPendingPaymentsPanelOpen] = useState(true);
   const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
 
@@ -245,6 +246,12 @@ export default function POSPage() {
       }
     }
   }, []);
+
+  // ─── Keep pendingPayments ref in sync so socket handler always has latest list ────
+
+  useEffect(() => {
+    pendingPaymentsRef.current = pendingPayments;
+  }, [pendingPayments]);
 
   // ─── Auto-dismiss paid banner after 5 seconds ──────────────────────────────────────
 
@@ -499,17 +506,15 @@ export default function POSPage() {
         const { requestId, status } = event;
 
         if (status === 'PAID') {
-          // Show slide-in success banner instead of toast
-          const payment = pendingPayments.find(p => p.id === requestId);
-          if (payment) {
-            setPaidBanner({
-              shopperName: payment.shopperName,
-              displayAmount: payment.displayAmount,
-            });
-            // Play success chime if sound is enabled
-            if (soundEnabled) {
-              playSuccessChime();
-            }
+          // Use ref to get latest pending payments without stale closure
+          const payment = pendingPaymentsRef.current.find(p => p.id === requestId);
+          // Show banner regardless — fall back to event data if payment not yet in list
+          setPaidBanner({
+            shopperName: payment?.shopperName || 'Shopper',
+            displayAmount: payment?.displayAmount || (event.totalAmountCents ? `$${(event.totalAmountCents / 100).toFixed(2)}` : ''),
+          });
+          if (soundEnabled) {
+            playSuccessChime();
           }
 
           // Mark for visual feedback briefly, then remove
@@ -538,7 +543,7 @@ export default function POSPage() {
     }).catch((err) => {
       console.error('[pos] Failed to load socket.io-client:', err);
     });
-  }, [user, pendingPayments, soundEnabled, playSuccessChime]);
+  }, [user, soundEnabled, playSuccessChime]);
 
   // ─── Today's total summary query (30s polling) ────────────────────────────────────────
 
