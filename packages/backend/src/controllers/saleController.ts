@@ -162,14 +162,23 @@ export const listSales = async (req: Request, res: Response) => {
             select: { id: true, businessName: true, phone: true, reputationTier: true }
           },
           _count: { select: { favorites: true } },
+          trails: {
+            where: { isActive: true, isPublic: true },
+            select: { id: true, shareToken: true }
+          }
         }
       }),
       prisma.sale.count({ where }),
     ]);
 
     const convertedSales = sales.map((sale: any) => {
-      const { _count, ...rest } = convertDecimalsToNumbers(sale);
-      return { ...rest, favoriteCount: _count?.favorites ?? 0 };
+      const { _count, trails, ...rest } = convertDecimalsToNumbers(sale);
+      return {
+        ...rest,
+        favoriteCount: _count?.favorites ?? 0,
+        hasActiveTrail: (trails && trails.length > 0) ?? false,
+        trailShareToken: trails?.[0]?.shareToken ?? null
+      };
     });
     
     res.json({

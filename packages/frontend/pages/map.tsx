@@ -30,6 +30,8 @@ interface Sale {
   tags?: string[];
   isAuctionSale?: boolean;
   saleType?: string;
+  hasActiveTrail?: boolean;
+  trailShareToken?: string;
 }
 
 type DateFilter = 'all' | 'this-week' | 'this-weekend' | 'today';
@@ -171,6 +173,8 @@ const MapPage = () => {
           organizerName: s.organizer?.businessName ?? '',
           photoUrl: s.photoUrls?.[0],
           status: isActive ? 'active' : isWithin7Days ? 'upcoming-soon' : 'upcoming',
+          hasActiveTrail: s.hasActiveTrail ?? false,
+          trailShareToken: s.trailShareToken,
         };
       });
     setFilteredPins(pins);
