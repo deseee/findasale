@@ -409,35 +409,35 @@ const AvatarDropdown: React.FC = () => {
                 <>
                   <Link
                     href="/organizer/promote"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <Share2 size={16} className="text-amber-400" />
-                    <span>Share & Promote <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Share & Promote</span>
                   </Link>
                   <Link
                     href="/organizer/send-update"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <MessageSquare size={16} className="text-amber-400" />
-                    <span>Send Update <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Send Update</span>
                   </Link>
                   <Link
                     href="/organizer/photo-ops"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <Camera size={16} className="text-amber-400" />
-                    <span>Photo Ops <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Photo Ops</span>
                   </Link>
                   <Link
                     href="/organizer/qr-codes"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <Tag size={16} className="text-amber-400" />
-                    <span>Price Tags <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Price Tags</span>
                   </Link>
                   <Link
                     href="/organizer/print-kit"
@@ -480,7 +480,7 @@ const AvatarDropdown: React.FC = () => {
                     onClick={() => setIsOpen(false)}
                   >
                     <DollarSign size={16} className="text-amber-500" />
-                    <span>Earnings <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Earnings</span>
                   </Link>
                   <Link
                     href="/organizer/payouts"
@@ -547,50 +547,59 @@ const AvatarDropdown: React.FC = () => {
               </button>
               {proToolsOpen && (
                 <>
-                  <Link
-                    href="/organizer/command-center"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Multi-sale overview dashboard — PRO"
-                  >
-                    <LayoutDashboard size={16} className="text-purple-400" />
-                    <span>Command Center</span>
-                  </Link>
-                  <Link
-                    href="/organizer/brand-kit"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Custom logos, colors, and banners for your sale pages"
-                  >
-                    <Palette size={16} className="text-purple-400" />
-                    <span>Brand Kit</span>
-                  </Link>
-                  <Link
-                    href="/organizer/insights"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <BarChart2 size={16} className="text-purple-400" />
-                    <span>Insights</span>
-                  </Link>
-                  <Link
-                    href="/organizer/flip-report"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="AI analysis of your best-performing item categories"
-                  >
-                    <TrendingUp size={16} className="text-purple-400" />
-                    <span>Flip Report</span>
-                  </Link>
-                  <Link
-                    href="/organizer/appraisals"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Crowdsourced item appraisals — PRO"
-                  >
-                    <Scale size={16} className="text-purple-400" />
-                    <span>Appraisals</span>
-                  </Link>
+                  {canAccess('PRO') ? (
+                    <>
+                      <Link
+                        href="/organizer/command-center"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Multi-sale overview dashboard"
+                      >
+                        <LayoutDashboard size={16} className="text-purple-400" />
+                        <span>Command Center</span>
+                      </Link>
+                      <Link
+                        href="/organizer/brand-kit"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Custom logos, colors, and banners for your sale pages"
+                      >
+                        <Palette size={16} className="text-purple-400" />
+                        <span>Brand Kit</span>
+                      </Link>
+                      <Link
+                        href="/organizer/insights"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Advanced analytics and sale performance insights"
+                      >
+                        <BarChart2 size={16} className="text-purple-400" />
+                        <span>Insights</span>
+                      </Link>
+                      <Link
+                        href="/organizer/flip-report"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Analysis of your best-performing item categories"
+                      >
+                        <TrendingUp size={16} className="text-purple-400" />
+                        <span>Flip Report</span>
+                      </Link>
+                      <Link
+                        href="/organizer/appraisals"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Crowdsourced item appraisals"
+                      >
+                        <Scale size={16} className="text-purple-400" />
+                        <span>Appraisals</span>
+                      </Link>
+                    </>
+                  ) : (
+                    <div className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                      Upgrade to PRO for advanced tools
+                    </div>
+                  )}
                   <Link
                     href="/organizer/item-library"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -609,24 +618,28 @@ const AvatarDropdown: React.FC = () => {
                     <FileText size={16} className="text-purple-400" />
                     <span>Message Templates</span>
                   </Link>
-                  <Link
-                    href="/organizer/typology"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="AI item type and category classifier — PRO"
-                  >
-                    <Tag size={16} className="text-purple-400" />
-                    <span>Typology</span>
-                  </Link>
-                  <Link
-                    href="/organizer/fraud-signals"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="AI bid bot and fraud detection — PRO"
-                  >
-                    <ShieldAlert size={16} className="text-purple-400" />
-                    <span>Fraud Signals</span>
-                  </Link>
+                  {canAccess('PRO') && (
+                    <>
+                      <Link
+                        href="/organizer/typology"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Item type and category classifier"
+                      >
+                        <Tag size={16} className="text-purple-400" />
+                        <span>Typology</span>
+                      </Link>
+                      <Link
+                        href="/organizer/fraud-signals"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Bid bot and fraud detection"
+                      >
+                        <ShieldAlert size={16} className="text-purple-400" />
+                        <span>Fraud Signals</span>
+                      </Link>
+                    </>
+                  )}
                   <Link
                     href="/organizer/bounties"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -684,19 +697,19 @@ const AvatarDropdown: React.FC = () => {
                     <>
                       <Link
                         href="/organizer/calendar"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setIsOpen(false)}
                       >
-                        <Calendar size={16} className="text-gray-400" />
-                        <span>Calendar <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                        <Calendar size={16} className="text-amber-500" />
+                        <span>Calendar</span>
                       </Link>
                       <Link
                         href="/organizer/staff"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-not-allowed"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setIsOpen(false)}
                       >
-                        <UserPlus size={16} className="text-gray-400" />
-                        <span>Staff Accounts <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                        <UserPlus size={16} className="text-amber-500" />
+                        <span>Staff Accounts</span>
                       </Link>
                       <Link
                         href="/organizer/webhooks"
