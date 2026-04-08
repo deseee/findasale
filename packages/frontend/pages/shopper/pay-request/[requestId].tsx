@@ -95,7 +95,11 @@ export default function PaymentRequestPage() {
   };
 
   const handlePaymentSuccess = () => {
-    // Payment completed via webhook — page will auto-redirect on status update
+    // Redirect immediately after Stripe confirms — don't wait for webhook
+    showToast('Payment successful! Redirecting...', 'success');
+    setTimeout(() => {
+      router.push('/shopper/purchases');
+    }, 1500);
   };
 
   const handlePaymentError = (error: string) => {
