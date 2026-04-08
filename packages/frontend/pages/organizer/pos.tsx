@@ -218,9 +218,9 @@ export default function POSPage() {
     },
     enabled: !!user && user.roles?.includes('ORGANIZER'),
     refetchInterval: (query) => {
-      // Stop polling if no active requests
+      // Socket handles real-time updates — poll only as a fallback every 30s
       const d = (query as any).state?.data as PendingPayment[] | undefined;
-      return d && d.length > 0 ? 5000 : false;
+      return d && d.length > 0 ? 30000 : false;
     },
     staleTime: 0, // Always refetch
   });
