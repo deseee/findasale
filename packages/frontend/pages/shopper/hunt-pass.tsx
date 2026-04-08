@@ -304,6 +304,18 @@ const HuntPassPage = () => {
                     <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Community appraisal submitted</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">8 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">5/day, Scout+</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">12 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Your appraisal selected as the one</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">40 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">No cap</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">60 XP</td>
+                  </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Bounty fulfillment (organizer-posted)</td>
                     <td className="px-6 py-3 text-warm-600 dark:text-warm-400">25 XP</td>
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Supply-limited</td>
@@ -641,7 +653,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">$1 Off Any Purchase</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Redeem your XP for $1 off any purchase on FindA.Sale.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | One per calendar month | Applied at checkout</p>
                   </div>
@@ -651,7 +663,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Hunt Pass Discount</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Get $1 off one month of Hunt Pass ($4.99 → $3.99).</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | One-time bridge to paid</p>
                   </div>
@@ -690,7 +702,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Event Sponsorship</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Create a flash sale or themed collection for maximum visibility.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">150 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">500 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Elite+ | 3 days | Exclusive bounties included</p>
                   </div>
