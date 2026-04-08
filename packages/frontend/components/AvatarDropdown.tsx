@@ -59,6 +59,8 @@ import {
   Gift,
   Mail,
   Smartphone,
+  CheckCircle,
+  Wifi,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { useShopperCart } from '../hooks/useShopperCart';
@@ -446,6 +448,22 @@ const AvatarDropdown: React.FC = () => {
                   >
                     <Printer size={16} className="text-amber-500" />
                     <span>Print Kit</span>
+                  </Link>
+                  <Link
+                    href="/organizer/checklist"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <CheckCircle size={16} className="text-amber-500" />
+                    <span>Sale Checklist</span>
+                  </Link>
+                  <Link
+                    href="/organizer/offline"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Wifi size={16} className="text-amber-500" />
+                    <span>Offline Mode</span>
                   </Link>
                 </>
               )}
@@ -911,6 +929,24 @@ const AvatarDropdown: React.FC = () => {
                   >
                     <Ticket size={16} className="text-indigo-500" />
                     <span>Hunt Pass</span>
+                  </Link>
+                  <Link
+                    href="/shopper/loot-legend"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items"
+                  >
+                    <Star size={16} className="text-amber-400" />
+                    <span>Loot Legend</span>
+                  </Link>
+                  <Link
+                    href="/shopper/rare-finds"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Dedicated rare items page for Hunt Pass subscribers"
+                  >
+                    <Sparkles size={16} className="text-indigo-400" />
+                    <span>Rare Finds</span>
                   </Link>
                   <Link
                     href="/shopper/league"
