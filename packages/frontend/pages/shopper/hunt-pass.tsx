@@ -232,9 +232,9 @@ const HuntPassPage = () => {
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Auction win</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">15–20 XP</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10–15 XP</td>
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">22.5–30 XP</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15–22.5 XP</td>
                   </tr>
 
                   {/* Community */}
@@ -293,15 +293,15 @@ const HuntPassPage = () => {
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Referral (friend purchases)</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">25 XP</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">30 XP</td>
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">One-time per friend</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">37.5 XP</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">45 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Referral (new organizer signup)</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50 XP</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">20 XP</td>
                     <td className="px-6 py-3 text-warm-600 dark:text-warm-400">None</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75 XP</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">30 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Referral (organizer's first sale bonus)</td>
@@ -323,9 +323,9 @@ const HuntPassPage = () => {
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Community valuation</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
-                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo (10 max)</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">5 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo (20 max)</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">7.5 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Bounty fulfillment (organizer-posted)</td>
@@ -569,7 +569,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Username Color</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Make your username stand out with a personalized color.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">25 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Ranger+ | Permanent</p>
                   </div>
@@ -579,7 +579,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Frame Badge</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Unlock an exclusive rare avatar frame for your profile.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">30 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">75 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Sage+ | Permanent | One choice</p>
                   </div>
@@ -618,7 +618,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Bounty Visibility Boost</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Feature your bounty in "Hot Bounties" for higher fulfillment odds.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">5 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">15 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Scout+ | 7 days</p>
                   </div>
@@ -647,7 +647,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Guide Publication</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Publish a hunting guide to share your expertise with the community.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">30 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Ranger+ | Permanent | Free for Sage+; Grandmaster unlimited</p>
                   </div>
@@ -776,8 +776,8 @@ const HuntPassPage = () => {
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-sm text-warm-900 dark:text-warm-100">Win an auction</td>
-                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">15 XP</td>
-                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">23 XP</td>
+                    <td className="px-6 py-3 text-sm text-warm-600 dark:text-warm-400">10 XP</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
                   </tr>
                 </tbody>
               </table>
