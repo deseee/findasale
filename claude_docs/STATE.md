@@ -7,6 +7,36 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S413 COMPLETE (2026-04-07):** Second-pass orphan audit + admin nav gaps filled + 4 confirmed orphans removed.
+
+**S413 Summary:**
+Full 173-page inventory audit using Explore agent. 19 orphaned routes identified; ambiguous cases researched to definitive verdicts. Admin nav: 4 admin tools that existed but had no nav link added to admin dropdown in both AvatarDropdown.tsx and Layout.tsx (ab-tests, bid-review, disputes, invites). Removals (all Patrick-authorized after research confirmation): `shopper/referrals.tsx` (duplicate of /referral-dashboard already in nav), `shopper/disputes.tsx` (100% covered by disputes tab in /shopper/history), `shopper/messages.tsx` (orphaned, zero references anywhere), `FeedbackWidget.tsx` (dead code, fully replaced by FeedbackSurvey + FeedbackMenu). Intentional dual-route finding: `/notifications` (universal) and `/shopper/notifications` (bell target) are different by design — left both. TypeScript: zero errors.
+
+**S413 Key Findings:**
+- 4 admin tools (ab-tests, bid-review, disputes, invites) existed with no nav path
+- /shopper/referrals was a full duplicate of /referral-dashboard (already in nav)
+- /shopper/disputes fully covered by the existing disputes tab in /shopper/history
+- FeedbackWidget.tsx was 237 lines of dead code — replaced by FeedbackSurvey (event-triggered) + FeedbackMenu (settings)
+- /notifications vs /shopper/notifications: intentionally different — leaving both
+
+**S413 Files Changed (5 edited, 4 deleted):**
+- `packages/frontend/components/AvatarDropdown.tsx` — 4 admin nav links added
+- `packages/frontend/components/Layout.tsx` — 4 admin nav links added
+- `packages/frontend/pages/referral-dashboard.tsx` — redesigned with gradient hero, XP copy, share buttons (replica of the better shopper/referrals design); nav stays pointing here
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — RapidCapture `&&` → ternary (S407 P2 scroll bug, deferred)
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — RapidCapture `&&` → ternary (same fix)
+- `claude_docs/strategy/roadmap.md` — v101: #71 Reputation + #148 Checklist updated for S412 work
+- DELETED: `packages/frontend/pages/shopper/referrals.tsx` — design promoted to referral-dashboard.tsx
+- DELETED: `packages/frontend/pages/shopper/disputes.tsx`
+- DELETED: `packages/frontend/pages/shopper/messages.tsx`
+- DELETED: `packages/frontend/components/FeedbackWidget.tsx`
+
+**Also confirmed clean (S410 deferred):** Rarity dropdown already removed from add-items form in S410 — confirmed absent in both [saleId].tsx and review.tsx.
+
+**S413 Chrome smoke test:** PENDING — admin dropdown additions should be spot-checked.
+
+---
+
 **S412 COMPLETE (2026-04-07):** Full nav audit + link repair + shopper reputation page build.
 
 **S412 Summary:**
@@ -1568,37 +1598,50 @@ Files changed S361:
 
 ## Next Session (S410) — COMPLETE — see S410 smoke test in S411 above
 
-## Next Session (S413)
+## Next Session (S413) — COMPLETE — see S413 above
 
-### Patrick Actions First — push S411 + S412
+## Next Session (S414)
 
+### Patrick Actions First — push S411 + S412 + S413
+
+If S411+S412 not yet pushed:
 ```powershell
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/components/AvatarDropdown.tsx
 git add packages/frontend/components/Layout.tsx
 git add packages/frontend/pages/organizer/checklist/index.tsx
 git add packages/frontend/pages/shopper/reputation.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S411+S412: social post trigger fix + full nav audit + shopper reputation
-
-S411: wire Social Posts button to modal trigger in organizer dashboard.
-S412: unblock 12+ pages falsely marked Soon/cursor-not-allowed (promote,
-send-update, photo-ops, calendar, staff, earnings, ripples, qr-codes,
-inventory, reputation, bounties, line-queue). Add offline/loot-legend/
-rare-finds/checklist nav links. New: checklist index page (sale picker).
-Build out shopper reputation page from stub."
+git commit -m "S411+S412: social post trigger fix + full nav audit + shopper reputation"
 .\push.ps1
 ```
 
-**No new migrations this session.**
+Then push S413:
+```powershell
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/Layout.tsx
+git rm packages/frontend/pages/shopper/referrals.tsx
+git rm packages/frontend/pages/shopper/disputes.tsx
+git rm packages/frontend/pages/shopper/messages.tsx
+git rm packages/frontend/components/FeedbackWidget.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S413: admin nav gaps filled + orphaned pages/components removed
 
-### S413 Priority 1 — Chrome QA carry-forward
+Add 4 admin tools to admin dropdown: ab-tests, bid-review, disputes, invites.
+Remove 3 orphaned/duplicate pages: shopper/referrals (dup of referral-dashboard),
+shopper/disputes (dup of history tab), shopper/messages (zero references).
+Remove FeedbackWidget.tsx (dead code, replaced by FeedbackSurvey + FeedbackMenu)."
+.\push.ps1
+```
+
+**No new migrations.**
+
+### S414 Priority 1 — Chrome QA carry-forward
+- S412+S413 nav smoke test: spot-check newly unblocked pages (promote, calendar, line-queue, shopper/reputation) + admin dropdown new links
 - #72 Dual-Role Account: schema + auth + registration all confirmed implemented. Needs Chrome QA only.
 - #74 Role-Aware Registration Consent: fully implemented, needs Chrome QA only.
 - S396 rapidfire hold/photo limit QA
 - Shopper referrals (#7/#265), haul posts (#277)
-- S412 nav smoke test: spot-check newly unblocked pages (promote, calendar, line-queue, shopper/reputation)
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app
