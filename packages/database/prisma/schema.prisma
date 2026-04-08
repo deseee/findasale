@@ -201,6 +201,13 @@ model User {
   luckyRollStreakBad   Int        @default(0)  // Hidden: consecutive below-break-even count (consolation or 50 XP); streak protection doubles jackpot% at 5
   luckyRolls           LuckyRoll[]
 
+  // Phase 2c: XP Sinks — Custom Map Pin (cosmetic)
+  customMapPin         String?                                                    // Emoji or short string (max 4 chars) for map pin override
+
+  // Phase 2c: XP Sinks — Profile Showcase Slots
+  showcaseSlots        Int                @default(1)                            // How many showcase slots unlocked (1 free, +1 at 50 XP, +1 more at 150 XP)
+  showcases            UserShowcase[]
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
@@ -287,6 +294,21 @@ model Organizer {
   trails          TreasureTrail[] @relation("OrganizerTrails")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// Phase 2c: Profile Showcase Slots — user-pinned haul posts on profile
+model UserShowcase {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slotIndex  Int      // 0, 1, or 2
+  ugcPhotoId Int?     // nullable — slot can be empty
+  ugcPhoto   UGCPhoto? @relation(fields: [ugcPhotoId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, slotIndex])
+  @@index([userId])
 }
 
 // Feature #72: Dual-Role Account — Per-role subscription state, tier, and consent
@@ -1747,6 +1769,7 @@ model UGCPhoto {
   isHaulPost      Boolean    @default(false) // Feature #88: Haul Posts
   linkedItemIds   String[]   @default([]) // Feature #88: Items tagged in haul
   reactions       UGCPhotoReaction[] // Feature #88: Photo reactions (likes)
+  showcaseSlots   UserShowcase[] // Phase 2c: Profile showcase pinned hauls
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 

@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { searchNearbyPlaces, haversineDistance, completionBonus } from '../lib/placesService';
+import { spendXp } from '../services/xpService';
 
 /**
  * POST /api/trails
@@ -24,6 +25,31 @@ export const createTrail = async (req: AuthRequest, res: Response) => {
     });
     if (!organizer?.sales.length) {
       return res.status(403).json({ message: 'Not your sale or not an organizer.' });
+    }
+
+    // Phase 2c: XP Gate — Creating a Treasure Trail costs 100 XP
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { guildXp: true },
+    });
+
+    if (!user || user.guildXp < 100) {
+      const currentXp = user?.guildXp || 0;
+      return res.status(400).json({
+        message: `Creating a Treasure Trail costs 100 XP. You have ${currentXp} XP.`,
+      });
+    }
+
+    // Spend the XP
+    const spendSuccess = await spendXp(userId, 100, 'TREASURE_TRAIL_SPONSOR', {
+      saleId,
+      description: `Treasure Trail creation: ${name.trim()}`,
+    });
+
+    if (!spendSuccess) {
+      return res.status(400).json({
+        message: 'Failed to spend XP. Please try again.',
+      });
     }
 
     const trail = await prisma.treasureTrail.create({

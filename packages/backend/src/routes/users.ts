@@ -13,6 +13,7 @@ import {
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { spendXp } from '../services/xpService';
 
 const router = Router();
 
@@ -337,5 +338,211 @@ router.delete('/:userId/brand-follows/:brandFollowId', authenticate, removeBrand
 
 // Account deletion
 router.delete('/me', authenticate, deleteAccount);
+
+// Phase 2c: Custom Map Pin (XP sink)
+router.post('/me/custom-map-pin', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { pin } = req.body;
+
+    if (!pin || typeof pin !== 'string') {
+      return res.status(400).json({ message: 'pin is required and must be a string.' });
+    }
+
+    if (pin.length === 0 || pin.length > 4) {
+      return res.status(400).json({ message: 'pin must be 1-4 characters long.' });
+    }
+
+    // Get user's current XP
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { guildXp: true },
+    });
+
+    if (!user || user.guildXp < 75) {
+      const currentXp = user?.guildXp || 0;
+      return res.status(400).json({
+        message: `Custom Map Pin costs 75 XP. You have ${currentXp} XP.`,
+      });
+    }
+
+    // Spend the XP
+    const spendSuccess = await spendXp(req.user.id, 75, 'CUSTOM_MAP_PIN', {
+      description: `Set custom map pin: ${pin}`,
+    });
+
+    if (!spendSuccess) {
+      return res.status(400).json({
+        message: 'Failed to spend XP. Please try again.',
+      });
+    }
+
+    // Set custom map pin
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { customMapPin: pin },
+      select: { customMapPin: true },
+    });
+
+    res.json({ customMapPin: updatedUser.customMapPin });
+  } catch (error: any) {
+    console.error('Error setting custom map pin:', error);
+    res.status(500).json({ message: 'Server error while setting custom map pin' });
+  }
+});
+
+// Phase 2c: Profile Showcase Slots — Unlock next slot
+router.post('/me/showcase-slot/unlock', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { guildXp: true, showcaseSlots: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    let costXp: number;
+    let newSlotCount: number;
+
+    if (user.showcaseSlots === 1) {
+      costXp = 50;
+      newSlotCount = 2;
+    } else if (user.showcaseSlots === 2) {
+      costXp = 150;
+      newSlotCount = 3;
+    } else {
+      return res.status(400).json({ message: 'All showcase slots already unlocked.' });
+    }
+
+    if (user.guildXp < costXp) {
+      return res.status(400).json({
+        message: `Unlocking next showcase slot costs ${costXp} XP. You have ${user.guildXp} XP.`,
+      });
+    }
+
+    // Determine sink type based on which slot is being unlocked
+    const sinkType = newSlotCount === 2 ? 'PROFILE_SHOWCASE_SLOT_2' : 'PROFILE_SHOWCASE_SLOT_3';
+
+    // Spend the XP
+    const spendSuccess = await spendXp(req.user.id, costXp, sinkType, {
+      description: `Unlock showcase slot ${newSlotCount}`,
+    });
+
+    if (!spendSuccess) {
+      return res.status(400).json({
+        message: 'Failed to spend XP. Please try again.',
+      });
+    }
+
+    // Update showcase slots count
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { showcaseSlots: newSlotCount },
+      select: { showcaseSlots: true },
+    });
+
+    res.json({ showcaseSlots: updatedUser.showcaseSlots });
+  } catch (error: any) {
+    console.error('Error unlocking showcase slot:', error);
+    res.status(500).json({ message: 'Server error while unlocking showcase slot' });
+  }
+});
+
+// Phase 2c: Profile Showcase Slots — Pin/unpin haul post to slot
+router.put('/me/showcase/:slotIndex', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { slotIndex } = req.params;
+    const { ugcPhotoId } = req.body;
+
+    const slotIdx = parseInt(slotIndex, 10);
+    if (isNaN(slotIdx) || slotIdx < 0 || slotIdx > 2) {
+      return res.status(400).json({ message: 'slotIndex must be 0, 1, or 2.' });
+    }
+
+    // Validate user has unlocked this slot
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { showcaseSlots: true },
+    });
+
+    if (!user || slotIdx >= user.showcaseSlots) {
+      return res.status(403).json({ message: 'This showcase slot is not unlocked.' });
+    }
+
+    // If ugcPhotoId is provided, validate it belongs to this user
+    if (ugcPhotoId !== null && ugcPhotoId !== undefined) {
+      const ugcPhoto = await prisma.uGCPhoto.findUnique({
+        where: { id: ugcPhotoId },
+        select: { userId: true },
+      });
+
+      if (!ugcPhoto || ugcPhoto.userId !== req.user.id) {
+        return res.status(403).json({ message: 'This haul post does not belong to you.' });
+      }
+    }
+
+    // Upsert showcase record
+    const showcase = await prisma.userShowcase.upsert({
+      where: {
+        userId_slotIndex: {
+          userId: req.user.id,
+          slotIndex: slotIdx,
+        },
+      },
+      update: {
+        ugcPhotoId: ugcPhotoId || null,
+        updatedAt: new Date(),
+      },
+      create: {
+        userId: req.user.id,
+        slotIndex: slotIdx,
+        ugcPhotoId: ugcPhotoId || null,
+      },
+      include: {
+        ugcPhoto: {
+          select: {
+            id: true,
+            photoUrl: true,
+            caption: true,
+            linkedItemIds: true,
+          },
+        },
+      },
+    });
+
+    res.json(showcase);
+  } catch (error: any) {
+    console.error('Error updating showcase slot:', error);
+    res.status(500).json({ message: 'Server error while updating showcase slot' });
+  }
+});
+
+// Phase 2c: Profile Showcase Slots — Get shopper's showcase (public endpoint)
+router.get('/:userId/showcase', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const showcases = await prisma.userShowcase.findMany({
+      where: { userId },
+      orderBy: { slotIndex: 'asc' },
+      include: {
+        ugcPhoto: {
+          select: {
+            id: true,
+            photoUrl: true,
+            caption: true,
+            linkedItemIds: true,
+          },
+        },
+      },
+    });
+
+    res.json(showcases);
+  } catch (error: any) {
+    console.error('Error fetching user showcases:', error);
+    res.status(500).json({ message: 'Server error while fetching showcases' });
+  }
+});
 
 export default router;
