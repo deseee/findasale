@@ -31,54 +31,78 @@ export const XP_AWARDS = {
   // Visits (per spec Decision 2, base 5 XP)
   VISIT: 5,
   COMEBACK_BONUS: 20, // One-time if returning after 2+ weeks away
-  STREAK_BONUS_PER_WEEK: 2, // Max +10 XP at 5+ consecutive weeks
 
   // Purchases and engagement
   PURCHASE: 1, // Base for completed purchase ($1 = 1 XP)
-  REVIEW: 5, // For leaving a product review
-  SHARE: 10, // For social share (honor system)
-  ITEM_SCANNED: 25, // Feature #85: Treasure Hunt QR scan
-  CONDITION_RATING: 3, // Feature #145: Shopper rates item condition
+  REVIEW: 8, // For leaving a product review (raised from 5 — requires text effort)
+  SHARE: 10, // For social share to external platform (honor system)
+  HAUL_POST: 10, // For in-app haul post (2+ items + photo, posts to Loot Legend)
+
+  // Condition rating — organizer earns when a shopper rates one of their items
+  CONDITION_RATING: 5, // Organizer credit per shopper condition submission
+
+  // Treasure Hunt QR (Feature #85) — gamedesign S417 rebalance
+  TREASURE_HUNT_SCAN: 12, // Per clue scan (down from 25)
+  TREASURE_HUNT_COMPLETION: 30, // All clues found bonus (down from 50)
 
   // RSVPs and engagement
   RSVP: 2, // Feature #154: Shopper RSVPs to sale (capped 10/month)
 
-  // Streak milestones
-  STREAK_MILESTONE_5: 5, // 5-day streak bonus
-  STREAK_MILESTONE_10: 10, // 10-day streak bonus
-  STREAK_MILESTONE_20: 20, // 20-day streak bonus
+  // Streak and anniversary milestones (weekly cadence, not daily)
+  STREAK_7DAY_BONUS: 100, // 7-day active week bonus (once/month)
+  ANNIVERSARY_30DAY: 250, // 30-day active month anniversary (once/month)
+
+  // Community contributions
+  COMMUNITY_VALUATION: 5, // Price opinion on an item (down from 10, cap 20/month)
 
   // Collections and challenges
   COLLECTOR_PASSPORT_COMPLETE: 50, // One-time: passport complete (specialties + categories + keywords all non-empty)
   TRAIL_COMPLETE: 100, // One-time per trail: all QR codes found
 
-  // Auctions (per spec Decision 5, wins only)
-  AUCTION_WIN: 15,
-  AUCTION_VALUE_BONUS_PER_100: 0.5, // +0.5 XP per $100 of item value, max +5 XP
+  // Auctions (wins only — gamedesign S417 rebalance)
+  AUCTION_WIN: 10, // Base win XP (down from 15)
+  AUCTION_VALUE_BONUS_PER_100: 0.5, // +0.5 XP per $100 of item value, max +5 XP cap
   AUCTION_MAX_BONUS: 5,
 
-  // Future: Referrals, challenges, etc.
+  // Referrals
   REFERRAL_SIGNUP: 20,
   REFERRAL_FIRST_PURCHASE: 30,
 };
 
-// XP sink costs (per spec Decision 7)
+// XP sink costs (per spec Decision 7 — gamedesign S417 full sink table)
 export const XP_SINKS = {
-  COUPON_GENERATE: 50, // Organizer spends 50 XP to create $1-off coupon (spec-locked S404)
-  RARITY_BOOST: 15, // Shopper spends 15 XP for +2% legendary odds
-  HUNT_PASS_DISCOUNT: 50, // Shopper spends 50 XP for $1 off Hunt Pass
+  // Organizer sinks
+  COUPON_GENERATE: 50,         // Organizer generates $1-off coupon for shoppers
+  EARLY_ACCESS_BOOST: 75,      // Organizer presale visibility bump
+  BOUNTY_VISIBILITY_BOOST: 15, // Organizer increases fulfillment odds (raised from 5)
+  LISTINGS_EXTENSION: 100,     // Organizer extends listing tier (avoids $2.99 upgrade)
+  EVENT_SPONSORSHIP: 150,      // Organizer gets exclusive bounties + high visibility
+
+  // Shopper sinks
+  COUPON_CLAIM_SHOPPER: 25,    // Shopper spends for $0.50–$1 discount (one/organizer/month)
+  RARITY_BOOST: 15,            // Shopper gets +2% legendary odds for one sale
+  HUNT_PASS_DISCOUNT: 50,      // Shopper gets $1 off Hunt Pass subscription
+  HAUL_VISIBILITY_BOOST: 10,   // Shopper boosts haul post visibility for 7 days
+  SEASONAL_CHALLENGE_ACCESS: 100, // Shopper unlocks seasonal challenge tier
+  GUIDE_PUBLICATION: 50,       // Shopper publishes a collection guide (raised from 30)
+
+  // Cosmetic sinks (permanent — Sage+ only)
+  CUSTOM_USERNAME_COLOR: 50,   // Permanent color on username (raised from 25)
+  CUSTOM_FRAME_BADGE: 75,      // Permanent profile frame badge (raised from 30)
 };
 
-// Monthly XP caps (per spec)
+// Monthly XP caps (per spec — gamedesign S417 updated)
 export const MONTHLY_XP_CAPS = {
   VISIT: 150,
   AUCTION: 100,
-  RSVP: 10, // Max 10 XP from RSVPs per calendar month
+  RSVP: 10,                   // Max 10 XP from RSVPs per calendar month
+  CONDITION_RATING: 50,       // Organizer earns max 50 XP/month from condition submissions
+  COMMUNITY_VALUATION: 100,   // Max 100 XP/month from price opinions (20 valuations × 5 XP)
 };
 
 // Daily XP caps (exploit prevention)
 export const DAILY_XP_CAPS = {
-  ITEM_SCANNED: 100,
+  TREASURE_HUNT_SCAN: 100,    // Max 100 XP/day from QR clue scans (150 with Hunt Pass)
 };
 
 /**
@@ -139,7 +163,7 @@ export function getRankProgress(currentXp: number) {
 /**
  * Check if user has reached daily XP cap for a given type
  * Returns remaining XP that can be awarded today (0 if cap reached)
- * For ITEM_SCANNED, Hunt Pass subscribers get a higher cap (150 instead of 100)
+ * For TREASURE_HUNT_SCAN, Hunt Pass subscribers get a higher cap (150 instead of 100)
  */
 export async function checkDailyXpCap(
   userId: string,
@@ -149,8 +173,8 @@ export async function checkDailyXpCap(
   if (!cap) return Number.MAX_SAFE_INTEGER; // No cap for this type
 
   try {
-    // Hunt Pass bonus: raise ITEM_SCANNED cap from 100 to 150
-    if (type === 'ITEM_SCANNED') {
+    // Hunt Pass bonus: raise TREASURE_HUNT_SCAN cap from 100 to 150
+    if (type === 'TREASURE_HUNT_SCAN') {
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -348,8 +372,9 @@ export async function spendXp(
       },
     });
 
-    // Recalculate rank if needed
-    const newRank = getRankForXp(updatedUser.guildXp - amount);
+    // Recalculate rank based on new balance (updatedUser.guildXp already reflects the decrement)
+    // Note: ranks are milestones — spending XP does NOT drop rank (gamedesign S417 decision #14)
+    const newRank = getRankForXp(updatedUser.guildXp);
     if (newRank !== user.explorerRank) {
       await prisma.user.update({
         where: { id: userId },
@@ -504,8 +529,8 @@ export async function applyHuntPassMultiplier(userId: string, baseXp: number): P
 
 /**
  * Rank-Based XP Multiplier for Treasure Hunt Scans
- * Ranger+ get bonus multipliers on ITEM_SCANNED awards
- * INITIATE/SCOUT: 1x (25 XP), RANGER: 1.5x (38 XP), SAGE: 1.75x (44 XP), GRANDMASTER: 2x (50 XP)
+ * Ranger+ get bonus multipliers on TREASURE_HUNT_SCAN awards
+ * INITIATE/SCOUT: 1x (12 XP), RANGER: 1.5x (18 XP), SAGE: 1.75x (21 XP), GRANDMASTER: 2x (24 XP)
  */
 export function getRankXpMultiplier(rank: ExplorerRank): number {
   switch (rank) {
@@ -524,42 +549,37 @@ export function getRankXpMultiplier(rank: ExplorerRank): number {
 
 /**
  * Check and award streak milestone bonuses
- * Called when a streak is incremented. Checks if it just crossed 5, 10, or 20 days.
- * Prevents duplicate awards via PointsTransaction history check.
+ * Gamedesign S417 decision #10: daily streak milestones (5/10/20 days) removed.
+ * Replaced by weekly cadence: 7-day active week bonus (STREAK_7DAY_BONUS = 100 XP, once/month)
+ * and 30-day anniversary (ANNIVERSARY_30DAY = 250 XP, once/month).
+ * This function now awards STREAK_7DAY_BONUS when user hits 7 active days in a calendar month.
+ * TODO: wire ANNIVERSARY_30DAY into user anniversary tracking (separate feature).
  */
 export async function checkStreakMilestones(
   userId: string,
-  newStreakDays: number
+  activeMonthDays: number
 ): Promise<void> {
-  const milestones = [5, 10, 20];
+  // Award the 7-day streak bonus once per calendar month
+  if (activeMonthDays === 7) {
+    try {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  for (const milestone of milestones) {
-    if (newStreakDays === milestone) {
-      try {
-        // Check if user already earned this milestone in the current month
-        const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const existingBonus = await prisma.pointsTransaction.findFirst({
+        where: {
+          userId,
+          type: 'STREAK_7DAY_BONUS',
+          createdAt: { gte: monthStart },
+        },
+      });
 
-        const existingMilestone = await prisma.pointsTransaction.findFirst({
-          where: {
-            userId,
-            type: `STREAK_MILESTONE_${milestone}`,
-            createdAt: { gte: monthStart },
-          },
+      if (!existingBonus) {
+        await awardXp(userId, 'STREAK_7DAY_BONUS', XP_AWARDS.STREAK_7DAY_BONUS, {
+          description: '7-day active week bonus',
         });
-
-        // Only award if not already earned this milestone this month
-        if (!existingMilestone) {
-          const xpAmount = XP_AWARDS[`STREAK_MILESTONE_${milestone}` as keyof typeof XP_AWARDS] || 0;
-          if (xpAmount > 0) {
-            await awardXp(userId, `STREAK_MILESTONE_${milestone}`, xpAmount, {
-              description: `${milestone}-day streak milestone reached`,
-            });
-          }
-        }
-      } catch (error) {
-        console.error(`[xpService] Failed to check streak milestone ${milestone}:`, error);
       }
+    } catch (error) {
+      console.error(`[xpService] Failed to award 7-day streak bonus for user ${userId}:`, error);
     }
   }
 }

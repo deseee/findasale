@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
-import { awardXp } from '../services/xpService';
+import { awardXp, XP_AWARDS } from '../services/xpService';
 
 /**
  * Feature #85: Treasure Hunt QR Controller
@@ -284,9 +284,9 @@ export async function markClueFound(req: AuthRequest, res: Response) {
       },
     });
 
-    // Award 25 XP for the clue
-    let xpEarned = 25;
-    await awardXp(req.user.id, 'TREASURE_HUNT_QR_CLUE', 25, {
+    // Award XP for the clue (uses constant from xpService)
+    let xpEarned = XP_AWARDS.TREASURE_HUNT_SCAN;
+    await awardXp(req.user.id, 'TREASURE_HUNT_SCAN', XP_AWARDS.TREASURE_HUNT_SCAN, {
       saleId,
       description: `Treasure Hunt QR Clue found: ${clueId}`,
     });
@@ -307,9 +307,9 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     const completed = userScans >= totalClues;
 
     if (completed && sale.treasureHuntCompletionBadge) {
-      // Award 50 bonus XP
-      bonusXp = 50;
-      await awardXp(req.user.id, 'TREASURE_HUNT_QR_COMPLETION', 50, {
+      // Award completion bonus XP (uses constant from xpService)
+      bonusXp = XP_AWARDS.TREASURE_HUNT_COMPLETION;
+      await awardXp(req.user.id, 'TREASURE_HUNT_COMPLETION', XP_AWARDS.TREASURE_HUNT_COMPLETION, {
         saleId,
         description: `Treasure Hunt QR completed: ${saleId}`,
       });
