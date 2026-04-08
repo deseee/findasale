@@ -110,12 +110,18 @@ const MapPage = () => {
           });
         },
         (error) => {
-          console.warn('Geolocation denied or unavailable:', error);
-          showToast('Location access denied. Use the "My Location" button to share your location or browse sales near you.', 'info');
-        }
+          // Safari/iOS resets permission state on every page load and can fire
+          // PERMISSION_DENIED (code 1) even after the user taps Allow due to a
+          // race condition between the prompt dialog and the API callback.
+          // Fail silently on auto-request — user can tap "My Location" to retry.
+          if (error.code !== 1) {
+            console.warn('Geolocation unavailable on auto-request:', error);
+          }
+        },
+        { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false }
       );
     }
-  }, [isGeolocationRequested, showToast]);
+  }, [isGeolocationRequested]);
 
   // Filter sales by date, sale type, and geo-location
   const filteredSales = useMemo(() => {
@@ -216,8 +222,18 @@ const MapPage = () => {
         },
         (error) => {
           console.error('Error getting location:', error);
-          showToast('Unable to access your location. Please check your browser permissions.', 'error');
-        }
+          if (error.code === 1) {
+            // PERMISSION_DENIED — guide Safari/iOS users to Settings
+            showToast('Location permission denied. In Safari, go to Settings → Safari → Location and allow access.', 'error');
+          } else if (error.code === 3) {
+            // TIMEOUT — device too slow or GPS unavailable
+            showToast('Location request timed out. Please try again.', 'error');
+          } else {
+            // POSITION_UNAVAILABLE (code 2) or unknown
+            showToast('Unable to access your location. Please try again.', 'error');
+          }
+        },
+        { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false }
       );
     }
   };
