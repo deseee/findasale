@@ -27,7 +27,12 @@ make location same size as the about card and move it below the about card
 can like but can't wishlist or hold? what was the decision on that? 
 should all item cards sitewide be uniform on every page shoppers see them?
 
+
+Shopping cart, share cart with cashier pops toast "Failed to share cart"
+
 edit sale pickup scheduling doesn't work... how do shoppers use schedule pickup?  should regular sale hours be default pickup time for items sold online?  what other knock on effects and tools do organizers need?
+
+audio thing on edit page only for that one field?
 
 Item page:
 can't add item to cart
