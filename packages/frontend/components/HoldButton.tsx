@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -33,6 +34,7 @@ const HoldButton: React.FC<HoldButtonProps> = ({
 }) => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -115,6 +117,8 @@ const HoldButton: React.FC<HoldButtonProps> = ({
       setIsOpen(false);
       setNote('');
       onHoldPlaced?.();
+      // Immediately refresh cart icon — don't wait for the 30s poll
+      queryClient.invalidateQueries({ queryKey: ['my-holds-full'] });
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to place hold';
       showToast(msg, 'error');
