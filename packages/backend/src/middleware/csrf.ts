@@ -83,8 +83,8 @@ export const csrfTokenCookie = (req: Request, res: Response, next: NextFunction)
  * - Public endpoints that don't require authentication
  */
 export const validateCsrfToken = (req: Request, res: Response, next: NextFunction) => {
-  // Skip CSRF for webhooks (they use signature verification instead)
-  if (req.path.includes('/webhook') || req.path.includes('/stripe/webhook') || req.path.includes('/billing/webhook')) {
+  // Skip CSRF for webhooks and external server-to-server callbacks (they use signature verification instead)
+  if (req.path.includes('/webhook') || req.path.includes('/stripe/webhook') || req.path.includes('/billing/webhook') || req.path.includes('/ebay/account-deletion')) {
     return next();
   }
 
