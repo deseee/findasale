@@ -168,7 +168,6 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
           amount: totalAmountCents,
           currency: 'usd',
           payment_method_types: ['card'],
-          on_behalf_of: organizer.stripeConnectId!,
           application_fee_amount: platformFeeCents, // 10% platform fee
           metadata: {
             requestId: '', // will be filled in after DB creation
