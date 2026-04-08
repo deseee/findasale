@@ -159,7 +159,7 @@ export const listSales = async (req: Request, res: Response) => {
         orderBy: { startDate: 'asc' },
         include: {
           organizer: {
-            select: { id: true, businessName: true, phone: true, reputationTier: true, customMapPin: true }
+            select: { id: true, businessName: true, phone: true, reputationTier: true, user: { select: { customMapPin: true } } }
           },
           _count: { select: { favorites: true } },
           trails: {
