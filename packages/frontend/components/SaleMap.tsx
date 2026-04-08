@@ -16,6 +16,8 @@ export interface SalePin {
   organizerName: string;
   photoUrl?: string;
   status?: 'active' | 'upcoming-soon' | 'upcoming';
+  hasActiveTrail?: boolean;
+  trailShareToken?: string;
 }
 
 interface SaleMapProps {

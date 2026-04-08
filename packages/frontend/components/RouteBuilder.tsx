@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { planRoute, RouteResult, RouteError } from '../lib/routeApi';
+import { useToast } from './ToastContext';
 
 interface RouteSale {
   id: string;
@@ -19,12 +20,15 @@ const MAX_SELECTIONS = 5;
 const MIN_SELECTIONS = 2;
 
 const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
+  const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RouteResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  const [startFromMyLocation, setStartFromMyLocation] = useState(false);
+  const [myLocationGeo, setMyLocationGeo] = useState<{ lat: number; lng: number; city?: string; state?: string } | null>(null);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -40,6 +44,48 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
     setError(null);
   };
 
+  const handleStartFromMyLocation = () => {
+    if (startFromMyLocation) {
+      // Turning off
+      setStartFromMyLocation(false);
+      setMyLocationGeo(null);
+      return;
+    }
+    // Turning on — request geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setMyLocationGeo({ lat, lng });
+          setStartFromMyLocation(true);
+
+          // Try to reverse geocode to city/state (using OpenStreetMap Nominatim)
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+            );
+            const data = await response.json();
+            if (data.address) {
+              setMyLocationGeo({
+                lat,
+                lng,
+                city: data.address.city || data.address.town || data.address.village,
+                state: data.address.state,
+              });
+            }
+          } catch {
+            // Silently fail — we have the coordinates
+          }
+        },
+        (error) => {
+          console.warn('Geolocation denied:', error);
+          showToast('Location access denied. Route will start from the first selected sale.', 'info');
+        }
+      );
+    }
+  };
+
   const handlePlan = async () => {
     if (selected.size < MIN_SELECTIONS) return;
     setLoading(true);
@@ -47,7 +93,9 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
     setError(null);
     setFallbackUrl(null);
     try {
-      const res = await planRoute(Array.from(selected));
+      const saleIds = Array.from(selected);
+      const startCoord = startFromMyLocation && myLocationGeo ? { lat: myLocationGeo.lat, lng: myLocationGeo.lng } : undefined;
+      const res = await planRoute(saleIds, startCoord);
       setResult(res);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: RouteError } };
@@ -64,6 +112,8 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
     setResult(null);
     setError(null);
     setFallbackUrl(null);
+    setStartFromMyLocation(false);
+    setMyLocationGeo(null);
   };
 
   const salesWithCoords = sales.filter((s) => s.lat && s.lng);
@@ -104,6 +154,25 @@ const RouteBuilder: React.FC<RouteBuilderProps> = ({ sales }) => {
           <p className="text-xs text-warm-500 dark:text-warm-400">
             Select {MIN_SELECTIONS}–{MAX_SELECTIONS} sales to get drive times and distances.
           </p>
+
+          {/* Start from my location toggle */}
+          <div className="flex items-center gap-3 p-3 bg-warm-50 dark:bg-gray-700 rounded-lg">
+            <input
+              type="checkbox"
+              id="start-from-location"
+              checked={startFromMyLocation}
+              onChange={handleStartFromMyLocation}
+              className="accent-amber-600"
+            />
+            <label htmlFor="start-from-location" className="flex-1 cursor-pointer">
+              <p className="text-sm font-medium text-warm-900 dark:text-warm-100">Start from my location</p>
+              {startFromMyLocation && myLocationGeo && (
+                <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">
+                  📍 Starting from: {myLocationGeo.city || 'Your location'}{myLocationGeo.state ? `, ${myLocationGeo.state}` : ''}
+                </p>
+              )}
+            </label>
+          </div>
 
           {/* Sale checkboxes */}
           <div className="space-y-2 max-h-48 overflow-y-auto">

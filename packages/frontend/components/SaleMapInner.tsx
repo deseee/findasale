@@ -178,7 +178,29 @@ const SaleMapInner = ({
           return (
             <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={markerIcon}>
               <Popup>
-                <div style={{ minWidth: '180px' }}>
+                <div style={{ minWidth: '180px', position: 'relative' }}>
+                  {/* Treasure Trail Badge */}
+                  {pin.hasActiveTrail && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '4px',
+                        width: '16px',
+                        height: '16px',
+                        backgroundColor: '#d97706',
+                        borderRadius: '2px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                      aria-label="This sale has an active Treasure Trail"
+                      title="This sale has an active Treasure Trail"
+                    >
+                      <span style={{ fontSize: '10px', color: '#fff', fontWeight: 'bold' }}>🗺️</span>
+                    </div>
+                  )}
                   {pin.photoUrl && (
                     <img
                       key={pin.photoUrl}
@@ -198,20 +220,40 @@ const SaleMapInner = ({
                   <span style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '8px' }}>
                     by {pin.organizerName}
                   </span>
-                  <a
-                    href={`/sales/${pin.id}`}
-                    style={{
-                      display: 'inline-block',
-                      background: '#2563eb',
-                      color: '#fff',
-                      padding: '4px 12px',
-                      borderRadius: '4px',
-                      fontSize: '13px',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    View Sale →
-                  </a>
+                  <div style={{ display: 'flex', gap: '6px', flexDirection: 'column' }}>
+                    <a
+                      href={`/sales/${pin.id}`}
+                      style={{
+                        display: 'block',
+                        textAlign: 'center',
+                        background: '#2563eb',
+                        color: '#fff',
+                        padding: '4px 12px',
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      View Sale →
+                    </a>
+                    {pin.hasActiveTrail && pin.trailShareToken && (
+                      <a
+                        href={`/trail/${pin.trailShareToken}`}
+                        style={{
+                          display: 'block',
+                          textAlign: 'center',
+                          background: '#16a34a',
+                          color: '#fff',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        View Treasure Trail →
+                      </a>
+                    )}
+                  </div>
                 </div>
               </Popup>
             </Marker>
