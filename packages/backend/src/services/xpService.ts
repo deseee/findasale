@@ -87,8 +87,8 @@ export const XP_SINKS = {
   GUIDE_PUBLICATION: 50,       // Shopper publishes a collection guide (raised from 30)
 
   // Cosmetic sinks (permanent — Sage+ only)
-  CUSTOM_USERNAME_COLOR: 50,   // Permanent color on username (raised from 25)
-  CUSTOM_FRAME_BADGE: 75,      // Permanent profile frame badge (raised from 30)
+  CUSTOM_USERNAME_COLOR: 100,  // Permanent color on username (calibrated S418 Pass 4: 1 XP = $0.01)
+  CUSTOM_FRAME_BADGE: 200,     // Permanent profile frame badge (calibrated S418 Pass 4)
 };
 
 // Monthly XP caps (per spec — gamedesign S417 updated)

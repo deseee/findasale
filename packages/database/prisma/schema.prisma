@@ -194,6 +194,13 @@ model User {
   // Phase 2b: Boost Purchase — XP or Stripe promotional boosts
   boostPurchases BoostPurchase[]
 
+  // Phase 2b: Lucky Roll — weekly XP gacha
+  luckyRollPityCount   Int        @default(0)  // Consecutive consolation-outcome roll count (0, 1, 2; layer-1 pity fires at 2)
+  luckyRollPityYear    Int        @default(0)  // Cumulative roll count this calendar year (layer-2 jackpot guarantee fires every 10)
+  luckyRollLastRolledAt DateTime?              // Most recent roll timestamp — enforces weekly cap
+  luckyRollStreakBad   Int        @default(0)  // Hidden: consecutive below-break-even count (consolation or 50 XP); streak protection doubles jackpot% at 5
+  luckyRolls           LuckyRoll[]
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
@@ -2856,4 +2863,32 @@ enum BoostStatus {
   REFUNDED
   FAILED
   PENDING
+}
+
+// Phase 2b: Lucky Roll — weekly XP gacha outcomes
+enum LuckyRollOutcome {
+  CONSOLATION    // 10 XP back (35%)
+  XP_50          // 50 XP (28%)
+  XP_100         // 100 XP break-even (15%)
+  XP_200         // 200 XP (10%)
+  COUPON_1       // $1-off coupon, $10+ min purchase (7%)
+  XP_500         // 500 XP jackpot (4%)
+  COSMETIC_RARE  // Rare frame badge or username color (1%)
+}
+
+// Phase 2b: Lucky Roll — audit log of all rolls
+model LuckyRoll {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outcome     LuckyRollOutcome
+  xpAwarded   Int?                // null for COUPON_1 and COSMETIC_RARE outcomes
+  xpSpent     Int      @default(100)
+  seedHash    String              // SHA256(raw seed bytes) — verifiable, not reversible
+  rollNumber  Int                 // user's annual roll sequence number (for pity-year tracking)
+  pityFired   Boolean  @default(false)  // true if layer-1 or layer-2 pity modified this roll
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt])
 }
