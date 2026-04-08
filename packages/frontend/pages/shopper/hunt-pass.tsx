@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import Head from 'next/head';
 import { useAuth } from '../../components/AuthContext';
 import HuntPassModal from '../../components/HuntPassModal';
@@ -675,6 +676,18 @@ const HuntPassPage = () => {
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | One-time bridge to paid</p>
                   </div>
+                  <Link href="/shopper/lucky-roll">
+                    <div className="px-6 py-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <p className="font-semibold text-warm-900 dark:text-warm-100">Lucky Roll</p>
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Weekly XP gacha with 7 possible rewards. Spin for a chance at big payouts!</p>
+                        </div>
+                        <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
+                      </div>
+                      <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Account age 30+ days | 1 roll/week (2 with Hunt Pass) | No cash rail</p>
+                    </div>
+                  </Link>
                 </div>
               </div>
 

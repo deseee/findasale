@@ -1,8 +1,10 @@
-# Patrick's Dashboard — April 8, 2026 (S419 WRAPPED)
+# Patrick's Dashboard — April 8, 2026 (S420 IN PROGRESS)
 
 ## What You Need to Do Right Now
 
-**1. Run the migration** (after you push):
+**1. Push S420 (block at bottom of this file)**
+
+**2. Run the Lucky Roll migration** (after you push):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -10,12 +12,11 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**2. Push S419 (full block at bottom of this file)**
+## What's Next
 
-## What's Next — S420
-
-1. **Smoke test** — Chrome QA the boost system: buy a SALE_BUMP boost via XP from dashboard, verify badge appears on map. Test POST /coupons/generate-from-xp for all 3 tiers.
-2. **Lucky Roll dev dispatch** — ADR is written (`ADR-lucky-roll-schema-S419.md`). Dispatch findasale-dev with schema + full implementation sequence.
+1. **QA the boost system** — Chrome QA: buy a SALE_BUMP via XP from dashboard, verify ⭐ badge on map. Test POST /coupons/generate-from-xp for all 3 tiers.
+2. **QA Lucky Roll page** — Navigate to /shopper/lucky-roll, verify odds table, roll button, weekly cap countdown.
+3. **Remaining deferred sinks** (future sessions): Treasure Trail Sponsor (100 XP), Profile Showcase Slot, Guild/Crew Creation, Custom Map Pin.
 
 ---
 

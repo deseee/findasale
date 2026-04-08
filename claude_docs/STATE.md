@@ -7,6 +7,38 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S420 IN PROGRESS (2026-04-08):** Lucky Roll full implementation dispatched + S419 delivery audit + P2 xpService calibration fix.
+
+**S420 Batch 1 complete:**
+- Lucky Roll: schema.prisma (4 User fields + LuckyRoll model + LuckyRollOutcome enum), migration file, luckyRollService.ts (pity system, weekly reset, transactional roll), luckyRollController.ts, routes/lucky-roll.ts, index.ts wired, lucky-roll.tsx shopper page, hunt-pass.tsx Lucky Roll row added
+- S419 audit: All 18 specced items verified DELIVERED. One P2 bug found and fixed inline: CUSTOM_USERNAME_COLOR and CUSTOM_FRAME_BADGE in xpService.ts were not updated to S418 Pass 4 targets (50/75 → 100/200 fixed)
+- Zero TS errors (both frontend and backend confirmed by dev agent)
+
+**S420 Patrick action required (after push):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S420 Files Changed (9 files):**
+- `packages/database/prisma/schema.prisma` — 4 User fields + LuckyRoll model + LuckyRollOutcome enum
+- `packages/database/prisma/migrations/20260408_add_lucky_roll_schema/migration.sql` — NEW
+- `packages/backend/src/services/luckyRollService.ts` — NEW: pity system, weekly reset, transactional roll
+- `packages/backend/src/controllers/luckyRollController.ts` — NEW: eligibility + roll handlers
+- `packages/backend/src/routes/lucky-roll.ts` — NEW: GET /eligibility, POST /roll
+- `packages/backend/src/index.ts` — luckyRollRouter wired
+- `packages/backend/src/services/xpService.ts` — CUSTOM_USERNAME_COLOR 50→100, CUSTOM_FRAME_BADGE 75→200 (P2 bug fix)
+- `packages/frontend/pages/shopper/lucky-roll.tsx` — NEW: roll UI, odds table, celebration tiers, legal notice
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — Lucky Roll row added to Spend Your XP section
+
+**S420 QA needed:**
+- Lucky Roll page: roll button, odds table always visible, weekly cap countdown, celebration animations — needs migration first
+- xpService cosmetics fix: verify USERNAME_COLOR and FRAME_BADGE purchases now charge correct XP amount
+
+---
+
 **S419 COMPLETE (2026-04-08):** BoostPurchase dual-rail system built + shopper coupon generation + Hunt Pass dual-rail column + Lucky Roll architect spec. 15+ files changed.
 
 **S419 Summary:**
