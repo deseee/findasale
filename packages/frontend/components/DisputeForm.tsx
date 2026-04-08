@@ -77,31 +77,31 @@ const DisputeForm: React.FC<DisputeFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 p-6 bg-white rounded-lg border border-warm-200 shadow-sm">
+    <form onSubmit={handleSubmit} className="space-y-4 p-6 bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 shadow-sm">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-warm-900">Report an Issue</h3>
+        <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Report an Issue</h3>
         <button
           type="button"
           onClick={onCancel}
-          className="text-warm-500 hover:text-warm-700 font-medium"
+          className="text-warm-500 hover:text-warm-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium"
         >
           ✕
         </button>
       </div>
 
-      <p className="text-sm text-warm-600">
-        Item: <span className="font-medium text-warm-900">{itemTitle}</span>
+      <p className="text-sm text-warm-600 dark:text-gray-400">
+        Item: <span className="font-medium text-warm-900 dark:text-warm-100">{itemTitle}</span>
       </p>
 
       {/* Reason Select */}
       <div>
-        <label className="block text-sm font-medium text-warm-700 mb-2">
+        <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
           What's the issue? <span className="text-red-500">*</span>
         </label>
         <select
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className="w-full px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white"
+          className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white dark:bg-gray-700 dark:text-gray-100"
         >
           <option value="">-- Select a reason --</option>
           {REASON_OPTIONS.map((opt) => (
@@ -114,43 +114,43 @@ const DisputeForm: React.FC<DisputeFormProps> = ({
 
       {/* Description Textarea */}
       <div>
-        <label className="block text-sm font-medium text-warm-700 mb-2">
+        <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
           Description <span className="text-red-500">*</span>
         </label>
         <textarea
           value={description}
           onChange={handleDescriptionChange}
           placeholder="Please describe the issue in detail. What did you expect vs. what did you receive?"
-          className="w-full px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 resize-none"
+          className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 resize-none bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
           rows={5}
         />
-        <div className="text-xs text-warm-500 mt-1">
+        <div className="text-xs text-warm-500 dark:text-gray-400 mt-1">
           {charCount} / 50 characters minimum
         </div>
       </div>
 
       {/* Contact Email (Pre-filled) */}
       <div>
-        <label className="block text-sm font-medium text-warm-700 mb-2">
+        <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
           Contact Email
         </label>
         <input
           type="email"
           value={userEmail}
           readOnly
-          className="w-full px-3 py-2 border border-warm-300 rounded-lg bg-warm-50 text-warm-600 cursor-not-allowed"
+          className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-warm-50 dark:bg-gray-700/50 text-warm-600 dark:text-gray-300 cursor-not-allowed"
         />
-        <p className="text-xs text-warm-500 mt-1">
+        <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">
           We'll use this to contact you about your dispute
         </p>
       </div>
 
       {/* Buttons */}
-      <div className="flex gap-3 pt-4 border-t border-warm-200">
+      <div className="flex gap-3 pt-4 border-t border-warm-200 dark:border-gray-700">
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 px-4 py-2 border border-warm-300 text-warm-700 font-medium rounded-lg hover:bg-warm-50 transition"
+          className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 font-medium rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition"
         >
           Cancel
         </button>

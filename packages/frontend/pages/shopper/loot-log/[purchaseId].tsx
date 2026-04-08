@@ -14,7 +14,7 @@ export default function PurchaseDetailPage() {
   const { data: purchase, isLoading, error } = useQuery({
     queryKey: ['purchase', purchaseId],
     queryFn: async () => {
-      const { data } = await api.get(`/api/loot-log/${purchaseId}`);
+      const { data } = await api.get(`/loot-log/${purchaseId}`);
       return data;
     },
     enabled: !!purchaseId && !!user,
