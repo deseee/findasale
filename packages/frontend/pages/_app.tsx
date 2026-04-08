@@ -16,6 +16,7 @@ import { usePushSubscription } from '../hooks/usePushSubscription';
 import { useTheme } from '../hooks/useTheme'; // #63: Dark Mode
 import { useSentryUserContext } from '../hooks/useSentryUserContext'; // Feature #21: User Impact Scoring
 import OnboardingModal from '../components/OnboardingModal'; // Phase 27
+import PosPaymentRequestAlert from '../components/PosPaymentRequestAlert';
 import ErrorBoundary from '../components/ErrorBoundary';
 import NudgeBar from '../components/NudgeBar';
 import { DegradationProvider } from '../contexts/DegradationContext'; // Feature #20: Proactive Degradation Mode
@@ -269,6 +270,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <OAuthBridge />
               {/* Phase 27: First-time shopper onboarding */}
               <OnboardingShower />
+              {/* POS: Global fullscreen payment request alert for shoppers */}
+              <PosPaymentRequestAlert />
               </QueryClientProvider>
             </LowBandwidthProvider>
           </DegradationProvider>
