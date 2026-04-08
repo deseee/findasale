@@ -403,7 +403,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'What\'s the difference between SIMPLE, PRO, and TEAMS?',
     answer: (
       <>
-        SIMPLE is free — you get everything you need to run a single sale with up to 200 items. PRO ($29/month) unlocks bulk operations, analytics,, export tools, and more. 
+        SIMPLE is free — you get everything you need to run a single sale with up to 200 items. PRO ($29/month) unlocks bulk operations, analytics, export tools, and more.
         TEAMS ($79/month) adds multi-user workspaces with roles and permissions and the Command Center for organizations that run sales together.
       </>
     ),
@@ -412,7 +412,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'What is the Brand Kit?',
     answer: (
       <>
-        Brand Kit lets you customize your organizer profile with your logo, colors, and a custom URL. Basic branding (logo and colors) is available on all plans. PRO unlocks custom fonts, banners, and accent colors.
+        Brand Kit lets you customize your organizer profile with your logo, colors, custom fonts, banners, and a custom URL. Brand Kit is available on PRO and TEAMS plans.
       </>
     ),
   },

@@ -1,8 +1,66 @@
-# Patrick's Dashboard — April 8, 2026 (S416)
+# Patrick's Dashboard — April 8, 2026 (S418)
 
 ---
 
-## What Happened This Session (S416)
+## What Happened This Session (S418)
+
+**Hunt Pass page staleness audit + customer-facing doc sweep.** 5 files fixed, all copy/data corrections — no new features, no QA needed.
+
+**Hunt Pass fixes (7 total):**
+- "Collector Passport" → "Loot Legend" (D-S268 rename had missed this file)
+- Treasure Hunt scan XP: 25 → 12 (backend was rebalanced in S417, page wasn't updated)
+- Hunt Pass TH column: 28 → 13 XP
+- Quick Reference Matrix "Visit a sale" HP: 8 → 7.5 XP (was inconsistent with the full table)
+- "Write an item review" 5/8 → 8/12 XP (wrong action name and values; spec says Seller review = 8/12)
+- Benefit label "1.5x Streak XP" → "1.5x XP Multiplier" (streak is a separate mechanic)
+- Added missing Treasure Hunt (QR Scans) section to the full XP breakdown table
+
+**Other doc fixes:**
+- `faq.tsx`: Brand Kit answer said "available on all plans" — it's PRO+ only. Fixed. Also removed a double comma typo.
+- `TierComparisonTable.tsx`: "additonal" → "additional" typo
+- `BUSINESS_PLAN.md`: "AI tags per month" → "Auto Tags per month" in feature table; support model section was describing phone/email SLAs that were superseded by D-S392 — rewritten to reflect the automated support stack.
+
+---
+
+## Push Block (S418)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add packages/frontend/pages/faq.tsx
+git add packages/frontend/components/TierComparisonTable.tsx
+git add claude_docs/strategy/BUSINESS_PLAN.md
+git add .checkpoint-manifest.json
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S418: hunt-pass staleness fixes + doc sweep (5 files)
+
+hunt-pass: Loot Legend rename, TH scan XP 25->12, matrix corrections,
+1.5x Multiplier label fix, added Treasure Hunt QR section to full table.
+faq.tsx: Brand Kit tier fix (PRO+ only), double comma typo.
+TierComparisonTable: 'additonal' typo.
+BUSINESS_PLAN.md: Auto Tags rename, support model updated per D-S392."
+.\push.ps1
+```
+
+**Also push S415 + S416 if not done yet** (push blocks in STATE.md ## Next Session section).
+
+---
+
+## Investor Verdict (from S416 — still current)
+
+🟡 **YELLOW — Don't invest today. Here's what changes that:**
+
+- Product: extraordinary for a solo AI-assisted build. Genuine competitive advantage on workflow.
+- Revenue model: solid. 10% fee-on-sale is well-positioned vs competitors (MaxSold 20–30%).
+- **Fatal gap: zero paying customers, zero transactions.** The market hasn't answered "will organizers pay 10%?" yet.
+- CAC: D grade. No organizer outreach has happened. Homepage shows empty sales — looks abandoned.
+- Gamification: B+ as a long-term retention play, C as a current priority. Built loyalty system for users who don't exist yet.
+- **What changes it to GREEN:** 5 recurring organizers + any transaction showing repeat use. Patrick listing his own eBay inventory is the right first move.
+
+---
+
+## Previous Session Summary (S416)
 
 **Investor analysis of live PWA.** YELLOW verdict — strong product, zero commercial validation. Key findings summarized below under "Investor Verdict."
 

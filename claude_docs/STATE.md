@@ -7,6 +7,22 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S418 COMPLETE (2026-04-08):** Hunt Pass staleness audit + broad customer-facing doc sweep. 5 files changed.
+
+**S418 Summary:**
+Hunt Pass page had 6 stale data points: "Collector Passport" → "Loot Legend" (D-S268 missed in this file), Treasure Hunt scan XP 25→12 (S417 backend rebalance not reflected), Hunt Pass matrix column 28→13, Quick Reference "Visit a sale" HP 8→7.5 (inconsistency with full table), "Write an item review" 5/8 → 8/12 (wrong action/values, should be "Seller review"), benefit label "1.5x Streak XP" → "1.5x XP Multiplier" (streak is separate mechanic). Also added missing Treasure Hunt (QR Scans) section to full XP breakdown table. Doc sweep found: FAQ Brand Kit answer said "available on all plans" (PRO+ only, fixed); FAQ double comma typo; TierComparisonTable "additonal" → "additional" typo; BUSINESS_PLAN.md feature table "AI tags" → "Auto Tags"; BUSINESS_PLAN.md support model described phone/email SLAs superseded by D-S392 (rewritten to correct automated stack).
+
+**S418 Files Changed (5 files):**
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — 6 data fixes + Treasure Hunt section added
+- `packages/frontend/pages/faq.tsx` — Brand Kit tier fix + double comma typo
+- `packages/frontend/components/TierComparisonTable.tsx` — "additonal" typo fixed
+- `claude_docs/strategy/BUSINESS_PLAN.md` — "AI tags" → "Auto Tags" in feature table; support model rewritten per D-S392
+- `.checkpoint-manifest.json` — S418 session entry
+
+**S418 Chrome smoke test:** NOT RUN — all changes are copy/data fixes, no new flows. No Chrome verification needed.
+
+---
+
 **S416 COMPLETE (2026-04-08):** Phase 3 integration tests, Map MVP, investor analysis, 3 bug fixes, pricing transparency, PRO nudge. 16 files changed.
 
 **S416 Summary:**
@@ -1737,7 +1753,53 @@ Files changed S361:
 
 ---
 
-## Next Session (S417)
+## Next Session (S419)
+
+### Patrick Actions First — push S415 + S416 + S418
+
+**S415 push (if not done — run first):**
+See S415 push block below (unchanged from S417 section).
+
+**S416 push (if not done):**
+See S416 push block below (unchanged from S417 section).
+
+**S418 push:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add packages/frontend/pages/faq.tsx
+git add packages/frontend/components/TierComparisonTable.tsx
+git add claude_docs/strategy/BUSINESS_PLAN.md
+git add .checkpoint-manifest.json
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S418: hunt-pass staleness fixes + doc sweep (5 files)
+
+hunt-pass: Loot Legend rename, TH scan XP 25->12, matrix corrections,
+1.5x Multiplier label fix, added Treasure Hunt QR section to full table.
+faq.tsx: Brand Kit tier fix (PRO+ only), double comma typo.
+TierComparisonTable: 'additonal' typo.
+BUSINESS_PLAN.md: Auto Tags rename, support model updated per D-S392."
+.\push.ps1
+```
+
+### S419 Priority 1 — Chrome QA of S416 fixes (still pending)
+- Loot-log detail page: navigate to `/shopper/history` as user11 → click a purchase → confirm detail page loads with correct data
+- Dispute filing: open a ReceiptCard → confirm "Report Issue" button appears → confirm modal opens
+- Map trail badge: visit `/map` → check for amber trail badge on pins
+- PRO nudge: log in as SIMPLE organizer with 3+ completed sales → confirm nudge banner
+
+### S419 Priority 2 — Patrick as first organizer
+- Patrick creates organizer account on finda.sale
+- Lists real items (own eBay inventory) as a real sale
+- Seeds the homepage AND validates core organizer workflow end-to-end
+
+### Standing Notes
+- Railway backend: https://backend-production-153c9.up.railway.app
+- Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
+- eBay: production credentials live in Railway.
+
+## Next Session (S417) — COMPLETE — see S418 above
 
 ### Patrick Actions First — push S415 + S416
 

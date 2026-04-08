@@ -305,7 +305,7 @@ At the heart of FindA.Sale is a radical simplification: **photos are the primary
 | Items per sale | 200 included | 500 included | 2,000 included |
 | Photos per item | 5 | 10 | 15 |
 | Photos per month | 500 | 5,000 | 30,000 |
-| AI tags per month | 100 | 2,000 | Unlimited (soft cap 5,000) |
+| Auto Tags per month | 100 | 2,000 | Unlimited (soft cap 5,000) |
 | Concurrent active sales | 1–3 | Unlimited | Unlimited |
 
 **Shopper Monetization:**
@@ -863,10 +863,13 @@ $4,000 ÷ $5,000 (avg sale) = 0.8 sales/month
 
 ### Customer Support Model
 
-**Support Channels:**
-- Email: support@finda.sale (target: <4 hour response)
-- In-app feedback form (linked to ticketing)
-- Phone: Google Voice (for urgent organizer issues during sales)
+**Support Model (Zero-Human Automated Stack — D-S392):**
+- SIMPLE: Self-serve help center + organizer guides
+- PRO: 24/7 in-app support assistant + help center
+- TEAMS: Community forum + support assistant + help center
+- Enterprise: Dedicated support contact
+
+No SLA promises on any tier. No phone or email support. All support is self-serve or AI-assisted.
 
 
 ### Geographic Expansion Plan

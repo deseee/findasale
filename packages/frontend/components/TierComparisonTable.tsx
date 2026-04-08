@@ -179,7 +179,7 @@ const FEATURES: Feature[] = [
     name: 'Team members included',
     simple: false,
     pro: false,
-    teams: '5 (additonal $20/mo/ea)',
+    teams: '5 (additional $20/mo/ea)',
   },
   {
     name: 'Role-based permissions',
