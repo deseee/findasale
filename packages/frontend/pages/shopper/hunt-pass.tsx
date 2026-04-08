@@ -556,7 +556,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Username Color</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Make your username stand out with a personalized color.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Ranger+ | Permanent</p>
                   </div>
@@ -566,7 +566,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Frame Badge</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Unlock an exclusive rare avatar frame for your profile.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">75 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">200 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Sage+ | Permanent | One choice</p>
                   </div>
@@ -595,7 +595,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Haul Visibility Boost</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Feature your haul as "Trending" to reach more collectors.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">10 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">25 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | 7 days</p>
                   </div>
