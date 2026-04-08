@@ -565,6 +565,26 @@ const HuntPassPage = () => {
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Sage+ | Permanent | One choice</p>
                   </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Map Pin</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Customize your sale's map icon with an emoji or short icon.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">75 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Scout+ | One-time | Permanent</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Profile Showcase Slot</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Pin your favorite haul post to your public profile (2nd & 3rd slots).</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50–150 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | Permanent | 50 XP for 2nd, 150 XP for 3rd</p>
+                  </div>
                 </div>
               </div>
 
@@ -729,6 +749,16 @@ const HuntPassPage = () => {
                       </div>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Elite+ | 3 days | Exclusive bounties included</p>
+                  </div>
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">Treasure Trail Sponsor</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Add a scavenger hunt to your sale — shoppers find clues and earn XP.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Scout+ | Per trail | XP-only</p>
                   </div>
                 </div>
               </div>

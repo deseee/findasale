@@ -1,22 +1,23 @@
-# Patrick's Dashboard — April 8, 2026 (S420 IN PROGRESS)
+# Patrick's Dashboard — April 8, 2026 (S420 COMPLETE)
 
 ## What You Need to Do Right Now
 
-**1. Push S420 (block at bottom of this file)**
+**1. Push S420 Batch 2 (block below)**
 
-**2. Run the Lucky Roll migration** (after you push):
+**2. Run migrations after push:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
+(Runs BOTH pending migrations: Lucky Roll schema + XP sinks/showcase)
 
-## What's Next
+## What's Next (S421)
 
-1. **QA the boost system** — Chrome QA: buy a SALE_BUMP via XP from dashboard, verify ⭐ badge on map. Test POST /coupons/generate-from-xp for all 3 tiers.
-2. **QA Lucky Roll page** — Navigate to /shopper/lucky-roll, verify odds table, roll button, weekly cap countdown.
-3. **Remaining deferred sinks** (future sessions): Treasure Trail Sponsor (100 XP), Profile Showcase Slot, Guild/Crew Creation, Custom Map Pin.
+1. **QA all S419+S420 features** — Boost purchase, coupon generation, Lucky Roll, Custom Map Pin, Showcase Slot unlock, Treasure Trail XP gate
+2. **Guild/Crew dev dispatch** — ADR is written (`ADR-guild-crew-creation-S420.md`), ready for findasale-dev
+3. **Two frontend stubs to finish** — SaleMapInner.tsx (custom map pin emoji on map), profile.tsx (showcase slots UI)
 
 ---
 

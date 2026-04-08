@@ -89,6 +89,12 @@ export const XP_SINKS = {
   // Cosmetic sinks (permanent — Sage+ only)
   CUSTOM_USERNAME_COLOR: 100,  // Permanent color on username (calibrated S418 Pass 4: 1 XP = $0.01)
   CUSTOM_FRAME_BADGE: 200,     // Permanent profile frame badge (calibrated S418 Pass 4)
+
+  // Phase 2c: New XP Sinks
+  CUSTOM_MAP_PIN: 75,           // Organizer customizes sale map icon with emoji (one-time)
+  PROFILE_SHOWCASE_SLOT_2: 50,  // Shopper unlocks 2nd profile showcase slot for pinned haul
+  PROFILE_SHOWCASE_SLOT_3: 150, // Shopper unlocks 3rd profile showcase slot for pinned haul
+  TREASURE_TRAIL_SPONSOR: 100,  // Organizer pays to create a Treasure Trail
 };
 
 // Monthly XP caps (per spec — gamedesign S417 updated)

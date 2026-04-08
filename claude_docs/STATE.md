@@ -7,14 +7,20 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S420 IN PROGRESS (2026-04-08):** Lucky Roll full implementation dispatched + S419 delivery audit + P2 xpService calibration fix.
+**S420 COMPLETE (2026-04-08):** Lucky Roll full build + S419 audit + 3 new XP sinks (Custom Map Pin, Profile Showcase Slot, Treasure Trail Sponsor) + Guild/Crew ADR. 16 files changed across 2 batches.
 
-**S420 Batch 1 complete:**
-- Lucky Roll: schema.prisma (4 User fields + LuckyRoll model + LuckyRollOutcome enum), migration file, luckyRollService.ts (pity system, weekly reset, transactional roll), luckyRollController.ts, routes/lucky-roll.ts, index.ts wired, lucky-roll.tsx shopper page, hunt-pass.tsx Lucky Roll row added
-- S419 audit: All 18 specced items verified DELIVERED. One P2 bug found and fixed inline: CUSTOM_USERNAME_COLOR and CUSTOM_FRAME_BADGE in xpService.ts were not updated to S418 Pass 4 targets (50/75 → 100/200 fixed)
-- Zero TS errors (both frontend and backend confirmed by dev agent)
+**S420 Batch 1 (PUSHED):**
+- Lucky Roll: schema (4 User fields + LuckyRoll model + LuckyRollOutcome enum), migration 20260408_add_lucky_roll_schema, luckyRollService.ts (pity system, weekly reset, RNG), luckyRollController.ts, routes/lucky-roll.ts, index.ts wired, lucky-roll.tsx shopper page, hunt-pass.tsx Lucky Roll row
+- S419 audit: all 18 items delivered; P2 calibration bug found + fixed (CUSTOM_USERNAME_COLOR 50→100, CUSTOM_FRAME_BADGE 75→200 in xpService.ts)
 
-**S420 Patrick action required (after push):**
+**S420 Batch 2 (NOT YET PUSHED):**
+- Custom Map Pin (75 XP): User.customMapPin field, POST /api/users/me/custom-map-pin endpoint, hunt-pass.tsx row, xpService CUSTOM_MAP_PIN: 75
+- Profile Showcase Slot (50/150 XP): User.showcaseSlots field, UserShowcase model (id, userId, slotIndex, ugcPhotoId), POST /unlock + PUT /:slotIndex + GET /:userId/showcase endpoints in users.ts, xpService PROFILE_SHOWCASE_SLOT_2/3, hunt-pass.tsx row
+- Treasure Trail Sponsor (100 XP): XP gate in trailController.ts createTrail, xpService TREASURE_TRAIL_SPONSOR: 100, hunt-pass.tsx row in Organizer Features section
+- New migration: 20260408_add_xp_sinks_showcase_mappin (User.customMapPin, User.showcaseSlots, UserShowcase table)
+- Guild/Crew ADR written: ADR-guild-crew-creation-S420.md (schema: Crew + CrewMember models, 6 API endpoints, group bounties via crewId FK on existing Bounty model, free to join, 500 XP to create, 50-member cap)
+
+**S420 Patrick actions required (after push 2):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -22,20 +28,25 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**S420 Files Changed (9 files):**
-- `packages/database/prisma/schema.prisma` — 4 User fields + LuckyRoll model + LuckyRollOutcome enum
-- `packages/database/prisma/migrations/20260408_add_lucky_roll_schema/migration.sql` — NEW
-- `packages/backend/src/services/luckyRollService.ts` — NEW: pity system, weekly reset, transactional roll
-- `packages/backend/src/controllers/luckyRollController.ts` — NEW: eligibility + roll handlers
-- `packages/backend/src/routes/lucky-roll.ts` — NEW: GET /eligibility, POST /roll
-- `packages/backend/src/index.ts` — luckyRollRouter wired
-- `packages/backend/src/services/xpService.ts` — CUSTOM_USERNAME_COLOR 50→100, CUSTOM_FRAME_BADGE 75→200 (P2 bug fix)
-- `packages/frontend/pages/shopper/lucky-roll.tsx` — NEW: roll UI, odds table, celebration tiers, legal notice
-- `packages/frontend/pages/shopper/hunt-pass.tsx` — Lucky Roll row added to Spend Your XP section
+**S420 Blocked queue (still needs dev):**
+- `SaleMapInner.tsx` — render organizer's customMapPin emoji on map (stub was skipped as too large inline)
+- `profile.tsx` — showcase slots UI: render pinned hauls, show unlock button, slot progression
 
-**S420 QA needed:**
-- Lucky Roll page: roll button, odds table always visible, weekly cap countdown, celebration animations — needs migration first
-- xpService cosmetics fix: verify USERNAME_COLOR and FRAME_BADGE purchases now charge correct XP amount
+**S420 Files Changed — Batch 2 (7 new/modified):**
+- `packages/database/prisma/schema.prisma` — customMapPin + showcaseSlots + UserShowcase model (cumulative on top of Lucky Roll changes)
+- `packages/database/prisma/migrations/20260408_add_xp_sinks_showcase_mappin/migration.sql` — NEW
+- `packages/backend/src/services/xpService.ts` — 4 new sinks (CUSTOM_MAP_PIN, PROFILE_SHOWCASE_SLOT_2/3, TREASURE_TRAIL_SPONSOR)
+- `packages/backend/src/controllers/trailController.ts` — 100 XP gate on trail creation
+- `packages/backend/src/routes/users.ts` — 4 new endpoints (custom-map-pin, showcase unlock/set/get)
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — 3 new sink rows (Custom Map Pin, Profile Showcase Slot, Treasure Trail Sponsor)
+- `claude_docs/feature-notes/ADR-guild-crew-creation-S420.md` — NEW
+
+**S420 QA needed (after migration runs):**
+- Lucky Roll page: roll button, odds table, weekly cap countdown, celebration animations
+- Custom Map Pin: POST endpoint, XP spend, pin stores to DB
+- Showcase Slot unlock: XP spend progression (1→2, 2→3), slot assignment
+- Treasure Trail: creation blocked if <100 XP, succeeds if XP sufficient
+- Hunt Pass page: all 3 new sink rows visible with correct XP costs
 
 ---
 
