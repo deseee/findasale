@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticate } from '../middleware/auth';
 import {
   createSlot,
+  createSlotsBatch,
   getSlots,
   bookSlot,
   cancelBooking,
@@ -15,6 +16,7 @@ const router = express.Router();
 router.get('/slots/:saleId', getSlots);
 
 // Protected routes (require authentication)
+router.post('/slots/batch', authenticate, createSlotsBatch);
 router.post('/slots', authenticate, createSlot);
 router.delete('/slot/:slotId', authenticate, deleteSlot);
 

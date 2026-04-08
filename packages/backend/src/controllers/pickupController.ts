@@ -55,6 +55,83 @@ export const createSlot = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// POST /api/pickup/slots/batch — organizer creates multiple pickup slots at once
+export const createSlotsBatch = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+    const hasOrganizerRole = req.user.roles?.includes('ORGANIZER') || req.user.role === 'ORGANIZER';
+    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
+
+    const { saleId, slots } = req.body;
+
+    // Validate required fields
+    if (!saleId || !slots || !Array.isArray(slots)) {
+      return res.status(400).json({ message: 'saleId and slots array are required' });
+    }
+
+    if (slots.length === 0) {
+      return res.status(400).json({ message: 'At least one slot is required' });
+    }
+
+    // Verify organizer owns the sale
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied — you do not own this sale' });
+    }
+
+    // Validate and prepare all slots
+    const slotData: Array<{ saleId: string; startsAt: Date; endsAt: Date; capacity: number }> = [];
+
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+
+      if (!slot.startsAt || !slot.endsAt) {
+        return res.status(400).json({
+          message: `Slot ${i + 1}: startsAt and endsAt are required`,
+        });
+      }
+
+      const startDate = new Date(slot.startsAt);
+      const endDate = new Date(slot.endsAt);
+
+      if (startDate >= endDate) {
+        return res.status(400).json({
+          message: `Slot ${i + 1}: startsAt must be before endsAt`,
+        });
+      }
+
+      const cap = slot.capacity ? parseInt(slot.capacity, 10) : 5;
+      if (cap < 1 || cap > 50) {
+        return res.status(400).json({
+          message: `Slot ${i + 1}: capacity must be between 1 and 50`,
+        });
+      }
+
+      slotData.push({
+        saleId,
+        startsAt: startDate,
+        endsAt: endDate,
+        capacity: cap,
+      });
+    }
+
+    // Create all slots atomically
+    const result = await prisma.pickupSlot.createMany({
+      data: slotData,
+      skipDuplicates: false,
+    });
+
+    res.status(201).json({ created: result.count });
+  } catch (error) {
+    console.error('[pickup] createSlotsBatch error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // GET /api/pickup/slots/:saleId — public; returns available slots with booking counts
 export const getSlots = async (req: AuthRequest, res: Response) => {
   try {
