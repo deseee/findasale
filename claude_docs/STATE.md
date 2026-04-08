@@ -7,7 +7,20 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S418 COMPLETE (2026-04-08):** Hunt Pass staleness audit (pass 1 + pass 2) + broad customer-facing doc sweep. 7 files changed.
+**S418 IN PROGRESS (2026-04-08):** Hunt Pass staleness audit + exchange-rate calibration + dual-rail boost system spec. 8+ files changed.
+
+**S418 Pass 4 (exchange-rate calibration, 1 XP = $0.01):**
+- hunt-pass.tsx: Custom Username Color 50→100, Frame Badge 75→200, Haul Visibility Boost 10→25, Event Sponsorship 150→500, shopper coupon $1 off 100 XP, Hunt Pass discount 100 XP
+- xpService.ts: COUPON_CLAIM_SHOPPER 25→100, HUNT_PASS_DISCOUNT 50→100, HAUL_VISIBILITY_BOOST 10→25, EVENT_SPONSORSHIP 150→500
+- All shopper sinks now calibrated to 1 XP = $0.01 anchor
+
+**S418 Pass 6 (coupon system + refund policy locked):**
+Three coupon tiers locked: $1/$10 (100 XP, 1/mo), $1.50/$20 (150 XP, 3/mo), $5/$50 (500 XP, 1/mo). Min purchase enforced server-side, monthly caps per tier, no stacking with organizer coupons, 30-day expiry, requires Stripe-cleared transaction. Refund policy locked: Stripe admin-only + 2 auto-refund cases, XP no refunds, 5-min self-serve undo. Removed phantom "Public collection guide" earnings row from hunt-pass.tsx (was both earning and sink — sink only is correct). All decisions in `gamedesign-decisions-2026-04-08.md` Section 3 + ADR Patrick Decisions section.
+
+**S418 Pass 5 (new sinks + dual-rail spec — ARCHITECT COMPLETE):**
+Patrick approved 7 new XP sinks: Sale Bump, Treasure Trail Sponsor, Wishlist Notification Boost, Lucky Roll/Mystery Box, Profile Showcase Slot, Guild/Crew Creation, Custom Map Pin. Architect dispatched for unified "Featured Boost" system spec — single BoostPurchase service with dual payment rails (XP or Stripe). Boosts with cash rail: Sale Bump, Haul Visibility, Bounty Visibility, Event Sponsorship, Wishlist Notification, Seasonal Challenge Access, Guide Publication, Rarity Boost. Cosmetics stay XP-only (status symbols).
+
+**S418 Pass 1-3:** (prior work)
 
 **S418 Summary:**
 Pass 1: Hunt Pass page had 6 stale data points: "Collector Passport" → "Loot Legend" (D-S268 missed in this file), Treasure Hunt scan XP 25→12 (S417 backend rebalance not reflected), Hunt Pass matrix column 28→13, Quick Reference "Visit a sale" HP 8→7.5 (inconsistency with full table), "Write an item review" 5/8 → 8/12 (wrong action/values, should be "Seller review"), benefit label "1.5x Streak XP" → "1.5x XP Multiplier" (streak is separate mechanic). Added missing Treasure Hunt (QR Scans) section to full XP breakdown table.

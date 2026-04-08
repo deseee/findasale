@@ -298,12 +298,6 @@ const HuntPassPage = () => {
                     <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+75 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Public collection guide</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50 XP</td>
-                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">One-time per guide</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75 XP</td>
-                  </tr>
-                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Community appraisal submitted</td>
                     <td className="px-6 py-3 text-warm-600 dark:text-warm-400">8 XP</td>
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">5/day, Scout+</td>

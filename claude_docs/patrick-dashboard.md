@@ -2,6 +2,29 @@
 
 ---
 
+## S418 Pass 4 + 5 (latest)
+
+**Pass 4 — Exchange-rate calibration (1 XP = $0.01):**
+Re-priced every shopper sink against the anchor rate.
+- Custom Username Color: 50 → 100 XP
+- Custom Frame Badge: 75 → 200 XP
+- Haul Visibility Boost: 10 → 25 XP
+- Event Sponsorship: 150 → 500 XP
+- Shopper $1 off coupon: 100 XP (added — was missing)
+- Hunt Pass $1 discount: 100 XP
+- Seasonal Challenge Access: 250 XP
+
+**Pass 6 — Coupons + refund policy locked:**
+Three shopper coupon tiers: $1/$10 (100 XP, 1/mo), $1.50/$20 (150 XP, 3/mo, +$0.50 net per redemption), $5/$50 (500 XP, 1/mo). All require min purchase, monthly caps, Stripe-cleared transaction, no stacking with organizer coupons, 30-day expiry. Refund policy: Stripe admin-only + 2 auto-cases, XP no refunds, 5-min self-serve undo. Phantom "Public collection guide" earning row removed (it's a sink only). Full details in gamedesign-decisions Section 3 + ADR.
+
+**Pass 5 — New sinks + dual-rail spec (Architect complete):**
+You approved 7 new XP sinks: Sale Bump, Treasure Trail Sponsor, Wishlist Notification Boost, Lucky Roll/Mystery Box, Profile Showcase Slot, Guild/Crew Creation, Custom Map Pin. Dispatched Architect to spec a unified "Featured Boost" system — one BoostPurchase service, two payment rails (XP or Stripe). Boosts that get a cash rail: Sale Bump, Haul Visibility, Bounty Visibility, Event Sponsorship, Wishlist Notification, Seasonal Challenge Access, Guide Publication, Rarity Boost. Cosmetics stay XP-only.
+
+---
+
+
+---
+
 ## What Happened This Session (S418)
 
 **Hunt Pass staleness audit (2 passes) + game design review + customer-facing doc sweep.** 7 files changed.

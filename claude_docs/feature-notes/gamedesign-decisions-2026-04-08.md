@@ -752,3 +752,82 @@ IMPACT: LOW.
 DECISION: Row moved from Community section to Seasonal Challenges section in the full XP table.
 RATIONALE: Seasonal bounties are seasonal mechanics, not everyday community actions.
 IMPACT: LOW (organization only).
+
+---
+
+## Section 3 — S418 Pass 4/5 Decisions (Exchange Rate, New Sinks, Dual-Rail, Coupons, Refunds)
+
+Locked 2026-04-08. Anchor: **1 XP = $0.01** (from S388 spec, PURCHASE = 1 XP per $1 spent).
+
+### Exchange-rate calibration (all shopper sinks now anchored)
+
+| Sink | Old | New | Rationale |
+|---|---|---|---|
+| Custom Username Color | 50 XP | 100 XP | Permanent cosmetic should feel earned |
+| Custom Frame Badge | 75 XP | 200 XP | Permanent cosmetic, status symbol |
+| Haul Visibility Boost | 10 XP | 25 XP | $0.10 was almost free for 7-day promo |
+| Event Sponsorship | 150 XP | 500 XP | $1.50 absurdly cheap vs EstateSales.net $15-30 |
+| Shopper $1 off coupon | (added) | 100 XP | 1:1 with $1 = 100 cents |
+| Hunt Pass $1 discount | 50 XP | 100 XP | 1:1 alignment |
+| Seasonal Challenge Access | 100 XP | 250 XP | Premium content, $2.50 anchor |
+
+### Removed phantom earning row
+
+"Public collection guide" was listed as both an EARNING (50/75 XP) and a SINK (50 XP). It is a SINK only — guide publication costs XP, doesn't award it. Earnings row removed from hunt-pass.tsx.
+
+### New sinks approved (7 — to be built via BoostPurchase service)
+
+| Sink | XP cost | Cash cost | Duration | Notes |
+|---|---|---|---|---|
+| Sale Bump | 50 XP | $0.50 | 1 hour | Push sale to top of map/list at peak browse times |
+| Treasure Trail Sponsor | 100 XP | $1.00 | sale duration | Mini scavenger hunt attached to sale |
+| Wishlist Notification Boost | 30 XP/mo | $0.30/mo | 30 days | First-alert when matching item posted |
+| Lucky Roll / Mystery Box | 100 XP | XP only | weekly | Gacha — needs separate design pass |
+| Profile Showcase Slot | 50/150 XP | XP only | permanent | Pin favorite hauls to profile |
+| Guild/Crew Creation | 500 XP | XP only | permanent | Named collector crews, social retention |
+| Custom Map Pin | 75 XP | XP only | permanent | Replace default pin with themed icon |
+
+**Guiding principle:** Time-sensitive/opportunity-based sinks get a cash rail. Permanent cosmetics and status symbols stay XP-only.
+
+### Dual-rail system (locked — see ADR)
+
+A unified `BoostPurchase` service handles all 8 promotional boost types with two payment rails (XP via xpService.spendXp, or Stripe via platform-account paymentIntent). Adding a future boost requires only: enum value + pricing row + UI button. Full ADR at `claude_docs/feature-notes/ADR-featured-boost-dual-rail-S418.md`.
+
+**Cash-rail boosts:** Sale Bump, Haul Visibility, Bounty Visibility, Event Sponsorship, Wishlist Notification, Seasonal Challenge Access, Guide Publication, Rarity Boost.
+
+**XP-only:** All cosmetics + Lucky Roll + Profile Showcase + Guild Creation + Custom Map Pin.
+
+### Shopper coupon system (locked)
+
+Three tiers, all require Stripe-cleared transactions to redeem, none stack with organizer-issued coupons, all expire 30 days after generation:
+
+| Coupon | XP cost | Min purchase | Monthly cap | Net to us |
+|---|---|---|---|---|
+| $1 off any $10+ purchase | 100 XP | $10 | 1/mo | $0 (breakeven) |
+| $1.50 off any $20+ purchase | 150 XP | $20 | 3/mo | +$0.50/redemption |
+| $5 off any $50+ purchase | 500 XP | $50 | 1/mo | $0 (breakeven) |
+
+**Anti-fraud:** Tied to real Stripe payment, monthly per-shopper caps, no stacking with organizer coupons, 30-day expiry. Sock-puppet farming requires real card transactions which is much harder than free-account farming.
+
+### Refund policy (locked)
+
+**Stripe rail:** Admin-only refunds. Two auto-refund cases: (a) Stripe charged but webhook didn't fire and reconciliation failed within 24h, (b) targeted entity deleted within 1 hour of purchase (e.g. organizer cancelled the sale). Everything else goes to support queue.
+
+**XP rail:** No refunds. XP refunds create rank-up/rank-down chaos and an obvious abuse path. Same two auto-refund exceptions apply.
+
+**Self-serve undo window:** 5-minute "undo" button on the boost purchase success modal. After 5 minutes, no self-serve cancellation.
+
+**Industry comparison:** Matches Facebook Ads, Google Ads, eBay Promoted Listings, Etsy Offsite Ads — all admin-discretionary, no self-serve refunds for digital promotion purchases. Most mobile games have zero XP refunds (Clash Royale, Genshin, Pokémon GO).
+
+### Lucky Roll / Mystery Box — DEFERRED
+
+Excluded from BoostPurchase ADR. Needs separate gacha-design session: pity counter, reward table, weekly cap, randomness fairness model, regulatory considerations (loot boxes are regulated in some jurisdictions). Recommend findasale-gamedesign session before architect work.
+
+### Wishlist Notification subscription mode — DEFERRED
+
+Shipping as monthly one-shot first (user re-buys each month). Revisit Stripe Subscription mode if churn data shows users forget to re-buy.
+
+### Featured slot scarcity cap
+
+Hard-coded to **max 5 featured pins per viewport** initially. Adjustable via env var. Validate against first 10 organizers' usage before tuning.
+
