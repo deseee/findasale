@@ -149,7 +149,17 @@ export const getLootLogItem = async (req: Request, res: Response) => {
     const purchase = await prisma.purchase.findUnique({
       where: { id: purchaseId },
       include: {
-        item: true,
+        item: {
+          select: {
+            id: true,
+            title: true,
+            category: true,
+            description: true,
+            photoUrls: true,
+            price: true,
+            condition: true,
+          },
+        },
         sale: {
           select: {
             id: true,
@@ -169,7 +179,17 @@ export const getLootLogItem = async (req: Request, res: Response) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    res.json(purchase);
+    // Transform photoUrls array to imageUrl string (first photo)
+    const transformedPurchase = {
+      ...purchase,
+      item: purchase.item ? {
+        ...purchase.item,
+        imageUrl: purchase.item.photoUrls?.[0] || null,
+        photoUrls: undefined,
+      } : null,
+    };
+
+    res.json(transformedPurchase);
   } catch (error) {
     console.error('getLootLogItem error:', error);
     res.status(500).json({ message: 'Failed to fetch purchase detail' });

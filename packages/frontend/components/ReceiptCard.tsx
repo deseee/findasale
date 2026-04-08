@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import ReturnRequestModal from './ReturnRequestModal';
+import DisputeForm from './DisputeForm';
+import { useAuth } from './AuthContext';
 
 interface ReceiptItem {
   itemTitle: string;
@@ -35,6 +37,8 @@ interface ReceiptCardProps {
 
 export default function ReceiptCard({ receipt, returnWindowHours = 48, saleEndDate }: ReceiptCardProps) {
   const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const { user } = useAuth();
 
   // Calculate if return window is still open
   const isReturnWindowOpen = () => {
@@ -96,21 +100,32 @@ export default function ReceiptCard({ receipt, returnWindowHours = 48, saleEndDa
           </div>
         </div>
 
-        {/* Return Button */}
-        {canRequestReturn && (
-          <button
-            onClick={() => setShowReturnModal(true)}
-            className="w-full px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors font-medium text-sm"
-          >
-            Request Return
-          </button>
-        )}
+        {/* Action Buttons */}
+        <div className="space-y-2">
+          {canRequestReturn && (
+            <button
+              onClick={() => setShowReturnModal(true)}
+              className="w-full px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors font-medium text-sm"
+            >
+              Request Return
+            </button>
+          )}
 
-        {!canRequestReturn && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
-            Return window has closed
-          </p>
-        )}
+          {!canRequestReturn && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+              Return window has closed
+            </p>
+          )}
+
+          {!showDisputeForm && (
+            <button
+              onClick={() => setShowDisputeForm(true)}
+              className="w-full px-4 py-2 border border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors font-medium text-sm"
+            >
+              ⚠ Report Issue
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Return Request Modal */}
@@ -123,6 +138,22 @@ export default function ReceiptCard({ receipt, returnWindowHours = 48, saleEndDa
             setShowReturnModal(false);
             // Optionally refresh or show success message
           }}
+        />
+      )}
+
+      {/* Dispute Form */}
+      {showDisputeForm && (
+        <DisputeForm
+          itemId={receipt.purchase.item?.id || ''}
+          itemTitle={receipt.purchase.item?.title || 'Item'}
+          orderId={receipt.purchase.id}
+          saleId={receipt.purchase.sale?.id || ''}
+          userEmail={user?.email || ''}
+          onSuccess={() => {
+            setShowDisputeForm(false);
+            // Optionally refresh or show success message
+          }}
+          onCancel={() => setShowDisputeForm(false)}
         />
       )}
     </>

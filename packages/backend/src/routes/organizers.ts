@@ -72,6 +72,8 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
     let totalFees = 0;
     let itemsSold = 0;
     let itemsUnsold = 0;
+    let completedSalesCount = 0;
+    let totalGMV = 0;
 
     const saleBreakdown = sales.map((sale: any) => {
       const saleRevenue = sale.purchases.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
@@ -83,6 +85,12 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
       totalFees += saleFees;
       itemsSold += saleSold;
       itemsUnsold += saleUnsold;
+      totalGMV += saleRevenue;
+
+      // Count as completed if status is ENDED or PUBLISHED and has at least one PAID purchase
+      if ((sale.status === 'ENDED' || sale.status === 'PUBLISHED') && sale.purchases.length > 0) {
+        completedSalesCount++;
+      }
 
       return {
         id: sale.id,
@@ -101,6 +109,8 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
       totalFees,
       itemsSold,
       itemsUnsold,
+      completedSalesCount,
+      totalGMV,
       sales: saleBreakdown,
     });
   } catch (error) {

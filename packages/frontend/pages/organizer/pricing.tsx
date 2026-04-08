@@ -391,6 +391,30 @@ const PricingPage = () => {
                       )}
                     </div>
 
+                    {/* All-in cost transparency */}
+                    <div className="mb-6 p-3 bg-warm-50 dark:bg-gray-700/30 rounded-lg border border-warm-200 dark:border-gray-600">
+                      <p className="text-xs text-warm-600 dark:text-warm-400 leading-relaxed">
+                        {tier.id === 'SIMPLE' && (
+                          <>
+                            <span className="font-semibold">10% platform</span> + ~3.2% payment processing = <span className="font-semibold">~13.2% total per sale</span><br />
+                            <span className="text-warm-500 dark:text-warm-500 italic">Competitors typically charge 20–30%</span>
+                          </>
+                        )}
+                        {tier.id === 'PRO' && (
+                          <>
+                            <span className="font-semibold">8% platform</span> + ~3.2% payment processing = <span className="font-semibold">~11.2% total per sale</span><br />
+                            <span className="text-warm-500 dark:text-warm-500 italic">Plus $29/mo subscription</span>
+                          </>
+                        )}
+                        {tier.id === 'TEAMS' && (
+                          <>
+                            <span className="font-semibold">8% platform</span> + ~3.2% payment processing = <span className="font-semibold">~11.2% total per sale</span><br />
+                            <span className="text-warm-500 dark:text-warm-500 italic">Plus $79/mo subscription</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+
                     {/* Current plan badge */}
                     {isCurrentTier && (
                       <div className="mb-6 inline-block bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-3 py-1 rounded-full text-sm font-medium">

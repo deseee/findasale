@@ -1183,7 +1183,7 @@ const ReviewPage = () => {
                                       {CATEGORIES.map((cat) => (
                                         <option key={cat} value={cat}>{cat}</option>
                                       ))}
-                                      {editState.category && !CATEGORIES.includes(editState.category) && (
+                                      {editState.category && !(CATEGORIES as readonly string[]).includes(editState.category) && (
                                         <option key={editState.category} value={editState.category}>{editState.category}</option>
                                       )}
                                     </select>
