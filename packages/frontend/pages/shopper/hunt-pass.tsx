@@ -232,9 +232,9 @@ const HuntPassPage = () => {
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Auction win</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10–15 XP</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">10 XP</td>
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15–22.5 XP</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">15 XP</td>
                   </tr>
 
                   {/* Community */}
@@ -260,18 +260,6 @@ const HuntPassPage = () => {
                     <td className="px-6 py-3 text-warm-600 dark:text-warm-400">+0.5/like, +3/comment</td>
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">20/mo</td>
                     <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+0.75/like, +4.5/comment</td>
-                  </tr>
-                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Item photo quality</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">3 XP</td>
-                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">30/mo</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">4.5 XP</td>
-                  </tr>
-                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Condition grade submission</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">5 XP</td>
-                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">50/mo</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">7.5 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Seller review (text)</td>
@@ -310,22 +298,10 @@ const HuntPassPage = () => {
                     <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">+75 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Community mentor session</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">25 XP</td>
-                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo (4 max)</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">37.5 XP</td>
-                  </tr>
-                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Public collection guide</td>
                     <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50 XP</td>
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">One-time per guide</td>
                     <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75 XP</td>
-                  </tr>
-                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Community valuation</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">5 XP</td>
-                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">100/mo (20 max)</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">7.5 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Bounty fulfillment (organizer-posted)</td>
@@ -333,13 +309,6 @@ const HuntPassPage = () => {
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Supply-limited</td>
                     <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">37.5 XP</td>
                   </tr>
-                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Bounty fulfillment (seasonal)</td>
-                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50–200 XP</td>
-                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Per-bounty</td>
-                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75–300 XP</td>
-                  </tr>
-
                   {/* Treasure Trails */}
                   <tr className="bg-orange-50/30 dark:bg-orange-900/10">
                     <td colSpan={4} className="px-6 py-2 font-bold text-warm-900 dark:text-warm-100 text-sm">
@@ -499,6 +468,12 @@ const HuntPassPage = () => {
                     <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1x/season</td>
                     <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">750 XP</td>
                   </tr>
+                  <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Seasonal bounty fulfillment</td>
+                    <td className="px-6 py-3 text-warm-600 dark:text-warm-400">50–200 XP</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Per-bounty</td>
+                    <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">75–300 XP</td>
+                  </tr>
 
                   {/* Organizer */}
                   <tr className="bg-teal-50/30 dark:bg-teal-900/10">
@@ -637,7 +612,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Seasonal Challenge Access</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Unlock this season's challenges, cosmetics, and leaderboard access (non-Hunt Pass only).</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">250 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ (non-Hunt Pass) | 1 season | Hunt Pass subscribers get free access</p>
                   </div>
@@ -657,9 +632,19 @@ const HuntPassPage = () => {
               {/* Hunt Pass */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-hidden">
                 <div className="bg-purple-50 dark:bg-purple-900/20 px-6 py-3 border-b border-warm-200 dark:border-gray-700">
-                  <h3 className="font-bold text-warm-900 dark:text-warm-100">Hunt Pass & Premium</h3>
+                  <h3 className="font-bold text-warm-900 dark:text-warm-100">Hunt Pass & Discounts</h3>
                 </div>
                 <div className="divide-y divide-warm-200 dark:divide-gray-700">
+                  <div className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-warm-900 dark:text-warm-100">$1 Off Any Purchase</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Redeem your XP for $1 off any purchase on FindA.Sale.</p>
+                      </div>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | One per calendar month | Applied at checkout</p>
+                  </div>
                   <div className="px-6 py-4">
                     <div className="flex justify-between items-start mb-2">
                       <div>
@@ -679,16 +664,6 @@ const HuntPassPage = () => {
                   <h3 className="font-bold text-warm-900 dark:text-warm-100">Organizer Features</h3>
                 </div>
                 <div className="divide-y divide-warm-200 dark:divide-gray-700">
-                  <div className="px-6 py-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-semibold text-warm-900 dark:text-warm-100">Coupon Generation</p>
-                        <p className="text-sm text-warm-600 dark:text-warm-400">Create a $1-off coupon to incentivize shoppers at your sale.</p>
-                      </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50 XP</span>
-                    </div>
-                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Trusted+ | 30 days (1-use) | Max 5/month</p>
-                  </div>
                   <div className="px-6 py-4">
                     <div className="flex justify-between items-start mb-2">
                       <div>
@@ -820,10 +795,10 @@ const HuntPassPage = () => {
 
               <details className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <summary className="font-semibold text-warm-900 dark:text-warm-100 cursor-pointer">
-                  What is Streak XP?
+                  How does the weekly activity streak work?
                 </summary>
                 <p className="text-warm-600 dark:text-warm-400 mt-3">
-                  Streak XP is the reward you earn for engaging with FindA.Sale. Visit sales, make purchases, scan items, and interact with the community to build your streak. Hunt Pass holders earn 1.5x XP, unlocking badges and exclusive rewards sooner.
+                  Stay active any 7 days in a calendar month and earn a 100 XP streak bonus (150 XP with Hunt Pass). During an active streak week, all your XP is also multiplied by 1.2x — so the more you engage, the faster your rank grows. Miss a week entirely? Your streak resets, but your rank and all previously earned XP stay put.
                 </p>
               </details>
 

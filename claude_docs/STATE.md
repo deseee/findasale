@@ -7,16 +7,24 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S418 COMPLETE (2026-04-08):** Hunt Pass staleness audit + broad customer-facing doc sweep. 5 files changed.
+**S418 COMPLETE (2026-04-08):** Hunt Pass staleness audit (pass 1 + pass 2) + broad customer-facing doc sweep. 7 files changed.
 
 **S418 Summary:**
-Hunt Pass page had 6 stale data points: "Collector Passport" → "Loot Legend" (D-S268 missed in this file), Treasure Hunt scan XP 25→12 (S417 backend rebalance not reflected), Hunt Pass matrix column 28→13, Quick Reference "Visit a sale" HP 8→7.5 (inconsistency with full table), "Write an item review" 5/8 → 8/12 (wrong action/values, should be "Seller review"), benefit label "1.5x Streak XP" → "1.5x XP Multiplier" (streak is separate mechanic). Also added missing Treasure Hunt (QR Scans) section to full XP breakdown table. Doc sweep found: FAQ Brand Kit answer said "available on all plans" (PRO+ only, fixed); FAQ double comma typo; TierComparisonTable "additonal" → "additional" typo; BUSINESS_PLAN.md feature table "AI tags" → "Auto Tags"; BUSINESS_PLAN.md support model described phone/email SLAs superseded by D-S392 (rewritten to correct automated stack).
+Pass 1: Hunt Pass page had 6 stale data points: "Collector Passport" → "Loot Legend" (D-S268 missed in this file), Treasure Hunt scan XP 25→12 (S417 backend rebalance not reflected), Hunt Pass matrix column 28→13, Quick Reference "Visit a sale" HP 8→7.5 (inconsistency with full table), "Write an item review" 5/8 → 8/12 (wrong action/values, should be "Seller review"), benefit label "1.5x Streak XP" → "1.5x XP Multiplier" (streak is separate mechanic). Added missing Treasure Hunt (QR Scans) section to full XP breakdown table.
 
-**S418 Files Changed (5 files):**
-- `packages/frontend/pages/shopper/hunt-pass.tsx` — 6 data fixes + Treasure Hunt section added
+Pass 2 (game design review + Patrick follow-up questions): Auction win range "10–15 XP" → flat "10 XP / 15 XP HP" (Patrick's call). Removed "Item photo quality" row (not in xpService.ts). Removed "Community mentor session" row (not in xpService.ts). Moved "Bounty fulfillment (seasonal)" from Community section to Seasonal Challenges section. Added missing shopper coupon sink (COUPON_CLAIM_SHOPPER 25 XP — was in xpService.ts, not on page). Seasonal Challenge Access cost raised 100→250 XP (gamedesign S418). FAQ "What is Streak XP?" renamed to "How does the weekly activity streak work?" with accurate answer.
+
+Doc sweep: FAQ Brand Kit answer said "available on all plans" (PRO+ only, fixed); FAQ double comma typo; TierComparisonTable "additonal" → "additional" typo; BUSINESS_PLAN.md feature table "AI tags" → "Auto Tags"; BUSINESS_PLAN.md support model described phone/email SLAs superseded by D-S392 (rewritten to correct automated stack).
+
+Game design decisions: 9 decisions locked and saved to `claude_docs/feature-notes/gamedesign-decisions-2026-04-08.md` (Section 2, S418). Streak Freeze locked as future sink (75 XP, post-beta).
+
+**S418 Files Changed (7 files):**
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — pass 1 + pass 2 fixes (13 total changes)
+- `packages/backend/src/services/xpService.ts` — SEASONAL_CHALLENGE_ACCESS 100→250 XP
 - `packages/frontend/pages/faq.tsx` — Brand Kit tier fix + double comma typo
 - `packages/frontend/components/TierComparisonTable.tsx` — "additonal" typo fixed
 - `claude_docs/strategy/BUSINESS_PLAN.md` — "AI tags" → "Auto Tags" in feature table; support model rewritten per D-S392
+- `claude_docs/feature-notes/gamedesign-decisions-2026-04-08.md` — Section 2: 9 S418 game design decisions appended
 - `.checkpoint-manifest.json` — S418 session entry
 
 **S418 Chrome smoke test:** NOT RUN — all changes are copy/data fixes, no new flows. No Chrome verification needed.
