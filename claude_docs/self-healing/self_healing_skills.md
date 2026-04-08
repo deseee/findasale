@@ -391,3 +391,92 @@ const user = await prisma.user.findFirst({ where: { stripeCustomerId: X } });
 **Test Command:** `node -e "const {randomUUID}=require('crypto'); console.log(randomUUID())"` — should output a valid UUID.
 
 **Confidence:** HIGH — UUID v4 provides 2^122 entropy; collision is cryptographically impossible.
+
+---
+
+## SH-017: Ship feature, forget to wire trigger button
+
+**Trigger:** Post-deploy: a modal, drawer, overlay, or panel exists but there is no UI element that opens it. The feature is unreachable by the user.
+
+**Environment:** Any frontend component that relies on a parent page calling `setX(true)` or a similar trigger.
+
+**Pattern:** Agent builds `ComponentX.tsx` and wires it conditionally in `parentPage.tsx`, but never adds the `<button onClick={() => setComponentXOpen(true)}>` (or equivalent) to the parent JSX. Feature ships silently broken.
+
+**Known instance:** Session 410/411 — Social Post Generator modal (`SocialPostGenerator.tsx`) was built and conditionally rendered in `dashboard.tsx`, but the "📱 Social Posts" trigger button was never added to the PUBLISHED sale card action row. S411 was an entire repair session for this one omission.
+
+**Steps:**
+1. After implementing any new modal/drawer/overlay, grep the parent page for the setState call: `grep "setComponentXOpen\|setShowX\|openX" <parent-page>.tsx`
+2. Verify a `<button>` or clickable element that calls that setter exists in the rendered JSX.
+3. If missing: add the trigger UI before returning output. Do not return without it.
+4. Include in acceptance criteria for every modal dispatch: "Trigger button exists and is reachable from the expected user flow."
+
+**Confidence:** HIGH — confirmed S410. Structurally certain to recur whenever modal-first dispatch prompts don't include a "verify trigger exists" step.
+
+---
+
+## SH-018: New organizer/shopper page missing auth guard
+
+**Trigger:** Unauthenticated user reaches an organizer or shopper page without being redirected to login.
+
+**Environment:** Any page under `packages/frontend/pages/organizer/` or `packages/frontend/pages/shopper/`.
+
+**Pattern:** New pages are built with feature logic but the auth guard pattern is omitted. S410 found 6 such pages (calendar, earnings, qr-codes, staff, ripples, ugc-moderation) that had shipped without guards.
+
+**Steps:**
+1. After building any new organizer/shopper page, verify the following pattern is present at the top of the component:
+```typescript
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/router'
+import { useEffect } from 'react'
+
+const { data: session, status } = useSession()
+const router = useRouter()
+
+useEffect(() => {
+  if (status === 'unauthenticated') {
+    router.push('/auth/signin')
+  }
+}, [status, router])
+
+if (status === 'loading' || !session) return null
+```
+2. Verify by grepping the new file: `grep "useSession" <new-page>.tsx` — must return a match.
+3. If missing: add the guard before returning.
+
+**Edge Cases:**
+- Public-facing organizer pages (e.g., `/organizer/[slug]` public profile) are intentionally unguarded — don't add auth guard to pages that should be publicly accessible.
+- Admin pages use a different auth check (role-based) — verify with `requireAdmin` pattern from existing admin pages.
+
+**Confidence:** HIGH — missing auth guards are a consistent pattern across new page builds (S410 found 6 in one pass).
+
+---
+
+## SH-019: Cloudinary transformation URL silently returning 400
+
+**Trigger:** Watermarked or transformed images fail to load. CDN returns HTTP 400. Images appear broken or missing in UI.
+
+**Environment:** Any backend code in `packages/backend/src/utils/cloudinaryWatermark.ts` or any file generating Cloudinary transformation URLs.
+
+**Pattern:** Cloudinary transformation strings reference resources (fonts, named overlays, presets) that are not configured in the Cloudinary account. The string is syntactically valid TypeScript but fails at URL request time with no runtime error thrown. S410 found that `Montserrat_bold_18` had never been uploaded to Cloudinary — every watermarked URL had been returning 400 since the watermark feature was first launched.
+
+**Known instance:** S410 — `cloudinaryWatermark.ts` used `l_text:Montserrat_bold_18:finda.sale`. Montserrat was not in the account. Fixed to `l_text:Arial_30,co_white,o_80:finda.sale`.
+
+**Confirmed safe Cloudinary resources:**
+- `Arial_30` (system font, always available)
+- `co_white`, `o_80` (color/opacity params, no asset required)
+
+**Steps:**
+1. After writing any Cloudinary transformation string, construct the full resulting URL.
+2. Test the URL directly: `curl -I "<generated_cloudinary_url>"` — must return HTTP 200.
+3. If 400: check the `l_text:FontName_Size` portion — verify the font exists in Cloudinary account under Settings → Upload Presets or Media Library → Fonts.
+4. If the font isn't configured: use `Arial_30` as the safe fallback.
+5. Never use named transformations (e.g., `t_watermark`) without first verifying they exist in the account.
+
+**Test Command:**
+```bash
+# Replace with actual Cloudinary cloud name and sample public_id
+curl -I "https://res.cloudinary.com/<cloud>/image/upload/l_text:Arial_30,co_white,o_80:test/<sample-public-id>.jpg"
+# Expect: HTTP/2 200
+```
+
+**Confidence:** HIGH — Cloudinary transformation errors are silent at write-time; only URL testing catches them. Pattern is certain to recur whenever new text overlays or custom fonts are added.
