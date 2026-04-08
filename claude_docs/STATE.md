@@ -7,6 +7,29 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S412 COMPLETE (2026-04-07):** Full nav audit + link repair + shopper reputation page build.
+
+**S412 Summary:**
+Three-pass nav audit covering both `AvatarDropdown.tsx` and `Layout.tsx`. Pass 1 (dev agent): unblocked dynamic routes that had working index/sale-picker pages — promote, send-update, photo-ops, qr-codes. Unblocked standalone pages that existed but were marked "(Soon)" — calendar, staff, earnings, ripples, ugc-moderation, inventory, reputation (organizer), bounties, line-queue. Added PRO gates to command-center, brand-kit, insights, appraisals, typology, fraud-signals. Pass 2 (inline fix): line-queue had been missed by agent — fixed in 3 places (Layout ×2, AvatarDropdown ×1). Pass 3 (dev agent): Added 5 new nav links for built-but-hidden pages — offline (#69), loot-legend, rare-finds, checklist. Created `checklist/index.tsx` sale-picker (200 lines). Built out `shopper/reputation.tsx` from stub to full dashboard (366 lines) showing purchase count, payment completion rate, total spent, reputation level logic, with "coming soon" sections for dispute history, hold honor rate, community standing. TypeScript: zero errors across all passes.
+
+**S412 Key Findings:**
+- 12+ pages were built but hidden behind false "(Soon)" / cursor-not-allowed labels
+- `/organizer/line-queue` had a real working index.tsx the agent missed — fixed inline
+- `shopper/reputation` was an active nav link pointing to a stub — now a real page
+- "Manage Items" = Item Library (already in nav). "Reports" = admin-only (`/admin/reports`)
+- `shopper/disputes` is a tab in `/shopper/history` — not a separate nav link needed
+- `shopper/trades` and `shopper/bounties` in shopper nav point to stubs — flagged for future build
+
+**S412 Files Changed (5 files, 1 new):**
+- `packages/frontend/components/AvatarDropdown.tsx` — nav audit fixes (passes 1+2+3)
+- `packages/frontend/components/Layout.tsx` — nav audit fixes (passes 1+2+3)
+- `packages/frontend/pages/organizer/checklist/index.tsx` — NEW (200-line sale picker)
+- `packages/frontend/pages/shopper/reputation.tsx` — rebuilt from stub (366 lines)
+
+**S412 Chrome smoke test:** PENDING — needs QA for newly unblocked pages and reputation page.
+
+---
+
 **S411 COMPLETE (2026-04-07):** S409+S410 Chrome smoke test + Social Post Generator trigger bug fix.
 
 **S411 Summary:** Mandatory §10 post-fix smoke test of S409+S410 changes. Dashboard ✅, Calendar auth guard ✅, Watermark ✅, Add-items/QuickBooks ✅, Listing Type on Full Edit ✅, Promote page template social ✅. Bug found: Social Post Generator modal (added S410) had no trigger button — `setSocialPostSale` was never called with an actual sale object. Added "📱 Social Posts" button to PUBLISHED sale card action row in `dashboard.tsx`. TypeScript check: zero errors. Also clarified architecture: two separate social systems exist (AI modal with 6 platforms vs template system with 2) — both correct, not a bug.
@@ -1545,29 +1568,37 @@ Files changed S361:
 
 ## Next Session (S410) — COMPLETE — see S410 smoke test in S411 above
 
-## Next Session (S412)
+## Next Session (S413)
 
-### Patrick Actions First — push S411 fix
+### Patrick Actions First — push S411 + S412
 
 ```powershell
 git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/organizer/checklist/index.tsx
+git add packages/frontend/pages/shopper/reputation.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S411: wire Social Post Generator modal trigger in dashboard
+git commit -m "S411+S412: social post trigger fix + full nav audit + shopper reputation
 
-Add missing 'Social Posts' button to PUBLISHED sale card action row.
-Modal existed but had no trigger — setSocialPostSale was never called
-with an actual sale object."
+S411: wire Social Posts button to modal trigger in organizer dashboard.
+S412: unblock 12+ pages falsely marked Soon/cursor-not-allowed (promote,
+send-update, photo-ops, calendar, staff, earnings, ripples, qr-codes,
+inventory, reputation, bounties, line-queue). Add offline/loot-legend/
+rare-finds/checklist nav links. New: checklist index page (sale picker).
+Build out shopper reputation page from stub."
 .\push.ps1
 ```
 
 **No new migrations this session.**
 
-### S412 Priority 1 — Chrome QA carry-forward
+### S413 Priority 1 — Chrome QA carry-forward
 - #72 Dual-Role Account: schema + auth + registration all confirmed implemented. Needs Chrome QA only.
 - #74 Role-Aware Registration Consent: fully implemented, needs Chrome QA only.
 - S396 rapidfire hold/photo limit QA
 - Shopper referrals (#7/#265), haul posts (#277)
+- S412 nav smoke test: spot-check newly unblocked pages (promote, calendar, line-queue, shopper/reputation)
 
 ### Standing Notes
 - Railway backend: https://backend-production-153c9.up.railway.app

@@ -1,30 +1,45 @@
-# Patrick's Dashboard — April 7, 2026 (S411)
+# Patrick's Dashboard — April 7, 2026 (S412)
 
 ---
 
-## What Happened This Session (S411)
+## What Happened This Session (S411 + S412)
 
-**S409+S410 smoke test complete** — Chrome-verified all key S410 features live. Dashboard, Calendar auth guards, Watermarks, Add-items/QuickBooks, Listing Type (Full Edit page), and the Promote page template social system all confirmed working.
+**S411 — Social Post Generator trigger fixed.** The AI social post modal (TikTok, Pinterest, Threads, etc.) had no way to open it from the dashboard — the button was missing. Added "📱 Social Posts" to the PUBLISHED sale card action row.
 
-**Bug found and fixed: Social Post Generator was unreachable** — The AI social post modal (supporting TikTok, Pinterest, Threads, etc.) built in S410 had no trigger button anywhere in the dashboard. The `setSocialPostSale` state setter was never called with an actual sale. Added a "📱 Social Posts" button to the PUBLISHED sale card action row in the organizer dashboard. Fixed, TypeScript passes clean.
+**S412 — Full nav audit.** 12+ pages were built but hidden behind false "(Soon)" labels or `cursor-not-allowed`. All unblocked. Key ones now accessible:
+- Organizer: Promote, Send Update, Photo Ops, Price Tags, Calendar, Staff, Earnings, Ripples, QR Codes, Inventory, Reputation, Bounties, Line Queue, Offline Mode, Checklist
+- Shopper: Loot Legend, Rare Finds (both Hunt Pass pages)
+
+**New: Checklist sale picker** — `/organizer/checklist` now has an index page so you can pick a sale and go straight to its checklist from the nav.
+
+**New: Shopper Reputation page** — was a stub, now a real dashboard showing purchase count, payment completion rate, total spent, and reputation level (New Shopper → Trusted Buyer). Dispute history and hold honor rate marked as "coming soon" within the page until backend data is wired.
+
+**Confirmed:** "Manage Items" = Item Library (already in nav). "Reports" = admin-only. Disputes = tab in Purchase History, not a separate nav link.
 
 ---
 
-## Push Block (S411)
+## Push Block (S411 + S412)
 
 ```powershell
 git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/organizer/checklist/index.tsx
+git add packages/frontend/pages/shopper/reputation.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S411: wire Social Post Generator modal trigger in dashboard
+git commit -m "S411+S412: social post trigger fix + full nav audit + shopper reputation
 
-Add missing 'Social Posts' button to PUBLISHED sale card action row.
-Modal existed but had no trigger — setSocialPostSale was never called
-with an actual sale object."
+S411: wire Social Posts button to modal trigger in organizer dashboard.
+S412: unblock 12+ pages falsely marked Soon/cursor-not-allowed (promote,
+send-update, photo-ops, calendar, staff, earnings, ripples, qr-codes,
+inventory, reputation, bounties, line-queue). Add offline/loot-legend/
+rare-finds/checklist nav links. New: checklist index page (sale picker).
+Build out shopper reputation page from stub."
 .\push.ps1
 ```
 
-**No new migrations this session.**
+**No new migrations.**
 
 ---
 
@@ -41,8 +56,8 @@ npx prisma generate
 
 ## Action Items for Patrick
 
-- [ ] **Push S410 block above**
-- [ ] **Test eBay export** — 400 should be gone now. Condition values are now human-readable strings.
+- [ ] **Push S411+S412 block above**
+- [ ] **Test eBay export** — 400 should be gone. Condition values are now human-readable strings.
 - [ ] **Run S407 migration** if not done (estateId on Organizer)
 - [ ] **Complete eBay keyset activation** — developer.ebay.com → Alerts & Notifications → endpoint `https://backend-production-153c9.up.railway.app/api/ebay/account-deletion` → token `findasale-ebay-verify-2026-primary` → Save
 - [ ] **Create Google Places API key** — console.cloud.google.com → Maps Platform → Places API → Add to Railway as `GOOGLE_PLACES_API_KEY`

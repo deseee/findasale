@@ -55,6 +55,8 @@ import {
   Scale,
   Gift,
   Smartphone,
+  CheckCircle,
+  Wifi,
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
@@ -303,6 +305,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Image size={16} className="text-amber-500" />
               <span>Manage Photos</span>
             </Link>
+            <Link href="/organizer/checklist" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Sale preparation checklist">
+              <CheckCircle size={16} className="text-amber-500" />
+              <span>Sale Checklist</span>
+            </Link>
+            <Link href="/organizer/offline" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Offline mode dashboard">
+              <Wifi size={16} className="text-amber-500" />
+              <span>Offline Mode</span>
+            </Link>
 
             {canAccess('PRO') && (
               <>
@@ -467,7 +477,15 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
             <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
               <Ticket size={16} className="text-indigo-500" />
-              <span>Hunt Pass <span className="text-xs text-gray-400">(Soon)</span></span>
+              <span>Hunt Pass</span>
+            </Link>
+            <Link href="/shopper/loot-legend" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items">
+              <Star size={16} className="text-amber-400" />
+              <span>Loot Legend</span>
+            </Link>
+            <Link href="/shopper/rare-finds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Dedicated rare items page for Hunt Pass subscribers">
+              <Sparkles size={16} className="text-indigo-400" />
+              <span>Rare Finds</span>
             </Link>
             <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
               <Trophy size={16} className="text-indigo-500" />
