@@ -1,0 +1,341 @@
+[
+  {
+    "id": "1",
+    "name": "Antiques",
+    "children": [
+      { "id": "20081", "name": "Antiquities" },
+      { "id": "37903", "name": "Antique Furniture" },
+      { "id": "14719", "name": "Collectible Antiques" },
+      { "id": "6320", "name": "Decorative Antiques" }
+    ]
+  },
+  {
+    "id": "550",
+    "name": "Art",
+    "children": [
+      { "id": "552", "name": "Art Prints" },
+      { "id": "14066", "name": "Paintings & Drawing" },
+      { "id": "553", "name": "Sculptures & Carvings" },
+      { "id": "4703", "name": "Mixed Media Art" }
+    ]
+  },
+  {
+    "id": "267",
+    "name": "Books & Magazines",
+    "children": [
+      { "id": "267", "name": "Books" },
+      { "id": "37867", "name": "Magazines" },
+      { "id": "2748", "name": "Comic Books & Memorabilia" },
+      { "id": "29792", "name": "Textbooks & Educational" }
+    ]
+  },
+  {
+    "id": "625",
+    "name": "Business & Industrial",
+    "children": [
+      { "id": "12576", "name": "Agriculture & Forestry" },
+      { "id": "12602", "name": "Compressors" },
+      { "id": "12600", "name": "Construction" },
+      { "id": "49206", "name": "Electrical & Test Equipment" }
+    ]
+  },
+  {
+    "id": "15687",
+    "name": "Cameras & Photo",
+    "children": [
+      { "id": "625012", "name": "Digital Cameras" },
+      { "id": "625008", "name": "Film Photography" },
+      { "id": "625009", "name": "Lenses & Filters" },
+      { "id": "625010", "name": "Lighting & Studio" }
+    ]
+  },
+  {
+    "id": "10542",
+    "name": "Cell Phones & Accessories",
+    "children": [
+      { "id": "15687", "name": "Cell Phones & Smartphones" },
+      { "id": "15688", "name": "Phone Accessories" },
+      { "id": "179797", "name": "Phone Cases & Covers" },
+      { "id": "15689", "name": "Phone Chargers & Cables" }
+    ]
+  },
+  {
+    "id": "11450",
+    "name": "Clothing, Shoes & Accessories",
+    "children": [
+      { "id": "15687", "name": "Women's Clothing" },
+      { "id": "15688", "name": "Men's Clothing" },
+      { "id": "15689", "name": "Unisex Clothing" },
+      { "id": "15690", "name": "Shoes" }
+    ]
+  },
+  {
+    "id": "1",
+    "name": "Coins & Paper Money",
+    "children": [
+      { "id": "3027", "name": "Coins" },
+      { "id": "3030", "name": "Paper Money" },
+      { "id": "37654", "name": "Exonumia" },
+      { "id": "3034", "name": "Coin & Paper Money Accessories" }
+    ]
+  },
+  {
+    "id": "14339",
+    "name": "Collectibles",
+    "children": [
+      { "id": "14340", "name": "Advertising" },
+      { "id": "14341", "name": "Animals" },
+      { "id": "14342", "name": "Animation & Anime" },
+      { "id": "14343", "name": "Autographs" }
+    ]
+  },
+  {
+    "id": "1281",
+    "name": "Computers & Tablets",
+    "children": [
+      { "id": "179797", "name": "Laptops & Netbooks" },
+      { "id": "51395", "name": "Desktops & All-in-Ones" },
+      { "id": "179798", "name": "Tablets & eReaders" },
+      { "id": "48742", "name": "Computer Peripherals" }
+    ]
+  },
+  {
+    "id": "26395",
+    "name": "Consumer Electronics",
+    "children": [
+      { "id": "179794", "name": "Headphones & Speakers" },
+      { "id": "179795", "name": "Video & TV Accessories" },
+      { "id": "179796", "name": "Portable Audio & Video" },
+      { "id": "26397", "name": "Power Supplies & Chargers" }
+    ]
+  },
+  {
+    "id": "11116",
+    "name": "Crafts",
+    "children": [
+      { "id": "11117", "name": "Beading & Jewelry Making" },
+      { "id": "11118", "name": "Knitting & Crochet" },
+      { "id": "11119", "name": "Sewing" },
+      { "id": "11120", "name": "Embroidery" }
+    ]
+  },
+  {
+    "id": "4713",
+    "name": "Dolls & Accessories",
+    "children": [
+      { "id": "4714", "name": "Baby Dolls" },
+      { "id": "4715", "name": "Barbie Dolls" },
+      { "id": "4716", "name": "Composition Dolls" },
+      { "id": "4717", "name": "Porcelain Dolls" }
+    ]
+  },
+  {
+    "id": "3208",
+    "name": "DVDs & Movies",
+    "children": [
+      { "id": "3209", "name": "DVDs & Blu-ray" },
+      { "id": "3210", "name": "VHS Tapes" },
+      { "id": "3211", "name": "Laserdiscs" },
+      { "id": "3212", "name": "Other Formats" }
+    ]
+  },
+  {
+    "id": "58058",
+    "name": "Electronics",
+    "children": [
+      { "id": "15687", "name": "Audio & Video Electronics" },
+      { "id": "15688", "name": "Other Electronics" },
+      { "id": "15689", "name": "Power Tools" },
+      { "id": "15690", "name": "Hand Tools" }
+    ]
+  },
+  {
+    "id": "619",
+    "name": "Garden & Outdoor",
+    "children": [
+      { "id": "158997", "name": "Garden & Landscape" },
+      { "id": "158998", "name": "Gardening Tools" },
+      { "id": "158999", "name": "Garden Structures & Shade" },
+      { "id": "159000", "name": "Patio & Yard Furniture" }
+    ]
+  },
+  {
+    "id": "26395",
+    "name": "Gift Cards & Coupons",
+    "children": [
+      { "id": "178906", "name": "Gift Cards" },
+      { "id": "178907", "name": "Phone Cards" },
+      { "id": "178908", "name": "Other Gift Certificates" }
+    ]
+  },
+  {
+    "id": "14994",
+    "name": "Health & Beauty",
+    "children": [
+      { "id": "14996", "name": "Bath & Body" },
+      { "id": "14997", "name": "Beauty Supplies" },
+      { "id": "14998", "name": "Fragrance" },
+      { "id": "14999", "name": "Hair Care" }
+    ]
+  },
+  {
+    "id": "15687",
+    "name": "Home & Garden",
+    "children": [
+      { "id": "158997", "name": "Bedding" },
+      { "id": "158998", "name": "Bath" },
+      { "id": "158999", "name": "Kitchen & Dining" },
+      { "id": "159000", "name": "Home Décor" }
+    ]
+  },
+  {
+    "id": "3197",
+    "name": "Home Furnishings",
+    "children": [
+      { "id": "3199", "name": "Furniture" },
+      { "id": "3200", "name": "Chairs" },
+      { "id": "3201", "name": "Tables" },
+      { "id": "3202", "name": "Bedroom Furniture" }
+    ]
+  },
+  {
+    "id": "6000",
+    "name": "Jewelry & Watches",
+    "children": [
+      { "id": "281", "name": "Fine Jewelry" },
+      { "id": "6005", "name": "Fashion Jewelry" },
+      { "id": "6006", "name": "Vintage & Antique Jewelry" },
+      { "id": "6007", "name": "Watches" }
+    ]
+  },
+  {
+    "id": "11232",
+    "name": "Movies & TV",
+    "children": [
+      { "id": "11233", "name": "Movie Memorabilia" },
+      { "id": "11234", "name": "TV Memorabilia" },
+      { "id": "11235", "name": "Movie & TV Soundtracks" },
+      { "id": "11236", "name": "Scripts" }
+    ]
+  },
+  {
+    "id": "26395",
+    "name": "Musical Instruments & Gear",
+    "children": [
+      { "id": "29792", "name": "Guitars & Basses" },
+      { "id": "29793", "name": "Keyboards & Synthesizers" },
+      { "id": "29794", "name": "Drums & Percussion" },
+      { "id": "29795", "name": "Vintage Instruments" }
+    ]
+  },
+  {
+    "id": "15687",
+    "name": "Pet Supplies",
+    "children": [
+      { "id": "179794", "name": "Dog Supplies" },
+      { "id": "179795", "name": "Cat Supplies" },
+      { "id": "179796", "name": "Bird Supplies" },
+      { "id": "179797", "name": "Small Animal Supplies" }
+    ]
+  },
+  {
+    "id": "281",
+    "name": "Pottery & Glass",
+    "children": [
+      { "id": "4661", "name": "Art Glass" },
+      { "id": "4662", "name": "Pottery & Ceramics" },
+      { "id": "4663", "name": "Glass Dinnerware" },
+      { "id": "4664", "name": "Decorative Glassware" }
+    ]
+  },
+  {
+    "id": "5094",
+    "name": "Religious & Ceremonial",
+    "children": [
+      { "id": "5095", "name": "Christian Figurines & Statues" },
+      { "id": "5096", "name": "Prayer Books & Cards" },
+      { "id": "5097", "name": "Religious Jewelry" },
+      { "id": "5098", "name": "Religious Textiles" }
+    ]
+  },
+  {
+    "id": "888",
+    "name": "Sports Mem, Cards & Fan Shop",
+    "children": [
+      { "id": "889", "name": "Sports Trading Cards" },
+      { "id": "890", "name": "Baseball Memorabilia" },
+      { "id": "891", "name": "Basketball Memorabilia" },
+      { "id": "892", "name": "Football Memorabilia" }
+    ]
+  },
+  {
+    "id": "19149",
+    "name": "Sports & Outdoors",
+    "children": [
+      { "id": "19150", "name": "Sporting Goods" },
+      { "id": "19151", "name": "Outdoor Gear" },
+      { "id": "19152", "name": "Camping & Hiking" },
+      { "id": "19153", "name": "Water Sports" }
+    ]
+  },
+  {
+    "id": "1553",
+    "name": "Stamps",
+    "children": [
+      { "id": "1554", "name": "Stamps" },
+      { "id": "1555", "name": "Stamp Collections" },
+      { "id": "1556", "name": "Stamp Supplies" },
+      { "id": "1557", "name": "Postage Stamps" }
+    ]
+  },
+  {
+    "id": "220",
+    "name": "Toys & Games",
+    "children": [
+      { "id": "221", "name": "Action Figures" },
+      { "id": "222", "name": "Diecast Vehicles" },
+      { "id": "223", "name": "Building Sets" },
+      { "id": "224", "name": "Board Games" }
+    ]
+  },
+  {
+    "id": "15687",
+    "name": "Trading Cards & Accessories",
+    "children": [
+      { "id": "178869", "name": "Trading Card Game Supplies" },
+      { "id": "178870", "name": "Card Sleeves & Cases" },
+      { "id": "178871", "name": "Booster Boxes" },
+      { "id": "178872", "name": "Graded Cards" }
+    ]
+  },
+  {
+    "id": "26395",
+    "name": "Vehicles & Accessories",
+    "children": [
+      { "id": "6002", "name": "Automobiles" },
+      { "id": "6003", "name": "Motorcycles" },
+      { "id": "6004", "name": "Powersports" },
+      { "id": "6005", "name": "Trucks & Buses" }
+    ]
+  },
+  {
+    "id": "625",
+    "name": "Video Gaming",
+    "children": [
+      { "id": "139973", "name": "Video Games & Consoles" },
+      { "id": "139974", "name": "Retro Gaming" },
+      { "id": "139975", "name": "Gaming Accessories" },
+      { "id": "139976", "name": "Video Game Memorabilia" }
+    ]
+  },
+  {
+    "id": "26395",
+    "name": "Vintage & Collectible",
+    "children": [
+      { "id": "161084", "name": "Vintage Clothing" },
+      { "id": "161085", "name": "Vintage Home & Garden" },
+      { "id": "161086", "name": "Vintage Electronics" },
+      { "id": "161087", "name": "Vintage Toys" }
+    ]
+  }
+]

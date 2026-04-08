@@ -105,7 +105,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">
-                      🤖 AI Estimate
+                      🤖 Smart Estimate
                     </p>
                     <p className="text-lg font-semibold text-blue-900 dark:text-blue-100">
                       ${aiEstimate.toFixed(2)}

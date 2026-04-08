@@ -1247,7 +1247,7 @@ const ReviewPage = () => {
                                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
                                     Condition Grade
                                     {item.suggestedConditionGrade && (
-                                      <span className="ml-2 text-xs text-indigo-500 font-normal">AI suggests: {item.suggestedConditionGrade}</span>
+                                      <span className="ml-2 text-xs text-indigo-500 font-normal">Auto-suggests: {item.suggestedConditionGrade}</span>
                                     )}
                                   </label>
                                   <div className="flex gap-2">
@@ -1337,7 +1337,7 @@ const ReviewPage = () => {
                                   {/* AI suggested chips */}
                                   {item.suggestedTags && item.suggestedTags.length > 0 && (
                                     <div className="mb-2">
-                                      <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">AI suggested:</span>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Suggested:</span>
                                       {item.suggestedTags.map(tag => (
                                         <button
                                           key={tag}

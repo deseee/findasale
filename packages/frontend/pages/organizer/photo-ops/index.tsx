@@ -11,6 +11,7 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import Head from 'next/head';
 import Link from 'next/link';
+import TierGate from '../../../components/TierGate';
 
 interface Sale {
   id: string;
@@ -84,6 +85,7 @@ const PhotoOpsLandingPage = () => {
         <title>Photo Ops — FindA.Sale</title>
       </Head>
 
+      <TierGate requiredTier="PRO" featureName="Photo Ops" description="Mark your best photo spots on the map and let shoppers know where to find the most Instagrammable finds at your sale.">
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header with breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4">
@@ -193,6 +195,7 @@ const PhotoOpsLandingPage = () => {
           )}
         </div>
       </div>
+      </TierGate>
     </>
   );
 };

@@ -615,7 +615,7 @@ const OrganizerDashboard = () => {
                       Your PRO subscription has lapsed
                     </h3>
                     <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                      <p>You've been downgraded to SIMPLE tier (200 items/sale, 5 photos/item, 100 AI tags/month).</p>
+                      <p>You've been downgraded to SIMPLE tier (200 items/sale, 5 photos/item, 100 Auto Tags/month).</p>
                     </div>
                     <div className="mt-4">
                       <Link href="/organizer/billing" className="text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 underline">
@@ -855,7 +855,7 @@ const OrganizerDashboard = () => {
                       <button
                         onClick={() => setSocialPostSale({ id: activeSale.id, title: activeSale.title })}
                         className="text-sm px-3 py-1 bg-pink-100 dark:bg-pink-900 text-pink-700 dark:text-pink-300 rounded-full hover:bg-pink-200 dark:hover:bg-pink-800 transition-colors"
-                        title="Generate AI social media posts for this sale"
+                        title="Generate social media posts for this sale"
                       >
                         📱 Social Posts
                       </button>

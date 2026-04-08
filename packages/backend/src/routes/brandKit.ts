@@ -5,6 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/auth';
+import { requireTier } from '../middleware/requireTier';
 import { getBrandKit, getBrandKitBySlug, updateBrandKit } from '../controllers/brandKitController';
 import {
   generateBusinessCards,
@@ -25,13 +26,13 @@ router.get('/by-slug/:slug', (req: Request, res: Response) => getBrandKitBySlug(
 
 // Authenticated: PATCH /api/brand-kit
 // Update current organizer's brand kit (PRO tier for advanced fields)
-router.patch('/', authenticate, updateBrandKit);
+router.patch('/', authenticate, requireTier('PRO'), updateBrandKit);
 
 // Authenticated: Feature #241 - Brand Kit Print Assets (PRO tier only)
 // Generate downloadable brand asset PDFs
-router.get('/organizer/business-card', authenticate, generateBusinessCards);
-router.get('/organizer/letterhead', authenticate, generateLetterhead);
-router.get('/organizer/social-headers', authenticate, generateSocialHeaders);
-router.get('/organizer/yard-sign', authenticate, generateBrandedYardSign);
+router.get('/organizer/business-card', authenticate, requireTier('PRO'), generateBusinessCards);
+router.get('/organizer/letterhead', authenticate, requireTier('PRO'), generateLetterhead);
+router.get('/organizer/social-headers', authenticate, requireTier('PRO'), generateSocialHeaders);
+router.get('/organizer/yard-sign', authenticate, requireTier('PRO'), generateBrandedYardSign);
 
 export default router;

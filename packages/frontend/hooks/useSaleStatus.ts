@@ -83,7 +83,6 @@ export const useSaleStatus = (saleId: string | null | undefined) => {
 
       // Join the sale room
       socket.emit('JOIN_SALE_FEED', saleId);
-      console.log(`[useSaleStatus] Joined sale room: ${saleId}`);
 
       // Listen for status updates
       const handleStatusUpdate = (data: SaleStatus) => {
@@ -103,7 +102,6 @@ export const useSaleStatus = (saleId: string | null | undefined) => {
         isMounted = false;
         socket.emit('LEAVE_SALE_FEED', saleId);
         socket.off('SALE_STATUS_UPDATE', handleStatusUpdate);
-        console.log(`[useSaleStatus] Left sale room: ${saleId}`);
       };
     } catch (err) {
       if (isMounted) {

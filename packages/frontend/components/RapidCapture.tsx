@@ -603,7 +603,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                           Too dark to identify
                         </h3>
                         <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
-                          Move to brighter light and try again. AI won't be able to identify items in dark photos.
+                          Move to brighter light and try again. Our system won't be able to identify items in dark photos.
                         </p>
                         <div className="flex gap-3">
                           <button

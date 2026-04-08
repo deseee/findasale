@@ -7,6 +7,7 @@ interface SecondarySaleCardProps {
     title: string;
     status: string;
     startDate?: string | Date;
+    endDate?: string | Date;
     saleType?: string;
     city?: string;
     state?: string;
@@ -88,13 +89,31 @@ const SecondarySaleCard: React.FC<SecondarySaleCardProps> = ({
           {sale.city && (
             <p className="text-xs text-warm-600 dark:text-warm-400 truncate mb-2">
               {sale.city}
-              {sale.startDate && sale.status !== 'LIVE' && sale.status !== 'PUBLISHED' && (
+              {sale.startDate && (
                 <>
                   {' • '}
-                  {new Date(sale.startDate).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  {sale.status === 'LIVE' || sale.status === 'PUBLISHED' ? (
+                    <>
+                      📅 {new Date(sale.startDate).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                      {sale.endDate && (
+                        <>
+                          {' – '}
+                          {new Date(sale.endDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    new Date(sale.startDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  )}
                 </>
               )}
             </p>

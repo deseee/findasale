@@ -22,6 +22,7 @@ import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 import { CURATED_TAGS } from '../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 import RapidCapture, { RapidItem } from '../../../components/RapidCapture';
+import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -333,7 +334,7 @@ const EditItemPage = () => {
             {id && (
               <button
                 type="button"
-                onClick={() => window.open(`/api/items/${id}/label`, '_blank')}
+                onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/items/${id}/label`, '_blank')}
                 className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
               >
                 🏷️ Print Label
@@ -369,33 +370,14 @@ const EditItemPage = () => {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Category
-              </label>
-              <select
-                value={formData.category}
-                onChange={(e) =>
-                  setFormData({ ...formData, category: e.target.value })
-                }
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="">Select a category</option>
-                <option value="Furniture">Furniture</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Clothing">Clothing</option>
-                <option value="Books">Books</option>
-                <option value="Kitchenware">Kitchenware</option>
-                <option value="Tools">Tools</option>
-                <option value="Art">Art</option>
-                <option value="Decor">Decor</option>
-                <option value="Jewelry">Jewelry</option>
-                <option value="Toys">Toys</option>
-                <option value="Sports">Sports</option>
-                <option value="Collectibles">Collectibles</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
+            <EbayCategoryPicker
+              value={formData.category}
+              onChange={(categoryName) =>
+                setFormData({ ...formData, category: categoryName })
+              }
+              label="Category"
+              placeholder="Search and select an eBay category..."
+            />
 
             <div>
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
