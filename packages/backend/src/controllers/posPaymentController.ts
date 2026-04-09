@@ -843,7 +843,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     let paymentIntent;
     try {
       // Retrieve PaymentIntent from Stripe (on the connected account)
-      paymentIntent = await stripe().paymentIntents.retrieve(paymentIntentId, {
+      paymentIntent = await stripe().paymentIntents.retrieve(paymentIntentId, {}, {
         stripeAccount: posRequest.organizer.stripeConnectId!,
       });
     } catch (err: any) {
