@@ -669,6 +669,66 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * POST /api/pos/holds/:reservationId/request-cart
+ * Organizer asks the shopper to share their cart.
+ * Emits CART_SHARE_REQUEST via socket to the shopper's device.
+ * Shopper's Layout listener auto-shares and opens the cart drawer.
+ */
+export const requestCartShare = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    if (!organizer) return;
+
+    const { reservationId } = req.params as { reservationId?: string };
+    if (!reservationId) return res.status(400).json({ message: 'reservationId required' });
+
+    const reservation = await prisma.itemReservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        item: { select: { sale: { select: { id: true, organizerId: true, title: true } } } },
+        user: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
+    if (reservation.item.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Reservation does not belong to your sale' });
+    }
+
+    const shopperId = reservation.userId;
+
+    // Emit socket event — shopper's Layout listener picks this up
+    try {
+      const io = getIO();
+      io.to(`user:${shopperId}`).emit('CART_SHARE_REQUEST', {
+        saleId: reservation.item.sale.id,
+        saleName: reservation.item.sale.title,
+      });
+    } catch (socketErr) {
+      console.warn('[pos] CART_SHARE_REQUEST socket emit failed:', socketErr);
+    }
+
+    // In-app notification as fallback if shopper isn't connected
+    try {
+      await createNotification({
+        userId: shopperId,
+        type: 'cart_share_request',
+        title: 'Cashier is ready for you',
+        body: `Open the app and tap "Share cart with cashier" to check out.`,
+        link: `/sales/${reservation.item.sale.id}`,
+      });
+    } catch (notifErr) {
+      console.warn('[pos] CART_SHARE_REQUEST notification failed:', notifErr);
+    }
+
+    res.json({ status: 'SENT', shopperName: reservation.user.name });
+  } catch (error) {
+    console.error('[pos] requestCartShare error:', error);
+    res.status(500).json({ message: 'Failed to send cart request' });
+  }
+};
+
+/**
  * DELETE /api/pos/sessions/:sessionId
  * Organizer removes a stale or unwanted open cart (organizer-only)
  *

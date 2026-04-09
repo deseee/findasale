@@ -10,6 +10,7 @@ import {
   sendPaymentLinkEmail,
   getActiveHolds,
   sendHoldInvoice,
+  requestCartShare,
   deleteSession,
   searchShopperHolds,
   pullHoldsToCart,
@@ -41,6 +42,7 @@ router.post('/payment-links/email', authenticate, requireOrganizer, sendPaymentL
 router.get('/payment-links/:linkId', authenticate, getPaymentLink);
 router.get('/holds', authenticate, getActiveHolds);
 router.post('/holds/:reservationId/invoice', authenticate, sendHoldInvoice);
+router.post('/holds/:reservationId/request-cart', authenticate, requireOrganizer, requestCartShare);
 
 // POS Cart + Invoice endpoints (multi-source holds)
 router.get('/sessions/:sessionId/shopper-holds', authenticate, searchShopperHolds);

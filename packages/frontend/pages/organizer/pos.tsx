@@ -178,6 +178,9 @@ export default function POSPage() {
   const [loadedHold, setLoadedHold] = useState<HoldItem | null>(null);
   const [holdsRefreshInterval, setHoldsRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const [cancellingSalesId, setCancellingSalesId] = useState<string | null>(null);
+  // Cart share request — tracks whether organizer has requested the shopper share their cart
+  const [cartShareRequesting, setCartShareRequesting] = useState(false);
+  const [cartShareSent, setCartShareSent] = useState(false);
 
   // Shopper lookup state
   const [shopperSearchEmail, setShopperSearchEmail] = useState('');
@@ -1208,6 +1211,36 @@ export default function POSPage() {
     // If linked cart was merged, handleAddLinkedCart already showed its own toast
   };
 
+  // ─── Request Cart Share (organizer → shopper push) ────────────────────────────────────
+
+  const handleRequestCartShare = async (hold: HoldItem) => {
+    setCartShareRequesting(true);
+    try {
+      await api.post(`/pos/holds/${hold.reservationId}/request-cart`);
+      setCartShareSent(true);
+      showToast(`Cart request sent to ${hold.shopperName}'s phone`, 'success');
+      // Poll for cart after a short delay — shopper's device may auto-share
+      setTimeout(async () => {
+        if (!selectedSaleId) return;
+        try {
+          const sessionRes = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}&_t=${Date.now()}`);
+          const freshSessions = sessionRes.data.sessions || [];
+          const shopperCart = freshSessions.find(
+            lc => (hold.shopperId && lc.shopperId === hold.shopperId) || lc.shopperEmail === hold.shopperEmail
+          );
+          if (shopperCart && shopperCart.cartItems.length > 0) {
+            await handleAddLinkedCart(shopperCart.id, shopperCart.cartItems, shopperCart.shopperId, shopperCart.shopperEmail);
+            setLinkedCarts(freshSessions);
+          }
+        } catch { /* ignore */ }
+      }, 4000);
+    } catch {
+      showToast('Failed to send cart request', 'error');
+    } finally {
+      setCartShareRequesting(false);
+    }
+  };
+
   // ─── Cancel hold from POS ──────────────────────────────────────────────────────────────
 
   const handleCancelHold = async (hold: HoldItem) => {
@@ -2083,6 +2116,20 @@ export default function POSPage() {
               >
                 📧 Send Invoice to {loadedHold.shopperEmail}
               </button>
+              {/* Request Cart — sends push to shopper's device to auto-share their cart */}
+              {!cartShareSent ? (
+                <button
+                  onClick={() => { setCartShareSent(false); handleRequestCartShare(loadedHold); }}
+                  disabled={cartShareRequesting}
+                  className="mt-2 w-full py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+                >
+                  {cartShareRequesting ? 'Sending…' : '📲 Request Cart from Shopper'}
+                </button>
+              ) : (
+                <div className="mt-2 w-full py-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-semibold text-center">
+                  ✓ Cart request sent — waiting for shopper
+                </div>
+              )}
             </div>
           )}
         </div>

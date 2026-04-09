@@ -72,6 +72,9 @@ import BecomeOrganizerModal from './BecomeOrganizerModal';
 import { useShopperCart } from '../hooks/useShopperCart';
 import ShopperCartDrawer from './ShopperCartDrawer';
 import CartIcon from './CartIcon';
+import { io } from 'socket.io-client';
+import { useToast } from './ToastContext';
+import api from '../lib/api';
 
 const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: boolean }) => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
@@ -80,7 +83,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const { user, logout } = useAuth();
   const { canAccess } = useOrganizerTier();
   const { isLowBandwidth } = useNetworkQuality();
-  const { items: cartItems } = useShopperCart();
+  const cart = useShopperCart();
+  const { items: cartItems } = cart;
+  const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const { data: unreadMessages } = useUnreadMessages(!!user);
   // Derived role flags — must be after isClient declaration
@@ -144,6 +149,46 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       searchInputRef.current?.focus();
     }
   }, [isSearchOpen]);
+
+  // CART_SHARE_REQUEST — organizer requested shopper share their cart
+  // Auto-shares and opens the cart drawer so the organizer sees it immediately
+  useEffect(() => {
+    if (!user?.id) return;
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const socket = io(socketUrl, {
+      auth: { token: token || undefined },
+      transports: ['websocket'],
+      upgrade: false,
+    });
+    socket.emit('join', `user:${user.id}`);
+    socket.on('CART_SHARE_REQUEST', async (data: { saleId: string; saleName?: string }) => {
+      // Auto-share current cart if it matches the requested sale
+      if (cart.saleId === data.saleId && cart.cartCount > 0) {
+        try {
+          await api.post('/pos/sessions', {
+            saleId: data.saleId,
+            cartItems: cart.items.map(item => ({
+              id: item.id,
+              title: item.title,
+              price: item.price ?? 0,
+              photoUrl: item.photoUrl,
+              saleId: item.saleId,
+            })),
+          });
+          showToast('Cart shared with cashier ✓', 'success');
+        } catch {
+          showToast('Cashier requested your cart — tap Share Cart to check out', 'info');
+        }
+      } else {
+        // Cart is empty or on a different sale — just notify
+        showToast('Cashier is ready for you — open your cart and tap Share', 'info');
+      }
+      setMobileCartOpen(true);
+    });
+    return () => { socket.disconnect(); };
+  }, [user?.id, cart.saleId, cart.cartCount]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
