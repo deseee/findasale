@@ -161,8 +161,8 @@ export const useFeedbackSurvey = (): UseFeedbackSurveyReturn => {
       if (survey.role === 'ORGANIZER' && !user.roles?.includes('ORGANIZER')) {
         return; // Silently skip if not an organizer
       }
-      if (survey.role === 'SHOPPER' && user.roles?.includes('ORGANIZER')) {
-        return; // Silently skip if organizer (shoppers can also be organizers)
+      if (survey.role === 'SHOPPER' && !user.roles?.includes('USER')) {
+        return; // Silently skip if not a shopper
       }
 
       // Check suppression

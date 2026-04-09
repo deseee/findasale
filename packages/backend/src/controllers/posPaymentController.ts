@@ -281,6 +281,11 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
         expiresIn: expiresInSeconds,
         stripePaymentIntentSecret: paymentIntent.client_secret,
         deepLink: `/shopper/pay-request/${posRequest.id}`,
+        isSplitPayment,
+        cashAmountCents: isSplitPayment ? splitCashAmountCents : undefined,
+        cardAmountCents: isSplitPayment ? splitCardAmountCents : undefined,
+        cashDisplayAmount: isSplitPayment ? `$${(splitCashAmountCents / 100).toFixed(2)}` : undefined,
+        cardDisplayAmount: isSplitPayment ? `$${(splitCardAmountCents / 100).toFixed(2)}` : undefined,
       });
     } catch (err: any) {
       console.warn('[pos-payment] Failed to emit socket event:', err.message);
@@ -600,6 +605,11 @@ export const getPendingPaymentRequests = async (req: AuthRequest, res: Response)
       displayAmount: `$${(r.totalAmountCents / 100).toFixed(2)}`,
       expiresAt: r.expiresAt.toISOString(),
       deepLink: `/shopper/pay-request/${r.id}`,
+      isSplitPayment: r.isSplitPayment,
+      cashAmountCents: r.cashAmountCents ?? undefined,
+      cardAmountCents: r.cardAmountCents ?? undefined,
+      cashDisplayAmount: r.cashAmountCents ? `$${(r.cashAmountCents / 100).toFixed(2)}` : undefined,
+      cardDisplayAmount: r.cardAmountCents ? `$${(r.cardAmountCents / 100).toFixed(2)}` : undefined,
     }));
 
     return res.json({ requests: formatted });

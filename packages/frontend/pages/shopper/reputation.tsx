@@ -33,7 +33,7 @@ const ShopperReputationPage = () => {
 
   // Redirect if not authenticated
   useEffect(() => {
-    if (!authLoading && (!user || !user.roles?.includes('USER'))) {
+    if (!authLoading && !user) {
       router.push('/login');
     }
   }, [user, authLoading, router]);
@@ -79,7 +79,7 @@ const ShopperReputationPage = () => {
     }
   }, [user?.id]);
 
-  if (!user || !user.roles?.includes('USER')) {
+  if (!user) {
     return null;
   }
 
