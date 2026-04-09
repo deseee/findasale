@@ -1141,7 +1141,7 @@ export default function POSPage() {
 
   // ─── Load hold into cart ──────────────────────────────────────────────────────────────
 
-  const handleLoadHold = (hold: HoldItem) => {
+  const handleLoadHold = async (hold: HoldItem) => {
     // Add held item to cart
     addToCart({
       id: hold.itemId,
@@ -1156,17 +1156,46 @@ export default function POSPage() {
     // Track the loaded hold
     setLoadedHold(hold);
 
-    // Auto-merge shopper's open linked cart if they've shared one
-    const shopperCart = linkedCarts.find(lc => lc.shopperId === hold.shopperId);
-    if (shopperCart && shopperCart.cartItems.length > 0) {
-      shopperCart.cartItems.forEach(cartItem => {
-        if (cartItem.id) {
-          addToCart({ id: cartItem.id, title: cartItem.title, price: cartItem.price, status: 'AVAILABLE', photoUrls: cartItem.photoUrl ? [cartItem.photoUrl] : [], sku: null } as Item);
-        } else {
-          addToCart({ title: cartItem.title, amount: cartItem.price });
+    let mergedCount = 0;
+
+    // Merge OTHER holds for the same shopper from the holds list
+    const otherHolds = holds.filter(h => h.shopperId === hold.shopperId && h.reservationId !== hold.reservationId);
+    otherHolds.forEach(otherHold => {
+      addToCart({
+        id: otherHold.itemId,
+        title: otherHold.itemTitle,
+        price: otherHold.itemPrice,
+        status: 'AVAILABLE',
+        photoUrls: [],
+        sku: null,
+      } as Item);
+      mergedCount++;
+    });
+
+    // Also do a fresh fetch for the shopper's linked cart session (cached linkedCarts may be stale)
+    if (selectedSaleId) {
+      try {
+        const sessionRes = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}`);
+        const freshSessions = sessionRes.data.sessions || [];
+        const shopperCart = freshSessions.find(lc => lc.shopperId === hold.shopperId);
+        if (shopperCart && shopperCart.cartItems.length > 0) {
+          shopperCart.cartItems.forEach(cartItem => {
+            if (cartItem.id) {
+              addToCart({ id: cartItem.id, title: cartItem.title, price: cartItem.price, status: 'AVAILABLE', photoUrls: cartItem.photoUrl ? [cartItem.photoUrl] : [], sku: null } as Item);
+            } else {
+              addToCart({ title: cartItem.title, amount: cartItem.price });
+            }
+            mergedCount++;
+          });
+          setLinkedCarts(freshSessions); // update cache
         }
-      });
-      showToast(`Loaded hold + ${shopperCart.cartItems.length} cart item${shopperCart.cartItems.length !== 1 ? 's' : ''} for ${hold.shopperName}`, 'success');
+      } catch {
+        // ignore — fresh fetch is best-effort
+      }
+    }
+
+    if (mergedCount > 0) {
+      showToast(`Loaded hold + ${mergedCount} item${mergedCount !== 1 ? 's' : ''} for ${hold.shopperName}`, 'success');
     } else {
       showToast(`Loaded hold for ${hold.shopperName}`, 'success');
     }
@@ -2020,7 +2049,25 @@ export default function POSPage() {
                   <span>Total</span>
                   <span>${(loadedHold.itemPrice + cart.filter(item => item.itemId !== loadedHold.itemId).reduce((sum, item) => sum + item.amount, 0)).toFixed(2)}</span>
                 </div>
+                {cashReceived > 0 && (
+                  <>
+                    <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+                      <span>Cash Collected</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">-${cashReceived.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-semibold text-sage-700 dark:text-sage-400">
+                      <span>Remaining to Charge</span>
+                      <span>${Math.max(0, loadedHold.itemPrice + cart.filter(item => item.itemId !== loadedHold.itemId).reduce((sum, item) => sum + item.amount, 0) - cashReceived).toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
               </div>
+              <button
+                onClick={() => setInvoiceModalHold(loadedHold)}
+                className="mt-2 w-full py-2 rounded-lg bg-sage-700 text-white text-xs font-semibold hover:bg-sage-800 transition"
+              >
+                📧 Send Invoice to {loadedHold.shopperEmail}
+              </button>
             </div>
           )}
         </div>
