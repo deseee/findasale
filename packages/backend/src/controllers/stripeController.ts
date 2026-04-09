@@ -234,7 +234,7 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'paymentIntentId is required' });
     }
 
-    const existingPurchase = await prisma.purchase.findUnique({
+    const existingPurchase = await prisma.purchase.findFirst({
       where: { stripePaymentIntentId: paymentIntentId },
     });
 
@@ -791,7 +791,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
 
       // Standard Purchase: handle existing purchase records
-      const purchase = await prisma.purchase.findUnique({
+      const purchase = await prisma.purchase.findFirst({
         where: { stripePaymentIntentId: paymentIntent.id },
         include: {
           user: { select: { id: true, email: true, name: true } },
@@ -839,7 +839,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           break;
         }
 
-        await prisma.purchase.update({
+        await prisma.purchase.updateMany({
           where: { stripePaymentIntentId: paymentIntent.id },
           data: { status: 'PAID' },
         });
@@ -915,7 +915,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
               `refunding PI ${paymentIntent.id}`
             );
             await stripe().refunds.create({ payment_intent: paymentIntent.id });
-            await prisma.purchase.update({
+            await prisma.purchase.updateMany({
               where: { stripePaymentIntentId: paymentIntent.id },
               data: { status: 'REFUNDED' },
             });
@@ -1059,7 +1059,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           ? charge.payment_intent
           : charge.payment_intent?.id ?? null;
         if (paymentIntentId) {
-          const purchase = await prisma.purchase.findUnique({
+          const purchase = await prisma.purchase.findFirst({
             where: { stripePaymentIntentId: paymentIntentId },
             include: { item: { include: { sale: true } }, user: true }
           });
