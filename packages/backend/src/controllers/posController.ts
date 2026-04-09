@@ -278,20 +278,22 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     } else {
       try {
         // Payment Links require a pre-created Price object (price_data not supported)
+        const stripeOpts = { stripeAccount: organizer.stripeConnectId! };
+
         const adHocPrice = await stripe().prices.create({
           currency: 'usd',
           unit_amount: amountCents,
           product_data: {
             name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200)}`,
           },
-        });
+        }, stripeOpts);
 
         const paymentLink = await stripe().paymentLinks.create({
           line_items: [{ price: adHocPrice.id, quantity: 1 }],
           after_completion: {
             type: 'hosted_confirmation' as const,
           },
-        });
+        }, stripeOpts);
 
         stripePaymentLinkId = paymentLink.id;
         paymentLinkUrl = paymentLink.url;
