@@ -290,12 +290,9 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
         after_completion: {
           type: 'hosted_confirmation' as const,
         },
-        payment_intent_data: {
-          application_fee_amount: platformFeeAmount,
-          transfer_data: {
-            destination: organizer.stripeConnectId!,
-          },
-        } as any,
+        // Note: application_fee_amount goes at top level for Payment Links (not inside payment_intent_data)
+        // transfer_data is not supported on paymentLinks API — Connect routing handled via Checkout Sessions
+        ...(organizer.stripeConnectId ? { application_fee_amount: platformFeeAmount } as any : {}),
       });
 
       stripePaymentLinkId = paymentLink.id;
@@ -699,15 +696,15 @@ export const pullHoldsToCart = async (req: AuthRequest, res: Response) => {
     });
 
     // Validate all reservations
-    for (const res of reservations) {
-      if (res.item.saleId !== session.saleId) {
+    for (const hold of reservations) {
+      if (hold.item.saleId !== session.saleId) {
         return res.status(403).json({ message: 'Reservation does not belong to this session sale' });
       }
-      if (!['PENDING', 'CONFIRMED'].includes(res.status)) {
-        return res.status(409).json({ message: `Reservation ${res.id} is not in PENDING or CONFIRMED state` });
+      if (!['PENDING', 'CONFIRMED'].includes(hold.status)) {
+        return res.status(409).json({ message: `Reservation ${hold.id} is not in PENDING or CONFIRMED state` });
       }
-      if (res.invoiceId) {
-        return res.status(409).json({ message: `Reservation ${res.id} already has an invoice` });
+      if (hold.invoiceId) {
+        return res.status(409).json({ message: `Reservation ${hold.id} already has an invoice` });
       }
     }
 
@@ -804,15 +801,15 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
       : [];
 
     // Validate held items
-    for (const res of heldReservations) {
-      if (res.item.saleId !== session.sale.id) {
+    for (const heldItem of heldReservations) {
+      if (heldItem.item.saleId !== session.sale.id) {
         return res.status(403).json({ message: 'Hold does not belong to this session sale' });
       }
-      if (res.status !== 'HOLD_IN_CART') {
-        return res.status(409).json({ message: `Hold ${res.id} is not in HOLD_IN_CART state` });
+      if (heldItem.status !== 'HOLD_IN_CART') {
+        return res.status(409).json({ message: `Hold ${heldItem.id} is not in HOLD_IN_CART state` });
       }
-      if (res.invoiceId) {
-        return res.status(409).json({ message: `Hold ${res.id} already has an invoice` });
+      if (heldItem.invoiceId) {
+        return res.status(409).json({ message: `Hold ${heldItem.id} already has an invoice` });
       }
     }
 
@@ -940,7 +937,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     const holdInvoice = await prisma.$transaction(async (tx) => {
       const inv = await tx.holdInvoice.create({
         data: {
-          reservationId: heldReservations.length > 0 ? heldReservations[0].id : undefined,
+          ...(heldReservations.length > 0 ? { reservationId: heldReservations[0].id } : {}),
           shopperUserId: shopper.id,
           organizerUserId: organizer.id,
           saleId: session.sale.id,

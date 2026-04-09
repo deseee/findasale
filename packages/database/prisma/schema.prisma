@@ -955,8 +955,8 @@ model ItemReservation {
 // Hold-to-Pay feature: Payment invoice for held items
 model HoldInvoice {
   id                    String    @id @default(cuid())
-  reservationId         String    @unique
-  reservation           ItemReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  reservationId         String?   @unique
+  reservation           ItemReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
   shopperUserId         String
   shopper               User      @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: Cascade)
   organizerUserId       String
