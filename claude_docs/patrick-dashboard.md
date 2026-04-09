@@ -1,39 +1,17 @@
-# Patrick's Dashboard — April 9, 2026 (S424)
+# Patrick's Dashboard — April 9, 2026 (S425)
 
-## 🔴 Next Session Priority — Stripe QR "AccessDenied"
+## 🔴 Next Session Priority — Invoice Price Bug + Architect Session
 
-When a shopper scans the Stripe QR from the POS screen they land on a Stripe page showing **"AccessDenied / Access Denied"**. This kills the QR payment mode. Next session starts here — all context is in STATE.md "Next Session Priority".
+**P2 — Send Invoice shows `$0.18` instead of `$18.00`** for the Adidas Sneaker. Start next session here — it's a quick fix once the root cause is found (price field formatting in `posController.ts` or `PosInvoiceModal.tsx`).
 
----
-
-## 🚨 Audit Alerts — 2026-04-09
-
-**3 HIGH issues found. No CRITICALs. Full report: `claude_docs/audits/weekly-audit-2026-04-09.md`**
-
-### HIGH — D-006 Violation: Items section buried below Map + Reviews on sale detail pages
-Sale detail pages show: Reviews (top) → Map → **Items** (bottom). D-006 requires Items to be the first full-width section after the photo gallery. This is a conversion blocker — shoppers must scroll past a map and reviews before seeing what's for sale.
-**Action:** Dispatch findasale-dev to reorder sections in `pages/sales/[id].tsx`
-
-### HIGH — D-004 Violation: Mobile nav broken at 375px
-Full desktop navigation (all 6 links + icons) is visible at mobile size. No hamburger menu. "Host a Sale" button text wraps to 3 lines. Unusable on phones.
-**Action:** Dispatch findasale-dev to build mobile hamburger nav
-
-### HIGH — Lucky Roll API 404 (S420 Batch 2 not pushed)
-`/shopper/lucky-roll` page loads but the feature fails with `SyntaxError: Unexpected token '<'` — backend endpoint returns HTML instead of JSON. The Lucky Roll migration hasn't been run on Railway yet.
-**Action:** Push S420 Batch 2 (instructions below) then run migration
-
-### MEDIUM — POS quick-action button (top row) does nothing when clicked
-The "POS" pill button in the dashboard header is a no-op. Only the POS button inside a sale card works. Confusing for new organizers.
-**Action:** Dispatch findasale-dev to fix
-
-### DECISION NEEDED — `/organizer/analytics` returns 404
-This URL doesn't exist yet. Is analytics a planned page? If yes, build it. If no, ensure nothing links to it.
+**Feature — Holds-to-Cart + Cart-to-Invoice:** Dispatch to `findasale-architect` before any dev. Patrick wants holds pulled into the POS cart and cart items added to invoices with split cash support.
 
 ---
 
-## What You Need to Do Right Now
+## 🚨 Action Required Right Now — S425 Migration
 
-**1. Run the split payment migration (if not done yet):**
+The S425 schema change (removing unique constraint on Purchase.stripePaymentIntentId) requires a migration:
+
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -41,17 +19,60 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**2. Configure Stripe Connect webhook (unlocks items-marked-SOLD after POS payment)**
+---
 
-In Stripe Dashboard → Developers → Webhooks → Add endpoint:
-- URL: `https://backend-production-153c9.up.railway.app/api/webhooks/stripe`
-- Listen to: **Events on Connected accounts** (not just your platform)
-- Event: `payment_intent.succeeded`
-- Copy the signing secret → add to Railway as `STRIPE_CONNECT_WEBHOOK_SECRET`
+## What Happened This Session (S425)
 
-Until this is done: payments go through correctly, shoppers get redirected, but items won't be marked SOLD in the DB and no Purchase record is created.
+**POS payment bug sprint — 7 bugs fixed.**
 
-**2. Push S420 Batch 2 (if not yet pushed):**
+- **Card Reader "Failed to create Terminal payment intent" 500 fixed** — a multi-item cart creates one Purchase row per item, all sharing the same PaymentIntent ID. The old `@unique` constraint on `stripePaymentIntentId` blocked the second row (Prisma P2002 error). Removed the constraint, added a regular index.
+- **QR/Card Reader button amounts now show immediately** — split balance (`cartTotal - cashReceived`) is computed before the user clicks anything, so the Stripe QR and "Charge $X" buttons always show the right card amount even before QR generation.
+- **Wrong survey fixed** — "You used online checkout!" (OG-4) was firing after POS card and cash payments. Now fires "An item sold" (OG-3).
+- **Mark Sold no longer shows to non-owners** — the button was visible to any organizer-role user on any item page. Now checks `user.id === item.sale.organizer.userId`.
+- **POS Invoice button unblocked** — holds are created as PENDING, but the invoice lookup was only looking for CONFIRMED holds. Fixed to include both states.
+- **Railway + Vercel build failures fixed** — removing @unique cascaded to 5 Prisma calls in stripeController.ts (findUnique → findFirst/updateMany). Vercel failed because the organizer type in [id].tsx was missing the `userId` field that the backend already returned.
+
+**New bug found (next session):** Send Invoice tile + modal shows `$0.18` for `$18.00` item. Price field formatting issue to investigate.
+
+---
+
+## What Happened This Session (S424)
+
+**POS payment popup fully working + dual-role shopper access fixed.**
+
+- Popup now fires for organizer accounts (was blocked for ORGANIZER role — Bob Smith is organizer+shopper)
+- False "PAID" flash fixed when cashier cancels or shopper declines
+- Split payment shows amber box with cash/card breakdown in popup
+- 4 dual-role access components fixed: reviews, reputation page, nudge bar, feedback surveys
+
+---
+
+## Audit Alerts (from S423 weekly audit — still current)
+
+### HIGH — D-006 Violation: Items section buried below Map + Reviews
+Sale detail pages: Reviews (top) → Map → Items (bottom). D-006 requires Items first. Conversion blocker.
+**Action:** Dispatch findasale-dev to reorder sections in `pages/sales/[id].tsx`
+
+### HIGH — D-004 Violation: Mobile nav broken at 375px
+No hamburger menu. "Host a Sale" button wraps to 3 lines. Unusable on phones.
+**Action:** Dispatch findasale-dev to build mobile hamburger nav
+
+### HIGH — Lucky Roll API 404 (S420 Batch 2 not pushed)
+`/shopper/lucky-roll` fails with backend returning HTML instead of JSON. Migration not run.
+**Action:** Push S420 Batch 2 (block below) then run migration
+
+---
+
+## Patrick Action Items
+
+- [ ] **Run S425 migration** (see block above — unblocks multi-item card reader payments)
+- [ ] **Configure Stripe Connect webhook** (unblocks items marked SOLD after POS payment)
+  - Stripe Dashboard → Developers → Webhooks → Add endpoint
+  - URL: `https://backend-production-153c9.up.railway.app/api/webhooks/stripe`
+  - Listen to: **Events on Connected accounts**
+  - Event: `payment_intent.succeeded`
+  - Copy signing secret → Railway env var `STRIPE_CONNECT_WEBHOOK_SECRET`
+- [ ] **Push S420 Batch 2** (if not done):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/database/prisma/schema.prisma
@@ -66,103 +87,16 @@ git add claude_docs/patrick-dashboard.md
 git commit -m "feat(S420): XP sinks (custom map pin, showcase slots, treasure trail sponsor) + guild/crew ADR"
 .\push.ps1
 ```
-Then run migration:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
 
 ---
 
-## What Happened This Session (S424)
-
-**POS payment popup fully working + dual-role shopper access fixed.**
-
-- **Popup now fires for organizer accounts** — the component was blocking anyone with the ORGANIZER role. Since Bob Smith (your test shopper) is also an organizer, the popup never appeared. Fixed — any logged-in user receives payment request popups now.
-- **False "PAID" flash fixed** — when the cashier cancelled a pending or the shopper declined, the POS would briefly flash the green "payment received" banner. Fixed by verifying actual payment status via API before showing the banner.
-- **Split payment shows in popup** — the overlay now shows the amber "Split Payment" box with cash and card amounts, matching the full pay-request page. (Pending Railway redeploy of the TS build fix.)
-- **Dual-role access** — 4 components that blocked organizers from shopper features are fixed: reviews, reputation page, nudge bar, feedback surveys.
-
----
-
-## What Happened This Session (S422)
-
-**POS payment UX — split payment, notifications, dark mode, infrastructure fixes.**
-
-- **Split payment working:** Enter cash on the numpad → if it's less than the total, "Send to Phone" automatically charges the remaining balance to the shopper's card. No separate toggle needed.
-- **POS success banner fixed:** The green flash and toast weren't showing because the socket event arrived before the pending payments list was populated. Fixed with a React ref — now fires immediately every time.
-- **New transaction button** now clears the cart and email field properly.
-- **Dark mode** fixed on the shopper pay-request page (was white/hard to read).
-- **After payment**, shoppers land on their receipts page with a success flash and CTAs: "Post your haul," "Share your collection," "Find more sales."
-- **Rate limit 429 errors fixed:** Authenticated users now get 3000 req/15min (was 500 — too tight for dashboard + POS polling). POS pending poll slowed from every 5s to every 30s since socket handles real-time.
-- **eBay 403 fixed:** eBay's compliance pings to `/api/ebay/account-deletion` were being blocked by CSRF middleware. Exempted.
-
----
-
-## What Happened This Session (S421)
-
-**POS "Send to Phone" payment flow — final bug fixes.** 4 files changed, all pushed.
-
-**Root cause of stuck "Processing..." button found and fixed:**
-The payment form was waiting for a Stripe webhook to fire before redirecting the shopper. But POS PaymentIntents are created on your connected Stripe account (using `stripeAccount`), which means `payment_intent.succeeded` fires as a Connect webhook — not your platform webhook. Your platform's `STRIPE_WEBHOOK_SECRET` never catches it. The shopper was stuck forever with no redirect and no error.
-
-Fix: the shopper now redirects immediately after Stripe confirms payment on the client side. No webhook dependency for the UX path. The webhook will still run when you configure it (see #1 above) to mark items SOLD and create Purchase records.
-
-**Also fixed this session:**
-- Platform fee line removed from the shopper's pay-request page (that's your internal cost, shopper only sees the total)
-- Item names now appear on the pay-request page instead of "0 item(s)"
-- 60-second timeout added as a safety net — if Stripe ever hangs again, the button resets with an error after 60s
-
-**The POS Send to Phone flow should now work end-to-end.** Test with a fresh payment request.
-
----
-
-## What Happened This Session (S420)
-
-**Lucky Roll full build + 3 new XP sinks + Guild/Crew ADR.** 16 files, 2 batches.
-
-**Lucky Roll (complete):** Weekly gacha roll for shoppers at 100 XP/roll. Pity system (guaranteed non-"nothing" after 3 rolls). 7-outcome table. Server-side RNG. Full page at `/shopper/lucky-roll`. Wired into Hunt Pass page.
-
-**3 new XP sinks (code complete, need S420 Batch 2 push + migration):**
-- Custom Map Pin (75 XP): Spend XP to set a custom emoji that appears on your map location
-- Profile Showcase Slot (50/150 XP): Unlock 2nd and 3rd showcase slots on your profile
-- Treasure Trail Sponsor (100 XP): XP required to create a new Treasure Trail
-
-**Guild/Crew ADR written:** Architecture decision record for crew system. Schema, API endpoints, group bounties. Ready to dispatch to findasale-dev whenever you want to build it.
-
----
-
-## Investor Verdict (from S416 — still current)
+## Investor Verdict (S416 — still current)
 
 🟡 **YELLOW — Don't invest today. Here's what changes that:**
-- Product: extraordinary for a solo AI-assisted build. Real competitive advantage.
+- Product: extraordinary for a solo AI-assisted build.
 - **Fatal gap: zero paying customers, zero transactions.**
 - **What changes it to GREEN:** 5 recurring organizers + any real transaction. List your own eBay inventory first.
 
 ---
 
-## What Needs QA
-
-| Feature | How to Test |
-|---|---|
-| POS Send to Phone end-to-end | Organizer pulls shopper cart → Send to Phone → shopper overlay → Accept & Pay → 4242 → confirm redirect to /shopper/purchases |
-| Pay-request page | Confirm: item names show (if any), total only (no platform fee line) |
-| Lucky Roll | `/shopper/lucky-roll` as user11 → roll button → outcome → weekly cap countdown |
-| Custom Map Pin | POST /api/users/me/custom-map-pin with XP spend |
-| Showcase Slot | Unlock 2nd slot (50 XP), then 3rd slot (150 XP) |
-| Treasure Trail gate | Try creating trail with <100 XP — confirm blocked |
-
----
-
-## Action Items for Patrick
-
-- [ ] **Configure Stripe Connect webhook** (see #1 above — unblocks items SOLD after POS payment)
-- [ ] **Push S420 Batch 2** (if not done)
-- [ ] **Run migration** (after S420 Batch 2 push)
-- [ ] **Create organizer account on finda.sale** — list real items from your eBay inventory
-
----
-
-*Updated S423 (weekly audit) — 2026-04-09*
+*Updated S425 — 2026-04-09*

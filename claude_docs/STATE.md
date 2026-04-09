@@ -7,6 +7,42 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S425 COMPLETE (2026-04-09):** POS payment bug sprint — 7 bugs fixed across schema, backend, and frontend. All pushed (migration required).
+
+**S425 Key fixes:**
+- `schema.prisma` + migration — `Purchase.stripePaymentIntentId @unique` dropped; a single PaymentIntent covers multiple Purchase rows in a multi-item POS cart. P2002 unique constraint was causing 500 on card reader charge for carts with >1 item. Added regular index for webhook/capture lookup performance.
+- `stripeController.ts` — 3× `prisma.purchase.findUnique` → `findFirst` (stripePaymentIntentId is no longer a unique lookup key), 2× `prisma.purchase.update` → `updateMany` (status updates). Fixed Railway TypeScript build failure.
+- `pos.tsx` — `cardAmount` derived variable computed upfront (`cartTotal - cashReceived` when split, else `cartTotal`). QR/Card Reader buttons and `paymentAmount` prop now show correct split balance before QR is generated.
+- `pos.tsx` — `showSurvey('OG-4')` (wrong: "You used online checkout!") → `showSurvey('OG-3')` ("An item sold") in both `handleCharge` and `handleCashPayment`.
+- `posController.ts` — `getActiveHolds` was filtering `status: 'CONFIRMED'` only; holds are created as `PENDING` (reservationController.ts line 187). Changed to `status: { in: ['PENDING', 'CONFIRMED'] }`. Unblocks the POS Invoice tile.
+- `items/[id].tsx` — Mark Sold button now guards `user?.id === item.sale.organizer?.userId &&` — was showing to any ORGANIZER-role user, not just the sale owner. Added `userId?: string` to local organizer type to fix Vercel build failure.
+
+**S425 Files changed:**
+- `packages/database/prisma/schema.prisma` — @unique removed, @@index added to Purchase.stripePaymentIntentId
+- `packages/database/prisma/migrations/20260409_purchase_pi_non_unique/migration.sql` — NEW
+- `packages/frontend/pages/organizer/pos.tsx` — cardAmount + survey OG-3 fix
+- `packages/backend/src/controllers/posController.ts` — holds status filter
+- `packages/frontend/pages/items/[id].tsx` — ownership guard + userId type
+- `packages/backend/src/controllers/stripeController.ts` — findFirst×3 + updateMany×2
+
+**S425 Migration required (Patrick must run):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S425 New bug found:**
+- Send Invoice tile + modal shows `$0.18` for an $18.00 item. `getActiveHolds` returns `itemPrice: h.item.price` — likely stored as dollars but displayed with a /100 division somewhere, or vice versa. Investigate `PosInvoiceModal.tsx` and the `getActiveHolds` response.
+
+**S425 QA needed:**
+- Card Reader charge with multi-item cart (now unblocked after migration)
+- POS Invoice tile now shows holds correctly (confirmed by Patrick screenshot)
+- Mark Sold no longer shows to non-owner organizers (confirmed by Patrick screenshot)
+
+---
+
 **S424 COMPLETE (2026-04-09):** POS payment popup dual-role fix, false paid banner fix, split payment in popup, dual-role shopper access audit fixes. All pushed.
 
 **S424 Key fixes:**
@@ -72,27 +108,25 @@ npx prisma generate
 
 ## Next Session Priority
 
-**🔴 P0 — Stripe QR code "AccessDenied / Access Denied" error:**
-When the shopper scans the Stripe QR code from the POS screen, they land on a Stripe-hosted page showing "AccessDenied" or "Access Denied". This blocks the Stripe QR payment mode entirely.
+**🔴 P2 — Send Invoice price formatting bug:**
+The Send Invoice tile and modal show `$0.18` for an item priced at `$18.00`. Root cause likely: `itemPrice: h.item.price` in `getActiveHolds` (posController.ts) is a Prisma `Decimal` — some path is dividing by 100 or multiplying incorrectly. Investigate:
+1. `packages/backend/src/controllers/posController.ts` — `getActiveHolds` — what is `h.item.price` and how is it returned?
+2. `packages/frontend/pages/organizer/pos.tsx` and/or `PosInvoiceModal.tsx` — where is the price displayed and how is it formatted?
+Single targeted fix once root cause is identified.
 
-Start by reading:
-1. `packages/frontend/components/PosPaymentQr.tsx` — what URL is rendered as the QR code?
-2. `packages/backend/src/controllers/posController.ts` — `createPaymentLink` function — how is the Stripe payment link created? Which Stripe object is used (PaymentLink vs CheckoutSession vs PaymentIntent)?
-3. Check if the URL contains `/c/pay/` (Stripe Payment Link) or `/pay/` (Checkout Session) — each has different auth behavior.
+**🟡 P2 — Dark green text illegible in dark mode on Send Invoice tile:**
+The dark green text used on the Send Invoice card is unreadable in dark mode. Color class fix needed — likely `text-green-800` or similar needs a `dark:text-green-300` variant.
 
-Likely root causes to investigate:
-- **Payment link has `customer_creation: 'always'`** — forces shopper to create a Stripe account, which returns AccessDenied for guests.
-- **Payment link restricted to specific customer** — if `customer` field is set on the link, only that customer can use it.
-- **Connected account issue** — PaymentLink created on platform but needs to be on the connected organizer account (via `stripeAccount` header). If on the wrong account, Stripe returns AccessDenied.
-- **Link already used/expired** — Stripe Payment Links can be one-time use. If the link was already paid or expired, scanning again returns AccessDenied.
-- **`consent_collection` or `payment_method_collection` = 'always'** — forces auth that blocks guests.
+**🟢 Feature — Holds-to-Cart + Cart-to-Invoice architecture:**
+Patrick wants to: (a) pull a shopper's held item(s) into the POS cart, (b) add additional cart items to an invoice, (c) support split cash payment on invoices (partial cash, remainder via invoice link). Architecture question: combine with existing Stripe QR workflow or keep invoices as a separate email/SMS channel for shoppers who don't use the app?
 
-The fix is likely: ensure the payment link is created without `customer_creation`, on the correct connected account, and with `after_completion.type = 'redirect'` pointing back to the sale page.
+**Dispatch to `findasale-architect` before any dev.** Brief: read `posController.ts`, `stripeController.ts` (payment link creation), `reservationController.ts` (holds), and the POS frontend (`pos.tsx`) to understand current data flow. Then spec the holds-to-cart + cart-to-invoice flow with a decision on whether to unify with QR checkout or keep separate.
 
-**iPhone XS geolocation bug (Safari/iOS):**
-Unauthenticated user on web, has accepted location permission, but gets: "location access denied — use the My Location button to share your location or browse sales near you / unable to access your location, please check your browser permissions."
+**🔴 P0 — Stripe QR code "AccessDenied / Access Denied" error (carried from S424):**
+When shopper scans the Stripe QR code, Stripe page shows "AccessDenied". Blocks QR payment mode entirely. Investigate `PosPaymentQr.tsx` (what URL is rendered) + `posController.ts` `createPaymentLink` (connected account, `customer_creation` param, one-time use expiry).
 
-Start by reading the geolocation/map code — likely `SaleMap`, `SaleMapInner`, or a `useGeolocation` hook. Safari on iOS handles the Geolocation API differently: permission state can be `prompt` on every page load (no persistent grant on older iOS), the API requires HTTPS (prod should be fine), and `getCurrentPosition` can return `PERMISSION_DENIED` even after the user taps Allow if the request fires before the permission dialog resolves. Also check if there's a try/catch swallowing a `PositionError` code 1 (denied) vs code 2 (unavailable) vs code 3 (timeout) — each needs different error messaging.
+**iPhone XS geolocation bug (Safari/iOS, carried from S424):**
+Unauthenticated user accepted location but gets "location access denied." Check `SaleMap`/`useGeolocation` hook — Safari iOS permission state resets between page loads; need to handle `PositionError` codes 1/2/3 distinctly.
 
 ---
 
