@@ -272,7 +272,7 @@ const sendMatchNotificationEmail = async (
   `;
 
   await resend.emails.send({
-    from: 'FindA.Sale <notifications@findasale.com>',
+    from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale <notifications@finda.sale>',
     to: email,
     subject: `${matchedItems.length} item${matchedItems.length !== 1 ? 's' : ''} match your collection!`,
     html,
