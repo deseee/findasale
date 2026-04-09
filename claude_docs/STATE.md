@@ -7,6 +7,26 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S428 COMPLETE (2026-04-09):** 4 POS bug fixes — no migration required.
+
+**S428 Fixes:**
+- `pos.tsx` — Invoice preview filter: `item.id !== hold.itemId` → `item.itemId !== hold.itemId` (5 occurrences). Root cause: `cartItem.id` is a generated UUID, not the DB item ID. `cartItem.itemId` is the actual Prisma item ID. Same bug fixed in `miscItems` prop to PosInvoiceModal. "📌 On Hold" badge in cart list also fixed.
+- `pos.tsx` — `handleLoadHold`: now auto-merges shopper's open linked cart (from `linkedCarts` state) when loading a hold. Adds all shared cart items to POS cart. Toast shows item count.
+- `pos.tsx` — Dark mode loaded hold card: `dark:bg-sage-900/20` → `dark:bg-gray-600` (20% opacity was too transparent against parent).
+- `posController.ts` — `createPaymentLink` items check: removed `status: 'AVAILABLE'` filter and strict count check. Items may be mid-sale when QR is generated; `amount` is passed explicitly from frontend so the check was blocking QR generation unnecessarily.
+
+**S428 Files changed:**
+- `packages/frontend/pages/organizer/pos.tsx`
+- `packages/backend/src/controllers/posController.ts`
+
+**S428 QA needed:**
+- Invoice preview: Load hold → add misc items → Send Invoice → verify hold item NOT duplicated in preview
+- Load Hold: shopper with shared cart → Load Hold → cart should contain hold item + all shared cart items
+- Dark mode: load a hold → invoice panel hold card should have dark gray background
+- QR code: generate QR for cart with inventory items → 200 (not 400), shopper scans → no AccessDenied
+
+---
+
 **S427 COMPLETE (2026-04-09):** Multi-source POS cart + invoice — full implementation. 2 migrations required.
 
 **S427 Implemented (ADR-012 Phases 1–8):**
@@ -177,20 +197,24 @@ npx prisma generate
 
 ## Next Session Priority
 
-**🔴 P0 — Duplicate item in invoice preview (S427):**
-"Glass Pitcher Set #10" appears as both the `📌 Hold:` line AND a misc cart item in the invoice preview. Total inflated. Fix: verify ID type match in `cart.filter(item => item.id !== invoiceModalHold.itemId)` — suspect string vs number mismatch. `pos.tsx` + `PosInvoiceModal.tsx`.
+**🔴 P0 — Stripe QR code "AccessDenied" (Patrick must retest after S428 push):**
+S426 switched to destination charges. S428 removed the strict `status: 'AVAILABLE'` items check that was causing 400s on QR generation. Patrick needs to retest QR after pushing S428. If AccessDenied persists on the Stripe-hosted page, next step: switch `createPaymentLink` from Stripe Payment Links to Stripe Checkout Sessions (one-time URL, `payment_intent_data.application_fee_amount + transfer_data.destination`, no Payment Links Connect restrictions).
 
-**🔴 P0 — In-app shopper cart not pulled in on Load Hold (S427):**
-When cashier loads a hold by shopper email, only the held item is in POS cart. Shopper's app cart items are NOT merged in. `pullHoldsToCart` (posController.ts) needs to also query the shopper's active `CartSession` items and add them to the POS misc items.
-
-**🟡 P1 — White/light card background in dark mode on hold card (S427):**
-Loaded hold card has light background in dark mode. Likely `bg-white` missing `dark:bg-gray-800` in pos.tsx hold card container.
-
-**🔴 P0 — Stripe QR code "AccessDenied / Access Denied" error (carried from S424):**
-When shopper scans the Stripe QR code, Stripe page shows "AccessDenied". Blocks QR payment mode entirely. Investigate `PosPaymentQr.tsx` (what URL is rendered) + `posController.ts` `createPaymentLink` (connected account, `customer_creation` param, one-time use expiry).
+**🟡 P1 — S427 migrations still needed (if not run):**
+```
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
 **iPhone XS geolocation bug (Safari/iOS, carried from S424):**
 Unauthenticated user accepted location but gets "location access denied." Check `SaleMap`/`useGeolocation` hook — Safari iOS permission state resets between page loads; need to handle `PositionError` codes 1/2/3 distinctly.
+
+**🟡 S427 QA (pending push + migration):**
+- Full invoice flow: load hold + add misc items → Send Invoice → shopper pays via link
+- Cart-only invoice: add misc items → Send Invoice without loading any hold
+- QUICK vs TRUST mode expiry
 
 ---
 
