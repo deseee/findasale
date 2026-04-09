@@ -657,7 +657,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
     await resend.emails.send({
       from: fromEmail,
       to: buyerEmail,
-      subject: `Payment link: ${amountStr}`,
+      subject: `Your checkout is ready — ${amountStr}`,
       html,
     });
 
