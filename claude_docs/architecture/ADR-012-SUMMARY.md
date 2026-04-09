@@ -53,24 +53,31 @@ Stripe fees also apply only to the card amount.
 
 ---
 
-## What Needs Your Input
+## Patrick's Decisions (Final)
 
-### 1. Cash Reconciliation
-How should cash be handled?
-- **Recommended:** Organizer records cash in POS, notes it on invoice. No integration with Stripe/bank (simplest).
-- **Alternative:** Organizer photographs receipt or provides note for audit (more compliance).
-- **Complex:** FindA.Sale deposits cash to organizer's bank later (not recommended — operational burden).
+### 1. Cash Reconciliation ✅
+**Organizer records cash in POS, notes it on invoice. No bank integration.**
+Simple logging: organizer records cash amount in the app, stored in DB. "We can always revisit if enough organizers ask." No photos, no Stripe Connect integration needed.
 
-### 2. Hold Auto-Expiry on Abandoned Session
-If organizer pulls a hold into a cart but then closes the browser (doesn't create invoice):
-- **Recommended:** Hold reverts to `PENDING` after 2 hours (session expiry). Shopper can retry.
-- **Alternative:** Hold is locked to organizer until organizer cancels it.
-- **Alternative:** Hold is released entirely (shopper starts fresh).
+### 2. Hold Auto-Expiry on Abandoned Session ✅
+**Revert to PENDING after session expires (2 hours).**
+Holds are only 30 minutes anyway, so this is low-stakes. Shopper can request a hold extension (future backlog item — do not design now).
 
-### 3. Non-Held Item Reservation During Invoice
-If organizer adds a non-held item to a cart with held items, should that non-held item be softly reserved during the 2-hour invoice window?
-- **Recommended:** Yes. Treat the entire invoice as atomic — if not paid by expiry, all items revert to available.
-- **Alternative:** No. Non-held items stay available for other shoppers (could oversell).
+### 3. Non-Held Item + Invoice Timeout ✅
+**Atomic with two distinct invoice modes:**
+
+**Mode A — "Quick Pay Invoice":**
+- Timeout: 15 minutes
+- Use case: Shopper is present or on phone stuck in traffic
+- Organizer uses this for immediate payment via link instead of card reader
+- Items locked atomically; released after 15 min if unpaid
+
+**Mode B — "Trust Invoice":**
+- Timeout: Organizer-set (default 24h, can be longer)
+- Use case: Organizer knows shopper, comfortable with async payment
+- Shopper may have already left with merchandise (organizer takes risk)
+- **Requires cautionary warning:** "By sending this invoice, you're allowing the shopper to leave with the item before payment is collected. You may not receive payment."
+- Items still locked atomically during window
 
 ---
 

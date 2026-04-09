@@ -10,7 +10,8 @@ Reference: `ADR-holds-to-cart-invoice.md` (full spec) and `ADR-012-SUMMARY.md` (
 
 - [ ] Read `packages/database/prisma/schema.prisma`
 - [ ] Add `HOLD_IN_CART` to `ItemReservation.status` enum (update comment if using string enum)
-- [ ] Add 3 fields to `HoldInvoice` model:
+- [ ] Add 4 fields to `HoldInvoice` model:
+  - `invoiceMode: String @default("TRUST")` — stores "QUICK" or "TRUST"
   - `cashAmountCents: Int?`
   - `cardAmountCents: Int?`
   - `cartSessionId: String?` with FK constraint to `POSSession`
@@ -19,7 +20,7 @@ Reference: `ADR-holds-to-cart-invoice.md` (full spec) and `ADR-012-SUMMARY.md` (
 - [ ] Verify migration applies cleanly to Railway DB (with DATABASE_URL override):
   ```powershell
   cd packages/database
-  $env:DATABASE_URL="postgresql://postgres:..."
+  $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
   npx prisma migrate deploy
   npx prisma generate
   ```
@@ -59,6 +60,10 @@ router.post('/sessions/:sessionId/pull-holds', authenticateRequest, pullHoldsInt
   - [ ] Verify organizer auth
   - [ ] Fetch POSSession, validate ownership + status = 'OPEN'
   - [ ] Validate cartItems not empty
+  - [ ] Validate invoice mode:
+    - [ ] `invoiceMode` must be "QUICK" or "TRUST"
+    - [ ] If "QUICK": ignore `expiresAt` from request, set expiry to now + 15 minutes
+    - [ ] If "TRUST": use provided `expiresAt` (or default to now + 24 hours if omitted)
   - [ ] Calculate totals:
     - [ ] `totalAmountCents = sum of all item prices`
     - [ ] `cashAmountCents = req.body.cashAmountCents || 0`
@@ -69,10 +74,11 @@ router.post('/sessions/:sessionId/pull-holds', authenticateRequest, pullHoldsInt
     - [ ] Build line_items array
     - [ ] Calculate platform fee on `cardAmountCents` only (10% SIMPLE, 8% PRO)
     - [ ] Set `application_fee_amount` to platform fee (in cents)
-    - [ ] Set `expires_at` = hold soonest expiry date
+    - [ ] Set `expires_at` = calculated expiry date (mode-dependent)
     - [ ] Store organizer Stripe Connect ID in transfer_data
   - [ ] Wrap in transaction:
     - [ ] Create HoldInvoice with:
+      - `invoiceMode` = "QUICK" or "TRUST"
       - `cartSessionId` = session ID
       - `cashAmountCents` = request value (or null)
       - `cardAmountCents` = calculated value
@@ -84,10 +90,11 @@ router.post('/sessions/:sessionId/pull-holds', authenticateRequest, pullHoldsInt
       - [ ] Update invoiceId reference
     - [ ] Update POSSession: status = 'PULLED'
   - [ ] Send email to shopper (Resend) with invoice link + details:
+    - [ ] Include invoice mode and expiry time
     - [ ] If split payment: show "Cash collected: $X, Remaining to charge: $Y"
+    - [ ] If mode = "TRUST": include warning copy: "This invoice allows you to pay after you leave with the item. Your payment deadline is [DATE]. If you don't pay by then, the item will be released back to available."
     - [ ] Include Stripe checkout URL
-    - [ ] Include expiry time
-  - [ ] Return response with invoiceId, stripeSessionId, URLs, amounts
+  - [ ] Return response with invoiceId, stripeSessionId, invoiceMode, URLs, amounts, expiresAt
   - [ ] Error handling: 400, 403, 409, 402 (Stripe)
 
 **Route:** Add to routes:
@@ -179,16 +186,29 @@ router.post('/sessions/:sessionId/create-invoice', authenticateRequest, createCa
 
 - [ ] Form fields:
   - [ ] Shopper email/ID (dropdown or autocomplete)
+  - [ ] Invoice mode selector: radio buttons
+    - [ ] "Quick Pay (15 min) — Use when shopper is present or on phone"
+    - [ ] "Trust Invoice — Organizer sets expiry (shopper leaves with item)"
+  - [ ] Expiry date/time picker — ONLY visible when mode = "Trust"
+    - [ ] Default to 24 hours from now
+    - [ ] Allow organizer to adjust (earlier or later)
   - [ ] Total amount (read-only, calculated from cartItems)
   - [ ] Cash amount (number input, optional)
-  - [ ] Display calculated card amount (total - cash)
+  - [ ] Display calculated card amount (total - cash) in real-time
   - [ ] Notes (optional textarea)
+  - [ ] For TRUST mode: show warning callout ABOVE "Create Invoice" button:
+    - [ ] Style: amber/yellow background (warning color)
+    - [ ] Copy: "By sending this invoice, you're allowing the shopper to leave with the item before payment is collected. You may not receive payment."
+    - [ ] This callout must be HIDDEN when mode = "Quick"
   - [ ] "Create Invoice" button
 - [ ] Form validation:
   - [ ] Cash amount must be <= total
   - [ ] Cash amount must be >= 0
   - [ ] Shopper ID required
+  - [ ] Invoice mode required
+  - [ ] For TRUST mode: expiresAt must be in the future
 - [ ] On submit:
+  - [ ] Send invoiceMode + expiresAt (if TRUST) + other fields to backend
   - [ ] Call `POST /api/pos/sessions/:sessionId/create-invoice`
   - [ ] Show loading state
   - [ ] On success:
@@ -198,7 +218,8 @@ router.post('/sessions/:sessionId/create-invoice', authenticateRequest, createCa
   - [ ] On error: show error toast, preserve form data
 - [ ] Dark mode + mobile-first compliance
   - [ ] Number input with proper touch keyboard on mobile
-  - [ ] Stack form vertically on small screens
+  - [ ] Radio buttons + date picker stack vertically on small screens
+  - [ ] Warning callout must be legible on mobile (no horizontal overflow)
 
 ---
 

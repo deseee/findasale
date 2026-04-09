@@ -82,6 +82,8 @@ Should holds-backed invoices unify with the QR payment link flow (`POSPaymentLin
 ```json
 {
   "shopperId": "user123",           // shopper to bill (may differ from session creator)
+  "invoiceMode": "QUICK",            // QUICK (15min) or TRUST (organizer-set, default 24h)
+  "expiresAt": "2026-04-10T18:00:00Z", // optional: required if mode = "TRUST", ignored if mode = "QUICK"
   "cashAmountCents": 0,              // optional: cash received (0 = no split, default)
   "notes": "Customer special request" // optional
 }
@@ -92,9 +94,10 @@ Should holds-backed invoices unify with the QR payment link flow (`POSPaymentLin
 {
   "invoiceId": "inv_abc123",
   "stripeSessionId": "cs_test_...",
+  "invoiceMode": "QUICK",
   "totalAmountCents": 5000,
   "cardAmountCents": 5000,           // after split, if any
-  "expiresAt": "2026-04-10T18:00:00Z",
+  "expiresAt": "2026-04-10T18:15:00Z", // 15 min for QUICK, organizer-set for TRUST
   "status": "PENDING",
   "invoiceLinkUrl": "https://checkout.stripe.com/pay/cs_test_..."
 }
@@ -240,7 +243,9 @@ stripeAmount = 3500 cents
 ```json
 {
   "shopperId": "user_abc",
-  "cashAmountCents": 1500,  // optional: e.g., $15 cash collected
+  "invoiceMode": "QUICK",                      // "QUICK" (15min) or "TRUST" (default)
+  "expiresAt": "2026-04-10T18:00:00Z",        // required if mode="TRUST", ignored if mode="QUICK"
+  "cashAmountCents": 1500,                    // optional: e.g., $15 cash collected
   "notes": "Customer requested 2-piece sale"  // optional
 }
 ```
@@ -251,12 +256,13 @@ stripeAmount = 3500 cents
   "invoiceId": "inv_abc123",
   "stripeSessionId": "cs_test_...",
   "stripeCheckoutUrl": "https://checkout.stripe.com/pay/cs_test_...",
+  "invoiceMode": "QUICK",
   "totalAmountCents": 5000,
   "cashAmountCents": 1500,
   "cardAmountCents": 3500,
   "platformFeeAmount": 350,  // 10% of cardAmountCents
   "status": "PENDING",
-  "expiresAt": "2026-04-10T18:00:00Z",
+  "expiresAt": "2026-04-10T18:15:00Z",        // +15min for QUICK, organizer-set for TRUST
   "createdAt": "2026-04-09T14:30:00Z"
 }
 ```
@@ -301,6 +307,9 @@ stripeAmount = 3500 cents
 model HoldInvoice {
   // ... existing ...
   
+  // Feature: Invoice Modes (QUICK or TRUST)
+  invoiceMode        String        @default("TRUST") // "QUICK" (15min) or "TRUST" (organizer-set)
+  
   // Feature: Split Cash Payments
   cashAmountCents    Int?          // Optional: amount organizer collected in cash
   cardAmountCents    Int?          // Derived: total - cash (optional for backcompat)
@@ -339,6 +348,7 @@ enum HoldStatus {
 ```sql
 -- Add new columns to HoldInvoice
 ALTER TABLE "HoldInvoice" 
+  ADD COLUMN "invoiceMode" VARCHAR(10) DEFAULT 'TRUST',
   ADD COLUMN "cashAmountCents" INTEGER,
   ADD COLUMN "cardAmountCents" INTEGER,
   ADD COLUMN "cartSessionId" VARCHAR(255),
@@ -382,17 +392,19 @@ ALTER TABLE "HoldInvoice"
 
 3. **Backend: POS Controller — Create Invoice from Cart** (Backend Package)
    - New endpoint: `POST /api/pos/sessions/:sessionId/create-invoice`
-   - Input: session ID, shopper ID, optional cash amount
+   - Input: session ID, shopper ID, invoiceMode (QUICK|TRUST), optional expiresAt, optional cash amount
    - Logic:
      - Fetch session, validate cartItems not empty
+     - Validate invoiceMode: if "QUICK" ignore expiresAt, set expiry to now + 15min; if "TRUST" use provided expiresAt (or default to now + 24h)
      - Calculate total from all items
      - If `cashAmountCents` provided: `cardAmountCents = totalAmountCents - cashAmountCents`
      - Create Stripe Checkout Session with all items (use existing `markSoldAndCreateInvoice` pattern as template)
      - In Stripe intent metadata, use `cardAmountCents` for fee calculations, not total
-     - Create HoldInvoice record with `cartSessionId` + `cashAmountCents` + `cardAmountCents`
+     - Create HoldInvoice record with `cartSessionId` + `invoiceMode` + `cashAmountCents` + `cardAmountCents`
      - Update all held items in cartItems from `HOLD_IN_CART` → `INVOICE_ISSUED`
      - Update session status to `PULLED`
      - Send invoice email with Stripe checkout link (Resend)
+       - If mode = TRUST: include warning copy in email ("This invoice allows shopper to pay after they leave...")
      - Return invoice + Stripe session ID
    - Error handling: 400, 403, 409, 402 (Stripe)
    - **File:** `packages/backend/src/controllers/posController.ts` → add `createCartInvoice` function
@@ -425,7 +437,14 @@ ALTER TABLE "HoldInvoice"
 7. **Frontend: POS Cart UI** (Frontend Package)
    - New component: `POS/HoldsToCart.tsx` — display active holds list with "Pull into Cart" button
    - New component: `POS/CartSummary.tsx` — display current cart items with prices + held badge
-   - New component: `POS/CartInvoiceForm.tsx` — form to enter cash amount + shopper selection, "Create Invoice" button
+   - New component: `POS/CartInvoiceForm.tsx` — form to:
+     - Enter shopper selection (dropdown/autocomplete)
+     - Select invoice mode: radio buttons "Quick Pay (15 min)" or "Trust (Organizer sets expiry)"
+     - Show expiresAt date/time picker ONLY if mode = "Trust" (hidden if "Quick")
+     - Enter optional cash amount (number input)
+     - Display calculated card amount (total - cash) in real-time
+     - For TRUST mode: show warning callout before submit button: "By sending this invoice, you're allowing the shopper to leave with the item before payment is collected. You may not receive payment."
+     - "Create Invoice" button
    - Calls:
      - `POST /api/pos/sessions/:id/pull-holds` on button click (pull holds)
      - `POST /api/pos/sessions/:id/create-invoice` on form submit (create invoice)
@@ -467,43 +486,41 @@ ALTER TABLE "HoldInvoice"
 
 ---
 
-## Flagged for Patrick
+## Patrick's Final Decisions
 
-### Business Decision Required
-
-**Question 1: Cash Reconciliation**
-
-The spec treats cash as "organizer keeps it, records it in platform, Stripe doesn't know about it."
-
-Should FindA.Sale instead:
-- **Option A (recommended):** Organizer records cash locally, platform just logs it for receipts. Organizer manually reconciles (current spec)
-- **Option B:** FindA.Sale deposits cash via Stripe Connect later (more complex, needs bank routing)
-- **Option C:** Cash is collected but organizer must photograph receipt/note for audit (compliance)
-
-**Recommendation:** Option A. It's the simplest and matches the "POS organizer" workflow (organizers are already handling cash at sales).
+### 1. Cash Reconciliation ✅
+**Simple logging only. Organizer records cash amount in POS, stored in DB. No photos, no bank integration.**
+No Stripe Connect or photo requirements. "We can always revisit if enough organizers ask."
 
 ---
 
-**Question 2: Hold Auto-Expiry on Session Abandon**
-
-If an organizer pulls a hold into a POS cart and then abandons the session (closes browser, session times out), should:
-
-- **Option A (recommended):** Hold reverts to `PENDING` after 2 hours (same as session expiry). Shopper can try holding again.
-- **Option B:** Hold is released entirely (no re-hold allowed). Shopper must request new hold.
-- **Option C:** Hold is locked to organizer until organizer explicitly cancels it.
-
-**Recommendation:** Option A. It respects the original hold timer and allows retry without being punitive.
+### 2. Hold Auto-Expiry on Abandoned Session ✅
+**Revert to PENDING after session expires (2 hours).**
+Holds are only 30 minutes anyway, so low-stakes. Patrick flagged a future feature: shoppers should be able to request hold extensions — note this in the spec as backlog, do not design now.
 
 ---
 
-**Question 3: Non-Held Item Behavior**
+### 3. Two-Mode Invoice Strategy ✅
+**Non-held items are atomic with held items, but organizer chooses mode at invoice creation:**
 
-If organizer adds a non-held item to a cart (e.g., upsell, customer special request), and the invoice is created with a mix of held + non-held items:
+**Mode A — "Quick Pay Invoice":**
+- **Timeout:** 15 minutes (short window for immediate payment)
+- **Use case:** Shopper is present (standing in front of organizer) OR on phone stuck in traffic
+- Very similar to QR checkout — organizer wants payment RIGHT NOW via link instead of card reader
+- Items locked atomically; released after 15 min if unpaid
 
-- Should held items be marked `SOLD` if payment fails (Stripe decline)?
-- Should non-held items be marked `RESERVED` during the 2-hour invoice window (preventing another shopper from buying)?
+**Mode B — "Trust Invoice":**
+- **Timeout:** Organizer-set (default 24 hours, can be longer or shorter)
+- **Use case:** Organizer knows shopper, trusts them, comfortable with async payment
+- Shopper may have already LEFT WITH THE MERCHANDISE — organizer is taking a risk
+- **REQUIRES cautionary warning in organizer UI:** "By sending this invoice, you're allowing the shopper to leave with the item before payment is collected. You may not receive payment."
+- Items still locked atomically during the window
+- This is the async, email-style invoice use case
 
-**Recommendation:** Yes to both. Treat the entire invoice as an atomic unit. If shopper pays, all items move to SOLD. If shopper doesn't pay and invoice expires, all items revert to available. Non-held items should be softly reserved during the invoice window (optional, depends on your overbooking tolerance).
+**Both modes:**
+- Non-held items in cart are treated atomically with held items
+- If payment succeeds: all items move to SOLD
+- If payment fails or expires: all items revert to available
 
 ---
 
