@@ -992,7 +992,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         userId: posRequest.organizerUserId,
         type: 'pos_payment_completed',
         title: 'Payment Received',
-        body: `${posRequest.shopper?.name || 'Shopper'} paid $${(posRequest.totalAmountCents / 100).toFixed(2)} for ${posRequest.itemIds.length} item(s)`,
+        body: `${posRequest.shopper?.name || 'Shopper'} paid $${(posRequest.totalAmountCents / 100).toFixed(2)}${posRequest.itemIds.length > 0 ? ` for ${posRequest.itemIds.length} item(s)` : ''}`,
         link: `/organizer/pos`,
         channel: 'OPERATIONAL',
       });

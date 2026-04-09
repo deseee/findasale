@@ -310,7 +310,7 @@ const PurchaseHistoryPage = () => {
                             <div className="w-16 h-16 rounded bg-warm-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center text-xl">🏷️</div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-warm-900 dark:text-warm-100 truncate">{purchase.item?.title || 'Item'}</h3>
+                            <h3 className="font-semibold text-warm-900 dark:text-warm-100 truncate">{purchase.item?.title || (purchase.sale?.title ? `${purchase.sale.title} — Purchase` : 'POS Purchase')}</h3>
                             <p className="text-sm text-warm-600 dark:text-warm-400">From: {purchase.sale?.organizer?.businessName || purchase.sale?.title || 'Unknown'}</p>
                             <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">{new Date(purchase.createdAt).toLocaleDateString()}</p>
                           </div>
@@ -327,7 +327,7 @@ const PurchaseHistoryPage = () => {
                       {disputeFormOpen === purchase.id && (
                         <DisputeForm
                           itemId={purchase.item?.id || ''}
-                          itemTitle={purchase.item?.title || 'Item'}
+                          itemTitle={purchase.item?.title || (purchase.sale?.title ? `${purchase.sale.title} — Purchase` : 'POS Purchase')}
                           orderId={purchase.id}
                           saleId={purchase.sale?.id || ''}
                           userEmail={user?.email || ''}
