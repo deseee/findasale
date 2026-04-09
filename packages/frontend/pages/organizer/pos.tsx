@@ -15,7 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import jsQR from 'jsqr';
@@ -121,6 +121,7 @@ export default function POSPage() {
   const router = useRouter();
   const { showToast } = useToast();
   const { showSurvey } = useFeedbackSurvey();
+  const queryClient = useQueryClient();
 
   // Sale + item state
   const [sales, setSales] = useState<Sale[]>([]);
@@ -490,15 +491,19 @@ export default function POSPage() {
     if (!user || !user.roles?.includes('ORGANIZER')) return;
 
     let isMounted = true;
+    let socketInstance: any = null;
+
+    // Match the fallback URL pattern used by useLiveFeed.ts and usePOSPaymentRequest.ts
+    // NEXT_PUBLIC_API_URL is like https://backend.railway.app/api — strip /api suffix for socket base
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/api\/?$/, '');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     // Dynamic import to avoid SSR issues
     import('socket.io-client').then(({ io }) => {
       if (!isMounted) return;
 
-      const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
-      // Pass JWT so the socket server auto-joins this client to their user:X room
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const socket = io(SOCKET_URL, {
+      socketInstance = io(socketUrl, {
         auth: token ? { token } : {},
         transports: ['websocket', 'polling'],
         reconnection: true,
@@ -526,12 +531,11 @@ export default function POSPage() {
 
           // Mark for visual feedback briefly, then remove
           setSuccessPaymentId(requestId);
-          const timer = setTimeout(() => {
+          setTimeout(() => {
             setSuccessPaymentId(null);
             // Trigger refetch to update the list
             setPendingPayments(prev => prev.filter(p => p.id !== requestId));
           }, 3000);
-          return () => clearTimeout(timer);
         } else if (status === 'ACCEPTED') {
           // Update status in list for visual feedback
           setPendingPayments(prev =>
@@ -540,16 +544,18 @@ export default function POSPage() {
         }
       };
 
-      socket.on('POS_PAYMENT_STATUS', handlePaymentStatus);
-
-      return () => {
-        isMounted = false;
-        socket.off('POS_PAYMENT_STATUS', handlePaymentStatus);
-        socket.disconnect();
-      };
+      socketInstance.on('POS_PAYMENT_STATUS', handlePaymentStatus);
     }).catch((err) => {
       console.error('[pos] Failed to load socket.io-client:', err);
     });
+
+    // Cleanup: properly disconnect socket when effect re-runs or component unmounts
+    return () => {
+      isMounted = false;
+      if (socketInstance) {
+        socketInstance.disconnect();
+      }
+    };
   }, [user, soundEnabled, playSuccessChime]);
 
   // ─── Today's total summary query (30s polling) ────────────────────────────────────────
@@ -586,7 +592,7 @@ export default function POSPage() {
 
   const handleRemoveCart = async (sessionId: string) => {
     try {
-      await api.delete(`/api/pos/sessions/${sessionId}`);
+      await api.delete(`/pos/sessions/${sessionId}`);
       setLinkedCarts(prev => prev.filter(c => c.id !== sessionId));
       showToast('Cart removed', 'info');
     } catch (err) {
@@ -1087,6 +1093,8 @@ export default function POSPage() {
       } else {
         setSuccessMessage(`📱 Payment request of $${cartTotal.toFixed(2)} sent to ${shopperName}'s phone.`);
       }
+      // Refetch active requests to populate split payment details in pending panel
+      queryClient.invalidateQueries({ queryKey: ['pos-active-payment-requests'] });
     } catch (err: any) {
       console.error('[pos] Send to Phone error:', err);
       setPaymentStatus('error');
