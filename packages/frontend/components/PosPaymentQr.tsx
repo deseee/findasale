@@ -16,6 +16,7 @@ interface PosPaymentQrProps {
   paymentLinkUrl: string; // payment link URL for copy button
   paymentLinkStatus: 'idle' | 'generating' | 'waiting' | 'paid';
   buyerEmail?: string; // if set, show Email Link button
+  onEmailLink?: () => Promise<void>; // called when organizer taps Email Link
   onGenerate: () => void;
   onNewTransaction: () => void;
   onReset?: () => void;
@@ -29,12 +30,27 @@ export default function PosPaymentQr({
   paymentLinkUrl,
   paymentLinkStatus,
   buyerEmail,
+  onEmailLink,
   onGenerate,
   onNewTransaction,
   onReset,
 }: PosPaymentQrProps) {
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+
+  const handleEmailLink = async () => {
+    if (!onEmailLink || emailSending) return;
+    setEmailSending(true);
+    try {
+      await onEmailLink();
+      setEmailSent(true);
+      setTimeout(() => setEmailSent(false), 3000);
+    } finally {
+      setEmailSending(false);
+    }
+  };
 
   const handleCopyLink = async () => {
     if (paymentLinkUrl) {
@@ -125,13 +141,18 @@ export default function PosPaymentQr({
               </button>
             </div>
             {/* Email Link button — shown when buyer email is known */}
-            {buyerEmail && paymentLinkUrl && (
-              <a
-                href={`mailto:${buyerEmail}?subject=Your%20payment%20link&body=Here%20is%20your%20payment%20link%3A%20${encodeURIComponent(paymentLinkUrl)}`}
-                className="block w-full mt-2 py-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-semibold text-center hover:bg-blue-200 dark:hover:bg-blue-800 transition"
+            {buyerEmail && paymentLinkUrl && onEmailLink && (
+              <button
+                onClick={handleEmailLink}
+                disabled={emailSending}
+                className={`w-full mt-2 py-2 rounded-lg text-sm font-semibold transition ${
+                  emailSent
+                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50'
+                }`}
               >
-                📧 Email Link to {buyerEmail}
-              </a>
+                {emailSent ? '✓ Link sent!' : emailSending ? 'Sending…' : `📧 Email Link to ${buyerEmail}`}
+              </button>
             )}
 
             {/* Status Indicator */}
