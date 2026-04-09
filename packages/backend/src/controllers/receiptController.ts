@@ -20,6 +20,7 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
         id: true,
         amount: true,
         createdAt: true,
+        stripePaymentIntentId: true,
         sale: {
           select: {
             id: true,
@@ -38,14 +39,46 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Group per-item POS purchases into a single receipt card per transaction.
+    // Per-item purchases store stripePaymentIntentId as "{piId}_{itemId}" or "{piId}_misc".
+    // We strip the suffix to get the base PI ID and group by it.
+    const getBasePIId = (piId: string | null): string | null => {
+      if (!piId) return null;
+      const lastUnderscore = piId.lastIndexOf('_');
+      if (lastUnderscore > 0) {
+        const suffix = piId.substring(lastUnderscore + 1);
+        // cuid item IDs start with 'cm' and are ~25 chars; 'misc' is the misc-remainder marker
+        if ((suffix.startsWith('cm') && suffix.length >= 20) || suffix === 'misc') {
+          return piId.substring(0, lastUnderscore);
+        }
+      }
+      return piId;
+    };
+
+    const transactionGroups = new Map<string, typeof purchases>();
+    for (const p of purchases) {
+      const key = getBasePIId(p.stripePaymentIntentId) ?? p.id;
+      const group = transactionGroups.get(key) ?? [];
+      group.push(p);
+      transactionGroups.set(key, group);
+    }
+
     // Shape response to match ReceiptCard component expectations
-    const receipts = purchases.map((p) => ({
-      id: p.id,
-      issuedAt: p.createdAt,
-      total: p.amount,
-      items: [{ itemTitle: p.item?.title ?? (p.sale?.title ? `${p.sale.title} — Purchase` : 'POS Purchase'), photoUrl: undefined, price: p.amount }],
-      purchase: p,
-    }));
+    const receipts = Array.from(transactionGroups.values()).map((group) => {
+      const first = group[0];
+      const total = group.reduce((sum, p) => sum + p.amount, 0);
+      return {
+        id: first.id,
+        issuedAt: first.createdAt,
+        total,
+        items: group.map((p) => ({
+          itemTitle: p.item?.title ?? (p.sale?.title ? `${p.sale.title} — Purchase` : 'POS Purchase'),
+          photoUrl: undefined,
+          price: p.amount,
+        })),
+        purchase: first,
+      };
+    });
 
     res.json({ receipts });
   } catch (error) {

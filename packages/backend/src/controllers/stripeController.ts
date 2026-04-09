@@ -672,6 +672,30 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 }
               }
 
+              // Mixed carts: create a misc Purchase for any remainder beyond catalog item prices
+              const realItemsTotal = items.reduce((sum: number, item: { price: number | null }) => sum + (item.price || 0), 0);
+              const miscRemainder = Math.round((posRequest.totalAmountCents / 100 - realItemsTotal) * 100) / 100;
+              const shouldCreateMisc = items.length === 0 || miscRemainder > 0.01;
+              if (shouldCreateMisc) {
+                const miscAmount = items.length === 0 ? posRequest.totalAmountCents / 100 : miscRemainder;
+                try {
+                  await prisma.purchase.create({
+                    data: {
+                      userId: posRequest.shopperUserId,
+                      itemId: null,
+                      saleId: posRequest.saleId,
+                      amount: miscAmount,
+                      platformFeeAmount: posRequest.platformFeeCents / 100,
+                      stripePaymentIntentId: items.length === 0 ? paymentIntent.id : `${paymentIntent.id}_misc`,
+                      source: 'POS',
+                      status: 'PAID',
+                    },
+                  });
+                } catch (err: any) {
+                  console.error('[pos-payment] Failed to create misc remainder purchase:', err);
+                }
+              }
+
               // Award XP to shopper for purchase
               if (posRequest.shopperUserId) {
                 try {

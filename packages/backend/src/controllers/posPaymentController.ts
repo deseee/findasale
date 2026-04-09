@@ -931,17 +931,22 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       }
     }
 
-    // Misc/custom-amount carts have no DB item IDs — create one Purchase for the full amount
-    if (items.length === 0) {
+    // Misc-only carts: no DB item IDs — create one Purchase for the full amount
+    // Mixed carts: create a misc Purchase for any remainder beyond catalog item prices
+    const realItemsTotal = items.reduce((sum, item) => sum + (item.price || 0), 0);
+    const miscRemainder = Math.round((posRequest.totalAmountCents / 100 - realItemsTotal) * 100) / 100;
+    const shouldCreateMisc = items.length === 0 || miscRemainder > 0.01;
+    if (shouldCreateMisc) {
+      const miscAmount = items.length === 0 ? posRequest.totalAmountCents / 100 : miscRemainder;
       try {
         await prisma.purchase.create({
           data: {
             userId: posRequest.shopperUserId,
             itemId: null,
             saleId: posRequest.saleId,
-            amount: posRequest.totalAmountCents / 100,
+            amount: miscAmount,
             platformFeeAmount: posRequest.platformFeeCents / 100,
-            stripePaymentIntentId: paymentIntent.id,
+            stripePaymentIntentId: items.length === 0 ? paymentIntent.id : `${paymentIntent.id}_misc`,
             source: 'POS',
             status: 'PAID',
           },
