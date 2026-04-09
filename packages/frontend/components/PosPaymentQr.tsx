@@ -10,8 +10,10 @@ import { useState } from 'react';
 
 interface PosPaymentQrProps {
   cartTotal: number;
+  paymentAmount: number; // actual amount being charged (may be less than cartTotal in split scenarios)
   paymentLinkId: string;
   paymentLinkQr: string; // base64 data URL
+  paymentLinkUrl: string; // payment link URL for copy button
   paymentLinkStatus: 'idle' | 'generating' | 'waiting' | 'paid';
   onGenerate: () => void;
   onNewTransaction: () => void;
@@ -20,14 +22,28 @@ interface PosPaymentQrProps {
 
 export default function PosPaymentQr({
   cartTotal,
+  paymentAmount,
   paymentLinkId,
   paymentLinkQr,
+  paymentLinkUrl,
   paymentLinkStatus,
   onGenerate,
   onNewTransaction,
   onReset,
 }: PosPaymentQrProps) {
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = async () => {
+    if (paymentLinkUrl) {
+      await navigator.clipboard.writeText(paymentLinkUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  };
+
+  const isSplitPayment = paymentAmount < cartTotal;
+  const displayLabel = isSplitPayment ? 'Card charge' : 'Total';
 
   return (
     <>
@@ -37,7 +53,7 @@ export default function PosPaymentQr({
           📲 Shopper Scan to Pay
         </h4>
         <p className="text-xs text-warm-600 dark:text-warm-400 mb-4">
-          Total: ${cartTotal.toFixed(2)}
+          {displayLabel}: ${paymentAmount.toFixed(2)}
         </p>
 
         {/* State: Idle (Generate Button) */}
@@ -93,11 +109,17 @@ export default function PosPaymentQr({
                 Full Screen
               </button>
               <button
-                disabled
-                title="URL will be available in a future update"
-                className="flex-1 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-sm font-semibold cursor-not-allowed opacity-50"
+                onClick={handleCopyLink}
+                disabled={!paymentLinkUrl}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
+                  copied
+                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                    : paymentLinkUrl
+                    ? 'bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-400 hover:bg-sage-200 dark:hover:bg-sage-800'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
+                }`}
               >
-                Copy Link
+                {copied ? '✓ Copied!' : 'Copy Link'}
               </button>
             </div>
 
@@ -136,7 +158,7 @@ export default function PosPaymentQr({
                 Payment Received
               </p>
               <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
-                ${cartTotal.toFixed(2)}
+                ${paymentAmount.toFixed(2)}
               </p>
             </div>
 
