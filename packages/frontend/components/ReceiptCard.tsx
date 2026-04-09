@@ -42,9 +42,14 @@ export default function ReceiptCard({ receipt, returnWindowHours = 48, saleEndDa
 
   // Calculate if return window is still open
   const isReturnWindowOpen = () => {
-    if (!saleEndDate) return false;
-    const endTime = new Date(saleEndDate);
-    const returnDeadline = new Date(endTime.getTime() + returnWindowHours * 60 * 60 * 1000);
+    if (saleEndDate) {
+      const endTime = new Date(saleEndDate);
+      const returnDeadline = new Date(endTime.getTime() + returnWindowHours * 60 * 60 * 1000);
+      return new Date() <= returnDeadline;
+    }
+    // Fallback: 30-day return window from purchase date (covers POS and other purchase types with no sale end date)
+    const purchaseDate = new Date(receipt.purchase.createdAt);
+    const returnDeadline = new Date(purchaseDate.getTime() + 30 * 24 * 60 * 60 * 1000);
     return new Date() <= returnDeadline;
   };
 
