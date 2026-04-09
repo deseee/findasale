@@ -161,6 +161,8 @@ export default function POSPage() {
   // Payment QR state (for sending payment link to shopper)
   const [paymentLinkId, setPaymentLinkId] = useState('');
   const [paymentLinkQr, setPaymentLinkQr] = useState(''); // base64 data URL
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState(''); // payment link URL for copy button
+  const [paymentLinkAmount, setPaymentLinkAmount] = useState(0); // actual amount being charged
   const [paymentLinkStatus, setPaymentLinkStatus] = useState<'idle' | 'generating' | 'waiting' | 'paid'>('idle');
   const [paymentLinkPollInterval, setPaymentLinkPollInterval] = useState<NodeJS.Timeout | null>(null);
 
@@ -480,7 +482,9 @@ export default function POSPage() {
       setPaymentLinkPollInterval(null);
     }
     setPaymentLinkId('');
+    setPaymentLinkUrl('');
     setPaymentLinkQr('');
+    setPaymentLinkAmount(0);
     setPaymentLinkStatus('idle');
   };
 
@@ -1060,13 +1064,15 @@ export default function POSPage() {
 
       const amountForQr = remainingCents > 0 ? remainingCents / 100 : cartTotal;
 
-      const res = await api.post<{ linkId: string; qrCodeDataUrl: string }>('/pos/payment-links', {
+      const res = await api.post<{ linkId: string; paymentLinkUrl: string; qrCodeDataUrl: string }>('/pos/payment-links', {
         saleId: selectedSaleId,
         amount: amountForQr,
         itemIds,
       });
       setPaymentLinkId(res.data.linkId);
+      setPaymentLinkUrl(res.data.paymentLinkUrl);
       setPaymentLinkQr(res.data.qrCodeDataUrl); // base64 data URL
+      setPaymentLinkAmount(amountForQr);
       setPaymentLinkStatus('waiting');
     } catch (err) {
       console.error('[pos] QR generation error:', err);
@@ -1729,8 +1735,10 @@ export default function POSPage() {
       {paymentMode === 'qr' && cart.length > 0 && (
         <PosPaymentQr
           cartTotal={cartTotal}
+          paymentAmount={paymentLinkAmount || cartTotal}
           paymentLinkId={paymentLinkId}
           paymentLinkQr={paymentLinkQr}
+          paymentLinkUrl={paymentLinkUrl}
           paymentLinkStatus={paymentLinkStatus}
           onGenerate={handleGeneratePaymentQr}
           onNewTransaction={handleNewTransaction}
