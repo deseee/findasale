@@ -147,7 +147,18 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
           });
           return res.json({ url: accountLink.url });
         }
-        throw loginError;
+        // Invalid / inaccessible account ID (e.g. seed data like 'acct_test_user3').
+        // Clear it and fall through to create a real account below.
+        const isInvalidAccount =
+          loginError.message?.includes('does not have access') ||
+          loginError.message?.includes('does not exist') ||
+          loginError.code === 'account_invalid' ||
+          loginError.type === 'invalid_request_error';
+        if (!isInvalidAccount) throw loginError;
+        await prisma.organizer.update({
+          where: { userId: req.user!.id },
+          data: { stripeConnectId: null },
+        });
       }
     }
 
