@@ -7,6 +7,46 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S427 COMPLETE (2026-04-09):** Multi-source POS cart + invoice — full implementation. 2 migrations required.
+
+**S427 Implemented (ADR-012 Phases 1–8):**
+- Schema: `HoldInvoice.reservationId` made optional (`String?`) to support cart-only invoices. New fields: `invoiceMode`, `cashAmountCents`, `cardAmountCents`, `cartSessionId`.
+- Migrations: `20260409120230_pos_cart_invoice_fields` + `20260409160000_holdinvoice_optional_reservation`
+- Backend: 3 new endpoints — `GET /sessions/:id/shopper-holds`, `POST /sessions/:id/pull-holds`, `POST /sessions/:id/create-invoice`
+- Frontend pos.tsx: shopper email search → shows holds → Load Hold / Invoice / Cancel Hold buttons; auto-refresh 30s; invoice preview tile
+- Frontend PosInvoiceModal.tsx: QUICK (15 min default) / TRUST mode selector; removed cash split checkbox; cashAmountCents prop shows "Cash Collected / Remaining to Charge"; ≥24h amber warning
+- 6 UI fixes from live testing: cancel button `bg-red-600`, filter duplicate held item from miscItems, cashReceived passed to modal, invoice preview in tile
+
+**S427 Files changed:**
+- `packages/frontend/components/PosInvoiceModal.tsx`
+- `packages/frontend/pages/organizer/pos.tsx`
+- `packages/backend/src/controllers/posController.ts`
+- `packages/backend/src/routes/pos.ts`
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260409120230_pos_cart_invoice_fields/migration.sql` — NEW
+- `packages/database/prisma/migrations/20260409160000_holdinvoice_optional_reservation/migration.sql` — NEW
+
+**S427 Migrations required:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S427 Bugs found in live testing — next session:**
+1. 🔴 **Duplicate item in invoice preview** — "Glass Pitcher Set #10" appears both as the `📌 Hold:` line AND as a misc cart item. The `cart.filter(item => item.id !== invoiceModalHold.itemId)` filter is not catching it — `item.id` vs `invoiceModalHold.itemId` may be mismatched (string vs number, or different ID fields). Investigate IDs coming from `getActiveHolds` vs cart item IDs.
+2. 🔴 **In-app shopper cart not pulled in on Load Hold** — When cashier loads a hold by shopper email, only the held item appears in POS cart. Shopper's app cart items (e.g. Console Table #2, Oil Painting #7) are NOT brought in. `pullHoldsToCart` endpoint needs to also fetch and merge the shopper's active CartSession items.
+3. 🟡 **White/light card background in dark mode** — Loaded hold card renders with light background in dark mode. Likely `bg-white` or missing `dark:bg-gray-800` on the hold card container in `pos.tsx`.
+
+**S427 QA needed:**
+- Full invoice flow: load hold + add misc items → Send Invoice → shopper pays via link
+- Cart-only invoice (no hold): add misc items → Send Invoice without loading any hold
+- QUICK mode (15 min) vs TRUST mode expiry options
+- Cancel Hold removes the hold from POS and reverts item status
+
+---
+
 **S426 COMPLETE (2026-04-09):** 3 POS bugs fixed + Holds-to-Cart architect spec. No migration required.
 
 **S426 Fixes:**
@@ -137,19 +177,14 @@ npx prisma generate
 
 ## Next Session Priority
 
-**🔴 P2 — Send Invoice price formatting bug:**
-The Send Invoice tile and modal show `$0.18` for an item priced at `$18.00`. Root cause likely: `itemPrice: h.item.price` in `getActiveHolds` (posController.ts) is a Prisma `Decimal` — some path is dividing by 100 or multiplying incorrectly. Investigate:
-1. `packages/backend/src/controllers/posController.ts` — `getActiveHolds` — what is `h.item.price` and how is it returned?
-2. `packages/frontend/pages/organizer/pos.tsx` and/or `PosInvoiceModal.tsx` — where is the price displayed and how is it formatted?
-Single targeted fix once root cause is identified.
+**🔴 P0 — Duplicate item in invoice preview (S427):**
+"Glass Pitcher Set #10" appears as both the `📌 Hold:` line AND a misc cart item in the invoice preview. Total inflated. Fix: verify ID type match in `cart.filter(item => item.id !== invoiceModalHold.itemId)` — suspect string vs number mismatch. `pos.tsx` + `PosInvoiceModal.tsx`.
 
-**🟡 P2 — Dark green text illegible in dark mode on Send Invoice tile:**
-The dark green text used on the Send Invoice card is unreadable in dark mode. Color class fix needed — likely `text-green-800` or similar needs a `dark:text-green-300` variant.
+**🔴 P0 — In-app shopper cart not pulled in on Load Hold (S427):**
+When cashier loads a hold by shopper email, only the held item is in POS cart. Shopper's app cart items are NOT merged in. `pullHoldsToCart` (posController.ts) needs to also query the shopper's active `CartSession` items and add them to the POS misc items.
 
-**🟢 Feature — Holds-to-Cart + Cart-to-Invoice architecture:**
-Patrick wants to: (a) pull a shopper's held item(s) into the POS cart, (b) add additional cart items to an invoice, (c) support split cash payment on invoices (partial cash, remainder via invoice link). Architecture question: combine with existing Stripe QR workflow or keep invoices as a separate email/SMS channel for shoppers who don't use the app?
-
-**Dispatch to `findasale-architect` before any dev.** Brief: read `posController.ts`, `stripeController.ts` (payment link creation), `reservationController.ts` (holds), and the POS frontend (`pos.tsx`) to understand current data flow. Then spec the holds-to-cart + cart-to-invoice flow with a decision on whether to unify with QR checkout or keep separate.
+**🟡 P1 — White/light card background in dark mode on hold card (S427):**
+Loaded hold card has light background in dark mode. Likely `bg-white` missing `dark:bg-gray-800` in pos.tsx hold card container.
 
 **🔴 P0 — Stripe QR code "AccessDenied / Access Denied" error (carried from S424):**
 When shopper scans the Stripe QR code, Stripe page shows "AccessDenied". Blocks QR payment mode entirely. Investigate `PosPaymentQr.tsx` (what URL is rendered) + `posController.ts` `createPaymentLink` (connected account, `customer_creation` param, one-time use expiry).

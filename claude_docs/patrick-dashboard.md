@@ -1,37 +1,25 @@
-# Patrick's Dashboard — April 9, 2026 (S426)
+# Patrick's Dashboard — April 9, 2026 (S427)
 
 ## ✅ Done This Session
 
-- **Invoice price bug fixed** — Send Invoice tile + modal now show `$18.00` not `$0.18`
-- **Dark mode fix** — Send Invoice hold price color readable in dark mode  
-- **QR "AccessDenied" fix** — switched to destination charges (same pattern as all other payment flows). Needs retest after push.
-- **Holds-to-Cart spec complete** — see `claude_docs/architecture/ADR-012-SUMMARY.md` for architect decisions and 3 items that need your input
+- **Multi-source POS cart implemented** — cashier can search shopper by email, load their held item(s) into POS cart, add misc items, and send a combined invoice link
+- **Cart-only invoice** — works without any hold (misc items only)
+- **QUICK/TRUST invoice modes** — 15-min default (QUICK) or organizer-set hours (TRUST) with amber warning at ≥24h
+- **Cash split on invoice** — enter cash received at POS, modal shows "Cash Collected / Remaining to Charge on invoice"
+- **Cancel Hold** — red button on loaded hold card cancels the reservation
+- **Invoice preview** — shows all line items + total before sending
 
-## 🔴 Action Required — Push S426
+## 🔴 Action Required — Push S427 + Run Migrations
 
-Push block is below. No migration needed for this session.
+Push block at bottom. **2 migrations required** after push.
 
-## 🔴 Action Required — S425 Migration (if not yet run)
+## 🐛 3 Bugs Found in Live Testing — Next Session
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+1. **Duplicate item in invoice preview** — held item appears twice (once as Hold line, once as misc cart item). Total is wrong.
+2. **Shopper's app cart not merged in** — when you load a hold by email, only the held item comes in. The shopper's other in-app cart items (Console Table, Oil Painting, etc.) don't appear.
+3. **Dark mode hold card** — loaded hold card has white/light background in dark mode.
 
-## 🟡 Patrick Decision Needed — ADR-012
-
-Read `claude_docs/architecture/ADR-012-SUMMARY.md`. Three business decisions:
-1. Cash reconciliation method (simple logging recommended)
-2. Hold state on abandoned session (revert to PENDING recommended)
-3. Non-held item locking during invoice window (atomic recommended)
-
-Once you confirm/override, dispatch dev with `ADR-012-DEV-CHECKLIST.md`.
-
-## 🟢 Next Feature — Holds-to-Cart + Cart-to-Invoice Dev
-
-After Patrick approves ADR-012: dispatch `findasale-dev` with the checklist.
+These are P0/P1 and will be the first dispatches next session.
 
 ---
 
