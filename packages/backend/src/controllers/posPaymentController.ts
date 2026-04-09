@@ -786,3 +786,193 @@ export const cancelPaymentRequest = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+/**
+ * POST /api/pos/payment-request/:requestId/confirm
+ * Shopper confirms payment was successful (called by client after confirmCardPayment succeeds).
+ * Creates Purchase records and finalizes payment without waiting for webhook.
+ *
+ * Body: { paymentIntentId: string }
+ */
+export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const { requestId } = req.params;
+    const { paymentIntentId } = req.body as { paymentIntentId?: string };
+
+    if (!requestId) return res.status(400).json({ message: 'requestId is required' });
+    if (!paymentIntentId || typeof paymentIntentId !== 'string') {
+      return res.status(400).json({ message: 'paymentIntentId is required' });
+    }
+
+    // Lookup POSPaymentRequest
+    const posRequest = await prisma.pOSPaymentRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        shopper: { select: { id: true, email: true, name: true } },
+        organizer: { select: { id: true, name: true, stripeConnectId: true } },
+        sale: { select: { id: true, title: true } },
+      },
+    });
+
+    if (!posRequest) return res.status(404).json({ message: 'Payment request not found' });
+
+    // Verify shopper owns this request
+    if (posRequest.shopperUserId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Idempotency: if already PAID, return 200 quietly
+    if (posRequest.status === 'PAID') {
+      return res.json({
+        success: true,
+        receiptUrl: '/shopper/history?view=receipts',
+        message: 'Payment already completed',
+      });
+    }
+
+    // Verify status is ACCEPTED
+    if (posRequest.status !== 'ACCEPTED') {
+      return res.status(400).json({
+        message: `Payment request is no longer available (status: ${posRequest.status})`,
+      });
+    }
+
+    // Get Stripe instance
+    let paymentIntent;
+    try {
+      // Retrieve PaymentIntent from Stripe (on the connected account)
+      paymentIntent = await stripe().paymentIntents.retrieve(paymentIntentId, {
+        stripeAccount: posRequest.organizer.stripeConnectId!,
+      });
+    } catch (err: any) {
+      console.error('[pos-payment] Failed to retrieve PaymentIntent:', err);
+      return res.status(400).json({
+        message: 'Could not verify payment with Stripe',
+        error: err.message,
+      });
+    }
+
+    // Verify PaymentIntent succeeded
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({
+        message: `Payment intent status is ${paymentIntent.status}, expected succeeded`,
+      });
+    }
+
+    // Verify metadata matches
+    if (
+      paymentIntent.metadata?.source !== 'pos_payment_request' ||
+      paymentIntent.metadata?.requestId !== requestId
+    ) {
+      return res.status(400).json({
+        message: 'Payment intent does not match this payment request',
+      });
+    }
+
+    // Mark POS request as PAID
+    await prisma.pOSPaymentRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'PAID',
+        paidAt: new Date(),
+      },
+    });
+
+    // Create Purchase records for each item
+    const items = await prisma.item.findMany({
+      where: { id: { in: posRequest.itemIds }, saleId: posRequest.saleId },
+      select: { id: true, price: true },
+    });
+
+    for (const item of items) {
+      try {
+        await prisma.purchase.create({
+          data: {
+            userId: posRequest.shopperUserId,
+            itemId: item.id,
+            saleId: posRequest.saleId,
+            amount: item.price || 0,
+            platformFeeAmount: posRequest.platformFeeCents / 100,
+            stripePaymentIntentId: paymentIntent.id,
+            source: 'POS',
+            status: 'PAID',
+          },
+        });
+
+        // Mark item as SOLD
+        await prisma.item.update({
+          where: { id: item.id },
+          data: { status: 'SOLD' },
+        });
+
+        // Update ItemReservation if exists
+        await prisma.itemReservation.updateMany({
+          where: { itemId: item.id, userId: posRequest.shopperUserId },
+          data: { status: 'COMPLETED' },
+        });
+      } catch (err: any) {
+        console.error(`[pos-payment] Failed to mark item ${item.id} as sold:`, err);
+      }
+    }
+
+    // Award XP to shopper for purchase
+    if (posRequest.shopperUserId) {
+      try {
+        const baseXp = XP_AWARDS.PURCHASE;
+        const multipliedXp = await applyHuntPassMultiplier(posRequest.shopperUserId, baseXp);
+        awardXp(posRequest.shopperUserId, 'PURCHASE_COMPLETED', multipliedXp, {
+          saleId: posRequest.saleId,
+        }).catch((err: any) =>
+          console.error('[XP] Failed to award XP for POS purchase:', err)
+        );
+      } catch (err: any) {
+        console.warn('[pos-payment] Failed to award XP:', err.message);
+      }
+    }
+
+    // Emit socket event to both organizer and shopper
+    try {
+      const io = getIO();
+      io.to(`user:${posRequest.organizerUserId}`).emit('POS_PAYMENT_STATUS', {
+        type: 'POS_PAYMENT_STATUS',
+        requestId,
+        status: 'PAID',
+        totalAmountCents: posRequest.totalAmountCents,
+        paidAt: new Date().toISOString(),
+      });
+      io.to(`user:${posRequest.shopperUserId}`).emit('POS_PAYMENT_STATUS', {
+        type: 'POS_PAYMENT_STATUS',
+        requestId,
+        status: 'PAID',
+        totalAmountCents: posRequest.totalAmountCents,
+        paidAt: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.warn('[pos-payment] Failed to emit socket event:', err.message);
+    }
+
+    // Create notification to organizer
+    try {
+      await createNotification({
+        userId: posRequest.organizerUserId,
+        type: 'pos_payment_completed',
+        title: 'Payment Received',
+        body: `${posRequest.shopper?.name || 'Shopper'} paid $${(posRequest.totalAmountCents / 100).toFixed(2)} for ${posRequest.itemIds.length} item(s)`,
+        link: `/organizer/pos`,
+        channel: 'OPERATIONAL',
+      });
+    } catch (err: any) {
+      console.warn('[pos-payment] Failed to create notification:', err.message);
+    }
+
+    return res.json({
+      success: true,
+      receiptUrl: '/shopper/history?view=receipts',
+    });
+  } catch (err: any) {
+    console.error('[pos-payment] confirmPaymentRequest error:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};

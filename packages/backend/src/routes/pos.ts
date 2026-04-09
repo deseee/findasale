@@ -19,6 +19,7 @@ import {
   getOrganizerActiveRequests,
   getTodaySummary,
   cancelPaymentRequest,
+  confirmPaymentRequest,
 } from '../controllers/posPaymentController';
 
 const router = Router();
@@ -45,6 +46,7 @@ router.get('/payment-request/pending', authenticate, getPendingPaymentRequests);
 router.get('/payment-request/:requestId', authenticate, getPaymentRequest);
 router.post('/payment-request/:requestId/accept', authenticate, acceptPaymentRequest);
 router.post('/payment-request/:requestId/decline', authenticate, declinePaymentRequest);
+router.post('/payment-request/:requestId/confirm', authenticate, confirmPaymentRequest);
 router.post('/payment-request/:id/cancel', authenticate, requireOrganizer, cancelPaymentRequest);
 
 export default router;
