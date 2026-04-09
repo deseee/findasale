@@ -1,31 +1,64 @@
-# Patrick's Dashboard — April 9, 2026 (S427)
+# Patrick's Dashboard — April 9, 2026 (S429)
 
-## ✅ Done This Session
+## ✅ Done This Session (S429)
 
-- **Multi-source POS cart implemented** — cashier can search shopper by email, load their held item(s) into POS cart, add misc items, and send a combined invoice link
-- **Cart-only invoice** — works without any hold (misc items only)
-- **QUICK/TRUST invoice modes** — 15-min default (QUICK) or organizer-set hours (TRUST) with amber warning at ≥24h
-- **Cash split on invoice** — enter cash received at POS, modal shows "Cash Collected / Remaining to Charge on invoice"
-- **Cancel Hold** — red button on loaded hold card cancels the reservation
-- **Invoice preview** — shows all line items + total before sending
+- **Socket 502s eliminated** — all 5 socket connections across POS now use websocket-only transport. Railway's load balancer was killing HTTP long-polling after 15–22s.
+- **Request Cart Share** — organizer taps "📲 Request Cart from Shopper" → shopper's device gets a push notification → cart automatically appears in POS. Confirmed working.
+- **Real email link on QR** — "Send Link via Email" button now sends an actual Resend email (not mailto). Shows loading/sent state.
+- **Split payment fee bug fixed** — platform fee was 10% of the total ($59.80 on a $597.96 sale) applied to a $347.96 PaymentIntent. Changed to 10% of the card portion only. Was causing Stripe to reject Send to Phone.
+- **Stripe Connect invalid account** — Settings → Setup Stripe Connect was throwing 500 because `acct_test_user3` (seed data) isn't a real account. Now auto-clears the fake ID and creates a real account.
+- **Expired holds unblock immediately** — before: users had to wait up to 10 min for the cron job to run before placing a new hold on an expired item. Now: `placeHold` checks expiry inline and clears it on the spot.
+- **IndexedDB crash fixed** — `InvalidStateError: The database connection is closing` in offline sync. Stale DB singleton was being reused after the connection closed.
 
-## 🔴 Action Required — Push S427 + Run Migrations
+## 🔴 Action Required — Push S429
 
-Push block at bottom. **2 migrations required** after push.
+```powershell
+git add packages/frontend/components/PosPaymentRequestAlert.tsx
+git add packages/frontend/pages/organizer/pos.tsx
+git add packages/backend/src/controllers/posPaymentController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/reservationController.ts
+git add packages/backend/src/controllers/posController.ts
+git add packages/backend/src/routes/pos.ts
+git add packages/frontend/components/PosPaymentQr.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/hooks/usePOSPaymentRequest.ts
+git add packages/frontend/hooks/useSaleStatus.ts
+git add packages/frontend/hooks/useLiveFeed.ts
+git add packages/frontend/lib/offlineSync.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(S429): socket 502, split fee, stripe connect, expired hold, IDB + request cart share
 
-## 🐛 3 Bugs Found in Live Testing — Next Session
+- All 5 POS sockets: websocket-only transport (no more Railway 502s)
+- posPaymentController: fee = 10% of card portion for split payments
+- stripeController: auto-clear invalid stripeConnectId, create real account
+- reservationController: inline-expire stale holds so new hold is immediate
+- offlineSync: fix InvalidStateError on DB connection close
+- posController: sendPaymentLinkEmail + requestCartShare endpoints
+- pos.tsx: Request Cart Share button + Stripe error surfacing
+- PosPaymentQr: real Resend email button replacing mailto
+- Layout.tsx: CART_SHARE_REQUEST socket listener auto-shares cart"
+.\push.ps1
+```
 
-1. **Duplicate item in invoice preview** — held item appears twice (once as Hold line, once as misc cart item). Total is wrong.
-2. **Shopper's app cart not merged in** — when you load a hold by email, only the held item comes in. The shopper's other in-app cart items (Console Table, Oil Painting, etc.) don't appear.
-3. **Dark mode hold card** — loaded hold card has white/light background in dark mode.
+## 🔴 After Push — Complete Stripe Connect
 
-These are P0/P1 and will be the first dispatches next session.
+Settings → Payments → Setup Stripe Connect. The `acct_test_user3` seed value will be cleared and you'll land on real Stripe Express onboarding. Must complete before Send to Phone works.
 
 ---
 
-## 🚨 Action Required Right Now — S425 Migration
+## 🔴 Next Session — Emails Going to Spam
 
-The S425 schema change (removing unique constraint on Purchase.stripePaymentIntentId) requires a migration:
+Payment request emails are landing in Yahoo spam folders. Next session will audit:
+- SPF / DKIM / DMARC DNS records for finda.sale
+- Resend domain verification status
+- `from` address and email headers
+- Whether a dedicated sending subdomain (e.g. `mail.finda.sale`) is needed
+
+---
+
+## 🔴 Pending — S427 Migrations (if not run yet)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -36,72 +69,23 @@ npx prisma generate
 
 ---
 
-## What Happened This Session (S425)
+## 🔴 Pending — Stripe Connect Webhook
 
-**POS payment bug sprint — 7 bugs fixed.**
-
-- **Card Reader "Failed to create Terminal payment intent" 500 fixed** — a multi-item cart creates one Purchase row per item, all sharing the same PaymentIntent ID. The old `@unique` constraint on `stripePaymentIntentId` blocked the second row (Prisma P2002 error). Removed the constraint, added a regular index.
-- **QR/Card Reader button amounts now show immediately** — split balance (`cartTotal - cashReceived`) is computed before the user clicks anything, so the Stripe QR and "Charge $X" buttons always show the right card amount even before QR generation.
-- **Wrong survey fixed** — "You used online checkout!" (OG-4) was firing after POS card and cash payments. Now fires "An item sold" (OG-3).
-- **Mark Sold no longer shows to non-owners** — the button was visible to any organizer-role user on any item page. Now checks `user.id === item.sale.organizer.userId`.
-- **POS Invoice button unblocked** — holds are created as PENDING, but the invoice lookup was only looking for CONFIRMED holds. Fixed to include both states.
-- **Railway + Vercel build failures fixed** — removing @unique cascaded to 5 Prisma calls in stripeController.ts (findUnique → findFirst/updateMany). Vercel failed because the organizer type in [id].tsx was missing the `userId` field that the backend already returned.
-
-**New bug found (next session):** Send Invoice tile + modal shows `$0.18` for `$18.00` item. Price field formatting issue to investigate.
+- Stripe Dashboard → Developers → Webhooks → Add endpoint
+- URL: `https://backend-production-153c9.up.railway.app/api/webhooks/stripe`
+- Listen to: **Events on Connected accounts**
+- Event: `payment_intent.succeeded`
+- Copy signing secret → Railway env var `STRIPE_CONNECT_WEBHOOK_SECRET`
 
 ---
 
-## What Happened This Session (S424)
+## 🟡 QA Needed After Push
 
-**POS payment popup fully working + dual-role shopper access fixed.**
-
-- Popup now fires for organizer accounts (was blocked for ORGANIZER role — Bob Smith is organizer+shopper)
-- False "PAID" flash fixed when cashier cancels or shopper declines
-- Split payment shows amber box with cash/card breakdown in popup
-- 4 dual-role access components fixed: reviews, reputation page, nudge bar, feedback surveys
-
----
-
-## Audit Alerts (from S423 weekly audit — still current)
-
-### HIGH — D-006 Violation: Items section buried below Map + Reviews
-Sale detail pages: Reviews (top) → Map → Items (bottom). D-006 requires Items first. Conversion blocker.
-**Action:** Dispatch findasale-dev to reorder sections in `pages/sales/[id].tsx`
-
-### HIGH — D-004 Violation: Mobile nav broken at 375px
-No hamburger menu. "Host a Sale" button wraps to 3 lines. Unusable on phones.
-**Action:** Dispatch findasale-dev to build mobile hamburger nav
-
-### HIGH — Lucky Roll API 404 (S420 Batch 2 not pushed)
-`/shopper/lucky-roll` fails with backend returning HTML instead of JSON. Migration not run.
-**Action:** Push S420 Batch 2 (block below) then run migration
-
----
-
-## Patrick Action Items
-
-- [ ] **Run S425 migration** (see block above — unblocks multi-item card reader payments)
-- [ ] **Configure Stripe Connect webhook** (unblocks items marked SOLD after POS payment)
-  - Stripe Dashboard → Developers → Webhooks → Add endpoint
-  - URL: `https://backend-production-153c9.up.railway.app/api/webhooks/stripe`
-  - Listen to: **Events on Connected accounts**
-  - Event: `payment_intent.succeeded`
-  - Copy signing secret → Railway env var `STRIPE_CONNECT_WEBHOOK_SECRET`
-- [ ] **Push S420 Batch 2** (if not done):
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add "packages/database/prisma/migrations/20260408_add_xp_sinks_showcase_mappin/migration.sql"
-git add packages/backend/src/services/xpService.ts
-git add packages/backend/src/controllers/trailController.ts
-git add packages/backend/src/routes/users.ts
-git add packages/frontend/pages/shopper/hunt-pass.tsx
-git add claude_docs/feature-notes/ADR-guild-crew-creation-S420.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat(S420): XP sinks (custom map pin, showcase slots, treasure trail sponsor) + guild/crew ADR"
-.\push.ps1
-```
+- No 502 errors in Railway logs on POS WebSocket connections
+- Split payment ($250 cash + $347.96 card): Send to Phone creates PaymentIntent successfully
+- Settings → Payments → Setup Stripe Connect redirects to Stripe (not 500)
+- Expired hold: place a hold, wait for it to expire, immediately try a new hold — should work
+- Request Cart Share: ✅ confirmed working
 
 ---
 
@@ -114,4 +98,4 @@ git commit -m "feat(S420): XP sinks (custom map pin, showcase slots, treasure tr
 
 ---
 
-*Updated S425 — 2026-04-09*
+*Updated S429 — 2026-04-09*

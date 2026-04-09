@@ -7,6 +7,46 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S429 COMPLETE (2026-04-09):** POS socket 502 fixes, payment intent fee bug, Stripe Connect invalid account, expired hold blocking, IDB crash fix, Request Cart Share feature. No migration required.
+
+**S429 Fixes:**
+- `PosPaymentRequestAlert.tsx`, `pos.tsx` — last two sockets still using polling → `transports: ['websocket'], upgrade: false`. Eliminates Railway 502s on those connections.
+- `posPaymentController.ts` — `application_fee_amount` was 10% of the **total** on a PaymentIntent for card amount only (split payment). Changed to 10% of card portion. Was likely causing Stripe rejection on split payments.
+- `pos.tsx` — surfaces actual Stripe error text (`err.response.data.error`) in errorMessage state so Patrick can diagnose Stripe rejections without reading logs.
+- `stripeController.ts` — `createConnectAccount`: when `stripeConnectId` is a fake/seeded value (e.g. `acct_test_user3`), Stripe rejects login link. Was rethrowing. Now: detect invalid account error → clear `stripeConnectId` to null → fall through to create a real account. Settings → Setup Stripe Connect now works.
+- `reservationController.ts` — `placeHold`: when item is RESERVED but the active reservation is past `expiresAt`, inline-expire it and allow the new hold. Cron runs every 10 min — users were blocked for up to 10 min after a hold expired.
+- `offlineSync.ts` — add `onclose`/`onversionchange` handlers to clear stale `dbInstance` singleton. Add try/catch around `db.transaction()` in `getAllFromStore`. Fixes `InvalidStateError: The database connection is closing`.
+- `posController.ts` — `sendPaymentLinkEmail`: new endpoint sends Stripe payment link URL via Resend to `buyerEmail`.
+- `posController.ts` — `requestCartShare`: emits `CART_SHARE_REQUEST` socket event to shopper's device + creates in-app notification fallback. Confirmed working by Patrick.
+- `pos.tsx` — "📲 Request Cart from Shopper" button in invoice panel. Polls 4s after request for cart.
+- `PosPaymentQr.tsx` — mailto link replaced with real Resend email button (loading/sent states).
+- `Layout.tsx` — `CART_SHARE_REQUEST` socket listener: if shopper has matching cart → auto-posts POSSession; otherwise shows actionable toast.
+- `usePOSPaymentRequest.ts`, `useSaleStatus.ts`, `useLiveFeed.ts` — websocket-only transport (done earlier in S428/S429 context).
+
+**S429 Files changed:**
+- `packages/frontend/components/PosPaymentRequestAlert.tsx`
+- `packages/frontend/pages/organizer/pos.tsx`
+- `packages/backend/src/controllers/posPaymentController.ts`
+- `packages/backend/src/controllers/stripeController.ts`
+- `packages/backend/src/controllers/reservationController.ts`
+- `packages/backend/src/controllers/posController.ts`
+- `packages/backend/src/routes/pos.ts`
+- `packages/frontend/components/PosPaymentQr.tsx`
+- `packages/frontend/components/Layout.tsx`
+- `packages/frontend/hooks/usePOSPaymentRequest.ts`
+- `packages/frontend/hooks/useSaleStatus.ts`
+- `packages/frontend/hooks/useLiveFeed.ts`
+- `packages/frontend/lib/offlineSync.ts`
+
+**S429 QA needed:**
+- Socket 502: POS page → no 502 errors in Railway logs on WebSocket connections
+- Split payment Send to Phone: $597.96 total, $250 cash, $347.96 card → should create PaymentIntent successfully
+- Settings → Payments → Setup Stripe Connect: should redirect to real Stripe onboarding (not 500)
+- Expired hold → user can immediately place new hold (no 10-min wait)
+- Request Cart Share: organizer taps button → shopper gets notification → cart auto-appears in POS ✅ confirmed
+
+---
+
 **S428 COMPLETE (2026-04-09):** 4 POS bug fixes — no migration required.
 
 **S428 Fixes:**
@@ -197,11 +237,17 @@ npx prisma generate
 
 ## Next Session Priority
 
-**🔴 P0 — Stripe QR code "AccessDenied" (Patrick must retest after S428 push):**
-S426 switched to destination charges. S428 removed the strict `status: 'AVAILABLE'` items check that was causing 400s on QR generation. Patrick needs to retest QR after pushing S428. If AccessDenied persists on the Stripe-hosted page, next step: switch `createPaymentLink` from Stripe Payment Links to Stripe Checkout Sessions (one-time URL, `payment_intent_data.application_fee_amount + transfer_data.destination`, no Payment Links Connect restrictions).
+**🔴 P0 — Payment request emails going to spam (Yahoo confirmed):**
+Resend-sent emails (pay-request, hold invoice, cart share link) are landing in Yahoo spam folders. Next session: audit SPF/DKIM/DMARC records for finda.sale domain, check Resend domain verification status, review email `from` address and headers for spam triggers, consider dedicated sending domain if not already set up. Start by reading `packages/backend/src/lib/email.ts` and any Resend config.
+
+**🔴 P0 — Stripe QR code "AccessDenied" (Patrick must retest after S429 push):**
+S426 switched to destination charges. S428 removed strict items check. Retest QR after pushing S429. If AccessDenied persists: switch `createPaymentLink` from Stripe Payment Links to Stripe Checkout Sessions.
+
+**🔴 P0 — Complete Stripe Connect onboarding (Patrick action):**
+After S429 push, go to Settings → Payments → Setup Stripe Connect. The fake `acct_test_user3` will be cleared and you'll get a real Stripe Express onboarding link. Must complete before Send to Phone works for real transactions.
 
 **🟡 P1 — S427 migrations still needed (if not run):**
-```
+```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
