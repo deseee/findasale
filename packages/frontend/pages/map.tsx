@@ -205,30 +205,51 @@ const MapPage = () => {
   }, [filteredSales, featuredBoosts]);
 
   const handleUseLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          if (error.code === 1) {
-            // PERMISSION_DENIED — guide Safari/iOS users to Settings
-            showToast('Location permission denied. In Safari, go to Settings → Safari → Location and allow access.', 'error');
-          } else if (error.code === 3) {
-            // TIMEOUT — device too slow or GPS unavailable
-            showToast('Location request timed out. Please try again.', 'error');
-          } else {
-            // POSITION_UNAVAILABLE (code 2) or unknown
-            showToast('Unable to access your location. Please try again.', 'error');
-          }
-        },
-        { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false }
-      );
+    if (!navigator.geolocation) {
+      showToast('Geolocation is not supported by your browser.', 'error');
+      return;
     }
+
+    const onSuccess = (position: GeolocationPosition) => {
+      setUserLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      });
+    };
+
+    const onError = (error: GeolocationPositionError) => {
+      console.error('Error getting location:', error);
+      if (error.code === 1) {
+        // PERMISSION_DENIED
+        // Detect iOS Safari (standalone PWA) vs browser — different settings path
+        const isStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS && isStandalone) {
+          showToast('Location blocked. Go to iOS Settings → Privacy → Location Services → Safari and set to "While Using".', 'error');
+        } else if (isIOS) {
+          showToast('Location blocked. In iOS Settings → Privacy → Location Services, allow Safari to access location.', 'error');
+        } else {
+          showToast('Location permission denied. Allow location access in your browser settings and try again.', 'error');
+        }
+      } else if (error.code === 3) {
+        // TIMEOUT — GPS cold start on mobile; retry with low accuracy
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          () => showToast('Location request timed out. Make sure Location Services are on and try again.', 'error'),
+          { timeout: 15000, maximumAge: 300000, enableHighAccuracy: false }
+        );
+      } else {
+        // POSITION_UNAVAILABLE (code 2)
+        showToast('Unable to determine your location. Check that Location Services are enabled.', 'error');
+      }
+    };
+
+    // Phase 1: try high accuracy (GPS) with generous timeout for mobile cold starts
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+      timeout: 15000,
+      maximumAge: 60000,
+      enableHighAccuracy: true,
+    });
   };
 
   const handleHeatmapCellClick = (tile: HeatmapTile) => {

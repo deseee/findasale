@@ -133,22 +133,28 @@ const HomePage = () => {
   });
 
   useEffect(() => {
-    // Bug #24: Make geolocation non-blocking with timeout fallback
+    // Auto-locate only when permission is already granted.
+    // iOS Safari: calling getCurrentPosition without a user gesture and without
+    // checking permissions first can trigger the system dialog at wrong time,
+    // or return PERMISSION_DENIED before the user sees the prompt.
+    // Map page uses the same pattern — only auto-locate if already granted.
     if (navigator.geolocation) {
-      const timeoutId = setTimeout(() => {
-        console.warn('Geolocation request timed out after 5s');
-      }, 5000);
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          clearTimeout(timeoutId);
-          setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
-        },
-        (error) => {
-          clearTimeout(timeoutId);
-          console.error('Geolocation error (non-blocking):', error.message);
-        }
-      );
+      navigator.permissions
+        ?.query({ name: 'geolocation' as PermissionName })
+        .then((result) => {
+          if (result.state === 'granted') {
+            navigator.geolocation.getCurrentPosition(
+              (position) => {
+                setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+              },
+              () => {} // granted but position failed — silent, non-blocking
+            );
+          }
+          // 'prompt' or 'denied' — do nothing; user can request via map page
+        })
+        .catch(() => {
+          // Permissions API not available (older iOS) — skip auto-locate
+        });
     }
 
     // Record visit streak silently
