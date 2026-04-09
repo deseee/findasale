@@ -15,6 +15,7 @@ interface LinkedCart {
 interface PosOpenCartsProps {
   linkedCarts: LinkedCart[];
   onPullCart: (sessionId: string, cartItems: LinkedCart['cartItems'], shopperId: string, shopperEmail: string) => void;
+  onRemoveCart: (sessionId: string) => void;
 }
 
 // Helper: Calculate relative time ("2 min ago", "1 hour ago", etc.)
@@ -36,9 +37,11 @@ function getTimeAgo(createdAt: string): string {
 function CartCard({
   cart,
   onPullCart,
+  onRemoveCart,
 }: {
   cart: LinkedCart;
   onPullCart: (sessionId: string, cartItems: LinkedCart['cartItems'], shopperId: string, shopperEmail: string) => void;
+  onRemoveCart: (sessionId: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -58,13 +61,25 @@ function CartCard({
             {getTimeAgo(cart.createdAt)}
           </p>
         </div>
-        <div className="text-right ml-4">
-          <p className="text-sm font-semibold text-sage-700 dark:text-sage-300">
-            ${cart.cartTotal.toFixed(2)}
-          </p>
-          <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">
-            {isExpanded ? '▼' : '▶'}
-          </p>
+        <div className="text-right ml-4 flex items-center gap-2">
+          <div>
+            <p className="text-sm font-semibold text-sage-700 dark:text-sage-300">
+              ${cart.cartTotal.toFixed(2)}
+            </p>
+            <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">
+              {isExpanded ? '▼' : '▶'}
+            </p>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemoveCart(cart.id);
+            }}
+            className="text-gray-400 hover:text-red-500 transition text-lg leading-none p-1 min-w-[32px] min-h-[32px] flex items-center justify-center flex-shrink-0"
+            aria-label="Remove cart"
+          >
+            ✕
+          </button>
         </div>
       </div>
 
@@ -112,7 +127,7 @@ function CartCard({
 }
 
 // Main component
-export function PosOpenCarts({ linkedCarts, onPullCart }: PosOpenCartsProps) {
+export function PosOpenCarts({ linkedCarts, onPullCart, onRemoveCart }: PosOpenCartsProps) {
   // Empty state
   if (linkedCarts.length === 0) {
     return (
@@ -144,7 +159,7 @@ export function PosOpenCarts({ linkedCarts, onPullCart }: PosOpenCartsProps) {
       {/* Cart list */}
       <div>
         {linkedCarts.map(cart => (
-          <CartCard key={cart.id} cart={cart} onPullCart={onPullCart} />
+          <CartCard key={cart.id} cart={cart} onPullCart={onPullCart} onRemoveCart={onRemoveCart} />
         ))}
       </div>
     </div>

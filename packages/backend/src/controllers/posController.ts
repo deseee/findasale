@@ -538,3 +538,40 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to send invoice' });
   }
 };
+
+/**
+ * DELETE /api/pos/sessions/:sessionId
+ * Organizer removes a stale or unwanted open cart (organizer-only)
+ *
+ * Response: { success: true }
+ */
+export const deleteSession = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    if (!organizer) return;
+
+    const { sessionId } = req.params as { sessionId?: string };
+    if (!sessionId) return res.status(400).json({ message: 'sessionId required' });
+
+    // Fetch session + verify ownership
+    const session = await prisma.pOSSession.findUnique({
+      where: { id: sessionId },
+      include: { sale: { select: { organizerId: true } } },
+    });
+
+    if (!session) return res.status(404).json({ message: 'Session not found' });
+    if (session.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Session does not belong to your sale' });
+    }
+
+    // Delete the session
+    await prisma.pOSSession.delete({
+      where: { id: sessionId },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[pos] deleteSession error:', error);
+    res.status(500).json({ message: 'Failed to delete session' });
+  }
+};

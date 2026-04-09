@@ -96,6 +96,10 @@ interface PendingPayment {
   status: 'PENDING' | 'ACCEPTED';
   expiresAt: string;
   isExpired: boolean;
+  isSplitPayment?: boolean;
+  cashAmountCents?: number;
+  cardAmountCents?: number;
+  cardDisplayAmount?: string;
 }
 
 // ─── Stripe Helper ────────────────────────────────────────────────────────────────
@@ -575,6 +579,19 @@ export default function POSPage() {
       showToast('Failed to cancel request', 'error');
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  // ─── Remove open cart ───────────────────────────────────────────────────────────────────
+
+  const handleRemoveCart = async (sessionId: string) => {
+    try {
+      await api.delete(`/api/pos/sessions/${sessionId}`);
+      setLinkedCarts(prev => prev.filter(c => c.id !== sessionId));
+      showToast('Cart removed', 'info');
+    } catch (err) {
+      console.error('[pos] Remove cart error:', err);
+      showToast('Failed to remove cart', 'error');
     }
   };
 
@@ -1288,7 +1305,7 @@ export default function POSPage() {
 
       {/* Open Carts Dashboard */}
       {selectedSaleId && (
-        <PosOpenCarts linkedCarts={linkedCarts} onPullCart={handleAddLinkedCart} />
+        <PosOpenCarts linkedCarts={linkedCarts} onPullCart={handleAddLinkedCart} onRemoveCart={handleRemoveCart} />
       )}
 
       {/* Linked shopper account banner */}
@@ -1444,9 +1461,16 @@ export default function POSPage() {
                           {payment.shopperName}
                         </p>
                       </div>
-                      <span className="text-sm font-bold text-gray-900 dark:text-gray-100 ml-2">
-                        {payment.displayAmount}
-                      </span>
+                      <div className="text-right ml-2">
+                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100 block">
+                          {payment.displayAmount}
+                        </span>
+                        {payment.isSplitPayment && payment.cashAmountCents && payment.cardAmountCents && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Cash ${(payment.cashAmountCents / 100).toFixed(2)} + Card ${(payment.cardAmountCents / 100).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
                       {/* Cancel button */}
                       {cancellingId === payment.id ? (
                         <span className="text-gray-400 ml-2">⏳</span>

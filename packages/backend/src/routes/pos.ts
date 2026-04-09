@@ -9,6 +9,7 @@ import {
   getPaymentLink,
   getActiveHolds,
   sendHoldInvoice,
+  deleteSession,
 } from '../controllers/posController';
 import {
   createPaymentRequest,
@@ -30,6 +31,7 @@ router.post('/sessions', authenticate, shareCart);
 // Organizer endpoints
 router.get('/sessions', authenticate, getLinkedCarts);
 router.post('/sessions/:sessionId/pull', authenticate, pullCart);
+router.delete('/sessions/:sessionId', authenticate, requireOrganizer, deleteSession);
 router.post('/payment-links', authenticate, createPaymentLink);
 router.get('/payment-links/:linkId', authenticate, getPaymentLink);
 router.get('/holds', authenticate, getActiveHolds);
