@@ -636,8 +636,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                     📱 QR
                   </button>
                 )}
-                {/* Hold-to-Pay: Organizer "Mark Sold" button for RESERVED items */}
-                {user?.roles?.includes('ORGANIZER') && item.status === 'RESERVED' && (
+                {/* Hold-to-Pay: Organizer "Mark Sold" button — only for the sale owner, not any organizer */}
+                {user?.roles?.includes('ORGANIZER') && user?.id === item.sale.organizer?.userId && item.status === 'RESERVED' && (
                   <button
                     onClick={() => setShowHoldToPayModal(true)}
                     title="Mark as sold and send payment request to shopper"
