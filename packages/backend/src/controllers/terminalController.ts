@@ -103,10 +103,11 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     const organizer = await resolveOrganizer(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
-    const { items, buyerEmail, saleId: bodySaleId } = req.body as {
+    const { items, buyerEmail, saleId: bodySaleId, cashAmountCents } = req.body as {
       items?: Array<{ itemId?: string; amount: number; label?: string }>;
       buyerEmail?: string;
       saleId?: string;  // required when cart contains only misc items (no itemId)
+      cashAmountCents?: number;  // optional: amount of cash received for split payments
     };
 
     // Validate items array
@@ -157,13 +158,19 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     // Calculate total amount in cents
     const totalAmountCents = Math.round(items.reduce((sum, i) => sum + i.amount, 0) * 100);
 
+    // Calculate card amount: if split payment (cashAmountCents provided and less than total), use remaining
+    const cardAmountCents = cashAmountCents != null && cashAmountCents > 0 && cashAmountCents < totalAmountCents
+      ? totalAmountCents - cashAmountCents
+      : totalAmountCents;
+
     // Fee: read from FeeStructure, apply referral discount if active
+    // Platform fee is calculated on the card portion only (not on cash)
     const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
     const baseFeeRate = feeStructure?.feeRate ?? 0.10;
     const hasReferralDiscount =
       organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
     const feeRate = hasReferralDiscount ? 0 : baseFeeRate;
-    const platformFeeAmount = Math.round(totalAmountCents * feeRate);
+    const platformFeeAmount = Math.round(cardAmountCents * feeRate);
 
     // Determine sale ID: derive from first item with itemId, or fall back to bodySaleId (misc-only carts)
     let saleId = '';
@@ -188,7 +195,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
 
     // Create terminal PaymentIntent — platform account in simulated mode, connected account in production
     const piParams = {
-      amount: totalAmountCents,
+      amount: cardAmountCents,
       currency: 'usd',
       payment_method_types: ['card_present'], // Terminal-only: physical card reader
       capture_method: 'manual' as const,      // Terminal requires explicit capture
@@ -198,6 +205,11 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
         saleId,
         source: 'POS',
         ...(buyerEmail ? { buyerEmail } : {}),
+        ...(cashAmountCents != null && cashAmountCents > 0 && cashAmountCents < totalAmountCents ? {
+          isSplitPayment: 'true',
+          cashAmountCents: cashAmountCents.toString(),
+          cardAmountCents: cardAmountCents.toString(),
+        } : {}),
       },
     };
     const paymentIntent = isSimulated
@@ -230,7 +242,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
       purchaseIds,
-      totalAmount: totalAmountCents / 100,
+      totalAmount: cardAmountCents / 100,
       platformFee: platformFeeAmount / 100,
     });
   } catch (error) {
