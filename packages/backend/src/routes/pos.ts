@@ -7,6 +7,7 @@ import {
   pullCart,
   createPaymentLink,
   getPaymentLink,
+  sendPaymentLinkEmail,
   getActiveHolds,
   sendHoldInvoice,
   deleteSession,
@@ -36,6 +37,7 @@ router.get('/sessions', authenticate, getLinkedCarts);
 router.post('/sessions/:sessionId/pull', authenticate, pullCart);
 router.delete('/sessions/:sessionId', authenticate, requireOrganizer, deleteSession);
 router.post('/payment-links', authenticate, createPaymentLink);
+router.post('/payment-links/email', authenticate, requireOrganizer, sendPaymentLinkEmail);
 router.get('/payment-links/:linkId', authenticate, getPaymentLink);
 router.get('/holds', authenticate, getActiveHolds);
 router.post('/holds/:reservationId/invoice', authenticate, sendHoldInvoice);

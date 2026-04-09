@@ -1174,33 +1174,33 @@ export default function POSPage() {
       mergedCount++;
     });
 
-    // Also do a fresh fetch for the shopper's linked cart session (cached linkedCarts may be stale)
+    // Pull shopper's shared cart (same flow as clicking a linked cart manually)
     if (selectedSaleId) {
       try {
         const sessionRes = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}`);
         const freshSessions = sessionRes.data.sessions || [];
-        const shopperCart = freshSessions.find(lc => lc.shopperId === hold.shopperId);
+        // Match by shopperId OR email — covers guest/account edge cases
+        const shopperCart = freshSessions.find(
+          lc => (hold.shopperId && lc.shopperId === hold.shopperId) || lc.shopperEmail === hold.shopperEmail
+        );
         if (shopperCart && shopperCart.cartItems.length > 0) {
-          shopperCart.cartItems.forEach(cartItem => {
-            if (cartItem.id) {
-              addToCart({ id: cartItem.id, title: cartItem.title, price: cartItem.price, status: 'AVAILABLE', photoUrls: cartItem.photoUrl ? [cartItem.photoUrl] : [], sku: null } as Item);
-            } else {
-              addToCart({ title: cartItem.title, amount: cartItem.price });
-            }
-            mergedCount++;
-          });
-          setLinkedCarts(freshSessions); // update cache
+          // Use the proven pull flow — calls /pull endpoint then adds items exactly like the UI button does
+          await handleAddLinkedCart(shopperCart.id, shopperCart.cartItems, shopperCart.shopperId, shopperCart.shopperEmail);
+          mergedCount += shopperCart.cartItems.length;
         }
+        setLinkedCarts(freshSessions);
       } catch {
-        // ignore — fresh fetch is best-effort
+        // ignore — best effort
       }
     }
 
-    if (mergedCount > 0) {
+    if (otherHolds.length > 0 && mergedCount === otherHolds.length) {
+      // Only other holds merged (no linked cart) — show count
       showToast(`Loaded hold + ${mergedCount} item${mergedCount !== 1 ? 's' : ''} for ${hold.shopperName}`, 'success');
-    } else {
+    } else if (mergedCount === 0) {
       showToast(`Loaded hold for ${hold.shopperName}`, 'success');
     }
+    // If linked cart was merged, handleAddLinkedCart already showed its own toast
   };
 
   // ─── Cancel hold from POS ──────────────────────────────────────────────────────────────
@@ -1900,6 +1900,13 @@ export default function POSPage() {
           paymentLinkUrl={paymentLinkUrl}
           paymentLinkStatus={paymentLinkStatus}
           buyerEmail={buyerEmail}
+          onEmailLink={buyerEmail && paymentLinkUrl ? async () => {
+            await api.post('/pos/payment-links/email', {
+              paymentLinkUrl,
+              buyerEmail,
+              amount: paymentLinkAmount || cardAmount,
+            });
+          } : undefined}
           onGenerate={handleGeneratePaymentQr}
           onNewTransaction={handleNewTransaction}
           onReset={handleResetPaymentQr}

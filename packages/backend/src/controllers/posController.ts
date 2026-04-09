@@ -614,6 +614,61 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * POST /api/pos/payment-links/email
+ * Send a Stripe payment link URL to a shopper's email via Resend.
+ * Used when organizer generates a QR code and wants to also email the link.
+ *
+ * Body: { paymentLinkUrl: string, buyerEmail: string, amount: number }
+ */
+export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    if (!organizer) return;
+
+    const { paymentLinkUrl, buyerEmail, amount } = req.body as {
+      paymentLinkUrl?: string;
+      buyerEmail?: string;
+      amount?: number;
+    };
+
+    if (!paymentLinkUrl || !buyerEmail) {
+      return res.status(400).json({ message: 'paymentLinkUrl and buyerEmail required' });
+    }
+
+    if (!process.env.RESEND_API_KEY) {
+      return res.status(503).json({ message: 'Email service not configured' });
+    }
+
+    const { Resend } = await import('resend');
+    const { buildEmail } = await import('../services/emailTemplateService');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
+
+    const amountStr = amount ? `$${Number(amount).toFixed(2)}` : 'your items';
+    const html = buildEmail({
+      preheader: `Your payment link is ready`,
+      headline: `Pay ${amountStr} — tap the button below`,
+      body: `<p>The organizer has sent you a secure payment link for ${amountStr}. Tap below to pay from your phone.</p>`,
+      ctaText: 'Pay Now',
+      ctaUrl: paymentLinkUrl,
+      accentColor: '#10b981',
+    });
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: buyerEmail,
+      subject: `Payment link: ${amountStr}`,
+      html,
+    });
+
+    res.json({ status: 'SENT' });
+  } catch (error) {
+    console.error('[pos] sendPaymentLinkEmail error:', error);
+    res.status(500).json({ message: 'Failed to send email' });
+  }
+};
+
+/**
  * DELETE /api/pos/sessions/:sessionId
  * Organizer removes a stale or unwanted open cart (organizer-only)
  *
