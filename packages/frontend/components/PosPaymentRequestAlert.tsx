@@ -66,7 +66,9 @@ export function PosPaymentRequestAlert() {
 
     const socketUrl =
       process.env.NEXT_PUBLIC_SOCKET_URL ||
-      (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/^http/, 'ws');
+      (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001')
+        .replace(/\/api\/?$/, '')   // strip /api suffix before ws conversion
+        .replace(/^http/, 'ws');
 
     socketRef.current = io(socketUrl, {
       auth: { token },

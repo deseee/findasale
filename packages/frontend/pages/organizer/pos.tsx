@@ -237,28 +237,36 @@ export default function POSPage() {
     if (activePendingPayments) {
       const prev = prevActivePendingRef.current;
 
-      // Polling-based flash fallback: detect when a PENDING/ACCEPTED payment disappears from the list
-      // (it transitioned to PAID). Fires even when the socket PAID event is missed.
-      // Skip payments that the cashier explicitly cancelled — those are NOT paid.
+      // Polling-based flash fallback: detect when a PENDING/ACCEPTED payment disappears from the list.
+      // Skip payments the cashier explicitly cancelled — those are NOT paid.
+      // Verify actual status before showing the banner — disappearance could mean DECLINED, not PAID.
       if (prev.length > 0 && activePendingPayments.length < prev.length) {
         const disappeared = prev.filter(p =>
           !activePendingPayments.find(c => c.id === p.id) &&
           !cancelledRequestIdsRef.current.has(p.id)
         );
         if (disappeared.length > 0) {
-          const paid = disappeared[0];
-          // Only set banner if socket hasn't already set one
-          setPaidBanner(current => current ? current : {
-            shopperName: paid.shopperName,
-            displayAmount: paid.displayAmount,
-          });
-          // Clear organizer cart and reset payment state since the payment completed
-          setCart([]);
-          setBuyerEmail('');
-          setLinkedShopperId(null);
-          setLinkedShopperData(null);
-          setSuccessMessage('');
-          setPaymentStatus('idle');
+          const candidate = disappeared[0];
+          // Verify the actual terminal status before showing paid banner
+          api.get<{ status: string }>(`/pos/payment-request/${candidate.id}`)
+            .then(({ data }) => {
+              if (data?.status === 'PAID') {
+                setPaidBanner(current => current ? current : {
+                  shopperName: candidate.shopperName,
+                  displayAmount: candidate.displayAmount,
+                });
+                setCart([]);
+                setBuyerEmail('');
+                setLinkedShopperId(null);
+                setLinkedShopperData(null);
+                setSuccessMessage('');
+                setPaymentStatus('idle');
+              }
+              // DECLINED or other terminal states: do nothing — no banner, no cart clear
+            })
+            .catch(() => {
+              // If status check fails, don't show banner (safe default)
+            });
         }
       }
 
