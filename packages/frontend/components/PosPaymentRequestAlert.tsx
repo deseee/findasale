@@ -22,6 +22,11 @@ interface POSRequestPayload {
   displayAmount: string;
   expiresAt: string;
   deepLink: string;
+  isSplitPayment?: boolean;
+  cashAmountCents?: number;
+  cardAmountCents?: number;
+  cashDisplayAmount?: string;
+  cardDisplayAmount?: string;
 }
 
 export function PosPaymentRequestAlert() {
@@ -142,6 +147,13 @@ export function PosPaymentRequestAlert() {
               {pending.itemNames.slice(0, 3).join(' · ')}
               {pending.itemNames.length > 3 ? ` +${pending.itemNames.length - 3} more` : ''}
             </p>
+          )}
+          {pending.isSplitPayment && pending.cashDisplayAmount && pending.cardDisplayAmount && (
+            <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-center">
+              <p className="text-amber-600 dark:text-amber-400 font-semibold text-xs mb-1">Split Payment</p>
+              <p className="text-warm-700 dark:text-warm-300">Cash (in person): <span className="font-semibold">{pending.cashDisplayAmount}</span></p>
+              <p className="text-warm-700 dark:text-warm-300">Card charge: <span className="font-semibold text-sage-700 dark:text-sage-400">{pending.cardDisplayAmount}</span></p>
+            </div>
           )}
         </div>
 

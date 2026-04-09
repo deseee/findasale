@@ -85,7 +85,6 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
   const canReview =
     mode === 'sale' &&
     !!user &&
-    !user.roles?.includes('ORGANIZER') &&
     saleStatus &&
     ['PUBLISHED', 'ENDED'].includes(saleStatus);
 
