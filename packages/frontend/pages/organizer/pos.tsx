@@ -1956,7 +1956,7 @@ export default function POSPage() {
                         <button
                           onClick={() => handleCancelHold(hold)}
                           disabled={cancellingSalesId === hold.reservationId}
-                          className="flex-1 py-2 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-semibold hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 transition"
+                          className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
                         >
                           {cancellingSalesId === hold.reservationId ? 'Cancelling...' : 'Cancel Hold'}
                         </button>
@@ -1980,6 +1980,33 @@ export default function POSPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Invoice Preview (when hold is loaded) */}
+          {loadedHold && (
+            <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase">Invoice Preview</p>
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-700 dark:text-gray-300">📌 Hold: {loadedHold.itemTitle}</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">${loadedHold.itemPrice.toFixed(2)}</span>
+                </div>
+                {cart.filter(item => item.id !== loadedHold.itemId).length > 0 && (
+                  <>
+                    {cart.filter(item => item.id !== loadedHold.itemId).map((item, idx) => (
+                      <div key={idx} className="flex justify-between">
+                        <span className="text-gray-700 dark:text-gray-300">{item.title}</span>
+                        <span className="font-semibold text-gray-900 dark:text-white">${item.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+                <div className="border-t border-gray-200 dark:border-gray-600 pt-1.5 flex justify-between font-semibold text-gray-900 dark:text-white">
+                  <span>Total</span>
+                  <span>${(loadedHold.itemPrice + cart.filter(item => item.id !== loadedHold.itemId).reduce((sum, item) => sum + item.amount, 0)).toFixed(2)}</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -2155,6 +2182,7 @@ export default function POSPage() {
         <PosInvoiceModal
           hold={invoiceModalHold}
           miscItems={cart.filter(item => item.id !== invoiceModalHold.itemId)}
+          cashAmountCents={cashReceived > 0 ? Math.round(cashReceived * 100) : undefined}
           onClose={() => setInvoiceModalHold(null)}
           onSent={(reservationId) => {
             setHolds(prev => prev.filter(h => h.reservationId !== reservationId));

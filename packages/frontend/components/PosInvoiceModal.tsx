@@ -26,17 +26,16 @@ interface PosInvoiceModalProps {
   hold: HoldItem;
   miscItems?: CartItem[];
   sessionId?: string;
+  cashAmountCents?: number;
   onClose: () => void;
   onSent: (reservationId: string) => void;
 }
 
-export default function PosInvoiceModal({ hold, miscItems = [], sessionId, onClose, onSent }: PosInvoiceModalProps) {
+export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashAmountCents = 0, onClose, onSent }: PosInvoiceModalProps) {
   const { showToast } = useToast();
   const [deliverVia, setDeliverVia] = useState<'EMAIL' | 'SMS' | 'BOTH'>('EMAIL');
   const [invoiceMode, setInvoiceMode] = useState<'QUICK' | 'TRUST'>('QUICK');
   const [expiryHours, setExpiryHours] = useState(0.25);
-  const [cashAmountCents, setCashAmountCents] = useState(0);
-  const [cashInputValue, setCashInputValue] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -264,66 +263,23 @@ export default function PosInvoiceModal({ hold, miscItems = [], sessionId, onClo
                 </div>
               )}
 
-              {/* Cash Split Input */}
-              <div className="mb-6">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-                  Cash Split (Optional):
-                </p>
-                <label className="flex items-center cursor-pointer mb-3">
-                  <input
-                    type="checkbox"
-                    checked={cashAmountCents > 0}
-                    onChange={(e) => {
-                      if (!e.target.checked) {
-                        setCashAmountCents(0);
-                        setCashInputValue('');
-                      }
-                    }}
-                    className="w-4 h-4 cursor-pointer"
-                  />
-                  <span className="ml-3 text-sm text-gray-900 dark:text-white">
-                    Split with cash payment
-                  </span>
-                </label>
-                {cashAmountCents > 0 && (
-                  <div className="space-y-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Cash Collected:
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max={grandTotal}
-                        step="0.01"
-                        value={cashInputValue}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setCashInputValue(val);
-                          const cents = Math.round(parseFloat(val || '0') * 100);
-                          setCashAmountCents(Math.min(cents, Math.round(grandTotal * 100)));
-                        }}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div className="border-t border-gray-200 dark:border-gray-600 pt-3 space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Cash Collected:</span>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                          ${(cashAmountCents / 100).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">Remaining to Charge:</span>
-                        <span className="text-sm font-semibold text-sage-700 dark:text-sage-400">
-                          ${((grandTotal * 100 - cashAmountCents) / 100).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
+              {/* Cash Info (if provided) */}
+              {cashAmountCents > 0 && (
+                <div className="mb-6 space-y-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                  <div className="flex justify-between">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Cash Collected:</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                      ${(cashAmountCents / 100).toFixed(2)}
+                    </span>
                   </div>
-                )}
-              </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Remaining to Charge:</span>
+                    <span className="text-sm font-semibold text-sage-700 dark:text-sage-400">
+                      ${((grandTotal * 100 - cashAmountCents) / 100).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Error Message */}
               {error && (
