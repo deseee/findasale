@@ -284,8 +284,8 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
         isSplitPayment,
         cashAmountCents: isSplitPayment ? splitCashAmountCents : undefined,
         cardAmountCents: isSplitPayment ? splitCardAmountCents : undefined,
-        cashDisplayAmount: isSplitPayment ? `$${(splitCashAmountCents / 100).toFixed(2)}` : undefined,
-        cardDisplayAmount: isSplitPayment ? `$${(splitCardAmountCents / 100).toFixed(2)}` : undefined,
+        cashDisplayAmount: isSplitPayment ? `$${(splitCashAmountCents! / 100).toFixed(2)}` : undefined,
+        cardDisplayAmount: isSplitPayment ? `$${(splitCardAmountCents! / 100).toFixed(2)}` : undefined,
       });
     } catch (err: any) {
       console.warn('[pos-payment] Failed to emit socket event:', err.message);
@@ -314,7 +314,8 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       isSplitPayment,
       cashAmountCents: isSplitPayment ? splitCashAmountCents : undefined,
       cardAmountCents: isSplitPayment ? splitCardAmountCents : undefined,
-      cardDisplayAmount: isSplitPayment ? `$${(splitCardAmountCents / 100).toFixed(2)}` : undefined,
+      cashDisplayAmount: isSplitPayment ? `$${(splitCashAmountCents! / 100).toFixed(2)}` : undefined,
+      cardDisplayAmount: isSplitPayment ? `$${(splitCardAmountCents! / 100).toFixed(2)}` : undefined,
       displayAmount: `$${(totalAmountCents / 100).toFixed(2)}`,
       expiresAt: expiresAt.toISOString(),
       stripePaymentIntentId: paymentIntent.id,
