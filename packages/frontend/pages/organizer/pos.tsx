@@ -181,6 +181,7 @@ export default function POSPage() {
   // Pending Payments state
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const pendingPaymentsRef = useRef<PendingPayment[]>([]);
+  const prevActivePendingRef = useRef<PendingPayment[]>([]);
   const [pendingPaymentsPanelOpen, setPendingPaymentsPanelOpen] = useState(true);
   const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
 
@@ -223,9 +224,9 @@ export default function POSPage() {
     },
     enabled: !!user && user.roles?.includes('ORGANIZER'),
     refetchInterval: (query) => {
-      // Socket handles real-time updates — poll only as a fallback every 30s
+      // Socket handles real-time updates — poll only as a fallback every 5s
       const d = (query as any).state?.data as PendingPayment[] | undefined;
-      return d && d.length > 0 ? 30000 : false;
+      return d && d.length > 0 ? 5000 : false;
     },
     staleTime: 0, // Always refetch
   });
@@ -233,8 +234,29 @@ export default function POSPage() {
   // Update local state when query returns new data
   useEffect(() => {
     if (activePendingPayments) {
+      const prev = prevActivePendingRef.current;
+
+      // Polling-based flash fallback: detect when a PENDING/ACCEPTED payment disappears from the list
+      // (it transitioned to PAID). Fires even when the socket PAID event is missed.
+      if (prev.length > 0 && activePendingPayments.length < prev.length) {
+        const disappeared = prev.filter(p => !activePendingPayments.find(c => c.id === p.id));
+        if (disappeared.length > 0) {
+          const paid = disappeared[0];
+          // Only set banner if socket hasn't already set one
+          setPaidBanner(current => current ? current : {
+            shopperName: paid.shopperName,
+            displayAmount: paid.displayAmount,
+          });
+          // Clear organizer cart since the payment completed
+          setCart([]);
+          setBuyerEmail('');
+          setLinkedShopperId(null);
+          setLinkedShopperData(null);
+        }
+      }
+
+      prevActivePendingRef.current = activePendingPayments;
       setPendingPayments(activePendingPayments);
-      // Keep panel expanded while there are active requests
       if (activePendingPayments.length > 0) {
         setPendingPaymentsPanelOpen(true);
       }
@@ -528,6 +550,12 @@ export default function POSPage() {
           if (soundEnabled) {
             playSuccessChime();
           }
+
+          // Clear organizer cart since payment completed
+          setCart([]);
+          setBuyerEmail('');
+          setLinkedShopperId(null);
+          setLinkedShopperData(null);
 
           // Mark for visual feedback briefly, then remove
           setSuccessPaymentId(requestId);
