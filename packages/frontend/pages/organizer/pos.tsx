@@ -1123,6 +1123,7 @@ export default function POSPage() {
         saleId: selectedSaleId,
         amount: amountForQr,
         itemIds,
+        ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
       });
       setPaymentLinkId(res.data.linkId);
       setPaymentLinkUrl(res.data.paymentLinkUrl);
@@ -1536,7 +1537,14 @@ export default function POSPage() {
                       className="w-8 h-8 rounded mb-1 object-cover"
                     />
                   )}
-                  <p className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
+                    {loadedHold && item.id === loadedHold.itemId && (
+                      <span className="px-1.5 py-0.5 text-xs rounded-full bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 whitespace-nowrap">
+                        📌 On Hold
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 ml-2">
                   <span className="text-sm font-semibold text-sage-700 dark:text-green-400">
@@ -2012,41 +2020,6 @@ export default function POSPage() {
           >
             New Transaction
           </button>
-        </div>
-      )}
-
-      {/* Cart Summary with held/misc item badges */}
-      {cart.length > 0 && (
-        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-sage-200 dark:border-sage-700">
-          <h4 className="text-sm font-semibold text-sage-900 dark:text-sage-100 mb-3">Cart Summary</h4>
-          <div className="space-y-2 mb-4 max-h-32 overflow-y-auto">
-            {cart.map((item, idx) => {
-              const isHeldItem = loadedHold && item.id === loadedHold.itemId;
-              return (
-                <div key={idx} className="flex justify-between items-start text-sm">
-                  <div className="flex-1">
-                    <div className="flex gap-2 items-start">
-                      <span className="text-gray-900 dark:text-white flex-1">{item.title}</span>
-                      {isHeldItem && (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 whitespace-nowrap">
-                          📌 On Hold
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-gray-900 dark:text-white font-medium ml-2">
-                    ${(item.amount || 0).toFixed(2)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="border-t border-sage-200 dark:border-sage-700 pt-3">
-            <div className="flex justify-between">
-              <span className="font-semibold text-sage-900 dark:text-sage-100">Total</span>
-              <span className="font-bold text-sage-700 dark:text-sage-400">${cartTotal.toFixed(2)}</span>
-            </div>
-          </div>
         </div>
       )}
 

@@ -227,10 +227,11 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     const organizer = await resolveOrganizer(req, res, { requireStripe: true });
     if (!organizer) return;
 
-    const { saleId, itemIds, amount } = req.body as {
+    const { saleId, itemIds, amount, buyerEmail } = req.body as {
       saleId?: string;
       itemIds?: string[];
       amount?: number;
+      buyerEmail?: string;
     };
 
     if (!saleId) return res.status(400).json({ message: 'saleId is required' });
@@ -330,6 +331,31 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
       },
     });
+
+    // Send payment link via email if buyer email provided
+    if (buyerEmail && process.env.RESEND_API_KEY) {
+      try {
+        const { Resend } = await import('resend');
+        const { buildEmail } = await import('../services/emailTemplateService');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const html = buildEmail({
+          preheader: `Your payment link for $${amount.toFixed(2)}`,
+          headline: `Your Payment Link`,
+          body: `<p>Your organizer has sent you a payment link for <strong>$${amount.toFixed(2)}</strong>. Click below to pay securely via Stripe.</p>`,
+          ctaText: 'Pay Now',
+          ctaUrl: paymentLinkUrl,
+          accentColor: '#10b981',
+        });
+        await resend.emails.send({
+          from: process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale',
+          to: buyerEmail,
+          subject: `Payment link: $${amount.toFixed(2)}`,
+          html,
+        });
+      } catch (emailErr) {
+        console.warn('[pos] Failed to send payment link email:', emailErr);
+      }
+    }
 
     res.json({
       linkId: posPaymentLink.id,
