@@ -56,6 +56,14 @@ export async function initOfflineDB(): Promise<IDBDatabase> {
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       dbInstance = request.result;
+      // Clear the singleton when the connection is closed or invalidated so
+      // the next call to initOfflineDB() opens a fresh connection instead of
+      // reusing a dead one (which causes InvalidStateError on transaction).
+      dbInstance.onclose = () => { dbInstance = null; };
+      dbInstance.onversionchange = () => {
+        dbInstance?.close();
+        dbInstance = null;
+      };
       resolve(dbInstance);
     };
 
@@ -357,7 +365,15 @@ function getFromStore(db: IDBDatabase, storeName: string, key: any): Promise<any
  */
 function getAllFromStore(db: IDBDatabase, storeName: string): Promise<any[]> {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([storeName], 'readonly');
+    let transaction: IDBTransaction;
+    try {
+      transaction = db.transaction([storeName], 'readonly');
+    } catch (err) {
+      // DB connection was closed between init and use — clear singleton so
+      // next call reopens. Resolve empty rather than crashing the UI.
+      dbInstance = null;
+      return resolve([]);
+    }
     const store = transaction.objectStore(storeName);
     const request = store.getAll();
 
