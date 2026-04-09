@@ -650,6 +650,10 @@ export const getOrganizerActiveRequests = async (req: AuthRequest, res: Response
       status: r.status,
       expiresAt: r.expiresAt.toISOString(),
       isExpired: new Date() > r.expiresAt,
+      isSplitPayment: r.isSplitPayment,
+      cashAmountCents: r.cashAmountCents,
+      cardAmountCents: r.cardAmountCents,
+      cardDisplayAmount: r.cardAmountCents ? `$${(r.cardAmountCents / 100).toFixed(2)}` : undefined,
     }));
 
     return res.json(formatted);
