@@ -102,12 +102,34 @@ export default function PaymentRequestPage() {
     }
   };
 
-  const handlePaymentSuccess = () => {
-    // Redirect immediately after Stripe confirms — don't wait for webhook
-    showToast('Payment successful! Redirecting...', 'success');
-    setTimeout(() => {
-      router.push('/shopper/history?view=receipts&paid=1');
-    }, 1500);
+  const handlePaymentSuccess = async (paymentIntentId: string) => {
+    // Call confirm endpoint to finalize payment server-side
+    if (requestId) {
+      try {
+        const response = await api.post(
+          `/pos/payment-request/${requestId}/confirm`,
+          { paymentIntentId }
+        );
+        if (response.data?.success) {
+          showToast('Payment successful! Redirecting...', 'success');
+          setTimeout(() => {
+            router.push('/shopper/history?view=receipts&paid=1');
+          }, 1500);
+        }
+      } catch (err: any) {
+        // Log error but still redirect — webhook fallback may catch it
+        console.error('[pos-payment] confirm endpoint failed:', err);
+        showToast('Payment processing... (fallback to webhook)', 'info');
+        setTimeout(() => {
+          router.push('/shopper/history?view=receipts&paid=1');
+        }, 2000);
+      }
+    } else {
+      showToast('Payment successful! Redirecting...', 'success');
+      setTimeout(() => {
+        router.push('/shopper/history?view=receipts&paid=1');
+      }, 1500);
+    }
   };
 
   const handlePaymentError = (error: string) => {

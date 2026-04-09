@@ -8,7 +8,7 @@ interface PaymentRequestFormProps {
   clientSecret: string;
   totalAmountCents: number;
   stripeAccountId?: string | null; // connected account — PI lives here
-  onSuccess: () => void;
+  onSuccess: (paymentIntentId: string) => void;
   onError?: (error: string) => void;
   isProcessing?: boolean;
 }
@@ -58,10 +58,10 @@ const PaymentForm: React.FC<PaymentRequestFormProps> = ({
       }
 
       if (paymentIntent?.status === 'succeeded') {
-        onSuccess();
+        onSuccess(paymentIntent.id);
       } else if (paymentIntent?.status === 'requires_action') {
         // 3DS or redirect — Stripe will handle it; wait for webhook to confirm
-        onSuccess();
+        onSuccess(paymentIntent.id);
       } else {
         onError?.(`Payment not completed (status: ${paymentIntent?.status ?? 'unknown'}). Please try again.`);
         setIsSubmitting(false);
