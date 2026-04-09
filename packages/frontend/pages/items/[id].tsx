@@ -63,6 +63,7 @@ interface Item {
       name?: string;
       businessName?: string;
       rating?: number;
+      userId?: string;
     } | null;
     location?: string;
   };
