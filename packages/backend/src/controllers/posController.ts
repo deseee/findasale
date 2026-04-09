@@ -290,9 +290,12 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
         after_completion: {
           type: 'hosted_confirmation' as const,
         },
-        // Note: application_fee_amount goes at top level for Payment Links (not inside payment_intent_data)
-        // transfer_data is not supported on paymentLinks API — Connect routing handled via Checkout Sessions
-        ...(organizer.stripeConnectId ? { application_fee_amount: platformFeeAmount } as any : {}),
+        // For Payment Links + Connect: application_fee_amount AND transfer_data both go at top level
+        // (NOT inside payment_intent_data — that only works for Checkout Sessions)
+        ...(organizer.stripeConnectId ? {
+          application_fee_amount: platformFeeAmount,
+          transfer_data: { destination: organizer.stripeConnectId },
+        } as any : {}),
       });
 
       stripePaymentLinkId = paymentLink.id;
