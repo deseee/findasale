@@ -811,7 +811,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       where: { id: requestId },
       include: {
         shopper: { select: { id: true, email: true, name: true } },
-        organizer: { select: { id: true, name: true, stripeConnectId: true } },
+        organizer: { select: { id: true, name: true } },
         sale: { select: { id: true, title: true } },
       },
     });
@@ -839,12 +839,21 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       });
     }
 
+    // Fetch Organizer profile to get stripeConnectId (stripeConnectId lives on Organizer, not User)
+    const organizerProfile = await prisma.organizer.findUnique({
+      where: { userId: posRequest.organizerUserId },
+      select: { stripeConnectId: true },
+    });
+    if (!organizerProfile?.stripeConnectId) {
+      return res.status(400).json({ message: 'Organizer Stripe account not configured' });
+    }
+
     // Get Stripe instance
     let paymentIntent;
     try {
       // Retrieve PaymentIntent from Stripe (on the connected account)
       paymentIntent = await stripe().paymentIntents.retrieve(paymentIntentId, {}, {
-        stripeAccount: posRequest.organizer.stripeConnectId!,
+        stripeAccount: organizerProfile.stripeConnectId,
       });
     } catch (err: any) {
       console.error('[pos-payment] Failed to retrieve PaymentIntent:', err);
