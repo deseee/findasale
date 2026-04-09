@@ -7,6 +7,35 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S426 COMPLETE (2026-04-09):** 3 POS bugs fixed + Holds-to-Cart architect spec. No migration required.
+
+**S426 Fixes:**
+- `PosInvoiceModal.tsx` line 31 — removed `/100` division on `itemPrice`. `Item.price` is a Float in dollars; dividing by 100 was showing $0.18 instead of $18.00. Fix: `Number(hold.itemPrice)`.
+- `pos.tsx` line 1774 — Send Invoice tile hold price also had same `/100` bug; fixed. Added `dark:text-sage-400` dark mode variant to the hold price display.
+- `posController.ts` — `createPaymentLink`: switched from direct charges (stripeAccount on connected account) to destination charges (platform-side with `payment_intent_data.application_fee_amount + transfer_data.destination`). Matches pattern used everywhere else. Intended fix for QR "AccessDenied" — Patrick will retest after push.
+
+**S426 Architect output:**
+- `claude_docs/architecture/ADR-holds-to-cart-invoice.md` — full spec for Holds-to-Cart pull, invoice channel unification, split cash on invoices, `sendHoldInvoice` deprecation
+- `claude_docs/architecture/ADR-012-SUMMARY.md` — executive summary + 3 Patrick decisions needed
+- `claude_docs/architecture/ADR-012-DEV-CHECKLIST.md` — ordered dev implementation checklist (10 phases)
+
+**S426 Files changed:**
+- `packages/frontend/components/PosInvoiceModal.tsx` — price /100 bug fixed
+- `packages/frontend/pages/organizer/pos.tsx` — price /100 bug + dark mode color
+- `packages/backend/src/controllers/posController.ts` — QR destination charges fix
+- `claude_docs/architecture/ADR-holds-to-cart-invoice.md` — NEW
+- `claude_docs/architecture/ADR-012-SUMMARY.md` — NEW
+- `claude_docs/architecture/ADR-012-DEV-CHECKLIST.md` — NEW
+
+**S426 QA needed (after push):**
+- QR code payment: generate QR → shopper scans → confirm no AccessDenied (Patrick to retest)
+- Send Invoice tile: price now shows $18.00 not $0.18 ✅ (code fix confirmed)
+- Dark mode: Send Invoice tile hold price readable ✅
+
+**S426 Next:** Patrick reviews `ADR-012-SUMMARY.md` for 3 business decisions, then dispatch dev with `ADR-012-DEV-CHECKLIST.md`.
+
+---
+
 **S425 COMPLETE (2026-04-09):** POS payment bug sprint — 7 bugs fixed across schema, backend, and frontend. All pushed (migration required).
 
 **S425 Key fixes:**

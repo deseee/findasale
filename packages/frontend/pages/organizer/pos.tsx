@@ -1771,7 +1771,7 @@ export default function POSPage() {
                       <p className="text-sm font-semibold text-warm-900 dark:text-warm-100">{hold.shopperName}</p>
                       <p className="text-xs text-warm-500 dark:text-warm-400">{hold.shopperEmail}</p>
                     </div>
-                    <span className="text-sm font-bold text-sage-700">${(hold.itemPrice / 100).toFixed(2)}</span>
+                    <span className="text-sm font-bold text-sage-700 dark:text-sage-400">${(hold.itemPrice).toFixed(2)}</span>
                   </div>
                   <p className="text-xs text-warm-600 dark:text-warm-400 mb-2">{hold.itemTitle}</p>
                   <button

@@ -1,10 +1,37 @@
-# Patrick's Dashboard — April 9, 2026 (S425)
+# Patrick's Dashboard — April 9, 2026 (S426)
 
-## 🔴 Next Session Priority — Invoice Price Bug + Architect Session
+## ✅ Done This Session
 
-**P2 — Send Invoice shows `$0.18` instead of `$18.00`** for the Adidas Sneaker. Start next session here — it's a quick fix once the root cause is found (price field formatting in `posController.ts` or `PosInvoiceModal.tsx`).
+- **Invoice price bug fixed** — Send Invoice tile + modal now show `$18.00` not `$0.18`
+- **Dark mode fix** — Send Invoice hold price color readable in dark mode  
+- **QR "AccessDenied" fix** — switched to destination charges (same pattern as all other payment flows). Needs retest after push.
+- **Holds-to-Cart spec complete** — see `claude_docs/architecture/ADR-012-SUMMARY.md` for architect decisions and 3 items that need your input
 
-**Feature — Holds-to-Cart + Cart-to-Invoice:** Dispatch to `findasale-architect` before any dev. Patrick wants holds pulled into the POS cart and cart items added to invoices with split cash support.
+## 🔴 Action Required — Push S426
+
+Push block is below. No migration needed for this session.
+
+## 🔴 Action Required — S425 Migration (if not yet run)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+## 🟡 Patrick Decision Needed — ADR-012
+
+Read `claude_docs/architecture/ADR-012-SUMMARY.md`. Three business decisions:
+1. Cash reconciliation method (simple logging recommended)
+2. Hold state on abandoned session (revert to PENDING recommended)
+3. Non-held item locking during invoice window (atomic recommended)
+
+Once you confirm/override, dispatch dev with `ADR-012-DEV-CHECKLIST.md`.
+
+## 🟢 Next Feature — Holds-to-Cart + Cart-to-Invoice Dev
+
+After Patrick approves ADR-012: dispatch `findasale-dev` with the checklist.
 
 ---
 

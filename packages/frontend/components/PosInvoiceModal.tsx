@@ -28,7 +28,7 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const itemTotal = hold.itemPrice / 100;
+  const itemTotal = Number(hold.itemPrice);
 
   const handleSendInvoice = async () => {
     setSending(true);
