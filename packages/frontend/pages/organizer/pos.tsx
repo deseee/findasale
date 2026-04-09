@@ -182,6 +182,7 @@ export default function POSPage() {
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const pendingPaymentsRef = useRef<PendingPayment[]>([]);
   const prevActivePendingRef = useRef<PendingPayment[]>([]);
+  const cancelledRequestIdsRef = useRef<Set<string>>(new Set());
   const [pendingPaymentsPanelOpen, setPendingPaymentsPanelOpen] = useState(true);
   const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
 
@@ -238,8 +239,12 @@ export default function POSPage() {
 
       // Polling-based flash fallback: detect when a PENDING/ACCEPTED payment disappears from the list
       // (it transitioned to PAID). Fires even when the socket PAID event is missed.
+      // Skip payments that the cashier explicitly cancelled — those are NOT paid.
       if (prev.length > 0 && activePendingPayments.length < prev.length) {
-        const disappeared = prev.filter(p => !activePendingPayments.find(c => c.id === p.id));
+        const disappeared = prev.filter(p =>
+          !activePendingPayments.find(c => c.id === p.id) &&
+          !cancelledRequestIdsRef.current.has(p.id)
+        );
         if (disappeared.length > 0) {
           const paid = disappeared[0];
           // Only set banner if socket hasn't already set one
@@ -605,6 +610,8 @@ export default function POSPage() {
 
   const handleCancelPayment = async (paymentId: string) => {
     setCancellingId(paymentId);
+    // Mark as cancelled before the API call so the polling loop won't flash the paid banner
+    cancelledRequestIdsRef.current.add(paymentId);
     try {
       await api.post(`/pos/payment-request/${paymentId}/cancel`, { reason: 'ORGANIZER_CANCEL' });
       // Refetch pending payments
