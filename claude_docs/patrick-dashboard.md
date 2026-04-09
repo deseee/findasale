@@ -1,4 +1,10 @@
-# Patrick's Dashboard — April 9, 2026 (Weekly Audit Complete)
+# Patrick's Dashboard — April 9, 2026 (S424)
+
+## 🔴 Next Session Priority — Stripe QR "AccessDenied"
+
+When a shopper scans the Stripe QR from the POS screen they land on a Stripe page showing **"AccessDenied / Access Denied"**. This kills the QR payment mode. Next session starts here — all context is in STATE.md "Next Session Priority".
+
+---
 
 ## 🚨 Audit Alerts — 2026-04-09
 
@@ -67,6 +73,17 @@ $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev
 npx prisma migrate deploy
 npx prisma generate
 ```
+
+---
+
+## What Happened This Session (S424)
+
+**POS payment popup fully working + dual-role shopper access fixed.**
+
+- **Popup now fires for organizer accounts** — the component was blocking anyone with the ORGANIZER role. Since Bob Smith (your test shopper) is also an organizer, the popup never appeared. Fixed — any logged-in user receives payment request popups now.
+- **False "PAID" flash fixed** — when the cashier cancelled a pending or the shopper declined, the POS would briefly flash the green "payment received" banner. Fixed by verifying actual payment status via API before showing the banner.
+- **Split payment shows in popup** — the overlay now shows the amber "Split Payment" box with cash and card amounts, matching the full pay-request page. (Pending Railway redeploy of the TS build fix.)
+- **Dual-role access** — 4 components that blocked organizers from shopper features are fixed: reviews, reputation page, nudge bar, feedback surveys.
 
 ---
 

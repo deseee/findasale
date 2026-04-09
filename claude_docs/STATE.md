@@ -7,6 +7,33 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S424 COMPLETE (2026-04-09):** POS payment popup dual-role fix, false paid banner fix, split payment in popup, dual-role shopper access audit fixes. All pushed.
+
+**S424 Key fixes:**
+- `PosPaymentRequestAlert.tsx` — `isShopper` gate removed; any authenticated user now receives payment request popups. Root cause: Bob Smith (`user2@example.com`) has `role: ORGANIZER`, so the old check blocked the popup entirely. Confirmed via DB query: all recent `POSPaymentRequest` rows had `shopperUserId = Bob Smith (ORGANIZER)`.
+- `PosPaymentRequestAlert.tsx` — socket URL `/api` suffix stripped before `http→ws` conversion so socket connects correctly on production.
+- `pos.tsx` — false "PAID" green banner on shopper decline fixed: polling loop now calls `GET /pos/payment-request/:id` to verify actual status before showing the banner. Only status `PAID` shows the banner; `DECLINED` does nothing.
+- `posPaymentController.ts` — split payment fields (`isSplitPayment`, `cashDisplayAmount`, `cardDisplayAmount`) added to both the polling endpoint (`getPendingPaymentRequests`) and the `POS_PAYMENT_REQUEST` socket emit. TS build error fixed with `!` non-null assertions on `splitCashAmountCents`/`splitCardAmountCents`.
+- `PosPaymentRequestAlert.tsx` — popup now shows amber "Split Payment" box with cash/card breakdown when `isSplitPayment` is true.
+- Dual-role audit fixes (4 files): `ReviewsSection.tsx` (organizers can review sales), `shopper/reputation.tsx` (organizers not redirected away), `NudgeBar.tsx` (organizers see shopper nudges), `useFeedbackSurvey.ts` (organizers receive shopper surveys).
+
+**S424 Files changed (all pushed):**
+- `packages/frontend/components/PosPaymentRequestAlert.tsx`
+- `packages/frontend/pages/organizer/pos.tsx`
+- `packages/frontend/components/ReviewsSection.tsx`
+- `packages/frontend/pages/shopper/reputation.tsx`
+- `packages/frontend/components/NudgeBar.tsx`
+- `packages/frontend/hooks/useFeedbackSurvey.ts`
+- `packages/backend/src/controllers/posPaymentController.ts`
+
+**S424 QA needed:**
+- POS popup: send to Bob (organizer account) → popup appears on Bob's browser ✅ confirmed by screenshot
+- Split payment popup: send split to Bob → popup shows amber box with cash + card breakdown (awaiting Railway redeploy after TS fix)
+- False banner: cashier cancels pending → NO green flash ✅ | shopper declines → NO green flash (awaiting test)
+- Dual-role: organizer account can write a sale review, access /shopper/reputation, sees nudges
+
+---
+
 **S422 COMPLETE (2026-04-08):** POS payment UX — split payment, pending panel, success notifications, dark mode, rate limit fixes. All pushed.
 
 **S422 Key fixes:**
@@ -44,6 +71,23 @@ npx prisma generate
 ---
 
 ## Next Session Priority
+
+**🔴 P0 — Stripe QR code "AccessDenied / Access Denied" error:**
+When the shopper scans the Stripe QR code from the POS screen, they land on a Stripe-hosted page showing "AccessDenied" or "Access Denied". This blocks the Stripe QR payment mode entirely.
+
+Start by reading:
+1. `packages/frontend/components/PosPaymentQr.tsx` — what URL is rendered as the QR code?
+2. `packages/backend/src/controllers/posController.ts` — `createPaymentLink` function — how is the Stripe payment link created? Which Stripe object is used (PaymentLink vs CheckoutSession vs PaymentIntent)?
+3. Check if the URL contains `/c/pay/` (Stripe Payment Link) or `/pay/` (Checkout Session) — each has different auth behavior.
+
+Likely root causes to investigate:
+- **Payment link has `customer_creation: 'always'`** — forces shopper to create a Stripe account, which returns AccessDenied for guests.
+- **Payment link restricted to specific customer** — if `customer` field is set on the link, only that customer can use it.
+- **Connected account issue** — PaymentLink created on platform but needs to be on the connected organizer account (via `stripeAccount` header). If on the wrong account, Stripe returns AccessDenied.
+- **Link already used/expired** — Stripe Payment Links can be one-time use. If the link was already paid or expired, scanning again returns AccessDenied.
+- **`consent_collection` or `payment_method_collection` = 'always'** — forces auth that blocks guests.
+
+The fix is likely: ensure the payment link is created without `customer_creation`, on the correct connected account, and with `after_completion.type = 'redirect'` pointing back to the sale page.
 
 **iPhone XS geolocation bug (Safari/iOS):**
 Unauthenticated user on web, has accepted location permission, but gets: "location access denied — use the My Location button to share your location or browse sales near you / unable to access your location, please check your browser permissions."
