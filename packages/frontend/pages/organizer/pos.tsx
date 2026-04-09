@@ -602,7 +602,8 @@ export default function POSPage() {
 
       socketInstance = io(socketUrl, {
         auth: token ? { token } : {},
-        transports: ['websocket', 'polling'],
+        transports: ['websocket'],
+        upgrade: false,
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
@@ -1360,7 +1361,8 @@ export default function POSPage() {
       console.error('[pos] Send to Phone error:', err);
       setPaymentStatus('error');
       const msg = err?.response?.data?.message || 'Failed to send payment request';
-      setErrorMessage(msg);
+      const detail = err?.response?.data?.error;
+      setErrorMessage(detail ? `${msg}: ${detail}` : msg);
     }
   };
 
