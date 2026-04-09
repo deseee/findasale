@@ -649,7 +649,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       saleId: posRequest.saleId,
                       amount: item.price || 0,
                       platformFeeAmount: posRequest.platformFeeCents / 100,
-                      stripePaymentIntentId: paymentIntent.id,
+                      // PI ID is @unique — use per-item suffix to allow multiple items per PI
+                      stripePaymentIntentId: `${paymentIntent.id}_${item.id}`,
                       source: 'POS',
                       status: 'PAID',
                     },
@@ -713,7 +714,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   userId: posRequest.organizerUserId,
                   type: 'pos_payment_completed',
                   title: 'Payment Received',
-                  body: `${posRequest.shopper?.name || 'Shopper'} paid $${(posRequest.totalAmountCents / 100).toFixed(2)} for ${posRequest.itemIds.length} item(s)`,
+                  body: `${posRequest.shopper?.name || 'Shopper'} paid $${(posRequest.totalAmountCents / 100).toFixed(2)}${posRequest.itemIds.length > 0 ? ` for ${posRequest.itemIds.length} item(s)` : ''}`,
                   link: `/organizer/pos`,
                   channel: 'OPERATIONAL',
                 });
