@@ -926,6 +926,26 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
       }
     }
 
+    // Misc/custom-amount carts have no DB item IDs — create one Purchase for the full amount
+    if (items.length === 0) {
+      try {
+        await prisma.purchase.create({
+          data: {
+            userId: posRequest.shopperUserId,
+            itemId: null,
+            saleId: posRequest.saleId,
+            amount: posRequest.totalAmountCents / 100,
+            platformFeeAmount: posRequest.platformFeeCents / 100,
+            stripePaymentIntentId: paymentIntent.id,
+            source: 'POS',
+            status: 'PAID',
+          },
+        });
+      } catch (err: any) {
+        console.error('[pos-payment] Failed to create misc purchase record:', err);
+      }
+    }
+
     // Award XP to shopper for purchase
     if (posRequest.shopperUserId) {
       try {
