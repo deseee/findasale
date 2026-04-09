@@ -295,7 +295,7 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
           transfer_data: {
             destination: organizer.stripeConnectId!,
           },
-        },
+        } as any,
       });
 
       stripePaymentLinkId = paymentLink.id;
@@ -461,7 +461,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     if (!organizer) return;
 
     const { reservationId } = req.params as { reservationId?: string };
-    const { deliverVia } = req.body as { deliverVia?: string };
+    const { deliverVia, expiryHours } = req.body as { deliverVia?: string; expiryHours?: number };
 
     if (!reservationId) return res.status(400).json({ message: 'reservationId required' });
     if (!deliverVia || deliverVia !== 'EMAIL') {
@@ -498,7 +498,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         totalAmount: Math.round(reservation.item.price! * 100), // in cents
         platformFeeAmount: Math.round(reservation.item.price! * 0.1 * 100), // 10% fee in cents
         status: 'PENDING',
-        expiresAt: reservation.expiresAt, // inherit hold expiry
+        expiresAt: expiryHours ? new Date(Date.now() + expiryHours * 60 * 60 * 1000) : reservation.expiresAt,
       },
     });
 
