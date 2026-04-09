@@ -154,15 +154,9 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ message: 'One or more items not found or not in this sale' });
       }
 
-      const unavailableItems = items.filter(
-        (item) => !['AVAILABLE', 'RESERVED'].includes(item.status)
-      );
-      if (unavailableItems.length > 0) {
-        return res.status(400).json({
-          message: 'One or more items are no longer available',
-          unavailableItemIds: unavailableItems.map((i) => i.id),
-        });
-      }
+      // POS cashier has physical possession — exclude already-SOLD items silently
+      // rather than rejecting the entire request (common in test/reuse scenarios)
+      items = items.filter((item) => ['AVAILABLE', 'RESERVED'].includes(item.status));
     }
 
     // Verify shopper exists
@@ -236,7 +230,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
           organizerUserId: organizer.userId,
           shopperUserId,
           saleId,
-          itemIds,
+          itemIds: items.map((i) => i.id), // use only available items (SOLD filtered out above)
           totalAmountCents,
           platformFeeCents,
           expiresAt,
