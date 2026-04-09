@@ -69,7 +69,32 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       },
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
-    if (item.status !== 'AVAILABLE') return res.status(409).json({ message: 'Item is not available for hold' });
+
+    // If item is RESERVED, check whether the active reservation has actually expired.
+    // The cron job runs every 10 min — don't block new holds on a stale status.
+    if (item.status === 'RESERVED') {
+      const activeReservation = await prisma.itemReservation.findFirst({
+        where: { itemId, status: { in: ['PENDING', 'CONFIRMED'] } },
+        select: { id: true, expiresAt: true },
+      });
+      if (activeReservation && activeReservation.expiresAt <= new Date()) {
+        // Expired hold — clean up inline so the new hold can proceed
+        await prisma.$transaction([
+          prisma.itemReservation.update({
+            where: { id: activeReservation.id },
+            data: { status: 'EXPIRED' },
+          }),
+          prisma.item.update({
+            where: { id: itemId },
+            data: { status: 'AVAILABLE' },
+          }),
+        ]);
+      } else {
+        return res.status(409).json({ message: 'Item is not available for hold' });
+      }
+    } else if (item.status !== 'AVAILABLE') {
+      return res.status(409).json({ message: 'Item is not available for hold' });
+    }
 
     const sale = (item.sale as any);
     const holdSettings = sale?.organizer?.holdSettings;
