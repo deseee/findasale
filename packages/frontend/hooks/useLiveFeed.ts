@@ -65,7 +65,8 @@ export const useLiveFeed = (saleId: string | undefined): UseLiveFeedReturn => {
     if (!socketRef.current) {
       socketRef.current = io(socketUrl, {
         auth: { token: token || undefined },
-        transports: ['websocket', 'polling'],
+        transports: ['websocket'], // polling causes 502 on Railway
+        upgrade: false,
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,

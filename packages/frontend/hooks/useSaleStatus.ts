@@ -30,7 +30,8 @@ let socketInstance: Socket | null = null;
 const getSocket = (): Socket => {
   if (!socketInstance) {
     socketInstance = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'], // polling causes 502 on Railway
+      upgrade: false,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

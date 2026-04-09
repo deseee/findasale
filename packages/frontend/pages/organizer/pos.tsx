@@ -548,7 +548,7 @@ export default function POSPage() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}`);
+        const res = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}&_t=${Date.now()}`);
         setLinkedCarts(res.data.sessions || []);
       } catch (err) {
         console.error('[pos] Linked carts poll error:', err);
@@ -1177,7 +1177,8 @@ export default function POSPage() {
     // Pull shopper's shared cart (same flow as clicking a linked cart manually)
     if (selectedSaleId) {
       try {
-        const sessionRes = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}`);
+        // _t busts Railway/browser cache that causes 304 with stale empty data
+        const sessionRes = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}&_t=${Date.now()}`);
         const freshSessions = sessionRes.data.sessions || [];
         // Match by shopperId OR email — covers guest/account edge cases
         const shopperCart = freshSessions.find(
