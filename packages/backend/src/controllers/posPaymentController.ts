@@ -186,8 +186,8 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Platform fee: 10% flat on total transaction amount (locked — never a different rate)
-    const platformFeeCents = Math.round(totalAmountCents * 0.1);
+    // Platform fee: 10% of the card portion only (for split payments, cash isn't processed by Stripe)
+    const platformFeeCents = Math.round(splitCardAmountCents! * 0.1);
 
     // Create Stripe Payment Intent (for card amount only)
     let paymentIntent;

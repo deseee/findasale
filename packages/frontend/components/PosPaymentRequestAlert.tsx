@@ -74,7 +74,8 @@ export function PosPaymentRequestAlert() {
 
     socketRef.current = io(socketUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
+      upgrade: false,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
