@@ -23,7 +23,7 @@ interface PosInvoiceModalProps {
 export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceModalProps) {
   const { showToast } = useToast();
   const [deliverVia, setDeliverVia] = useState<'EMAIL' | 'SMS' | 'BOTH'>('EMAIL');
-  const [expiryHours, setExpiryHours] = useState(24);
+  const [expiryHours, setExpiryHours] = useState(0.25);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
 
   const calculateExpiryDate = (): string => {
     const now = new Date();
-    now.setHours(now.getHours() + expiryHours);
+    now.setTime(now.getTime() + expiryHours * 60 * 60 * 1000);
     return now.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -158,7 +158,8 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
                 </p>
                 <div className="space-y-2">
                   {[
-                    { hours: 24, label: '24 hours (default)' },
+                    { hours: 0.25, label: '15 minutes (default)' },
+                    { hours: 24, label: '24 hours' },
                     { hours: 168, label: '7 days' },
                     { hours: 720, label: '30 days' },
                   ].map((option) => (
@@ -177,6 +178,11 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
                     </label>
                   ))}
                 </div>
+                {expiryHours >= 24 && (
+                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                    ⚠️ If the shopper leaves with the item before paying, FindA.Sale cannot guarantee collection of your payment or platform fees. Only use extended windows for trusted buyers.
+                  </p>
+                )}
               </div>
 
               {/* Error Message */}
