@@ -247,11 +247,13 @@ export default function POSPage() {
             shopperName: paid.shopperName,
             displayAmount: paid.displayAmount,
           });
-          // Clear organizer cart since the payment completed
+          // Clear organizer cart and reset payment state since the payment completed
           setCart([]);
           setBuyerEmail('');
           setLinkedShopperId(null);
           setLinkedShopperData(null);
+          setSuccessMessage('');
+          setPaymentStatus('idle');
         }
       }
 
@@ -1062,12 +1064,13 @@ export default function POSPage() {
   ) => {
     try {
       await api.post(`/pos/sessions/${sessionId}/pull`);
-      // Add items to cart
+      // Add items to cart — pass catalog item id so itemIds are captured in payment requests
       cartItems.forEach(item => {
-        addToCart({
-          title: item.title,
-          amount: item.price,
-        });
+        if (item.id) {
+          addToCart({ id: item.id, title: item.title, price: item.price, status: 'AVAILABLE', photoUrls: item.photoUrl ? [item.photoUrl] : [], sku: null } as Item);
+        } else {
+          addToCart({ title: item.title, amount: item.price });
+        }
       });
       // Autofill shopper context for Send to Phone
       setLinkedShopperId(shopperId || null);

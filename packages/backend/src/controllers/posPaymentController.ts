@@ -908,7 +908,8 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             saleId: posRequest.saleId,
             amount: item.price || 0,
             platformFeeAmount: posRequest.platformFeeCents / 100,
-            stripePaymentIntentId: paymentIntent.id,
+            // PI ID is @unique — use per-item suffix to allow multiple items per PI
+            stripePaymentIntentId: `${paymentIntent.id}_${item.id}`,
             source: 'POS',
             status: 'PAID',
           },
