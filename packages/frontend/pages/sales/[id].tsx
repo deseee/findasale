@@ -633,26 +633,15 @@ const SaleDetailPage = () => {
                 </button>
               </div>
             )}
-            {/* Location Map */}
-            {sale.lat && sale.lng && (
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mb-4">Location</h2>
-                <LocationMap
-                  lat={sale.lat}
-                  lng={sale.lng}
-                  address={sale.address}
-                  city={sale.city}
-                  state={sale.state}
-                  title={sale.title}
-                  height="300px"
-                />
-              </div>
-            )}
-
             {/* About This Sale */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mt-8">
               <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mb-4">About</h2>
               <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
+            </div>
+
+            {/* Feature #70: Live Feed Ticker — real-time sale events (SOLD, HOLD, PRICE_DROP) */}
+            <div className="mt-8">
+              <LiveFeedTicker saleId={sale.id} />
             </div>
 
             {/* Social Proof Badge */}
@@ -809,11 +798,6 @@ const SaleDetailPage = () => {
                 avgRating={sale.organizer.avgRating}
                 totalReviews={sale.organizer.reviewCount}
               />
-            </div>
-
-            {/* Feature #70: Live Feed Ticker — real-time sale events (SOLD, HOLD, PRICE_DROP) */}
-            <div className="mb-8">
-              <LiveFeedTicker saleId={sale.id} />
             </div>
 
             {/* Location Card */}

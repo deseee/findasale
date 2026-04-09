@@ -131,7 +131,7 @@ const nextConfig = {
 
   // Cloudinary image optimisation
   images: {
-    domains: ['res.cloudinary.com', 'picsum.photos'],
+    domains: ['res.cloudinary.com', 'picsum.photos', 'api.qrserver.com'],
     formats: ['image/avif', 'image/webp'],
   },
 
