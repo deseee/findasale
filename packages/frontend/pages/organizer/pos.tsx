@@ -492,7 +492,10 @@ export default function POSPage() {
       if (!isMounted) return;
 
       const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+      // Pass JWT so the socket server auto-joins this client to their user:X room
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const socket = io(SOCKET_URL, {
+        auth: token ? { token } : {},
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionDelay: 1000,
