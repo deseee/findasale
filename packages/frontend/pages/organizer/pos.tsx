@@ -2035,7 +2035,7 @@ export default function POSPage() {
                     </div>
                   </div>
                   <span className="text-gray-900 dark:text-white font-medium ml-2">
-                    ${(item.amount || item.price || 0).toFixed(2)}
+                    ${(item.amount || 0).toFixed(2)}
                   </span>
                 </div>
               );
