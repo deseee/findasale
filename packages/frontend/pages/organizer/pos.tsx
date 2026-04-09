@@ -175,6 +175,14 @@ export default function POSPage() {
   const [holds, setHolds] = useState<HoldItem[]>([]);
   const [holdsLoading, setHoldsLoading] = useState(false);
   const [invoiceModalHold, setInvoiceModalHold] = useState<HoldItem | null>(null);
+  const [loadedHold, setLoadedHold] = useState<HoldItem | null>(null);
+  const [holdsRefreshInterval, setHoldsRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [cancellingSalesId, setCancellingSalesId] = useState<string | null>(null);
+
+  // Shopper lookup state
+  const [shopperSearchEmail, setShopperSearchEmail] = useState('');
+  const [shopperSearchResults, setShopperSearchResults] = useState<HoldItem[]>([]);
+  const [shopperSearchLoading, setShopperSearchLoading] = useState(false);
 
   // Open Carts state
   const [linkedCarts, setLinkedCarts] = useState<LinkedCart[]>([]);
@@ -439,7 +447,42 @@ export default function POSPage() {
     setCashReceived(cents / 100);
   }, [cashNumpadValue]);
 
-  // ─── Load holds when sale changes ──────────────────────────────────────────────────────
+  // ─── Refresh holds (manual or periodic) ────────────────────────────────────────────────
+
+  const refreshHolds = useCallback(async () => {
+    if (!selectedSaleId) return;
+    try {
+      const res = await api.get<{ holds: HoldItem[] }>(`/pos/holds?saleId=${selectedSaleId}`);
+      setHolds(res.data.holds || []);
+    } catch (err) {
+      console.error('[pos] Failed to refresh holds:', err);
+    }
+  }, [selectedSaleId]);
+
+  // ─── Search holds by shopper email ─────────────────────────────────────────────────────
+
+  const handleShopperEmailSearch = useCallback(async (email: string) => {
+    setShopperSearchEmail(email);
+    if (!email.trim() || !selectedSaleId) {
+      setShopperSearchResults([]);
+      return;
+    }
+
+    setShopperSearchLoading(true);
+    try {
+      const res = await api.get<{ holds: HoldItem[] }>(
+        `/pos/sessions/${selectedSaleId}/shopper-holds?email=${encodeURIComponent(email)}`
+      );
+      setShopperSearchResults(res.data.holds || []);
+    } catch (err) {
+      console.error('[pos] Shopper search failed:', err);
+      setShopperSearchResults([]);
+    } finally {
+      setShopperSearchLoading(false);
+    }
+  }, [selectedSaleId]);
+
+  // ─── Load holds when sale changes + set up auto-refresh ────────────────────────────────
 
   useEffect(() => {
     if (!selectedSaleId) {
@@ -452,7 +495,17 @@ export default function POSPage() {
       .then(res => setHolds(res.data.holds || []))
       .catch(err => console.error('[pos] Failed to load holds:', err))
       .finally(() => setHoldsLoading(false));
-  }, [selectedSaleId]);
+
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      refreshHolds();
+    }, 30000);
+    setHoldsRefreshInterval(interval);
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [selectedSaleId, refreshHolds]);
 
   // ─── Payment link polling ─────────────────────────────────────────────────────────────
 
@@ -1085,10 +1138,61 @@ export default function POSPage() {
 
   // ─── Invoice Sending ──────────────────────────────────────────────────────────────────
 
-  const handleSendInvoice = async (reservationId: string, shopperEmail: string) => {
+  // ─── Load hold into cart ──────────────────────────────────────────────────────────────
+
+  const handleLoadHold = (hold: HoldItem) => {
+    // Add held item to cart
+    addToCart({
+      id: hold.itemId,
+      title: hold.itemTitle,
+      price: hold.itemPrice,
+      status: 'AVAILABLE',
+      photoUrls: [],
+      sku: null,
+    } as Item);
+    // Set buyer email to shopper email
+    setBuyerEmail(hold.shopperEmail);
+    // Track the loaded hold
+    setLoadedHold(hold);
+    showToast(`Loaded hold for ${hold.shopperName}`, 'success');
+  };
+
+  // ─── Cancel hold from POS ──────────────────────────────────────────────────────────────
+
+  const handleCancelHold = async (hold: HoldItem) => {
+    const confirmed = window.confirm(
+      `Cancel hold for ${hold.shopperName} on "${hold.itemTitle}"? This will release the item back to available.`,
+    );
+    if (!confirmed) return;
+
+    setCancellingSalesId(hold.reservationId);
     try {
-      await api.post(`/pos/holds/${reservationId}/invoice`, { deliverVia: 'EMAIL' });
+      await api.delete(`/api/reservations/${hold.reservationId}`);
+      // Remove from holds list
+      setHolds(prev => prev.filter(h => h.reservationId !== hold.reservationId));
+      // Clear loaded hold if this was the one
+      if (loadedHold?.reservationId === hold.reservationId) {
+        setLoadedHold(null);
+        // Remove from cart
+        setCart([]);
+        setBuyerEmail('');
+      }
+      showToast(`Hold cancelled for ${hold.shopperName}`, 'success');
+    } catch (err) {
+      console.error('[pos] Cancel hold error:', err);
+      showToast('Failed to cancel hold', 'error');
+    } finally {
+      setCancellingSalesId(null);
+    }
+  };
+
+  const handleSendInvoice = async (reservationId: string, shopperEmail: string, miscItems?: CartItem[]) => {
+    try {
+      await api.post(`/pos/holds/${reservationId}/invoice`, { deliverVia: 'EMAIL', miscItems });
       setHolds(prev => prev.filter(h => h.reservationId !== reservationId));
+      setLoadedHold(null);
+      setCart([]);
+      setBuyerEmail('');
       showToast(`Invoice sent to ${shopperEmail}`, 'success');
     } catch (err) {
       console.error('[pos] Send invoice error:', err);
@@ -1751,12 +1855,66 @@ export default function POSPage() {
       {/* Payment Method: Invoice/Holds */}
       {paymentMode === 'invoice' && (
         <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
-          <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">📧 Send Invoice</h4>
+          <div className="flex justify-between items-center mb-3">
+            <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100">📧 Send Invoice</h4>
+            <button
+              onClick={() => refreshHolds()}
+              disabled={holdsLoading}
+              className="text-xs px-2 py-1 rounded bg-warm-100 dark:bg-warm-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200 dark:hover:bg-warm-600 disabled:opacity-50 transition"
+            >
+              {holdsLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+
+          {/* Shopper Lookup */}
+          <div className="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Search by Shopper Email:
+            </label>
+            <input
+              type="email"
+              placeholder="Enter shopper email..."
+              value={shopperSearchEmail}
+              onChange={(e) => handleShopperEmailSearch(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm placeholder-gray-500 dark:placeholder-gray-400"
+            />
+            {shopperSearchLoading && (
+              <p className="text-xs text-warm-600 dark:text-warm-400 mt-2">Searching…</p>
+            )}
+            {shopperSearchEmail && shopperSearchResults.length > 0 && (
+              <div className="mt-3 space-y-2 max-h-40 overflow-y-auto">
+                {shopperSearchResults.map((hold) => (
+                  <div
+                    key={hold.reservationId}
+                    className="p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 flex justify-between items-start gap-2"
+                  >
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-gray-900 dark:text-white">{hold.itemTitle}</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">${(hold.itemPrice).toFixed(2)}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        handleLoadHold(hold);
+                        setShopperSearchEmail('');
+                        setShopperSearchResults([]);
+                      }}
+                      className="px-2 py-1 text-xs rounded bg-sage-600 text-white hover:bg-sage-700 transition whitespace-nowrap"
+                    >
+                      Pull
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {shopperSearchEmail && !shopperSearchLoading && shopperSearchResults.length === 0 && (
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">No holds found for this email.</p>
+            )}
+          </div>
 
           {holdsLoading && <p className="text-sm text-warm-600 dark:text-warm-400">Loading holds…</p>}
 
-          {!holdsLoading && holds.length === 0 && (
-            <p className="text-sm text-warm-600 dark:text-warm-400">No active holds for this sale.</p>
+          {!holdsLoading && holds.length === 0 && cart.length === 0 && (
+            <p className="text-sm text-warm-600 dark:text-warm-400">No active holds or cart items. Add items or create holds first.</p>
           )}
 
           {!holdsLoading && holds.length > 0 && (
@@ -1764,7 +1922,11 @@ export default function POSPage() {
               {holds.map(hold => (
                 <div
                   key={hold.reservationId}
-                  className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600"
+                  className={`p-3 rounded-lg border ${
+                    loadedHold?.reservationId === hold.reservationId
+                      ? 'bg-sage-50 dark:bg-sage-900/20 border-sage-300 dark:border-sage-700'
+                      : 'bg-warm-50 dark:bg-gray-700 border-warm-200 dark:border-gray-600'
+                  }`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -1773,13 +1935,41 @@ export default function POSPage() {
                     </div>
                     <span className="text-sm font-bold text-sage-700 dark:text-sage-400">${(hold.itemPrice).toFixed(2)}</span>
                   </div>
-                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-2">{hold.itemTitle}</p>
-                  <button
-                    onClick={() => setInvoiceModalHold(hold)}
-                    className="w-full py-2 rounded-lg bg-sage-700 text-white text-xs font-semibold hover:bg-sage-800 transition"
-                  >
-                    Send Invoice →
-                  </button>
+                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">{hold.itemTitle}</p>
+                  <div className="flex gap-2">
+                    {loadedHold?.reservationId === hold.reservationId ? (
+                      <>
+                        <button
+                          onClick={() => setInvoiceModalHold(hold)}
+                          className="flex-1 py-2 rounded-lg bg-sage-700 text-white text-xs font-semibold hover:bg-sage-800 transition"
+                        >
+                          Send Invoice
+                        </button>
+                        <button
+                          onClick={() => handleCancelHold(hold)}
+                          disabled={cancellingSalesId === hold.reservationId}
+                          className="flex-1 py-2 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-semibold hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 transition"
+                        >
+                          {cancellingSalesId === hold.reservationId ? 'Cancelling...' : 'Cancel Hold'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleLoadHold(hold)}
+                          className="flex-1 py-2 rounded-lg bg-warm-200 dark:bg-warm-700 text-warm-900 dark:text-warm-100 text-xs font-semibold hover:bg-warm-300 dark:hover:bg-warm-600 transition"
+                        >
+                          Load Hold
+                        </button>
+                        <button
+                          onClick={() => setInvoiceModalHold(hold)}
+                          className="flex-1 py-2 rounded-lg bg-sage-700 text-white text-xs font-semibold hover:bg-sage-800 transition"
+                        >
+                          Invoice
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1822,6 +2012,41 @@ export default function POSPage() {
           >
             New Transaction
           </button>
+        </div>
+      )}
+
+      {/* Cart Summary with held/misc item badges */}
+      {cart.length > 0 && (
+        <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-sage-200 dark:border-sage-700">
+          <h4 className="text-sm font-semibold text-sage-900 dark:text-sage-100 mb-3">Cart Summary</h4>
+          <div className="space-y-2 mb-4 max-h-32 overflow-y-auto">
+            {cart.map((item, idx) => {
+              const isHeldItem = loadedHold && item.id === loadedHold.itemId;
+              return (
+                <div key={idx} className="flex justify-between items-start text-sm">
+                  <div className="flex-1">
+                    <div className="flex gap-2 items-start">
+                      <span className="text-gray-900 dark:text-white flex-1">{item.title}</span>
+                      {isHeldItem && (
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 whitespace-nowrap">
+                          📌 On Hold
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-gray-900 dark:text-white font-medium ml-2">
+                    ${(item.amount || item.price || 0).toFixed(2)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="border-t border-sage-200 dark:border-sage-700 pt-3">
+            <div className="flex justify-between">
+              <span className="font-semibold text-sage-900 dark:text-sage-100">Total</span>
+              <span className="font-bold text-sage-700 dark:text-sage-400">${cartTotal.toFixed(2)}</span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1956,9 +2181,13 @@ export default function POSPage() {
       {invoiceModalHold && (
         <PosInvoiceModal
           hold={invoiceModalHold}
+          miscItems={cart.filter(item => item.id !== invoiceModalHold.itemId)}
           onClose={() => setInvoiceModalHold(null)}
           onSent={(reservationId) => {
             setHolds(prev => prev.filter(h => h.reservationId !== reservationId));
+            setLoadedHold(null);
+            setCart([]);
+            setBuyerEmail('');
             setInvoiceModalHold(null);
           }}
         />

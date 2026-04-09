@@ -10,6 +10,9 @@ import {
   getActiveHolds,
   sendHoldInvoice,
   deleteSession,
+  searchShopperHolds,
+  pullHoldsToCart,
+  createCombinedInvoice,
 } from '../controllers/posController';
 import {
   createPaymentRequest,
@@ -36,6 +39,11 @@ router.post('/payment-links', authenticate, createPaymentLink);
 router.get('/payment-links/:linkId', authenticate, getPaymentLink);
 router.get('/holds', authenticate, getActiveHolds);
 router.post('/holds/:reservationId/invoice', authenticate, sendHoldInvoice);
+
+// POS Cart + Invoice endpoints (multi-source holds)
+router.get('/sessions/:sessionId/shopper-holds', authenticate, searchShopperHolds);
+router.post('/sessions/:sessionId/pull-holds', authenticate, pullHoldsToCart);
+router.post('/sessions/:sessionId/create-invoice', authenticate, createCombinedInvoice);
 
 // POS Payment Request endpoints
 router.post('/payment-request', authenticate, requireOrganizer, createPaymentRequest);

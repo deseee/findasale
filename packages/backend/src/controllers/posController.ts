@@ -461,7 +461,11 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     if (!organizer) return;
 
     const { reservationId } = req.params as { reservationId?: string };
-    const { deliverVia, expiryHours } = req.body as { deliverVia?: string; expiryHours?: number };
+    const { deliverVia, expiryHours, miscItems } = req.body as {
+      deliverVia?: string;
+      expiryHours?: number;
+      miscItems?: Array<{ id: string; title: string; amount: number }>;
+    };
 
     if (!reservationId) return res.status(400).json({ message: 'reservationId required' });
     if (!deliverVia || deliverVia !== 'EMAIL') {
@@ -487,6 +491,12 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invoice already exists for this reservation' });
     }
 
+    // Calculate total: held item + misc items
+    const heldItemTotal = Math.round(reservation.item.price! * 100); // in cents
+    const miscTotal = miscItems ? miscItems.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) : 0;
+    const grandTotal = heldItemTotal + miscTotal;
+    const platformFeeAmount = Math.round(grandTotal * 0.1); // 10% fee on total
+
     // Create HoldInvoice record (simplified for MVP — no actual Stripe Checkout)
     const holdInvoice = await prisma.holdInvoice.create({
       data: {
@@ -495,8 +505,8 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         organizerUserId: organizer.id,
         saleId: reservation.item.sale.id,
         itemIds: [reservation.itemId],
-        totalAmount: Math.round(reservation.item.price! * 100), // in cents
-        platformFeeAmount: Math.round(reservation.item.price! * 0.1 * 100), // 10% fee in cents
+        totalAmount: grandTotal,
+        platformFeeAmount,
         status: 'PENDING',
         expiresAt: expiryHours ? new Date(Date.now() + expiryHours * 60 * 60 * 1000) : reservation.expiresAt,
       },
@@ -516,10 +526,19 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
 
+        // Build item list for email
+        let itemsList = `<strong>${reservation.item.title}</strong> - $${reservation.item.price?.toFixed(2)}`;
+        if (miscItems && miscItems.length > 0) {
+          const miscItemsHtml = miscItems
+            .map(item => `<strong>${item.title}</strong> - $${item.amount.toFixed(2)}`)
+            .join('<br/>');
+          itemsList += '<br/>' + miscItemsHtml;
+        }
+
         const html = buildEmail({
           preheader: `Invoice for your hold`,
-          headline: `Invoice: ${reservation.item.title}`,
-          body: `<p>Hi ${reservation.user.name},</p><p>Your hold on <strong>${reservation.item.title}</strong> for $${reservation.item.price?.toFixed(2)} is ready. Payment link in dashboard.</p>`,
+          headline: `Invoice: ${reservation.item.title}${miscItems && miscItems.length > 0 ? ' + more' : ''}`,
+          body: `<p>Hi ${reservation.user.name},</p><p>Your hold is ready for payment:</p><p>${itemsList}</p><p><strong>Total: $${(grandTotal / 100).toFixed(2)}</strong></p><p>Payment link in dashboard.</p>`,
           ctaText: 'View Invoice',
           ctaUrl: `${process.env.FRONTEND_URL || 'https://finda.sale'}/my-invoices/${holdInvoice.id}`,
           accentColor: '#10b981',
@@ -577,5 +596,447 @@ export const deleteSession = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('[pos] deleteSession error:', error);
     res.status(500).json({ message: 'Failed to delete session' });
+  }
+};
+
+/**
+ * GET /api/pos/sessions/:sessionId/shopper-holds
+ * Search for active holds by shopper email (organizer-only)
+ * Query: ?email=xxx (required, case-insensitive)
+ * Response: { holds: Array<{reservationId, itemId, itemTitle, itemPrice, shopperName, shopperEmail, shopperId, expiresAt, status}> }
+ */
+export const searchShopperHolds = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    if (!organizer) return;
+
+    const { sessionId } = req.params as { sessionId?: string };
+    const { email } = req.query as { email?: string };
+
+    if (!sessionId) return res.status(400).json({ message: 'sessionId required' });
+    if (!email) return res.status(400).json({ message: 'email query param required' });
+
+    // Fetch session + verify ownership
+    const session = await prisma.pOSSession.findUnique({
+      where: { id: sessionId },
+      include: { sale: { select: { organizerId: true } } },
+    });
+
+    if (!session) return res.status(404).json({ message: 'Session not found' });
+    if (session.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Session does not belong to your sale' });
+    }
+
+    // Find holds for this shopper at this sale
+    const holds = await prisma.itemReservation.findMany({
+      where: {
+        item: { saleId: session.saleId },
+        user: { email: { contains: email, mode: 'insensitive' } },
+        status: { in: ['PENDING', 'CONFIRMED'] },
+        expiresAt: { gt: new Date() },
+        invoiceId: null,
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        item: { select: { id: true, title: true, price: true } },
+      },
+      orderBy: { expiresAt: 'asc' },
+    });
+
+    const result = holds.map(h => ({
+      reservationId: h.id,
+      itemId: h.itemId,
+      itemTitle: h.item.title,
+      itemPrice: h.item.price,
+      shopperName: h.user.name,
+      shopperEmail: h.user.email,
+      shopperId: h.userId,
+      expiresAt: h.expiresAt,
+      status: h.status,
+    }));
+
+    res.json({ holds: result });
+  } catch (error) {
+    console.error('[pos] searchShopperHolds error:', error);
+    res.status(500).json({ message: 'Failed to search shopper holds' });
+  }
+};
+
+/**
+ * POST /api/pos/sessions/:sessionId/pull-holds
+ * Transition selected holds to HOLD_IN_CART status (organizer-only)
+ * Body: { reservationIds: string[] }
+ * Response: { pulled: number, reservations: Array<{reservationId, itemTitle, status}> }
+ */
+export const pullHoldsToCart = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    if (!organizer) return;
+
+    const { sessionId } = req.params as { sessionId?: string };
+    const { reservationIds } = req.body as { reservationIds?: string[] };
+
+    if (!sessionId) return res.status(400).json({ message: 'sessionId required' });
+    if (!reservationIds || !Array.isArray(reservationIds) || reservationIds.length === 0) {
+      return res.status(400).json({ message: 'reservationIds must be non-empty array' });
+    }
+
+    // Fetch session + verify ownership
+    const session = await prisma.pOSSession.findUnique({
+      where: { id: sessionId },
+      include: { sale: { select: { organizerId: true } } },
+    });
+
+    if (!session) return res.status(404).json({ message: 'Session not found' });
+    if (session.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Session does not belong to your sale' });
+    }
+
+    // Fetch all reservations + verify they're valid for pulling
+    const reservations = await prisma.itemReservation.findMany({
+      where: { id: { in: reservationIds } },
+      include: { item: { select: { saleId: true, title: true } } },
+    });
+
+    // Validate all reservations
+    for (const res of reservations) {
+      if (res.item.saleId !== session.saleId) {
+        return res.status(403).json({ message: 'Reservation does not belong to this session sale' });
+      }
+      if (!['PENDING', 'CONFIRMED'].includes(res.status)) {
+        return res.status(409).json({ message: `Reservation ${res.id} is not in PENDING or CONFIRMED state` });
+      }
+      if (res.invoiceId) {
+        return res.status(409).json({ message: `Reservation ${res.id} already has an invoice` });
+      }
+    }
+
+    // Update all reservations to HOLD_IN_CART
+    const updated = await prisma.itemReservation.updateMany({
+      where: { id: { in: reservationIds } },
+      data: { status: 'HOLD_IN_CART' },
+    });
+
+    // Fetch updated records for response
+    const updatedReservations = await prisma.itemReservation.findMany({
+      where: { id: { in: reservationIds } },
+      include: { item: { select: { title: true } } },
+    });
+
+    const result = updatedReservations.map(r => ({
+      reservationId: r.id,
+      itemTitle: r.item.title,
+      status: r.status,
+    }));
+
+    res.json({ pulled: updated.count, reservations: result });
+  } catch (error) {
+    console.error('[pos] pullHoldsToCart error:', error);
+    res.status(500).json({ message: 'Failed to pull holds into cart' });
+  }
+};
+
+/**
+ * POST /api/pos/sessions/:sessionId/create-invoice
+ * Create combined invoice from held items + misc items with optional cash split (organizer-only)
+ * Body: { shopperId, invoiceMode, expiresAt?, cashAmountCents?, miscItems?, holdIds? }
+ * Response: { invoiceId, stripeSessionId, invoiceMode, totalAmountCents, cashAmountCents, cardAmountCents, platformFeeAmount, status, expiresAt, createdAt }
+ */
+export const createCombinedInvoice = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizer = await resolveOrganizer(req, res, { requireStripe: true });
+    if (!organizer) return;
+
+    const { sessionId } = req.params as { sessionId?: string };
+    const {
+      shopperId,
+      invoiceMode,
+      expiresAt: providedExpiresAt,
+      cashAmountCents,
+      miscItems,
+      holdIds,
+    } = req.body as {
+      shopperId?: string;
+      invoiceMode?: string;
+      expiresAt?: string;
+      cashAmountCents?: number;
+      miscItems?: Array<{ title: string; amount: number }>;
+      holdIds?: string[];
+    };
+
+    if (!sessionId) return res.status(400).json({ message: 'sessionId required' });
+    if (!shopperId) return res.status(400).json({ message: 'shopperId required' });
+    if (!invoiceMode || !['QUICK', 'TRUST'].includes(invoiceMode)) {
+      return res.status(400).json({ message: 'invoiceMode must be QUICK or TRUST' });
+    }
+    if (holdIds && (!Array.isArray(holdIds) || holdIds.length === 0)) {
+      return res.status(400).json({ message: 'holdIds must be non-empty array' });
+    }
+    if (typeof cashAmountCents === 'number' && cashAmountCents < 0) {
+      return res.status(400).json({ message: 'cashAmountCents cannot be negative' });
+    }
+
+    // Fetch session + verify ownership
+    const session = await prisma.pOSSession.findUnique({
+      where: { id: sessionId },
+      include: { sale: { select: { organizerId: true, id: true } } },
+    });
+
+    if (!session) return res.status(404).json({ message: 'Session not found' });
+    if (session.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Session does not belong to your sale' });
+    }
+
+    // Fetch shopper
+    const shopper = await prisma.user.findUnique({
+      where: { id: shopperId },
+      select: { id: true, email: true, name: true },
+    });
+
+    if (!shopper) return res.status(404).json({ message: 'Shopper not found' });
+
+    // Fetch held items
+    const heldReservations = holdIds && holdIds.length > 0
+      ? await prisma.itemReservation.findMany({
+          where: { id: { in: holdIds } },
+          include: { item: { select: { id: true, saleId: true, title: true, price: true, photoUrls: true } } },
+        })
+      : [];
+
+    // Validate held items
+    for (const res of heldReservations) {
+      if (res.item.saleId !== session.sale.id) {
+        return res.status(403).json({ message: 'Hold does not belong to this session sale' });
+      }
+      if (res.status !== 'HOLD_IN_CART') {
+        return res.status(409).json({ message: `Hold ${res.id} is not in HOLD_IN_CART state` });
+      }
+      if (res.invoiceId) {
+        return res.status(409).json({ message: `Hold ${res.id} already has an invoice` });
+      }
+    }
+
+    // Calculate totals
+    let holdTotalCents = 0;
+    const bundledItemIds: string[] = [];
+    for (const res of heldReservations) {
+      holdTotalCents += Math.round((res.item.price || 0) * 100);
+      bundledItemIds.push(res.item.id);
+    }
+
+    let miscTotalCents = 0;
+    if (miscItems && Array.isArray(miscItems)) {
+      for (const item of miscItems) {
+        miscTotalCents += Math.round(item.amount * 100);
+      }
+    }
+
+    const grandTotalCents = holdTotalCents + miscTotalCents;
+    const finalCashAmountCents = Math.min(cashAmountCents ?? 0, grandTotalCents);
+    const cardAmountCents = grandTotalCents - finalCashAmountCents;
+
+    // Get organizer tier for platform fee calculation
+    const organizerWithRole = await prisma.organizer.findUnique({
+      where: { id: organizer.id },
+      include: { user: { select: { roleSubscriptions: true } } },
+    });
+
+    const hasPro = organizerWithRole?.user?.roleSubscriptions?.some(
+      rs => rs.subscriptionTier === 'PRO'
+    ) ?? false;
+    const platformFeePercent = hasPro ? 0.08 : 0.10;
+    const platformFeeCents = Math.round(cardAmountCents * platformFeePercent);
+
+    // Determine expiresAt
+    let expiresAt: Date;
+    if (invoiceMode === 'QUICK') {
+      expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    } else {
+      // TRUST mode
+      if (providedExpiresAt) {
+        expiresAt = new Date(providedExpiresAt);
+      } else {
+        expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours default
+      }
+    }
+
+    let stripeSessionId: string | null = null;
+
+    // Create Stripe Checkout Session if cardAmountCents > 0
+    if (cardAmountCents > 0) {
+      try {
+        // Build line_items from held items
+        const line_items = [];
+
+        for (const res of heldReservations) {
+          line_items.push({
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: res.item.title,
+                description: 'Estate sale item',
+                images: res.item.photoUrls && res.item.photoUrls.length > 0 ? [res.item.photoUrls[0]] : [],
+              },
+              unit_amount_decimal: String(Math.round((res.item.price || 0) * 100)),
+            },
+            quantity: 1,
+          });
+        }
+
+        // Add misc items
+        if (miscItems && Array.isArray(miscItems)) {
+          for (const miscItem of miscItems) {
+            line_items.push({
+              price_data: {
+                currency: 'usd',
+                product_data: {
+                  name: miscItem.title,
+                  description: 'Additional item',
+                },
+                unit_amount_decimal: String(Math.round(miscItem.amount * 100)),
+              },
+              quantity: 1,
+            });
+          }
+        }
+
+        const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+        const stripeSession = await stripe().checkout.sessions.create({
+          payment_method_types: ['card'],
+          mode: 'payment',
+          customer_email: shopper.email,
+          line_items,
+          success_url: `${baseUrl}/items?paymentStatus=success`,
+          cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
+          expires_at: Math.floor(expiresAt.getTime() / 1000),
+          payment_intent_data: {
+            metadata: {
+              itemIds: bundledItemIds.join(','),
+              shopperId: shopper.id,
+              organizerId: organizer.id,
+              saleId: session.sale.id,
+            },
+            application_fee_amount: platformFeeCents,
+            transfer_data: {
+              destination: organizer.stripeConnectId!,
+            },
+          },
+          metadata: {
+            organizerId: organizer.id,
+          },
+        });
+
+        stripeSessionId = stripeSession.id;
+      } catch (stripeError: any) {
+        console.error('[pos] Stripe session creation failed:', stripeError);
+        return res.status(500).json({
+          message: 'Failed to create Stripe checkout session',
+          error: stripeError.message,
+        });
+      }
+    }
+
+    // Create HoldInvoice in transaction
+    const holdInvoice = await prisma.$transaction(async (tx) => {
+      const inv = await tx.holdInvoice.create({
+        data: {
+          reservationId: heldReservations.length > 0 ? heldReservations[0].id : undefined,
+          shopperUserId: shopper.id,
+          organizerUserId: organizer.id,
+          saleId: session.sale.id,
+          stripeSessionId,
+          totalAmount: grandTotalCents,
+          platformFeeAmount: platformFeeCents,
+          itemIds: bundledItemIds,
+          status: 'PENDING',
+          expiresAt,
+          invoiceMode,
+          cashAmountCents: finalCashAmountCents > 0 ? finalCashAmountCents : null,
+          cardAmountCents: cardAmountCents > 0 ? cardAmountCents : null,
+          cartSessionId: sessionId,
+        },
+      });
+
+      // Update all held reservations with invoiceId
+      if (heldReservations.length > 0) {
+        await tx.itemReservation.updateMany({
+          where: { id: { in: holdIds! } },
+          data: { invoiceId: inv.id },
+        });
+      }
+
+      return inv;
+    });
+
+    // Send invoice email (fire-and-forget)
+    setImmediate(async () => {
+      try {
+        const resend = require('resend').Resend ? new (require('resend').Resend)(process.env.RESEND_API_KEY) : null;
+        if (resend) {
+          const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
+          const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            timeZone: 'America/Chicago',
+          });
+
+          // Build item list HTML
+          let itemsHtml = '';
+          for (const res of heldReservations) {
+            itemsHtml += `<li><strong>${res.item.title}</strong> - $${((res.item.price || 0) / 100).toFixed(2)}</li>`;
+          }
+          if (miscItems && Array.isArray(miscItems)) {
+            for (const miscItem of miscItems) {
+              itemsHtml += `<li><strong>${miscItem.title}</strong> - $${(miscItem.amount / 100).toFixed(2)}</li>`;
+            }
+          }
+
+          let cautionCopy = '';
+          if (invoiceMode === 'TRUST') {
+            cautionCopy =
+              '<p style="color: #dc2626; font-weight: bold; margin-top: 16px;">By sending this invoice, you\'re allowing the shopper to leave with the item before payment is collected. You may not receive payment.</p>';
+          }
+
+          const html = `
+            <h2>Invoice for Purchase</h2>
+            <p>Hi ${shopper.name},</p>
+            <p>Your invoice is ready for payment:</p>
+            <ul>${itemsHtml}</ul>
+            <hr style="margin: 16px 0;">
+            <p><strong>Total Amount:</strong> $${(grandTotalCents / 100).toFixed(2)}</p>
+            ${finalCashAmountCents > 0 ? `<p><strong>Cash Collected:</strong> $${(finalCashAmountCents / 100).toFixed(2)}</p>` : ''}
+            ${cardAmountCents > 0 ? `<p><strong>Remaining to Charge:</strong> $${(cardAmountCents / 100).toFixed(2)}</p>` : ''}
+            <p><strong>Expires at:</strong> ${expiryTime}</p>
+            ${cardAmountCents > 0 ? `<p><a href="${stripeSessionId ? `${process.env.FRONTEND_URL || 'https://finda.sale'}/my-invoices/${holdInvoice.id}` : ''}">Complete Payment</a></p>` : '<p style="color: #10b981;"><strong>Full payment collected at POS.</strong></p>'}
+            ${cautionCopy}
+          `;
+
+          await resend.emails.send({
+            from: fromEmail,
+            to: shopper.email,
+            subject: `Invoice for your purchase`,
+            html,
+          });
+        }
+      } catch (emailErr) {
+        console.warn('[pos] Failed to send invoice email:', emailErr);
+      }
+    });
+
+    res.json({
+      invoiceId: holdInvoice.id,
+      stripeSessionId,
+      invoiceMode,
+      totalAmountCents: grandTotalCents,
+      cashAmountCents: finalCashAmountCents > 0 ? finalCashAmountCents : null,
+      cardAmountCents: cardAmountCents > 0 ? cardAmountCents : null,
+      platformFeeAmount: platformFeeCents,
+      status: 'PENDING',
+      expiresAt,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    console.error('[pos] createCombinedInvoice error:', error);
+    res.status(500).json({ message: 'Failed to create invoice' });
   }
 };
