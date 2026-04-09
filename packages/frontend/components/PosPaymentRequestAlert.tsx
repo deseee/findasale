@@ -32,12 +32,9 @@ export function PosPaymentRequestAlert() {
   // Track shown request IDs to avoid showing the same request twice (socket + poll)
   const seenRef = useRef<Set<string>>(new Set());
 
-  const isShopper =
-    !!user &&
-    !user.roles?.includes('ORGANIZER') &&
-    user.role !== 'ORGANIZER' &&
-    !user.roles?.includes('ADMIN') &&
-    user.role !== 'ADMIN';
+  // Any authenticated user may receive a payment request — organizers can also be shoppers.
+  // Backend filters by shopperUserId, so only requests directed at this user appear.
+  const isAuthenticated = !!user;
 
   const showRequest = (payload: POSRequestPayload) => {
     if (seenRef.current.has(payload.requestId)) return;
@@ -59,7 +56,7 @@ export function PosPaymentRequestAlert() {
 
   // Socket connection — fast path
   useEffect(() => {
-    if (!isShopper) return;
+    if (!isAuthenticated) return;
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) return;
@@ -94,7 +91,7 @@ export function PosPaymentRequestAlert() {
       const res = await api.get<{ requests: POSRequestPayload[] }>('/pos/payment-request/pending');
       return res.data.requests;
     },
-    enabled: isShopper,
+    enabled: isAuthenticated,
     refetchInterval: 5000,
     staleTime: 0,
     select: (requests) => {
