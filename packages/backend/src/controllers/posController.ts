@@ -404,11 +404,11 @@ export const getActiveHolds = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Sale does not belong to your account' });
     }
 
-    // Get active holds: CONFIRMED, not expired, no invoice
+    // Get active holds: PENDING or CONFIRMED, not expired, no invoice yet
     const holds = await prisma.itemReservation.findMany({
       where: {
         item: { saleId },
-        status: 'CONFIRMED',
+        status: { in: ['PENDING', 'CONFIRMED'] },
         expiresAt: { gt: new Date() },
         invoiceId: null,
       },
