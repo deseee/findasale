@@ -274,7 +274,8 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
 
     try {
       // Payment Links require a pre-created Price object (price_data not supported)
-      const stripeOpts = { stripeAccount: organizer.stripeConnectId! };
+      // Use platform-side pricing + destination charges (matching PaymentIntent pattern)
+      const platformFeeAmount = Math.round(amountCents * 0.1); // 10% platform fee
 
       const adHocPrice = await stripe().prices.create({
         currency: 'usd',
@@ -282,14 +283,20 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
         product_data: {
           name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200)}`,
         },
-      }, stripeOpts);
+      });
 
       const paymentLink = await stripe().paymentLinks.create({
         line_items: [{ price: adHocPrice.id, quantity: 1 }],
         after_completion: {
           type: 'hosted_confirmation' as const,
         },
-      }, stripeOpts);
+        payment_intent_data: {
+          application_fee_amount: platformFeeAmount,
+          transfer_data: {
+            destination: organizer.stripeConnectId!,
+          },
+        },
+      });
 
       stripePaymentLinkId = paymentLink.id;
       paymentLinkUrl = paymentLink.url;
