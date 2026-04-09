@@ -936,7 +936,7 @@ model ItemReservation {
   item      Item     @relation(fields: [itemId], references: [id])
   userId    String
   user      User     @relation(fields: [userId], references: [id])
-  status    String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED, EXPIRED
+  status    String   @default("PENDING") // PENDING, CONFIRMED, HOLD_IN_CART, CANCELLED, EXPIRED, INVOICE_ISSUED
   expiresAt DateTime
   note      String?
   // Hold-specific enhancements (Feature #121)
@@ -973,6 +973,11 @@ model HoldInvoice {
   expiresAt             DateTime  // = ItemReservation.expiresAt at time of invoice creation
   paidAt                DateTime?
   releasedAt            DateTime?
+  // POS Cart feature: Multi-source invoices with split cash payment
+  invoiceMode           String    @default("QUICK") // "QUICK" (15 min) or "TRUST" (organizer-set hours)
+  cashAmountCents       Int?      // Optional: cash collected by organizer at POS
+  cardAmountCents       Int?      // Optional: remainder charged via Stripe (total - cash)
+  cartSessionId         String?   // Optional: FK to POSSession for audit trail
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -980,6 +985,7 @@ model HoldInvoice {
   @@index([shopperUserId])
   @@index([organizerUserId])
   @@index([expiresAt])
+  @@index([cartSessionId])
 }
 
 // Feature #121: Sale Check-in — per-shopper GPS-based validation for hold rank enforcement

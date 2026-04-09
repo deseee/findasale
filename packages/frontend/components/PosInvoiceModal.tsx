@@ -14,30 +14,60 @@ interface HoldItem {
   expiresAt: string;
 }
 
+interface CartItem {
+  id: string;
+  itemId?: string;
+  title: string;
+  amount: number;
+  photoUrl?: string;
+}
+
 interface PosInvoiceModalProps {
   hold: HoldItem;
+  miscItems?: CartItem[];
+  sessionId?: string;
   onClose: () => void;
   onSent: (reservationId: string) => void;
 }
 
-export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceModalProps) {
+export default function PosInvoiceModal({ hold, miscItems = [], sessionId, onClose, onSent }: PosInvoiceModalProps) {
   const { showToast } = useToast();
   const [deliverVia, setDeliverVia] = useState<'EMAIL' | 'SMS' | 'BOTH'>('EMAIL');
+  const [invoiceMode, setInvoiceMode] = useState<'QUICK' | 'TRUST'>('QUICK');
   const [expiryHours, setExpiryHours] = useState(0.25);
+  const [cashAmountCents, setCashAmountCents] = useState(0);
+  const [cashInputValue, setCashInputValue] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const itemTotal = Number(hold.itemPrice);
+  const miscTotal = miscItems.reduce((sum, item) => sum + item.amount, 0);
+  const grandTotal = itemTotal + miscTotal;
 
   const handleSendInvoice = async () => {
     setSending(true);
     setError(null);
 
     try {
-      await api.post(`/pos/holds/${hold.reservationId}/invoice`, {
+      const expiresAt = new Date();
+      if (invoiceMode === 'QUICK') {
+        expiresAt.setTime(expiresAt.getTime() + 15 * 60 * 1000); // 15 min
+      } else {
+        expiresAt.setTime(expiresAt.getTime() + expiryHours * 60 * 60 * 1000);
+      }
+
+      const endpoint = sessionId
+        ? `/pos/sessions/${sessionId}/create-invoice`
+        : `/pos/holds/${hold.reservationId}/invoice`;
+
+      await api.post(endpoint, {
+        shopperId: hold.shopperId,
+        invoiceMode,
+        expiresAt: expiresAt.toISOString(),
+        cashAmountCents: cashAmountCents > 0 ? cashAmountCents : undefined,
         deliverVia,
-        expiryHours,
+        miscItems: miscItems.length > 0 ? miscItems : undefined,
       });
 
       setSent(true);
@@ -95,7 +125,7 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
               {/* Item Summary */}
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
                 <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-3">
-                  Items (1):
+                  Items ({1 + miscItems.length}):
                 </p>
                 <div className="space-y-2 mb-3">
                   <div className="flex justify-between text-sm">
@@ -104,6 +134,14 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
                       ${itemTotal.toFixed(2)}
                     </span>
                   </div>
+                  {miscItems.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span className="text-gray-900 dark:text-white">• {item.title}</span>
+                      <span className="text-gray-900 dark:text-white font-medium">
+                        ${item.amount.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
                 <div className="border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
                   <div className="flex justify-between">
@@ -111,7 +149,7 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
                       Total
                     </span>
                     <span className="text-sm font-semibold text-sage-700 dark:text-sage-400">
-                      ${itemTotal.toFixed(2)}
+                      ${grandTotal.toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -151,37 +189,139 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
                 </div>
               </div>
 
-              {/* Expiry */}
+              {/* Invoice Mode */}
               <div className="mb-6">
                 <p className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-                  Expiry:
+                  Invoice Mode:
                 </p>
                 <div className="space-y-2">
-                  {[
-                    { hours: 0.25, label: '15 minutes (default)' },
-                    { hours: 24, label: '24 hours' },
-                    { hours: 168, label: '7 days' },
-                    { hours: 720, label: '30 days' },
-                  ].map((option) => (
-                    <label key={option.hours} className="flex items-center cursor-pointer">
-                      <input
-                        type="radio"
-                        name="expiry"
-                        value={option.hours}
-                        checked={expiryHours === option.hours}
-                        onChange={(e) => setExpiryHours(Number(e.target.value))}
-                        className="w-4 h-4 cursor-pointer"
-                      />
-                      <span className="ml-3 text-sm text-gray-900 dark:text-white">
-                        {option.label}
-                      </span>
-                    </label>
-                  ))}
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="invoiceMode"
+                      value="QUICK"
+                      checked={invoiceMode === 'QUICK'}
+                      onChange={(e) => {
+                        setInvoiceMode(e.target.value as 'QUICK' | 'TRUST');
+                        setExpiryHours(0.25);
+                      }}
+                      className="w-4 h-4 cursor-pointer"
+                    />
+                    <span className="ml-3 text-sm text-gray-900 dark:text-white">
+                      Quick Pay (15 minutes) — Shopper pays now
+                    </span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="invoiceMode"
+                      value="TRUST"
+                      checked={invoiceMode === 'TRUST'}
+                      onChange={(e) => {
+                        setInvoiceMode(e.target.value as 'QUICK' | 'TRUST');
+                        setExpiryHours(24);
+                      }}
+                      className="w-4 h-4 cursor-pointer"
+                    />
+                    <span className="ml-3 text-sm text-gray-900 dark:text-white">
+                      Trust Invoice (organizer-set) — Send for later payment
+                    </span>
+                  </label>
                 </div>
-                {expiryHours >= 24 && (
-                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
-                    ⚠️ If the shopper leaves with the item before paying, FindA.Sale cannot guarantee collection of your payment or platform fees. Only use extended windows for trusted buyers.
+              </div>
+
+              {/* Expiry (only for TRUST mode) */}
+              {invoiceMode === 'TRUST' && (
+                <div className="mb-6">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                    Payment Window:
                   </p>
+                  <div className="space-y-2">
+                    {[
+                      { hours: 1, label: '1 hour' },
+                      { hours: 24, label: '24 hours (default)' },
+                      { hours: 168, label: '7 days' },
+                      { hours: 720, label: '30 days' },
+                    ].map((option) => (
+                      <label key={option.hours} className="flex items-center cursor-pointer">
+                        <input
+                          type="radio"
+                          name="expiry"
+                          value={option.hours}
+                          checked={expiryHours === option.hours}
+                          onChange={(e) => setExpiryHours(Number(e.target.value))}
+                          className="w-4 h-4 cursor-pointer"
+                        />
+                        <span className="ml-3 text-sm text-gray-900 dark:text-white">
+                          {option.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                    ⚠️ By sending this invoice, you're allowing the shopper to leave with the item before payment is collected. You may not receive payment.
+                  </p>
+                </div>
+              )}
+
+              {/* Cash Split Input */}
+              <div className="mb-6">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                  Cash Split (Optional):
+                </p>
+                <label className="flex items-center cursor-pointer mb-3">
+                  <input
+                    type="checkbox"
+                    checked={cashAmountCents > 0}
+                    onChange={(e) => {
+                      if (!e.target.checked) {
+                        setCashAmountCents(0);
+                        setCashInputValue('');
+                      }
+                    }}
+                    className="w-4 h-4 cursor-pointer"
+                  />
+                  <span className="ml-3 text-sm text-gray-900 dark:text-white">
+                    Split with cash payment
+                  </span>
+                </label>
+                {cashAmountCents > 0 && (
+                  <div className="space-y-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Cash Collected:
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={grandTotal}
+                        step="0.01"
+                        value={cashInputValue}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCashInputValue(val);
+                          const cents = Math.round(parseFloat(val || '0') * 100);
+                          setCashAmountCents(Math.min(cents, Math.round(grandTotal * 100)));
+                        }}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="border-t border-gray-200 dark:border-gray-600 pt-3 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">Cash Collected:</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                          ${(cashAmountCents / 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">Remaining to Charge:</span>
+                        <span className="text-sm font-semibold text-sage-700 dark:text-sage-400">
+                          ${((grandTotal * 100 - cashAmountCents) / 100).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -224,6 +364,12 @@ export default function PosInvoiceModal({ hold, onClose, onSent }: PosInvoiceMod
                   {hold.shopperEmail}
                 </p>
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6 text-left space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Amount:</span>
+                    <span className="text-gray-900 dark:text-white font-medium">
+                      ${grandTotal.toFixed(2)}
+                    </span>
+                  </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">Expires:</span>
                     <span className="text-gray-900 dark:text-white font-medium">
