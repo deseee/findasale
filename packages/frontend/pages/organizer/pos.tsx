@@ -1188,10 +1188,14 @@ export default function POSPage() {
           // Use the proven pull flow — calls /pull endpoint then adds items exactly like the UI button does
           await handleAddLinkedCart(shopperCart.id, shopperCart.cartItems, shopperCart.shopperId, shopperCart.shopperEmail);
           mergedCount += shopperCart.cartItems.length;
+        } else if (freshSessions.length === 0) {
+          showToast(`No shared carts found — shopper must tap "Share cart" in their app first`, 'info');
+        } else {
+          showToast(`No cart found for ${hold.shopperEmail} (${freshSessions.length} other cart${freshSessions.length !== 1 ? 's' : ''} open)`, 'info');
         }
         setLinkedCarts(freshSessions);
-      } catch {
-        // ignore — best effort
+      } catch (err) {
+        console.error('[pos] hold cart merge error:', err);
       }
     }
 
