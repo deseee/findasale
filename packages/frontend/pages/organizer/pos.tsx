@@ -1155,7 +1155,21 @@ export default function POSPage() {
     setBuyerEmail(hold.shopperEmail);
     // Track the loaded hold
     setLoadedHold(hold);
-    showToast(`Loaded hold for ${hold.shopperName}`, 'success');
+
+    // Auto-merge shopper's open linked cart if they've shared one
+    const shopperCart = linkedCarts.find(lc => lc.shopperId === hold.shopperId);
+    if (shopperCart && shopperCart.cartItems.length > 0) {
+      shopperCart.cartItems.forEach(cartItem => {
+        if (cartItem.id) {
+          addToCart({ id: cartItem.id, title: cartItem.title, price: cartItem.price, status: 'AVAILABLE', photoUrls: cartItem.photoUrl ? [cartItem.photoUrl] : [], sku: null } as Item);
+        } else {
+          addToCart({ title: cartItem.title, amount: cartItem.price });
+        }
+      });
+      showToast(`Loaded hold + ${shopperCart.cartItems.length} cart item${shopperCart.cartItems.length !== 1 ? 's' : ''} for ${hold.shopperName}`, 'success');
+    } else {
+      showToast(`Loaded hold for ${hold.shopperName}`, 'success');
+    }
   };
 
   // ─── Cancel hold from POS ──────────────────────────────────────────────────────────────
@@ -1539,7 +1553,7 @@ export default function POSPage() {
                   )}
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</p>
-                    {loadedHold && item.id === loadedHold.itemId && (
+                    {loadedHold && item.itemId === loadedHold.itemId && (
                       <span className="px-1.5 py-0.5 text-xs rounded-full bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 whitespace-nowrap">
                         📌 On Hold
                       </span>
@@ -1932,7 +1946,7 @@ export default function POSPage() {
                   key={hold.reservationId}
                   className={`p-3 rounded-lg border ${
                     loadedHold?.reservationId === hold.reservationId
-                      ? 'bg-sage-50 dark:bg-sage-900/20 border-sage-300 dark:border-sage-700'
+                      ? 'bg-sage-50 dark:bg-gray-600 border-sage-300 dark:border-sage-600'
                       : 'bg-warm-50 dark:bg-gray-700 border-warm-200 dark:border-gray-600'
                   }`}
                 >
@@ -1992,9 +2006,9 @@ export default function POSPage() {
                   <span className="text-gray-700 dark:text-gray-300">📌 Hold: {loadedHold.itemTitle}</span>
                   <span className="font-semibold text-gray-900 dark:text-white">${loadedHold.itemPrice.toFixed(2)}</span>
                 </div>
-                {cart.filter(item => item.id !== loadedHold.itemId).length > 0 && (
+                {cart.filter(item => item.itemId !== loadedHold.itemId).length > 0 && (
                   <>
-                    {cart.filter(item => item.id !== loadedHold.itemId).map((item, idx) => (
+                    {cart.filter(item => item.itemId !== loadedHold.itemId).map((item, idx) => (
                       <div key={idx} className="flex justify-between">
                         <span className="text-gray-700 dark:text-gray-300">{item.title}</span>
                         <span className="font-semibold text-gray-900 dark:text-white">${item.amount.toFixed(2)}</span>
@@ -2004,7 +2018,7 @@ export default function POSPage() {
                 )}
                 <div className="border-t border-gray-200 dark:border-gray-600 pt-1.5 flex justify-between font-semibold text-gray-900 dark:text-white">
                   <span>Total</span>
-                  <span>${(loadedHold.itemPrice + cart.filter(item => item.id !== loadedHold.itemId).reduce((sum, item) => sum + item.amount, 0)).toFixed(2)}</span>
+                  <span>${(loadedHold.itemPrice + cart.filter(item => item.itemId !== loadedHold.itemId).reduce((sum, item) => sum + item.amount, 0)).toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -2181,7 +2195,7 @@ export default function POSPage() {
       {invoiceModalHold && (
         <PosInvoiceModal
           hold={invoiceModalHold}
-          miscItems={cart.filter(item => item.id !== invoiceModalHold.itemId)}
+          miscItems={cart.filter(item => item.itemId !== invoiceModalHold.itemId)}
           cashAmountCents={cashReceived > 0 ? Math.round(cashReceived * 100) : undefined}
           onClose={() => setInvoiceModalHold(null)}
           onSent={(reservationId) => {

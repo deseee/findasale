@@ -242,19 +242,14 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'amount must be positive number (in dollars)' });
     }
 
-    // Verify items exist and belong to organizer's sale
-    const items = await prisma.item.findMany({
-      where: {
-        id: { in: itemIds },
-        saleId,
-        status: 'AVAILABLE',
-      },
-      select: { id: true, title: true, price: true },
-    });
-
-    if (items.length !== itemIds.length) {
-      return res.status(400).json({ message: 'Some items not found, sold, or unavailable' });
-    }
+    // Look up item titles for the payment link label (soft check — don't block on status)
+    // Items may already be mid-sale when QR is generated; we still need to collect payment
+    const items = itemIds.length > 0
+      ? await prisma.item.findMany({
+          where: { id: { in: itemIds }, saleId },
+          select: { id: true, title: true, price: true },
+        })
+      : [];
 
     // Verify sale belongs to organizer
     const sale = await prisma.sale.findUnique({
