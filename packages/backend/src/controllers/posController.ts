@@ -222,8 +222,9 @@ export const pullCart = async (req: AuthRequest, res: Response) => {
  */
 export const createPaymentLink = async (req: AuthRequest, res: Response) => {
   try {
-    const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
-    const organizer = await resolveOrganizer(req, res, { requireStripe: !isSimulated });
+    // Payment Links are independent of the Terminal/card-reader simulation flag.
+    // Always require a real Stripe connected account — never generate a fake URL.
+    const organizer = await resolveOrganizer(req, res, { requireStripe: true });
     if (!organizer) return;
 
     const { saleId, itemIds, amount } = req.body as {
@@ -271,36 +272,30 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     let paymentLinkUrl = '';
     let stripePaymentLinkId = '';
 
-    if (isSimulated) {
-      // Simulated mode: mock payment link
-      stripePaymentLinkId = `plink_sim_${Date.now()}`;
-      paymentLinkUrl = `https://buy.stripe.com/test/sim_${Date.now()}`;
-    } else {
-      try {
-        // Payment Links require a pre-created Price object (price_data not supported)
-        const stripeOpts = { stripeAccount: organizer.stripeConnectId! };
+    try {
+      // Payment Links require a pre-created Price object (price_data not supported)
+      const stripeOpts = { stripeAccount: organizer.stripeConnectId! };
 
-        const adHocPrice = await stripe().prices.create({
-          currency: 'usd',
-          unit_amount: amountCents,
-          product_data: {
-            name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200)}`,
-          },
-        }, stripeOpts);
+      const adHocPrice = await stripe().prices.create({
+        currency: 'usd',
+        unit_amount: amountCents,
+        product_data: {
+          name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200)}`,
+        },
+      }, stripeOpts);
 
-        const paymentLink = await stripe().paymentLinks.create({
-          line_items: [{ price: adHocPrice.id, quantity: 1 }],
-          after_completion: {
-            type: 'hosted_confirmation' as const,
-          },
-        }, stripeOpts);
+      const paymentLink = await stripe().paymentLinks.create({
+        line_items: [{ price: adHocPrice.id, quantity: 1 }],
+        after_completion: {
+          type: 'hosted_confirmation' as const,
+        },
+      }, stripeOpts);
 
-        stripePaymentLinkId = paymentLink.id;
-        paymentLinkUrl = paymentLink.url;
-      } catch (stripeErr) {
-        console.error('[pos] Stripe payment link creation failed:', stripeErr);
-        return res.status(500).json({ message: 'Failed to create payment link' });
-      }
+      stripePaymentLinkId = paymentLink.id;
+      paymentLinkUrl = paymentLink.url;
+    } catch (stripeErr) {
+      console.error('[pos] Stripe payment link creation failed:', stripeErr);
+      return res.status(500).json({ message: 'Failed to create payment link' });
     }
 
     // Generate QR code as base64 data URL
