@@ -1153,6 +1153,8 @@ export default function POSPage() {
     } as Item);
     // Set buyer email to shopper email
     setBuyerEmail(hold.shopperEmail);
+    // Set linked shopper ID so Send to Phone button appears
+    setLinkedShopperId(hold.shopperId || null);
     // Track the loaded hold
     setLoadedHold(hold);
 
@@ -1897,6 +1899,7 @@ export default function POSPage() {
           paymentLinkQr={paymentLinkQr}
           paymentLinkUrl={paymentLinkUrl}
           paymentLinkStatus={paymentLinkStatus}
+          buyerEmail={buyerEmail}
           onGenerate={handleGeneratePaymentQr}
           onNewTransaction={handleNewTransaction}
           onReset={handleResetPaymentQr}
