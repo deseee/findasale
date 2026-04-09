@@ -1,6 +1,6 @@
 ---
-version: 1
-last_updated: 2026-03-09 (Session 108)
+version: 2
+last_updated: 2026-04-09 (S423 — repackaged; installed copy had stale Neon refs, source was already Railway-correct)
 name: dev-environment
 description: >
   Patrick's FindA.Sale development environment reference. Critical for avoiding

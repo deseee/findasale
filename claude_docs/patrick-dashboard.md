@@ -1,4 +1,29 @@
-# Patrick's Dashboard — April 8, 2026 (S422 COMPLETE)
+# Patrick's Dashboard — April 9, 2026 (Weekly Audit Complete)
+
+## 🚨 Audit Alerts — 2026-04-09
+
+**3 HIGH issues found. No CRITICALs. Full report: `claude_docs/audits/weekly-audit-2026-04-09.md`**
+
+### HIGH — D-006 Violation: Items section buried below Map + Reviews on sale detail pages
+Sale detail pages show: Reviews (top) → Map → **Items** (bottom). D-006 requires Items to be the first full-width section after the photo gallery. This is a conversion blocker — shoppers must scroll past a map and reviews before seeing what's for sale.
+**Action:** Dispatch findasale-dev to reorder sections in `pages/sales/[id].tsx`
+
+### HIGH — D-004 Violation: Mobile nav broken at 375px
+Full desktop navigation (all 6 links + icons) is visible at mobile size. No hamburger menu. "Host a Sale" button text wraps to 3 lines. Unusable on phones.
+**Action:** Dispatch findasale-dev to build mobile hamburger nav
+
+### HIGH — Lucky Roll API 404 (S420 Batch 2 not pushed)
+`/shopper/lucky-roll` page loads but the feature fails with `SyntaxError: Unexpected token '<'` — backend endpoint returns HTML instead of JSON. The Lucky Roll migration hasn't been run on Railway yet.
+**Action:** Push S420 Batch 2 (instructions below) then run migration
+
+### MEDIUM — POS quick-action button (top row) does nothing when clicked
+The "POS" pill button in the dashboard header is a no-op. Only the POS button inside a sale card works. Confusing for new organizers.
+**Action:** Dispatch findasale-dev to fix
+
+### DECISION NEEDED — `/organizer/analytics` returns 404
+This URL doesn't exist yet. Is analytics a planned page? If yes, build it. If no, ensure nothing links to it.
+
+---
 
 ## What You Need to Do Right Now
 
@@ -123,4 +148,4 @@ Fix: the shopper now redirects immediately after Stripe confirms payment on the 
 
 ---
 
-*Updated S421 — 2026-04-08*
+*Updated S423 (weekly audit) — 2026-04-09*
