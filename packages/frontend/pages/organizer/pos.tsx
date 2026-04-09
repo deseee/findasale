@@ -715,6 +715,8 @@ export default function POSPage() {
 
   const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
   const cartChange = Math.max(0, cashReceived - cartTotal);
+  // Amount to charge on card: cartTotal minus cash if a partial cash payment is entered
+  const cardAmount = cashReceived > 0 && cashReceived < cartTotal ? cartTotal - cashReceived : cartTotal;
 
   // ─── Numpad operations (price entry only) ───────────────────────────────────────────
 
@@ -1735,7 +1737,7 @@ export default function POSPage() {
       {paymentMode === 'qr' && cart.length > 0 && (
         <PosPaymentQr
           cartTotal={cartTotal}
-          paymentAmount={paymentLinkAmount || cartTotal}
+          paymentAmount={paymentLinkAmount || cardAmount}
           paymentLinkId={paymentLinkId}
           paymentLinkQr={paymentLinkQr}
           paymentLinkUrl={paymentLinkUrl}
@@ -1841,7 +1843,7 @@ export default function POSPage() {
                 {paymentStatus === 'waiting_for_card' && '📲 Present card to reader…'}
                 {paymentStatus === 'processing' && 'Processing…'}
                 {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
-                  `Charge $${cartTotal.toFixed(2)}`}
+                  `Charge $${cardAmount.toFixed(2)}`}
               </button>
 
               {['waiting_for_card', 'creating'].includes(paymentStatus) && (

@@ -721,7 +721,7 @@ model Purchase {
   item                  Item?          @relation(fields: [itemId], references: [id])
   saleId                String?
   sale                  Sale?          @relation(fields: [saleId], references: [id])
-  stripePaymentIntentId String?        @unique
+  stripePaymentIntentId String?        // Not unique — one PI may have multiple Purchase rows (multi-item cart)
   affiliateLinkId       String?
   affiliateLink         AffiliateLink? @relation(fields: [affiliateLinkId], references: [id])
   source                String         @default("ONLINE") // ONLINE | POS
@@ -731,6 +731,8 @@ model Purchase {
   checkoutEvidence      CheckoutEvidence? // Platform Safety #98: Chargeback defense documentation
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
+
+  @@index([stripePaymentIntentId])
 }
 
 model SaleSubscriber {
