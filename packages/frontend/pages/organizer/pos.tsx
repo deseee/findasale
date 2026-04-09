@@ -755,6 +755,13 @@ export default function POSPage() {
         label: c.title,
       }));
 
+      // Calculate split payment amounts
+      const totalAmountCents = Math.round(cartTotal * 100);
+      const cashReceivedCents = Math.round(cashReceived * 100);
+      const remainingCents = cashReceivedCents > 0 && cashReceivedCents < totalAmountCents
+        ? totalAmountCents - cashReceivedCents
+        : 0;
+
       const piRes = await api.post<{
         paymentIntentId: string;
         clientSecret: string;
@@ -765,6 +772,7 @@ export default function POSPage() {
         items,
         saleId: selectedSaleId,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
+        ...(remainingCents > 0 ? { cashAmountCents: cashReceivedCents } : {}),
       });
 
       const { paymentIntentId: piId, clientSecret } = piRes.data;
@@ -785,8 +793,9 @@ export default function POSPage() {
       await api.post('/stripe/terminal/capture', { paymentIntentId: piId });
 
       setPaymentStatus('success');
+      const chargeAmount = remainingCents > 0 ? (remainingCents / 100).toFixed(2) : cartTotal.toFixed(2);
       setSuccessMessage(
-        `✅ Card payment of $${cartTotal.toFixed(2)} accepted${buyerEmail.trim() ? ` — receipt sent to ${buyerEmail.trim()}` : ''}.`
+        `✅ Card payment of $${chargeAmount} accepted${buyerEmail.trim() ? ` — receipt sent to ${buyerEmail.trim()}` : ''}.`
       );
 
       showSurvey('OG-4');
@@ -1041,9 +1050,19 @@ export default function POSPage() {
     setPaymentLinkStatus('generating');
     try {
       const itemIds = cart.filter(c => c.itemId).map(c => c.itemId!);
+
+      // Calculate remaining balance: if cashReceived < cartTotal, QR encodes only the card amount
+      const totalAmountCents = Math.round(cartTotal * 100);
+      const cashReceivedCents = Math.round(cashReceived * 100);
+      const remainingCents = cashReceivedCents > 0 && cashReceivedCents < totalAmountCents
+        ? totalAmountCents - cashReceivedCents
+        : 0;
+
+      const amountForQr = remainingCents > 0 ? remainingCents / 100 : cartTotal;
+
       const res = await api.post<{ linkId: string; qrCodeDataUrl: string }>('/pos/payment-links', {
         saleId: selectedSaleId,
-        amount: cartTotal,
+        amount: amountForQr,
         itemIds,
       });
       setPaymentLinkId(res.data.linkId);
