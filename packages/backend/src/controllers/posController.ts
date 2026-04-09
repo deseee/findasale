@@ -291,8 +291,9 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
           type: 'hosted_confirmation' as const,
         },
         // For Payment Links + Connect: application_fee_amount AND transfer_data both go at top level
-        // (NOT inside payment_intent_data — that only works for Checkout Sessions)
-        ...(organizer.stripeConnectId ? {
+        // Only apply when organizer has a real Stripe Connect account (real IDs are acct_ + 16 chars = 21+)
+        // Seed/test data uses short fake IDs that Stripe rejects — skip fee gracefully for those
+        ...(organizer.stripeConnectId && organizer.stripeConnectId.length >= 21 ? {
           application_fee_amount: platformFeeAmount,
           transfer_data: { destination: organizer.stripeConnectId },
         } as any : {}),
