@@ -804,7 +804,7 @@ export default function POSPage() {
         `✅ Card payment of $${chargeAmount} accepted${buyerEmail.trim() ? ` — receipt sent to ${buyerEmail.trim()}` : ''}.`
       );
 
-      showSurvey('OG-4');
+      showSurvey('OG-3');
       clearCart();
     } catch (err: any) {
       console.error('[pos] Payment error:', err);
@@ -843,7 +843,7 @@ export default function POSPage() {
         `✅ Cash sale recorded for $${cartTotal.toFixed(2)}. Change: $${change}${buyerEmail.trim() ? ` — receipt sent to ${buyerEmail.trim()}` : ''}.`
       );
 
-      showSurvey('OG-4');
+      showSurvey('OG-3');
       clearCart();
     } catch (err: any) {
       console.error('[pos] Cash payment error:', err);
