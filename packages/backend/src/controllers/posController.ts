@@ -15,6 +15,8 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getStripe } from '../utils/stripe';
+import { getIO } from '../lib/socket';
+import { createNotification } from '../lib/notificationService';
 
 const stripe = () => getStripe();
 
@@ -575,6 +577,33 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       } catch (emailErr) {
         console.warn('[pos] Failed to send invoice email:', emailErr);
       }
+    }
+
+    // Emit socket event to shopper so in-app payment popup appears
+    try {
+      const io = getIO();
+      io.to(`user:${reservation.userId}`).emit('HOLD_INVOICE', {
+        type: 'HOLD_INVOICE',
+        invoiceId: holdInvoice.id,
+        total: grandTotal / 100,
+        expiresAt: holdInvoice.expiresAt,
+        itemTitle: reservation.item.title,
+      });
+    } catch (socketErr) {
+      console.warn('[pos] Failed to emit HOLD_INVOICE socket event:', socketErr);
+    }
+
+    // Create in-app notification for shopper
+    try {
+      await createNotification({
+        userId: reservation.userId,
+        type: 'hold_invoice',
+        title: 'Invoice Ready',
+        body: `Your invoice for ${reservation.item.title} is ready. Total: $${(grandTotal / 100).toFixed(2)}`,
+        link: `/my-invoices/${holdInvoice.id}`,
+      });
+    } catch (notifErr) {
+      console.warn('[pos] Failed to create hold invoice notification:', notifErr);
     }
 
     res.json({ invoiceId: holdInvoice.id, status: 'SENT' });
