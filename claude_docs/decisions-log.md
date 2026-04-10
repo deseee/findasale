@@ -5,6 +5,15 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-04-10 (S436) — Sale Hubs Repurposed as Flea Market Events Foundation
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Hubs as built (one organizer pools their own sales) solves a problem that doesn't exist — organizers don't run 3 simultaneous estate sales in the same area. Treasure Trails already covers multi-sale discovery better. Hubs outer shell (geo-container, event date/name, public landing page, map) is the right skeleton for flea market events. Folds #238 into this repurpose.
+**Locked:** Hubs is no longer a "pool your own sales" feature. `SaleHubMembership` replaced by `VendorBooth` model. ADR-014 written. Tier/booth-limits/payout-trigger are open Patrick decisions before dev starts.
+
+---
+
 ## 2026-04-07 (S413) — Brand-Spreading Features Are Never Tier-Gated
 
 **Status:** LOCKED
