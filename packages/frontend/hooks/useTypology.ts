@@ -92,12 +92,13 @@ export function useClassifyItem() {
 }
 
 // POST /api/sales/:saleId/classify-all
+// NOTE: Returns 202 ACCEPTED with fire-and-forget pattern (no results returned)
 export function useBatchClassifySale() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (saleId: string) => {
       const res = await api.post(`/sales/${saleId}/classify-all`);
-      return res.data as BatchClassifyResult;
+      return res.data as { status: string; message: string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['typology'] });
