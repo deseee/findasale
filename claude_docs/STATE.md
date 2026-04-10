@@ -7,45 +7,33 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S434 PARTIAL (2026-04-10):** Pricing page audit, feature gating fixes, nav restructure, DB QA, reputation/reviews merge. Session had execution quality issues — next session must audit all changes before pushing.
+**S435 COMPLETE (2026-04-10):** S434 audit completed, nav parity fixed, Hunt Pass section corrected. All S433/S434 commits are local and ready to push.
 
-**S434 What shipped (code changes, NOT pushed):**
-1. `typologyController.ts` — Railway crash fix: batchClassifySale changed from await (timeout→double-response) to fire-and-forget 202 pattern + `res.headersSent` guard.
-2. `Layout.tsx` — Nav gating: Command Center moved from PRO→TEAMS block. Appraisals moved out of PRO gate (ala carte per ADR-054). "Add Items" mobile nav href changed from `/organizer/command-center` to `/organizer/sales`. Typology removed from nav. Shopper "Explore & Connect" split into 3 sections: Explore (Compass), Hunt Pass (Ticket, amber), Connect (Share2).
-3. `TierComparisonTable.tsx` — 14 missing features added + À la Carte column added.
-4. `email-digest-preview.tsx` — Dark mode fix: `dark:bg-gray-900` on main wrapper.
-5. `webhooks.tsx` — Dark mode contrast fix + plain-English intro (QuickBooks, Zapier, Google Sheets examples).
-6. `typology.tsx` — Dark mode input/select fixes.
-7. `item-library.tsx` — TierGate removed (was PRO, should be all-tiers per comparison table). `fetchUserSales` stub replaced with real API call to `/sales/mine`.
-8. `offline.tsx` — TierGate removed (was PRO, should be all-tiers per comparison table). Unused `useOrganizerTier` import removed.
-9. `reputation.tsx` — Merged reviews functionality: tabbed interface (Reputation/Reviews), reviews query+mutation+respond, `?tab=reviews` deep-linking.
-10. `reviews.tsx` — Converted to redirect → `/organizer/reputation?tab=reviews`.
+**S435 What was audited and fixed:**
+1. **S434 audit** — Read all 14 changed files. 5 bugs found and fixed:
+   - `Layout.tsx` mobile nav: Typology was still in mobile "Pro Tools" (removed)
+   - `offline.tsx`: Stale comment "TierGate handles PRO access check" removed
+   - `AvatarDropdown.tsx`: S434 never updated this file — 3 fixes applied (Add Items href → `/organizer/sales`, Command Center → TEAMS section, Typology removed)
+   - `auctionJob.ts`: `auctionClosed: true` not set in bid-won path (fixed)
+   - `auctionAutoCloseCron.ts`: Circular import `'../index'` → `'../lib/prisma'` (fixed)
+2. **S433 cron audit** — 3 cron files confirmed safe: different query predicates, complementary responsibilities, no double-processing
+3. **Full nav parity audit** — Systematic comparison of AvatarDropdown.tsx vs Layout.tsx:
+   - Organizer: Messages + Inventory missing from AvatarDropdown (added), Flip Report + Appraisals wrongly PRO-gated (ungated), Sale Hubs href wrong `/organizer/hubs` → `/organizer/sale-hubs`
+   - Shopper: AvatarDropdown "Explore & Connect" split into 3 proper sections (Explore / Hunt Pass / Connect) matching Layout.tsx
+   - Hunt Pass: Lucky Roll moved from Hunt Pass → Explore (it's a free XP mechanic, not HP exclusive) in both desktop + mobile
+   - Mobile bugs fixed: mobile Hunt Pass sections were using wrong state vars (`mobileCartOpen` and `mobileDevToolsOpen`) — replaced with `mobileHuntPassOpen` and `mobileDualRoleHuntPassOpen`
+   - TS check: zero errors
+4. **Original S434 prompt review** — Confirmed what was NOT done by S434: placeholder pages (promote, send-update, photo-ops, qr-codes, print-kit, checklist, earnings, line-queue, calendar, staff), functional issues with item-library and typology, offline sync awareness, bounties game design check, Line Queue gating. These are separate workloads.
 
-**S434 DB QA findings:**
-- Bounties: 3 seeded `MissingListingBounty` records. Backend has 5 endpoints wired. Organizer bounties page functional. Shopper bounties page is placeholder.
-- Item Library: `inLibrary` column exists, 0 items flagged. Hook calls `/item-library` correctly.
-- Offline Mode: No server-side queue tables (expected — client-side hooks). Page is full sync dashboard.
-- Webhooks: 0 in DB. Page is management interface.
-- 448 items, 26 sales, 100 users in DB.
-
-**S434 NOT completed:**
-- /plan link "goes to middle of page" — unresolved. /plan is AI chat page, issue unclear.
-- No Chrome QA performed (DB-only per Patrick's direction this session).
-- Changes NOT pushed — need audit first.
-
-**⚠️ S434 audit needed next session:** Session had direction-following issues (assumptions without reading code, Chrome used in subagent violating §10c, main window code edits). Next session must: (a) read every changed file and verify edits are correct, (b) TS check passes, (c) compile verified pushblock.
-
-**S434 Files changed (all unpushed):**
-- `packages/backend/src/controllers/typologyController.ts`
+**S435 Files changed (uncommitted — include in push):**
+- `packages/frontend/components/AvatarDropdown.tsx`
 - `packages/frontend/components/Layout.tsx`
-- `packages/frontend/components/TierComparisonTable.tsx`
-- `packages/frontend/pages/organizer/email-digest-preview.tsx`
-- `packages/frontend/pages/organizer/webhooks.tsx`
-- `packages/frontend/pages/organizer/typology.tsx`
-- `packages/frontend/pages/organizer/item-library.tsx`
-- `packages/frontend/pages/organizer/offline.tsx`
-- `packages/frontend/pages/organizer/reputation.tsx`
-- `packages/frontend/pages/organizer/reviews.tsx`
+
+**S435 Next session:**
+- Push S433 + S434 + S435 commits using `.\push.ps1`
+- S433 migration must run first (see below)
+- Chrome QA all S434 pages after deploy
+- Remaining S434 original prompt work: placeholder pages, functional bugs
 
 ---
 

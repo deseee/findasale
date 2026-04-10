@@ -1,69 +1,73 @@
-# Patrick's Dashboard — April 10, 2026 (S434)
+# Patrick's Dashboard — April 10, 2026 (S435)
 
-## ⚠️ S434 Status: DO NOT PUSH YET — Audit Required
+## ✅ S433 + S434 Pushed. S435 nav fixes ready to push.
 
-This session made a lot of changes but had execution quality issues (assumptions without reading code, direction-following gaps). **Next session must audit every changed file before pushing.**
+S433 and S434 are already on GitHub. S435 (this session) has 2 uncommitted files.
 
-## What S434 Changed (10 files, all local/unpushed)
+## S435 Push (2 files)
 
-### Backend (1 file)
-- **typologyController.ts** — Fixed Railway crash ("Cannot set headers after sent"). Changed batch classification from await (timeout) to fire-and-forget 202 response.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/Layout.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S435: Nav parity fixes — AvatarDropdown sync, Hunt Pass section corrected, mobile state var bugs"
+.\push.ps1
+```
 
-### Nav & Gating (2 files)
-- **Layout.tsx** — Command Center moved from PRO→TEAMS gate. Appraisals ungated (ala carte). "Add Items" mobile link fixed (was routing to Command Center). Typology removed from nav. Shopper nav split: Explore / Hunt Pass / Connect (3 separate sections).
-- **TierComparisonTable.tsx** — 14 missing features added. À la Carte column added.
+## What S435 Fixed
 
-### Dark Mode & Copy (3 files)
-- **email-digest-preview.tsx** — Dark background fix
-- **webhooks.tsx** — Dark mode fix + plain-English intro explaining what webhooks are
-- **typology.tsx** — Dark mode input/select fixes
+### S434 Audit (5 bugs found + fixed, already committed)
+- Layout.tsx mobile: Typology was still in mobile Pro Tools — removed
+- offline.tsx: Stale comment removed
+- AvatarDropdown.tsx: Was never updated by S434 — 3 fixes applied (Add Items href, Command Center → TEAMS, Typology removed)
+- auctionJob.ts: `auctionClosed: true` missing from bid-won path — fixed
+- auctionAutoCloseCron.ts: Circular import `'../index'` → `'../lib/prisma'` — fixed
 
-### Tier Gate Fixes (2 files)
-- **item-library.tsx** — PRO gate removed (should be all-tiers). `fetchUserSales` stub replaced with real API call (was always empty).
-- **offline.tsx** — PRO gate removed (should be all-tiers).
-
-### Reputation + Reviews Merge (2 files)
-- **reputation.tsx** — Reviews functionality merged in with tabbed interface (Reputation / Reviews tabs). Deep-linkable via `?tab=reviews`.
-- **reviews.tsx** — Now redirects to `/organizer/reputation?tab=reviews`.
-
-## DB QA Results (no Chrome — DB queries only)
-- **Bounties:** 3 real records in DB. Organizer page wired to 5 API endpoints. Shopper page is placeholder.
-- **Item Library:** `inLibrary` field exists, 0 items flagged. Hook + API wired correctly.
-- **Offline Mode:** Client-side sync (no server tables). Full dashboard page exists.
-- **Webhooks:** 0 in DB. Management page ready.
-
-## Not Done This Session
-- `/plan` link "goes to middle of page" — unresolved
-- No Chrome QA (DB-only this session)
-- S433 auction cron audit still pending
+### Nav Parity (AvatarDropdown ↔ Layout.tsx — uncommitted)
+- **Messages** added to organizer section (was in Layout sidebar, missing from dropdown)
+- **Inventory** added to Pro Tools (was in Layout sidebar, missing from dropdown)
+- **Flip Report + Appraisals** ungated (were PRO-gated in dropdown, ungated in sidebar — now match)
+- **Sale Hubs href** fixed: `/organizer/hubs` → `/organizer/sale-hubs`
+- **Explore & Connect** split into 3 sections (Explore / Hunt Pass / Connect) — matches Layout.tsx
+- **Lucky Roll** moved from Hunt Pass → Explore in both files (it's a free XP mechanic, not HP exclusive)
+- **Mobile Hunt Pass toggles** fixed: were reusing `mobileCartOpen` and `mobileDevToolsOpen` as state vars (serious bug — cart drawer opening also opened Hunt Pass section). Now use dedicated `mobileHuntPassOpen` and `mobileDualRoleHuntPassOpen`
 
 ---
 
-## 🔴 Next Session (S435): AUDIT FIRST
+## What S434 Originally Requested but Didn't Deliver
 
-1. **Read every changed file** — verify edits are correct, no broken JSX, no missing imports
-2. **Run full TS check** — `cd packages/frontend && npx tsc --noEmit --skipLibCheck` → zero errors
-3. **Verify Layout.tsx nav structure** — the nav is 1400+ lines and was edited by a subagent. Spot-check: Command Center in TEAMS block, Appraisals ungated, Explore/Hunt Pass/Connect split correct, mobile nav matches desktop
-4. **Verify TierComparisonTable** — 14 added features have correct tier assignments
-5. **Verify reputation.tsx** — tabbed interface compiles and reviews tab has all functionality from old reviews.tsx
-6. **Compile pushblock** — all 10 files + STATE.md + patrick-dashboard.md
-7. Then resume: /plan link bug, any remaining audit items
+These are planned for next session:
+
+### Placeholder Pages (10 pages — need real content built)
+- `/organizer/promote` — share/promote your sale
+- `/organizer/send-update` — send buyer updates
+- `/organizer/photo-ops` — photo opportunity management
+- `/organizer/qr-codes` — QR code generation
+- `/organizer/print-kit` — print materials
+- `/organizer/checklist` — sale prep checklist
+- `/organizer/earnings` — earnings dashboard
+- `/organizer/line-queue` — virtual line management (PRO + À la Carte gating needed)
+- `/organizer/calendar` — TEAMS calendar
+- `/organizer/staff` — TEAMS staff management
+
+### Functional Issues
+- **Item Library** — page renders but 0 items in library (feature not wired end-to-end)
+- **Typology** — dark mode fixed but classification feature may not work
+- **Offline Mode** — sync awareness UI not built (user doesn't know when they need to sync)
+
+### Decisions Needed
+- **Line Queue gating**: PRO AND À la Carte (confirm before building)
+- **Bounties**: Does current implementation match game design session intent?
 
 ---
 
-## Pending QA (backlog — unchanged from S433)
+## S433 Migration (run if not yet done)
 
-| Feature | What to Test |
-|---|---|
-| S433 Auction (Phase 1+2) | Run migration first, then QA reserve/proxy/soft-close/bid-history |
-| Trail activation | Map → sale → "View Treasure Trail →" → amber circles |
-| XP on purchase | Complete purchase → XP = dollar amount |
-| Email spam | Payment link to Yahoo → inbox not spam |
-| POS invoice flow | Load hold + misc → Send Invoice → shopper pays |
-
----
-
-## 🔧 Standing Items
-- **Auction cron audit:** 3 job files exist — architect must confirm no double-close before deploy
-- **Stripe Connect webhook (P2):** Items not marked SOLD after POS card payment. One-time Stripe Dashboard config needed.
-- **S433 migration required** before pushing auction Phase 2 code
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
