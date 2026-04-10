@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import express, { Response } from 'express';
+import express, { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
@@ -617,12 +617,15 @@ export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
-    // Generate CSRF token (state parameter)
-    const stateToken = crypto.randomBytes(32).toString('hex');
-
-    // In a real app, store state token in Redis or DB with expiry
-    // For now, we'll rely on the OAuth endpoint validation
-    // TODO: Add state token validation on callback
+    // Generate state parameter encoding organizerId + nonce
+    // This allows the callback (public endpoint) to identify the organizer
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const statePayload = {
+      organizerId: organizer.id,
+      nonce,
+      iat: Date.now(),
+    };
+    const stateToken = Buffer.from(JSON.stringify(statePayload)).toString('base64url');
 
     const clientId = process.env.EBAY_CLIENT_ID;
     const redirectUri = process.env.EBAY_OAUTH_REDIRECT_URI;
@@ -651,27 +654,44 @@ export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
 /**
  * GET /api/ebay/callback
  * Exchange authorization code for tokens; store in EbayConnection
+ * PUBLIC endpoint — eBay redirects here without FindA.Sale JWT
+ * Organizer ID is encoded in the state parameter
  */
-export const ebayOAuthCallback = async (req: AuthRequest, res: Response) => {
+export const ebayOAuthCallback = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
     const { code, state } = req.query as { code?: string; state?: string };
 
     if (!code) {
       return res.status(400).json({ message: 'Authorization code missing' });
     }
 
-    // Get organizer
+    if (!state) {
+      return res.status(400).json({ message: 'State parameter missing' });
+    }
+
+    // Decode state to get organizerId
+    let statePayload: { organizerId: string; nonce: string; iat: number };
+    try {
+      const decoded = Buffer.from(state, 'base64url').toString('utf-8');
+      statePayload = JSON.parse(decoded);
+    } catch (e) {
+      console.error('[eBay] Failed to decode state parameter:', e);
+      return res.status(400).json({ message: 'Invalid state parameter' });
+    }
+
+    // Validate state freshness (max 10 minutes old)
+    const stateAge = Date.now() - statePayload.iat;
+    if (stateAge > 10 * 60 * 1000) {
+      return res.status(400).json({ message: 'State parameter expired' });
+    }
+
+    // Get organizer by ID from state
     const organizer = await prisma.organizer.findUnique({
-      where: { userId },
+      where: { id: statePayload.organizerId },
     });
 
     if (!organizer) {
-      return res.status(404).json({ message: 'Organizer profile not found' });
+      return res.status(404).json({ message: 'Organizer not found' });
     }
 
     const clientId = process.env.EBAY_CLIENT_ID;

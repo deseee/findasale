@@ -16,7 +16,7 @@ const router = Router();
 // Feature #244 Phase 2: eBay OAuth connection
 // OAuth flow
 router.get('/connect', authenticate, connectEbayAccount);
-router.get('/callback', authenticate, ebayOAuthCallback);
+router.get('/callback', ebayOAuthCallback); // Public endpoint — eBay redirects here without JWT
 
 // Connection management
 router.get('/connection', authenticate, checkEbayConnection);
