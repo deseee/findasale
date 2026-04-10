@@ -33,7 +33,7 @@ const OrganizerSettingsPage = () => {
   const { showSurvey } = useFeedbackSurvey();
   const { tier, isPro } = useOrganizerTier();
   const { isLowBandwidth, networkType, toggleLowBandwidth } = useNetworkQuality();
-  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help' | 'ebay'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
@@ -43,6 +43,7 @@ const OrganizerSettingsPage = () => {
   const [etsy, setEtsy] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [isConnectingEbay, setIsConnectingEbay] = useState(false);
   const [fontSize, setFontSize] = useState(16);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
@@ -57,6 +58,13 @@ const OrganizerSettingsPage = () => {
     enabled: !!user
   });
 
+  // eBay connection status query
+  const { data: ebayStatus, isLoading: ebayStatusLoading, refetch: refetchEbayStatus } = useQuery({
+    queryKey: ['ebay-connection-status'],
+    queryFn: () => api.get('/api/ebay/connection').then(r => r.data),
+    enabled: !!user
+  });
+
   // Request verification mutation
   const requestMutation = useMutation({
     mutationFn: () => api.post('/api/verification/request'),
@@ -66,6 +74,19 @@ const OrganizerSettingsPage = () => {
     },
     onError: (error: any) => {
       const msg = error.response?.data?.message || 'Failed to submit verification request';
+      showToast(msg, 'error');
+    }
+  });
+
+  // Disconnect eBay mutation
+  const disconnectEbayMutation = useMutation({
+    mutationFn: () => api.delete('/api/ebay/connection'),
+    onSuccess: () => {
+      refetchEbayStatus();
+      showToast('eBay account disconnected', 'success');
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to disconnect eBay account';
       showToast(msg, 'error');
     }
   });
@@ -111,7 +132,15 @@ const OrganizerSettingsPage = () => {
     if (aiAssistanceSaved === 'false') {
       setAiAssistanceEnabled(false);
     }
-  }, []);
+
+    // Check for eBay callback success
+    if (router.query.ebay_connected === 'true') {
+      showToast('eBay account connected successfully', 'success');
+      refetchEbayStatus();
+      // Remove the query param
+      router.replace('/organizer/settings?tab=ebay', undefined, { shallow: true });
+    }
+  }, [router.query.ebay_connected, showToast, refetchEbayStatus, router]);
 
   const handleStripeConnect = async () => {
     setIsConnectingStripe(true);
@@ -126,6 +155,21 @@ const OrganizerSettingsPage = () => {
       showToast(error.response?.data?.message || 'Failed to connect Stripe', 'error');
     } finally {
       setIsConnectingStripe(false);
+    }
+  };
+
+  const handleEbayConnect = async () => {
+    setIsConnectingEbay(true);
+    try {
+      const response = await api.get('/api/ebay/connect');
+      // The backend redirects directly to eBay OAuth, so we shouldn't reach here
+      // But if it returns a URL in the response, redirect to it
+      if (response.data?.redirectUrl) {
+        window.location.href = response.data.redirectUrl;
+      }
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to start eBay connection', 'error');
+      setIsConnectingEbay(false);
     }
   };
 
@@ -182,7 +226,7 @@ const OrganizerSettingsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
-            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'help'].map((tab) => (
+            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', 'help'].map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -673,6 +717,76 @@ const OrganizerSettingsPage = () => {
                   </label>
                   <p className="text-sm text-warm-600 dark:text-gray-400">Manually override automatic detection. Use this if you're on a slow connection or want to save mobile data.</p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* eBay Tab */}
+          {activeTab === 'ebay' && (
+            <div className="space-y-6">
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">eBay Account</h2>
+                  <Tooltip content="Connect your eBay account to list items on eBay directly from FindA.Sale." position="right" />
+                </div>
+                <p className="text-warm-600 dark:text-gray-400 mb-6">
+                  Connect your eBay account to expand your sales channels. You'll be able to push inventory to eBay with a single click.
+                </p>
+
+                {ebayStatusLoading ? (
+                  <div className="flex items-center gap-2 text-warm-600 dark:text-gray-400">
+                    <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                    Checking connection status...
+                  </div>
+                ) : ebayStatus?.connected ? (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <p className="font-semibold text-green-800 dark:text-green-200">eBay Connected</p>
+                      </div>
+                      {ebayStatus?.ebayUserId && (
+                        <p className="text-sm text-green-700 dark:text-green-300">
+                          Account: <span className="font-medium">{ebayStatus.ebayUserId}</span>
+                        </p>
+                      )}
+                      {ebayStatus?.connectedAt && (
+                        <p className="text-sm text-green-700 dark:text-green-300">
+                          Connected on {new Date(ebayStatus.connectedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                      {ebayStatus?.error && (
+                        <div className="mt-3 p-2 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                          <p className="text-xs text-red-700 dark:text-red-300">
+                            <strong>Token issue:</strong> {ebayStatus.errorMessage || 'Please reconnect your account.'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => disconnectEbayMutation.mutate()}
+                      disabled={disconnectEbayMutation.isPending}
+                      className="text-sm bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
+                    >
+                      {disconnectEbayMutation.isPending ? 'Disconnecting...' : 'Disconnect eBay Account'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <p className="text-sm text-amber-800 dark:text-amber-200 mb-4">
+                      Connect your eBay account to start pushing inventory. You'll be redirected to eBay to authorize FindA.Sale.
+                    </p>
+                    <button
+                      onClick={handleEbayConnect}
+                      disabled={isConnectingEbay}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50"
+                    >
+                      {isConnectingEbay ? 'Redirecting to eBay...' : 'Connect eBay Account'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
