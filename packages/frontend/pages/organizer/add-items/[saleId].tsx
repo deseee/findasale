@@ -271,6 +271,7 @@ const emptyForm = {
   listingType: 'FIXED',
   startingBid: '',
   reservePrice: '',
+  auctionEndTime: '',
   reverseDailyDrop: '',
   reverseFloorPrice: '',
   shippingAvailable: false,
@@ -502,9 +503,18 @@ const AddItemsDetailPage = () => {
   const createMutation = useMutation({
     mutationFn: async () => {
       const photoUrls = formData.photoUrls;
+      // Map form field names to API field names for auction items
+      const submitData = { ...formData, saleId, photoUrls };
+      if (submitData.listingType === 'AUCTION') {
+        submitData.auctionStartPrice = submitData.startingBid ? parseFloat(submitData.startingBid) : null;
+        submitData.auctionReservePrice = submitData.reservePrice ? parseFloat(submitData.reservePrice) : null;
+        submitData.auctionEndTime = submitData.auctionEndTime || null;
+        delete submitData.startingBid;
+        delete submitData.reservePrice;
+      }
       return await api.post(
         `/items`,
-        { ...formData, saleId, photoUrls },
+        submitData,
         { headers: { 'Content-Type': 'application/json' } }
       );
     },
@@ -1602,6 +1612,49 @@ const AddItemsDetailPage = () => {
                           className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
                           placeholder="Minimum price"
                         />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Conditional: Auction Fields */}
+                  {formData.listingType === 'AUCTION' && (
+                    <div className="grid grid-cols-3 gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                      <div>
+                        <label className="block text-xs font-medium text-amber-900 dark:text-amber-200 mb-1">Starting Bid ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.startingBid}
+                          onChange={(e) => setFormData({ ...formData, startingBid: e.target.value })}
+                          className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                          placeholder="Starting bid"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-amber-900 dark:text-amber-200 mb-1">Reserve Price ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.reservePrice}
+                          onChange={(e) => setFormData({ ...formData, reservePrice: e.target.value })}
+                          className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                          placeholder="Reserve price (optional)"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-amber-900 dark:text-amber-200 mb-1">Auction End Time</label>
+                        <input
+                          type="datetime-local"
+                          value={formData.auctionEndTime}
+                          onChange={(e) => setFormData({ ...formData, auctionEndTime: e.target.value })}
+                          min={sale && sale.startDate ? new Date(new Date(sale.startDate).getTime() - 86400000).toISOString().slice(0, 16) : undefined}
+                          className="w-full px-3 py-1.5 border border-amber-300 dark:border-amber-600 dark:bg-gray-800 dark:text-warm-100 rounded focus:ring-1 focus:ring-amber-500 text-sm"
+                        />
+                        {!formData.auctionEndTime && sale && sale.startDate && (
+                          <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                            Default: {new Date(new Date(sale.startDate).getTime() - 86400000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Detroit' })} ET
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
