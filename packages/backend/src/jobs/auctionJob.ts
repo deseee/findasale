@@ -65,7 +65,7 @@ export const endAuctions = async () => {
         // Mark as AUCTION_ENDED — switches to SOLD only once Stripe webhook confirms payment
         await prisma.item.update({
           where: { id: item.id },
-          data: { status: 'AUCTION_ENDED', currentBid: price },
+          data: { status: 'AUCTION_ENDED', currentBid: price, auctionClosed: true },
         });
 
         // QA: Fee rate now read from FeeStructure table at transaction time
