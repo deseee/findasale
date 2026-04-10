@@ -43,6 +43,7 @@ const OrganizerSettingsPage = () => {
   const [etsy, setEtsy] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(false);
   const [isConnectingEbay, setIsConnectingEbay] = useState(false);
   const [fontSize, setFontSize] = useState(16);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
@@ -105,6 +106,7 @@ const OrganizerSettingsPage = () => {
           setFacebook(response.data.facebook || '');
           setInstagram(response.data.instagram || '');
           setEtsy(response.data.etsy || '');
+          setStripeConnected(response.data.stripeConnected || false);
         }
       } catch (error) {
         console.error('Failed to fetch organizer data:', error);
@@ -255,13 +257,31 @@ const OrganizerSettingsPage = () => {
               <p className="text-warm-600 dark:text-gray-400 mb-6">
                 Connect your Stripe account to receive payouts from your sales. You'll need a valid bank account in the US.
               </p>
-              <button
-                onClick={handleStripeConnect}
-                disabled={isConnectingStripe}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50"
-              >
-                {isConnectingStripe ? 'Redirecting to Stripe...' : 'Setup Stripe Connect'}
-              </button>
+              {stripeConnected ? (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Stripe Connected
+                  </div>
+                  <button
+                    onClick={handleStripeConnect}
+                    disabled={isConnectingStripe}
+                    className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-gray-100 font-semibold py-2 px-4 rounded-lg disabled:opacity-50 text-sm"
+                  >
+                    {isConnectingStripe ? 'Opening Stripe...' : 'Manage Payouts'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStripeConnect}
+                  disabled={isConnectingStripe}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50"
+                >
+                  {isConnectingStripe ? 'Redirecting to Stripe...' : 'Setup Stripe Connect'}
+                </button>
+              )}
             </div>
           )}
 
