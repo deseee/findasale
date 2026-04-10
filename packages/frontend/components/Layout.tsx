@@ -992,7 +992,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <Camera size={14} className="inline mr-2 text-amber-400" /> Photo Ops
                     </Link>
                     <Link href="/organizer/qr-codes" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Tag size={14} className="inline mr-2 text-amber-400" /> Price Tags
+                      <Tag size={14} className="inline mr-2 text-amber-400" /> QR Analytics
                     </Link>
                     <Link href="/organizer/print-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Printer size={14} className="inline mr-2 text-amber-500" /> Print Kit
@@ -1073,8 +1073,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <ShieldAlert size={14} className="inline mr-2 text-purple-400" /> Fraud Signals
                     </Link>
-                    <Link href="/organizer/sale-hubs" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-                      <Network size={14} className="inline mr-2 text-purple-400" /> Sale Hubs <span className="text-xs text-gray-400">(Soon)</span>
+                    <Link href="/organizer/hubs" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Network size={14} className="inline mr-2 text-purple-400" /> Sale Hubs
                     </Link>
                     <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Users size={14} className="inline mr-2 text-purple-400" /> Line Queue
