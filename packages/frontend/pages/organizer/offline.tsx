@@ -65,9 +65,6 @@ const OfflinePage = () => {
     return null;
   }
 
-  // Redirect if PRO tier not available
-  // TierGate handles PRO access check in the JSX below
-
   const handleSync = async () => {
     try {
       const operations = queueData?.data || [];

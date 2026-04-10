@@ -1,9 +1,9 @@
 /**
  * Command Center Dashboard
  *
- * Multi-sale overview for PRO/TEAMS organizers.
+ * Multi-sale overview for TEAMS organizers.
  * Route: /organizer/command-center
- * Tier gating: PRO minimum (SIMPLE redirected to /organizer/pricing)
+ * Tier gating: TEAMS minimum (PRO/SIMPLE redirected to /organizer/pricing)
  */
 
 import React, { useState } from 'react';
@@ -101,7 +101,7 @@ const CommandCenterPage = () => {
         <title>Command Center - FindA.Sale</title>
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Command Center" description="Multi-sale overview dashboard with real-time status, quick actions, and performance metrics across all your sales.">
+      <TierGate requiredTier="TEAMS" featureName="Command Center" description="Multi-sale overview dashboard with real-time status, quick actions, and performance metrics across all your sales.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
           <div className="max-w-6xl mx-auto flex items-center gap-3">

@@ -27,6 +27,11 @@ const PlanPage = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Scroll to top on page load
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
   const starterPrompts = [
     'Where do I start planning a sale?',
     'How do I price items for my sale?',
