@@ -31,6 +31,7 @@ import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart C
 import ShopperCartDrawer from '../../components/ShopperCartDrawer'; // Phase 1: Smart Cart
 import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
 import BidModal from '../../components/BidModal';
+import BidHistory from '../../components/BidHistory'; // ADR-013 Phase 2: Bid history with anonymization
 
 interface Item {
   id: string;
@@ -38,9 +39,12 @@ interface Item {
   description: string;
   price: number;
   auctionStartPrice: number;
+  auctionReservePrice?: number;
   currentBid: number;
+  auctionClosed?: boolean;
   bidIncrement: number;
   auctionEndTime: string;
+  auctionStatus?: 'INACTIVE' | 'ACTIVE' | 'ENDING_SOON' | 'ENDED'; // ADR-013 Phase 2
   status: string;
   photoUrls: string[];
   isLiveDrop: boolean; // CD2
@@ -272,6 +276,14 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
       newSocket.on('bid-placed', (_data: unknown) => {
         refetchItem();
         refetchBids();
+      });
+
+      // ADR-013 Phase 2: Listen for auction extension
+      newSocket.on('auctionExtended', (data: { itemId: string; newEndTime: string; message: string }) => {
+        if (data.itemId === id) {
+          refetchItem(); // Refresh to get new auctionEndTime
+          showToast(data.message, 'info');
+        }
       });
 
       newSocket.on('item-sold', (_data: unknown) => {
@@ -557,6 +569,39 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                     Starting Price: ${item.auctionStartPrice.toFixed(2)}
                   </div>
                 )}
+                {/* Reserve status display (Phase 1 P0 fix — ADR-013) */}
+                {isAuction && item.auctionReservePrice && item.auctionReservePrice > 0 && (
+                  <div className={`text-sm font-medium ${
+                    (item.currentBid ?? 0) >= item.auctionReservePrice
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                  }`}>
+                    {(item.currentBid ?? 0) >= item.auctionReservePrice
+                      ? '✓ Reserve met'
+                      : `Reserve: $${item.auctionReservePrice.toFixed(2)} (not met)`
+                    }
+                  </div>
+                )}
+                {/* ADR-013 Phase 2: Auction status badge */}
+                {isAuction && item.auctionStatus && (
+                  <div className="flex gap-2">
+                    {item.auctionStatus === 'ACTIVE' && (
+                      <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold rounded">
+                        Active
+                      </span>
+                    )}
+                    {item.auctionStatus === 'ENDING_SOON' && (
+                      <span className="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs font-bold rounded animate-pulse">
+                        Ending Soon
+                      </span>
+                    )}
+                    {item.auctionStatus === 'ENDED' && (
+                      <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs font-bold rounded">
+                        Ended
+                      </span>
+                    )}
+                  </div>
+                )}
                 {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
                 {item.listingType === 'REVERSE_AUCTION' && (item.reverseFloorPrice ?? 0) > 0 && (
                   <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -746,7 +791,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                       )}
 
                       {/* Auction Item — Place Bid Button */}
-                      {isAuction && item.status === 'AVAILABLE' && item.auctionEndTime && new Date(item.auctionEndTime) > new Date() && (
+                      {isAuction && item.status === 'AVAILABLE' && item.auctionEndTime && new Date(item.auctionEndTime) > new Date() && !item.auctionClosed && (
                         <button
                           onClick={() => setBidModalOpen(true)}
                           disabled={!user}
@@ -801,25 +846,17 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
             </div>
           </div>
 
-          {/* Bid History */}
+          {/* ADR-013 Phase 2: Bid History with anonymization */}
           {showBidHistory && bids.length > 0 && (
             <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Bid History</h2>
-              <div className="space-y-2">
-                {bids.map((bid) => (
-                  <div key={bid.id} className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-gray-100">${(bid.bidAmount ?? 0).toFixed(2)}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{bid.bidder.name}</p>
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {formatDistanceToNow(parseISO(bid.timestamp), {
-                        addSuffix: true,
-                      })}
-                    </p>
-                  </div>
-                ))}
-              </div>
+              <BidHistory bids={bids.map(bid => ({
+                id: bid.id,
+                bidAmount: bid.bidAmount || 0,
+                bidderLabel: bid.bidderLabel || bid.bidder?.name || 'Unknown',
+                status: bid.status || 'ACTIVE',
+                timestamp: bid.timestamp
+              }))} />
             </div>
           )}
 
@@ -893,6 +930,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
             currentBid: item.currentBid || null,
             auctionStartPrice: item.auctionStartPrice || null,
             bidIncrement: item.bidIncrement || null,
+            auctionClosed: item.auctionClosed,
           }}
           onClose={() => setBidModalOpen(false)}
           onBidPlaced={() => {

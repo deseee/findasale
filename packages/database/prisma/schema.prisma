@@ -36,6 +36,7 @@ model User {
   purchases     Purchase[]
   favorites     Favorite[]
   bids          Bid[]
+  maxBids       MaxBidByUser[] // ADR-013 Phase 2: Proxy bidding
   subscriptions SaleSubscriber[]
   userBadges    UserBadge[]
   referredUsers   Referral[]      @relation("ReferrerToReferred")
@@ -619,6 +620,7 @@ model Item {
   saleId           String
   sale             Sale      @relation(fields: [saleId], references: [id])
   bids             Bid[]
+  maxBids          MaxBidByUser[] // ADR-013 Phase 2: Proxy bidding
   purchases        Purchase[]
   favorites        Favorite[]
   reservation      ItemReservation?
@@ -744,6 +746,20 @@ model Bid {
   ipRecords BidIpRecord[] // Platform Safety #94: IP tracking for shill detection
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ADR-013 Phase 2: Proxy bidding (max bid auction)
+model MaxBidByUser {
+  id        String   @id @default(cuid())
+  itemId    String
+  userId    String
+  maxAmount Float
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([itemId, userId])
 }
 
 model Purchase {

@@ -7,6 +7,53 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S433 COMPLETE (2026-04-10):** Full auction overhaul — Phase 1 P0 fixes + Phase 2 professional features. ADR-013 written. Migration required for Phase 2.
+
+**S433 Phase 1 (No migration — ships now):**
+- `itemController.ts` — Reserve price enforcement in `placeBid` (bids below reserve rejected with clear error + reserve amount in response). Auto-close lazy fetch in `getItemById` (sets `auctionClosed: true` when `auctionEndTime` past). Outbid notifications to displaced WINNING bidder after new bid created.
+- `items/[id].tsx` — Reserve-met badge: "✓ Reserve met" (green) / "Reserve: $X.XX (not met)" (amber). Added `auctionReservePrice` and `auctionClosed` to Item interface.
+- `BidModal.tsx` — `auctionClosed` prop added. Submit button disables with "Auction Closed" text when true.
+
+**S433 Phase 2 (Migration required — MaxBidByUser table):**
+- `schema.prisma` — MaxBidByUser model added with `@@unique([itemId, userId])`. Relations added to Item + User.
+- Migration: `packages/database/prisma/migrations/20260410_add_max_bid_by_user/migration.sql` — NEW
+- `shared/src/utils/bidIncrement.ts` — eBay-style tiered bid increment function (NEW)
+- `itemController.ts` — `placeBid` rewritten for proxy bidding: user submits maxBidAmount, system auto-bids against competing maxes, calculates actual bid via `calculateBidIncrement()`, marks previous WINNING bids as OUTBID. Soft-close: bid in final 5 min → auction extended 5 min → `auctionExtended` socket emitted. `getBids` anonymized: shoppers see "Bidder 1/2/3", organizers see real names. `getItemById` computes `auctionStatus` (ACTIVE/ENDING_SOON/ENDED).
+- `BidHistory.tsx` — New component: anonymized bid log with WINNING badge (NEW)
+- `items/[id].tsx` — BidHistory wired in, `auctionExtended` socket listener, auction status badge rendered
+- `jobs/auctionAutoCloseCron.ts` — 5-min cron: closes expired auctions, notifies winner + organizer (NEW)
+- `index.ts` — Cron scheduled at startup
+
+**S433 eBay categories finding:** Already working. EbayCategoryPicker exists in edit-item form. Export/push use `ebayCategoryMap.ts` runtime mapping. No schema fields needed. No additional UI work required.
+
+**S433 ADR:** `claude_docs/architecture/ADR-013-auction-overhaul.md` — NEW
+
+**S433 Files changed:**
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/frontend/pages/items/[id].tsx`
+- `packages/frontend/components/BidModal.tsx`
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260410_add_max_bid_by_user/migration.sql` — NEW
+- `packages/shared/src/utils/bidIncrement.ts` — NEW
+- `packages/frontend/components/BidHistory.tsx` — NEW
+- `packages/backend/src/jobs/auctionAutoCloseCron.ts` — NEW
+- `packages/backend/src/index.ts`
+- `claude_docs/architecture/ADR-013-auction-overhaul.md` — NEW
+
+**S433 Migration required (run before pushing):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S433 QA needed:**
+- Phase 1: Place bid below reserve → rejected with error + reserve amount shown. Reserve badge renders correctly (amber → green as bids climb). Outbid notification fires to displaced bidder. Auction past deadline → auto-closes on next page load (no bid accepted).
+- Phase 2: Set max bid $200 → system places actual bid. Competitor bids up → auto-counter. Bid in last 5 min → countdown extends 5 min + toast. Bid history shows Bidder 1/2/3 (not real names). Status badge: green ACTIVE → orange ENDING SOON → gray ENDED. Cron runs every 5 min (check Railway logs).
+
+---
+
 **S432 COMPLETE (2026-04-10):** eBay OAuth bug fixes + Stripe Connect status display + auction listing type display (3 layers).
 
 **S432 Fixes:**
@@ -338,24 +385,13 @@ npx prisma generate
 
 ## Next Session Priority
 
-**S433 FOCUS: Auction overhaul + eBay categories in UI**
-
-Patrick's brief: "Our auctions are too basic and not really like eBay or other professional auction sites. Do some research and see what we already have built and what we need to do to get the auctions in proper working order that our customers will expect. We also need to surface our new eBay style categories in the UI — there may be knock-on and downstream changes needed as well."
+**S434 FOCUS: QA the auction overhaul + hunt-pass.tsx sink rows**
 
 **Session start protocol:**
-1. Load `dev-environment` skill before any shell commands.
-2. Dispatch `findasale-innovation` to research: (a) what professional auction UX looks like (eBay, Proxibid, Invaluable, LiveAuctioneers), (b) audit what FindA.Sale already has built (schema fields, bidding socket events, bid controller, frontend bid UI), (c) gap list with priority ranking.
-3. Dispatch `findasale-architect` to spec the auction overhaul based on Innovation findings — before any dev work starts.
-4. Separately: dispatch `findasale-dev` to audit where eBay categories (the `ebayCategoryId`/`ebayCategory` fields on Item) are currently stored but not surfaced in UI — sale page item card, item detail page, search/filter, add-items form. Return a list of every touch point that needs updating.
-
-**Key questions for Innovation to answer:**
-- What does a real auction item page look like? (Proxy bidding, bid history, bid increment rules, reserve met indicator, time extension on last-second bids, outbid notifications)
-- What does FindA.Sale already have? (Read `schema.prisma` for Bid model, `bidController.ts`, `auctionController.ts` if it exists, socket events in `bidSocket.ts` or similar)
-- What's missing vs what just needs to be surfaced in the UI?
-
-**Key questions for eBay categories:**
-- Where is `ebayCategoryId`/`ebayCategory` stored on Item? (confirmed in schema S432)
-- Where does it need to surface: item card badge? item detail page? add-items category picker? search filter sidebar? organizer item list?
+1. Run migration first (Patrick must run before any QA is possible — see S433 migration block above).
+2. QA Phase 1 fixes via Chrome: bid below reserve, reserve badge, outbid notification, auto-close.
+3. QA Phase 2 via Chrome: proxy bidding flow, soft-close extension, bid history anonymization, status badge.
+4. If QA passes: dispatch dev for `hunt-pass.tsx` missing XP sink rows (3 rows: Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP). Low priority — batch with any other front-end work.
 - Are there any downstream effects — e.g., does the eBay export CSV or API push use this field already?
 
 **🟡 Still needed — hunt-pass.tsx sink rows:**

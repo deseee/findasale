@@ -1,48 +1,85 @@
-# Patrick's Dashboard — April 10, 2026 (S432)
+# Patrick's Dashboard — April 10, 2026 (S433)
 
-## ✅ Done This Session (S432)
+## ✅ Done This Session (S433) — Full Auction Overhaul
 
-- **eBay OAuth "Authentication required" fixed** — Callback route was gated behind FindA.Sale JWT middleware. eBay's redirect doesn't carry a JWT. Removed middleware from the public callback; organizer identity recovered via base64 state parameter. OAuth flow now completes and redirects to settings with success toast.
-- **eBay "Failed to start connection" double /api/ fixed** — Axios base URL already includes `/api`, settings.tsx was prepending `/api/` again. All three eBay calls corrected.
-- **eBay axios redirect fixed** — Backend was calling `res.redirect(authUrl)` but axios doesn't follow external redirects cleanly. Changed to `res.json({ redirectUrl })` and frontend does `window.location.href`.
-- **Stripe Connect status fixed** — Settings Payments tab always showed "Setup Stripe Connect" even for connected organizers. Backend now returns `stripeConnected: true/false` in `/organizers/me`. Settings page shows "Stripe Connected ✓" + "Manage Payouts" button for connected organizers.
-- **Auction items showing as fixed price — fixed (3 layers):** (1) `getSale` backend wasn't returning `listingType` in item fields — added. (2) Sale page condition was `sale.isAuctionSale && item.auctionStartPrice` — changed to also check `item.listingType === 'AUCTION'`. (3) Item detail page `isAuction` flag only checked `auctionStartPrice` — now also checks `listingType`.
-- **Auction end time field added to add-items form** — When listing type is set to AUCTION, organizers now see Starting Bid, Reserve Price, and Auction End Time fields. End time defaults to 8:00 PM the evening before the sale's start date.
+### Phase 1 — Ships with current push (no migration needed)
+- **Reserve price enforcement** — Bids below reserve now rejected with clear error message including the reserve amount
+- **Reserve-met badge** — Item detail page shows amber "Reserve: $X.XX (not met)" → switches to green "✓ Reserve met" as bids climb
+- **Auto-close on fetch** — Auctions past their deadline automatically set `auctionClosed: true` on next page load; no more post-deadline bids
+- **Outbid notifications** — When someone outbids the current high bidder, that bidder immediately gets an in-app notification with item name, new amount, and link to re-bid
+- **BidModal guard** — Submit button disables with "Auction Closed" text when auction has ended
 
-## ⚠️ Push Required
+### Phase 2 — Requires migration + separate push
+- **Proxy/max bidding** — Bidders set a maximum price once; system auto-bids on their behalf up to that amount against competing maxes. eBay-style.
+- **Dynamic bid increments** — Replaced flat $1 increment with eBay-style tiers ($0.05 at low prices → $100 at $5000+)
+- **Bid history** — Full bid log below the bid UI; shoppers see "Bidder 1, Bidder 2" (anonymized); organizers see real names
+- **Soft-close / anti-sniping** — Any bid placed in the final 5 minutes extends the auction by 5 minutes; watchers notified via socket
+- **Auction status badge** — Green "Active" / pulsing orange "Ending Soon" (< 5 min) / gray "Ended"
+- **Background auto-close cron** — Runs every 5 minutes on the server; closes expired auctions and notifies winners without waiting for a page load
+- **ADR-013 written** — Full spec in `claude_docs/architecture/ADR-013-auction-overhaul.md`
 
-```powershell
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/sales/[id].tsx
-git add packages/frontend/pages/organizer/add-items/[saleId].tsx
-git add packages/backend/src/controllers/saleController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/items/[id].tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S432: eBay OAuth fixes, Stripe Connect status, auction listing type display fixes"
-.\push.ps1
-```
-
-## 🟡 Next Session — Auction overhaul + eBay categories in UI
+### eBay Categories (no work needed)
+Audited and found it's already done. EbayCategoryPicker is in the edit-item form. Export and push both work. No additional UI changes required.
 
 ---
 
-## Pending QA (next week)
+## ⚠️ Action Required — Migration First, Then Push
+
+**Step 1: Run migration (Phase 2 won't work without this)**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Step 2: Push all files**
+```powershell
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/pages/items/[id].tsx
+git add packages/frontend/components/BidModal.tsx
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260410_add_max_bid_by_user/migration.sql
+git add packages/shared/src/utils/bidIncrement.ts
+git add packages/frontend/components/BidHistory.tsx
+git add packages/backend/src/jobs/auctionAutoCloseCron.ts
+git add packages/backend/src/index.ts
+git add claude_docs/architecture/ADR-013-auction-overhaul.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S433: Full auction overhaul — proxy bidding, reserve enforcement, soft-close, bid history, auto-close cron"
+.\push.ps1
+```
+
+---
+
+## 🟡 Next Session — QA the auction overhaul
+
+After migration + push, QA in Chrome:
+
+| Test | What to Check |
+|---|---|
+| Bid below reserve | Error with reserve amount shown |
+| Reserve badge | Amber → green as bids climb |
+| Outbid notification | Fires to previous high bidder |
+| Auto-close | Past-deadline auction → locked on page load |
+| Proxy bidding | Set max $200 → system auto-bids on your behalf |
+| Soft-close | Bid in last 5 min → countdown extends by 5 min + toast |
+| Bid history | Bidder 1/2/3 shown (not real names) |
+| Status badge | Green ACTIVE → orange ENDING SOON → gray ENDED |
+
+---
+
+## Pending QA (backlog)
 
 | Feature | What to Test |
 |---|---|
 | Trail activation | Map → sale popup → "View Treasure Trail →" → amber circle markers appear |
-| Trail dismissal | ✕ button → markers disappear |
 | Trail detail page | `/trail/[shareToken]` loads (not "Trail Not Found") |
-| XP on purchase | Complete a purchase → check that XP = purchase amount in dollars |
+| XP on purchase | Complete a purchase → XP = purchase amount in dollars |
 | Email spam | Send payment link email to Yahoo → confirm inbox not spam |
 | QR code on sale page | Navigate to any sale → QR renders (not broken image) |
 | iOS map geolocation | Test on iOS Safari — correct error message if denied |
-| Sale page activity | Only 2 live elements: viewer pill + LiveFeedTicker card |
-| Auction Buy Now | Auction sale → no Buy Now button on items |
 | Print label | Edit item → Print Label → PDF opens, 1 page, centred layout |
 | Photo upload (organizer) | Sale page → Add Photos → renders in gallery, capped at 6 |
-| Send to Phone end-to-end | Organizer sends → shopper pays → redirect to receipts (no stuck "Processing") |
 | POS invoice flow | Load hold + misc items → Send Invoice → shopper pays via link |

@@ -299,15 +299,38 @@ export const getItemById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+    // Auto-close expired auctions (Phase 1 P0 fix — ADR-013 lazy close)
+    if (item.auctionEndTime && new Date(item.auctionEndTime) < new Date() && !item.auctionClosed) {
+      await prisma.item.update({
+        where: { id: item.id },
+        data: { auctionClosed: true }
+      }).catch(err => console.warn('[getItemById] Failed to auto-close auction:', err));
+      item.auctionClosed = true;
+    }
+
     // Compute cartCount and views
     const cartCount = item.checkoutAttempts?.length ?? 0;
     const views = 0; // Placeholder: item-level view tracking not yet implemented; can be enhanced with dedicated tracking table
+
+    // ADR-013 Phase 2: Compute auction status badge
+    let auctionStatus: 'INACTIVE' | 'ACTIVE' | 'ENDING_SOON' | 'ENDED' = 'INACTIVE';
+    if (item.listingType === 'AUCTION' && item.auctionEndTime) {
+      const timeToEnd = new Date(item.auctionEndTime).getTime() - Date.now();
+      if (item.auctionClosed || timeToEnd <= 0) {
+        auctionStatus = 'ENDED';
+      } else if (timeToEnd < 5 * 60 * 1000) {
+        auctionStatus = 'ENDING_SOON';
+      } else {
+        auctionStatus = 'ACTIVE';
+      }
+    }
 
     // Return item with computed fields
     const itemWithCounts = {
       ...item,
       cartCount,
       views,
+      auctionStatus, // ADR-013 Phase 2: auction status for UI badge
       checkoutAttempts: undefined // exclude from response
     };
 
@@ -809,38 +832,73 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
 export const getBids = async (req: AuthRequest, res: Response) => {
   try {
     const itemId = req.params.id;
+
+    // Get the item to check if requester is the organizer
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    const isOrganizer = req.user?.id === item.sale.organizer.userId;
+
+    // Fetch all bids, ordered by amount DESC (most recent winning first)
     const bids = await prisma.bid.findMany({
       where: { itemId },
       orderBy: { createdAt: 'desc' },
       include: { user: { select: { id: true, name: true } } },
     });
-    res.json(bids.map(b => ({
+
+    // ADR-013 Phase 2: Anonymize bidder names (unless requester is organizer)
+    const mappedBids = bids.map((b: any, index: number) => ({
       id: b.id,
       bidAmount: b.amount,
       timestamp: b.createdAt,
-      bidder: { id: b.user.id, name: b.user.name },
-    })));
+      status: b.status,
+      bidderLabel: isOrganizer ? b.user.name : `Bidder ${index + 1}`, // Bidder 1 = most recent
+      // Organizer sees real name, shoppers see anonymized label
+      ...(isOrganizer && { realBidderName: b.user.name, bidderId: b.user.id })
+    }));
+
+    res.json(mappedBids);
   } catch (error) {
     console.error('Error fetching bids:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
+// ADR-013 Phase 2: Dynamic bid increment calculation
+function calculateBidIncrement(currentBid: number): number {
+  if (currentBid < 1) return 0.05;
+  if (currentBid < 5) return 0.25;
+  if (currentBid < 25) return 0.50;
+  if (currentBid < 100) return 1.00;
+  if (currentBid < 250) return 2.50;
+  if (currentBid < 500) return 5.00;
+  if (currentBid < 1000) return 10.00;
+  if (currentBid < 2500) return 25.00;
+  if (currentBid < 5000) return 50.00;
+  return 100.00;
+}
+
 export const placeBid = async (req: AuthRequest, res: Response) => {
   try {
     const itemId = req.params.itemId || req.params.id;
-    const { bidAmount } = req.body;
+    const { maxBidAmount } = req.body; // ADR-013: renamed from bidAmount to maxBidAmount (user's ceiling)
 
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // Fetch item with current bid and organizer
+    // Fetch item with current bid, maxBids, and organizer
     const item = await prisma.item.findUnique({
       where: { id: itemId },
       include: {
         sale: { include: { organizer: { select: { userId: true } } } },
-        bids: { orderBy: { amount: 'desc' }, take: 1 }
+        maxBids: { orderBy: { maxAmount: 'desc' } } // ADR-013: get all max bids
       }
     });
 
@@ -854,18 +912,16 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     }
 
     // Validate bid amount
-    if (!bidAmount || bidAmount <= 0) {
+    if (!maxBidAmount || maxBidAmount <= 0) {
       return res.status(400).json({ message: 'Invalid bid amount' });
     }
 
-    const currentHighBid = item.bids.length > 0 ? item.bids[0].amount : item.auctionStartPrice || 0;
-    const minimumBid = currentHighBid + (item.bidIncrement || 1);
-
-    if (bidAmount < minimumBid) {
+    // Reserve price enforcement (Phase 1 P0 fix — ADR-013)
+    if (item.auctionReservePrice && maxBidAmount < item.auctionReservePrice) {
       return res.status(400).json({
-        message: `Bid amount must be at least $${minimumBid.toFixed(2)}`,
-        minimumBid,
-        currentBid: currentHighBid
+        message: `Bid must be at least $${item.auctionReservePrice.toFixed(2)} to meet reserve`,
+        minimumBid: item.auctionReservePrice,
+        reservePrice: item.auctionReservePrice
       });
     }
 
@@ -874,12 +930,59 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Auction has ended' });
     }
 
-    // Create the bid (store amount in dollars)
+    // ADR-013 Phase 2: Proxy bidding logic
+    // Find the current winning max bid (highest max bid from another user)
+    const currentWinner = item.maxBids.find((m: any) => m.userId !== req.user.id);
+
+    let actualBidAmount: number;
+    let outbidWinnerId: string | null = null;
+
+    if (!currentWinner) {
+      // No other bids — this is the first bid
+      actualBidAmount = Math.max(
+        item.auctionStartPrice || 0,
+        item.auctionReservePrice || 0
+      );
+    } else if (currentWinner.maxAmount < maxBidAmount) {
+      // New bidder's max is higher — they win with auto-increment
+      actualBidAmount = currentWinner.maxAmount + calculateBidIncrement(currentWinner.maxAmount);
+      outbidWinnerId = currentWinner.userId;
+    } else {
+      // Current winner's max >= new bidder's max — new bidder loses
+      return res.status(400).json({
+        message: 'Another bidder has a higher maximum bid',
+        currentBid: currentWinner.maxAmount,
+        yourMax: maxBidAmount
+      });
+    }
+
+    // Upsert MaxBidByUser record for this user
+    await prisma.maxBidByUser.upsert({
+      where: { itemId_userId: { itemId, userId: req.user.id } },
+      create: { itemId, userId: req.user.id, maxAmount: maxBidAmount },
+      update: { maxAmount: maxBidAmount }
+    });
+
+    // Mark all previous WINNING bids as LOST, create new bid
+    const previousWinning = await prisma.bid.findFirst({
+      where: { itemId, status: 'WINNING' },
+      select: { id: true, userId: true, amount: true }
+    });
+
+    if (previousWinning) {
+      await prisma.bid.update({
+        where: { id: previousWinning.id },
+        data: { status: 'OUTBID' }
+      });
+    }
+
+    // Create the bid (store actualBidAmount, not maxBidAmount)
     const bid = await prisma.bid.create({
       data: {
         itemId,
         userId: req.user.id,
-        amount: bidAmount
+        amount: actualBidAmount,
+        status: 'WINNING' // ADR-013: new bid is immediately WINNING
       }
     });
 
@@ -895,18 +998,43 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       }).catch(err => console.warn('[placeBid] Failed to record bid IP:', err));
     }
 
-    // Update item's current bid (in dollars)
+    // Update item's current bid
     await prisma.item.update({
       where: { id: itemId },
-      data: { currentBid: bidAmount }
+      data: { currentBid: actualBidAmount }
     });
+
+    // Soft-close: extend auction if bid placed in final 5 minutes (ADR-013 Phase 2)
+    if (item.auctionEndTime) {
+      const timeToEnd = new Date(item.auctionEndTime).getTime() - Date.now();
+      const EXTENSION_WINDOW_MS = 5 * 60 * 1000;
+      const EXTENSION_DURATION_MS = 5 * 60 * 1000;
+
+      if (timeToEnd > 0 && timeToEnd < EXTENSION_WINDOW_MS) {
+        const newEndTime = new Date(new Date(item.auctionEndTime).getTime() + EXTENSION_DURATION_MS);
+        await prisma.item.update({
+          where: { id: itemId },
+          data: { auctionEndTime: newEndTime }
+        });
+
+        // Notify watchers of extension via socket
+        const io = getIO();
+        if (io) {
+          io.to(`item-${itemId}`).emit('auctionExtended', {
+            itemId,
+            newEndTime: newEndTime.toISOString(),
+            message: 'Auction extended by 5 minutes due to a last-minute bid'
+          });
+        }
+      }
+    }
 
     // V1: Broadcast live bid update via Socket.io
     const io = getIO();
     if (io) {
       io.to(`item-${itemId}`).emit('bidPlaced', {
         itemId,
-        bidAmount: bidAmount,
+        bidAmount: actualBidAmount,
         bidderId: req.user.id,
         bidTime: new Date(),
       });
@@ -916,7 +1044,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     fireWebhooks(item.sale.organizer.userId, 'bid.placed', {
       itemId: item.id,
       saleId: item.saleId,
-      bidAmount: bidAmount,
+      bidAmount: actualBidAmount,
       bidderId: req.user.id,
     }).catch(err => console.error('Webhook fire error:', err));
 
@@ -926,7 +1054,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       req.user.id,
       'BID_PLACED',
       'Bid Placed',
-      `Your bid of $${bidAmount.toFixed(2)} was placed on ${item.title}`,
+      `Your bid of $${actualBidAmount.toFixed(2)} was placed on ${item.title}`,
       `/items/${itemId}`,
       'OPERATIONAL'
     ).catch(err => console.warn('[placeBid] Failed to create bidder notification:', err));
@@ -936,10 +1064,22 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       item.sale.organizer.userId,
       'NEW_BID',
       'New Bid Received',
-      `New bid of $${bidAmount.toFixed(2)} on ${item.title}`,
+      `New bid of $${actualBidAmount.toFixed(2)} on ${item.title}`,
       `/items/${itemId}`,
       'OPERATIONAL'
     ).catch(err => console.warn('[placeBid] Failed to create organizer notification:', err));
+
+    // Notify displaced bidder of outbid (Phase 1 P0 fix — ADR-013)
+    if (outbidWinnerId && previousWinning && previousWinning.userId !== req.user.id) {
+      createNotification(
+        outbidWinnerId,
+        'OUTBID',
+        'You Were Outbid',
+        `You were outbid at $${actualBidAmount.toFixed(2)} on ${item.title}`,
+        `/items/${itemId}`,
+        'OPERATIONAL'
+      ).catch(err => console.warn('[placeBid] Failed to create outbid notification:', err));
+    }
 
     res.status(201).json(bid);
   } catch (error) {
