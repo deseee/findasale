@@ -53,20 +53,40 @@ git commit -m "S433: Full auction overhaul — proxy bidding, reserve enforcemen
 
 ---
 
-## 🟡 Next Session — QA the auction overhaul
+## 🟡 Next Session — S434: Pricing page + feature gating + placeholder sweep
 
-After migration + push, QA in Chrome:
+**⚠️ Before pushing S433:** Dispatch `findasale-architect` to audit the 3 auction cron files (`auctionCloseCron.ts`, `auctionJob.ts`, `auctionAutoCloseCron.ts`) — confirm no double-close before Railway deploy.
 
-| Test | What to Check |
-|---|---|
-| Bid below reserve | Error with reserve amount shown |
-| Reserve badge | Amber → green as bids climb |
-| Outbid notification | Fires to previous high bidder |
-| Auto-close | Past-deadline auction → locked on page load |
-| Proxy bidding | Set max $200 → system auto-bids on your behalf |
-| Soft-close | Bid in last 5 min → countdown extends by 5 min + toast |
-| Bid history | Bidder 1/2/3 shown (not real names) |
-| Status badge | Green ACTIVE → orange ENDING SOON → gray ENDED |
+### Feature Gating Bugs to Fix
+| Issue | Current State | Correct State |
+|---|---|---|
+| Command Center | Listed under PRO | TEAMS-only |
+| Appraisals | PRO gate | Ala Carte (confirmed — backend comment says "PAID_ADDON maps to PRO until addon billing is wired") |
+| Line Queue + Flip Report | Both PRO and Ala Carte | Patrick to decide: which tier(s)? |
+
+### Placeholder Pages (nav links that go nowhere)
+All need a decision: build now / hide from nav / show "Coming Soon" gate:
+`/organizer/promote` · `/organizer/send-update` · `/organizer/photo-ops` · `/organizer/qr-codes` · `/organizer/print-kit` · `/organizer/checklist` · `/organizer/earnings` · `/organizer/line-queue` · `/organizer/calendar` · `/organizer/staff`
+
+### Routing Bugs
+- `/plan` link lands in the middle of the pricing page — anchor positioning bug
+- "Add Items" routes to dashboard instead of add-items form
+
+### Feature/UX Issues
+- **Offline Mode** — Functional? No visible sync indicator. Users won't know if data needs syncing.
+- **`/organizer/item-library`** — Broken (error or blank)
+- **`/organizer/typology`** — Dark mode input broken; page non-functional. Worth keeping with auto-tagging?
+- **Bounties** — Work as game-designed? Were they supposed to be PRO-gated?
+- **Email digest page** — White background in dark mode
+- **Webhooks page** — Dark mode contrast failure; needs copy explaining what webhooks are + examples (QuickBooks, Zapier)
+
+### Patrick Decisions Needed (nav structure)
+- Reputation + Reviews → combine into one page?
+- Hunt Pass → move out of "Explore & Connect" to more prominent location
+- "Explore & Connect" → split into 2 nav groups?
+
+### Auction QA (after migration runs)
+Run migration → then QA reserve enforcement, reserve badge, proxy bidding, soft-close, bid history, status badge
 
 ---
 
@@ -83,3 +103,13 @@ After migration + push, QA in Chrome:
 | Print label | Edit item → Print Label → PDF opens, 1 page, centred layout |
 | Photo upload (organizer) | Sale page → Add Photos → renders in gallery, capped at 6 |
 | POS invoice flow | Load hold + misc items → Send Invoice → shopper pays via link |
+
+---
+
+## 🔧 Maintenance — 2026-04-10
+
+**STATE.md compacted (automated):** STATE.md hit the 256KB Read tool size limit (2,712 lines). The daily-friction-audit detected this and ran the records agent to archive sessions S404–S427 to `COMPLETED_PHASES.md`. STATE.md is now ~470 lines. No content lost — all session details are in COMPLETED_PHASES.md.
+
+**Auction cron audit needed:** Three auction job files exist (`auctionCloseCron.ts` deprecated, `auctionJob.ts` authoritative, `auctionAutoCloseCron.ts` new from S433). Dispatch `findasale-architect` before next deploy to confirm no double-close logic running.
+
+**Stripe Connect webhook (P2, unresolved since S421):** Items aren't being marked SOLD + Purchase records aren't created after POS card payments. Needs a one-time Stripe Dashboard config — see Standing Notes in STATE.md.
