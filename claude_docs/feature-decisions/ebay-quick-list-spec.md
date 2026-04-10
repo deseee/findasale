@@ -143,21 +143,24 @@ Post-sale item view (filter: Unsold)
 
 ## Revenue & Strategic Value
 
-- **eBay Partner Network (EPN) — primary revenue.** Enroll in eBay's affiliate program (1–4% commission per sale). Phase 2 listings embed EPN tracking parameter in the offer. When eBay buyer purchases, FindA.Sale earns a cut automatically. Passive, scales with volume. Add EPN enrollment to Phase 2 build checklist.
-- **Watermark removal fee — micro-revenue.** Phase 1 free exports use Cloudinary watermarked photos (brand advertising). Organizer pays to export clean photos: e.g. $0.99/item or $4.99 per batch. Gate clean exports as a SIMPLE paid add-on or PRO perk. Every free listing is a FindA.Sale ad on eBay at zero cost.
+- **eBay Partner Network (EPN) — primary revenue.** Accepted. Campaign ID (`campid`): `5339148447`. Commission: 1–4% per sale. Phase 2 listings embed this campid in the offer URL. When eBay buyer purchases, FindA.Sale earns a cut automatically. Passive, scales with volume.
+- **Watermark removal fee — micro-revenue.** Phase 1 free exports use Cloudinary watermarked photos (brand advertising). Clean photo export pricing: $0.99/item or $4.99/batch (à la carte for SIMPLE + PRO). No watermarks = TEAMS tier perk (included). Every free listing is a FindA.Sale ad on eBay at zero cost.
 - **Phase 2 gated to PRO.** Direct API push (one-click "List on eBay") is a PRO tier feature. Natural upsell anchor for SIMPLE organizers who find the CSV workflow friction.
-- **Pirate Ship / shipping affiliate (Phase 2+).** eBay sellers must ship items. Add "Ship with Pirate Ship" button post-export — referral revenue per shipment. Low build effort, complements the workflow naturally.
+- **Shippo shipping affiliate (Phase 2+).** eBay sellers must ship items. Add "Ship with Shippo" button post-export — referral revenue per new Shippo customer ($60/Pro referral, 120-day cookie). Sign up: goshippo.com/affiliates (via PartnerStack). Note: Pirate Ship has no affiliate program — Shippo is the correct partner here.
 - **Retention driver:** Organizers who flip unsold items on eBay via FindA.Sale associate eBay revenue with the platform — strong retention signal.
 - **Differentiation:** No estate sale competitor offers AI-assisted eBay export. First-mover in "AI intake → multi-platform publish" workflow.
 - **eBay TOS compliance:** Phase 1 CSV has zero TOS risk. Phase 2 requires explicit organizer approval per listing before publish — UX must enforce this with a confirmation step (eBay policy requirement).
 
 ---
 
-## Confirmed Decisions (S374)
+## Confirmed Decisions (S374 + S389)
 
-1. **Photos: watermarked by default.** Clean photo export = paid feature (see Revenue below). Free exports carry FindA.Sale watermark — every eBay listing becomes brand advertising.
-2. **Both phases prioritized.** Phase 1 (CSV, SIMPLE) and Phase 2 (direct API push, PRO) build in parallel — they serve different organizer tiers and neither blocks the other.
-3. **Items stay active on both platforms.** Do NOT auto-mark as unavailable on FindA.Sale when exported to eBay. Instead, build cross-platform sold sync (Phase 3): if item sells on FindA.Sale → auto-end eBay listing via API; if item sells on eBay → eBay webhook fires → FindA.Sale marks item sold. Phase 3 requires Phase 2 (connected eBay account) as prerequisite.
+1. **Photos: watermarked by default.** Clean photo export = paid feature. Free exports carry FindA.Sale watermark — every eBay listing becomes brand advertising.
+2. **Watermark removal pricing confirmed (S389).** À la carte: $0.99/item or $4.99/batch for SIMPLE and PRO. No watermarks included free for TEAMS tier.
+3. **EPN campid confirmed (S389).** `5339148447` — embed in all Phase 2 eBay offer URLs.
+4. **Shippo replaces Pirate Ship (S389).** Pirate Ship has no affiliate program. Shippo affiliate program via PartnerStack — $60/Pro referral, 120-day cookie.
+5. **Both phases prioritized.** Phase 1 (CSV, SIMPLE) and Phase 2 (direct API push, PRO) build in parallel — they serve different organizer tiers and neither blocks the other.
+6. **Items stay active on both platforms.** Do NOT auto-mark as unavailable on FindA.Sale when exported to eBay. Instead, build cross-platform sold sync (Phase 3): if item sells on FindA.Sale → auto-end eBay listing via API; if item sells on eBay → eBay webhook fires → FindA.Sale marks item sold. Phase 3 requires Phase 2 (connected eBay account) as prerequisite.
 
 ---
 
