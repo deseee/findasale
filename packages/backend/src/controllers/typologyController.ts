@@ -143,17 +143,19 @@ export const batchClassifySale = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
-    // Batch classify
-    const result = await batchClassify(saleId);
+    // Respond immediately — batch runs in background to avoid Railway request timeout
+    // (20 AI calls × ~3s each = ~60s, well over the 30s limit)
+    res.status(202).json({ status: 'BATCH_QUEUED', message: 'Classification started' });
 
-    res.json({
-      status: 'BATCH_COMPLETE',
-      classified: result.classified,
-      failed: result.failed,
+    // Fire-and-forget: do not await
+    batchClassify(saleId).catch((error) => {
+      console.error('[Typology] Background batch classification failed for sale', saleId, error);
     });
   } catch (error) {
     console.error('[Typology] Error in batch classification:', error);
-    res.status(500).json({ message: 'Failed to batch classify items' });
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to batch classify items' });
+    }
   }
 };
 
