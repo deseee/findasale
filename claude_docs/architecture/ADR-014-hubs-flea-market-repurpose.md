@@ -278,3 +278,16 @@ UPDATE SaleHub SET migrated = true WHERE id IN (SELECT DISTINCT hubId FROM SaleH
 - Payout calculation correctly splits boothFee + revenueShare per vendor
 - Organizers can create recurring events (optional for MVP)
 
+---
+
+## Locked Decisions (S436 — 2026-04-10)
+
+Per Patrick:
+
+- **Tier:** TEAMS only
+- **hubType enum:** All four — FLEA_MARKET | VENDOR_MARKET | SWAP_MEET | ANTIQUE_FAIR (competitive research shows each category self-identifies strongly)
+- **Booth limits:** Unlimited for TEAMS. No per-event cap — event size is the natural constraint.
+- **Payout triggers (organizer's choice):** Three options available per event — (a) End of event, (b) Manual organizer trigger, (c) Scheduled (net-30 or weekly). Industry standard is net-30; auto-settlement via QR scan data is the differentiator.
+- **Competitive research:** `claude_docs/research/flea-market-software-competitive-analysis.md`
+- **Key differentiator to prioritize:** Auto-settlement via QR scan data. No competitor has this. Build it into the booth management flow from day one.
+

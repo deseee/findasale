@@ -10,7 +10,8 @@ Only decisions that affect future sessions — not implementation details.
 **Status:** LOCKED
 **Made by:** Patrick
 **Rationale:** Hubs as built (one organizer pools their own sales) solves a problem that doesn't exist — organizers don't run 3 simultaneous estate sales in the same area. Treasure Trails already covers multi-sale discovery better. Hubs outer shell (geo-container, event date/name, public landing page, map) is the right skeleton for flea market events. Folds #238 into this repurpose.
-**Locked:** Hubs is no longer a "pool your own sales" feature. `SaleHubMembership` replaced by `VendorBooth` model. ADR-014 written. Tier/booth-limits/payout-trigger are open Patrick decisions before dev starts.
+**Locked decisions:** (1) Tier = TEAMS. (2) hubType = all four: FLEA_MARKET, VENDOR_MARKET, SWAP_MEET, ANTIQUE_FAIR. (3) Booth limits = unlimited for TEAMS — event size is the natural constraint. (4) Payout triggers = organizer's choice: end of event / manual / scheduled (net-30 or weekly). Auto-settlement via QR scan data is the key differentiator — no competitor has it.
+**References:** ADR-014, `claude_docs/research/flea-market-software-competitive-analysis.md`
 
 ---
 

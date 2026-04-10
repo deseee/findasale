@@ -20,17 +20,34 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - `packages/frontend/pages/organizer/earnings.tsx`
 - `packages/frontend/pages/organizer/qr-codes.tsx`
 - `packages/frontend/pages/organizer/staff.tsx`
-- `packages/frontend/pages/organizer/typology.tsx` — fixed 202 response handling (was reading non-existent `result.classified/failed`)
-- `packages/frontend/pages/plan.tsx` — fixed scroll-to-middle bug (scrollToBottom guard)
+- `packages/frontend/pages/organizer/typology.tsx` — fixed 202 response handling
+- `packages/frontend/pages/plan.tsx` — fixed scroll-to-middle bug
 - `packages/backend/src/routes/organizers.ts` — added qrScanCount to /me/sales SELECT
-- `packages/backend/src/routes/lines.ts` — added requireTier('SIMPLE') to 6 organizer Line Queue routes
+- `packages/backend/src/routes/lines.ts` — added requireTier('SIMPLE') to 6 Line Queue routes
+- `packages/frontend/components/BountyModal.tsx` — dark mode
+- `packages/frontend/pages/organizer/bounties.tsx` — cancel button, dark mode, invalidation
+- `packages/backend/src/controllers/bountyController.ts` — shopper notification on fulfill
+- `packages/frontend/components/Layout.tsx` — "Price Tags"→"QR Analytics", hubs href fixed
+- `packages/frontend/components/AvatarDropdown.tsx` — same nav fixes
+- `claude_docs/architecture/ADR-014-hubs-flea-market-repurpose.md` — NEW
+- `claude_docs/research/flea-market-software-competitive-analysis.md` — NEW
+- `claude_docs/decisions-log.md` — S436 Hubs decisions appended
+- `claude_docs/strategy/roadmap.md` — #40 and #238 updated
 
 **S436 Verified:**
 - S435 all 5 fixes CONFIRMED in code (Layout mobile nav, offline.tsx, AvatarDropdown, auctionJob, auctionAutoCloseCron)
 - item-library already functional (no TierGate, real API call) — no changes needed
 
-**S436 Decision needed — Bounties (#197):**
-No shopper reward loop exists. When organizer marks bounty fulfilled, shopper gets no notification and no link to the item. Options: (A) UX only — notify shopper + item link (B) Full gamification — XP + badge + notification. Patrick to decide before bounty fix is dispatched.
+**S436 Bounties (#197) — SHIPPED:**
+Full end-to-end: organizer cancel button (DELETE /api/bounties/:id + React Query invalidation + loading state), dark mode throughout BountyModal + bounties.tsx, shopper notification on fulfillment (type BOUNTY_FULFILLED, "Good news!", link to /items/{itemId}).
+
+**S436 Hubs → Flea Market Events — DECISION LOCKED:**
+- Repurposed Sale Hubs as Flea Market Events (ADR-014). SaleHubMembership → VendorBooth.
+- 4 locked decisions: TEAMS tier only, all 4 hubTypes (FLEA_MARKET, ANTIQUE_MALL, POPUP_MARKET, FARMERS_MARKET), unlimited booths, organizer-choice payout (flat booth fee / revenue share / hybrid).
+- Nav: "Price Tags" → "QR Analytics", /organizer/sale-hubs → /organizer/hubs (removed "(Soon)" + disabled styling)
+- Research doc: `claude_docs/research/flea-market-software-competitive-analysis.md` — key finding: no competitor has shopper app; QR auto-settlement is the differentiator
+- ADR-014: `claude_docs/architecture/ADR-014-hubs-flea-market-repurpose.md`
+- Roadmap: #40 → "Repurposed S436 — Flea Market Events (TEAMS)", #238 → "Folded into #40 S436"
 
 **S436 QA needed:**
 - Earnings page: `/organizer/earnings` → verify summary cards show real revenue data, per-sale table renders, PDF export downloads
