@@ -23,46 +23,39 @@ async function drawLabel(
   const startY = yOffset;
   const startX = xOffset;
 
-  // Layout: left text column | right QR column
-  const qrSize   = 80;
-  const qrColW   = qrSize + MARGIN;                       // 96px right column
-  const textW    = LABEL_W - qrColW - MARGIN - 8;         // ~168px left column
-  const textX    = startX + 8;
+  // QR column: right side, 72×72, centred vertically with slight upward bias
+  const qrSize = 72;
+  const qrPad  = 14;
+  const qrX    = startX + LABEL_W - qrPad - qrSize;   // x ≈ 202
+  const qrY    = startY + Math.round((LABEL_H - qrSize) / 2) - 8; // y ≈ 64
 
-  // QR — vertically centred in the label
-  const qrX = startX + LABEL_W - MARGIN - qrSize;
-  const qrY = startY + (LABEL_H - qrSize) / 2;
+  // Text column: left side, ends just before QR column
+  const textX = startX + MARGIN;  // 16pt left padding
+  const textW = qrX - startX - 20;                    // ≈ 172 pts
+
+  // QR image
   doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
 
-  // "Scan" label under QR
+  // "Scan to view" under QR — kept well clear of bottom edge
   doc
     .fontSize(6)
     .fillColor('#aaaaaa')
     .font('Helvetica')
-    .text('Scan to view', qrX, qrY + qrSize + 3, { width: qrSize, align: 'center', lineBreak: false });
-
-  // Thin vertical divider between columns
-  const divX = startX + LABEL_W - qrColW - 4;
-  doc
-    .moveTo(divX, startY + 12)
-    .lineTo(divX, startY + LABEL_H - 12)
-    .lineWidth(0.5)
-    .strokeColor('#e0e0e0')
-    .stroke();
+    .text('Scan to view', qrX, qrY + qrSize + 4, { width: qrSize, align: 'center', lineBreak: false });
 
   // Sale name (small, top)
   doc
     .fontSize(7)
     .fillColor('#888888')
     .font('Helvetica')
-    .text(saleTitle, textX, startY + 10, { width: textW, align: 'left', lineBreak: false });
+    .text(saleTitle, textX, startY + 12, { width: textW, align: 'left', lineBreak: false });
 
   // Item title
   doc
     .fontSize(13)
     .fillColor('#111111')
     .font('Helvetica-Bold')
-    .text(item.title, textX, startY + 26, { width: textW, height: 40, align: 'left' });
+    .text(item.title, textX, startY + 28, { width: textW, height: 38, align: 'left' });
 
   // Price
   const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'Price on request';
@@ -79,19 +72,19 @@ async function drawLabel(
       .fontSize(8)
       .fillColor('#555555')
       .font('Helvetica')
-      .text(chips, textX, startY + 102, { width: textW, align: 'left', lineBreak: false });
+      .text(chips, textX, startY + 104, { width: textW, align: 'left', lineBreak: false });
   }
 
-  // Item ID (bottom-left)
+  // Item ID — 36 pts from bottom edge, safely clear of page boundary
   doc
     .fontSize(6)
-    .fillColor('#bbbbbb')
+    .fillColor('#cccccc')
     .font('Helvetica')
-    .text(`ID: ${item.id}`, textX, startY + LABEL_H - 18, { width: textW, align: 'left', lineBreak: false });
+    .text(`ID: ${item.id}`, textX, startY + LABEL_H - 36, { width: textW, align: 'left', lineBreak: false });
 
-  // Outer border
+  // Outer border (drawn last so it sits on top of any bleed)
   doc
-    .rect(startX, startY, LABEL_W, LABEL_H)
+    .rect(startX + 1, startY + 1, LABEL_W - 2, LABEL_H - 2)
     .lineWidth(0.5)
     .strokeColor('#e0e0e0')
     .stroke();
@@ -131,7 +124,6 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="label-${id}.pdf"`);
     doc.pipe(res);
 
-    doc.moveDown(0.5);
     await drawLabel(doc, item, item.sale.title, qrBuffer);
 
     doc.end();
