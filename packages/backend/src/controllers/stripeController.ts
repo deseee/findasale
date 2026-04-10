@@ -707,10 +707,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 }
               }
 
-              // Award XP to shopper for purchase
+              // Award XP to shopper for purchase ($1 = 1 XP, minimum 1)
               if (posRequest.shopperUserId) {
                 try {
-                  const baseXp = XP_AWARDS.PURCHASE;
+                  const baseXp = Math.max(1, Math.floor((posRequest.totalAmountCents / 100) * XP_AWARDS.PURCHASE));
                   const multipliedXp = await applyHuntPassMultiplier(posRequest.shopperUserId, baseXp);
                   awardXp(posRequest.shopperUserId, 'PURCHASE_COMPLETED', multipliedXp, {
                     saleId: posRequest.saleId,
@@ -865,8 +865,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
         // Award XP to shopper for completing purchase (only if user exists — not for POS walk-ins)
         if (purchase.userId) {
-          // Apply Hunt Pass 1.5x multiplier if active
-          const baseXp = XP_AWARDS.PURCHASE;
+          // Apply Hunt Pass 1.5x multiplier if active ($1 = 1 XP, minimum 1)
+          const baseXp = Math.max(1, Math.floor(Number(purchase.amount) * XP_AWARDS.PURCHASE));
           const multipliedXp = await applyHuntPassMultiplier(purchase.userId, baseXp);
 
           awardXp(purchase.userId, 'PURCHASE_COMPLETED', multipliedXp, {
