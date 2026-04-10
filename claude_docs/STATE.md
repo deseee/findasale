@@ -7,6 +7,51 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S430 COMPLETE (2026-04-09):** Sale page layout cleanup, email spam fixes, iOS geo UX, organizer photo upload, label redesign, print label auth fix, activity dedup, auction Buy Now gate.
+
+**S430 Fixes:**
+- `emailTemplateService.ts` — removed literal `[UNSUBSCRIBE_URL]` placeholder from footer (spam trigger). Replaced with transactional email disclosure.
+- `buyingPoolController.ts`, `collectorPassportService.ts` — unified sender from `findasale.com` (unverified) → `finda.sale` (verified in Resend).
+- `posController.ts` — subject `"Payment link: $X"` → `"Your checkout is ready — $X"` (phishing trigger removed).
+- `next.config.js` — added `api.qrserver.com` to `images.domains` (QR codes were silently blocked by Next.js image loader).
+- `map.tsx` — Permissions API query-first pattern + two-phase accuracy + iOS-specific PERMISSION_DENIED messages.
+- `index.tsx` — homepage auto-locates only when permission already `'granted'` (prevents iOS Safari false PERMISSION_DENIED).
+- `sales/[id].tsx` — Removed broken duplicate LocationMap. Removed standalone HypeMeter card (moved inline above LiveFeedTicker). Removed ActivityFeed at bottom (duplicate). Removed SocialProofBadge ("Sale Activity" pill). Removed second Organized By card; moved "Plan My Route in Maps" button into Location card. Auction Buy Now gate hardened: `!sale.isAuctionSale && !item.auctionStartPrice`.
+- `PickupBookingCard.tsx` — full dark mode. Internal post-purchase gate (only shows if user has a hold at sale).
+- `sales/[id].tsx` — PickupBookingCard removed from sale page entirely.
+- `checkout-success.tsx` — PickupBookingCard added to receipt page with haversine GPS gate: hidden if buyer is within 300m of sale (they're already there).
+- `userController.ts` — `getPurchases` now includes `sale.lat`, `sale.lng`, `sale.id`, `sale.address` etc. for GPS check.
+- `sales/[id].tsx` — Organizer photo management: "+ Add Photos" button in gallery (max 6), × remove on thumbnail hover, `handlePhotoUpload` (Cloudinary via existing `/upload/sale-photos`), `handleRemovePhoto`, file size validation.
+- `edit-item/[id].tsx` — Print Label button fixed: was `window.open(url)` → now `api.get(responseType: 'blob')` + blob URL. Bearer token now sent correctly.
+- `labelController.ts` — Label redesign: two-column layout (text left, QR right), QR 72×72 vertically centred, content block centred in label, removed `moveDown(0.5)` that caused blank second page, border 1pt inset from page edge.
+
+**S430 Files changed:**
+- `packages/backend/src/controllers/buyingPoolController.ts`
+- `packages/backend/src/controllers/posController.ts`
+- `packages/backend/src/controllers/userController.ts`
+- `packages/backend/src/controllers/labelController.ts`
+- `packages/backend/src/services/collectorPassportService.ts`
+- `packages/backend/src/services/emailTemplateService.ts`
+- `packages/frontend/components/PickupBookingCard.tsx`
+- `packages/frontend/next.config.js`
+- `packages/frontend/pages/index.tsx`
+- `packages/frontend/pages/map.tsx`
+- `packages/frontend/pages/sales/[id].tsx`
+- `packages/frontend/pages/shopper/checkout-success.tsx`
+- `packages/frontend/pages/organizer/edit-item/[id].tsx`
+
+**S430 QA needed:**
+- Email: send a payment link / invite email to Yahoo address → confirm not spam
+- QR code on sale page: confirm QR image renders (not broken image)
+- iOS map page: test geolocation → two-phase accuracy, correct error message if denied
+- Sale page: confirm only 2 live activity elements (HypeMeter pill + LiveFeedTicker card)
+- Sale page: auction items → confirm no "Buy Now" button
+- Receipt page: organizer pickup slots only shown when buyer not at sale (GPS gate)
+- Print label: open from edit-item page → PDF opens with no second blank page, content centred
+- Photo upload: organizer adds photo from sale page → appears in gallery, capped at 6
+
+---
+
 **S429 COMPLETE (2026-04-09):** POS socket 502 fixes, payment intent fee bug, Stripe Connect invalid account, expired hold blocking, IDB crash fix, Request Cart Share feature. No migration required.
 
 **S429 Fixes:**
@@ -237,14 +282,14 @@ npx prisma generate
 
 ## Next Session Priority
 
-**🔴 P0 — Payment request emails going to spam (Yahoo confirmed):**
-Resend-sent emails (pay-request, hold invoice, cart share link) are landing in Yahoo spam folders. Next session: audit SPF/DKIM/DMARC records for finda.sale domain, check Resend domain verification status, review email `from` address and headers for spam triggers, consider dedicated sending domain if not already set up. Start by reading `packages/backend/src/lib/email.ts` and any Resend config.
+**🗺️ START — Treasure Trails on the map:**
+Open `map.tsx` and the `/map` page on finda.sale. Check whether Treasure Trails are visible on the map. Read the TreasureTrail schema in `schema.prisma`. Check the map data endpoint — does it include trails? Are there any seeded trails in the DB to test with? If not, add 1-2 seed trails near the test sale addresses so they appear on the map. Start: `grep -r "TreasureTrail\|trail" packages/backend/src/routes/ packages/database/prisma/schema.prisma`.
 
-**🔴 P0 — Stripe QR code "AccessDenied" (Patrick must retest after S429 push):**
-S426 switched to destination charges. S428 removed strict items check. Retest QR after pushing S429. If AccessDenied persists: switch `createPaymentLink` from Stripe Payment Links to Stripe Checkout Sessions.
+**🔴 P0 — Stripe QR code "AccessDenied" (Patrick must retest after S430 push):**
+S426 switched to destination charges, S430 removed strict items check. Retest QR. If AccessDenied persists: switch `createPaymentLink` from Stripe Payment Links to Stripe Checkout Sessions.
 
 **🔴 P0 — Complete Stripe Connect onboarding (Patrick action):**
-After S429 push, go to Settings → Payments → Setup Stripe Connect. The fake `acct_test_user3` will be cleared and you'll get a real Stripe Express onboarding link. Must complete before Send to Phone works for real transactions.
+Settings → Payments → Setup Stripe Connect. Fake `acct_test_user3` was cleared in S429 — real Stripe Express onboarding link should now appear.
 
 **🟡 P1 — S427 migrations still needed (if not run):**
 ```powershell
@@ -254,8 +299,13 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**iPhone XS geolocation bug (Safari/iOS, carried from S424):**
-Unauthenticated user accepted location but gets "location access denied." Check `SaleMap`/`useGeolocation` hook — Safari iOS permission state resets between page loads; need to handle `PositionError` codes 1/2/3 distinctly.
+**🟡 S430 QA (after push):**
+- Email: Yahoo spam test on payment link email
+- iOS geolocation: map page + homepage auto-locate
+- Sale page: activity dedup (only HypeMeter pill + LiveFeedTicker)
+- Auction Buy Now: confirm hidden for auction items
+- Print label: no blank second page, content centred
+- Photo upload: organizer adds photo from sale page
 
 **🟡 S427 QA (pending push + migration):**
 - Full invoice flow: load hold + add misc items → Send Invoice → shopper pays via link
