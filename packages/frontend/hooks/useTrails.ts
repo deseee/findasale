@@ -110,7 +110,7 @@ export const usePublicTrail = (shareToken: string | null) => {
   return useQuery({
     queryKey: ['trail', 'public', shareToken],
     queryFn: async () => {
-      const { data } = await api.get(`/trails/public/${shareToken}`);
+      const { data } = await api.get(`/trails/${shareToken}`);
       return data;
     },
     enabled: !!shareToken,
