@@ -1,20 +1,31 @@
-# Patrick's Dashboard — April 9, 2026 (S431)
+# Patrick's Dashboard — April 10, 2026 (S432)
 
-## ✅ Done This Session (S431)
+## ✅ Done This Session (S432)
 
-- **Treasure Trails on the map** — Trail stops now only appear when you explicitly tap "View Treasure Trail →" on a sale popup (not cluttering the default map). Dismissal bar shows trail name + "View Details" link + ✕ to close. Amber circle markers appear for each stop.
-- **"Failed to load trail" toast fixed** — Double `/api/api/` prefix bug in the map component. Trail now loads correctly when you tap the button.
-- **"Trail Not Found" on detail page fixed** — Backend was looking up trails by ID only; frontend passes shareToken. Added shareToken fallback. Trail detail page (`/trail/[shareToken]`) should now load.
-- **`usePublicTrail` hook fixed** — Was calling a nonexistent route `/trails/public/...`. Now uses the correct `/trails/:shareToken` endpoint.
-- **XP purchase rate bug fixed (P0)** — Purchases were awarding flat 1 XP regardless of amount. A $617 POS session was giving 1 XP. Fixed: now computes `Math.floor(dollars × 1)` so $20 = 20 XP, $617 = 617 XP. Applies to both POS and regular purchases. Historical XP is undercounted but not worth retroactive correction.
+- **eBay OAuth "Authentication required" fixed** — Callback route was gated behind FindA.Sale JWT middleware. eBay's redirect doesn't carry a JWT. Removed middleware from the public callback; organizer identity recovered via base64 state parameter. OAuth flow now completes and redirects to settings with success toast.
+- **eBay "Failed to start connection" double /api/ fixed** — Axios base URL already includes `/api`, settings.tsx was prepending `/api/` again. All three eBay calls corrected.
+- **eBay axios redirect fixed** — Backend was calling `res.redirect(authUrl)` but axios doesn't follow external redirects cleanly. Changed to `res.json({ redirectUrl })` and frontend does `window.location.href`.
+- **Stripe Connect status fixed** — Settings Payments tab always showed "Setup Stripe Connect" even for connected organizers. Backend now returns `stripeConnected: true/false` in `/organizers/me`. Settings page shows "Stripe Connected ✓" + "Manage Payouts" button for connected organizers.
+- **Auction items showing as fixed price — fixed (3 layers):** (1) `getSale` backend wasn't returning `listingType` in item fields — added. (2) Sale page condition was `sale.isAuctionSale && item.auctionStartPrice` — changed to also check `item.listingType === 'AUCTION'`. (3) Item detail page `isAuction` flag only checked `auctionStartPrice` — now also checks `listingType`.
+- **Auction end time field added to add-items form** — When listing type is set to AUCTION, organizers now see Starting Bid, Reserve Price, and Auction End Time fields. End time defaults to 8:00 PM the evening before the sale's start date.
 
-## ✅ No Action Required — Already Pushed
+## ⚠️ Push Required
 
-All S431 fixes are live on GitHub (push `0acdeaad`). Railway and Vercel auto-deploying.
+```powershell
+git add packages/frontend/pages/organizer/settings.tsx
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/organizer/add-items/[saleId].tsx
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/pages/items/[id].tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S432: eBay OAuth fixes, Stripe Connect status, auction listing type display fixes"
+.\push.ps1
+```
 
-## 🟡 Next Session — Hunt Pass sink rows
-
-`packages/frontend/pages/shopper/hunt-pass.tsx` still needs 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP). Dispatch findasale-dev to add them, then push.
+## 🟡 Next Session — Auction overhaul + eBay categories in UI
 
 ---
 

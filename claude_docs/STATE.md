@@ -7,6 +7,35 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S432 COMPLETE (2026-04-10):** eBay OAuth bug fixes + Stripe Connect status display + auction listing type display (3 layers).
+
+**S432 Fixes:**
+- `organizers.ts` — Added `stripeConnected: !!(organizer as any).stripeConnectId` to `/organizers/me` response.
+- `settings.tsx` — Added `stripeConnected` state, set from `/organizers/me`. Payments tab now shows "Stripe Connected ✓" + "Manage Payouts" for connected organizers; unconnected still see "Setup Stripe Connect". eBay OAuth fixed: removed `/api/` double prefix from all 3 eBay calls; changed from axios-following `res.redirect()` to `res.json({ redirectUrl })` + `window.location.href`. Public eBay callback route un-gated from JWT middleware.
+- `saleController.ts` — `getSale` now includes `listingType`, `auctionReservePrice`, `auctionClosed` in items select (were missing, causing auction items to render as fixed-price).
+- `sales/[id].tsx` — Auction UI conditions updated to check `item.listingType === 'AUCTION'` in addition to `sale.isAuctionSale`. `listingType` added to Item interface.
+- `add-items/[saleId].tsx` — Auction fields added (Starting Bid, Reserve Price, Auction End Time) when listing type is AUCTION. End time defaults to 8 PM night before sale start. Auction field name mapping fixed (form `startingBid` → API `auctionStartPrice`, etc.).
+- `itemController.ts` — `getItemById` and `getItemsBySaleId` now include `auctionClosed` in select.
+- `items/[id].tsx` — `isAuction` now checks `item.listingType === 'AUCTION'` in addition to `item.auctionStartPrice`. Fixes auction item detail page showing fixed-price UI.
+
+**S432 Files changed:**
+- `packages/frontend/pages/organizer/settings.tsx`
+- `packages/backend/src/routes/organizers.ts`
+- `packages/frontend/pages/sales/[id].tsx`
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx`
+- `packages/backend/src/controllers/saleController.ts`
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/frontend/pages/items/[id].tsx`
+
+**S432 QA needed:**
+- eBay OAuth: settings → eBay tab → Connect → eBay sign in → redirects back with success toast, connection status shows
+- Stripe: connected organizer → settings Payments tab → shows "Stripe Connected ✓" + Manage Payouts (not Setup button)
+- Auction item card: auction item on sale page shows bid UI, not Buy Now/Cart
+- Auction item detail: `/items/[id]` for auction item shows bid UI, not fixed-price
+- Auction create: add-items form → set listing type AUCTION → auction fields appear, end time defaults to 8 PM night before sale
+
+---
+
 **S431 COMPLETE (2026-04-09):** Treasure Trails map activation mode + 3 trail URL bugs fixed + XP purchase rate bug fixed.
 
 **S431 Fixes:**
@@ -309,8 +338,28 @@ npx prisma generate
 
 ## Next Session Priority
 
-**🟡 S420 Batch 2 — hunt-pass.tsx still needs push:**
-5 of 6 S420 Batch 2 files confirmed on GitHub. Missing: `packages/frontend/pages/shopper/hunt-pass.tsx` — 3 new XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP) not yet pushed. Dispatch to findasale-dev next session to add the rows, then push.
+**S433 FOCUS: Auction overhaul + eBay categories in UI**
+
+Patrick's brief: "Our auctions are too basic and not really like eBay or other professional auction sites. Do some research and see what we already have built and what we need to do to get the auctions in proper working order that our customers will expect. We also need to surface our new eBay style categories in the UI — there may be knock-on and downstream changes needed as well."
+
+**Session start protocol:**
+1. Load `dev-environment` skill before any shell commands.
+2. Dispatch `findasale-innovation` to research: (a) what professional auction UX looks like (eBay, Proxibid, Invaluable, LiveAuctioneers), (b) audit what FindA.Sale already has built (schema fields, bidding socket events, bid controller, frontend bid UI), (c) gap list with priority ranking.
+3. Dispatch `findasale-architect` to spec the auction overhaul based on Innovation findings — before any dev work starts.
+4. Separately: dispatch `findasale-dev` to audit where eBay categories (the `ebayCategoryId`/`ebayCategory` fields on Item) are currently stored but not surfaced in UI — sale page item card, item detail page, search/filter, add-items form. Return a list of every touch point that needs updating.
+
+**Key questions for Innovation to answer:**
+- What does a real auction item page look like? (Proxy bidding, bid history, bid increment rules, reserve met indicator, time extension on last-second bids, outbid notifications)
+- What does FindA.Sale already have? (Read `schema.prisma` for Bid model, `bidController.ts`, `auctionController.ts` if it exists, socket events in `bidSocket.ts` or similar)
+- What's missing vs what just needs to be surfaced in the UI?
+
+**Key questions for eBay categories:**
+- Where is `ebayCategoryId`/`ebayCategory` stored on Item? (confirmed in schema S432)
+- Where does it need to surface: item card badge? item detail page? add-items category picker? search filter sidebar? organizer item list?
+- Are there any downstream effects — e.g., does the eBay export CSV or API push use this field already?
+
+**🟡 Still needed — hunt-pass.tsx sink rows:**
+`packages/frontend/pages/shopper/hunt-pass.tsx` still needs 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP). Low priority — batch with other front-end work.
 
 **✅ DONE — Treasure Trails map work (S431):**
 - Trail activation mode: trail stop markers only appear when user explicitly taps "View Treasure Trail →" on a sale popup (not on default map load). `activeTrail` state added to map.tsx.
