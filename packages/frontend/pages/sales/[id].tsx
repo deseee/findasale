@@ -141,6 +141,9 @@ const SaleDetailPage = () => {
   const [isShopperCartOpen, setIsShopperCartOpen] = useState(false);
   const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false);
   const [pendingCartItem, setPendingCartItem] = useState<any>(null);
+  const [photoUploadError, setPhotoUploadError] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
 
   // Refresh sale data every 5 seconds to pick up new bids and inventory changes
   useEffect(() => {
@@ -366,6 +369,82 @@ const SaleDetailPage = () => {
     setPendingNavigation(null);
   };
 
+  const handlePhotoUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !sale) return;
+
+    const MAX_FILE_SIZE_MB = 5;
+    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+    // Validate file sizes
+    const invalidFiles = Array.from(files).filter(f => f.size > MAX_FILE_SIZE_BYTES);
+    if (invalidFiles.length > 0) {
+      setPhotoUploadError(`Photos must be under ${MAX_FILE_SIZE_MB}MB. ${invalidFiles.length} file(s) too large.`);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+      return;
+    }
+
+    // Check max photos constraint
+    if (sale.photoUrls.length >= 6) {
+      setPhotoUploadError('Maximum 6 photos allowed per sale.');
+      if (photoInputRef.current) photoInputRef.current.value = '';
+      return;
+    }
+
+    const remainingSlots = 6 - sale.photoUrls.length;
+    const filesToUpload = Array.from(files).slice(0, remainingSlots);
+
+    setPhotoUploading(true);
+    setPhotoUploadError('');
+    try {
+      // Upload photos to Cloudinary
+      const formData = new FormData();
+      filesToUpload.forEach(file => formData.append('photos', file));
+
+      const uploadRes = await api.post('/upload/sale-photos', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const newUrls: string[] = uploadRes.data.urls || [];
+      if (!newUrls.length) {
+        setPhotoUploadError('Upload failed: no URLs returned.');
+        return;
+      }
+
+      // Update sale with new photo URLs
+      const updatedPhotoUrls = [...sale.photoUrls, ...newUrls];
+      await api.put(`/sales/${sale.id}`, { photoUrls: updatedPhotoUrls });
+
+      // Refetch sale data
+      queryClient.invalidateQueries({ queryKey: ['sale', id] });
+      showToast(`Added ${newUrls.length} photo${newUrls.length !== 1 ? 's' : ''}!`, 'success');
+    } catch (err: any) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
+      setPhotoUploadError(serverMsg ? `Upload failed: ${serverMsg}` : 'Upload failed. Please try again.');
+    } finally {
+      setPhotoUploading(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  };
+
+  const handleRemovePhoto = async (indexToRemove: number) => {
+    if (!sale) return;
+    const confirmed = window.confirm('Remove this photo?');
+    if (!confirmed) return;
+
+    try {
+      const updatedPhotoUrls = sale.photoUrls.filter((_, idx) => idx !== indexToRemove);
+      await api.put(`/sales/${sale.id}`, { photoUrls: updatedPhotoUrls });
+      queryClient.invalidateQueries({ queryKey: ['sale', id] });
+      showToast('Photo removed.', 'success');
+      // Reset main photo index if viewing deleted photo
+      if (currentPhotoIndex >= updatedPhotoUrls.length) {
+        setCurrentPhotoIndex(Math.max(0, updatedPhotoUrls.length - 1));
+      }
+    } catch {
+      showToast('Failed to remove photo. Please try again.', 'error');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -578,11 +657,6 @@ const SaleDetailPage = () => {
           </div>
         </div>
 
-        {/* Feature #51: Hype Meter — Live Viewer Count */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          <HypeMeter saleId={id as string} />
-        </div>
-
         {/* Flash Deal Banner */}
         <FlashDealBanner saleId={sale.id} itemIds={sale.items.map((item) => item.id)} />
 
@@ -609,20 +683,69 @@ const SaleDetailPage = () => {
                   )}
                 </div>
                 {sale.photoUrls.length > 1 && (
-                  <div className="flex gap-2 mt-4 overflow-x-auto">
+                  <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
                     {sale.photoUrls.map((url, idx) => (
-                      <img
-                        key={idx}
-                        src={getThumbnailUrl(url)}
-                        alt={`Thumbnail ${idx + 1}`}
-                        className={`h-20 w-20 object-cover rounded cursor-pointer transition ${
-                          idx === currentPhotoIndex ? 'ring-2 ring-amber-600' : ''
-                        }`}
-                        onClick={() => setCurrentPhotoIndex(idx)}
-                      />
+                      <div key={idx} className="relative group">
+                        <img
+                          src={getThumbnailUrl(url)}
+                          alt={`Thumbnail ${idx + 1}`}
+                          className={`h-20 w-20 object-cover rounded cursor-pointer transition ${
+                            idx === currentPhotoIndex ? 'ring-2 ring-amber-600' : ''
+                          }`}
+                          onClick={() => setCurrentPhotoIndex(idx)}
+                        />
+                        {isOrganizer && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePhoto(idx)}
+                            className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                            aria-label="Remove photo"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
+
+                {/* Organizer photo management controls */}
+                {isOrganizer && (
+                  <div className="mt-4 space-y-3">
+                    {photoUploadError && (
+                      <p className="text-red-500 text-sm">{photoUploadError}</p>
+                    )}
+                    <div className="flex items-center gap-3">
+                      {sale.photoUrls.length < 6 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => photoInputRef.current?.click()}
+                            disabled={photoUploading}
+                            className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
+                          >
+                            <span>+</span>
+                            <span>{photoUploading ? 'Uploading…' : 'Add Photos'}</span>
+                          </button>
+                          <input
+                            ref={photoInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => handlePhotoUpload(e.target.files)}
+                          />
+                        </>
+                      )}
+                      {sale.photoUrls.length >= 6 && (
+                        <span className="text-sm text-warm-600 dark:text-gray-400">
+                          Max 6 photos reached
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <button
                   onClick={() => setTourOpen(true)}
                   className="mt-4 inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
@@ -639,8 +762,9 @@ const SaleDetailPage = () => {
               <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
             </div>
 
-            {/* Feature #70: Live Feed Ticker — real-time sale events (SOLD, HOLD, PRICE_DROP) */}
-            <div className="mt-8">
+            {/* Live Activity — viewer count + recent sale events */}
+            <div className="mt-8 space-y-2">
+              <HypeMeter saleId={sale.id} />
               <LiveFeedTicker saleId={sale.id} />
             </div>
 
@@ -1190,10 +1314,7 @@ const SaleDetailPage = () => {
           </div>
         )}
 
-        {/* Feature #51: Activity Feed — Recent Activity + Social Proof */}
-        <div className="mt-12">
-          <ActivityFeed saleId={id as string} />
-        </div>
+        {/* ActivityFeed removed — LiveFeedTicker under About covers this */}
 
       </main>
 
