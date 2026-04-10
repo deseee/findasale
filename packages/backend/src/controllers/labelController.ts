@@ -23,39 +23,44 @@ async function drawLabel(
   const startY = yOffset;
   const startX = xOffset;
 
-  // QR column: right side, 72×72, centred vertically with slight upward bias
+  // QR column: right side, 72×72, vertically centred
   const qrSize = 72;
   const qrPad  = 14;
-  const qrX    = startX + LABEL_W - qrPad - qrSize;   // x ≈ 202
-  const qrY    = startY + Math.round((LABEL_H - qrSize) / 2) - 8; // y ≈ 64
+  const qrX    = startX + LABEL_W - qrPad - qrSize;        // x ≈ 202
+  const qrY    = startY + Math.round((LABEL_H - qrSize) / 2); // y = 72, centred
 
-  // Text column: left side, ends just before QR column
-  const textX = startX + MARGIN;  // 16pt left padding
-  const textW = qrX - startX - 20;                    // ≈ 172 pts
+  // Text column: left of QR, 10pt left padding
+  const textX = startX + 10;
+  const textW = qrX - startX - 18;                         // ≈ 174 pts
+
+  // Vertically centre the content block in the label.
+  // Block composition (approximate): sale(8) + gap(10) + title(24) + gap(8) + price(26) + gap(8) + chips(10) + gap(10) + id(8) = 112pt
+  const BLOCK_H = 112;
+  const cs = startY + Math.round((LABEL_H - BLOCK_H) / 2); // content start ≈ y+52
 
   // QR image
   doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
 
-  // "Scan to view" under QR — kept well clear of bottom edge
+  // "Scan to view" under QR
   doc
     .fontSize(6)
     .fillColor('#aaaaaa')
     .font('Helvetica')
     .text('Scan to view', qrX, qrY + qrSize + 4, { width: qrSize, align: 'center', lineBreak: false });
 
-  // Sale name (small, top)
+  // Sale name
   doc
     .fontSize(7)
     .fillColor('#888888')
     .font('Helvetica')
-    .text(saleTitle, textX, startY + 12, { width: textW, align: 'left', lineBreak: false });
+    .text(saleTitle, textX, cs, { width: textW, align: 'left', lineBreak: false });
 
   // Item title
   doc
     .fontSize(13)
     .fillColor('#111111')
     .font('Helvetica-Bold')
-    .text(item.title, textX, startY + 28, { width: textW, height: 38, align: 'left' });
+    .text(item.title, textX, cs + 18, { width: textW, height: 24, align: 'left' });
 
   // Price
   const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'Price on request';
@@ -63,7 +68,7 @@ async function drawLabel(
     .fontSize(22)
     .fillColor(item.price != null ? '#16a34a' : '#999999')
     .font('Helvetica-Bold')
-    .text(priceText, textX, startY + 74, { width: textW, align: 'left', lineBreak: false });
+    .text(priceText, textX, cs + 50, { width: textW, align: 'left', lineBreak: false });
 
   // Category + condition
   const chips = [item.category, item.condition].filter(Boolean).join('  ·  ');
@@ -72,15 +77,15 @@ async function drawLabel(
       .fontSize(8)
       .fillColor('#555555')
       .font('Helvetica')
-      .text(chips, textX, startY + 104, { width: textW, align: 'left', lineBreak: false });
+      .text(chips, textX, cs + 86, { width: textW, align: 'left', lineBreak: false });
   }
 
-  // Item ID — 36 pts from bottom edge, safely clear of page boundary
+  // Item ID — positioned at fixed offset from content block bottom
   doc
     .fontSize(6)
     .fillColor('#cccccc')
     .font('Helvetica')
-    .text(`ID: ${item.id}`, textX, startY + LABEL_H - 36, { width: textW, align: 'left', lineBreak: false });
+    .text(`ID: ${item.id}`, textX, cs + 104, { width: textW, align: 'left', lineBreak: false });
 
   // Outer border (drawn last so it sits on top of any bleed)
   doc
