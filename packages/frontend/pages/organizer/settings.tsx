@@ -61,7 +61,7 @@ const OrganizerSettingsPage = () => {
   // eBay connection status query
   const { data: ebayStatus, isLoading: ebayStatusLoading, refetch: refetchEbayStatus } = useQuery({
     queryKey: ['ebay-connection-status'],
-    queryFn: () => api.get('/api/ebay/connection').then(r => r.data),
+    queryFn: () => api.get('/ebay/connection').then(r => r.data),
     enabled: !!user
   });
 
@@ -80,7 +80,7 @@ const OrganizerSettingsPage = () => {
 
   // Disconnect eBay mutation
   const disconnectEbayMutation = useMutation({
-    mutationFn: () => api.delete('/api/ebay/connection'),
+    mutationFn: () => api.delete('/ebay/connection'),
     onSuccess: () => {
       refetchEbayStatus();
       showToast('eBay account disconnected', 'success');
@@ -161,7 +161,7 @@ const OrganizerSettingsPage = () => {
   const handleEbayConnect = async () => {
     setIsConnectingEbay(true);
     try {
-      const response = await api.get('/api/ebay/connect');
+      const response = await api.get('/ebay/connect');
       // The backend redirects directly to eBay OAuth, so we shouldn't reach here
       // But if it returns a URL in the response, redirect to it
       if (response.data?.redirectUrl) {
