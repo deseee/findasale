@@ -20,60 +20,81 @@ async function drawLabel(
   xOffset: number = MARGIN,
   yOffset: number = MARGIN,
 ) {
-  // Use absolute positioning for grid layout
   const startY = yOffset;
   const startX = xOffset;
+
+  // Layout: left text column | right QR column
+  const qrSize   = 80;
+  const qrColW   = qrSize + MARGIN;                       // 96px right column
+  const textW    = LABEL_W - qrColW - MARGIN - 8;         // ~168px left column
+  const textX    = startX + 8;
+
+  // QR — vertically centred in the label
+  const qrX = startX + LABEL_W - MARGIN - qrSize;
+  const qrY = startY + (LABEL_H - qrSize) / 2;
+  doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+
+  // "Scan" label under QR
+  doc
+    .fontSize(6)
+    .fillColor('#aaaaaa')
+    .font('Helvetica')
+    .text('Scan to view', qrX, qrY + qrSize + 3, { width: qrSize, align: 'center', lineBreak: false });
+
+  // Thin vertical divider between columns
+  const divX = startX + LABEL_W - qrColW - 4;
+  doc
+    .moveTo(divX, startY + 12)
+    .lineTo(divX, startY + LABEL_H - 12)
+    .lineWidth(0.5)
+    .strokeColor('#e0e0e0')
+    .stroke();
 
   // Sale name (small, top)
   doc
     .fontSize(7)
-    .fillColor('#666666')
+    .fillColor('#888888')
     .font('Helvetica')
-    .text(saleTitle, startX + 8, startY + 8, { width: LABEL_W - 16, align: 'left', lineBreak: false });
+    .text(saleTitle, textX, startY + 10, { width: textW, align: 'left', lineBreak: false });
 
   // Item title
   doc
-    .fontSize(14)
+    .fontSize(13)
     .fillColor('#111111')
     .font('Helvetica-Bold')
-    .text(item.title, startX + 8, startY + 24, { width: LABEL_W - 56, align: 'left', height: 32 });
+    .text(item.title, textX, startY + 26, { width: textW, height: 40, align: 'left' });
 
   // Price
   const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'Price on request';
   doc
-    .fontSize(20)
+    .fontSize(22)
     .fillColor(item.price != null ? '#16a34a' : '#999999')
     .font('Helvetica-Bold')
-    .text(priceText, startX + 8, startY + 60, { width: LABEL_W - 56, align: 'left', lineBreak: false });
+    .text(priceText, textX, startY + 74, { width: textW, align: 'left', lineBreak: false });
 
-  // Category + condition chips
-  const chips = [item.category, item.condition].filter(Boolean).join('  \u00b7  ');
+  // Category + condition
+  const chips = [item.category, item.condition].filter(Boolean).join('  ·  ');
   if (chips) {
     doc
       .fontSize(8)
       .fillColor('#555555')
       .font('Helvetica')
-      .text(chips, startX + 8, startY + 85, { width: LABEL_W - 56, align: 'left', lineBreak: false });
+      .text(chips, textX, startY + 102, { width: textW, align: 'left', lineBreak: false });
   }
 
-  // Item ID (small, bottom-left)
+  // Item ID (bottom-left)
   doc
     .fontSize(6)
-    .fillColor('#aaaaaa')
+    .fillColor('#bbbbbb')
     .font('Helvetica')
-    .text(`ID: ${item.id}`, startX + 8, startY + LABEL_H - 24, { width: LABEL_W - 56, align: 'left', lineBreak: false });
+    .text(`ID: ${item.id}`, textX, startY + LABEL_H - 18, { width: textW, align: 'left', lineBreak: false });
 
-  // QR code in bottom-right corner (48×48 pixels, within bounds)
-  const qrSize = 48;
-  const qrX = startX + LABEL_W - MARGIN - qrSize;
-  const qrY = startY + LABEL_H - MARGIN - qrSize;
-  doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
-
-  // Light border around label cell
+  // Outer border
   doc
     .rect(startX, startY, LABEL_W, LABEL_H)
     .lineWidth(0.5)
-    .stroke('#e0e0e0');
+    .strokeColor('#e0e0e0')
+    .stroke();
 }
 
 /**
