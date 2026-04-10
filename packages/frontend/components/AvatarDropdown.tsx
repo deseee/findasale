@@ -390,7 +390,7 @@ const AvatarDropdown: React.FC = () => {
                     <span>Plan a Sale</span>
                   </Link>
                   <Link
-                    href="/organizer/add-items"
+                    href="/organizer/sales"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                     title="Add items to any sale or your inventory"
@@ -600,15 +600,6 @@ const AvatarDropdown: React.FC = () => {
                   {canAccess('PRO') ? (
                     <>
                       <Link
-                        href="/organizer/command-center"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Multi-sale overview dashboard"
-                      >
-                        <LayoutDashboard size={16} className="text-purple-400" />
-                        <span>Command Center</span>
-                      </Link>
-                      <Link
                         href="/organizer/brand-kit"
                         className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setIsOpen(false)}
@@ -745,6 +736,15 @@ const AvatarDropdown: React.FC = () => {
                   </button>
                   {teamsOpen && (
                     <>
+                      <Link
+                        href="/organizer/command-center"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Multi-sale overview dashboard"
+                      >
+                        <LayoutDashboard size={16} className="text-purple-400" />
+                        <span>Command Center</span>
+                      </Link>
                       <Link
                         href="/organizer/calendar"
                         className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
