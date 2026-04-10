@@ -79,13 +79,15 @@ export const createTrail = async (req: AuthRequest, res: Response) => {
 /**
  * GET /api/trails/:trailId
  * Get trail details + user's check-in progress (if logged in)
+ * Accepts either a full trail ID or a shareToken
  */
 export const getTrail = async (req: AuthRequest | Request, res: Response) => {
   try {
     const { trailId } = req.params;
     const userId = (req as AuthRequest).user?.id;
 
-    const trail = await prisma.treasureTrail.findUnique({
+    // Try lookup by ID first
+    let trail = await prisma.treasureTrail.findUnique({
       where: { id: trailId },
       include: {
         organizer: { select: { id: true, businessName: true } },
@@ -93,6 +95,18 @@ export const getTrail = async (req: AuthRequest | Request, res: Response) => {
         completions: { where: { userId }, select: { completionBonusXp: true, totalXpEarned: true } },
       },
     });
+
+    // Fallback: try lookup by shareToken
+    if (!trail) {
+      trail = await prisma.treasureTrail.findUnique({
+        where: { shareToken: trailId },
+        include: {
+          organizer: { select: { id: true, businessName: true } },
+          stops: { orderBy: { order: 'asc' } },
+          completions: { where: { userId }, select: { completionBonusXp: true, totalXpEarned: true } },
+        },
+      });
+    }
 
     if (!trail) return res.status(404).json({ message: 'Trail not found.' });
 

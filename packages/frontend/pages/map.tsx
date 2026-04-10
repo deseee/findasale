@@ -38,6 +38,21 @@ interface Sale {
 type DateFilter = 'all' | 'this-week' | 'this-weekend' | 'today';
 type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'consignment';
 
+interface TrailStop {
+  id: string;
+  order: number;
+  stopName: string;
+  latitude: number;
+  longitude: number;
+  stopType: string;
+}
+
+interface ActiveTrail {
+  name: string;
+  shareToken: string;
+  stops: TrailStop[];
+}
+
 const MapPage = () => {
   const { showToast } = useToast();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -45,6 +60,7 @@ const MapPage = () => {
   const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
   const [filteredPins, setFilteredPins] = useState<SalePin[]>([]);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [activeTrail, setActiveTrail] = useState<ActiveTrail | null>(null);
 
   // Helper function to determine sale type from saleType field
   const getSaleType = (sale: Sale): string => {
@@ -391,6 +407,28 @@ const MapPage = () => {
           </div>
         ) : (
           <>
+            {/* Treasure Trail activation bar */}
+            {activeTrail && (
+              <div className="bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-4 py-2 flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-100">
+                  🗺️ {activeTrail.name}
+                </span>
+                <div className="flex gap-2">
+                  <a
+                    href={`/trail/${activeTrail.shareToken}`}
+                    className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                  >
+                    View Details →
+                  </a>
+                  <button
+                    onClick={() => setActiveTrail(null)}
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 text-sm font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
             <SaleMap
               pins={filteredPins}
               userLocation={userLocation}
@@ -399,6 +437,8 @@ const MapPage = () => {
               zoom={userLocation ? 13 : 11}
               heatmapTiles={showHeatmap ? heatmapData?.tiles : undefined}
               onHeatmapCellClick={handleHeatmapCellClick}
+              activeTrail={activeTrail}
+              setActiveTrail={setActiveTrail}
             />
             {/* Feature #28: Heatmap legend */}
             {showHeatmap && heatmapData && (
