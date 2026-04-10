@@ -163,15 +163,12 @@ const QRCodesPage = () => {
             </div>
           ) : sortedSales.length === 0 ? (
             <EmptyState
-              title="No sales yet"
-              description="Create your first sale to start tracking QR engagement."
-              action={
-                <Link href="/organizer/create-sale">
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    Create Sale
-                  </button>
-                </Link>
-              }
+              heading="No sales yet"
+              subtext="Create your first sale to start tracking QR engagement."
+              cta={{
+                label: 'Create Sale',
+                href: '/organizer/create-sale'
+              }}
             />
           ) : (
             <div>

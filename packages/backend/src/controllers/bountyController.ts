@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { createNotification } from '../services/notificationService';
 
 /**
  * POST /api/bounties
@@ -137,6 +138,17 @@ export const fulfillBounty = async (req: AuthRequest, res: Response) => {
       data: { status: 'FULFILLED', itemId: itemId || null },
       include: { item: { select: { id: true, title: true, price: true } } },
     });
+
+    // Notify the shopper that their bounty has been fulfilled
+    const itemLink = updated.item ? `/items/${updated.item.id}` : undefined;
+    await createNotification(
+      bounty.userId,
+      'BOUNTY_FULFILLED',
+      'Good news!',
+      'Good news! An organizer found what you were looking for.',
+      itemLink,
+      'OPERATIONAL'
+    );
 
     return res.json(updated);
   } catch (error) {

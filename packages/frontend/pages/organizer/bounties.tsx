@@ -80,6 +80,16 @@ const OrganizerBountiesPage = () => {
     onError: (err: any) => showToast(err.response?.data?.message || 'Failed to fulfill', 'error'),
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/bounties/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bounties', selectedSaleId] });
+      showToast('Bounty cancelled', 'success');
+    },
+    onError: (err: any) => showToast(err.response?.data?.message || 'Failed to cancel', 'error'),
+  });
+
   if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">Loading…</div>;
 
   const openBounties = bounties.filter(b => b.status === 'OPEN');
@@ -96,6 +106,7 @@ const OrganizerBountiesPage = () => {
             <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Missing-Item Requests</h1>
           </div>
         </div>
+      </div>
 
         <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
           {/* Sale selector */}
@@ -111,11 +122,11 @@ const OrganizerBountiesPage = () => {
             </select>
           </div>
 
-          {/* Open bounties */}
-          <div>
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-              Open requests ({openBounties.length})
-            </h2>
+        {/* Open bounties */}
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+            Open requests ({openBounties.length})
+          </h2>
             {bountiesLoading ? (
               <p className="text-gray-400 dark:text-gray-500 text-sm">Loading…</p>
             ) : openBounties.length === 0 ? (
@@ -135,12 +146,21 @@ const OrganizerBountiesPage = () => {
                           {' · '}{new Date(b.createdAt).toLocaleDateString()}
                         </p>
                       </div>
-                      <button
-                        onClick={() => { setFulfillBountyId(b.id); setFulfillItemId(''); }}
-                        className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 whitespace-nowrap"
-                      >
-                        Mark fulfilled
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setFulfillBountyId(b.id); setFulfillItemId(''); }}
+                          className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 whitespace-nowrap"
+                        >
+                          Mark fulfilled
+                        </button>
+                        <button
+                          onClick={() => cancelMutation.mutate(b.id)}
+                          disabled={cancelMutation.isPending}
+                          className="text-xs bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-100 px-3 py-1.5 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {cancelMutation.isPending ? 'Cancelling…' : 'Cancel'}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Inline fulfill form */}
@@ -155,7 +175,7 @@ const OrganizerBountiesPage = () => {
                             placeholder="Item ID (optional)"
                             value={fulfillItemId}
                             onChange={e => setFulfillItemId(e.target.value)}
-                            className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:text-gray-100"
+                            className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
                           />
                           <button
                             onClick={() => fulfillMutation.mutate({ id: b.id, itemId: fulfillItemId })}
@@ -179,31 +199,30 @@ const OrganizerBountiesPage = () => {
             )}
           </div>
 
-          {/* Closed bounties */}
-          {closedBounties.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">Closed ({closedBounties.length})</h2>
-              <div className="space-y-2">
-                {closedBounties.map(b => (
-                  <div key={b.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 flex justify-between items-center gap-3">
-                    <div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">"{b.description}"</p>
-                      {b.item && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          Linked to: <span className="font-medium">{b.item.title}</span>
-                          {b.item.price != null && ` · $${b.item.price.toFixed(2)}`}
-                        </p>
-                      )}
-                    </div>
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_COLORS[b.status]}`}>
-                      {b.status}
-                    </span>
+        {/* Closed bounties */}
+        {closedBounties.length > 0 && (
+          <div>
+            <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3">Closed ({closedBounties.length})</h2>
+            <div className="space-y-2">
+              {closedBounties.map(b => (
+                <div key={b.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 flex justify-between items-center gap-3">
+                  <div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">"{b.description}"</p>
+                    {b.item && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        Linked to: <span className="font-medium">{b.item.title}</span>
+                        {b.item.price != null && ` · $${b.item.price.toFixed(2)}`}
+                      </p>
+                    )}
                   </div>
-                ))}
-              </div>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_COLORS[b.status]}`}>
+                    {b.status}
+                  </span>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </>
   );
