@@ -248,10 +248,10 @@ const TypologyPage = () => {
   const handleBatchClassify = async () => {
     if (!selectedSaleId) return;
     try {
-      const result = await batchMutation.mutateAsync(selectedSaleId);
+      await batchMutation.mutateAsync(selectedSaleId);
       showToast(
-        `Classified ${result.classified} items${result.failed > 0 ? ` (${result.failed} failed)` : ''}`,
-        result.failed > 0 ? 'error' : 'success'
+        'Batch classification queued — check back in a few moments for results',
+        'success'
       );
     } catch {
       showToast('Batch classification failed', 'error');

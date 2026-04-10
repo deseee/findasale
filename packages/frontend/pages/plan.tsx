@@ -23,11 +23,14 @@ const PlanPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Scroll to bottom only when messages exist (prevents race condition on mount)
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length > 0) {
+      scrollToBottom();
+    }
   }, [messages]);
 
-  // Scroll to top on page load
+  // Scroll to top on page load - runs first, has priority
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
