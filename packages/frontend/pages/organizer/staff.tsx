@@ -91,7 +91,7 @@ const OrganizerStaffPage = () => {
   }
 
   // TEAMS tier: show staff management
-  const isOwner = workspace?.ownerId === user?.organizerProfile?.id;
+  const isOwner = workspace?.ownerId === user?.id;
   const members = membersData?.members || [];
 
   const handleCreateWorkspace = async () => {
