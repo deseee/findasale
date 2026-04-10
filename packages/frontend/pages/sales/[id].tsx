@@ -768,12 +768,7 @@ const SaleDetailPage = () => {
               <LiveFeedTicker saleId={sale.id} />
             </div>
 
-            {/* Social Proof Badge */}
-            {saleSocialProof && (
-              <div className="mt-8">
-                <SocialProofBadge socialProof={saleSocialProof} loading={socialProofLoading} variant="full" />
-              </div>
-            )}
+            {/* SocialProofBadge removed — redundant with LiveFeedTicker */}
           </div>
 
           {/* Sidebar */}
@@ -1221,7 +1216,7 @@ const SaleDetailPage = () => {
                       )}
                       {!isOrganizer && user && item.status === 'AVAILABLE' && (
                         <div className="flex gap-2">
-                          {!sale.isAuctionSale && (
+                          {!sale.isAuctionSale && !item.auctionStartPrice && (
                             <>
                               <button
                                 onClick={() => handleBuyNow(item.id, item.title)}
