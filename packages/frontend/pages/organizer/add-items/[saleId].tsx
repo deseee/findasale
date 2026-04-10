@@ -504,13 +504,16 @@ const AddItemsDetailPage = () => {
     mutationFn: async () => {
       const photoUrls = formData.photoUrls;
       // Map form field names to API field names for auction items
-      const submitData = { ...formData, saleId, photoUrls };
+      let submitData: any = { ...formData, saleId, photoUrls };
       if (submitData.listingType === 'AUCTION') {
-        submitData.auctionStartPrice = submitData.startingBid ? parseFloat(submitData.startingBid) : null;
-        submitData.auctionReservePrice = submitData.reservePrice ? parseFloat(submitData.reservePrice) : null;
-        submitData.auctionEndTime = submitData.auctionEndTime || null;
-        delete submitData.startingBid;
-        delete submitData.reservePrice;
+        submitData = {
+          ...submitData,
+          auctionStartPrice: submitData.startingBid ? parseFloat(submitData.startingBid) : null,
+          auctionReservePrice: submitData.reservePrice ? parseFloat(submitData.reservePrice) : null,
+          auctionEndTime: submitData.auctionEndTime || null,
+        };
+        const { startingBid, reservePrice, ...cleanPayload } = submitData;
+        submitData = cleanPayload;
       }
       return await api.post(
         `/items`,
