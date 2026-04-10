@@ -770,12 +770,7 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
       },
     });
 
-    res.json({
-      success: true,
-      ebayUserId: connection.ebayUserId,
-      connectedAt: connection.connectedAt,
-      redirectTo: '/organizer/settings#ebay',
-    });
+    res.redirect(`/organizer/settings?ebay_connected=true`);
   } catch (error) {
     console.error('[eBay] OAuth callback error:', error);
     res.status(500).json({ message: 'Failed to process OAuth callback' });
