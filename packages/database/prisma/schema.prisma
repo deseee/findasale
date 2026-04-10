@@ -294,8 +294,40 @@ model Organizer {
   posPaymentLinks POSPaymentLink[]
   // Feature #48: Treasure Trails — organizer-created discovery trails
   trails          TreasureTrail[] @relation("OrganizerTrails")
+  // Feature #244 Phase 2: eBay OAuth connection
+  ebayConnection  EbayConnection? @relation("OrganizerEbayConnection")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// Feature #244 Phase 2: eBay OAuth Connection — stores refresh tokens and connection state
+model EbayConnection {
+  id                String   @id @default(cuid())
+
+  // Foreign key to organizer
+  organizerId       String   @unique
+  organizer         Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade, name: "OrganizerEbayConnection")
+
+  // eBay OAuth tokens
+  accessToken       String   // 2-hour lifetime, refresh endpoint handles rotation
+  refreshToken      String   // 18-month lifetime, stored securely
+  tokenExpiresAt    DateTime // When accessToken expires
+
+  // eBay seller identity
+  ebayUserId        String   // eBay seller username (returned in token response)
+  ebayAccountEmail  String?  // Optional: eBay account email for reconciliation
+
+  // Metadata
+  connectedAt       DateTime @default(now())
+  lastRefreshedAt   DateTime @default(now())
+  lastErrorAt       DateTime?
+  lastErrorMessage  String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([organizerId])
+  @@index([lastRefreshedAt])
 }
 
 // Phase 2c: Profile Showcase Slots — user-pinned haul posts on profile
@@ -658,6 +690,9 @@ model Item {
   highValueFlaggedAt DateTime?
   isHighValueLocked  Boolean   @default(false)      // Organizer locked decision, respect it
   saleTransactions   SaleTransaction[]
+  // Feature #244 Phase 2: eBay listing tracking
+  ebayListingId      String?                       // eBay listing ID after successful publish; used for Phase 3 sync
+  listedOnEbayAt     DateTime?                     // Timestamp when item was pushed to eBay
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -667,6 +702,7 @@ model Item {
   @@index([libraryId])
   @@index([organizerId, inLibrary])
   @@index([isHighValue])
+  @@index([ebayListingId])
 }
 
 // Camera Workflow v2: Photo model for multi-photo support (forward-looking schema)
