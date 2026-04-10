@@ -20,7 +20,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - `packages/frontend/pages/organizer/earnings.tsx`
 - `packages/frontend/pages/organizer/qr-codes.tsx`
 - `packages/frontend/pages/organizer/staff.tsx`
+- `packages/frontend/pages/organizer/typology.tsx` — fixed 202 response handling (was reading non-existent `result.classified/failed`)
+- `packages/frontend/pages/plan.tsx` — fixed scroll-to-middle bug (scrollToBottom guard)
 - `packages/backend/src/routes/organizers.ts` — added qrScanCount to /me/sales SELECT
+- `packages/backend/src/routes/lines.ts` — added requireTier('SIMPLE') to 6 organizer Line Queue routes
+
+**S436 Verified:**
+- S435 all 5 fixes CONFIRMED in code (Layout mobile nav, offline.tsx, AvatarDropdown, auctionJob, auctionAutoCloseCron)
+- item-library already functional (no TierGate, real API call) — no changes needed
+
+**S436 Decision needed — Bounties (#197):**
+No shopper reward loop exists. When organizer marks bounty fulfilled, shopper gets no notification and no link to the item. Options: (A) UX only — notify shopper + item link (B) Full gamification — XP + badge + notification. Patrick to decide before bounty fix is dispatched.
 
 **S436 QA needed:**
 - Earnings page: `/organizer/earnings` → verify summary cards show real revenue data, per-sale table renders, PDF export downloads
