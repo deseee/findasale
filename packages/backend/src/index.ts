@@ -183,7 +183,7 @@ import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transactio
 import './jobs/boostExpiryJob';   // Phase 2b: Expire stale ACTIVE BoostPurchase records hourly
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
-// REMOVED: Auction auto-close — merged into auctionJob.ts which handles the complete payment flow (Stripe, XP, emails, reserve checks)
+import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // ADR-013 Phase 2: Auto-close expired auctions + notify winners
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
@@ -530,7 +530,8 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // Phase 2B: Register cleanup cron for stale DRAFT items
   scheduleCleanupCron();
 
-  // Auction auto-close cron — handled by auctionJob.ts (which registers its own cron with full payment flow)
+  // ADR-013 Phase 2: Auction auto-close cron (background + notifications)
+  scheduleAuctionAutoCloseCron();
 
   // Feature #103: Register photo retention cron
   schedulePhotoRetentionCron();

@@ -9,6 +9,7 @@ interface Item {
   currentBid: number | null;
   auctionStartPrice: number | null;
   bidIncrement: number | null;
+  auctionClosed?: boolean;
 }
 
 interface Props {
@@ -104,10 +105,11 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || item.auctionClosed}
                 className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium disabled:opacity-50"
+                title={item.auctionClosed ? 'Auction has ended' : ''}
               >
-                {submitting ? 'Placing…' : 'Place Bid'}
+                {item.auctionClosed ? 'Auction Closed' : (submitting ? 'Placing…' : 'Place Bid')}
               </button>
             </div>
           </form>
