@@ -644,7 +644,7 @@ export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
     authUrl.searchParams.set('state', stateToken);
     authUrl.searchParams.set('prompt', 'login');
 
-    res.redirect(authUrl.toString());
+    res.json({ redirectUrl: authUrl.toString() });
   } catch (error) {
     console.error('[eBay] Connect error:', error);
     res.status(500).json({ message: 'Failed to initiate eBay OAuth' });
