@@ -308,8 +308,9 @@ export const getSale = async (req: Request, res: Response) => {
           where: PUBLIC_ITEM_FILTER,
           select: {
             id: true, title: true, description: true, price: true,
-            auctionStartPrice: true, currentBid: true, bidIncrement: true,
-            status: true, photoUrls: true, auctionEndTime: true, category: true, condition: true
+            auctionStartPrice: true, auctionReservePrice: true, currentBid: true, bidIncrement: true,
+            auctionEndTime: true, auctionClosed: true, listingType: true,
+            status: true, photoUrls: true, category: true, condition: true
           }
         }
       }
