@@ -3,7 +3,7 @@
  * Runs every 5 minutes to close expired auctions and notify winners
  */
 
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 import { createNotification } from '../services/notificationService';
 
 export function scheduleAuctionAutoCloseCron() {
