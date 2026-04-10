@@ -24,6 +24,21 @@ export interface SalePin {
   customMapPin?: string;
 }
 
+interface TrailStop {
+  id: string;
+  order: number;
+  stopName: string;
+  latitude: number;
+  longitude: number;
+  stopType: string;
+}
+
+interface ActiveTrail {
+  name: string;
+  shareToken: string;
+  stops: TrailStop[];
+}
+
 interface SaleMapProps {
   pins?: SalePin[];
   center?: [number, number];
@@ -39,6 +54,9 @@ interface SaleMapProps {
   onHeatmapCellClick?: (tile: HeatmapTile) => void;
   /** Feature #39: Photo Op Stations */
   photoOpStations?: PhotoOpStation[];
+  /** Feature: Trail Activation Mode — show trail stops on map */
+  activeTrail?: ActiveTrail | null;
+  setActiveTrail?: (trail: ActiveTrail | null) => void;
 }
 
 // Dynamically import the inner map (no SSR) so Leaflet doesn't crash on server

@@ -1,14 +1,31 @@
 // SaleMapInner.tsx — actual Leaflet implementation (browser-only, loaded dynamically)
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet';
 import EntranceMarker from './EntranceMarker'; // Feature 35: Front Door Locator
 import HeatmapOverlay from './HeatmapOverlay'; // Feature #28
 import PhotoOpMarker from './PhotoOpMarker'; // Feature #39: Photo Op Stations
 import Link from 'next/link';
 import { format } from 'date-fns';
+import api from '../lib/api';
+import { useToast } from './ToastContext';
 import type { SalePin } from './SaleMap';
 import type { HeatmapTile } from '../types/heatmap';
 import type { PhotoOpStation } from '../hooks/usePhotoOps';
+
+interface TrailStop {
+  id: string;
+  order: number;
+  stopName: string;
+  latitude: number;
+  longitude: number;
+  stopType: string;
+}
+
+interface ActiveTrail {
+  name: string;
+  shareToken: string;
+  stops: TrailStop[];
+}
 
 // Leaflet icon initialization — only on browser (this module is already guarded by dynamic + ssr:false)
 let L: any;
@@ -96,6 +113,9 @@ interface SaleMapInnerProps {
   onHeatmapCellClick?: (tile: HeatmapTile) => void;
   /** Feature #39: Photo Op Stations */
   photoOpStations?: PhotoOpStation[];
+  /** Feature: Trail Activation Mode — show trail stops on map */
+  activeTrail?: ActiveTrail | null;
+  setActiveTrail?: (trail: ActiveTrail | null) => void;
   // (hasFeaturedBoost is passed through SalePin — no extra prop needed)
 }
 
@@ -113,9 +133,34 @@ const SaleMapInner = ({
   heatmapTiles,
   onHeatmapCellClick,
   photoOpStations = [],
+  activeTrail,
+  setActiveTrail,
 }: SaleMapInnerProps) => {
+  const { showToast } = useToast();
+  const [isLoadingTrail, setIsLoadingTrail] = useState(false);
+
   const formatDate = (d: string) => {
     try { return format(new Date(d), 'MMM d, yyyy'); } catch { return 'TBA'; }
+  };
+
+  const handleViewTrail = async (shareToken: string) => {
+    if (!shareToken || !setActiveTrail) return;
+
+    setIsLoadingTrail(true);
+    try {
+      const response = await api.get(`/api/trails/${shareToken}`);
+      const trail = response.data;
+      setActiveTrail({
+        name: trail.name,
+        shareToken: trail.shareToken,
+        stops: trail.stops,
+      });
+    } catch (error) {
+      console.error('Error fetching trail:', error);
+      showToast('Failed to load trail', 'error');
+    } finally {
+      setIsLoadingTrail(false);
+    }
   };
 
   return (
@@ -261,21 +306,25 @@ const SaleMapInner = ({
                       View Sale →
                     </a>
                     {pin.hasActiveTrail && pin.trailShareToken && (
-                      <a
-                        href={`/trail/${pin.trailShareToken}`}
+                      <button
+                        onClick={() => handleViewTrail(pin.trailShareToken!)}
+                        disabled={isLoadingTrail}
                         style={{
                           display: 'block',
+                          width: '100%',
                           textAlign: 'center',
-                          background: '#16a34a',
+                          background: isLoadingTrail ? '#9ca3af' : '#16a34a',
                           color: '#fff',
                           padding: '4px 12px',
                           borderRadius: '4px',
                           fontSize: '13px',
-                          textDecoration: 'none',
+                          border: 'none',
+                          cursor: isLoadingTrail ? 'not-allowed' : 'pointer',
+                          fontWeight: 500,
                         }}
                       >
-                        View Treasure Trail →
-                      </a>
+                        {isLoadingTrail ? 'Loading...' : 'View Treasure Trail →'}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -283,6 +332,31 @@ const SaleMapInner = ({
             </Marker>
           );
         })}
+
+        {/* Trail stop markers — only show when activeTrail is set */}
+        {activeTrail && activeTrail.stops && activeTrail.stops.map((stop) => (
+          <CircleMarker
+            key={stop.id}
+            center={[stop.latitude, stop.longitude]}
+            radius={12}
+            pathOptions={{
+              fillColor: '#F59E0B',
+              fillOpacity: 0.8,
+              color: '#D97706',
+              weight: 2,
+            }}
+          >
+            <Popup>
+              <div style={{ fontSize: '12px' }}>
+                <strong>{stop.stopName}</strong>
+                <br />
+                <small>Type: {stop.stopType}</small>
+                <br />
+                <small>Stop #{stop.order + 1}</small>
+              </div>
+            </Popup>
+          </CircleMarker>
+        ))}
       </MapContainer>
     </>
   );
