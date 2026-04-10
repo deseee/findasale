@@ -7,6 +7,33 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S431 COMPLETE (2026-04-09):** Treasure Trails map activation mode + 3 trail URL bugs fixed + XP purchase rate bug fixed.
+
+**S431 Fixes:**
+- `map.tsx` — `activeTrail` state + dismissal bar (trail name, "View Details →" link, ✕ close). Passes `activeTrail`/`setActiveTrail` props to SaleMap.
+- `SaleMap.tsx` — `ActiveTrail` interface + optional props passthrough.
+- `SaleMapInner.tsx` — `handleViewTrail(shareToken)`: fetches trail on click, sets `activeTrail`. CircleMarker rendering for stops (amber #F59E0B, radius 12). Fixed double `/api/` prefix bug: `api.get('/trails/${shareToken}')`.
+- `trailController.ts` — `getTrail`: shareToken fallback lookup after ID lookup returns null. Fixes "Trail Not Found" on detail page.
+- `useTrails.ts` — `usePublicTrail`: was calling `/trails/public/${shareToken}` (nonexistent route) → fixed to `/trails/${shareToken}`.
+- `stripeController.ts` — P0 XP bug: `PURCHASE_COMPLETED` was awarding flat 1 XP regardless of amount. Fixed both POS path (`Math.floor(totalAmountCents/100 * XP_AWARDS.PURCHASE)`) and webhook path (`Math.floor(Number(purchase.amount) * XP_AWARDS.PURCHASE)`). Min 1 XP enforced.
+- Test trail + 3 stops inserted into Railway DB directly via psycopg2 for testing.
+
+**S431 Files changed:**
+- `packages/frontend/pages/map.tsx`
+- `packages/frontend/components/SaleMap.tsx`
+- `packages/frontend/components/SaleMapInner.tsx`
+- `packages/frontend/hooks/useTrails.ts`
+- `packages/backend/src/controllers/trailController.ts`
+- `packages/backend/src/controllers/stripeController.ts`
+
+**S431 QA needed:**
+- Trail activation: open map → click sale with trail → "View Treasure Trail →" button → trail stops appear as amber circles
+- Trail dismissal: ✕ button removes stops from map
+- Trail detail page: `/trail/[shareToken]` should now load (useTrails.ts fix deployed)
+- XP: complete a purchase → check `PointsTransaction` for `Math.floor(amount)` XP, not flat 1
+
+---
+
 **S430 COMPLETE (2026-04-09):** Sale page layout cleanup, email spam fixes, iOS geo UX, organizer photo upload, label redesign, print label auth fix, activity dedup, auction Buy Now gate.
 
 **S430 Fixes:**
@@ -282,8 +309,17 @@ npx prisma generate
 
 ## Next Session Priority
 
-**🗺️ START — Treasure Trails on the map:**
-Open `map.tsx` and the `/map` page on finda.sale. Check whether Treasure Trails are visible on the map. Read the TreasureTrail schema in `schema.prisma`. Check the map data endpoint — does it include trails? Are there any seeded trails in the DB to test with? If not, add 1-2 seed trails near the test sale addresses so they appear on the map. Start: `grep -r "TreasureTrail\|trail" packages/backend/src/routes/ packages/database/prisma/schema.prisma`.
+**🟡 S420 Batch 2 — hunt-pass.tsx still needs push:**
+5 of 6 S420 Batch 2 files confirmed on GitHub. Missing: `packages/frontend/pages/shopper/hunt-pass.tsx` — 3 new XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP) not yet pushed. Dispatch to findasale-dev next session to add the rows, then push.
+
+**✅ DONE — Treasure Trails map work (S431):**
+- Trail activation mode: trail stop markers only appear when user explicitly taps "View Treasure Trail →" on a sale popup (not on default map load). `activeTrail` state added to map.tsx.
+- Trail dismissal bar: shows trail name + "View Details →" link + ✕ close button.
+- CircleMarker rendering: amber (#F59E0B), radius 12, only rendered when `activeTrail !== null`.
+- Fixed "Trail Not Found" on detail page: `getTrail` now tries shareToken fallback if ID lookup returns null.
+- Fixed "Failed to load trail" toast: double `/api/` prefix bug in `handleViewTrail` → `api.get('/trails/${shareToken}')`.
+- Fixed trail detail page still showing "Trail Not Found": `usePublicTrail` was calling nonexistent `/trails/public/${shareToken}` → fixed to `/trails/${shareToken}`.
+- Test trail + 3 stops inserted directly into Railway DB via psycopg2 (trail id: `cmnsa0ji...`, shareToken: `cmnsa0ji`).
 
 **✅ DONE — Stripe QR code "AccessDenied":** Resolved (S431, confirmed by Patrick 2026-04-09).
 
@@ -291,14 +327,12 @@ Open `map.tsx` and the `/map` page on finda.sale. Check whether Treasure Trails 
 
 **✅ DONE — S427 migrations:** `prisma migrate deploy` + `prisma generate` run against Railway DB (confirmed by Patrick 2026-04-09).
 
-**🟡 S420 Batch 2 — hunt-pass.tsx still needs push:**
-5 of 6 S420 Batch 2 files confirmed on GitHub. Missing: `packages/frontend/pages/shopper/hunt-pass.tsx` — 3 new XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP) not yet pushed. Dispatch to findasale-dev next session to add the rows, then push.
-
 **⏸️ QA QUEUE — postponed to next week (usage limits):**
 - S430: Yahoo spam test, iOS geolocation, sale page activity dedup, Auction Buy Now, print label, photo upload
 - S427: Full invoice flow, cart-only invoice, QUICK vs TRUST mode expiry
 - S421: Send to Phone end-to-end, pay-request page items/fee display
 - S420: Lucky Roll page, Custom Map Pin endpoint, Showcase Slot unlock, Treasure Trail XP gate, Hunt Pass sink rows
+- S431: Trail detail page loads `/trail/[shareToken]` correctly (Vercel deploy pending); trail stops appear on map after activation
 
 ---
 
