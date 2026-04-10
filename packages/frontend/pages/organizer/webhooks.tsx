@@ -104,15 +104,18 @@ const OrganizerWebhooksPage = () => {
 
         <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
           {/* Intro */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 rounded-xl p-4 text-sm text-blue-800">
-            <p>Send real-time event notifications to Zapier, Make, or any custom URL.
-            Each request is signed with <code className="font-mono bg-blue-100 px-1 rounded">X-FindASale-Signature</code> (HMAC-SHA256).</p>
-            <p className="mt-2">
-              New to webhooks?{' '}
-              <Link href="/guide#zapier-webhooks" className="underline font-medium hover:text-blue-900">
-                Read the Zapier integration guide →
-              </Link>
-            </p>
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
+              <p className="font-medium mb-2">What are webhooks?</p>
+              <p className="mb-2">Webhooks send real-time updates from your FindA.Sale sales to other tools you use — like QuickBooks for accounting, Zapier for automation, or Google Sheets for tracking. When something happens (an item sells, a new hold is placed, a bid comes in), FindA.Sale automatically notifies your connected tools so you stay in sync across systems.</p>
+              <p className="mb-2">Each webhook request is signed with <code className="font-mono bg-blue-100 dark:bg-blue-900 px-1 rounded">X-FindASale-Signature</code> (HMAC-SHA256) so your endpoint can verify it came from FindA.Sale.</p>
+              <p>
+                New to webhooks?{' '}
+                <Link href="/guide#zapier-webhooks" className="underline font-medium hover:text-blue-900 dark:hover:text-blue-100">
+                  Read the Zapier integration guide →
+                </Link>
+              </p>
+            </div>
           </div>
 
           {/* Secret revealed once */}
@@ -178,7 +181,7 @@ const OrganizerWebhooksPage = () => {
           {/* Add webhook form */}
           {showForm ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-4">
-              <h2 className="text-sm font-semibold text-gray-800">New webhook</h2>
+              <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">New webhook</h2>
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-xs text-gray-700 dark:text-gray-300 space-y-1">
                 <p><strong>Testing webhooks?</strong> Use a temporary endpoint like:</p>
                 <ul className="list-disc list-inside space-y-0.5 ml-1">

@@ -101,7 +101,7 @@ export default function EmailDigestPreview() {
         <title>Weekly Email Digest Preview - FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-stone-50 py-8 px-4">
+      <div className="min-h-screen bg-stone-50 dark:bg-gray-900 py-8 px-4">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="mb-8">

@@ -6,7 +6,7 @@
  * Allows manual sync trigger.
  *
  * Route: /organizer/offline
- * Tier: PRO minimum
+ * Tier: All tiers (per TierComparisonTable)
  */
 
 import React, { useEffect } from 'react';
@@ -14,7 +14,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../components/AuthContext';
-import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useToast } from '../../components/ToastContext';
 import {
   useOfflineStatus,
@@ -24,7 +23,6 @@ import {
   type OfflineQueueItem,
 } from '../../hooks/useOfflineMode';
 import Skeleton from '../../components/Skeleton';
-import TierGate from '../../components/TierGate';
 
 const operationTypeLabels: Record<SyncOperationType, string> = {
   CREATE_ITEM: 'Create Item',
@@ -43,7 +41,6 @@ const operationTypeColors: Record<SyncOperationType, string> = {
 const OfflinePage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { canAccess } = useOrganizerTier();
   const { showToast } = useToast();
   const offlineStatus = useOfflineStatus();
   const { data: queueData } = useSyncQueue();
@@ -93,7 +90,6 @@ const OfflinePage = () => {
         <title>Offline Mode - FindA.Sale</title>
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Offline Mode" description="Run your sale without internet. Sync inventory, process sales, and manage holds offline with automatic background sync.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -273,7 +269,6 @@ const OfflinePage = () => {
           </div>
         </div>
       </div>
-      </TierGate>
     </>
   );
 };

@@ -386,24 +386,16 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
             {canAccess('PRO') && (
               <>
-                <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals">
-                  <Scale size={16} className="text-purple-400" />
-                  <span>Appraisals</span>
-                </Link>
-                <Link href="/organizer/command-center" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-sale overview dashboard">
-                  <LayoutDashboard size={16} className="text-purple-400" />
-                  <span>Command Center</span>
-                </Link>
-                <Link href="/organizer/typology" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Item type and category classifier">
-                  <Tag size={16} className="text-purple-400" />
-                  <span>Typology</span>
-                </Link>
                 <Link href="/organizer/fraud-signals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Bid bot and fraud detection">
                   <ShieldAlert size={16} className="text-purple-400" />
                   <span>Fraud Signals</span>
                 </Link>
               </>
             )}
+            <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals — also available as à la carte">
+              <Scale size={16} className="text-purple-400" />
+              <span>Appraisals</span>
+            </Link>
             <Link href="/organizer/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Buyer bounty requests for your sale items">
               <Trophy size={16} className="text-purple-400" />
               <span>Bounties</span>
@@ -415,6 +407,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
             {canAccess('TEAMS') && (
               <>
+                <Link href="/organizer/command-center" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-sale overview dashboard">
+                  <LayoutDashboard size={16} className="text-purple-400" />
+                  <span>Command Center</span>
+                </Link>
                 <SectionHeader icon={Wrench} label="Developer Tools" />
                 <Link href="/organizer/webhooks" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send real-time sale events to your own systems">
                   <Webhook size={16} className="text-gray-500" />
@@ -515,50 +511,58 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               </>
             )}
 
-            <SectionHeader icon={Compass} label="Explore & Connect" color="indigo" />
+            <SectionHeader icon={Compass} label="Explore" color="indigo" />
             <Link href="/shopper/explorer-passport" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your collector journey, badges, and discovery history">
               <Award size={16} className="text-indigo-500" />
               <span>Collector Passport</span>
-            </Link>
-            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
-              <Ticket size={16} className="text-indigo-500" />
-              <span>Hunt Pass</span>
-            </Link>
-            <Link href="/shopper/loot-legend" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items">
-              <Star size={16} className="text-amber-400" />
-              <span>Loot Legend</span>
-            </Link>
-            <Link href="/shopper/rare-finds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Dedicated rare items page for Hunt Pass subscribers">
-              <Sparkles size={16} className="text-indigo-400" />
-              <span>Rare Finds</span>
-            </Link>
-            <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
-              <Trophy size={16} className="text-indigo-500" />
-              <span>League</span>
             </Link>
             <Link href="/shopper/haul-posts" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Share your latest hauls with the community">
               <Camera size={16} className="text-indigo-500" />
               <span>Haul Posts</span>
             </Link>
-            <Link href="/shopper/loyalty" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Star size={16} className="text-indigo-500" />
-              <span>Loyalty Passport</span>
-            </Link>
             <Link href="/shopper/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Target size={16} className="text-indigo-500" />
               <span>Bounties</span>
+            </Link>
+            <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
+              <Trophy size={16} className="text-indigo-500" />
+              <span>League</span>
+            </Link>
+
+            <SectionHeader icon={Ticket} label="Hunt Pass" color="amber" />
+            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
+              <Ticket size={16} className="text-amber-500" />
+              <span>Hunt Pass</span>
+            </Link>
+            <Link href="/shopper/rare-finds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Dedicated rare items page for Hunt Pass subscribers">
+              <Sparkles size={16} className="text-amber-400" />
+              <span>Rare Finds</span>
+            </Link>
+            <Link href="/shopper/loot-legend" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items">
+              <Star size={16} className="text-amber-400" />
+              <span>Loot Legend</span>
+            </Link>
+            <Link href="/shopper/lucky-roll" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Lucky Roll — enhanced by Hunt Pass">
+              <Zap size={16} className="text-amber-500" />
+              <span>Lucky Roll</span>
+            </Link>
+
+            <SectionHeader icon={Share2} label="Connect" color="indigo" />
+            <Link href="/shopper/loyalty" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Star size={16} className="text-indigo-500" />
+              <span>Loyalty Passport</span>
             </Link>
             <Link href="/shopper/reputation" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Shield size={16} className="text-indigo-500" />
               <span>Reputation</span>
             </Link>
-            <Link href="/shopper/trades" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
-              <ArrowLeftRight size={16} className="text-indigo-400" />
-              <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
-            </Link>
             <Link href="/referral-dashboard" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Gift size={16} className="text-indigo-500" />
               <span>Refer a Friend</span>
+            </Link>
+            <Link href="/shopper/trades" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
+              <ArrowLeftRight size={16} className="text-indigo-400" />
+              <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
             </Link>
           </>
         )}
@@ -948,7 +952,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/plan" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Calendar size={14} className="inline mr-2 text-amber-500" /> Plan a Sale
                     </Link>
-                    <Link href="/organizer/add-items" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Add items to any sale or your inventory">
+                    <Link href="/organizer/sales" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Select a sale then add items">
                       <PlusCircle size={14} className="inline mr-2 text-amber-500" /> Add Items
                     </Link>
                     <Link href="/organizer/holds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
@@ -1046,9 +1050,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileProToolsOpen && (
                   <>
-                    <Link href="/organizer/command-center" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <LayoutDashboard size={14} className="inline mr-2 text-purple-400" /> Command Center
-                    </Link>
                     <Link href="/organizer/brand-kit" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Palette size={14} className="inline mr-2 text-purple-400" /> Brand Kit
                     </Link>
@@ -1097,6 +1098,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileTeamsOpen && (
                       <>
+                        <Link href="/organizer/command-center" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <LayoutDashboard size={14} className="inline mr-2 text-purple-400" /> Command Center
+                        </Link>
                         <Link href="/organizer/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Calendar size={14} className="inline mr-2 text-amber-500" /> Calendar
                         </Link>
@@ -1176,14 +1180,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       </>
                     )}
 
-                    {/* Explore & Connect Section — Collapsible */}
+                    {/* Explore Section — Collapsible */}
                     <button
                       onClick={() => setMobileShopperExploreOpen(!mobileShopperExploreOpen)}
                       className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <Compass size={14} />
-                        <span>Explore & Connect</span>
+                        <span>Explore</span>
                       </div>
                       <ChevronRight
                         size={16}
@@ -1216,26 +1220,73 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Award size={14} className="inline mr-2 text-indigo-500" /> Collector Passport
                         </Link>
-                        <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Ticket size={14} className="inline mr-2 text-indigo-500" /> Hunt Pass
+                        <Link href="/shopper/haul-posts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Camera size={14} className="inline mr-2 text-indigo-500" /> Haul Posts
+                        </Link>
+                        <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Target size={14} className="inline mr-2 text-indigo-500" /> Bounties
                         </Link>
                         <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Trophy size={14} className="inline mr-2 text-indigo-500" /> League
                         </Link>
+                      </>
+                    )}
+
+                    {/* Hunt Pass Section — Collapsible */}
+                    <button
+                      onClick={() => setMobileDevToolsOpen(!mobileDevToolsOpen)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Ticket size={14} />
+                        <span>Hunt Pass</span>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className={`transition-transform duration-200 ${mobileDevToolsOpen ? 'rotate-90' : ''}`}
+                      />
+                    </button>
+                    {mobileDevToolsOpen && (
+                      <>
+                        <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
+                        </Link>
+                        <Link href="/shopper/rare-finds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Sparkles size={14} className="inline mr-2 text-amber-400" /> Rare Finds
+                        </Link>
+                        <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
+                        </Link>
+                        <Link href="/shopper/lucky-roll" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Zap size={14} className="inline mr-2 text-amber-500" /> Lucky Roll
+                        </Link>
+                      </>
+                    )}
+
+                    {/* Connect Section — Collapsible */}
+                    <button
+                      onClick={() => setMobileInSaleToolsOpen(!mobileInSaleToolsOpen)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Share2 size={14} />
+                        <span>Connect</span>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className={`transition-transform duration-200 ${mobileInSaleToolsOpen ? 'rotate-90' : ''}`}
+                      />
+                    </button>
+                    {mobileInSaleToolsOpen && (
+                      <>
                         <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Star size={14} className="inline mr-2 text-indigo-500" /> Loyalty Passport
                         </Link>
-                        <Link href="/shopper/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Trophy size={14} className="inline mr-2 text-indigo-500" /> Explorer Leaderboard
-                        </Link>
-                        <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Award size={14} className="inline mr-2 text-indigo-500" /> Achievements
-                        </Link>
-                        <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Target size={14} className="inline mr-2 text-indigo-500" /> Bounties <span className="text-xs text-gray-400">(Soon)</span>
-                        </Link>
                         <Link href="/shopper/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation <span className="text-xs text-gray-400">(Soon)</span>
+                          <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation
+                        </Link>
+                        <Link href="/referral-dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Gift size={14} className="inline mr-2 text-indigo-500" /> Refer a Friend
                         </Link>
                         <Link href="/shopper/trades" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                           <ArrowLeftRight size={14} className="inline mr-2 text-indigo-400" /> Trades <span className="text-xs text-gray-400">(Soon)</span>
@@ -1303,14 +1354,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* Explore & Connect Section — Collapsible */}
+                {/* Explore Section — Collapsible */}
                 <button
                   onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
                   <div className="flex items-center gap-2">
                     <Compass size={14} />
-                    <span>Explore & Connect</span>
+                    <span>Explore</span>
                   </div>
                   <ChevronRight
                     size={16}
@@ -1340,17 +1391,73 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Award size={14} className="inline mr-2 text-indigo-500" /> Collector Passport
                     </Link>
-                    <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Ticket size={14} className="inline mr-2 text-indigo-500" /> Hunt Pass
+                    <Link href="/shopper/haul-posts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Camera size={14} className="inline mr-2 text-indigo-500" /> Haul Posts
+                    </Link>
+                    <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Target size={14} className="inline mr-2 text-indigo-500" /> Bounties
                     </Link>
                     <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Trophy size={14} className="inline mr-2 text-indigo-500" /> League
                     </Link>
-                    <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Target size={14} className="inline mr-2 text-indigo-500" /> Bounties <span className="text-xs text-gray-400">(Soon)</span>
+                  </>
+                )}
+
+                {/* Hunt Pass Section — Collapsible */}
+                <button
+                  onClick={() => setMobileCartOpen(!mobileCartOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Ticket size={14} />
+                    <span>Hunt Pass</span>
+                  </div>
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileCartOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileCartOpen && (
+                  <>
+                    <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
+                    </Link>
+                    <Link href="/shopper/rare-finds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Sparkles size={14} className="inline mr-2 text-amber-400" /> Rare Finds
+                    </Link>
+                    <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
+                    </Link>
+                    <Link href="/shopper/lucky-roll" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Zap size={14} className="inline mr-2 text-amber-500" /> Lucky Roll
+                    </Link>
+                  </>
+                )}
+
+                {/* Connect Section — Collapsible */}
+                <button
+                  onClick={() => setMobileShopperCollectionOpen(!mobileShopperCollectionOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Share2 size={14} />
+                    <span>Connect</span>
+                  </div>
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileShopperCollectionOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileShopperCollectionOpen && (
+                  <>
+                    <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Star size={14} className="inline mr-2 text-indigo-500" /> Loyalty Passport
                     </Link>
                     <Link href="/shopper/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation <span className="text-xs text-gray-400">(Soon)</span>
+                      <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation
+                    </Link>
+                    <Link href="/referral-dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Gift size={14} className="inline mr-2 text-indigo-500" /> Refer a Friend
                     </Link>
                     <Link href="/shopper/trades" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                       <ArrowLeftRight size={14} className="inline mr-2 text-indigo-400" /> Trades <span className="text-xs text-gray-400">(Soon)</span>
