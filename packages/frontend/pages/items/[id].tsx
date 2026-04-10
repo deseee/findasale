@@ -107,8 +107,10 @@ interface Item {
 interface BidHistory {
   id: string;
   bidAmount: number;
+  bidderLabel?: string;
+  status?: string;
   timestamp: string;
-  bidder: {
+  bidder?: {
     id: string;
     name: string;
   };
