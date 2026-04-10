@@ -285,32 +285,20 @@ npx prisma generate
 **🗺️ START — Treasure Trails on the map:**
 Open `map.tsx` and the `/map` page on finda.sale. Check whether Treasure Trails are visible on the map. Read the TreasureTrail schema in `schema.prisma`. Check the map data endpoint — does it include trails? Are there any seeded trails in the DB to test with? If not, add 1-2 seed trails near the test sale addresses so they appear on the map. Start: `grep -r "TreasureTrail\|trail" packages/backend/src/routes/ packages/database/prisma/schema.prisma`.
 
-**🔴 P0 — Stripe QR code "AccessDenied" (Patrick must retest after S430 push):**
-S426 switched to destination charges, S430 removed strict items check. Retest QR. If AccessDenied persists: switch `createPaymentLink` from Stripe Payment Links to Stripe Checkout Sessions.
+**✅ DONE — Stripe QR code "AccessDenied":** Resolved (S431, confirmed by Patrick 2026-04-09).
 
-**🔴 P0 — Complete Stripe Connect onboarding (Patrick action):**
-Settings → Payments → Setup Stripe Connect. Fake `acct_test_user3` was cleared in S429 — real Stripe Express onboarding link should now appear.
+**✅ DONE — Stripe Connect onboarding:** Complete (confirmed by Patrick 2026-04-09).
 
-**🟡 P1 — S427 migrations still needed (if not run):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+**✅ DONE — S427 migrations:** `prisma migrate deploy` + `prisma generate` run against Railway DB (confirmed by Patrick 2026-04-09).
 
-**🟡 S430 QA (after push):**
-- Email: Yahoo spam test on payment link email
-- iOS geolocation: map page + homepage auto-locate
-- Sale page: activity dedup (only HypeMeter pill + LiveFeedTicker)
-- Auction Buy Now: confirm hidden for auction items
-- Print label: no blank second page, content centred
-- Photo upload: organizer adds photo from sale page
+**🟡 S420 Batch 2 — hunt-pass.tsx still needs push:**
+5 of 6 S420 Batch 2 files confirmed on GitHub. Missing: `packages/frontend/pages/shopper/hunt-pass.tsx` — 3 new XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP) not yet pushed. Dispatch to findasale-dev next session to add the rows, then push.
 
-**🟡 S427 QA (pending push + migration):**
-- Full invoice flow: load hold + add misc items → Send Invoice → shopper pays via link
-- Cart-only invoice: add misc items → Send Invoice without loading any hold
-- QUICK vs TRUST mode expiry
+**⏸️ QA QUEUE — postponed to next week (usage limits):**
+- S430: Yahoo spam test, iOS geolocation, sale page activity dedup, Auction Buy Now, print label, photo upload
+- S427: Full invoice flow, cart-only invoice, QUICK vs TRUST mode expiry
+- S421: Send to Phone end-to-end, pay-request page items/fee display
+- S420: Lucky Roll page, Custom Map Pin endpoint, Showcase Slot unlock, Treasure Trail XP gate, Hunt Pass sink rows
 
 ---
 
