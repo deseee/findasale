@@ -148,7 +148,7 @@ const SaleMapInner = ({
 
     setIsLoadingTrail(true);
     try {
-      const response = await api.get(`/api/trails/${shareToken}`);
+      const response = await api.get(`/trails/${shareToken}`);
       const trail = response.data;
       setActiveTrail({
         name: trail.name,
