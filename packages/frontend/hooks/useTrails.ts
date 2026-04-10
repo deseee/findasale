@@ -105,6 +105,7 @@ export const useDeleteTrail = () => {
 
 /**
  * Get public trail by share token
+ * Uses /:shareToken — getTrail has fallback to shareToken lookup if ID not found
  */
 export const usePublicTrail = (shareToken: string | null) => {
   return useQuery({
