@@ -8,10 +8,13 @@ import { getEbayCategoryId } from '../utils/ebayCategoryMap';
 /**
  * Feature #229: AI Price Comps Tool
  * Feature #244 Phase 1: eBay CSV Export
- * Feature #244 Phase 2: eBay Category Hierarchy Picker
+ * Feature #244 Phase 2: eBay OAuth + Inventory API Push
  *
- * eBay API integration for price comparison and CSV export.
+ * eBay API integration for price comparison, CSV export, OAuth, and direct inventory push.
  */
+
+// EPN Campaign ID for affiliate tracking
+const EBAY_EPN_CAMPID = '5339148447';
 
 // Token cache for eBay OAuth (simple in-memory, will be replaced with Redis in production)
 interface CachedToken {
@@ -502,6 +505,778 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to generate CSV export' });
   }
 };
+
+/**
+ * Feature #244 Phase 2: eBay OAuth + Inventory API
+ */
+
+/**
+ * Refresh eBay access token if expired
+ * Called internally before every eBay API call
+ */
+async function refreshEbayAccessToken(organizerId: string): Promise<string | null> {
+  try {
+    const connection = await prisma.ebayConnection.findUnique({
+      where: { organizerId },
+    });
+
+    if (!connection) {
+      console.warn(`[eBay] No connection found for organizer ${organizerId}`);
+      return null;
+    }
+
+    // Check if token is still valid (more than 5 minutes remaining)
+    const now = new Date();
+    const expiresIn = (connection.tokenExpiresAt.getTime() - now.getTime()) / 1000;
+
+    if (expiresIn > 300) {
+      // Token still valid for at least 5 minutes
+      return connection.accessToken;
+    }
+
+    // Token expired or expiring soon — refresh it
+    const clientId = process.env.EBAY_CLIENT_ID;
+    const clientSecret = process.env.EBAY_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      console.error('[eBay] EBAY_CLIENT_ID or EBAY_CLIENT_SECRET not configured');
+      return null;
+    }
+
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: connection.refreshToken,
+    });
+
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const response = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const errorMsg = `Token refresh failed: ${response.status}`;
+      console.error(`[eBay] ${errorMsg}`);
+      await prisma.ebayConnection.update({
+        where: { organizerId },
+        data: {
+          lastErrorAt: new Date(),
+          lastErrorMessage: errorMsg,
+        },
+      });
+      return null;
+    }
+
+    const data = (await response.json()) as any;
+    const newAccessToken = data.access_token;
+    const newRefreshToken = data.refresh_token || connection.refreshToken; // Some flows don't return refresh token
+    const newExpiresIn = data.expires_in || 7200;
+    const newTokenExpiresAt = new Date(Date.now() + newExpiresIn * 1000);
+
+    // Update connection with new tokens
+    await prisma.ebayConnection.update({
+      where: { organizerId },
+      data: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        tokenExpiresAt: newTokenExpiresAt,
+        lastRefreshedAt: new Date(),
+        lastErrorAt: null,
+        lastErrorMessage: null,
+      },
+    });
+
+    return newAccessToken;
+  } catch (error) {
+    console.error('[eBay] Token refresh error:', error);
+    return null;
+  }
+}
+
+/**
+ * GET /api/ebay/connect
+ * Redirect organizer to eBay OAuth authorization URL
+ */
+export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Get organizer
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // Generate CSRF token (state parameter)
+    const stateToken = crypto.randomBytes(32).toString('hex');
+
+    // In a real app, store state token in Redis or DB with expiry
+    // For now, we'll rely on the OAuth endpoint validation
+    // TODO: Add state token validation on callback
+
+    const clientId = process.env.EBAY_CLIENT_ID;
+    const redirectUri = process.env.EBAY_OAUTH_REDIRECT_URI;
+
+    if (!clientId || !redirectUri) {
+      return res.status(500).json({
+        message: 'eBay OAuth not configured (missing EBAY_CLIENT_ID or EBAY_OAUTH_REDIRECT_URI)',
+      });
+    }
+
+    const authUrl = new URL('https://auth.ebay.com/oauth2/authorize');
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', 'https://api.ebay.com/oauth/api_scope/sell.inventory');
+    authUrl.searchParams.set('state', stateToken);
+    authUrl.searchParams.set('prompt', 'login');
+
+    res.redirect(authUrl.toString());
+  } catch (error) {
+    console.error('[eBay] Connect error:', error);
+    res.status(500).json({ message: 'Failed to initiate eBay OAuth' });
+  }
+};
+
+/**
+ * GET /api/ebay/callback
+ * Exchange authorization code for tokens; store in EbayConnection
+ */
+export const ebayOAuthCallback = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { code, state } = req.query as { code?: string; state?: string };
+
+    if (!code) {
+      return res.status(400).json({ message: 'Authorization code missing' });
+    }
+
+    // Get organizer
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const clientId = process.env.EBAY_CLIENT_ID;
+    const clientSecret = process.env.EBAY_CLIENT_SECRET;
+    const redirectUri = process.env.EBAY_OAUTH_REDIRECT_URI;
+
+    if (!clientId || !clientSecret || !redirectUri) {
+      return res.status(500).json({
+        message: 'eBay OAuth not configured',
+      });
+    }
+
+    // Exchange code for tokens
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+    });
+
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const tokenResponse = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.text();
+      console.error(`[eBay] Token exchange failed: ${tokenResponse.status} ${errorData}`);
+      return res.status(400).json({ message: 'Failed to exchange authorization code' });
+    }
+
+    const tokenData = (await tokenResponse.json()) as any;
+    const accessToken = tokenData.access_token;
+    const refreshToken = tokenData.refresh_token;
+    const expiresIn = tokenData.expires_in || 7200;
+    const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    // Decode JWT to get eBay user ID (optional, but recommended)
+    // For now, extract from token response if present
+    let ebayUserId = 'unknown';
+    try {
+      // Basic JWT decode (without verification) — in production, verify signature
+      const parts = accessToken.split('.');
+      if (parts.length === 3) {
+        const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+        ebayUserId = decoded.iss || decoded.user_id || 'unknown';
+      }
+    } catch (e) {
+      console.warn('[eBay] Could not decode eBay user ID from JWT', e);
+    }
+
+    // Upsert EbayConnection
+    const connection = await prisma.ebayConnection.upsert({
+      where: { organizerId: organizer.id },
+      create: {
+        organizerId: organizer.id,
+        accessToken,
+        refreshToken,
+        tokenExpiresAt,
+        ebayUserId,
+        connectedAt: new Date(),
+        lastRefreshedAt: new Date(),
+      },
+      update: {
+        accessToken,
+        refreshToken,
+        tokenExpiresAt,
+        ebayUserId,
+        lastRefreshedAt: new Date(),
+        lastErrorAt: null,
+        lastErrorMessage: null,
+      },
+    });
+
+    res.json({
+      success: true,
+      ebayUserId: connection.ebayUserId,
+      connectedAt: connection.connectedAt,
+      redirectTo: '/organizer/settings#ebay',
+    });
+  } catch (error) {
+    console.error('[eBay] OAuth callback error:', error);
+    res.status(500).json({ message: 'Failed to process OAuth callback' });
+  }
+};
+
+/**
+ * GET /api/ebay/connection
+ * Return connection status for the organizer
+ */
+export const checkEbayConnection = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+      include: { ebayConnection: true },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const connection = organizer.ebayConnection;
+
+    if (!connection) {
+      return res.json({
+        connected: false,
+        ebayUserId: null,
+        connectedAt: null,
+        error: null,
+      });
+    }
+
+    res.json({
+      connected: true,
+      ebayUserId: connection.ebayUserId,
+      connectedAt: connection.connectedAt,
+      lastRefreshedAt: connection.lastRefreshedAt,
+      error: connection.lastErrorMessage ? 'TOKEN_REFRESH_FAILED' : null,
+      errorMessage: connection.lastErrorMessage,
+    });
+  } catch (error) {
+    console.error('[eBay] Connection status error:', error);
+    res.status(500).json({ message: 'Failed to check connection status' });
+  }
+};
+
+/**
+ * DELETE /api/ebay/connection
+ * Revoke and delete eBay connection
+ */
+export const disconnectEbay = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // Delete connection (cascade will clean up any related data)
+    await prisma.ebayConnection.deleteMany({
+      where: { organizerId: organizer.id },
+    });
+
+    res.json({
+      success: true,
+      message: 'eBay account disconnected',
+    });
+  } catch (error) {
+    console.error('[eBay] Disconnect error:', error);
+    res.status(500).json({ message: 'Failed to disconnect eBay account' });
+  }
+};
+
+/**
+ * GET /api/organizer/items/:itemId/ebay-preview
+ * Return pre-filled eBay listing data for review modal
+ */
+export const getEbayPreview = async (req: AuthRequest, res: Response) => {
+  try {
+    const { itemId } = req.params;
+    const { photoMode } = req.query as { photoMode?: string };
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Fetch item with sale info
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        conditionGrade: true,
+        category: true,
+        photoUrls: true,
+        aiSuggestedPrice: true,
+        estimatedValue: true,
+        price: true,
+        tags: true,
+        ebayListingId: true,
+        sale: {
+          select: {
+            organizerId: true,
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Verify organizer owns this item
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer || item.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Not authorized to preview this item' });
+    }
+
+    // Build preview payload
+    const sku = `FAS-${item.id}`;
+    const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
+    const categoryId = getEbayCategoryId(item.category);
+
+    // Determine price
+    let price = 0.99;
+    if (item.aiSuggestedPrice) {
+      price = Number(item.aiSuggestedPrice);
+    } else if (item.estimatedValue) {
+      price = Number(item.estimatedValue);
+    } else if (item.price) {
+      price = item.price;
+    }
+
+    // Apply watermark/clean to photos
+    const photos = item.photoUrls.map(url => {
+      if (photoMode === 'clean') {
+        return url; // Return clean URL
+      }
+      return getWatermarkedUrl(url); // Return watermarked URL
+    });
+
+    // Build aspects from tags
+    const aspects: Record<string, string> = {};
+    item.tags.forEach(tag => {
+      const [key, value] = tag.split(':');
+      if (key && value) {
+        aspects[key] = value;
+      }
+    });
+
+    res.json({
+      itemId: item.id,
+      sku,
+      title: item.title.substring(0, 80),
+      description: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 4000),
+      price,
+      conditionId,
+      conditionLabel: getConditionLabel(conditionId),
+      categoryId,
+      categoryLabel: getCategoryLabel(categoryId),
+      photos,
+      aspects,
+      ebayUrl: item.ebayListingId ? `https://www.ebay.com/itm/${item.ebayListingId}` : null,
+      alreadyListed: !!item.ebayListingId,
+    });
+  } catch (error) {
+    console.error('[eBay] Preview error:', error);
+    res.status(500).json({ message: 'Failed to generate eBay preview' });
+  }
+};
+
+/**
+ * POST /api/organizer/sales/:saleId/ebay-push
+ * Push selected items to eBay
+ */
+export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
+  try {
+    const { saleId } = req.params;
+    const { itemIds, photoMode } = req.body as { itemIds: string[]; photoMode?: string };
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ message: 'itemIds required' });
+    }
+
+    // Get organizer and verify tier
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+      include: { ebayConnection: true },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // Check tier gate
+    if (organizer.subscriptionTier !== 'PRO' && organizer.subscriptionTier !== 'TEAMS') {
+      return res.status(403).json({
+        message: 'eBay direct push requires PRO or TEAMS tier',
+      });
+    }
+
+    // Verify eBay connection exists
+    if (!organizer.ebayConnection) {
+      return res.status(400).json({
+        message: 'eBay account not connected',
+      });
+    }
+
+    // Refresh token if needed
+    const accessToken = await refreshEbayAccessToken(organizer.id);
+    if (!accessToken) {
+      return res.status(500).json({
+        message: 'Failed to refresh eBay access token',
+      });
+    }
+
+    // Fetch items
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: {
+        id: true,
+        organizerId: true,
+        items: {
+          where: {
+            id: { in: itemIds },
+            status: 'AVAILABLE',
+          },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            price: true,
+            category: true,
+            conditionGrade: true,
+            photoUrls: true,
+            estimatedValue: true,
+            aiSuggestedPrice: true,
+            tags: true,
+          },
+        },
+      },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Not authorized to access this sale' });
+    }
+
+    if (sale.items.length === 0) {
+      return res.status(400).json({ message: 'No available items to push' });
+    }
+
+    // Push each item to eBay
+    const results: any[] = [];
+
+    for (const item of sale.items) {
+      try {
+        const sku = `FAS-${item.id}`;
+        const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
+        const categoryId = getEbayCategoryId(item.category);
+
+        // Determine price
+        let price = 0.99;
+        if (item.aiSuggestedPrice) {
+          price = Number(item.aiSuggestedPrice);
+        } else if (item.estimatedValue) {
+          price = Number(item.estimatedValue);
+        } else if (item.price) {
+          price = item.price;
+        }
+
+        // Prepare photo URLs
+        const photos = item.photoUrls.map(url => {
+          if (photoMode === 'clean') {
+            return url;
+          }
+          return getWatermarkedUrl(url);
+        });
+
+        // Step 1: Create or replace inventory item
+        const inventoryUrl = `https://api.ebay.com/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
+        const inventoryPayload = {
+          product: {
+            title: item.title.substring(0, 80),
+            description: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 4000),
+            imageUrls: photos,
+            aspects: buildAspects(item.tags),
+          },
+          condition: mapConditionIdToEbayCondition(conditionId),
+          availability: {
+            shipToLocationAvailability: [
+              {
+                quantity: 1,
+                locationKey: 'DEFAULT',
+              },
+            ],
+          },
+        };
+
+        const inventoryResponse = await fetch(inventoryUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(inventoryPayload),
+        });
+
+        if (!inventoryResponse.ok && inventoryResponse.status !== 204) {
+          const errorData = await inventoryResponse.text();
+          console.error(`[eBay] Inventory creation failed: ${inventoryResponse.status} ${errorData}`);
+          results.push({
+            itemId: item.id,
+            sku,
+            ebayListingId: null,
+            status: 'error',
+            error: 'INVENTORY_CREATION_FAILED',
+            message: `Failed to create inventory item: ${inventoryResponse.status}`,
+          });
+          continue;
+        }
+
+        // Step 2: Create offer
+        const offerUrl = 'https://api.ebay.com/sell/inventory/v1/offer';
+        const offerPayload = {
+          sku,
+          listingDescription: item.description || '',
+          pricingSummary: {
+            price: {
+              currency: 'USD',
+              value: price.toFixed(2),
+            },
+          },
+          categoryId,
+          condition: mapConditionIdToEbayCondition(conditionId),
+          listingDuration: 'GTC',
+          listingPolicies: {
+            // Note: These policy IDs would need to be fetched from organizer's account
+            // For MVP, using placeholder — should be configurable
+            paymentPolicyId: 'EBAY_DEFAULT',
+            fulfillmentPolicyId: 'EBAY_DEFAULT',
+            returnPolicyId: 'EBAY_DEFAULT',
+          },
+          referralUrl: `https://www.ebay.com/?campid=${EBAY_EPN_CAMPID}`,
+        };
+
+        const offerResponse = await fetch(offerUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(offerPayload),
+        });
+
+        if (!offerResponse.ok) {
+          const errorData = await offerResponse.text();
+          console.error(`[eBay] Offer creation failed: ${offerResponse.status} ${errorData}`);
+          results.push({
+            itemId: item.id,
+            sku,
+            ebayListingId: null,
+            status: 'error',
+            error: 'OFFER_CREATION_FAILED',
+            message: `Failed to create offer: ${offerResponse.status}`,
+          });
+          continue;
+        }
+
+        const offerData = (await offerResponse.json()) as any;
+        const offerId = offerData.offerId;
+
+        // Step 3: Publish offer
+        const publishUrl = `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`;
+        const publishResponse = await fetch(publishUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: '{}',
+        });
+
+        if (!publishResponse.ok) {
+          const errorData = await publishResponse.text();
+          console.error(`[eBay] Publish failed: ${publishResponse.status} ${errorData}`);
+          results.push({
+            itemId: item.id,
+            sku,
+            ebayListingId: null,
+            status: 'error',
+            error: 'PUBLISH_FAILED',
+            message: `Failed to publish offer: ${publishResponse.status}`,
+          });
+          continue;
+        }
+
+        const publishData = (await publishResponse.json()) as any;
+        const ebayListingId = publishData.listingId;
+
+        // Update item with eBay listing ID
+        await prisma.item.update({
+          where: { id: item.id },
+          data: {
+            ebayListingId,
+            listedOnEbayAt: new Date(),
+          },
+        });
+
+        results.push({
+          itemId: item.id,
+          sku,
+          ebayListingId,
+          status: 'success',
+          ebayUrl: `https://www.ebay.com/itm/${ebayListingId}`,
+          publishedAt: new Date(),
+        });
+      } catch (itemError) {
+        console.error(`[eBay] Error processing item ${item.id}:`, itemError);
+        results.push({
+          itemId: item.id,
+          sku: `FAS-${item.id}`,
+          ebayListingId: null,
+          status: 'error',
+          error: 'INTERNAL_ERROR',
+          message: 'Internal server error processing item',
+        });
+      }
+    }
+
+    // Calculate summary
+    const summary = {
+      total: results.length,
+      success: results.filter((r: any) => r.status === 'success').length,
+      failed: results.filter((r: any) => r.status === 'error').length,
+    };
+
+    res.json({ results, summary });
+  } catch (error) {
+    console.error('[eBay] Push error:', error);
+    res.status(500).json({ message: 'Failed to push items to eBay' });
+  }
+};
+
+/**
+ * Helper: Build aspects object from tags
+ */
+function buildAspects(tags: string[]): Record<string, string> {
+  const aspects: Record<string, string> = {};
+  tags.forEach(tag => {
+    const [key, value] = tag.split(':');
+    if (key && value) {
+      aspects[key] = value;
+    }
+  });
+  return aspects;
+}
+
+/**
+ * Helper: Map condition ID to eBay condition string
+ */
+function mapConditionIdToEbayCondition(conditionId: string): string {
+  const conditionMap: Record<string, string> = {
+    '1000': 'NEW',
+    '3000': 'LIKE_NEW',
+    '4000': 'VERY_GOOD',
+    '5000': 'GOOD',
+    '6000': 'ACCEPTABLE',
+    '7000': 'FOR_PARTS_OR_NOT_WORKING',
+  };
+  return conditionMap[conditionId] || 'USED';
+}
+
+/**
+ * Helper: Get condition label from ID
+ */
+function getConditionLabel(conditionId: string): string {
+  const labelMap: Record<string, string> = {
+    '1000': 'New',
+    '3000': 'Like New',
+    '4000': 'Very Good',
+    '5000': 'Good',
+    '6000': 'Acceptable',
+    '7000': 'For Parts or Not Working',
+  };
+  return labelMap[conditionId] || 'Unknown';
+}
+
+/**
+ * Helper: Get category label from ID
+ */
+function getCategoryLabel(categoryId: string): string {
+  // This would normally look up from eBay's category taxonomy
+  // For now, return a generic label
+  return `eBay Category ${categoryId}`;
+}
 
 /**
  * GET /api/ebay/account-deletion
