@@ -111,6 +111,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [mobileDevToolsOpen, setMobileDevToolsOpen] = useState(false);
   const [mobileInSaleToolsOpen, setMobileInSaleToolsOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [mobileDualRoleHuntPassOpen, setMobileDualRoleHuntPassOpen] = useState(false);
+  const [mobileHuntPassOpen, setMobileHuntPassOpen] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [showIOSTooltip, setShowIOSTooltip] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
@@ -528,6 +530,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Trophy size={16} className="text-indigo-500" />
               <span>League</span>
             </Link>
+            <Link href="/shopper/lucky-roll" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP gacha — spend 100 XP for a roll">
+              <Zap size={16} className="text-indigo-500" />
+              <span>Lucky Roll</span>
+            </Link>
 
             <SectionHeader icon={Ticket} label="Hunt Pass" color="amber" />
             <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
@@ -541,10 +547,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/shopper/loot-legend" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items">
               <Star size={16} className="text-amber-400" />
               <span>Loot Legend</span>
-            </Link>
-            <Link href="/shopper/lucky-roll" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Lucky Roll — enhanced by Hunt Pass">
-              <Zap size={16} className="text-amber-500" />
-              <span>Lucky Roll</span>
             </Link>
 
             <SectionHeader icon={Share2} label="Connect" color="indigo" />
@@ -1226,12 +1228,15 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Trophy size={14} className="inline mr-2 text-indigo-500" /> League
                         </Link>
+                        <Link href="/shopper/lucky-roll" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Zap size={14} className="inline mr-2 text-indigo-500" /> Lucky Roll
+                        </Link>
                       </>
                     )}
 
                     {/* Hunt Pass Section — Collapsible */}
                     <button
-                      onClick={() => setMobileDevToolsOpen(!mobileDevToolsOpen)}
+                      onClick={() => setMobileDualRoleHuntPassOpen(!mobileDualRoleHuntPassOpen)}
                       className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     >
                       <div className="flex items-center gap-2">
@@ -1240,10 +1245,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       </div>
                       <ChevronRight
                         size={16}
-                        className={`transition-transform duration-200 ${mobileDevToolsOpen ? 'rotate-90' : ''}`}
+                        className={`transition-transform duration-200 ${mobileDualRoleHuntPassOpen ? 'rotate-90' : ''}`}
                       />
                     </button>
-                    {mobileDevToolsOpen && (
+                    {mobileDualRoleHuntPassOpen && (
                       <>
                         <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
@@ -1253,9 +1258,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         </Link>
                         <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
-                        </Link>
-                        <Link href="/shopper/lucky-roll" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Zap size={14} className="inline mr-2 text-amber-500" /> Lucky Roll
                         </Link>
                       </>
                     )}
@@ -1402,7 +1404,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
                 {/* Hunt Pass Section — Collapsible */}
                 <button
-                  onClick={() => setMobileCartOpen(!mobileCartOpen)}
+                  onClick={() => setMobileHuntPassOpen(!mobileHuntPassOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 >
                   <div className="flex items-center gap-2">
@@ -1411,10 +1413,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </div>
                   <ChevronRight
                     size={16}
-                    className={`transition-transform duration-200 ${mobileCartOpen ? 'rotate-90' : ''}`}
+                    className={`transition-transform duration-200 ${mobileHuntPassOpen ? 'rotate-90' : ''}`}
                   />
                 </button>
-                {mobileCartOpen && (
+                {mobileHuntPassOpen && (
                   <>
                     <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
@@ -1424,9 +1426,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
-                    </Link>
-                    <Link href="/shopper/lucky-roll" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Zap size={14} className="inline mr-2 text-amber-500" /> Lucky Roll
                     </Link>
                   </>
                 )}
