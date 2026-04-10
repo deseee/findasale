@@ -1106,7 +1106,7 @@ const SaleDetailPage = () => {
                     )}
 
                     {/* Auction-specific UI */}
-                    {(sale.isAuctionSale || item.listingType === 'AUCTION') && item.auctionStartPrice ? (
+                    {(sale.isAuctionSale || item.listingType === 'AUCTION') ? (
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <div>
