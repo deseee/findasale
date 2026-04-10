@@ -99,6 +99,7 @@ interface Sale {
     condition?: string;
     photoUrls: string[];
     auctionClosed?: boolean;
+    listingType?: string;
   }[];
   isAuctionSale: boolean;
   // Feature 35: Front Door Locator
@@ -1216,7 +1217,7 @@ const SaleDetailPage = () => {
                       )}
                       {!isOrganizer && user && item.status === 'AVAILABLE' && (
                         <div className="flex gap-2">
-                          {!sale.isAuctionSale && !item.auctionStartPrice && (
+                          {!(sale.isAuctionSale || item.listingType === 'AUCTION') && !item.auctionStartPrice && (
                             <>
                               <button
                                 onClick={() => handleBuyNow(item.id, item.title)}
@@ -1240,7 +1241,7 @@ const SaleDetailPage = () => {
                               )}
                             </>
                           )}
-                          {sale.isAuctionSale && item.auctionEndTime && (
+                          {(sale.isAuctionSale || item.listingType === 'AUCTION') && item.auctionEndTime && (
                             <button
                               onClick={() => setBiddingItemId(item.id)}
                               className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
