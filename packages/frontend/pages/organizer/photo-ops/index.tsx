@@ -43,7 +43,7 @@ const PhotoOpsLandingPage = () => {
   }
 
   // Fetch organizer's sales
-  const { data: salesData, isLoading, isError, refetch } = useQuery<{ sales: Sale[] }>({
+  const { data: salesData, isLoading, isError, refetch } = useQuery<Sale[]>({
     queryKey: ['organizer-photo-ops-sales'],
     queryFn: async () => {
       const res = await api.get('/organizers/me/sales');
@@ -52,7 +52,7 @@ const PhotoOpsLandingPage = () => {
     enabled: !!user?.id,
   });
 
-  const sales = salesData?.sales || [];
+  const sales = salesData || [];
 
   // Filter to PUBLISHED, UPCOMING, and DRAFT only
   const availableSales = sales.filter(
