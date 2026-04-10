@@ -479,6 +479,7 @@ router.get('/me/sales', authenticate, async (req: AuthRequest, res: Response) =>
         startDate: true,
         endDate: true,
         saleType: true,
+        qrScanCount: true,
       },
       orderBy: { startDate: 'desc' },
     });

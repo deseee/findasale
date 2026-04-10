@@ -7,6 +7,26 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S436 COMPLETE (2026-04-10):** Three placeholder pages replaced with functional implementations. S433/S434/S435 confirmed pushed by Patrick.
+
+**S436 What shipped:**
+1. **earnings.tsx** — Full earnings dashboard: lifetime gross/fees/net summary cards, per-sale breakdown table with sortable revenue data, year selector, PDF export button. Uses `/api/organizers/me/analytics`. 51-line stub → 350-line functional page.
+2. **qr-codes.tsx** — QR Scan Analytics (#186): total scans lifetime, active sale scans, per-sale breakdown table sorted by scan count descending, 3-step explainer. Backend updated: `qrScanCount` added to `/api/organizers/me/sales` response. 51-line stub → analytics dashboard.
+3. **staff.tsx** — Team management page: TEAMS tier gate + upgrade wall, workspace creation flow for first-time TEAMS users, member list with roles/dates, invite by email with role selector, remove member with confirmation. Uses existing workspace API endpoints.
+
+**S436 Architect audit result:** Double-close cron issue was already resolved in a prior session. Cron audit cleared.
+
+**S436 Files changed:**
+- `packages/frontend/pages/organizer/earnings.tsx`
+- `packages/frontend/pages/organizer/qr-codes.tsx`
+- `packages/frontend/pages/organizer/staff.tsx`
+- `packages/backend/src/routes/organizers.ts` — added qrScanCount to /me/sales SELECT
+
+**S436 QA needed:**
+- Earnings page: `/organizer/earnings` → verify summary cards show real revenue data, per-sale table renders, PDF export downloads
+- QR Analytics: `/organizer/qr-codes` → verify scan totals load, per-sale table shows qrScanCount, empty state works
+- Staff page: `/organizer/staff` → TEAMS user: workspace creation → invite member → member appears in list → remove works. Non-TEAMS: upgrade wall shows.
+
 **S435 COMPLETE (2026-04-10):** S434 audit completed, nav parity fixed, Hunt Pass section corrected. All S433/S434 commits are local and ready to push.
 
 **S435 What was audited and fixed:**
@@ -249,31 +269,16 @@ npx prisma generate
 
 ## Next Session Priority
 
-**S435 FOCUS: Audit S434 changes, then push**
+**S436 shipped: earnings, qr-codes (#186), staff pages. Push block above.**
 
-S434 made 10 file changes but had execution quality issues. Audit before pushing.
-
-### Step 1 — Audit S434 changes (MUST DO FIRST)
-1. Read every changed file, verify edits are correct:
-   - `Layout.tsx` — Command Center in TEAMS block? Appraisals ungated? Explore/Hunt Pass/Connect split correct? Mobile matches desktop?
-   - `TierComparisonTable.tsx` — 14 added features correct tier assignments?
-   - `reputation.tsx` — Tabbed interface compiles? Reviews tab complete?
-   - `item-library.tsx` — TierGate gone? fetchUserSales calls API?
-   - `offline.tsx` — TierGate gone? Unused imports cleaned?
-   - `typologyController.ts` — Fire-and-forget 202 pattern correct?
-   - Dark mode files (email-digest, webhooks, typology) — verify changes
-   - `reviews.tsx` — Redirect works?
-2. Run `cd packages/frontend && npx tsc --noEmit --skipLibCheck` — zero project errors
-3. If audit passes → compile pushblock and push
-
-### Step 2 — Remaining S434 items
-- `/plan` link "goes to middle of page" — unresolved
-- Placeholder page sweep (S434 was supposed to cover this but didn't get to it)
-
-### Step 3 — Standing items
-- **⚠️ S433 auction cron audit** — 3 job files, dispatch architect before deploy
-- **S433 migration required** — run before pushing auction Phase 2
+### Standing items
+- **S433 migration required** — run before Phase 2 auction features go live
 - **Auction QA** — after migration: reserve, proxy, soft-close, bid history, cron
+- **S436 QA** — earnings/qr-codes/staff pages after deploy (see S436 QA needed above)
+- **`/plan` link** — "goes to middle of page" — still unresolved from S434
+
+### Deferred
+- hunt-pass.tsx 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP)
 
 ### Deferred
 - hunt-pass.tsx 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP)
