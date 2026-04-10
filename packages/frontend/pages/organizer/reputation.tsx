@@ -8,20 +8,54 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useReputationBreakdown } from '../../hooks/useReputation';
 import ReputationBadge from '../../components/ReputationBadge';
+import StarRating from '../../components/StarRating';
 import Skeleton from '../../components/Skeleton';
 import EmptyState from '../../components/EmptyState';
 import { ArrowUp, TrendingUp, AlertCircle, Check } from 'lucide-react';
 import api from '../../lib/api';
 
+// --- Review Types ---
+interface Review {
+  id: string;
+  rating: number;
+  comment: string | null;
+  response: string | null;
+  respondedAt: string | null;
+  createdAt: string;
+  user: { name: string; id: string };
+  sale: { id: string; title: string };
+}
+
+interface ReviewsResponse {
+  reviews: Review[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
 const OrganizerReputationPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [organizerId, setOrganizerId] = useState<string>('');
+
+  // Tab routing
+  const activeTab = (router.query.tab as string) === 'reviews' ? 'reviews' : 'reputation';
+  const setTab = (tab: string) => {
+    router.replace({ pathname: router.pathname, query: tab === 'reputation' ? {} : { tab } }, undefined, { shallow: true });
+  };
+
+  // --- Review state ---
+  const [reviewPage, setReviewPage] = useState(1);
+  const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
+  const [responseText, setResponseText] = useState<Record<string, string>>({});
 
   // Redirect if not authenticated or not an organizer
   useEffect(() => {
@@ -40,6 +74,39 @@ const OrganizerReputationPage = () => {
   }, [user?.id]);
 
   const { data: reputation, isLoading, error } = useReputationBreakdown(organizerId);
+
+  // --- Reviews query ---
+  const { data: reviewsData, isLoading: reviewsLoading } = useQuery<ReviewsResponse>({
+    queryKey: ['reviews', 'organizer', 'me', user?.id, reviewPage],
+    queryFn: async () => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const res = await api.get('/reviews/organizer/me', { params: { page: reviewPage, limit: 10 } });
+      return res.data;
+    },
+    enabled: !!user?.id && user.roles?.includes('ORGANIZER') && activeTab === 'reviews',
+  });
+
+  const respondMutation = useMutation({
+    mutationFn: async ({ reviewId, response }: { reviewId: string; response: string }) => {
+      const res = await api.patch(`/reviews/${reviewId}/respond`, { response });
+      return res.data;
+    },
+    onSuccess: (updated) => {
+      showToast('Response submitted successfully!', 'success');
+      setExpandedReviewId(null);
+      setResponseText(prev => { const s = { ...prev }; delete s[updated.id]; return s; });
+      queryClient.invalidateQueries({ queryKey: ['reviews', 'organizer', 'me', user?.id] });
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.error || 'Failed to submit response', 'error');
+    },
+  });
+
+  const handleRespond = (reviewId: string) => {
+    const text = (responseText[reviewId] || '').trim();
+    if (!text) { showToast('Please enter a response', 'error'); return; }
+    respondMutation.mutate({ reviewId, response: text });
+  };
 
   if (!user || !user.roles?.includes('ORGANIZER')) {
     return null;
@@ -65,7 +132,7 @@ const OrganizerReputationPage = () => {
   return (
     <>
       <Head>
-        <title>Reputation | FindA.Sale</title>
+        <title>Reputation & Reviews | FindA.Sale</title>
       </Head>
 
       {authLoading || isLoading ? (
@@ -98,8 +165,41 @@ const OrganizerReputationPage = () => {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="max-w-4xl mx-auto px-4 py-12">
+        {/* Tab Navigation */}
+        <div className="max-w-4xl mx-auto px-4 pt-8">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 mb-8">
+            <button
+              onClick={() => setTab('reputation')}
+              className={`px-6 py-3 text-sm font-semibold transition-colors ${
+                activeTab === 'reputation'
+                  ? 'text-[#8FB897] border-b-2 border-[#8FB897]'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Reputation
+            </button>
+            <button
+              onClick={() => setTab('reviews')}
+              className={`px-6 py-3 text-sm font-semibold transition-colors ${
+                activeTab === 'reviews'
+                  ? 'text-[#8FB897] border-b-2 border-[#8FB897]'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Reviews
+              {reviewsData?.total ? (
+                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                  {reviewsData.total}
+                </span>
+              ) : null}
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="max-w-4xl mx-auto px-4 pb-12">
+          {activeTab === 'reputation' ? (
+          <>
           {/* Current Score Card */}
           <div className={`${scoreBg} rounded-lg border border-gray-200 dark:border-gray-700 p-8 mb-8`}>
             <div className="flex items-center justify-between mb-4">
@@ -289,6 +389,122 @@ const OrganizerReputationPage = () => {
               Create Your Next Sale
             </button>
           </div>
+          </>
+          ) : (
+          /* ===== REVIEWS TAB ===== */
+          <div>
+            {reviewsLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full" />)}
+              </div>
+            ) : !reviewsData || reviewsData.reviews.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
+                <p className="text-gray-500 dark:text-gray-400 text-lg">
+                  No reviews yet. Once customers leave reviews, you can respond here.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4 mb-6">
+                  {reviewsData.reviews.map((review) => (
+                    <div key={review.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-gray-50">{review.user.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">on {review.sale.title}</p>
+                        </div>
+                        <div className="text-right">
+                          <StarRating value={review.rating} size="sm" />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {format(new Date(review.createdAt), 'MMM d, yyyy')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {review.comment && (
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 bg-gray-50 dark:bg-gray-700 p-3 rounded">
+                          {review.comment}
+                        </p>
+                      )}
+
+                      {review.respondedAt && review.response && (
+                        <div className="mb-4 pl-4 border-l-2 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 p-3 rounded">
+                          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Your response:</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">{review.response}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {format(new Date(review.respondedAt), 'MMM d, yyyy')}
+                          </p>
+                        </div>
+                      )}
+
+                      {expandedReviewId === review.id ? (
+                        <div className="mt-4 space-y-3">
+                          <textarea
+                            value={responseText[review.id] || review.response || ''}
+                            onChange={(e) => setResponseText(prev => ({ ...prev, [review.id]: e.target.value }))}
+                            placeholder="Share your response..."
+                            maxLength={500}
+                            rows={4}
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm text-gray-900 dark:bg-gray-700 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+                          />
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {(responseText[review.id] || review.response || '').length}/500
+                            </span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => { setExpandedReviewId(null); setResponseText(prev => { const s = { ...prev }; delete s[review.id]; return s; }); }}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleRespond(review.id)}
+                                disabled={respondMutation.isPending}
+                                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded disabled:opacity-50"
+                              >
+                                {respondMutation.isPending ? 'Submitting…' : 'Submit Response'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setExpandedReviewId(review.id); setResponseText(prev => ({ ...prev, [review.id]: review.response || '' })); }}
+                          className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
+                        >
+                          {review.response ? 'Edit response' : 'Respond'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {reviewsData.pages > 1 && (
+                  <div className="flex justify-center gap-3 pt-4">
+                    <button
+                      onClick={() => setReviewPage(p => Math.max(1, p - 1))}
+                      disabled={reviewPage === 1}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+                    >
+                      ← Previous
+                    </button>
+                    <span className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                      Page {reviewPage} of {reviewsData.pages}
+                    </span>
+                    <button
+                      onClick={() => setReviewPage(p => Math.min(reviewsData.pages, p + 1))}
+                      disabled={reviewPage === reviewsData.pages}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          )}
         </div>
       </div>
       )}

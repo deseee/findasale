@@ -166,7 +166,7 @@ function ItemRow({ item }: ItemRowProps) {
             <select
               value={correctedTo}
               onChange={(e) => setCorrectedTo(e.target.value as TypologyCategory)}
-              className="flex-1 min-w-0 text-sm border border-warm-300 dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-white"
+              className="flex-1 min-w-0 text-sm border border-warm-300 dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
             >
               {ALL_TYPOLOGY_CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>
@@ -180,7 +180,7 @@ function ItemRow({ item }: ItemRowProps) {
             placeholder="Reason for correction (required)"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className="w-full text-sm border border-warm-300 dark:border-gray-600 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-white placeholder-warm-400"
+            className="w-full text-sm border border-warm-300 dark:border-gray-600 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-white placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
           />
           <button
             onClick={handleCorrect}
@@ -292,7 +292,7 @@ const TypologyPage = () => {
                 <select
                   value={selectedSaleId}
                   onChange={(e) => setSelectedSaleId(e.target.value)}
-                  className="w-full border border-warm-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-warm-900 dark:text-white text-sm"
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-warm-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
                 >
                   <option value="">— Choose a sale —</option>
                   {sales.map((sale) => (

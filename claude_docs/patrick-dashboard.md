@@ -1,115 +1,69 @@
-# Patrick's Dashboard — April 10, 2026 (S433)
+# Patrick's Dashboard — April 10, 2026 (S434)
 
-## ✅ Done This Session (S433) — Full Auction Overhaul
+## ⚠️ S434 Status: DO NOT PUSH YET — Audit Required
 
-### Phase 1 — Ships with current push (no migration needed)
-- **Reserve price enforcement** — Bids below reserve now rejected with clear error message including the reserve amount
-- **Reserve-met badge** — Item detail page shows amber "Reserve: $X.XX (not met)" → switches to green "✓ Reserve met" as bids climb
-- **Auto-close on fetch** — Auctions past their deadline automatically set `auctionClosed: true` on next page load; no more post-deadline bids
-- **Outbid notifications** — When someone outbids the current high bidder, that bidder immediately gets an in-app notification with item name, new amount, and link to re-bid
-- **BidModal guard** — Submit button disables with "Auction Closed" text when auction has ended
+This session made a lot of changes but had execution quality issues (assumptions without reading code, direction-following gaps). **Next session must audit every changed file before pushing.**
 
-### Phase 2 — Requires migration + separate push
-- **Proxy/max bidding** — Bidders set a maximum price once; system auto-bids on their behalf up to that amount against competing maxes. eBay-style.
-- **Dynamic bid increments** — Replaced flat $1 increment with eBay-style tiers ($0.05 at low prices → $100 at $5000+)
-- **Bid history** — Full bid log below the bid UI; shoppers see "Bidder 1, Bidder 2" (anonymized); organizers see real names
-- **Soft-close / anti-sniping** — Any bid placed in the final 5 minutes extends the auction by 5 minutes; watchers notified via socket
-- **Auction status badge** — Green "Active" / pulsing orange "Ending Soon" (< 5 min) / gray "Ended"
-- **Background auto-close cron** — Runs every 5 minutes on the server; closes expired auctions and notifies winners without waiting for a page load
-- **ADR-013 written** — Full spec in `claude_docs/architecture/ADR-013-auction-overhaul.md`
+## What S434 Changed (10 files, all local/unpushed)
 
-### eBay Categories (no work needed)
-Audited and found it's already done. EbayCategoryPicker is in the edit-item form. Export and push both work. No additional UI changes required.
+### Backend (1 file)
+- **typologyController.ts** — Fixed Railway crash ("Cannot set headers after sent"). Changed batch classification from await (timeout) to fire-and-forget 202 response.
 
----
+### Nav & Gating (2 files)
+- **Layout.tsx** — Command Center moved from PRO→TEAMS gate. Appraisals ungated (ala carte). "Add Items" mobile link fixed (was routing to Command Center). Typology removed from nav. Shopper nav split: Explore / Hunt Pass / Connect (3 separate sections).
+- **TierComparisonTable.tsx** — 14 missing features added. À la Carte column added.
 
-## ⚠️ Action Required — Migration First, Then Push
+### Dark Mode & Copy (3 files)
+- **email-digest-preview.tsx** — Dark background fix
+- **webhooks.tsx** — Dark mode fix + plain-English intro explaining what webhooks are
+- **typology.tsx** — Dark mode input/select fixes
 
-**Step 1: Run migration (Phase 2 won't work without this)**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+### Tier Gate Fixes (2 files)
+- **item-library.tsx** — PRO gate removed (should be all-tiers). `fetchUserSales` stub replaced with real API call (was always empty).
+- **offline.tsx** — PRO gate removed (should be all-tiers).
 
-**Step 2: Push all files**
-```powershell
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/items/[id].tsx
-git add packages/frontend/components/BidModal.tsx
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260410_add_max_bid_by_user/migration.sql
-git add packages/shared/src/utils/bidIncrement.ts
-git add packages/frontend/components/BidHistory.tsx
-git add packages/backend/src/jobs/auctionAutoCloseCron.ts
-git add packages/backend/src/index.ts
-git add claude_docs/architecture/ADR-013-auction-overhaul.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S433: Full auction overhaul — proxy bidding, reserve enforcement, soft-close, bid history, auto-close cron"
-.\push.ps1
-```
+### Reputation + Reviews Merge (2 files)
+- **reputation.tsx** — Reviews functionality merged in with tabbed interface (Reputation / Reviews tabs). Deep-linkable via `?tab=reviews`.
+- **reviews.tsx** — Now redirects to `/organizer/reputation?tab=reviews`.
+
+## DB QA Results (no Chrome — DB queries only)
+- **Bounties:** 3 real records in DB. Organizer page wired to 5 API endpoints. Shopper page is placeholder.
+- **Item Library:** `inLibrary` field exists, 0 items flagged. Hook + API wired correctly.
+- **Offline Mode:** Client-side sync (no server tables). Full dashboard page exists.
+- **Webhooks:** 0 in DB. Management page ready.
+
+## Not Done This Session
+- `/plan` link "goes to middle of page" — unresolved
+- No Chrome QA (DB-only this session)
+- S433 auction cron audit still pending
 
 ---
 
-## 🟡 Next Session — S434: Pricing page + feature gating + placeholder sweep
+## 🔴 Next Session (S435): AUDIT FIRST
 
-**⚠️ Before pushing S433:** Dispatch `findasale-architect` to audit the 3 auction cron files (`auctionCloseCron.ts`, `auctionJob.ts`, `auctionAutoCloseCron.ts`) — confirm no double-close before Railway deploy.
-
-### Feature Gating Bugs to Fix
-| Issue | Current State | Correct State |
-|---|---|---|
-| Command Center | Listed under PRO | TEAMS-only |
-| Appraisals | PRO gate | Ala Carte (confirmed — backend comment says "PAID_ADDON maps to PRO until addon billing is wired") |
-| Line Queue + Flip Report | Both PRO and Ala Carte | Patrick to decide: which tier(s)? |
-
-### Placeholder Pages (nav links that go nowhere)
-All need a decision: build now / hide from nav / show "Coming Soon" gate:
-`/organizer/promote` · `/organizer/send-update` · `/organizer/photo-ops` · `/organizer/qr-codes` · `/organizer/print-kit` · `/organizer/checklist` · `/organizer/earnings` · `/organizer/line-queue` · `/organizer/calendar` · `/organizer/staff`
-
-### Routing Bugs
-- `/plan` link lands in the middle of the pricing page — anchor positioning bug
-- "Add Items" routes to dashboard instead of add-items form
-
-### Feature/UX Issues
-- **Offline Mode** — Functional? No visible sync indicator. Users won't know if data needs syncing.
-- **`/organizer/item-library`** — Broken (error or blank)
-- **`/organizer/typology`** — Dark mode input broken; page non-functional. Worth keeping with auto-tagging?
-- **Bounties** — Work as game-designed? Were they supposed to be PRO-gated?
-- **Email digest page** — White background in dark mode
-- **Webhooks page** — Dark mode contrast failure; needs copy explaining what webhooks are + examples (QuickBooks, Zapier)
-
-### Patrick Decisions Needed (nav structure)
-- Reputation + Reviews → combine into one page?
-- Hunt Pass → move out of "Explore & Connect" to more prominent location
-- "Explore & Connect" → split into 2 nav groups?
-
-### Auction QA (after migration runs)
-Run migration → then QA reserve enforcement, reserve badge, proxy bidding, soft-close, bid history, status badge
+1. **Read every changed file** — verify edits are correct, no broken JSX, no missing imports
+2. **Run full TS check** — `cd packages/frontend && npx tsc --noEmit --skipLibCheck` → zero errors
+3. **Verify Layout.tsx nav structure** — the nav is 1400+ lines and was edited by a subagent. Spot-check: Command Center in TEAMS block, Appraisals ungated, Explore/Hunt Pass/Connect split correct, mobile nav matches desktop
+4. **Verify TierComparisonTable** — 14 added features have correct tier assignments
+5. **Verify reputation.tsx** — tabbed interface compiles and reviews tab has all functionality from old reviews.tsx
+6. **Compile pushblock** — all 10 files + STATE.md + patrick-dashboard.md
+7. Then resume: /plan link bug, any remaining audit items
 
 ---
 
-## Pending QA (backlog)
+## Pending QA (backlog — unchanged from S433)
 
 | Feature | What to Test |
 |---|---|
-| Trail activation | Map → sale popup → "View Treasure Trail →" → amber circle markers appear |
-| Trail detail page | `/trail/[shareToken]` loads (not "Trail Not Found") |
-| XP on purchase | Complete a purchase → XP = purchase amount in dollars |
-| Email spam | Send payment link email to Yahoo → confirm inbox not spam |
-| QR code on sale page | Navigate to any sale → QR renders (not broken image) |
-| iOS map geolocation | Test on iOS Safari — correct error message if denied |
-| Print label | Edit item → Print Label → PDF opens, 1 page, centred layout |
-| Photo upload (organizer) | Sale page → Add Photos → renders in gallery, capped at 6 |
-| POS invoice flow | Load hold + misc items → Send Invoice → shopper pays via link |
+| S433 Auction (Phase 1+2) | Run migration first, then QA reserve/proxy/soft-close/bid-history |
+| Trail activation | Map → sale → "View Treasure Trail →" → amber circles |
+| XP on purchase | Complete purchase → XP = dollar amount |
+| Email spam | Payment link to Yahoo → inbox not spam |
+| POS invoice flow | Load hold + misc → Send Invoice → shopper pays |
 
 ---
 
-## 🔧 Maintenance — 2026-04-10
-
-**STATE.md compacted (automated):** STATE.md hit the 256KB Read tool size limit (2,712 lines). The daily-friction-audit detected this and ran the records agent to archive sessions S404–S427 to `COMPLETED_PHASES.md`. STATE.md is now ~470 lines. No content lost — all session details are in COMPLETED_PHASES.md.
-
-**Auction cron audit needed:** Three auction job files exist (`auctionCloseCron.ts` deprecated, `auctionJob.ts` authoritative, `auctionAutoCloseCron.ts` new from S433). Dispatch `findasale-architect` before next deploy to confirm no double-close logic running.
-
-**Stripe Connect webhook (P2, unresolved since S421):** Items aren't being marked SOLD + Purchase records aren't created after POS card payments. Needs a one-time Stripe Dashboard config — see Standing Notes in STATE.md.
+## 🔧 Standing Items
+- **Auction cron audit:** 3 job files exist — architect must confirm no double-close before deploy
+- **Stripe Connect webhook (P2):** Items not marked SOLD after POS card payment. One-time Stripe Dashboard config needed.
+- **S433 migration required** before pushing auction Phase 2 code
