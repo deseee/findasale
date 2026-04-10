@@ -45,10 +45,12 @@ export const getPurchases = async (req: AuthRequest, res: Response) => {
         },
         sale: {
           select: {
-            title: true,
+            id: true, title: true, lat: true, lng: true,
+            startDate: true, endDate: true, address: true, city: true, state: true, zip: true,
             organizer: {
               select: {
                 businessName: true,
+                user: { select: { name: true } },
               },
             },
           },

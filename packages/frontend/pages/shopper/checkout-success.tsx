@@ -6,7 +6,7 @@
  * Accessible via: checkout-success?purchaseId=XXX or from modal redirect
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
@@ -16,6 +16,7 @@ import { useToast } from '../../components/ToastContext';
 import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import Head from 'next/head';
 import Skeleton from '../../components/Skeleton';
+import PickupBookingCard from '../../components/PickupBookingCard';
 
 const CheckoutSuccessPage = () => {
   const router = useRouter();
@@ -23,6 +24,7 @@ const CheckoutSuccessPage = () => {
   const { showToast } = useToast();
   const { showSurvey } = useFeedbackSurvey();
   const { purchaseId } = router.query;
+  const [isAtSale, setIsAtSale] = useState<boolean | null>(null);
 
   const { data: purchase, isLoading, isError } = useQuery({
     queryKey: ['purchase-confirmation', purchaseId],
@@ -60,6 +62,32 @@ const CheckoutSuccessPage = () => {
       showSurvey('SH-1');
     }
   }, [purchase, isLoading, user?.id, showSurvey]);
+
+  // GPS gate: if buyer is physically at the sale, skip pickup scheduling
+  useEffect(() => {
+    if (!purchase?.sale?.lat || !purchase?.sale?.lng) return;
+    if (!navigator.geolocation) { setIsAtSale(false); return; }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const saleLat = purchase.sale.lat as number;
+        const saleLng = purchase.sale.lng as number;
+        const R = 6371000; // Earth radius in metres
+        const φ1 = (latitude * Math.PI) / 180;
+        const φ2 = (saleLat * Math.PI) / 180;
+        const Δφ = ((saleLat - latitude) * Math.PI) / 180;
+        const Δλ = ((saleLng - longitude) * Math.PI) / 180;
+        const a =
+          Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+          Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        setIsAtSale(distance <= 300); // within 300 m = at the sale
+      },
+      () => setIsAtSale(false), // can't get location → show card by default
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  }, [purchase]);
 
   if (authLoading || isLoading) {
     return (
@@ -193,6 +221,13 @@ const CheckoutSuccessPage = () => {
                   Contact the organizer for specific pickup times and details.
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Pickup Scheduling — only shown when buyer is NOT physically at the sale */}
+          {sale?.id && isAtSale === false && (
+            <div className="mb-8">
+              <PickupBookingCard saleId={sale.id} />
             </div>
           )}
 

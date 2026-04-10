@@ -828,8 +828,7 @@ const SaleDetailPage = () => {
               </p>
             </div>
 
-            {/* Pickup Scheduling */}
-            {user && <PickupBookingCard saleId={sale.id} />}
+            {/* Pickup scheduling surfaces on the post-purchase receipt page, not here */}
           </div>
         </div>
 
