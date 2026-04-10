@@ -428,7 +428,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     );
   }
 
-  const isAuction = !!item.auctionStartPrice;
+  const isAuction = !!item.auctionStartPrice || item.listingType === 'AUCTION';
   const isSold = item.status === 'SOLD';
   const currentPrice = isAuction ? item.currentBid ?? 0 : (item.price ?? 0);
   const isUserLiked = user && favoriteStatus?.isFavorited === true;
