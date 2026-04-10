@@ -47,6 +47,20 @@ const EditItemPage = () => {
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePrintLabel = async () => {
+    if (!id) return;
+    try {
+      const res = await api.get(`/items/${id}/label`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const win = window.open(url, '_blank');
+      // Revoke after a short delay to allow the browser to load it
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      if (!win) showToast('Allow pop-ups to view the label', 'error');
+    } catch {
+      showToast('Failed to generate label', 'error');
+    }
+  };
   const [inlineCameraOpen, setInlineCameraOpen] = useState(false);
   const [inlineCaptureMode, setInlineCaptureMode] = useState<'rapidfire' | 'regular'>('regular');
   const [inlineRapidItems, setInlineRapidItems] = useState<RapidItem[]>([]);
@@ -334,7 +348,7 @@ const EditItemPage = () => {
             {id && (
               <button
                 type="button"
-                onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/items/${id}/label`, '_blank')}
+                onClick={handlePrintLabel}
                 className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
               >
                 🏷️ Print Label
