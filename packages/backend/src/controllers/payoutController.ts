@@ -4,6 +4,7 @@ import { Response } from 'express';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { getPlatformFeeRate } from '../utils/feeCalculator';
 
 /** Retrieve the organizer's Stripe Connect account ID, or null if not yet linked */
 const getOrganizerStripeId = async (userId: string): Promise<string | null> => {
@@ -237,7 +238,6 @@ export const createPayout = async (req: AuthRequest, res: Response) => {
 
 const STRIPE_RATE = 0.029;
 const STRIPE_FIXED = 0.30;
-const PLATFORM_RATE = 0.10;
 
 export interface EarningsBreakdownItem {
   purchaseId: string;
@@ -262,7 +262,7 @@ export interface EarningsBreakdownItem {
  * Also includes accumulated cash platform fees from POS sales.
  *
  * Stripe fee is estimated at 2.9% + $0.30. Actual fees may vary slightly.
- * Platform fee is 10% flat (locked session 106).
+ * Platform fee is tier-aware: 10% for SIMPLE, 8% for PRO/TEAMS (S388).
  */
 export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
   try {
@@ -304,7 +304,8 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
 
     const items: EarningsBreakdownItem[] = purchases.map((p) => {
       const salePrice = p.amount;
-      const platformFee = parseFloat((p.platformFeeAmount ?? salePrice * PLATFORM_RATE).toFixed(2));
+      const tierRate = getPlatformFeeRate(organizer.subscriptionTier as any);
+      const platformFee = parseFloat((p.platformFeeAmount ?? salePrice * tierRate).toFixed(2));
       const stripeFee = parseFloat((salePrice * STRIPE_RATE + STRIPE_FIXED).toFixed(2));
       const netPayout = parseFloat((salePrice - platformFee - stripeFee).toFixed(2));
 
@@ -344,7 +345,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         totalNetPayout: parseFloat(totals.totalNetPayout.toFixed(2)),
       },
       count: items.length,
-      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% flat.',
+      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS.',
       // Cash POS: accumulated fees awaiting payout deduction
       cashFeeBalance: organizer.cashFeeBalance,
       cashFeeBalanceUpdatedAt: organizer.cashFeeBalanceUpdatedAt,

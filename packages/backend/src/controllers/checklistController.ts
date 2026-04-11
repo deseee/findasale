@@ -14,20 +14,20 @@ interface ChecklistItem {
 
 const DEFAULT_CHECKLIST: ChecklistItem[] = [
   // Pre-sale
-  { id: 'pre1', phase: 'pre', label: 'Photograph all items', completed: false },
-  { id: 'pre2', phase: 'pre', label: 'Price all items', completed: false },
-  { id: 'pre3', phase: 'pre', label: 'Publish sale listing', completed: false },
-  { id: 'pre4', phase: 'pre', label: 'Print QR code signs', completed: false },
-  { id: 'pre5', phase: 'pre', label: 'Set up item displays', completed: false },
-  { id: 'pre6', phase: 'pre', label: 'Prepare change + payment system', completed: false },
+  { id: 'pre1', phase: 'pre', label: 'Upload item photos (Rapidfire mode)', completed: false },
+  { id: 'pre2', phase: 'pre', label: 'Review AI-generated tags and categories', completed: false },
+  { id: 'pre3', phase: 'pre', label: 'Set item pricing', completed: false },
+  { id: 'pre4', phase: 'pre', label: 'Write sale description and details', completed: false },
+  { id: 'pre5', phase: 'pre', label: 'Set sale dates, hours, and location', completed: false },
+  { id: 'pre6', phase: 'pre', label: 'Publish sale listing', completed: false },
   // During
-  { id: 'dur1', phase: 'during', label: 'Mark items as sold in app', completed: false },
-  { id: 'dur2', phase: 'during', label: 'Process payments promptly', completed: false },
-  { id: 'dur3', phase: 'during', label: 'Handle holds + reservations', completed: false },
+  { id: 'dur1', phase: 'during', label: 'Process sales and mark items sold', completed: false },
+  { id: 'dur2', phase: 'during', label: 'Handle holds and reservations', completed: false },
+  { id: 'dur3', phase: 'during', label: 'Monitor live sale dashboard', completed: false },
   // Post
   { id: 'post1', phase: 'post', label: 'Mark sale as complete', completed: false },
-  { id: 'post2', phase: 'post', label: 'Remove remaining items', completed: false },
-  { id: 'post3', phase: 'post', label: 'Review buyer feedback', completed: false },
+  { id: 'post2', phase: 'post', label: 'Review earnings and payouts', completed: false },
+  { id: 'post3', phase: 'post', label: 'Respond to shopper reviews', completed: false },
 ];
 
 // Validation schemas

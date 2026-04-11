@@ -160,48 +160,11 @@ const PhotoOpsPage: React.FC = () => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Latitude *
-                </label>
-                <input
-                  type="number"
-                  required
-                  step="0.0001"
-                  value={formData.lat}
-                  onChange={(e) => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
-                  placeholder="42.7335"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Longitude *
-                </label>
-                <input
-                  type="number"
-                  required
-                  step="0.0001"
-                  value={formData.lng}
-                  onChange={(e) => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
-                  placeholder="-85.6465"
-                />
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Frame Image URL
-              </label>
-              <input
-                type="url"
-                value={formData.frameImageUrl}
-                onChange={(e) => setFormData({ ...formData, frameImageUrl: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded"
-                placeholder="https://cdn.example.com/frame.png"
-              />
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+              <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">Frame Selection</h4>
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                Custom photo frames coming soon — unlock unique frames as you earn XP!
+              </p>
             </div>
 
             <div className="flex gap-3">
