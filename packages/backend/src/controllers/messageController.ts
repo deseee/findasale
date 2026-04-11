@@ -10,31 +10,38 @@ export const getConversations = async (req: AuthRequest, res: Response) => {
 
     const userId = req.user.id;
     const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isShopper = req.user?.roles?.includes('USER') || req.user?.role === 'USER';
 
-    let conversations;
+    let conversations: any[] = [];
 
+    // If user has ORGANIZER role, fetch organizer conversations
     if (isOrganizer) {
-      // Organizer: fetch via their organizer record
       const organizer = await prisma.organizer.findUnique({ where: { userId } });
-      if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
-
-      conversations = await prisma.conversation.findMany({
-        where: { organizerId: organizer.id },
-        include: {
-          shopperUser: { select: { id: true, name: true } },
-          sale: { select: { id: true, title: true } },
-          messages: {
-            orderBy: { createdAt: 'desc' },
-            take: 1,
+      if (organizer) {
+        const organizerConvs = await prisma.conversation.findMany({
+          where: { organizerId: organizer.id },
+          include: {
+            shopperUser: { select: { id: true, name: true } },
+            sale: { select: { id: true, title: true } },
+            messages: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+            _count: { select: { messages: { where: { isRead: false, senderId: { not: userId } } } } },
           },
-          _count: { select: { messages: { where: { isRead: false, senderId: { not: userId } } } } },
-        },
-        orderBy: { lastMessageAt: 'desc' },
-        take: 100, // M2: inbox hard cap — prevents memory spike for high-volume organizers
-      });
-    } else {
-      // Shopper: fetch their conversations directly
-      conversations = await prisma.conversation.findMany({
+          orderBy: { lastMessageAt: 'desc' },
+          take: 100, // M2: inbox hard cap — prevents memory spike for high-volume organizers
+        });
+        // Tag conversations with role context
+        conversations.push(
+          ...organizerConvs.map((c: any) => ({ ...c, roleContext: 'organizer' as const }))
+        );
+      }
+    }
+
+    // If user has USER (shopper) role, fetch shopper conversations
+    if (isShopper) {
+      const shopperConvs = await prisma.conversation.findMany({
         where: { shopperUserId: userId },
         include: {
           organizer: {
@@ -50,7 +57,17 @@ export const getConversations = async (req: AuthRequest, res: Response) => {
         orderBy: { lastMessageAt: 'desc' },
         take: 100, // M2: inbox hard cap — prevents memory spike for shoppers with many threads
       });
+      // Tag conversations with role context
+      conversations.push(
+        ...shopperConvs.map((c: any) => ({ ...c, roleContext: 'shopper' as const }))
+      );
     }
+
+    // For dual-role users, merge and deduplicate conversations (unlikely to be duplicates but safe to sort)
+    // Sort by lastMessageAt descending
+    conversations.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    // Take first 100 to maintain hard cap
+    conversations = conversations.slice(0, 100);
 
     res.json(conversations);
   } catch (error) {
@@ -221,33 +238,34 @@ export const getUnreadCount = async (req: AuthRequest, res: Response) => {
 
     const userId = req.user.id;
     const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const isShopper = req.user?.roles?.includes('USER') || req.user?.role === 'USER';
 
-    let count: number;
+    let conversationIds: string[] = [];
 
     if (isOrganizer) {
       const organizer = await prisma.organizer.findUnique({ where: { userId } });
-      if (!organizer) return res.json({ unread: 0 });
+      if (organizer) {
+        const conversations = await prisma.conversation.findMany({
+          where: { organizerId: organizer.id },
+          select: { id: true },
+        });
+        conversationIds.push(...conversations.map((c: any) => c.id));
+      }
+    }
 
-      const conversations = await prisma.conversation.findMany({
-        where: { organizerId: organizer.id },
-        select: { id: true },
-      });
-      const ids = conversations.map(c => c.id);
-
-      count = await prisma.message.count({
-        where: { conversationId: { in: ids }, senderId: { not: userId }, isRead: false },
-      });
-    } else {
+    if (isShopper) {
       const conversations = await prisma.conversation.findMany({
         where: { shopperUserId: userId },
         select: { id: true },
       });
-      const ids = conversations.map(c => c.id);
-
-      count = await prisma.message.count({
-        where: { conversationId: { in: ids }, senderId: { not: userId }, isRead: false },
-      });
+      conversationIds.push(...conversations.map((c: any) => c.id));
     }
+
+    // Deduplicate and count unread messages
+    const uniqueIds = [...new Set(conversationIds)];
+    const count = await prisma.message.count({
+      where: { conversationId: { in: uniqueIds }, senderId: { not: userId }, isRead: false },
+    });
 
     res.json({ unread: count });
   } catch (error) {

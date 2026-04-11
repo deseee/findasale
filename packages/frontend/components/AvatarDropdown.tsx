@@ -352,10 +352,10 @@ const AvatarDropdown: React.FC = () => {
               </Link>
 
               <Link
-                href="/organizer/messages"
+                href="/messages"
                 className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
-                title="Buyer and organizer messaging"
+                title="Your messages"
               >
                 <MessageSquare size={16} className="text-amber-500" />
                 <span>Messages</span>
@@ -1011,12 +1011,12 @@ const AvatarDropdown: React.FC = () => {
                     <span>Loyalty Passport</span>
                   </Link>
                   <Link
-                    href="/shopper/leaderboard"
+                    href="/leaderboard"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     <Trophy size={16} className="text-indigo-500" />
-                    <span>Explorer Leaderboard</span>
+                    <span>Leaderboard</span>
                   </Link>
                   <Link
                     href="/shopper/achievements"

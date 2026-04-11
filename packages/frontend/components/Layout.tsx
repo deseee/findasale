@@ -274,7 +274,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
 
             <SectionHeader icon={Wrench} label="Account & Profile" color="amber" />
-            <Link href="/organizer/messages" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Buyer and organizer messaging">
+            <Link href="/messages" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your messages">
               <MessageSquare size={16} className="text-amber-500" />
               <span>Messages</span>
             </Link>
@@ -1260,11 +1260,20 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileInSaleToolsOpen && (
                       <>
+                        <Link href="/shopper/appraisals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Star size={14} className="inline mr-2 text-indigo-500" /> Appraisals
+                        </Link>
                         <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Target size={14} className="inline mr-2 text-indigo-500" /> Bounty Board
                         </Link>
                         <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Star size={14} className="inline mr-2 text-indigo-500" /> Loyalty Passport
+                        </Link>
+                        <Link href="/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Trophy size={14} className="inline mr-2 text-indigo-500" /> Leaderboard
+                        </Link>
+                        <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Award size={14} className="inline mr-2 text-indigo-500" /> Achievements
                         </Link>
                         <Link href="/shopper/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation
@@ -1433,8 +1442,20 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobileShopperCollectionOpen && (
                   <>
+                    <Link href="/shopper/appraisals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Star size={14} className="inline mr-2 text-indigo-500" /> Appraisals
+                    </Link>
+                    <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Target size={14} className="inline mr-2 text-indigo-500" /> Bounty Board
+                    </Link>
                     <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Star size={14} className="inline mr-2 text-indigo-500" /> Loyalty Passport
+                    </Link>
+                    <Link href="/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Trophy size={14} className="inline mr-2 text-indigo-500" /> Leaderboard
+                    </Link>
+                    <Link href="/shopper/achievements" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Award size={14} className="inline mr-2 text-indigo-500" /> Achievements
                     </Link>
                     <Link href="/shopper/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Shield size={14} className="inline mr-2 text-indigo-500" /> Reputation

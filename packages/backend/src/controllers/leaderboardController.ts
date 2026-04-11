@@ -2,8 +2,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 
 /**
- * Get top shoppers by streakPoints (or points if streakPoints not available)
- * Returns anonymized names and points
+ * Get top shoppers by guildXp
+ * Returns anonymized names and XP score
  */
 export const getShopperLeaderboard = async (req: Request, res: Response) => {
   try {
@@ -14,7 +14,8 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
       select: {
         id: true,
         name: true,
-        streakPoints: true,
+        guildXp: true,
+        explorerRank: true,
         userBadges: {
           select: {
             id: true,
@@ -33,30 +34,19 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
           take: 3,
         },
       },
+      orderBy: {
+        guildXp: 'desc',
+      },
       take: 50,
     });
 
-    // Compute score for each user using streakPoints (legacy points removed)
-    const usersWithScore = users.map((user) => ({
-      ...user,
-      score: user.streakPoints ?? 0,
-    }));
-
-    const sorted = usersWithScore
-      .sort((a, b) => {
-        if (a.score === null && b.score === null) return 0;
-        if (a.score === null) return 1;
-        if (b.score === null) return -1;
-        return b.score - a.score;
-      })
-      .slice(0, 20);
-
-    // Anonymize and format response
-    const leaderboard = sorted.map((user, index) => ({
+    // Map to leaderboard format with guildXp as score
+    const sorted = users.map((user, index) => ({
       rank: index + 1,
-      userId: user.id.slice(0, 4), // Mask user ID for privacy
-      name: user.name.split(' ')[0] || 'Shopper', // First name only
-      score: user.score,
+      userId: user.id.slice(0, 4),
+      name: user.name.split(' ')[0] || 'Shopper',
+      score: user.guildXp ?? 0,
+      explorerRank: user.explorerRank,
       badges: user.userBadges.map((ub) => ({
         id: ub.badge.id,
         name: ub.badge.name,
@@ -65,7 +55,7 @@ export const getShopperLeaderboard = async (req: Request, res: Response) => {
       })),
     }));
 
-    res.json(leaderboard);
+    res.json(sorted);
   } catch (error) {
     console.error('Error fetching shopper leaderboard:', error);
     res.status(500).json({ message: 'Server error while fetching leaderboard' });

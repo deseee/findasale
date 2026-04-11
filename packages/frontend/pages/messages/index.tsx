@@ -15,6 +15,7 @@ interface ConversationSummary {
   lastMessageAt: string;
   messages: Array<{ body: string; createdAt: string; senderId: string }>;
   _count: { messages: number };
+  roleContext?: 'organizer' | 'shopper';
 }
 
 const MessagesPage = () => {
@@ -111,9 +112,21 @@ const MessagesPage = () => {
             {conversations.map(conv => {
               const preview = conv.messages[0];
               const unread = conv._count.messages;
-              const otherName = user.roles?.includes('ORGANIZER')
-                ? conv.shopperUser?.name ?? 'Shopper'
-                : conv.organizer?.businessName ?? 'Organizer';
+              const isDualRole = user.roles?.includes('ORGANIZER') && user.roles?.includes('USER');
+              const showRoleContext = isDualRole && conv.roleContext;
+
+              // Determine other person's name based on context
+              let otherName = 'Unknown';
+              if (conv.roleContext === 'organizer') {
+                otherName = conv.shopperUser?.name ?? 'Shopper';
+              } else if (conv.roleContext === 'shopper') {
+                otherName = conv.organizer?.businessName ?? 'Organizer';
+              } else if (user.roles?.includes('ORGANIZER')) {
+                otherName = conv.shopperUser?.name ?? 'Shopper';
+              } else {
+                otherName = conv.organizer?.businessName ?? 'Organizer';
+              }
+
               const timeAgo = new Date(conv.lastMessageAt).toLocaleDateString();
 
               return (
@@ -129,9 +142,20 @@ const MessagesPage = () => {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm font-semibold text-warm-900 dark:text-warm-100 truncate ${unread > 0 ? 'font-bold' : ''}`}>
-                        {otherName}
-                      </span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`text-sm font-semibold text-warm-900 dark:text-warm-100 truncate ${unread > 0 ? 'font-bold' : ''}`}>
+                          {otherName}
+                        </span>
+                        {showRoleContext && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium ${
+                            conv.roleContext === 'organizer'
+                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                          }`}>
+                            {conv.roleContext === 'organizer' ? 'As Organizer' : 'As Shopper'}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-warm-400 flex-shrink-0">{timeAgo}</span>
                     </div>
                     {conv.sale && (
