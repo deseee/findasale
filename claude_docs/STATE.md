@@ -7,7 +7,13 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S440 COMPLETE (2026-04-11):** Patrick's 10-issue review session. 7 parallel dev dispatches. Nav restructured (grey icons, Explorer Passport rename, Hunt Exclusives group, league moved). Bounties UX upgraded (XP input 50 min, reference URLs, expandable cards, BountySubmission model). Subscription upgrade pitches rebuilt for FREE→PRO/ALC and PRO→TEAMS. Achievements dark mode + unlock logic fixed. Reputation API path fixed. Dashboard primary sales cards got dates. Receipt review CTA added.
+**S440 COMPLETE (2026-04-11):** Massive nav/UX session — 3 push rounds.
+
+**S440 Round 1 (7 parallel agents):** Nav restructured (grey icons, Explorer Passport rename, Hunt Exclusives group, league moved). Bounties UX upgraded (XP input 50 min, reference URLs, expandable cards, BountySubmission model). Subscription upgrade pitches rebuilt for FREE→PRO/ALC and PRO→TEAMS. Achievements dark mode + unlock logic fixed. Reputation API path fixed. Dashboard primary sales cards got dates. Receipt review CTA added.
+
+**S440 Round 2:** Nav reorder (Connect > Hunt Pass > Hunt Exclusives) in all 3 nav locations + avatar dropdown. Removed Inspiration from desktop header. Holds icon: CartIcon bag→Clock, mobile holds icon with holdCount badge. Command Center icon grey in mobile.
+
+**S440 Round 3 (3 parallel agents):** Leaderboard consolidated — `/shopper/leaderboard` redirects to `/leaderboard`, backend uses `guildXp` not `streakPoints`, xpService returns correct shape. Messages dual-role fix — backend returns both organizer AND shopper conversations with roleContext badges, `/organizer/messages` redirects to `/messages`. Missing Connect nav links added (Appraisals, Leaderboard, Achievements) to both mobile sections.
 
 **S440 Schema changes (3 migrations):**
 - `20260411_add_reference_url_bounty` — adds referenceUrl to MissingListingBounty
@@ -493,12 +499,18 @@ npx prisma generate
 
 ## Next Session Priority
 
-**S439 shipped: Inventory fix (447 backfilled), shopper bounties model evolution, Market Hubs rename, subscription PRO display.**
+**S440 shipped:** 3 push rounds — nav restructure, leaderboard consolidation, messages dual-role fix, bounties UX, subscription pitches, achievements/reputation/dashboard/receipts fixes, Connect nav links.
 
-### Immediate (S440)
-- **S439 migration required** — `20260411_make_saleId_optional_shopper_bounties` (run before QA)
-- **Chrome QA S439** — inventory items visible, bounty cards display correctly, Market Hubs nav, subscription PRO card
-- **Chrome QA S437/S438** — sale selectors, calendar, platform fees (8% vs 10%), appraisals access
+### Immediate (S441) — Patrick's end-of-S440 bug reports
+
+1. **Bounties XP copy** (`/shopper/bounties`) — Add explainer text near XP input: "Minimum 50 XP. Organizers receive 1/2 the bounty amount after fulfillment. The more XP you offer the more likely organizers are to respond to your requests. XP is taken from your account at bounty posting and is non-refundable."
+2. **Bounties "Submit a Match" button** — Cards expand but Submit a Match just closes the card. Needs actual submission flow (POST to BountySubmission endpoint, success feedback).
+3. **Achievements stale copy** (`/shopper/achievements`) — References "streak achievements" which is legacy. Needs copy audit + verify badges render for test data. The S440 dark mode fix + unlockedAt nullable fix shipped but content may still reference old system.
+4. **Reputation scores all 0** (`/shopper/reputation`) — S440 fixed the API path (`/users/purchases` not `/users/me/purchases`) but scores still show 0 even for organizers with 3+ reviews. Likely needs more test data in DB or the score calculation logic is wrong. Diagnose the scoring formula in the frontend.
+5. **Dashboard primary sales — dates + live view link** (`/organizer/dashboard`) — S440 added dates (verify in Chrome). Still missing: a way to link to the live public view of the sale, not just the edit page.
+6. **Receipt review CTA** (`/shopper/history?view=receipts`) — S440 added review CTA in ReceiptCard. Verify it actually renders in Chrome with test data. May need receipts in DB for test users.
+7. **Messages link still in avatar nav** — Patrick confirmed with screenshot that Messages is still a standalone link in the avatar dropdown. Code at AvatarDropdown.tsx line ~355 has `href="/messages"`. Remove it — messages is accessible from the Connect group and header icon.
+8. **Bounties: dollars vs XP open decision** — Should shoppers offer real dollars as bounty rewards? Stripe/legal implications need research before committing.
 
 ### Deferred
 - hunt-pass.tsx 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP)

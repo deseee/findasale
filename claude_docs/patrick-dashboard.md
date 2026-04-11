@@ -2,88 +2,56 @@
 
 ## S440 Summary
 
-10-issue fix session from Patrick's live site review. 7 parallel dev agents. Nav restructured, bounties UX upgraded, subscription pitches rebuilt, achievements/reputation/dashboard/receipts all fixed.
+3-round session from Patrick's live site review. Round 1: 7 parallel agents fixed 10 issues. Round 2: nav reorder + holds icon + Inspiration removed. Round 3: leaderboard consolidated, messages dual-role fix, missing Connect links added.
+
+All 3 rounds pushed. Migrations applied. 8 bugs queued for S441.
 
 ---
 
-## What S440 Fixed
+## What S440 Shipped
 
-### Nav Restructure (Layout.tsx + AvatarDropdown.tsx)
-- Command Center, Calendar, Staff Accounts icons → grey
-- "Collector Passport" → "Explorer Passport" in both navs + page header
-- League moved under Hunt Pass section
-- Hunt Pass pulled out as standalone link, old group renamed "Hunt Exclusives", placed below My Collection and above Explore
+### Round 1 — 10-Issue Fix Batch (7 parallel agents)
+- Nav: grey icons (Command Center, Calendar, Staff), Explorer Passport rename, Hunt Exclusives group, league moved
+- Bounties: XP input (50 min), reference URL, expandable cards, BountySubmission model
+- Subscription: dark mode fix, upgrade pitches (FREE→PRO/ALC, PRO→TEAMS)
+- Achievements: dark mode styling + unlockedAt nullable fix
+- Reputation: API path fix (`/users/me/purchases` → `/users/purchases`)
+- Dashboard: dates on primary sales cards
+- Receipt: review CTA + organizer data in response
 
-### Bounties UX (bounties.tsx + bountyController.ts + schema)
-- XP input field with 50 minimum enforced
-- Reference URL input for photos/links
-- Bounty cards now expandable on click (shows description, reference, "Submit a Match" button)
-- New BountySubmission model + migration for match submissions
-- referenceUrl added to MissingListingBounty
+### Round 2 — Nav Reorder + Holds Icon
+- Nav order: Connect > Hunt Pass > Hunt Exclusives (all 3 locations + avatar)
+- Inspiration removed from desktop header
+- CartIcon: shopping bag → Clock icon
+- Mobile header: holds icon with live badge next to alerts
+- Command Center icon grey in mobile
 
-### Subscription Upgrade Pitches (subscription.tsx)
-- FREE tier: dark mode contrast fixed
-- FREE → PRO: new feature comparison grid (3 sales, 500 items, 2k auto tags, 8% fees, Flip Report, 24/7 support)
-- FREE → Ala Carte: $9.99/sale option card (500 items, 10 photos, 500 tags, Flip Report, Virtual Queue)
-- PRO → TEAMS: upgrade pitch (unlimited sales, 5 members, Command Center, webhooks/API, flea markets)
-
-### Achievements (AchievementBadge.tsx + achievementService.ts + schema)
-- Dark mode styling fixed on all badge cards
-- Bug fix: unlockedAt was auto-set to now() on creation — changed to nullable so achievements only unlock when earned
-
-### Reputation (reputation.tsx)
-- Root cause: was calling `/api/users/me/purchases` instead of `/api/users/purchases`. One-line fix.
-
-### Dashboard Dates (dashboard.tsx)
-- Primary sales cards now show city + date range (matching Other Sales card format)
-
-### Receipt Review CTA (ReceiptCard.tsx + receiptController.ts)
-- Orange success card with "Review this organizer" CTA added to receipt view
-- Backend now includes organizer data in receipt response
+### Round 3 — Leaderboard + Messages + Connect Links
+- Leaderboard: `/shopper/leaderboard` → redirect to `/leaderboard`, backend uses `guildXp`
+- Messages: dual-role fix — organizer AND shopper conversations with roleContext badges, `/organizer/messages` → redirect to `/messages`
+- Connect nav: added Appraisals, Leaderboard, Achievements to both mobile sections
 
 ---
 
-## Open Decision
+## S441 Priority Queue (8 items)
 
-Bounties — should shoppers be able to offer real dollars as bounty rewards, or XP only? Stripe/legal implications need research before committing.
-
----
-
-## Migrations Required (3 new)
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+1. **Remove Messages from avatar dropdown** — standalone Messages link still showing in dropdown nav
+2. **Bounties: Submit a Match** — button just closes card, needs actual POST to BountySubmission endpoint
+3. **Bounties: XP explainer copy** — add text near XP input (minimum, organizer split, non-refundable)
+4. **Achievements: stale copy** — references legacy "streak achievements", needs content audit
+5. **Reputation: scores all 0** — API path fixed but scoring formula returns 0
+6. **Dashboard: live view link** — dates added, need link to public sale view (not just edit)
+7. **Receipt: review CTA** — verify renders with test data in Chrome
+8. **Bounties: dollars vs XP** — open decision, Stripe/legal research needed
 
 ---
 
-## Push Block
+## Migrations (S440 — already applied)
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/pages/shopper/explorer-passport.tsx
-git add packages/frontend/pages/shopper/bounties.tsx
-git add packages/frontend/pages/organizer/subscription.tsx
-git add packages/frontend/components/AchievementBadge.tsx
-git add packages/frontend/pages/shopper/reputation.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/components/ReceiptCard.tsx
-git add packages/backend/src/controllers/bountyController.ts
-git add packages/backend/src/controllers/receiptController.ts
-git add packages/backend/src/services/achievementService.ts
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260411_add_reference_url_bounty/migration.sql
-git add packages/database/prisma/migrations/20260411_bounty_submissions/migration.sql
-git add packages/database/prisma/migrations/20260411_make_unlockedAt_nullable/migration.sql
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S440: 10-issue fix batch — nav restructure, bounties UX, subscription pitches, achievements, reputation, dashboard dates, receipt review CTA"
-.\push.ps1
-```
+3 migrations applied: `add_reference_url_bounty`, `bounty_submissions`, `make_unlockedAt_nullable`
 
-After push, run the migration block above.
+---
+
+## S440 Push Block (all 3 rounds already pushed)
+
+No action needed — all code pushed during session.
