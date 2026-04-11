@@ -149,6 +149,7 @@ export const fulfillBounty = async (req: AuthRequest, res: Response) => {
       include: { sale: { include: { organizer: { select: { userId: true } } } } },
     });
     if (!bounty) return res.status(404).json({ message: 'Bounty not found.' });
+    if (!bounty.sale) return res.status(400).json({ message: 'This bounty is not linked to a sale.' });
     if (bounty.sale.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Not your sale.' });
     }
