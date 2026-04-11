@@ -1084,11 +1084,11 @@ model OrganizerHoldSettings {
 // Shoppers flag items they couldn't find at a sale; organizers can fulfill by listing the item.
 model MissingListingBounty {
   id          String   @id @default(cuid())
-  saleId      String
-  sale        Sale     @relation(fields: [saleId], references: [id])
+  saleId      String?
+  sale        Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  description String   // What the shopper is looking for
+  description String?  // What the shopper is looking for
   offerPrice  Float?   // What they'd pay if listed
   status      String   @default("OPEN") // OPEN, FULFILLED, CANCELLED
   itemId      String?  // Linked by organizer when fulfilled
@@ -1098,12 +1098,18 @@ model MissingListingBounty {
   xpReward    Int      @default(25) // XP earned by organizer if submission purchased
   expiry      DateTime? // Auto-expire bounty (null = no auto-expire for backward compat)
   submissions BountySubmission[] // All submissions for this bounty
+  // Shopper-first bounty fields
+  itemName    String?  // Item name for shopper-created bounties
+  category    String?  // Category for shopper-created bounties
+  maxBudget   Float?   // Max budget for shopper-created bounties
+  radiusMiles Int?     // Search radius in miles for shopper-created bounties
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([saleId, status])
   @@index([userId])
   @@index([status, expiry])
+  @@index([category, radiusMiles])
 }
 
 model BountySubmission {
