@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 
 // GET /api/earnings/pdf?year=2025
 export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
@@ -16,8 +17,11 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
+      select: { id: true, subscriptionTier: true },
     });
     if (!organizer) return res.status(404).json({ message: 'Organizer not found' });
+
+    const tierRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
 
     const sales = await prisma.sale.findMany({
       where: { organizerId: organizer.id },
@@ -37,17 +41,14 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
       (sum, s) => sum + s.purchases.reduce((ps, p) => ps + p.amount, 0),
       0
     );
-    const totalFees = sales.reduce(
-      (sum, s) => sum + s.purchases.reduce((ps, p) => ps + (p.platformFeeAmount || 0), 0),
-      0
-    );
+    const totalFees = parseFloat((totalRevenue * tierRate).toFixed(2));
     const netEarnings = totalRevenue - totalFees;
 
     const saleRows = sales
       .filter((s) => s.purchases.length > 0)
       .map((s) => {
         const revenue = s.purchases.reduce((sum, p) => sum + p.amount, 0);
-        const fees = s.purchases.reduce((sum, p) => sum + (p.platformFeeAmount || 0), 0);
+        const fees = parseFloat((revenue * tierRate).toFixed(2));
         return `
 <tr style="border-bottom:1px solid #e5e7eb;">
   <td style="padding:10px 12px;color:#111827;">${s.title}</td>

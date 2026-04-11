@@ -1,150 +1,259 @@
 /**
- * Feature #40: Organizer Hub Dashboard
- * List and manage hubs created by the organizer
+ * Flea Market Events — Organizer Hub Dashboard
+ *
+ * Feature #40 repurposed per ADR-014: Sale Hubs → Flea Market Events (TEAMS tier)
+ * Route: /organizer/hubs
+ * 4 event types: FLEA_MARKET, ANTIQUE_MALL, POPUP_MARKET, FARMERS_MARKET
  */
 
-import { useRouter } from 'next/router';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useMyHubs, useDeleteHub } from '../../../hooks/useHubs';
 import { useAuth } from '../../../components/AuthContext';
-import { useQueryClient } from '@tanstack/react-query';
+import TierGate from '../../../components/TierGate';
+import api from '../../../lib/api';
 
-export default function OrganizerHubsPage() {
-  const router = useRouter();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
+interface HubEvent {
+  id: string;
+  name: string;
+  slug: string;
+  saleDate?: string;
+  eventName?: string;
+  saleCount: number;
+}
 
-  const { data, isLoading, error } = useMyHubs();
-  const deleteHubMutation = useDeleteHub('');
+const EVENT_TYPES = [
+  {
+    key: 'FLEA_MARKET',
+    title: 'Flea Market',
+    description: 'Classic multi-vendor outdoor/indoor market',
+    icon: '🏪',
+    color: 'amber',
+  },
+  {
+    key: 'ANTIQUE_MALL',
+    title: 'Antique Mall',
+    description: 'Curated antique and vintage dealer showcase',
+    icon: '🏛️',
+    color: 'warm',
+  },
+  {
+    key: 'POPUP_MARKET',
+    title: 'Popup Market',
+    description: 'Temporary themed market events',
+    icon: '🎪',
+    color: 'sage',
+  },
+  {
+    key: 'FARMERS_MARKET',
+    title: 'Farmers Market',
+    description: 'Local produce and artisan goods market',
+    icon: '🌽',
+    color: 'green',
+  },
+];
 
-  if (!user?.roles || !user.roles.includes('ORGANIZER')) {
+export default function FleaMarketEventsPage() {
+  const { user, isLoading: authLoading } = useAuth();
+  const [events, setEvents] = useState<HubEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const res = await api.get('/hubs/my');
+        const data = res.data;
+        setEvents(data?.hubs || []);
+      } catch (err: any) {
+        // Gracefully handle JSON parse errors or missing endpoints
+        console.warn('[hubs] Failed to fetch events:', err?.message);
+        setEvents([]);
+        // Only show error if it's not a parse/404 issue
+        if (err?.response?.status && err.response.status !== 404) {
+          setEventsError('Unable to load events. The feature is being updated.');
+        }
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+
+    if (user) {
+      fetchEvents();
+    }
+  }, [user]);
+
+  if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto"></div>
+      </div>
+    );
+  }
+
+  if (!user?.roles?.includes('ORGANIZER')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">You must be an organizer to manage hubs.</p>
-          <Link href="/" className="text-sage-600 hover:text-sage-700 font-medium">
-            Back to Home
-          </Link>
+          <h1 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-4">Access Denied</h1>
+          <p className="text-warm-600 dark:text-gray-400 mb-6">You must be an organizer to manage events.</p>
+          <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium">Back to Home</Link>
         </div>
       </div>
     );
   }
 
-  const handleDeleteHub = async (hubId: string) => {
-    if (!confirm('Are you sure you want to delete this hub?')) return;
-
-    try {
-      const mutation = useDeleteHub(hubId);
-      await mutation.mutateAsync();
-      // Invalidate and refetch
-      queryClient.invalidateQueries({ queryKey: ['hubs', 'my'] });
-    } catch (err) {
-      console.error('Error deleting hub:', err);
-      alert('Failed to delete hub');
-    }
-  };
-
   return (
     <>
       <Head>
-        <title>Manage Hubs - FindA.Sale</title>
-        <meta name="description" content="Manage your sale hubs" />
+        <title>Flea Market Events - FindA.Sale</title>
+        <meta name="description" content="Organize multi-vendor flea market events" />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <TierGate requiredTier="TEAMS" featureName="Flea Market Events" description="Organize multi-vendor events like flea markets, antique malls, popup markets, and farmers markets.">
+        <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-sage-900">Your Sale Hubs</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-2">Create and manage coordinated sale hubs</p>
+          <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
+            <div className="max-w-6xl mx-auto">
+              <div className="flex items-center gap-3 mb-1">
+                <Link
+                  href="/organizer/dashboard"
+                  className="text-warm-400 hover:text-warm-600 dark:text-gray-400 dark:hover:text-gray-300 text-sm"
+                >
+                  ← Dashboard
+                </Link>
+                <span className="text-warm-300 dark:text-gray-600">/</span>
+                <h1 className="text-lg font-semibold text-warm-900 dark:text-gray-100">
+                  Flea Market Events
+                </h1>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                  Work in progress
+                </span>
+              </div>
+              <p className="text-sm text-warm-600 dark:text-gray-400">
+                Organize multi-vendor events — flea markets, antique malls, popup markets, and farmers markets
+              </p>
             </div>
-            <Link
-              href="/organizer/hubs/create"
-              className="bg-sage-600 hover:bg-sage-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
-            >
-              + Create Hub
-            </Link>
           </div>
 
-          {/* Hubs List */}
-          {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow h-24 animate-pulse"></div>
-              ))}
-            </div>
-          ) : error ? (
-            <div className="text-center text-red-600 py-12">
-              <p>Error loading hubs: {error instanceof Error ? error.message : 'Unknown error'}</p>
-            </div>
-          ) : !data?.hubs.length ? (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-12 text-center">
-              <p className="text-gray-600 dark:text-gray-400 text-lg mb-4">You haven't created any hubs yet.</p>
-              <Link
-                href="/organizer/hubs/create"
-                className="text-sage-600 hover:text-sage-700 font-medium"
-              >
-                Create your first hub →
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {data.hubs.map((hub) => (
+          <div className="max-w-6xl mx-auto px-4 pb-12">
+            {/* Event Type Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              {EVENT_TYPES.map((type) => (
                 <div
-                  key={hub.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow p-6"
+                  key={type.key}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-5 hover:border-amber-300 dark:hover:border-amber-600 transition-colors"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-sage-900">{hub.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                        {hub.saleCount} {hub.saleCount === 1 ? 'sale' : 'sales'}
-                        {hub.saleDate && (
-                          <> • Event: {new Date(hub.saleDate).toLocaleDateString()}</>
-                        )}
-                      </p>
-                      {hub.eventName && (
-                        <p className="text-sm text-sage-600 font-medium">🎉 {hub.eventName}</p>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-2 ml-4">
-                      <Link
-                        href={`/organizer/hubs/${hub.id}/manage`}
-                        className="px-4 py-2 bg-sage-50 text-sage-700 hover:bg-sage-100 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        Manage
-                      </Link>
-                      <button
-                        onClick={() => handleDeleteHub(hub.id)}
-                        className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Hub Link */}
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <a
-                      href={`/hubs/${hub.slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-sage-600 hover:text-sage-700 font-medium"
-                    >
-                      View Public Hub →
-                    </a>
-                  </div>
+                  <div className="text-3xl mb-3">{type.icon}</div>
+                  <h3 className="text-base font-semibold text-warm-900 dark:text-gray-100 mb-1">
+                    {type.title}
+                  </h3>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">
+                    {type.description}
+                  </p>
                 </div>
               ))}
             </div>
-          )}
+
+            {/* Create Event CTA */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-6 mb-8">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                    Ready to host a multi-vendor event?
+                  </h2>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    Event creation is coming in Phase 2. You&apos;ll be able to set up booths, invite vendors, and manage payouts — all from one dashboard.
+                  </p>
+                </div>
+                <button
+                  disabled
+                  className="px-6 py-2.5 bg-amber-600/50 text-white rounded-lg font-semibold cursor-not-allowed"
+                >
+                  Create Event — Coming Soon
+                </button>
+              </div>
+            </div>
+
+            {/* Features Preview */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
+              <h2 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">
+                What&apos;s coming
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div>
+                  <p className="text-sm font-medium text-warm-900 dark:text-gray-100 mb-1">Unlimited Booths</p>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">
+                    Invite as many vendors as you want. Each gets their own booth, inventory, and checkout.
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-warm-900 dark:text-gray-100 mb-1">Flexible Payouts</p>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">
+                    Choose your model: flat booth fee, revenue share, or a hybrid of both.
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-warm-900 dark:text-gray-100 mb-1">QR Auto-Settlement</p>
+                  <p className="text-sm text-warm-600 dark:text-gray-400">
+                    Shoppers scan, pay, and go. Vendor payouts are calculated and sent automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Your Events Section */}
+            <div>
+              <h2 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">
+                Your Events
+              </h2>
+
+              {eventsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 h-20 animate-pulse" />
+                  ))}
+                </div>
+              ) : eventsError ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-8 text-center">
+                  <p className="text-warm-500 dark:text-gray-400 text-sm">{eventsError}</p>
+                </div>
+              ) : events.length === 0 ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-8 text-center">
+                  <p className="text-2xl mb-3">🎪</p>
+                  <p className="text-warm-900 dark:text-gray-100 font-medium mb-1">No events yet</p>
+                  <p className="text-sm text-warm-500 dark:text-gray-400">
+                    Create your first multi-vendor event to get started.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {events.map((event) => (
+                    <div
+                      key={event.id}
+                      className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4 flex items-center justify-between"
+                    >
+                      <div>
+                        <h3 className="font-medium text-warm-900 dark:text-gray-100">{event.name}</h3>
+                        <p className="text-sm text-warm-500 dark:text-gray-400">
+                          {event.saleCount} {event.saleCount === 1 ? 'sale' : 'sales'}
+                          {event.saleDate && <> · {new Date(event.saleDate).toLocaleDateString()}</>}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/organizer/hubs/${event.id}/manage`}
+                        className="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium"
+                      >
+                        Manage →
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </TierGate>
     </>
   );
 }

@@ -332,13 +332,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Wallet size={16} className="text-amber-500" />
               <span>Payouts</span>
             </Link>
-            <Link href="/organizer/item-library" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Reuse items across multiple sales">
-              <BookOpen size={16} className="text-amber-500" />
-              <span>Item Library</span>
-            </Link>
-            <Link href="/organizer/item-library" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Reuse items across multiple sales">
+            <Link href="/organizer/inventory" className="flex items-center gap-2 px-3 py-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Manage your persistent inventory across all sales">
               <Package size={16} className="text-amber-400" />
               <span>Inventory</span>
+            </Link>
+            <Link href="/organizer/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Buyer bounty requests for your sale items">
+              <Trophy size={16} className="text-amber-500" />
+              <span>Bounties</span>
             </Link>
             <Link href="/organizer/reputation" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your organizer rating and trust score">
               <Star size={16} className="text-amber-500" />
@@ -397,10 +397,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals — also available as à la carte">
               <Scale size={16} className="text-purple-400" />
               <span>Appraisals</span>
-            </Link>
-            <Link href="/organizer/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Buyer bounty requests for your sale items">
-              <Trophy size={16} className="text-purple-400" />
-              <span>Bounties</span>
             </Link>
             <Link href="/organizer/email-digest-preview" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Preview your email digest before it sends">
               <MessageSquare size={16} className="text-purple-400" />
@@ -522,10 +518,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Camera size={16} className="text-indigo-500" />
               <span>Haul Posts</span>
             </Link>
-            <Link href="/shopper/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-              <Target size={16} className="text-indigo-500" />
-              <span>Bounties</span>
-            </Link>
             <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
               <Trophy size={16} className="text-indigo-500" />
               <span>League</span>
@@ -550,6 +542,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
 
             <SectionHeader icon={Share2} label="Connect" color="indigo" />
+            <Link href="/shopper/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Star size={16} className="text-indigo-500" />
+              <span>Appraisals</span>
+            </Link>
+            <Link href="/shopper/bounties" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Request hard-to-find items from local organizers">
+              <Target size={16} className="text-indigo-500" />
+              <span>Bounty Board</span>
+            </Link>
             <Link href="/shopper/loyalty" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Star size={16} className="text-indigo-500" />
               <span>Loyalty Passport</span>
@@ -1013,6 +1013,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </button>
                 {mobilePostSalesOpen && (
                   <>
+                    <Link href="/organizer/inventory" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Package size={14} className="inline mr-2 text-amber-500" /> Inventory
+                    </Link>
+                    <Link href="/organizer/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Trophy size={14} className="inline mr-2 text-amber-500" /> Bounties
+                    </Link>
                     <Link href="/organizer/print-inventory" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Printer size={14} className="inline mr-2 text-amber-500" /> Print & Labels
                     </Link>
@@ -1060,9 +1066,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/organizer/appraisals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Scale size={14} className="inline mr-2 text-purple-400" /> Appraisals
-                    </Link>
-                    <Link href="/organizer/item-library" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <BookOpen size={14} className="inline mr-2 text-purple-400" /> Item Library
                     </Link>
                     <Link href="/organizer/message-templates" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <FileText size={14} className="inline mr-2 text-purple-400" /> Message Templates
@@ -1219,9 +1222,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/shopper/haul-posts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Camera size={14} className="inline mr-2 text-indigo-500" /> Haul Posts
                         </Link>
-                        <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Target size={14} className="inline mr-2 text-indigo-500" /> Bounties
-                        </Link>
                         <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Trophy size={14} className="inline mr-2 text-indigo-500" /> League
                         </Link>
@@ -1275,6 +1275,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileInSaleToolsOpen && (
                       <>
+                        <Link href="/shopper/bounties" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Target size={14} className="inline mr-2 text-indigo-500" /> Bounty Board
+                        </Link>
                         <Link href="/shopper/loyalty" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Star size={14} className="inline mr-2 text-indigo-500" /> Loyalty Passport
                         </Link>

@@ -305,7 +305,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
     const items: EarningsBreakdownItem[] = purchases.map((p) => {
       const salePrice = p.amount;
       const tierRate = getPlatformFeeRate(organizer.subscriptionTier as any);
-      const platformFee = parseFloat((p.platformFeeAmount ?? salePrice * tierRate).toFixed(2));
+      const platformFee = parseFloat((salePrice * tierRate).toFixed(2));
       const stripeFee = parseFloat((salePrice * STRIPE_RATE + STRIPE_FIXED).toFixed(2));
       const netPayout = parseFloat((salePrice - platformFee - stripeFee).toFixed(2));
 

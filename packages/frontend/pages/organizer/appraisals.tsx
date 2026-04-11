@@ -53,6 +53,9 @@ const AppraisalsPage = () => {
   );
   const createMutation = useCreateAppraisal();
 
+  // Not used anymore (a la carte model), but keeping import for future reference
+  // const { canAccess } = useOrganizerTier(); // Remove if no longer needed
+
   // Auth checks
   if (authLoading) {
     return (
@@ -261,38 +264,29 @@ const AppraisalsPage = () => {
           {/* Top explainer */}
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-8">
             <p className="text-sm text-amber-900 dark:text-amber-100">
-              Get community price estimates on items you&apos;re unsure about. Browse open requests and share your expertise — or{' '}
-              {canAccess('PRO') ? (
-                <span>submit your own.</span>
-              ) : (
-                <Link href="/organizer/pricing" className="font-semibold underline hover:text-amber-700 dark:hover:text-amber-50">
-                  submit your own with PRO
-                </Link>
-              )}
+              Get community price estimates on items you&apos;re unsure about. Submit a request for 25 XP. Community members earn reputation by providing estimates.
             </p>
           </div>
 
-          {/* Submit button (PRO only) */}
-          {canAccess('PRO') && (
-            <div className="mb-8">
-              <button
-                onClick={() => setShowSubmitForm(!showSubmitForm)}
-                className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
-              >
-                {showSubmitForm ? 'Cancel' : 'Submit New Request'}
-              </button>
-            </div>
-          )}
+          {/* Submit button (all organizers) */}
+          <div className="mb-8">
+            <button
+              onClick={() => setShowSubmitForm(!showSubmitForm)}
+              className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
+            >
+              {showSubmitForm ? 'Cancel' : 'Submit New Request'}
+            </button>
+          </div>
 
-          {/* Submit form (PRO tier only) */}
-          {showSubmitForm && canAccess('PRO') && (
+          {/* Submit form (all organizers) */}
+          {showSubmitForm && (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
               <div className="mb-4">
                 <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-2">
                   New Appraisal Request
                 </h2>
                 <p className="text-sm text-warm-600 dark:text-gray-400">
-                  Submitting an appraisal request is free with your PRO subscription. Community members will provide price estimates within 7 days.
+                  Each appraisal request costs 25 XP. Community members will provide price estimates within 7 days.
                 </p>
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -402,18 +396,16 @@ const AppraisalsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-6 border-b border-warm-200 dark:border-gray-700">
-            {canAccess('PRO') && (
-              <button
-                onClick={() => setActiveTab('my-requests')}
-                className={`pb-3 px-2 font-semibold border-b-2 transition-colors ${
-                  activeTab === 'my-requests'
-                    ? 'border-amber-600 text-amber-600'
-                    : 'border-transparent text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'
-                }`}
-              >
-                My Requests
-              </button>
-            )}
+            <button
+              onClick={() => setActiveTab('my-requests')}
+              className={`pb-3 px-2 font-semibold border-b-2 transition-colors ${
+                activeTab === 'my-requests'
+                  ? 'border-amber-600 text-amber-600'
+                  : 'border-transparent text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'
+              }`}
+            >
+              My Requests
+            </button>
             <button
               onClick={() => setActiveTab('community-feed')}
               className={`pb-3 px-2 font-semibold border-b-2 transition-colors ${
@@ -426,8 +418,8 @@ const AppraisalsPage = () => {
             </button>
           </div>
 
-          {/* My Requests Tab (PRO only) */}
-          {activeTab === 'my-requests' && canAccess('PRO') && (
+          {/* My Requests Tab (all organizers) */}
+          {activeTab === 'my-requests' && (
             <div>
               {myLoading && (
                 <div className="space-y-4">
