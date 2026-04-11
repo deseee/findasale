@@ -19,7 +19,7 @@ import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpServi
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
-import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
+import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -1360,6 +1360,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 where: { id: { in: posPaymentLink.itemIds } },
               });
 
+              // Look up organizer tier for fee calculation
+              const posOrganizerTier = posPaymentLink.saleId
+                ? (await tx.sale.findUnique({
+                    where: { id: posPaymentLink.saleId },
+                    select: { organizer: { select: { subscriptionTier: true } } },
+                  }))?.organizer?.subscriptionTier ?? null
+                : null;
+              const posFeeRate = getPlatformFeeRate(posOrganizerTier as SubscriptionTier);
+
               const purchaseIds: string[] = [];
               for (const item of items) {
                 const purchase = await tx.purchase.create({
@@ -1367,7 +1376,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     itemId: item.id,
                     saleId: posPaymentLink.saleId,
                     amount: item.price || 0,
-                    platformFeeAmount: (item.price || 0) * 0.1,
+                    platformFeeAmount: parseFloat(((item.price || 0) * posFeeRate).toFixed(2)),
                     status: 'PAID',
                     source: 'POS',
                     stripePaymentIntentId: `pos_${posPaymentLink.id}`,

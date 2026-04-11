@@ -17,6 +17,7 @@ import { prisma } from '../lib/prisma';
 import { getStripe } from '../utils/stripe';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
+import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 
 const stripe = () => getStripe();
 
@@ -36,7 +37,7 @@ const resolveOrganizer = async (req: AuthRequest, res: Response, opts: { require
 
   const organizer = await prisma.organizer.findUnique({
     where: { userId: req.user.id },
-    select: { id: true, stripeConnectId: true },
+    select: { id: true, stripeConnectId: true, subscriptionTier: true },
   });
 
   if (!organizer) {
@@ -273,7 +274,8 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
     try {
       // Payment Links require a pre-created Price object (price_data not supported)
       // Use platform-side pricing + destination charges (matching PaymentIntent pattern)
-      const platformFeeAmount = Math.round(amountCents * 0.1); // 10% platform fee
+      const feeRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
+      const platformFeeAmount = Math.round(amountCents * feeRate);
 
       const adHocPrice = await stripe().prices.create({
         currency: 'usd',
@@ -519,7 +521,8 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     const heldItemTotal = Math.round(reservation.item.price! * 100); // in cents
     const miscTotal = miscItems ? miscItems.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) : 0;
     const grandTotal = heldItemTotal + miscTotal;
-    const platformFeeAmount = Math.round(grandTotal * 0.1); // 10% fee on total
+    const holdFeeRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
+    const platformFeeAmount = Math.round(grandTotal * holdFeeRate);
 
     // Create HoldInvoice record (simplified for MVP — no actual Stripe Checkout)
     const holdInvoice = await prisma.holdInvoice.create({

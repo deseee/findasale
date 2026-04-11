@@ -9,6 +9,7 @@ import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
 import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getHangTagKit, getFullSignKitPDF, getPriceSheet } from '../controllers/printKitController';
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
+import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 
 const router = Router();
 
@@ -47,11 +48,14 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
+      select: { id: true, subscriptionTier: true },
     });
 
     if (!organizer) {
       return res.json({ totalRevenue: 0, totalFees: 0, itemsSold: 0, itemsUnsold: 0, sales: [] });
     }
+
+    const tierRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
 
     // Fetch all sales with items and purchases
     const sales = await prisma.sale.findMany({
@@ -62,7 +66,7 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
         },
         purchases: {
           where: { status: 'PAID' },
-          select: { amount: true, platformFeeAmount: true },
+          select: { amount: true },
         },
       },
       orderBy: { startDate: 'asc' },
@@ -77,7 +81,7 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
 
     const saleBreakdown = sales.map((sale: any) => {
       const saleRevenue = sale.purchases.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-      const saleFees = sale.purchases.reduce((sum: number, p: any) => sum + (Number(p.platformFeeAmount) || 0), 0);
+      const saleFees = parseFloat((saleRevenue * tierRate).toFixed(2));
       const saleSold = sale.items.filter((i: any) => i.status === 'SOLD').length;
       const saleUnsold = sale.items.filter((i: any) => i.status !== 'SOLD').length;
 

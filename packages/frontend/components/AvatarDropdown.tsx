@@ -529,6 +529,24 @@ const AvatarDropdown: React.FC = () => {
               {postSalesOpen && (
                 <>
                   <Link
+                    href="/organizer/inventory"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Manage your persistent inventory across all sales"
+                  >
+                    <Package size={16} className="text-amber-500" />
+                    <span>Inventory</span>
+                  </Link>
+                  <Link
+                    href="/organizer/bounties"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Buyer bounty requests for your sale items"
+                  >
+                    <Trophy size={16} className="text-amber-500" />
+                    <span>Bounties</span>
+                  </Link>
+                  <Link
                     href="/organizer/print-inventory"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -646,24 +664,6 @@ const AvatarDropdown: React.FC = () => {
                     <span>Appraisals</span>
                   </Link>
                   <Link
-                    href="/organizer/item-library"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Reuse items across multiple sales"
-                  >
-                    <BookOpen size={16} className="text-purple-400" />
-                    <span>Item Library</span>
-                  </Link>
-                  <Link
-                    href="/organizer/item-library"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Reuse items across multiple sales"
-                  >
-                    <Package size={16} className="text-purple-400" />
-                    <span>Inventory</span>
-                  </Link>
-                  <Link
                     href="/organizer/message-templates"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -685,15 +685,6 @@ const AvatarDropdown: React.FC = () => {
                       </Link>
                     </>
                   )}
-                  <Link
-                    href="/organizer/bounties"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Buyer bounty requests for your sale items"
-                  >
-                    <Trophy size={16} className="text-purple-400" />
-                    <span>Bounties</span>
-                  </Link>
                   <Link
                     href="/organizer/email-digest-preview"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -967,14 +958,6 @@ const AvatarDropdown: React.FC = () => {
                     <span>Haul Posts</span>
                   </Link>
                   <Link
-                    href="/shopper/bounties"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Target size={16} className="text-indigo-500" />
-                    <span>Bounties</span>
-                  </Link>
-                  <Link
                     href="/shopper/league"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -1057,6 +1040,23 @@ const AvatarDropdown: React.FC = () => {
               </button>
               {connectOpen && (
                 <>
+                  <Link
+                    href="/shopper/appraisals"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Star size={16} className="text-indigo-500" />
+                    <span>Appraisals</span>
+                  </Link>
+                  <Link
+                    href="/shopper/bounties"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Request hard-to-find items from local organizers"
+                  >
+                    <Target size={16} className="text-indigo-500" />
+                    <span>Bounty Board</span>
+                  </Link>
                   <Link
                     href="/shopper/loyalty"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
