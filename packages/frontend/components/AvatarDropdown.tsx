@@ -351,16 +351,6 @@ const AvatarDropdown: React.FC = () => {
                 <span>Organizer Dashboard</span>
               </Link>
 
-              <Link
-                href="/messages"
-                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                onClick={() => setIsOpen(false)}
-                title="Your messages"
-              >
-                <MessageSquare size={16} className="text-amber-500" />
-                <span>Messages</span>
-              </Link>
-
               {/* Your Sales Section — Collapsible */}
               <button
                 onClick={() => setOrgToolsOpen(!orgToolsOpen)}
