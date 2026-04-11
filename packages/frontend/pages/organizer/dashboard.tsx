@@ -838,6 +838,39 @@ const OrganizerDashboard = () => {
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <div className="flex-1">
                             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">{activeSale.title}</h2>
+                            {/* City and date display */}
+                            {activeSale.city && (
+                              <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">
+                                {activeSale.city}
+                                {activeSale.startDate && (
+                                  <>
+                                    {' • '}
+                                    {activeSale.status === 'PUBLISHED' ? (
+                                      <>
+                                        📅 {new Date(activeSale.startDate).toLocaleDateString('en-US', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                        })}
+                                        {activeSale.endDate && (
+                                          <>
+                                            {' – '}
+                                            {new Date(activeSale.endDate).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                            })}
+                                          </>
+                                        )}
+                                      </>
+                                    ) : (
+                                      new Date(activeSale.startDate).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                      })
+                                    )}
+                                  </>
+                                )}
+                              </p>
+                            )}
                             <div className="flex flex-wrap items-center gap-2 mb-3">
                               {activeSale.status === 'PUBLISHED' ? (
                                 <Link href={`/sales/${activeSale.id}`} className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800 transition-colors`} title="See your sale as shoppers see it">

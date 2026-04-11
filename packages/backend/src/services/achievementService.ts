@@ -137,7 +137,25 @@ export const checkAndAward = async (
 
       if (!achievement) continue;
 
-      // Get or create user achievement record
+      // Get current user achievement record first to check if already unlocked
+      const existingUserAch = await prisma.userAchievement.findUnique({
+        where: {
+          userId_achievementId: {
+            userId,
+            achievementId: achievement.id,
+          },
+        },
+      });
+
+      // Only increment if not yet unlocked
+      const isAlreadyUnlocked = existingUserAch?.unlockedAt !== null;
+
+      if (isAlreadyUnlocked) {
+        // Already unlocked, skip this achievement
+        continue;
+      }
+
+      // Increment progress
       const userAch = await prisma.userAchievement.upsert({
         where: {
           userId_achievementId: {
@@ -154,13 +172,14 @@ export const checkAndAward = async (
           userId,
           achievementId: achievement.id,
           progress: 1,
+          unlockedAt: null, // Don't set unlock time on creation
         },
       });
 
-      // Check if threshold met and not already unlocked
+      // Check if threshold just met
       if (
         userAch.progress >= achievement.targetValue &&
-        userAch.unlockedAt === undefined
+        userAch.unlockedAt === null
       ) {
         // Update unlock time
         await prisma.userAchievement.update({

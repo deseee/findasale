@@ -737,7 +737,7 @@ const AvatarDropdown: React.FC = () => {
                         onClick={() => setIsOpen(false)}
                         title="Multi-sale overview dashboard"
                       >
-                        <LayoutDashboard size={16} className="text-purple-400" />
+                        <LayoutDashboard size={16} className="text-gray-400" />
                         <span>Command Center</span>
                       </Link>
                       <Link
@@ -745,7 +745,7 @@ const AvatarDropdown: React.FC = () => {
                         className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setIsOpen(false)}
                       >
-                        <Calendar size={16} className="text-amber-500" />
+                        <Calendar size={16} className="text-gray-400" />
                         <span>Calendar</span>
                       </Link>
                       <Link
@@ -753,7 +753,7 @@ const AvatarDropdown: React.FC = () => {
                         className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setIsOpen(false)}
                       >
-                        <UserPlus size={16} className="text-amber-500" />
+                        <UserPlus size={16} className="text-gray-400" />
                         <span>Staff Accounts</span>
                       </Link>
                       <Link
@@ -946,7 +946,7 @@ const AvatarDropdown: React.FC = () => {
                     title="Your collector journey, badges, and discovery history"
                   >
                     <Award size={16} className="text-indigo-500" />
-                    <span>Collector Passport</span>
+                    <span>Explorer Passport</span>
                   </Link>
                   <Link
                     href="/shopper/haul-posts"
@@ -956,15 +956,6 @@ const AvatarDropdown: React.FC = () => {
                   >
                     <Camera size={16} className="text-indigo-500" />
                     <span>Haul Posts</span>
-                  </Link>
-                  <Link
-                    href="/shopper/league"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="Weekly XP leaderboard — compete with shoppers in your region"
-                  >
-                    <Trophy size={16} className="text-indigo-500" />
-                    <span>League</span>
                   </Link>
                   <Link
                     href="/shopper/lucky-roll"
@@ -978,14 +969,14 @@ const AvatarDropdown: React.FC = () => {
                 </>
               )}
 
-              {/* Hunt Pass Section — Collapsible */}
+              {/* Hunt Exclusives Section — Collapsible */}
               <button
                 onClick={() => setHuntPassOpen(!huntPassOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <Ticket size={16} />
-                  <span>Hunt Pass</span>
+                  <Award size={16} />
+                  <span>Hunt Exclusives</span>
                 </div>
                 <ChevronRight
                   size={16}
@@ -994,15 +985,6 @@ const AvatarDropdown: React.FC = () => {
               </button>
               {huntPassOpen && (
                 <>
-                  <Link
-                    href="/shopper/hunt-pass"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                    title="2x XP, early access to sales, and exclusive badges — $4.99/mo"
-                  >
-                    <Ticket size={16} className="text-amber-500" />
-                    <span>Hunt Pass</span>
-                  </Link>
                   <Link
                     href="/shopper/rare-finds"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1021,8 +1003,28 @@ const AvatarDropdown: React.FC = () => {
                     <Star size={16} className="text-amber-400" />
                     <span>Loot Legend</span>
                   </Link>
+                  <Link
+                    href="/shopper/league"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Weekly XP leaderboard — compete with shoppers in your region"
+                  >
+                    <Trophy size={16} className="text-amber-500" />
+                    <span>League</span>
+                  </Link>
                 </>
               )}
+
+              {/* Hunt Pass standalone link */}
+              <Link
+                href="/shopper/hunt-pass"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                onClick={() => setIsOpen(false)}
+                title="2x XP, early access to sales, and exclusive badges — $4.99/mo"
+              >
+                <Ticket size={16} className="text-amber-500" />
+                <span>Hunt Pass</span>
+              </Link>
 
               {/* Connect Section — Collapsible */}
               <button

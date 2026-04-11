@@ -25,6 +25,12 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             title: true,
+            organizer: {
+              select: {
+                id: true,
+                businessName: true,
+              },
+            },
           },
         },
         item: {

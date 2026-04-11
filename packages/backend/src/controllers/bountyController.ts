@@ -14,7 +14,7 @@ import { awardXp } from '../services/xpService';
  */
 export const createBounty = async (req: AuthRequest, res: Response) => {
   try {
-    const { saleId, description, offerPrice, itemName, category, maxBudget, radiusMiles } = req.body;
+    const { saleId, description, offerPrice, itemName, category, maxBudget, radiusMiles, xpReward, referenceUrl } = req.body;
     const userId = req.user.id;
 
     // Determine if organizer-style (with saleId) or shopper-first (without saleId)
@@ -58,6 +58,9 @@ export const createBounty = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Validate xpReward if provided
+    const finalXpReward = xpReward != null ? Math.max(50, Number(xpReward)) : 25;
+
     const bounty = await prisma.missingListingBounty.create({
       data: {
         saleId: saleId || null,
@@ -68,6 +71,8 @@ export const createBounty = async (req: AuthRequest, res: Response) => {
         category: category?.trim() || null,
         maxBudget: maxBudget != null ? Number(maxBudget) : null,
         radiusMiles: radiusMiles != null ? Number(radiusMiles) : null,
+        xpReward: finalXpReward,
+        referenceUrl: referenceUrl?.trim() || null,
       },
       include: { user: { select: { name: true } } },
     });
@@ -641,8 +646,23 @@ export const getCommunityBounties = async (req: AuthRequest, res: Response) => {
       prisma.missingListingBounty.count({ where }),
     ]);
 
+    // Map to include all fields including referenceUrl
+    const formattedBounties = bounties.map((b: any) => ({
+      id: b.id,
+      itemName: b.itemName,
+      description: b.description,
+      category: b.category,
+      maxBudget: b.maxBudget,
+      radiusMiles: b.radiusMiles,
+      xpReward: b.xpReward,
+      referenceUrl: b.referenceUrl,
+      status: b.status,
+      user: b.user,
+      createdAt: b.createdAt,
+    }));
+
     return res.json({
-      bounties,
+      bounties: formattedBounties,
       total,
       limit: Math.min(100, Number(limit) || 20),
       offset: Number(offset),
