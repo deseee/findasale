@@ -5,6 +5,14 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-04-11 (S441) — Team Collaboration System Approved (14 Ideas, 4 Pages)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Staff, Workspace Settings, Workspace View, and Command Center redesigned as cohesive team collaboration system. Workspace View converts from public to internal collaboration hub (public team spotlighting moves to organizer profile page). Staff gets full employee management (contact info, availability, skill tags, performance, coverage alerts). Workspace Settings gets templates (Empty/Solo/2-Person/5-Person/Custom), editable role permissions, brand rules, cost calculator. Command Center gets weather alerts, inactivity monitoring, coverage gap warnings, analytics. All 14 innovation ideas approved except Idea 9 (bulk member invite — deferred to Enterprise). Multiple workspaces deferred. Role permissions editable. Full scope: ADR at `claude_docs/strategy/TEAM_COLLABORATION_ADR.md`.
+
+---
+
 ## 2026-04-10 (S436) — Sale Hubs Repurposed as Flea Market Events Foundation
 
 **Status:** LOCKED
