@@ -7,11 +7,14 @@ import { useToast } from '../../components/ToastContext';
 
 interface Bounty {
   id: string;
-  itemTitle: string;
-  description: string;
+  itemName: string;
+  description?: string;
+  category?: string;
+  maxBudget?: number;
+  radiusMiles?: number;
+  xpReward: number;
   status: string;
-  distance: number;
-  organizerName: string;
+  user: { name: string };
   createdAt: string;
 }
 
@@ -251,7 +254,7 @@ export default function ShopperBountiesPage() {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex-1">
-                      {bounty.itemTitle}
+                      {bounty.itemName}
                     </h3>
                     <span className="ml-2 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-full">
                       {bounty.status}
@@ -265,9 +268,21 @@ export default function ShopperBountiesPage() {
                   )}
 
                   <div className="space-y-2 mb-4 text-sm">
+                    {bounty.maxBudget !== undefined && (
+                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                        <DollarSign size={16} className="text-gray-400" />
+                        <span>Budget: ${bounty.maxBudget.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {bounty.radiusMiles !== undefined && (
+                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                        <MapPin size={16} className="text-gray-400" />
+                        <span>Within {bounty.radiusMiles} miles</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <MapPin size={16} className="text-gray-400" />
-                      <span>{bounty.distance} miles away</span>
+                      <Target size={16} className="text-amber-500" />
+                      <span>🏆 {bounty.xpReward} XP reward</span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                       <Clock size={16} className="text-gray-400" />

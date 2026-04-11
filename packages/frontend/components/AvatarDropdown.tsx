@@ -699,8 +699,8 @@ const AvatarDropdown: React.FC = () => {
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
-                    <Network size={16} className="text-purple-400" />
-                    <span>Sale Hubs</span>
+                    <Store size={16} className="text-purple-400" />
+                    <span>Market Hubs</span>
                   </Link>
                   <Link
                     href="/organizer/line-queue"

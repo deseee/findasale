@@ -232,11 +232,79 @@ export default function SubscriptionPage() {
                 </div>
               </div>
             ) : tier === 'PRO' ? (
-              /* PRO users: show support message if subscription failed to load */
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
-                <p className="text-amber-900 dark:text-amber-200">
-                  Subscription managed externally or not yet configured. Contact support@finda.sale if you need help.
-                </p>
+              /* PRO users: show tier info even without Stripe subscription */
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                <div className="p-8 border-b border-gray-200 dark:border-gray-700">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your PRO Plan</h2>
+
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-8">
+                    <p className="text-green-900 dark:text-green-200">
+                      You are on the PRO plan with access to all PRO features.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Plan Tier</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">PRO</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Status</p>
+                      <div className="flex items-center">
+                        <span className="inline-block w-2 h-2 rounded-full mr-2 bg-green-500"></span>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Included Features</h3>
+                  <ul className="space-y-3 mb-8">
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Up to 500 Items per Sale</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Manage larger inventories</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Up to 10 Photos per Item</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Showcase your items in detail</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Batch Operations</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Edit multiple items at once</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Analytics & Reporting</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Track sales performance and trends</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Data Exports</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Export your inventory and sales data</p>
+                      </div>
+                    </li>
+                  </ul>
+
+                  <div className="flex gap-4">
+                    <Link
+                      href="/pricing"
+                      className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition"
+                    >
+                      Compare All Plans
+                    </Link>
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>

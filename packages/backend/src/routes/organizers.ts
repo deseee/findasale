@@ -449,6 +449,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       referralDiscountExpiry: discountExpiry ? discountExpiry.toISOString() : null,
       subscriptionLapsed,
       stripeConnected: !!(organizer as any).stripeConnectId,
+      subscriptionTier: organizer.subscriptionTier ?? 'SIMPLE',
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);
