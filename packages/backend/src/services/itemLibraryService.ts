@@ -133,7 +133,10 @@ export const pullFromLibrary = async (
  */
 export const getLibraryItems = async (organizerId: string, filters: LibraryFilters = {}) => {
   const where: any = {
-    organizerId,
+    OR: [
+      { organizerId },
+      { sale: { organizerId } },
+    ],
   };
 
   if (filters.search) {

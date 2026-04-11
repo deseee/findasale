@@ -106,11 +106,11 @@ export default function FleaMarketEventsPage() {
   return (
     <>
       <Head>
-        <title>Flea Market Events - FindA.Sale</title>
-        <meta name="description" content="Organize multi-vendor flea market events" />
+        <title>Market Hubs - FindA.Sale</title>
+        <meta name="description" content="Organize multi-vendor market events" />
       </Head>
 
-      <TierGate requiredTier="TEAMS" featureName="Flea Market Events" description="Organize multi-vendor events like flea markets, antique malls, popup markets, and farmers markets.">
+      <TierGate requiredTier="TEAMS" featureName="Market Hubs" description="Organize multi-vendor events like flea markets, antique malls, popup markets, and farmers markets.">
         <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
           {/* Header */}
           <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -124,7 +124,7 @@ export default function FleaMarketEventsPage() {
                 </Link>
                 <span className="text-warm-300 dark:text-gray-600">/</span>
                 <h1 className="text-lg font-semibold text-warm-900 dark:text-gray-100">
-                  Flea Market Events
+                  Market Hubs
                 </h1>
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
                   Work in progress

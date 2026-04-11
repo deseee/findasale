@@ -183,6 +183,7 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
         const d = result.data;
         itemsToCreate.push({
           saleId,
+          organizerId: sale.organizerId,
           title: d.title,
           description: d.description || '',
           price: toNumber(d.price),
@@ -520,6 +521,7 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     const item = await prisma.item.create({
       data: {
         saleId,
+        organizerId: sale.organizerId,
         title,
         description: description || '',
         price: price ? parseFloat(price) : null,
