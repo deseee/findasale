@@ -7,13 +7,51 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S438 COMPLETE (2026-04-11):** Patrick's 6-issue review session. Fixed tier-aware platform fees in 5 backend files (organizers.ts, payoutController, earningsPdfController, posController 2 locations, stripeController webhook). Rebuilt hubs page as Flea Market Events with TEAMS TierGate. Merged checklist into /plan as first tab with Planning Assistant as second tab. Moved bounties out of PRO Tools in both navs (Layout + AvatarDropdown). Removed appraisal PRO gate on submit, created shopper appraisals page. Consolidated Inventory/Item Library to single nav entry. Fixed bounties.tsx implicit any type. Fixed earningsPdfController businessName select.
+**S439 COMPLETE (2026-04-11):** 6 live-site issues fixed. Inventory root-cause resolved (447 items backfilled). Shopper bounties model evolved. Market Hubs renamed. Subscription PRO display fixed.
 
-**S438 UNRESOLVED — Shopper Bounty 400 Error:**
-Backend `MissingListingBounty` model requires `saleId` (tied to a specific sale). The shopper bounties page was built with a "wanted item" concept (itemName, category, maxBudget, radiusMiles) that doesn't match the backend model. Making shoppers browse sales first to post bounties is backwards UX — the whole point is "I want X, organizers come to me." **Needs Architect spec** to evolve the bounty model: make `saleId` optional, add `itemName`/`category`/`maxBudget` fields to `MissingListingBounty`, create a new GET endpoint for browsing community bounties. This is a schema change + migration.
+**S439 What shipped:**
+- `itemLibraryService.ts` — query uses `OR [organizerId, sale.organizerId]` to catch items missing denormalized field
+- `itemController.ts` — new items now get `organizerId` on create + CSV import
+- **DB backfill** — 447 existing `Item` rows updated with correct `organizerId` via psycopg2
+- `schema.prisma` — `MissingListingBounty.saleId` now optional, added `itemName`/`category`/`maxBudget`/`radiusMiles`
+- Migration: `20260411_make_saleId_optional_shopper_bounties/migration.sql`
+- `bountyController.ts` — createBounty accepts shopper-first (no saleId); new `getCommunityBounties` endpoint; null guard on `bounty.sale` (TS build fix)
+- `bounties.ts` routes — `GET /api/bounties/community` added
+- `shopper/bounties.tsx` — posts without saleId, Browse tab fetches /community, cards show itemName/budget/XP/radius
+- `Layout.tsx` + `AvatarDropdown.tsx` — "Sale Hubs" → "Market Hubs", Store icon
+- `hubs/index.tsx` — heading "Flea Market Events" → "Market Hubs"
+- `subscription.tsx` — PRO plan card for manually-seeded users (no Stripe sub object)
+- `organizers.ts` — added `subscriptionTier` to `/me` response
 
-**S438 UNRESOLVED — Inventory 0 Items:**
-Carol sees 0 items at /organizer/inventory despite having sales with items. Frontend is wired correctly to `/api/item-library`. Backend endpoint may filter incorrectly or require different query params.
+**S439 Migration required (shopper bounties):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S439 Files changed:**
+- `packages/backend/src/services/itemLibraryService.ts`
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260411_make_saleId_optional_shopper_bounties/migration.sql` — NEW
+- `packages/backend/src/controllers/bountyController.ts`
+- `packages/backend/src/routes/bounties.ts`
+- `packages/frontend/pages/shopper/bounties.tsx`
+- `packages/frontend/components/Layout.tsx`
+- `packages/frontend/components/AvatarDropdown.tsx`
+- `packages/frontend/pages/organizer/hubs/index.tsx`
+- `packages/frontend/pages/organizer/subscription.tsx`
+- `packages/backend/src/routes/organizers.ts`
+
+**S439 QA needed:**
+- Inventory: any organizer → /organizer/inventory → items visible (not 0)
+- Shopper bounties: create bounty → card shows itemName/budget/XP/radius; Browse tab loads from /community
+- Market Hubs: nav label + Store icon in desktop, mobile, avatar dropdown
+- Subscription: user2 PRO → "Your PRO Plan" card (not support message)
+
+**S438 COMPLETE (2026-04-11):** Patrick's 6-issue review session. Fixed tier-aware platform fees in 5 backend files. Rebuilt hubs page as Flea Market Events. Merged checklist into /plan. Moved bounties out of PRO Tools. Removed appraisal PRO gate, created shopper appraisals page.
 
 **S438 Files changed:**
 - `packages/backend/src/routes/organizers.ts` — tier-aware fee calculation in analytics
@@ -418,26 +456,25 @@ npx prisma generate
 
 ## Next Session Priority
 
-**S437 shipped: 6 sale-selector fixes, calendar, bounty redesign Phase 1, tier-aware fees, typology deleted, 7 organizer pages improved.**
+**S439 shipped: Inventory fix (447 backfilled), shopper bounties model evolution, Market Hubs rename, subscription PRO display.**
 
-### Immediate (S438)
-- **S437 migration required** — BountySubmission model (run BEFORE S433 migration if not yet done, or after — order doesn't matter, both are independent)
-- **S433 migration required** — MaxBidByUser table for auction Phase 2
-- **S437 QA** — sale selectors, calendar, bounties browse/submit, fee display, appraisals access, checklist
-- **S436 QA** — earnings/qr-codes/staff pages after deploy
-- **Auction QA** — after S433 migration: reserve, proxy, soft-close, bid history, cron
+### Immediate (S440)
+- **S439 migration required** — `20260411_make_saleId_optional_shopper_bounties` (run before QA)
+- **Chrome QA S439** — inventory items visible, bounty cards display correctly, Market Hubs nav, subscription PRO card
+- **Chrome QA S437/S438** — sale selectors, calendar, platform fees (8% vs 10%), appraisals access
 
 ### Deferred
 - hunt-pass.tsx 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP)
 - Bounty redesign Phase 2: auto-match on publish, shopper notifications, expiry cron
-- Flea Market Events implementation (ADR-014 locked, ready for Architect spec → Dev)
+- Flea Market Events full implementation (ADR-014 locked, schema ready)
+- Stripe Connect webhook config (items not marking SOLD after POS card payment — see Standing Notes)
 
-**⏸️ QA QUEUE — postponed (usage limits):**
-- S430: Yahoo spam test, iOS geolocation, sale page activity dedup, Auction Buy Now, print label, photo upload
-- S427: Full invoice flow, cart-only invoice, QUICK vs TRUST mode expiry
-- S421: Send to Phone end-to-end, pay-request page items/fee display
-- S420: Lucky Roll page, Custom Map Pin endpoint, Showcase Slot unlock, Treasure Trail XP gate, Hunt Pass sink rows
-- S431: Trail detail page loads `/trail/[shareToken]` correctly; trail stops appear on map after activation
+**⏸️ QA QUEUE — postponed:**
+- S436: earnings/qr-codes/staff pages
+- S430: Yahoo spam test, iOS geolocation, sale page activity dedup, print label, photo upload
+- S431: Trail detail page, trail stops on map
+- S427: Full invoice flow, cart-only invoice
+- S433: Auction reserve/proxy/soft-close/bid history/cron
 
 ---
 
