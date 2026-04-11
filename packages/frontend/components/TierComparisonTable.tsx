@@ -176,12 +176,6 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Typology Classifier',
-    simple: false,
-    pro: true,
-    teams: true,
-  },
-  {
     name: 'Fraud Signals',
     simple: false,
     pro: true,

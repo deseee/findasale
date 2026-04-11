@@ -134,7 +134,8 @@ import trailRoutes from './routes/trails';                    // Feature #48: Tr
 import workspaceRoutes from './routes/workspace';              // Feature #13: TEAMS Multi-User Workspace
 import encyclopediaRoutes from './routes/encyclopedia';        // Feature #52: Estate Sale Encyclopedia
 import appraisalRoutes from './routes/appraisals';            // Feature #54: Crowdsourced Appraisal API
-import typologyRoutes from './routes/typology';               // Feature #46: Treasure Typology Classifier
+// REMOVED S437: Typology deprecated — auto-tagging + tags replaced it
+// import typologyRoutes from './routes/typology';
 import syncRoutes from './routes/sync';                        // Feature #69: Local-First Offline Mode
 import checklistRoutes from './routes/checklist';               // Sale Checklist
 import disputeRoutes from './routes/disputes';                  // Disputes Management
@@ -468,7 +469,8 @@ app.use('/api/trails', trailRoutes);                                 // Feature 
 app.use('/api/workspace', workspaceRoutes);                          // Feature #13: TEAMS Multi-User Workspace
 app.use('/api/encyclopedia', encyclopediaRoutes);                     // Feature #52: Estate Sale Encyclopedia
 app.use('/api/appraisals', appraisalRoutes);                          // Feature #54: Crowdsourced Appraisal API
-app.use('/api', typologyRoutes);                                       // Feature #46: Treasure Typology Classifier
+// REMOVED S437: Typology deprecated
+// app.use('/api', typologyRoutes);
 app.use('/api/sync', syncRoutes);                                    // Feature #69: Local-First Offline Mode
 app.use('/api/checklist', checklistRoutes);                            // Sale Checklist
 app.use('/api/disputes', disputeRoutes);                               // Disputes Management
