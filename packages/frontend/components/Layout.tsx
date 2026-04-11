@@ -233,7 +233,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
     { href: '/map', label: 'Map' },
     { href: '/calendar', label: 'Calendar' },
     { href: '/feed', label: 'Feed' },
-    { href: '/inspiration', label: 'Inspiration' },
     { href: '/trending', label: 'Trending' },
     { href: '/pricing', label: 'Pricing' },
   ];
@@ -523,25 +522,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <span>Lucky Roll</span>
             </Link>
 
-            <SectionHeader icon={Award} label="Hunt Exclusives" color="amber" />
-            <Link href="/shopper/rare-finds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Dedicated rare items page for Hunt Pass subscribers">
-              <Sparkles size={16} className="text-amber-400" />
-              <span>Rare Finds</span>
-            </Link>
-            <Link href="/shopper/loot-legend" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items">
-              <Star size={16} className="text-amber-400" />
-              <span>Loot Legend</span>
-            </Link>
-            <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
-              <Trophy size={16} className="text-amber-500" />
-              <span>League</span>
-            </Link>
-
-            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
-              <Ticket size={16} className="text-amber-500" />
-              <span>Hunt Pass</span>
-            </Link>
-
             <SectionHeader icon={Share2} label="Connect" color="indigo" />
             <Link href="/shopper/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Star size={16} className="text-indigo-500" />
@@ -566,6 +546,25 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/shopper/trades" className="flex items-center gap-2 px-3 py-2 text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
               <ArrowLeftRight size={16} className="text-indigo-400" />
               <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
+            </Link>
+
+            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
+              <Ticket size={16} className="text-amber-500" />
+              <span>Hunt Pass</span>
+            </Link>
+
+            <SectionHeader icon={Award} label="Hunt Exclusives" color="amber" />
+            <Link href="/shopper/rare-finds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Dedicated rare items page for Hunt Pass subscribers">
+              <Sparkles size={16} className="text-amber-400" />
+              <span>Rare Finds</span>
+            </Link>
+            <Link href="/shopper/loot-legend" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items">
+              <Star size={16} className="text-amber-400" />
+              <span>Loot Legend</span>
+            </Link>
+            <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
+              <Trophy size={16} className="text-amber-500" />
+              <span>League</span>
             </Link>
           </>
         )}
@@ -758,7 +757,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
             {/* Mobile: notification bell (if logged in) + theme toggle + hamburger */}
             <div className="lg:hidden flex items-center gap-1">
-              {isClient && user && <NotificationBell />}
+              {isClient && user && (
+                <>
+                  <Link href="/shopper/holds" className="relative p-2 rounded-md text-warm-500 dark:text-warm-300 hover:text-amber-600 dark:hover:text-amber-400" title="My Holds">
+                    <Clock size={20} />
+                  </Link>
+                  <NotificationBell />
+                </>
+              )}
               <ThemeToggle compact={true} />
               <button
                 className="p-2 rounded-md text-warm-500 dark:text-warm-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-200 dark:hover:bg-warm-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -1098,8 +1104,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileTeamsOpen && (
                       <>
-                        <Link href="/organizer/command-center" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <LayoutDashboard size={14} className="inline mr-2 text-purple-400" /> Command Center
+                        <Link href="/organizer/command-center" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <LayoutDashboard size={14} className="inline mr-2 text-gray-400" /> Command Center
                         </Link>
                         <Link href="/organizer/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Calendar size={14} className="inline mr-2 text-gray-400" /> Calendar
@@ -1229,39 +1235,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       </>
                     )}
 
-                    {/* Hunt Exclusives Section — Collapsible */}
-                    <button
-                      onClick={() => setMobileDualRoleHuntPassOpen(!mobileDualRoleHuntPassOpen)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Award size={14} />
-                        <span>Hunt Exclusives</span>
-                      </div>
-                      <ChevronRight
-                        size={16}
-                        className={`transition-transform duration-200 ${mobileDualRoleHuntPassOpen ? 'rotate-90' : ''}`}
-                      />
-                    </button>
-                    {mobileDualRoleHuntPassOpen && (
-                      <>
-                        <Link href="/shopper/rare-finds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Sparkles size={14} className="inline mr-2 text-amber-400" /> Rare Finds
-                        </Link>
-                        <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
-                        </Link>
-                        <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Trophy size={14} className="inline mr-2 text-amber-500" /> League
-                        </Link>
-                      </>
-                    )}
-
-                    {/* Hunt Pass standalone link */}
-                    <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
-                    </Link>
-
                     {/* Connect Section — Collapsible */}
                     <button
                       onClick={() => setMobileInSaleToolsOpen(!mobileInSaleToolsOpen)}
@@ -1292,6 +1265,39 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         </Link>
                         <Link href="/shopper/trades" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                           <ArrowLeftRight size={14} className="inline mr-2 text-indigo-400" /> Trades <span className="text-xs text-gray-400">(Soon)</span>
+                        </Link>
+                      </>
+                    )}
+
+                    {/* Hunt Pass standalone link */}
+                    <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
+                    </Link>
+
+                    {/* Hunt Exclusives Section — Collapsible */}
+                    <button
+                      onClick={() => setMobileDualRoleHuntPassOpen(!mobileDualRoleHuntPassOpen)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Award size={14} />
+                        <span>Hunt Exclusives</span>
+                      </div>
+                      <ChevronRight
+                        size={16}
+                        className={`transition-transform duration-200 ${mobileDualRoleHuntPassOpen ? 'rotate-90' : ''}`}
+                      />
+                    </button>
+                    {mobileDualRoleHuntPassOpen && (
+                      <>
+                        <Link href="/shopper/rare-finds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Sparkles size={14} className="inline mr-2 text-amber-400" /> Rare Finds
+                        </Link>
+                        <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
+                        </Link>
+                        <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Trophy size={14} className="inline mr-2 text-amber-500" /> League
                         </Link>
                       </>
                     )}
@@ -1402,39 +1408,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* Hunt Exclusives Section — Collapsible */}
-                <button
-                  onClick={() => setMobileHuntPassOpen(!mobileHuntPassOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Award size={14} />
-                    <span>Hunt Exclusives</span>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className={`transition-transform duration-200 ${mobileHuntPassOpen ? 'rotate-90' : ''}`}
-                  />
-                </button>
-                {mobileHuntPassOpen && (
-                  <>
-                    <Link href="/shopper/rare-finds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Sparkles size={14} className="inline mr-2 text-amber-400" /> Rare Finds
-                    </Link>
-                    <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
-                    </Link>
-                    <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Trophy size={14} className="inline mr-2 text-amber-500" /> League
-                    </Link>
-                  </>
-                )}
-
-                {/* Hunt Pass standalone link */}
-                <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
-                </Link>
-
                 {/* Connect Section — Collapsible */}
                 <button
                   onClick={() => setMobileShopperCollectionOpen(!mobileShopperCollectionOpen)}
@@ -1462,6 +1435,39 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/shopper/trades" className="block px-3 py-2 text-sm text-gray-400 dark:text-gray-500 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md cursor-not-allowed">
                       <ArrowLeftRight size={14} className="inline mr-2 text-indigo-400" /> Trades <span className="text-xs text-gray-400">(Soon)</span>
+                    </Link>
+                  </>
+                )}
+
+                {/* Hunt Pass standalone link */}
+                <Link href="/shopper/hunt-pass" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
+                </Link>
+
+                {/* Hunt Exclusives Section — Collapsible */}
+                <button
+                  onClick={() => setMobileHuntPassOpen(!mobileHuntPassOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Award size={14} />
+                    <span>Hunt Exclusives</span>
+                  </div>
+                  <ChevronRight
+                    size={16}
+                    className={`transition-transform duration-200 ${mobileHuntPassOpen ? 'rotate-90' : ''}`}
+                  />
+                </button>
+                {mobileHuntPassOpen && (
+                  <>
+                    <Link href="/shopper/rare-finds" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Sparkles size={14} className="inline mr-2 text-amber-400" /> Rare Finds
+                    </Link>
+                    <Link href="/shopper/loot-legend" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Star size={14} className="inline mr-2 text-amber-400" /> Loot Legend
+                    </Link>
+                    <Link href="/shopper/league" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Trophy size={14} className="inline mr-2 text-amber-500" /> League
                     </Link>
                   </>
                 )}
