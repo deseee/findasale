@@ -1,9 +1,9 @@
 /**
- * Crowdsourced Appraisal API
+ * Crowdsourced Appraisal Page
  *
  * Feature #54: Organizer appraisal management (submit requests, view community feedback)
  * Route: /organizer/appraisals
- * Tier gating: PRO minimum (SIMPLE redirected to /organizer/pricing)
+ * Tier gating: Community Feed (browse) accessible to all. Submit Request (create) requires PRO.
  */
 
 import React, { useState } from 'react';
@@ -21,7 +21,6 @@ import {
 import { useToast } from '../../components/ToastContext';
 import AppraisalResponseForm from '../../components/AppraisalResponseForm';
 import Skeleton from '../../components/Skeleton';
-import TierGate from '../../components/TierGate';
 
 type Tab = 'my-requests' | 'community-feed';
 
@@ -31,7 +30,7 @@ const AppraisalsPage = () => {
   const { canAccess } = useOrganizerTier();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<Tab>('my-requests');
+  const [activeTab, setActiveTab] = useState<Tab>('community-feed');
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [feedPage, setFeedPage] = useState(1);
   const [expandedResponses, setExpandedResponses] = useState<Set<string>>(
@@ -241,7 +240,6 @@ const AppraisalsPage = () => {
         <title>Appraisals - FindA.Sale</title>
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Appraisals" description="Get community appraisals on items. Submit requests, browse the feed, and contribute your expertise.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
@@ -260,22 +258,43 @@ const AppraisalsPage = () => {
         </div>
 
         <div className="max-w-6xl mx-auto px-4 py-8">
-          {/* Submit button */}
-          <div className="mb-8">
-            <button
-              onClick={() => setShowSubmitForm(!showSubmitForm)}
-              className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
-            >
-              {showSubmitForm ? 'Cancel' : 'Submit New Request'}
-            </button>
+          {/* Top explainer */}
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-8">
+            <p className="text-sm text-amber-900 dark:text-amber-100">
+              Get community price estimates on items you&apos;re unsure about. Browse open requests and share your expertise — or{' '}
+              {canAccess('PRO') ? (
+                <span>submit your own.</span>
+              ) : (
+                <Link href="/organizer/pricing" className="font-semibold underline hover:text-amber-700 dark:hover:text-amber-50">
+                  submit your own with PRO
+                </Link>
+              )}
+            </p>
           </div>
 
-          {/* Submit form */}
-          {showSubmitForm && (
+          {/* Submit button (PRO only) */}
+          {canAccess('PRO') && (
+            <div className="mb-8">
+              <button
+                onClick={() => setShowSubmitForm(!showSubmitForm)}
+                className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
+              >
+                {showSubmitForm ? 'Cancel' : 'Submit New Request'}
+              </button>
+            </div>
+          )}
+
+          {/* Submit form (PRO tier only) */}
+          {showSubmitForm && canAccess('PRO') && (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
-              <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">
-                New Appraisal Request
-              </h2>
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-2">
+                  New Appraisal Request
+                </h2>
+                <p className="text-sm text-warm-600 dark:text-gray-400">
+                  Submitting an appraisal request is free with your PRO subscription. Community members will provide price estimates within 7 days.
+                </p>
+              </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Item Title */}
                 <div>
@@ -383,16 +402,18 @@ const AppraisalsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-6 border-b border-warm-200 dark:border-gray-700">
-            <button
-              onClick={() => setActiveTab('my-requests')}
-              className={`pb-3 px-2 font-semibold border-b-2 transition-colors ${
-                activeTab === 'my-requests'
-                  ? 'border-amber-600 text-amber-600'
-                  : 'border-transparent text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'
-              }`}
-            >
-              My Requests
-            </button>
+            {canAccess('PRO') && (
+              <button
+                onClick={() => setActiveTab('my-requests')}
+                className={`pb-3 px-2 font-semibold border-b-2 transition-colors ${
+                  activeTab === 'my-requests'
+                    ? 'border-amber-600 text-amber-600'
+                    : 'border-transparent text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'
+                }`}
+              >
+                My Requests
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('community-feed')}
               className={`pb-3 px-2 font-semibold border-b-2 transition-colors ${
@@ -405,8 +426,8 @@ const AppraisalsPage = () => {
             </button>
           </div>
 
-          {/* My Requests Tab */}
-          {activeTab === 'my-requests' && (
+          {/* My Requests Tab (PRO only) */}
+          {activeTab === 'my-requests' && canAccess('PRO') && (
             <div>
               {myLoading && (
                 <div className="space-y-4">
@@ -434,6 +455,12 @@ const AppraisalsPage = () => {
           {/* Community Feed Tab */}
           {activeTab === 'community-feed' && (
             <div>
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6">
+                <p className="text-sm text-blue-900 dark:text-blue-100">
+                  Help fellow organizers price their items. Your expertise earns you reputation in the community.
+                </p>
+              </div>
+
               {feedLoading && (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
@@ -466,11 +493,17 @@ const AppraisalsPage = () => {
                   </button>
                 </div>
               )}
+
+              {/* Reputation note */}
+              {!feedLoading && feedData && feedData.requests.length > 0 && (
+                <p className="text-xs text-warm-500 dark:text-gray-400 mt-6 text-center">
+                  Appraisal responses contribute to your Explorer&apos;s Guild reputation.
+                </p>
+              )}
             </div>
           )}
         </div>
       </div>
-      </TierGate>
     </>
   );
 };

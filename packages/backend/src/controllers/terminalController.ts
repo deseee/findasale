@@ -12,6 +12,7 @@ import { randomUUID } from 'crypto';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 
 const stripe = () => getStripe();
 
@@ -32,7 +33,7 @@ const resolveOrganizer = async (req: AuthRequest, res: Response, opts: { require
 
   const organizer = await prisma.organizer.findUnique({
     where: { userId: req.user.id },
-    select: { id: true, stripeConnectId: true, referralDiscountExpiry: true },
+    select: { id: true, stripeConnectId: true, referralDiscountExpiry: true, subscriptionTier: true },
   });
 
   if (!organizer) {
@@ -166,7 +167,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     // Fee: read from FeeStructure, apply referral discount if active
     // Platform fee is calculated on the card portion only (not on cash)
     const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const baseFeeRate = feeStructure?.feeRate ?? 0.10;
+    const baseFeeRate = feeStructure?.feeRate ?? getPlatformFeeRate(organizer.subscriptionTier as any);
     const hasReferralDiscount =
       organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
     const feeRate = hasReferralDiscount ? 0 : baseFeeRate;
@@ -553,7 +554,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     // Fee: read from FeeStructure (same rate as card flow). Cash organizer collects full amount in person —
     // platformFeeAmount is tracked for accounting; billing/collection is handled outside Stripe.
     const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const feeRate = feeStructure?.feeRate ?? 0.10;
+    const feeRate = feeStructure?.feeRate ?? getPlatformFeeRate(organizer.subscriptionTier as any);
 
     // Create Purchase records immediately with status PAID
     const purchaseIds: string[] = [];

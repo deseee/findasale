@@ -47,6 +47,16 @@ const OrganizerEarningsPage = () => {
     return null;
   }
 
+  // Fetch organizer profile (for subscriptionTier)
+  const { data: organizerProfile } = useQuery({
+    queryKey: ['organizer-profile'],
+    queryFn: async () => {
+      const response = await api.get('/organizers/me');
+      return response.data as { id: string; subscriptionTier: string };
+    },
+    enabled: !!user?.id,
+  });
+
   // Fetch analytics data
   const { data: analytics, isLoading: analyticsLoading, error: analyticsError } = useQuery({
     queryKey: ['organizer-earnings', year],
@@ -336,7 +346,7 @@ const OrganizerEarningsPage = () => {
               {/* Info footer */}
               <div className="mt-8 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <strong>Platform Fee:</strong> 10% of each completed sale. Fees are deducted from your gross revenue to calculate net earnings.
+                  <strong>Platform Fee:</strong> {organizerProfile?.subscriptionTier === 'PRO' || organizerProfile?.subscriptionTier === 'TEAMS' ? '8%' : '10%'} of each completed sale. Fees are deducted from your gross revenue to calculate net earnings.
                 </p>
               </div>
             </>

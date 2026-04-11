@@ -82,7 +82,7 @@ export default function EmailDigestPreview() {
 
   if (authLoading || settingsLoading) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+      <div className="min-h-screen bg-stone-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
     );
@@ -131,8 +131,8 @@ export default function EmailDigestPreview() {
                 disabled={updatePreferenceMutation.isPending}
                 className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                   isEmailEnabled
-                    ? 'bg-red-100 text-red-700 dark:text-red-300 hover:bg-red-200'
-                    : 'bg-green-100 text-green-700 hover:bg-green-200'
+                    ? 'bg-red-100 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/40'
+                    : 'bg-green-100 text-green-700 hover:bg-green-200 dark:hover:bg-green-900/40'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {updatePreferenceMutation.isPending ? 'Updating...' : isEmailEnabled ? 'Disable' : 'Enable'}
@@ -142,7 +142,7 @@ export default function EmailDigestPreview() {
 
           {/* Email Preview */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="bg-gray-100 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="bg-gray-100 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="font-semibold text-gray-900 dark:text-gray-100">Email Preview</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">This is how your weekly digest appears in your inbox.</p>
             </div>
@@ -169,15 +169,15 @@ export default function EmailDigestPreview() {
                   {/* Stats Grid */}
                   <div className="grid grid-cols-3 gap-4 mb-8">
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-blue-700">{mockDigest.totalItemsSold}</div>
+                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{mockDigest.totalItemsSold}</div>
                       <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Items Sold</div>
                     </div>
                     <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-amber-700">${mockDigest.totalRevenue.toFixed(2)}</div>
+                      <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">${mockDigest.totalRevenue.toFixed(2)}</div>
                       <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">Revenue</div>
                     </div>
                     <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-green-700">{mockDigest.newFollowers}</div>
+                      <div className="text-2xl font-bold text-green-700 dark:text-green-300">{mockDigest.newFollowers}</div>
                       <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">New Followers</div>
                     </div>
                   </div>
@@ -205,7 +205,7 @@ export default function EmailDigestPreview() {
                         {mockDigest.topItems.map((item, idx) => (
                           <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
                             <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">{item.title}</div>
-                            <div className="text-amber-700 font-bold text-sm mt-1">${item.price.toFixed(2)}</div>
+                            <div className="text-amber-700 dark:text-amber-300 font-bold text-sm mt-1">${item.price.toFixed(2)}</div>
                           </div>
                         ))}
                       </div>
@@ -242,15 +242,15 @@ export default function EmailDigestPreview() {
                 <div className="bg-gray-50 dark:bg-gray-900 px-8 py-5 border-t border-gray-200 dark:border-gray-700 text-center">
                   <p className="text-xs text-gray-600 dark:text-gray-400">
                     You're receiving this because you're an organizer on{' '}
-                    <a href="/" className="text-teal-700">
+                    <a href="/" className="text-teal-700 dark:text-teal-400 hover:text-teal-900 dark:hover:text-teal-300">
                       FindA.Sale
                     </a>
                     .<br />
-                    <a href="/organizer/settings" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:text-gray-100">
+                    <a href="/organizer/settings" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
                       Manage email preferences
                     </a>
                     {' '}·{' '}
-                    <a href="/unsubscribe" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:text-gray-100">
+                    <a href="/unsubscribe" className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
                       Unsubscribe
                     </a>
                   </p>
@@ -261,8 +261,8 @@ export default function EmailDigestPreview() {
 
           {/* Info Section */}
           <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
-            <h3 className="font-semibold text-blue-900 mb-2">About Your Weekly Digest</h3>
-            <ul className="text-sm text-blue-800 space-y-2 list-disc list-inside">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">About Your Weekly Digest</h3>
+            <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-2 list-disc list-inside">
               <li>Sent every Monday morning at 9 AM EST</li>
               <li>Includes items sold, revenue, new followers, and engagement metrics</li>
               <li>Shows your top-selling items from the past week</li>

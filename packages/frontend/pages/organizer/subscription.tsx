@@ -43,11 +43,18 @@ export default function SubscriptionPage() {
         const data = await response.json();
         setSubscription(data);
       } else {
-        showToast('Failed to load subscription', 'error');
+        // If tier info is available, suppress error toast — page can still display tier details
+        if (!tier) {
+          showToast('Failed to load subscription', 'error');
+        }
+        console.warn('Failed to load subscription details, will show graceful fallback');
       }
     } catch (error) {
       console.error('Error fetching subscription:', error);
-      showToast('Failed to load subscription', 'error');
+      // If tier info is available, suppress error toast — page can still display tier details
+      if (!tier) {
+        showToast('Failed to load subscription', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -278,7 +285,7 @@ export default function SubscriptionPage() {
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Billing Interval</p>
                     <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
-                      {subscription.billingInterval || 'N/A'}
+                      {subscription.billingInterval || <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
                     </p>
                   </div>
                   <div>
@@ -304,7 +311,7 @@ export default function SubscriptionPage() {
                             month: 'long',
                             day: 'numeric',
                           })
-                        : 'N/A'}
+                        : <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
                     </p>
                   </div>
                 </div>

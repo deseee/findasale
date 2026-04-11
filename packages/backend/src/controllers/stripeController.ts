@@ -19,6 +19,7 @@ import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpServi
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
+import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -345,7 +346,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
             endDate: true,
             organizerId: true,
             organizer: {
-              select: { stripeConnectId: true, userId: true, referralDiscountExpiry: true }
+              select: { stripeConnectId: true, userId: true, referralDiscountExpiry: true, subscriptionTier: true }
             }
           }
         }
@@ -406,7 +407,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     }
 
     const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const baseFeePercent = feeStructure?.feeRate ?? 0.10;
+    const baseFeePercent = feeStructure?.feeRate ?? getPlatformFeeRate(item.sale.organizer.subscriptionTier as any);
 
     const discountExpiry = item.sale.organizer.referralDiscountExpiry;
     const hasReferralDiscount = discountExpiry != null && discountExpiry > new Date();

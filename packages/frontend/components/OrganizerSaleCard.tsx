@@ -145,10 +145,10 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
         {/* ── Content area ── */}
         <div className="flex flex-col flex-1 p-3">
           <Link href={`/sales/${sale.id}`} className="flex-1">
-            <h3 className="font-semibold text-sm text-warm-900 leading-snug line-clamp-1 mb-1">
+            <h3 className="font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug line-clamp-1 mb-1">
               {sale.title}
             </h3>
-            <p className="text-xs text-warm-500">
+            <p className="text-xs text-warm-500 dark:text-gray-400">
               {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}&nbsp;·&nbsp;{sale.city}, {sale.state}
             </p>
           </Link>

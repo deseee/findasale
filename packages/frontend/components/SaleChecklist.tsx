@@ -124,7 +124,7 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
   }
 
   if (error || !checklist) {
-    return <div className="text-red-600">Failed to load checklist</div>;
+    return <div className="text-red-600 dark:text-red-400">Failed to load checklist</div>;
   }
 
   const items = (checklist.items || []) as ChecklistItem[];
@@ -140,14 +140,14 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
       {/* Overall Progress Bar */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Overall Progress</h3>
-          <span className="text-sm font-medium text-gray-600">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Overall Progress</h3>
+          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
             {completedItems} of {totalItems} tasks complete
           </span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-3">
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
           <div
-            className="bg-amber-500 h-3 rounded-full transition-all"
+            className="bg-amber-500 dark:bg-amber-600 h-3 rounded-full transition-all"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
@@ -167,13 +167,13 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
               className="w-full flex items-center justify-between mb-4 hover:opacity-70 transition-opacity"
             >
               <div className="flex items-center gap-3">
-                <h3 className="text-lg font-semibold text-gray-900">{phaseLabel}</h3>
-                <span className="text-sm font-medium text-gray-600">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{phaseLabel}</h3>
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                   ({phaseCompleted}/{phaseItems.length})
                 </span>
               </div>
               <svg
-                className={`w-5 h-5 text-gray-500 transition-transform ${
+                className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform ${
                   expandedPhase === phase ? 'rotate-180' : ''
                 }`}
                 fill="none"
@@ -196,26 +196,26 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
                   {phaseItems.map(item => (
                     <div
                       key={item.id}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={item.completed}
                         onChange={() => handleToggleItem(item.id, item.completed)}
-                        className="mt-1 w-5 h-5 text-amber-500 border-gray-300 rounded focus:ring-2 focus:ring-amber-500"
+                        className="mt-1 w-5 h-5 text-amber-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-amber-500"
                       />
                       <div className="flex-1 min-w-0">
                         <label
                           className={`text-sm font-medium block ${
                             item.completed
-                              ? 'text-gray-500 line-through'
-                              : 'text-gray-900'
+                              ? 'text-gray-500 dark:text-gray-400 line-through'
+                              : 'text-gray-900 dark:text-gray-100'
                           }`}
                         >
                           {item.label}
                         </label>
                         {item.completed && item.completedAt && (
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Completed {format(new Date(item.completedAt), 'MMM d, h:mm a')}
                           </p>
                         )}
@@ -223,7 +223,7 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
                       {item.id.startsWith('custom_') && (
                         <button
                           onClick={() => handleDeleteItem(item.id)}
-                          className="text-gray-400 hover:text-red-600 transition-colors"
+                          className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           title="Delete custom task"
                         >
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -256,11 +256,11 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
                       }
                     }}
                     placeholder="Add custom task..."
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-gray-400 dark:placeholder-gray-500"
                   />
                   <button
                     onClick={() => handleAddItem(phase)}
-                    className="px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
+                    className="px-4 py-2 bg-amber-500 dark:bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-600 dark:hover:bg-amber-700 transition-colors"
                   >
                     Add
                   </button>

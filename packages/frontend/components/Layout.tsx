@@ -336,7 +336,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <BookOpen size={16} className="text-amber-500" />
               <span>Item Library</span>
             </Link>
-            <Link href="/organizer/inventory" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Persistent inventory across sales">
+            <Link href="/organizer/item-library" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Reuse items across multiple sales">
               <Package size={16} className="text-amber-400" />
               <span>Inventory</span>
             </Link>
@@ -1027,9 +1027,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/organizer/reputation" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Star size={14} className="inline mr-2 text-amber-500" /> Reputation
-                    </Link>
-                    <Link href="/organizer/reviews" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Star size={14} className="inline mr-2 text-amber-500" /> Reviews
                     </Link>
                   </>
                 )}
