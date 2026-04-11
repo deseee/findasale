@@ -1103,6 +1103,7 @@ model MissingListingBounty {
   category    String?  // Category for shopper-created bounties
   maxBudget   Float?   // Max budget for shopper-created bounties
   radiusMiles Int?     // Search radius in miles for shopper-created bounties
+  referenceUrl String?  // URL to reference photo or similar item link
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -2008,7 +2009,7 @@ model UserAchievement {
   id            String      @id @default(cuid())
   userId        String
   achievementId String
-  unlockedAt    DateTime    @default(now())
+  unlockedAt    DateTime?
   progress      Int         @default(0)
   user          User        @relation("UserAchievements", fields: [userId], references: [id], onDelete: Cascade)
   achievement   Achievement @relation(fields: [achievementId], references: [id])

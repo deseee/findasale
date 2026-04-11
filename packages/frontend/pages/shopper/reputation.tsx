@@ -42,7 +42,7 @@ const ShopperReputationPage = () => {
   useEffect(() => {
     if (user?.id) {
       Promise.all([
-        api.get('/users/me/purchases'),
+        api.get('/users/purchases'),
         api.get('/users/me'),
       ])
         .then(([purchasesRes, userRes]) => {

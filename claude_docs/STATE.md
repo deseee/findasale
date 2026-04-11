@@ -7,6 +7,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S440 COMPLETE (2026-04-11):** Patrick's 10-issue review session. 7 parallel dev dispatches. Nav restructured (grey icons, Explorer Passport rename, Hunt Exclusives group, league moved). Bounties UX upgraded (XP input 50 min, reference URLs, expandable cards, BountySubmission model). Subscription upgrade pitches rebuilt for FREE→PRO/ALC and PRO→TEAMS. Achievements dark mode + unlock logic fixed. Reputation API path fixed. Dashboard primary sales cards got dates. Receipt review CTA added.
+
+**S440 Schema changes (3 migrations):**
+- `20260411_add_reference_url_bounty` — adds referenceUrl to MissingListingBounty
+- `20260411_bounty_submissions` — adds xpReward/expiry to MissingListingBounty, creates BountySubmission table
+- `20260411_make_unlockedAt_nullable` — UserAchievement.unlockedAt becomes nullable
+
+**S440 Migration required:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S440 Files changed:**
+- `packages/frontend/components/Layout.tsx` — nav: grey icons, Explorer Passport rename, Hunt Exclusives group, league moved
+- `packages/frontend/components/AvatarDropdown.tsx` — same nav changes
+- `packages/frontend/pages/shopper/explorer-passport.tsx` — title/heading → Explorer Passport
+- `packages/frontend/pages/shopper/bounties.tsx` — XP input, referenceUrl field, expandable cards
+- `packages/frontend/pages/organizer/subscription.tsx` — dark mode fix, upgrade pitches
+- `packages/frontend/components/AchievementBadge.tsx` — dark mode styling
+- `packages/frontend/pages/shopper/reputation.tsx` — fixed API path
+- `packages/frontend/pages/organizer/dashboard.tsx` — dates on primary sales cards
+- `packages/frontend/components/ReceiptCard.tsx` — review CTA
+- `packages/backend/src/controllers/bountyController.ts` — xpReward/referenceUrl support
+- `packages/backend/src/controllers/receiptController.ts` — organizer data in receipts
+- `packages/backend/src/services/achievementService.ts` — unlock logic fix
+- `packages/database/prisma/schema.prisma` — referenceUrl + unlockedAt nullable + BountySubmission
+- `packages/database/prisma/migrations/20260411_add_reference_url_bounty/migration.sql` — NEW
+- `packages/database/prisma/migrations/20260411_bounty_submissions/migration.sql` — NEW
+- `packages/database/prisma/migrations/20260411_make_unlockedAt_nullable/migration.sql` — NEW
+
+**S440 Open decision:** Bounties — dollars vs XP-only. Patrick exploring Stripe/legal implications before committing.
+
+---
+
 **S439 COMPLETE (2026-04-11):** 6 live-site issues fixed. Inventory root-cause resolved (447 items backfilled). Shopper bounties model evolved. Market Hubs renamed. Subscription PRO display fixed.
 
 **S439 What shipped:**

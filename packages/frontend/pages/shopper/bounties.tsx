@@ -13,6 +13,7 @@ interface Bounty {
   maxBudget?: number;
   radiusMiles?: number;
   xpReward: number;
+  referenceUrl?: string;
   status: string;
   user: { name: string };
   createdAt: string;
@@ -24,6 +25,8 @@ interface BountyRequest {
   category: string;
   maxBudget: number;
   radius: number;
+  xpReward: number;
+  referenceUrl: string;
 }
 
 export default function ShopperBountiesPage() {
@@ -33,12 +36,15 @@ export default function ShopperBountiesPage() {
   const [isLoadingBounties, setIsLoadingBounties] = useState(false);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedBountyId, setExpandedBountyId] = useState<string | null>(null);
   const [formData, setFormData] = useState<BountyRequest>({
     itemName: '',
     description: '',
     category: 'other',
     maxBudget: 0,
     radius: 25,
+    xpReward: 50,
+    referenceUrl: '',
   });
 
   // Load active bounties when page loads
@@ -63,7 +69,7 @@ export default function ShopperBountiesPage() {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'maxBudget' || name === 'radius' ? parseFloat(value) : value,
+      [name]: name === 'maxBudget' || name === 'radius' || name === 'xpReward' ? parseFloat(value) : value,
     }));
   };
 
@@ -75,6 +81,11 @@ export default function ShopperBountiesPage() {
       return;
     }
 
+    if (formData.xpReward < 50) {
+      showToast('XP reward must be at least 50', 'error');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       await api.post('/bounties', {
@@ -83,10 +94,12 @@ export default function ShopperBountiesPage() {
         category: formData.category,
         maxBudget: formData.maxBudget,
         radiusMiles: formData.radius,
+        xpReward: Math.max(50, formData.xpReward),
+        referenceUrl: formData.referenceUrl,
       });
 
       showToast('Bounty request submitted successfully!', 'success');
-      setFormData({ itemName: '', description: '', category: 'other', maxBudget: 0, radius: 25 });
+      setFormData({ itemName: '', description: '', category: 'other', maxBudget: 0, radius: 25, xpReward: 50, referenceUrl: '' });
       setShowRequestForm(false);
       // Reload bounties to show the new request
       await loadActiveBounties();
@@ -181,6 +194,23 @@ export default function ShopperBountiesPage() {
                 />
               </div>
 
+              <div className="mb-6">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Reference Photo/Link
+                </label>
+                <input
+                  type="url"
+                  name="referenceUrl"
+                  value={formData.referenceUrl}
+                  onChange={handleInputChange}
+                  placeholder="https://example.com/photo.jpg or link to similar item"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Optional: Link to a photo or reference item to help organizers understand what you're looking for
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -211,6 +241,27 @@ export default function ShopperBountiesPage() {
                     min="5"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    XP Reward <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="xpReward"
+                    value={formData.xpReward}
+                    onChange={handleInputChange}
+                    placeholder="50"
+                    step="10"
+                    min="50"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Minimum 50 XP. Organizers earn this as a reward if they find your item
+                  </p>
                 </div>
               </div>
 
@@ -247,54 +298,95 @@ export default function ShopperBountiesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeBounties.map((bounty) => (
-                <div
-                  key={bounty.id}
-                  className="bg-white dark:bg-slate-800 rounded-lg shadow hover:shadow-md transition-shadow p-6"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex-1">
-                      {bounty.itemName}
-                    </h3>
-                    <span className="ml-2 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-full">
-                      {bounty.status}
-                    </span>
-                  </div>
-
-                  {bounty.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                      {bounty.description}
-                    </p>
-                  )}
-
-                  <div className="space-y-2 mb-4 text-sm">
-                    {bounty.maxBudget !== undefined && (
-                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                        <DollarSign size={16} className="text-gray-400" />
-                        <span>Budget: ${bounty.maxBudget.toFixed(2)}</span>
+              {activeBounties.map((bounty) => {
+                const isExpanded = expandedBountyId === bounty.id;
+                return (
+                  <div
+                    key={bounty.id}
+                    className="bg-white dark:bg-slate-800 rounded-lg shadow hover:shadow-lg transition-all cursor-pointer"
+                    onClick={() => setExpandedBountyId(isExpanded ? null : bounty.id)}
+                  >
+                    <div className="p-6">
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex-1">
+                          {bounty.itemName}
+                        </h3>
+                        <span className="ml-2 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold rounded-full">
+                          {bounty.status}
+                        </span>
                       </div>
-                    )}
-                    {bounty.radiusMiles !== undefined && (
-                      <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                        <MapPin size={16} className="text-gray-400" />
-                        <span>Within {bounty.radiusMiles} miles</span>
+
+                      {bounty.description && (
+                        <p className={`text-sm text-gray-600 dark:text-gray-400 mb-4 ${isExpanded ? '' : 'line-clamp-2'}`}>
+                          {bounty.description}
+                        </p>
+                      )}
+
+                      <div className="space-y-2 mb-4 text-sm">
+                        {bounty.maxBudget !== undefined && (
+                          <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                            <DollarSign size={16} className="text-gray-400" />
+                            <span>Budget: ${bounty.maxBudget.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {bounty.radiusMiles !== undefined && (
+                          <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                            <MapPin size={16} className="text-gray-400" />
+                            <span>Within {bounty.radiusMiles} miles</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                          <Target size={16} className="text-amber-500" />
+                          <span>🏆 {bounty.xpReward} XP reward</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                          <Clock size={16} className="text-gray-400" />
+                          <span>{new Date(bounty.createdAt).toLocaleDateString()}</span>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <Target size={16} className="text-amber-500" />
-                      <span>🏆 {bounty.xpReward} XP reward</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <Clock size={16} className="text-gray-400" />
-                      <span>{new Date(bounty.createdAt).toLocaleDateString()}</span>
+
+                      {isExpanded && (
+                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                          <div className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                            <p className="font-semibold mb-2">Created by: {bounty.user.name}</p>
+                          </div>
+
+                          {bounty.referenceUrl && (
+                            <div className="mb-3">
+                              <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+                                Reference Link
+                              </p>
+                              <a
+                                href={bounty.referenceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+                              >
+                                {bounty.referenceUrl}
+                              </a>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <button className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors text-sm">
+                              Submit a Match
+                            </button>
+                            <button className="flex-1 px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-900 dark:text-gray-100 font-semibold rounded-lg transition-colors text-sm">
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {!isExpanded && (
+                        <button className="w-full px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-semibold rounded-lg transition-colors text-sm">
+                          View Details
+                        </button>
+                      )}
                     </div>
                   </div>
-
-                  <button className="w-full px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-semibold rounded-lg transition-colors">
-                    View Details
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

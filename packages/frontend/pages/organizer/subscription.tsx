@@ -140,14 +140,92 @@ export default function SubscriptionPage() {
 
             {/* SIMPLE tier users: show friendly message */}
             {tier === 'SIMPLE' ? (
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
-                <h2 className="font-semibold text-blue-900 mb-3">You're on the Free Plan</h2>
-                <p className="text-blue-800 mb-4">
-                  Upgrade to PRO to unlock batch operations, analytics, exports, and more.
-                </p>
-                <Link href="/pricing" className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition">
-                  Upgrade to PRO
-                </Link>
+              <div className="space-y-8 mb-8">
+                {/* Free Tier Status Card */}
+                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+                  <h2 className="font-semibold text-blue-900 dark:text-blue-200 mb-3">You're on the Free Plan</h2>
+                  <p className="text-blue-800 dark:text-blue-300 mb-4">
+                    You get 200 items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
+                  </p>
+                </div>
+
+                {/* Upgrade to PRO Section */}
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-8">
+                  <h3 className="text-2xl font-bold text-amber-900 dark:text-amber-100 mb-2">
+                    Ready to Scale?
+                  </h3>
+                  <p className="text-amber-800 dark:text-amber-200 mb-6">
+                    Upgrade to PRO ($29/month) and unlock powerful tools for running multiple sales.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">3 concurrent sales</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">Run estate sales, yard sales, and auctions at the same time.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">500 items per sale</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">5x the items vs. Free. Sell more without limits.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">2,000 auto tags/month</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">Every item tagged and described automatically.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Lower fees (8%)</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">Save 2% on every sale. Breakeven after 14 sales/month.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Advanced analytics</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">Flip Report shows exactly what sold and what didn't.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">24/7 support</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">AI-powered support assistant whenever you need help.</p>
+                    </div>
+                  </div>
+
+                  <Link href="/organizer/pricing" className="inline-block bg-amber-600 dark:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-amber-700 dark:hover:bg-amber-600 transition">
+                    Upgrade to PRO
+                  </Link>
+                </div>
+
+                {/* À La Carte Option */}
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
+                  <h3 className="text-2xl font-bold text-purple-900 dark:text-purple-100 mb-2">
+                    Just one big sale?
+                  </h3>
+                  <p className="text-purple-800 dark:text-purple-200 mb-6">
+                    Upgrade that sale for $9.99 to unlock PRO-level capacity without a monthly subscription.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 items & 10 photos each</p>
+                      <p className="text-sm text-purple-700 dark:text-purple-300">Everything you need for a large estate sale or auction.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 auto tags included</p>
+                      <p className="text-sm text-purple-700 dark:text-purple-300">Descriptions write themselves. Save hours of work.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Flip Report</p>
+                      <p className="text-sm text-purple-700 dark:text-purple-300">See what sold, what didn't, and your earnings.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Virtual Queue</p>
+                      <p className="text-sm text-purple-700 dark:text-purple-300">Manage early birds and long lines automatically.</p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-purple-700 dark:text-purple-300 mb-6">
+                    One-time $9.99 charge when you publish the sale. Same 10% platform fee applies.
+                  </p>
+
+                  <Link href="/organizer/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
+                    Learn about À La Carte
+                  </Link>
+                </div>
               </div>
             ) : tier === 'TEAMS' ? (
               /* TEAMS users: show tier info even without Stripe subscription */
@@ -233,77 +311,124 @@ export default function SubscriptionPage() {
               </div>
             ) : tier === 'PRO' ? (
               /* PRO users: show tier info even without Stripe subscription */
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div className="p-8 border-b border-gray-200 dark:border-gray-700">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your PRO Plan</h2>
+              <div className="space-y-8">
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                  <div className="p-8 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Your PRO Plan</h2>
 
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-8">
-                    <p className="text-green-900 dark:text-green-200">
-                      You are on the PRO plan with access to all PRO features.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Plan Tier</p>
-                      <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">PRO</p>
+                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-8">
+                      <p className="text-green-900 dark:text-green-200">
+                        You are on the PRO plan with access to all PRO features.
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Status</p>
-                      <div className="flex items-center">
-                        <span className="inline-block w-2 h-2 rounded-full mr-2 bg-green-500"></span>
-                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Plan Tier</p>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">PRO</p>
                       </div>
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Status</p>
+                        <div className="flex items-center">
+                          <span className="inline-block w-2 h-2 rounded-full mr-2 bg-green-500"></span>
+                          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Included Features</h3>
+                    <ul className="space-y-3 mb-8">
+                      <li className="flex items-start">
+                        <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-gray-100">Up to 500 Items per Sale</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Manage larger inventories</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-gray-100">Up to 10 Photos per Item</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Showcase your items in detail</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-gray-100">Batch Operations</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Edit multiple items at once</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-gray-100">Analytics & Reporting</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Track sales performance and trends</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-green-600 mr-3 mt-0.5">✓</span>
+                        <div>
+                          <p className="font-semibold text-gray-900 dark:text-gray-100">Data Exports</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Export your inventory and sales data</p>
+                        </div>
+                      </li>
+                    </ul>
+
+                    <div className="flex gap-4">
+                      <Link
+                        href="/pricing"
+                        className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition"
+                      >
+                        Compare All Plans
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Upgrade to TEAMS Section */}
+                <div className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border border-teal-200 dark:border-teal-800 rounded-lg p-8">
+                  <h3 className="text-2xl font-bold text-teal-900 dark:text-teal-100 mb-2">
+                    Growing Your Team?
+                  </h3>
+                  <p className="text-teal-800 dark:text-teal-200 mb-6">
+                    Upgrade to TEAMS ($79/month) to unlock team management, unlimited sales, and command center controls.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Unlimited concurrent sales</p>
+                      <p className="text-sm text-teal-700 dark:text-teal-300">Run as many sales as you need simultaneously.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">5 team members included</p>
+                      <p className="text-sm text-teal-700 dark:text-teal-300">Add staff, set custom roles & permissions. Add more at $20/mo each.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Unlimited items & photos</p>
+                      <p className="text-sm text-teal-700 dark:text-teal-300">No per-sale limits. Auto tags unlimited too.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Command Center</p>
+                      <p className="text-sm text-teal-700 dark:text-teal-300">Manage all your sales from one dashboard.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Webhooks & API access</p>
+                      <p className="text-sm text-teal-700 dark:text-teal-300">Connect to your other business systems.</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Same 8% platform fee</p>
+                      <p className="text-sm text-teal-700 dark:text-teal-300">Save 2% per sale vs. Free. ROI on team coordination.</p>
                     </div>
                   </div>
 
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Included Features</h3>
-                  <ul className="space-y-3 mb-8">
-                    <li className="flex items-start">
-                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">Up to 500 Items per Sale</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Manage larger inventories</p>
-                      </div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">Up to 10 Photos per Item</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Showcase your items in detail</p>
-                      </div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">Batch Operations</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Edit multiple items at once</p>
-                      </div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">Analytics & Reporting</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Track sales performance and trends</p>
-                      </div>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-green-600 mr-3 mt-0.5">✓</span>
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">Data Exports</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Export your inventory and sales data</p>
-                      </div>
-                    </li>
-                  </ul>
+                  <p className="text-sm text-teal-700 dark:text-teal-300 mb-6">
+                    TEAMS is designed for organizers running flea markets, auction houses, or multi-location operations with staff.
+                  </p>
 
-                  <div className="flex gap-4">
-                    <Link
-                      href="/pricing"
-                      className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition"
-                    >
-                      Compare All Plans
-                    </Link>
-                  </div>
+                  <Link href="/organizer/pricing" className="inline-block bg-teal-600 dark:bg-teal-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-teal-700 dark:hover:bg-teal-600 transition">
+                    Upgrade to TEAMS
+                  </Link>
                 </div>
               </div>
             ) : null}
@@ -327,14 +452,92 @@ export default function SubscriptionPage() {
 
           {/* SIMPLE Plan Message */}
           {tier === 'SIMPLE' && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
-              <h2 className="font-semibold text-blue-900 mb-3">You're on the Free Plan</h2>
-              <p className="text-blue-800 mb-4">
-                Upgrade to PRO to unlock batch operations, analytics, exports, and more.
-              </p>
-              <Link href="/pricing" className="inline-block bg-sage-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-sage-700 transition">
-                Upgrade to PRO
-              </Link>
+            <div className="space-y-8 mb-8">
+              {/* Free Tier Status Card */}
+              <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+                <h2 className="font-semibold text-blue-900 dark:text-blue-200 mb-3">You're on the Free Plan</h2>
+                <p className="text-blue-800 dark:text-blue-300">
+                  You get 200 items per sale, 5 photos each, and 100 auto tags per month. Pay 10% when items sell.
+                </p>
+              </div>
+
+              {/* Upgrade to PRO Section */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-8">
+                <h3 className="text-2xl font-bold text-amber-900 dark:text-amber-100 mb-2">
+                  Ready to Scale?
+                </h3>
+                <p className="text-amber-800 dark:text-amber-200 mb-6">
+                  Upgrade to PRO ($29/month) and unlock powerful tools for running multiple sales.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">3 concurrent sales</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">Run estate sales, yard sales, and auctions at the same time.</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">500 items per sale</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">5x the items vs. Free. Sell more without limits.</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">2,000 auto tags/month</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">Every item tagged and described automatically.</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Lower fees (8%)</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">Save 2% on every sale. Breakeven after 14 sales/month.</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Advanced analytics</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">Flip Report shows exactly what sold and what didn't.</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">24/7 support</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">AI-powered support assistant whenever you need help.</p>
+                  </div>
+                </div>
+
+                <Link href="/organizer/pricing" className="inline-block bg-amber-600 dark:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-amber-700 dark:hover:bg-amber-600 transition">
+                  Upgrade to PRO
+                </Link>
+              </div>
+
+              {/* À La Carte Option */}
+              <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-8">
+                <h3 className="text-2xl font-bold text-purple-900 dark:text-purple-100 mb-2">
+                  Just one big sale?
+                </h3>
+                <p className="text-purple-800 dark:text-purple-200 mb-6">
+                  Upgrade that sale for $9.99 to unlock PRO-level capacity without a monthly subscription.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 items & 10 photos each</p>
+                    <p className="text-sm text-purple-700 dark:text-purple-300">Everything you need for a large estate sale or auction.</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 auto tags included</p>
+                    <p className="text-sm text-purple-700 dark:text-purple-300">Descriptions write themselves. Save hours of work.</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Flip Report</p>
+                    <p className="text-sm text-purple-700 dark:text-purple-300">See what sold, what didn't, and your earnings.</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
+                    <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">Virtual Queue</p>
+                    <p className="text-sm text-purple-700 dark:text-purple-300">Manage early birds and long lines automatically.</p>
+                  </div>
+                </div>
+
+                <p className="text-sm text-purple-700 dark:text-purple-300 mb-6">
+                  One-time $9.99 charge when you publish the sale. Same 10% platform fee applies.
+                </p>
+
+                <Link href="/organizer/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
+                  Learn about À La Carte
+                </Link>
+              </div>
             </div>
           )}
 
