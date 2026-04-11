@@ -7,6 +7,37 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S438 COMPLETE (2026-04-11):** Patrick's 6-issue review session. Fixed tier-aware platform fees in 5 backend files (organizers.ts, payoutController, earningsPdfController, posController 2 locations, stripeController webhook). Rebuilt hubs page as Flea Market Events with TEAMS TierGate. Merged checklist into /plan as first tab with Planning Assistant as second tab. Moved bounties out of PRO Tools in both navs (Layout + AvatarDropdown). Removed appraisal PRO gate on submit, created shopper appraisals page. Consolidated Inventory/Item Library to single nav entry. Fixed bounties.tsx implicit any type. Fixed earningsPdfController businessName select.
+
+**S438 UNRESOLVED — Shopper Bounty 400 Error:**
+Backend `MissingListingBounty` model requires `saleId` (tied to a specific sale). The shopper bounties page was built with a "wanted item" concept (itemName, category, maxBudget, radiusMiles) that doesn't match the backend model. Making shoppers browse sales first to post bounties is backwards UX — the whole point is "I want X, organizers come to me." **Needs Architect spec** to evolve the bounty model: make `saleId` optional, add `itemName`/`category`/`maxBudget` fields to `MissingListingBounty`, create a new GET endpoint for browsing community bounties. This is a schema change + migration.
+
+**S438 UNRESOLVED — Inventory 0 Items:**
+Carol sees 0 items at /organizer/inventory despite having sales with items. Frontend is wired correctly to `/api/item-library`. Backend endpoint may filter incorrectly or require different query params.
+
+**S438 Files changed:**
+- `packages/backend/src/routes/organizers.ts` — tier-aware fee calculation in analytics
+- `packages/backend/src/controllers/payoutController.ts` — always use tierRate, removed ?? fallback
+- `packages/backend/src/controllers/earningsPdfController.ts` — tier-aware fees + businessName select fix
+- `packages/backend/src/controllers/posController.ts` — tier-aware fees (2 locations)
+- `packages/backend/src/controllers/stripeController.ts` — tier-aware webhook fee calculation
+- `packages/backend/src/routes/appraisals.ts` — removed requireTier('PRO') from POST
+- `packages/frontend/pages/organizer/hubs/index.tsx` — rebuilt as Flea Market Events page
+- `packages/frontend/pages/plan.tsx` — two-tab layout (Checklist + Planning Assistant)
+- `packages/frontend/pages/organizer/checklist/index.tsx` — redirect to /plan
+- `packages/frontend/components/Layout.tsx` — nav: removed duplicate Item Library, moved bounties out of PRO, added shopper appraisals
+- `packages/frontend/components/AvatarDropdown.tsx` — same nav changes
+- `packages/frontend/pages/shopper/bounties.tsx` — rebuilt from Coming Soon (has 400 bug, see above)
+- `packages/frontend/pages/organizer/inventory.tsx` — redirect to /organizer/item-library (was other direction)
+- `packages/frontend/pages/organizer/item-library.tsx` — redirect to /organizer/inventory
+- `packages/frontend/pages/organizer/appraisals.tsx` — removed PRO gate on submit
+- `packages/frontend/pages/shopper/appraisals.tsx` — NEW: community appraisals page
+- `packages/frontend/pages/organizer/bounties.tsx` — fixed implicit any type on .find()
+
+**S438 Push block (already pushed during session):** Fee fixes, nav changes, hubs rebuild, plan tabs, appraisals, bounties type fix, earningsPdfController businessName fix — all pushed. Shopper bounties page pushed but non-functional (400 on submit).
+
+---
+
 **S437 COMPLETE (2026-04-11):** Massive organizer tools session — 6 sale-selector bugs fixed, calendar built, bounty redesign Phase 1 shipped (schema + 6 endpoints + wired frontend), 7 organizer pages improved, typology deprecated and deleted.
 
 **S437 What shipped:**
