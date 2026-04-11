@@ -51,6 +51,7 @@ model User {
   sentMessages          Message[]         @relation("SentMessages")
   reservations          ItemReservation[]
   bounties              MissingListingBounty[]
+  organizerSubmissions  BountySubmission[]  @relation("OrganizerSubmissions")
   webhooks              Webhook[]
   treasureHuntFinds     TreasureHuntFind[]
   streakPoints          Int        @default(0)
@@ -625,6 +626,7 @@ model Item {
   favorites        Favorite[]
   reservation      ItemReservation?
   bountyFulfillments MissingListingBounty[]
+  bountySubmissions  BountySubmission[]  @relation("BountySubmissions")
   treasureHuntFinds TreasureHuntFind[]
   treasureHuntQRScans TreasureHuntQRScan[] @relation("TreasureHuntQRScans")
   flashDeals       FlashDeal[]
@@ -1093,11 +1095,37 @@ model MissingListingBounty {
   item        Item?    @relation(fields: [itemId], references: [id])
   crewId      String?
   crew        Crew?    @relation(fields: [crewId], references: [id], onDelete: SetNull)
+  xpReward    Int      @default(25) // XP earned by organizer if submission purchased
+  expiry      DateTime? // Auto-expire bounty (null = no auto-expire for backward compat)
+  submissions BountySubmission[] // All submissions for this bounty
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([saleId, status])
   @@index([userId])
+  @@index([status, expiry])
+}
+
+model BountySubmission {
+  id              String   @id @default(cuid())
+  bountyId        String
+  bounty          MissingListingBounty @relation(fields: [bountyId], references: [id], onDelete: Cascade)
+  organizerId     String   // User.id of organizer submitting
+  organizer       User     @relation("OrganizerSubmissions", fields: [organizerId], references: [id])
+  itemId          String
+  item            Item     @relation("BountySubmissions", fields: [itemId], references: [id])
+  status          String   @default("PENDING_REVIEW") // PENDING_REVIEW, APPROVED, REJECTED, EXPIRED, PURCHASED
+  shopperMessage  String?  // Message from organizer to shopper (500 char limit)
+  submittedAt     DateTime @default(now())
+  reviewedAt      DateTime? // When shopper approved/rejected
+  expiresAt       DateTime // Auto-expiry: submittedAt + 3 days
+  purchasedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+
+  @@index([bountyId, status])
+  @@index([organizerId])
+  @@index([expiresAt])
+  @@index([status])
 }
 
 // X1: Zapier / webhook registrations — organizer registers a URL + event list
