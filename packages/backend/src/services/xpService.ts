@@ -419,14 +419,21 @@ export async function getLeaderboard(limit: number = 50) {
       take: limit,
     });
 
-    return topUsers.map((user, index) => ({
+    const entries = topUsers.map((user, index) => ({
       rank: index + 1,
-      ...user,
-      rankName: user.explorerRank,
+      userId: user.id,
+      userName: user.name,
+      guildXp: user.guildXp,
+      explorerRank: user.explorerRank,
     }));
+
+    return {
+      entries,
+      lastUpdated: new Date().toISOString(),
+    };
   } catch (error) {
     console.error('[xpService] Failed to fetch leaderboard:', error);
-    return [];
+    return { entries: [], lastUpdated: new Date().toISOString() };
   }
 }
 

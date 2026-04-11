@@ -8,8 +8,8 @@ interface ShopperRank {
   rank: number;
   userId: string;
   name: string;
-  city: string | null;
   score: number;
+  explorerRank: string;
   badges?: Array<{
     id: string;
     name: string;
@@ -151,16 +151,14 @@ const Leaderboard = () => {
                         </div>
                         <div>
                           <p className="text-warm-900 dark:text-warm-100 font-semibold text-lg">{shopper.name}</p>
-                          {shopper.city && (
-                            <p className="text-sm text-warm-600 dark:text-warm-400">{shopper.city}</p>
-                          )}
+                          <p className="text-sm text-warm-600 dark:text-warm-400">{shopper.explorerRank}</p>
                         </div>
                       </div>
 
                       {/* Score */}
                       <div className="text-center mr-6">
                         <p className="text-2xl font-bold text-amber-600">{shopper.score}</p>
-                        <p className="text-xs text-warm-600 dark:text-warm-400">points</p>
+                        <p className="text-xs text-warm-600 dark:text-warm-400">XP</p>
                       </div>
 
                       {/* Badges */}
