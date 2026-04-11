@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
+import { awardXp } from '../services/xpService';
 
 /**
  * POST /api/bounties
@@ -178,6 +179,485 @@ export const cancelBounty = async (req: AuthRequest, res: Response) => {
     return res.json({ message: 'Bounty cancelled.' });
   } catch (error) {
     console.error('cancelBounty error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/bounties/local
+ * Browse local bounties (ORGANIZER auth)
+ * For MVP: returns all OPEN bounties not from this organizer's sales, sorted by newest.
+ * Distance filtering skipped (sales may not have lat/lng yet).
+ */
+export const getLocalBounties = async (req: AuthRequest, res: Response) => {
+  try {
+    // Verify organizer
+    if (!req.user?.id) return res.status(401).json({ message: 'Authentication required' });
+
+    const { distance, category, offset, limit, sort } = req.query;
+    const offsetNum = Math.max(0, parseInt(offset as string) || 0);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
+    const sortBy = (sort as string) || 'newest_first';
+
+    // Get organizer's sales to exclude bounties from their own sales
+    const organizerSales = await prisma.sale.findMany({
+      where: { organizer: { userId: req.user.id } },
+      select: { id: true },
+    });
+    const organizerSaleIds = organizerSales.map((s: any) => s.id);
+
+    // Build query for OPEN bounties not from organizer's sales
+    let orderBy: any = { createdAt: 'desc' };
+    if (sortBy === 'offer_price_desc') {
+      orderBy = { offerPrice: 'desc' };
+    } else if (sortBy === 'distance_asc') {
+      // TODO: implement distance sorting once Sales have consistent lat/lng
+      orderBy = { createdAt: 'desc' };
+    }
+
+    const bounties = await prisma.missingListingBounty.findMany({
+      where: {
+        status: 'OPEN',
+        saleId: { notIn: organizerSaleIds },
+        // TODO: add category filter if needed
+      },
+      include: {
+        user: { select: { id: true, name: true, roles: true } },
+        sale: { select: { id: true, title: true, startDate: true, lat: true, lng: true } },
+        submissions: { where: { organizerId: req.user.id } },
+      },
+      orderBy,
+      skip: offsetNum,
+      take: limitNum,
+    });
+
+    // Count total
+    const total = await prisma.missingListingBounty.count({
+      where: {
+        status: 'OPEN',
+        saleId: { notIn: organizerSaleIds },
+      },
+    });
+
+    // Format response
+    const formattedBounties = bounties.map((b: any) => ({
+      id: b.id,
+      description: b.description,
+      offerPrice: b.offerPrice,
+      user: b.user,
+      sale: b.sale,
+      distance: null, // TODO: calculate if lat/lng available
+      createdAt: b.createdAt,
+      submissionCount: b.submissions.length,
+      yourSubmission: b.submissions.length > 0 ? b.submissions[0] : null,
+    }));
+
+    return res.json({
+      bounties: formattedBounties,
+      total,
+      limit: limitNum,
+      offset: offsetNum,
+    });
+  } catch (error) {
+    console.error('getLocalBounties error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
+ * POST /api/bounties/:id/submissions
+ * Submit item to bounty (ORGANIZER auth)
+ */
+export const submitBountySubmission = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: bountyId } = req.params;
+    const { itemId, message } = req.body;
+    const organizerId = req.user?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
+    if (!itemId) return res.status(400).json({ message: 'itemId is required.' });
+
+    // Fetch bounty
+    const bounty = await prisma.missingListingBounty.findUnique({
+      where: { id: bountyId },
+      include: { sale: true },
+    });
+    if (!bounty) return res.status(404).json({ message: 'Bounty not found.' });
+    if (bounty.status !== 'OPEN') {
+      return res.status(400).json({ message: 'Bounty is not open.' });
+    }
+
+    // Fetch item
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { sale: true },
+    });
+    if (!item) return res.status(404).json({ message: 'Item not found.' });
+    if (item.sale.organizerId !== organizerId) {
+      return res.status(403).json({ message: 'Item does not belong to you.' });
+    }
+    if (item.status === 'DRAFT') {
+      return res.status(400).json({ message: 'Item must be published.' });
+    }
+
+    // Check for existing pending submission by this organizer for this bounty
+    const existingSubmission = await prisma.bountySubmission.findFirst({
+      where: {
+        bountyId,
+        organizerId,
+        status: { in: ['PENDING_REVIEW', 'APPROVED'] },
+      },
+    });
+    if (existingSubmission) {
+      return res.status(409).json({ message: 'You already have a pending submission for this bounty.' });
+    }
+
+    // Create submission with 3-day expiry
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 3);
+
+    const submission = await prisma.bountySubmission.create({
+      data: {
+        bountyId,
+        organizerId,
+        itemId,
+        status: 'PENDING_REVIEW',
+        shopperMessage: message || null,
+        expiresAt,
+      },
+    });
+
+    // Notify shopper
+    await createNotification(
+      bounty.userId,
+      'BOUNTY_SUBMISSION',
+      'New Submission',
+      `Someone found an item matching your request!`,
+      `/bounties/submissions/${submission.id}`,
+      'OPERATIONAL'
+    );
+
+    return res.status(201).json(submission);
+  } catch (error) {
+    console.error('submitBountySubmission error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/bounties/submissions
+ * Shopper view their submissions (auth required)
+ * Returns submissions for bounties owned by the authenticated user
+ */
+export const getMySubmissions = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    const { status, sort, limit } = req.query;
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
+
+    let orderBy: any = { submittedAt: 'desc' };
+    if (sort === 'expiring_soonest') {
+      orderBy = { expiresAt: 'asc' };
+    }
+
+    const submissions = await prisma.bountySubmission.findMany({
+      where: {
+        bounty: { userId },
+        ...(status ? { status: status as string } : { status: 'PENDING_REVIEW' }),
+      },
+      include: {
+        bounty: { select: { id: true, description: true, offerPrice: true, createdAt: true } },
+        item: {
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            saleId: true,
+            photoUrls: true,
+          },
+        },
+        organizer: { select: { id: true, name: true } },
+      },
+      orderBy,
+      take: limitNum,
+    });
+
+    // Count unreviewed (PENDING_REVIEW)
+    const unreviewed = await prisma.bountySubmission.count({
+      where: {
+        bounty: { userId },
+        status: 'PENDING_REVIEW',
+      },
+    });
+
+    const total = await prisma.bountySubmission.count({
+      where: {
+        bounty: { userId },
+        ...(status ? { status: status as string } : {}),
+      },
+    });
+
+    // Format response
+    const formattedSubmissions = submissions.map((s: any) => ({
+      id: s.id,
+      bounty: s.bounty,
+      item: s.item,
+      organizer: s.organizer,
+      message: s.shopperMessage,
+      status: s.status,
+      submittedAt: s.submittedAt,
+      expiresAt: s.expiresAt,
+      xpCost: s.bounty.xpReward ? s.bounty.xpReward * 2 : 50,
+    }));
+
+    return res.json({
+      submissions: formattedSubmissions,
+      total,
+      unreviewed,
+    });
+  } catch (error) {
+    console.error('getMySubmissions error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
+ * PATCH /api/bounties/submissions/:id
+ * Shopper approve/decline submission (auth required, owner of bounty)
+ */
+export const approveDeclineSubmission = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: submissionId } = req.params;
+    const { action } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+    if (!action || !['APPROVE', 'DECLINE'].includes(action)) {
+      return res.status(400).json({ message: 'action must be APPROVE or DECLINE.' });
+    }
+
+    // Fetch submission with bounty to verify ownership
+    const submission = await prisma.bountySubmission.findUnique({
+      where: { id: submissionId },
+      include: { bounty: true },
+    });
+    if (!submission) return res.status(404).json({ message: 'Submission not found.' });
+    if (submission.bounty.userId !== userId) {
+      return res.status(403).json({ message: 'Not your bounty.' });
+    }
+    if (!['PENDING_REVIEW', 'APPROVED'].includes(submission.status)) {
+      return res.status(400).json({ message: 'Submission cannot be reviewed.' });
+    }
+
+    if (action === 'APPROVE') {
+      // Mark as approved
+      const updated = await prisma.bountySubmission.update({
+        where: { id: submissionId },
+        data: {
+          status: 'APPROVED',
+          reviewedAt: new Date(),
+        },
+      });
+
+      return res.json({
+        id: updated.id,
+        status: updated.status,
+        checkoutUrl: null, // TODO: integrate Stripe
+      });
+    } else {
+      // DECLINE: reject but keep bounty open
+      const updated = await prisma.bountySubmission.update({
+        where: { id: submissionId },
+        data: {
+          status: 'REJECTED',
+          reviewedAt: new Date(),
+        },
+      });
+
+      // Notify organizer
+      await createNotification(
+        submission.organizerId,
+        'BOUNTY_DECLINED',
+        'Submission Declined',
+        'A shopper declined your submission. Keep looking!',
+        `/bounties/submissions`,
+        'OPERATIONAL'
+      );
+
+      return res.json({
+        id: updated.id,
+        status: updated.status,
+        message: 'Bounty remains open',
+      });
+    }
+  } catch (error) {
+    console.error('approveDecllineSubmission error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
+ * POST /api/bounties/:id/match
+ * Auto-match item against bounties (ORGANIZER auth)
+ * Simple text matching: calculate confidence based on word overlap
+ */
+export const matchItemToBounties = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: bountyId } = req.params;
+    const { itemId } = req.body;
+    const organizerId = req.user?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
+    if (!itemId) return res.status(400).json({ message: 'itemId is required.' });
+
+    // Fetch item
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { sale: true },
+    });
+    if (!item) return res.status(404).json({ message: 'Item not found.' });
+    if (item.sale.organizerId !== organizerId) {
+      return res.status(403).json({ message: 'Item does not belong to you.' });
+    }
+
+    // Get organizer's sale location (lat/lng)
+    const organizerSales = await prisma.sale.findMany({
+      where: { organizer: { userId: organizerId } },
+      select: { id: true, lat: true, lng: true },
+    });
+
+    // Query for OPEN bounties not from organizer's sales, within 90 days, not ended
+    const candidateBounties = await prisma.missingListingBounty.findMany({
+      where: {
+        status: 'OPEN',
+        saleId: { notIn: organizerSales.map((s: any) => s.id) },
+        createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+        sale: { status: { not: 'ENDED' } },
+      },
+      include: {
+        user: { select: { name: true, roles: true } },
+        sale: { select: { title: true, lat: true, lng: true } },
+      },
+    });
+
+    // Simple text matching: split item title and bounty description into words
+    const itemWords = (item.title + ' ' + (item.description || ''))
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w: any) => w.length > 2);
+
+    const matches = candidateBounties
+      .map((bounty: any) => {
+        const bountyWords = bounty.description
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((w: any) => w.length > 2);
+
+        // Count overlapping words
+        const overlap = itemWords.filter((w: any) => bountyWords.includes(w)).length;
+        const totalUnique = new Set([...itemWords, ...bountyWords]).size;
+        const confidence = totalUnique > 0 ? overlap / totalUnique : 0;
+
+        return {
+          id: bounty.id,
+          description: bounty.description,
+          confidence: Math.round(confidence * 100) / 100, // Round to 2 decimals
+          offerPrice: bounty.offerPrice,
+          user: bounty.user,
+          sale: bounty.sale,
+        };
+      })
+      .filter((m: any) => m.confidence >= 0.6) // Filter by threshold
+      .sort((a: any, b: any) => b.confidence - a.confidence) // Sort descending
+      .slice(0, 5); // Top 5
+
+    return res.json({ matches });
+  } catch (error) {
+    console.error('matchItemToBounties error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
+ * POST /api/bounties/submissions/:id/purchase
+ * Complete bounty purchase (auth required, owner of bounty)
+ * For MVP: just update statuses and create PointsTransaction records
+ * Stripe integration can be wired later
+ */
+export const completeBountyPurchase = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: submissionId } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    // Fetch submission with bounty
+    const submission = await prisma.bountySubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        bounty: true,
+        item: true,
+        organizer: true,
+      },
+    });
+    if (!submission) return res.status(404).json({ message: 'Submission not found.' });
+    if (submission.bounty.userId !== userId) {
+      return res.status(403).json({ message: 'Not your bounty.' });
+    }
+    if (!['PENDING_REVIEW', 'APPROVED'].includes(submission.status)) {
+      return res.status(400).json({ message: 'Submission cannot be purchased.' });
+    }
+
+    const xpCost = submission.bounty.xpReward ? submission.bounty.xpReward * 2 : 50;
+    const organizerXpAward = submission.bounty.xpReward || 25;
+
+    // Award XP to shopper (deduction as negative)
+    await awardXp(userId, 'BOUNTY_PURCHASE', -xpCost, {
+      description: `Paid for bounty submission: ${submission.bounty.description}`,
+    });
+
+    // Award XP to organizer
+    await awardXp(submission.organizerId, 'BOUNTY_SUBMISSION_PURCHASED', organizerXpAward, {
+      description: `Earned from bounty submission for: ${submission.bounty.description}`,
+    });
+
+    // Update submission status
+    const updated = await prisma.bountySubmission.update({
+      where: { id: submissionId },
+      data: {
+        status: 'PURCHASED',
+        purchasedAt: new Date(),
+      },
+    });
+
+    // Update bounty status to FULFILLED
+    await prisma.missingListingBounty.update({
+      where: { id: submission.bountyId },
+      data: { status: 'FULFILLED', itemId: submission.itemId },
+    });
+
+    // Notify organizer of purchase
+    await createNotification(
+      submission.organizerId,
+      'BOUNTY_PURCHASED',
+      'Bounty Purchased!',
+      `Your submission was purchased! You earned ${organizerXpAward} XP.`,
+      `/bounties/submissions`,
+      'OPERATIONAL'
+    );
+
+    return res.json({
+      orderId: null, // TODO: create Order record
+      bountyId: submission.bountyId,
+      submissionId: updated.id,
+      status: updated.status,
+      xpDeducted: xpCost,
+      organizerXpAwarded: organizerXpAward,
+    });
+  } catch (error) {
+    console.error('completeBountyPurchase error:', error);
     return res.status(500).json({ message: 'Server error.' });
   }
 };
