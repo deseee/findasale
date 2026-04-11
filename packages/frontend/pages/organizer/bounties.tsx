@@ -602,11 +602,11 @@ const OrganizerBountiesPage = () => {
 
               <div className="p-6 space-y-4">
                 {/* Show bounty description */}
-                {filteredLocalBounties.find(b => b.id === submissionBountyId) && (
+                {filteredLocalBounties.find((b: LocalBounty) => b.id === submissionBountyId) && (
                   <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3 border border-amber-200 dark:border-amber-700">
                     <p className="text-xs font-medium text-amber-900 dark:text-amber-300 mb-1">Bounty Request</p>
                     <p className="text-sm text-amber-900 dark:text-amber-200">
-                      "{filteredLocalBounties.find(b => b.id === submissionBountyId)?.description}"
+                      &quot;{filteredLocalBounties.find((b: LocalBounty) => b.id === submissionBountyId)?.description}&quot;
                     </p>
                   </div>
                 )}

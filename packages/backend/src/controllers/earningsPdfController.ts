@@ -17,7 +17,7 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
-      select: { id: true, subscriptionTier: true },
+      select: { id: true, subscriptionTier: true, businessName: true },
     });
     if (!organizer) return res.status(404).json({ message: 'Organizer not found' });
 
