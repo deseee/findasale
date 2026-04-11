@@ -7,6 +7,97 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S437 COMPLETE (2026-04-11):** Massive organizer tools session — 6 sale-selector bugs fixed, calendar built, bounty redesign Phase 1 shipped (schema + 6 endpoints + wired frontend), 7 organizer pages improved, typology deprecated and deleted.
+
+**S437 What shipped:**
+
+**Batch 1 — Sale Selector Fix + Calendar:**
+- Fixed 6 pages where "Choose a Sale" showed empty even with active sales: promote, send-update, photo-ops, print-kit, checklist, line-queue. Root cause: backend returns flat array `res.json(sales)`, frontend expected `{ sales: Sale[] }` wrapper.
+- Built full calendar page (`/organizer/calendar`): monthly grid with color-coded sale events, prev/next/today nav, upcoming sales sidebar, team schedules placeholder. TEAMS tier gated.
+
+**Batch 2 — UI Polish:**
+- Subscription toast: suppressed Stripe API error toast when tier available from auth context
+- OrganizerSaleCard: dark mode text fix
+- Photo-ops station form: removed lat/lng inputs, replaced frame URL with XP teaser card
+- Bounty redesign spec: `claude_docs/strategy/bounty-redesign-spec.md` (architect + innovation review)
+
+**Batch 3 — Cross-cutting Fixes:**
+- Tier-aware platform fees: new `feeCalculator.ts` — 10% SIMPLE, 8% PRO/TEAMS. Applied to payoutController, stripeController, terminalController. Earnings page shows dynamic fee %.
+- Checklist: full dark mode pass + updated default items to match FindA.Sale workflow (Rapidfire upload → AI tags → pricing → publish → process → review earnings)
+- Nav cleanup: removed Reviews (merged into Reputation S434), Inventory redirects to item-library
+- Appraisals: removed outer TierGate (community feed visible to all), PRO gate on submit only
+- Email digest: dark mode pass
+
+**Batch 4 — Bounty Redesign Phase 1:**
+- Schema: BountySubmission model with status/expiry/XP fields, indexes, relations to User/Item/MissingListingBounty
+- Migration: `20260411_bounty_submissions/migration.sql`
+- Backend: 6 new endpoints (browseLocalBounties, submitToBounty, getMySubmissions, reviewSubmission, autoMatchItem, purchaseBounty). Auto-match uses word-overlap at 60% confidence. 2x XP economics (shopper pays 50, organizer earns 25).
+- Frontend: Complete bounties.tsx rewrite V4 — tabbed UI (Browse Local / Your Requests / Your Submissions), search + mile range, submission modal, status badges. Fixed premature `</div>` layout bug.
+
+**Final — Typology Deprecation:**
+- Commented out typology import + route in `backend/src/index.ts`
+- Removed "Typology Classifier" from TierComparisonTable.tsx
+- 7 files to delete: typology page, hook, badge, controller, service, routes, test
+
+**S437 Files changed:**
+- `packages/frontend/pages/organizer/promote/index.tsx` — sale selector fix
+- `packages/frontend/pages/organizer/send-update/index.tsx` — sale selector fix
+- `packages/frontend/pages/organizer/photo-ops/index.tsx` — sale selector fix
+- `packages/frontend/pages/organizer/print-kit/index.tsx` — sale selector fix
+- `packages/frontend/pages/organizer/checklist/index.tsx` — sale selector fix
+- `packages/frontend/pages/organizer/line-queue/index.tsx` — sale selector fix
+- `packages/frontend/pages/organizer/calendar.tsx` — full calendar (replaced Coming Soon)
+- `packages/frontend/pages/organizer/subscription.tsx` — toast fix
+- `packages/frontend/components/OrganizerSaleCard.tsx` — dark mode
+- `packages/frontend/pages/organizer/photo-ops/[saleId].tsx` — form cleanup + frame teaser
+- `packages/frontend/pages/organizer/bounties.tsx` — complete rewrite V4
+- `packages/backend/src/utils/feeCalculator.ts` — NEW tier-aware fee utility
+- `packages/backend/src/controllers/payoutController.ts` — tier-aware fees
+- `packages/backend/src/controllers/stripeController.ts` — tier-aware fees
+- `packages/backend/src/controllers/terminalController.ts` — tier-aware fees
+- `packages/frontend/pages/organizer/earnings.tsx` — dynamic fee display
+- `packages/frontend/components/SaleChecklist.tsx` — dark mode + workflow defaults
+- `packages/backend/src/controllers/checklistController.ts` — updated defaults
+- `packages/frontend/components/Layout.tsx` — removed Reviews nav, Inventory→item-library
+- `packages/frontend/components/AvatarDropdown.tsx` — same nav cleanup
+- `packages/frontend/pages/organizer/inventory.tsx` — redirect to item-library
+- `packages/frontend/pages/organizer/appraisals.tsx` — TierGate scoped to submit only
+- `packages/frontend/pages/organizer/email-digest-preview.tsx` — dark mode
+- `packages/database/prisma/schema.prisma` — BountySubmission model + MissingListingBounty fields
+- `packages/database/prisma/migrations/20260411_bounty_submissions/migration.sql` — NEW
+- `packages/backend/src/controllers/bountyController.ts` — 6 new endpoints
+- `packages/backend/src/routes/bounties.ts` — 6 new routes
+- `packages/backend/src/index.ts` — commented out typology import/route
+- `packages/frontend/components/TierComparisonTable.tsx` — removed Typology Classifier
+- `claude_docs/strategy/bounty-redesign-spec.md` — NEW
+
+**S437 Files to DELETE (typology deprecation):**
+- `packages/frontend/pages/organizer/typology.tsx`
+- `packages/frontend/hooks/useTypology.ts`
+- `packages/frontend/components/TypologyBadge.tsx`
+- `packages/backend/src/controllers/typologyController.ts`
+- `packages/backend/src/services/typologyService.ts`
+- `packages/backend/src/routes/typology.ts`
+- `packages/backend/src/__tests__/typologyClassifier.integration.ts`
+
+**S437 Migration required:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S437 QA needed:**
+- Sale selector: promote/send-update/photo-ops/print-kit/checklist/line-queue → should list organizer's active sales (not empty)
+- Calendar: `/organizer/calendar` → monthly grid with sales shown on correct dates, nav works
+- Bounties: Browse tab → search/mile range → bounty cards load. Submit → modal opens → select sale/item → submit. Submissions tab → pending submissions visible
+- Platform fees: PRO organizer earnings page shows "8%", SIMPLE shows "10%"
+- Appraisals: non-PRO user can see community feed tab; submit form shows PRO gate
+- Checklist: dark mode renders clean, default items match workflow
+
+---
+
 **S436 COMPLETE (2026-04-10):** Three placeholder pages replaced with functional implementations. S433/S434/S435 confirmed pushed by Patrick.
 
 **S436 What shipped:**
@@ -296,40 +387,26 @@ npx prisma generate
 
 ## Next Session Priority
 
-**S436 shipped: earnings, qr-codes (#186), staff pages. Push block above.**
+**S437 shipped: 6 sale-selector fixes, calendar, bounty redesign Phase 1, tier-aware fees, typology deleted, 7 organizer pages improved.**
 
-### Standing items
-- **S433 migration required** — run before Phase 2 auction features go live
-- **Auction QA** — after migration: reserve, proxy, soft-close, bid history, cron
-- **S436 QA** — earnings/qr-codes/staff pages after deploy (see S436 QA needed above)
-- **`/plan` link** — "goes to middle of page" — still unresolved from S434
-
-### Deferred
-- hunt-pass.tsx 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP)
+### Immediate (S438)
+- **S437 migration required** — BountySubmission model (run BEFORE S433 migration if not yet done, or after — order doesn't matter, both are independent)
+- **S433 migration required** — MaxBidByUser table for auction Phase 2
+- **S437 QA** — sale selectors, calendar, bounties browse/submit, fee display, appraisals access, checklist
+- **S436 QA** — earnings/qr-codes/staff pages after deploy
+- **Auction QA** — after S433 migration: reserve, proxy, soft-close, bid history, cron
 
 ### Deferred
 - hunt-pass.tsx 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP)
+- Bounty redesign Phase 2: auto-match on publish, shopper notifications, expiry cron
+- Flea Market Events implementation (ADR-014 locked, ready for Architect spec → Dev)
 
-**🟡 Still needed — hunt-pass.tsx sink rows:**
-`packages/frontend/pages/shopper/hunt-pass.tsx` still needs 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP). Low priority — batch with other front-end work.
-
-**✅ DONE — Treasure Trails map work (S431):**
-- Trail activation mode, dismissal bar, CircleMarker rendering — all shipped.
-- Fixed "Trail Not Found", double `/api/` prefix bug, usePublicTrail route bug.
-- Test trail + 3 stops in Railway DB (trail id: `cmnsa0ji...`, shareToken: `cmnsa0ji`).
-
-**✅ DONE — Stripe QR code "AccessDenied":** Resolved (S431, confirmed by Patrick 2026-04-09).
-
-**✅ DONE — Stripe Connect onboarding:** Complete (confirmed by Patrick 2026-04-09).
-
-**✅ DONE — S427 migrations:** `prisma migrate deploy` + `prisma generate` run against Railway DB (confirmed by Patrick 2026-04-09).
-
-**⏸️ QA QUEUE — postponed to next week (usage limits):**
+**⏸️ QA QUEUE — postponed (usage limits):**
 - S430: Yahoo spam test, iOS geolocation, sale page activity dedup, Auction Buy Now, print label, photo upload
 - S427: Full invoice flow, cart-only invoice, QUICK vs TRUST mode expiry
 - S421: Send to Phone end-to-end, pay-request page items/fee display
 - S420: Lucky Roll page, Custom Map Pin endpoint, Showcase Slot unlock, Treasure Trail XP gate, Hunt Pass sink rows
-- S431: Trail detail page loads `/trail/[shareToken]` correctly (Vercel deploy pending); trail stops appear on map after activation
+- S431: Trail detail page loads `/trail/[shareToken]` correctly; trail stops appear on map after activation
 
 ---
 

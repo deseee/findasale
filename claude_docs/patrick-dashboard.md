@@ -1,75 +1,68 @@
-# Patrick's Dashboard — April 10, 2026 (S436)
+# Patrick's Dashboard — April 11, 2026 (S437)
 
-## S436 Summary
+## S437 Summary
 
-Big session. Three placeholder pages replaced with functional dashboards, Bounties fully wired end-to-end, Line Queue gating added, Hubs repurposed as Flea Market Events with ADR locked.
+Huge session. Fixed 6 broken sale-selector pages, built the calendar, shipped bounty redesign Phase 1 (schema + 6 endpoints + full frontend rewrite), added tier-aware platform fees, cleaned up nav, improved appraisals access, and fully deprecated typology (7 files deleted).
 
 ---
 
-## S436 Push Block — Two pushes (too many files for one)
+## S437 Push Block
 
-**Push 1 — Code:**
+**Push 1 — Delete typology files + all code changes:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/organizer/earnings.tsx
-git add packages/frontend/pages/organizer/qr-codes.tsx
-git add packages/frontend/pages/organizer/staff.tsx
-git add packages/frontend/pages/organizer/typology.tsx
-git add packages/frontend/pages/plan.tsx
-git add packages/backend/src/routes/organizers.ts
-git add packages/backend/src/routes/lines.ts
-git add packages/frontend/components/BountyModal.tsx
+git rm packages/frontend/pages/organizer/typology.tsx
+git rm packages/frontend/hooks/useTypology.ts
+git rm packages/frontend/components/TypologyBadge.tsx
+git rm packages/backend/src/controllers/typologyController.ts
+git rm packages/backend/src/services/typologyService.ts
+git rm packages/backend/src/routes/typology.ts
+git rm "packages/backend/src/__tests__/typologyClassifier.integration.ts"
+git add packages/frontend/pages/organizer/promote/index.tsx
+git add packages/frontend/pages/organizer/send-update/index.tsx
+git add packages/frontend/pages/organizer/photo-ops/index.tsx
+git add packages/frontend/pages/organizer/print-kit/index.tsx
+git add packages/frontend/pages/organizer/checklist/index.tsx
+git add packages/frontend/pages/organizer/line-queue/index.tsx
+git add packages/frontend/pages/organizer/calendar.tsx
+git add packages/frontend/pages/organizer/subscription.tsx
+git add packages/frontend/components/OrganizerSaleCard.tsx
+git add packages/frontend/pages/organizer/photo-ops/[saleId].tsx
 git add packages/frontend/pages/organizer/bounties.tsx
-git add packages/backend/src/controllers/bountyController.ts
+git add packages/backend/src/utils/feeCalculator.ts
+git add packages/backend/src/controllers/payoutController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/terminalController.ts
+git add packages/frontend/pages/organizer/earnings.tsx
+git add packages/frontend/components/SaleChecklist.tsx
+git add packages/backend/src/controllers/checklistController.ts
 git add packages/frontend/components/Layout.tsx
 git add packages/frontend/components/AvatarDropdown.tsx
-git commit -m "S436: earnings dashboard, QR analytics, staff page, bounties end-to-end, Line Queue gating, nav fixes"
+git add packages/frontend/pages/organizer/inventory.tsx
+git add packages/frontend/pages/organizer/appraisals.tsx
+git add packages/frontend/pages/organizer/email-digest-preview.tsx
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260411_bounty_submissions/migration.sql
+git add packages/backend/src/controllers/bountyController.ts
+git add packages/backend/src/routes/bounties.ts
+git add packages/backend/src/index.ts
+git add packages/frontend/components/TierComparisonTable.tsx
+git commit -m "S437: sale-selector fix (6 pages), calendar, bounty redesign Phase 1, tier-aware fees, typology deprecated, nav cleanup, appraisals access, dark mode passes"
 .\push.ps1
 ```
 
 **Push 2 — Docs:**
 ```powershell
-git add claude_docs/architecture/ADR-014-hubs-flea-market-repurpose.md
-git add claude_docs/research/flea-market-software-competitive-analysis.md
-git add claude_docs/decisions-log.md
-git add claude_docs/strategy/roadmap.md
+git add claude_docs/strategy/bounty-redesign-spec.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S436: Hubs→Flea Market Events locked (ADR-014), competitive research, roadmap #40/#238, STATE updated"
+git commit -m "S437: bounty redesign spec, STATE wrap, dashboard"
 .\push.ps1
 ```
 
 ---
 
-## What S436 Shipped
-
-### Placeholder Pages → Functional
-- **`/organizer/earnings`** — Gross revenue / fees / net summary cards, per-sale breakdown table, year selector, PDF export
-- **`/organizer/qr-codes`** — QR Scan Analytics: total lifetime scans, active sale scans, per-sale table sorted by scan count
-- **`/organizer/staff`** — TEAMS tier gate + upgrade wall, workspace creation, member list, invite by email, remove member
-
-### Bounties — End-to-End Complete
-- Organizer: Cancel button with loading state (DELETE /api/bounties/:id), dark mode throughout
-- Shopper: Notification fires when bounty is fulfilled ("Good news!"), links directly to the item
-
-### Bugs Fixed
-- Typology: Was crashing on 202 fire-and-forget response (tried to read `result.classified` which doesn't exist)
-- Plan page: Scroll was fighting itself on load (scroll-to-bottom firing with empty messages)
-- Line Queue: 6 organizer-facing routes now properly gated at SIMPLE tier
-
-### Nav
-- "Price Tags" → "QR Analytics" everywhere
-- `/organizer/sale-hubs` → `/organizer/hubs` (removed "(Soon)" + disabled styling — page is live)
-
-### Hubs → Flea Market Events (Locked)
-- Repurposed Sale Hubs as Flea Market Events (ADR-014 final)
-- **4 decisions locked:** TEAMS tier, all 4 hub types (flea market / antique mall / popup / farmers market), unlimited booths, organizer-choice payout
-- Competitive research saved: no competitor has a shopper app — QR auto-settlement is our differentiator
-- Roadmap: #40 updated, #238 folded in
-
----
-
-## S433 Migration (still needed before auction Phase 2 QA)
+## S437 Migration (run after push)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -78,20 +71,42 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
----
-
-## QA Queue (deferred — do next week after deploy)
-
-- `/organizer/earnings` — summary cards show real revenue, per-sale table renders, PDF downloads
-- `/organizer/qr-codes` — scan totals load, per-sale table has qrScanCount, empty state works
-- `/organizer/staff` — TEAMS: create workspace → invite → member appears → remove works. Non-TEAMS: upgrade wall shows
-- Bounties: organizer cancels → gone from list. Fulfillment → shopper gets notification with item link
-- Auction Phase 2 (requires S433 migration first): proxy bidding, soft-close extension, anonymized bid history
+This applies the BountySubmission table. If S433 migration (MaxBidByUser) hasn't been run yet, both will apply in order.
 
 ---
 
-## Still Not Built (deferred to future sessions)
+## What S437 Shipped
 
-- `/organizer/promote`, `/organizer/send-update`, `/organizer/photo-ops`, `/organizer/print-kit`, `/organizer/checklist`, `/organizer/line-queue`, `/organizer/calendar`
-- Offline sync awareness UI
-- Flea Market Events implementation (ADR-014 locked, ready for Architect spec → Dev)
+### Sale Selectors Fixed (6 pages)
+promote, send-update, photo-ops, print-kit, checklist, line-queue — all now correctly list organizer's active sales instead of showing empty state.
+
+### Calendar Built
+Full monthly calendar at `/organizer/calendar` — TEAMS tier gated. Color-coded sale events, month navigation, upcoming sales sidebar, team schedules placeholder.
+
+### Bounty Redesign Phase 1
+- New BountySubmission model + migration
+- 6 new backend endpoints (browse, submit, my submissions, review, auto-match, purchase)
+- Complete frontend rewrite: tabbed UI, search with mile range, submission modal
+- XP economics: shopper pays 50 XP, organizer earns 25 XP (2x multiplier)
+- Auto-match at 60% confidence threshold
+
+### Tier-Aware Platform Fees
+New `feeCalculator.ts`: SIMPLE = 10%, PRO/TEAMS = 8%. Applied to payouts, Stripe, terminal. Earnings page shows the correct rate dynamically.
+
+### Typology Fully Deprecated
+7 files deleted (page, hook, badge, controller, service, routes, test). Import + route commented out in index.ts. Removed from tier comparison table. Auto-tagging + eBay categories made it redundant.
+
+### Other Fixes
+- Subscription toast suppressed when Stripe unavailable but tier known
+- Checklist: dark mode + updated default items to match actual workflow
+- Nav: Reviews removed (merged into Reputation), Inventory → item-library redirect
+- Appraisals: community feed visible to all users, PRO gate on submit only
+- Email digest: dark mode pass
+- Photo-ops: lat/lng removed from station form, frame picker teaser added
+
+---
+
+## Still Not Built (deferred)
+- Bounty redesign Phase 2: auto-match on publish, shopper notifications, expiry cron
+- Flea Market Events (ADR-014 locked, needs Architect spec → Dev)
+- hunt-pass.tsx 3 missing XP sink rows
