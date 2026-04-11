@@ -1161,9 +1161,11 @@ const ReviewPage = () => {
                                     <PriceResearchPanel
                                       itemId={item.id}
                                       itemTitle={editState.title}
+                                      itemDescription={editState.description}
                                       category={editState.category}
                                       condition={editState.condition}
                                       currentPrice={editState.price}
+                                      photoUrls={item.photoUrls}
                                       collapsed={true}
                                       onPriceSelect={(price) => handleEditChange(item.id, 'price', price)}
                                     />

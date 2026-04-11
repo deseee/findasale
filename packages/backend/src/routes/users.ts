@@ -196,6 +196,7 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
         roles: updatedUser.roles,
         referralCode: updatedUser.referralCode,
         tokenVersion: updatedUser.tokenVersion,
+        guildXp: updatedUser.guildXp || 0, // Phase 2a: Explorer's Guild XP
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }

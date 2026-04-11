@@ -499,9 +499,11 @@ const EditItemPage = () => {
                   <PriceResearchPanel
                     itemId={id as string}
                     itemTitle={formData.title}
+                    itemDescription={formData.description}
                     category={formData.category}
                     condition={formData.condition}
                     currentPrice={formData.price ? parseFloat(formData.price) : undefined}
+                    photoUrls={item?.photoUrls}
                     collapsed={false}
                     onPriceSelect={(price) =>
                       setFormData({

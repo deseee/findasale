@@ -45,7 +45,7 @@ import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget'
 import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
-import { Clock, ShoppingCart, Megaphone, Pencil } from 'lucide-react';
+import { Clock, ShoppingCart, Megaphone, Pencil, Eye } from 'lucide-react';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -883,6 +883,9 @@ const OrganizerDashboard = () => {
                               )}
                               <Link href={`/organizer/edit-sale/${activeSale.id}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" title="Edit sale details">
                                 <Pencil className="w-3.5 h-3.5" />
+                              </Link>
+                              <Link href={`/sales/${activeSale.id}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors" title="View this sale as shoppers see it">
+                                <Eye className="w-3.5 h-3.5" />
                               </Link>
                               {statsData?.activeSale && (
                                 <SalePerformanceBadge
