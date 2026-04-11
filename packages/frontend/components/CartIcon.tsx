@@ -6,6 +6,7 @@
 
 import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Clock } from 'lucide-react';
 import api from '../lib/api';
 import { useCart } from '../context/CartContext';
 
@@ -53,15 +54,8 @@ const CartIcon: React.FC = () => {
       aria-label={`Shopping cart with ${holds.length} items`}
       title={`${holds.length} item${holds.length !== 1 ? 's' : ''} on hold`}
     >
-      {/* Shopping bag SVG */}
-      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-        />
-      </svg>
+      {/* Clock icon — matches mobile holds icon */}
+      <Clock size={22} />
 
       {/* Hold count badge — only show if > 0 */}
       {holds.length > 0 && (

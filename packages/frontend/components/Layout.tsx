@@ -70,6 +70,7 @@ import OfflineIndicator from './OfflineIndicator'; // Feature #69: Local-First O
 import AvatarDropdown from './AvatarDropdown';
 import BecomeOrganizerModal from './BecomeOrganizerModal';
 import { useShopperCart } from '../hooks/useShopperCart';
+import { useCart } from '../context/CartContext';
 import ShopperCartDrawer from './ShopperCartDrawer';
 import CartIcon from './CartIcon';
 import { io } from 'socket.io-client';
@@ -85,6 +86,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const { isLowBandwidth } = useNetworkQuality();
   const cart = useShopperCart();
   const { items: cartItems } = cart;
+  const { holdCount } = useCart();
   const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const { data: unreadMessages } = useUnreadMessages(!!user);
@@ -759,9 +761,16 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <div className="lg:hidden flex items-center gap-1">
               {isClient && user && (
                 <>
-                  <Link href="/shopper/holds" className="relative p-2 rounded-md text-warm-500 dark:text-warm-300 hover:text-amber-600 dark:hover:text-amber-400" title="My Holds">
-                    <Clock size={20} />
-                  </Link>
+                  <div className="relative">
+                    <Link href="/shopper/holds" className="p-2 rounded-md text-warm-500 dark:text-warm-300 hover:text-amber-600 dark:hover:text-amber-400" title="My Holds">
+                      <Clock size={20} />
+                    </Link>
+                    {holdCount > 0 && (
+                      <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-[9px] font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 dark:bg-red-700 rounded-full">
+                        {holdCount > 99 ? '99+' : holdCount}
+                      </span>
+                    )}
+                  </div>
                   <NotificationBell />
                 </>
               )}
