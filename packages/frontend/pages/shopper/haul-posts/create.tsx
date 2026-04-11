@@ -378,5 +378,3 @@ function CreateHaulPostPage() {
 }
 
 export default CreateHaulPostPage;
-
-export default CreateHaulPostPage;
