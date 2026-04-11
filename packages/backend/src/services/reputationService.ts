@@ -190,6 +190,17 @@ export async function computeReputationScore(organizerId: string): Promise<Reput
  */
 export async function recalculateShopperRating(organizerId: string): Promise<void> {
   try {
+    // Resolve the User ID from the Organizer
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { userId: true },
+    });
+
+    if (!organizer) {
+      console.warn(`[reputationService] Organizer not found: ${organizerId}`);
+      return;
+    }
+
     // Get all APPROVED reviews for this organizer's sales
     const reviews = await prisma.review.findMany({
       where: {
@@ -202,7 +213,7 @@ export async function recalculateShopperRating(organizerId: string): Promise<voi
     if (reviews.length === 0) {
       // No reviews yet — clear the field
       await prisma.organizerReputation.updateMany({
-        where: { organizerId },
+        where: { organizerId: organizer.userId },
         data: { shopperRating: null },
       });
       return;
@@ -211,11 +222,11 @@ export async function recalculateShopperRating(organizerId: string): Promise<voi
     const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
     const shopperRating = Math.round(avg * 10) / 10; // round to 1 decimal
 
-    // Update or create the OrganizerReputation record
+    // Update or create the OrganizerReputation record (using User.id, not Organizer.id)
     await prisma.organizerReputation.upsert({
-      where: { organizerId },
+      where: { organizerId: organizer.userId },
       create: {
-        organizerId,
+        organizerId: organizer.userId,
         shopperRating,
       },
       update: {

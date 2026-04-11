@@ -129,7 +129,7 @@ export default function ReceiptCard({ receipt, returnWindowHours = 48, saleEndDa
 
           {receipt.purchase.sale?.organizer && (
             <Link
-              href={`/organizer/${receipt.purchase.sale.organizer.id}/reviews`}
+              href={`/organizers/${receipt.purchase.sale.organizer.id}`}
               className="block w-full px-4 py-2 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors font-medium text-sm text-center"
             >
               ⭐ Review this organizer

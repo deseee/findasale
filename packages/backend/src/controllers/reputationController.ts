@@ -12,9 +12,39 @@ export const getOrganizerReputation = async (req: any, res: Response) => {
   try {
     const { id } = req.params;
 
-    const reputation = await computeReputationScore(id);
+    // Validate organizer exists
+    const organizer = await prisma.organizer.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    });
 
-    res.json(reputation);
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // Get or update reputation from OrganizerReputation table (includes shopperRating from reviews)
+    const reputation = await getOrUpdateOrganizerReputation(id);
+
+    if (!reputation) {
+      // First time — return defaults
+      return res.json({
+        score: 0,
+        isNew: true,
+        responseTimeAvg: 0,
+        saleCount: 0,
+        photoQualityAvg: 0,
+        tips: [],
+      });
+    }
+
+    res.json({
+      score: reputation.score,
+      isNew: reputation.isNew,
+      responseTimeAvg: reputation.responseTimeAvg,
+      saleCount: reputation.saleCount,
+      photoQualityAvg: reputation.photoQualityAvg,
+      tips: [], // Placeholder for future reputation tips
+    });
   } catch (error) {
     console.error('Error fetching organizer reputation:', error);
     res.status(500).json({ message: 'Failed to fetch organizer reputation' });
@@ -52,6 +82,7 @@ export const getSimpleReputation = async (req: any, res: Response) => {
         responseTimeAvg: 0,
         saleCount: 0,
         photoQualityAvg: 0,
+        tips: [],
       });
     }
 
@@ -61,6 +92,7 @@ export const getSimpleReputation = async (req: any, res: Response) => {
       responseTimeAvg: reputation.responseTimeAvg,
       saleCount: reputation.saleCount,
       photoQualityAvg: reputation.photoQualityAvg,
+      tips: [],
       shopperRating: reputation.shopperRating,
     });
   } catch (error) {

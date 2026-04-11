@@ -371,6 +371,7 @@ export const authenticateComplete = async (req: Request, res: Response) => {
           subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
           organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
           onboardingComplete: organizerProfile?.onboardingComplete ?? false,
+          guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
         },
         jwtSecret,
         { expiresIn: '7d' }

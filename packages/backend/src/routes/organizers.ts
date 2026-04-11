@@ -347,6 +347,7 @@ router.post('/me/onboarding-complete', authenticate, async (req: AuthRequest, re
         subscriptionTier: updated.subscriptionTier ?? 'SIMPLE',
         organizerTokenVersion: updated.tokenVersion ?? 0,
         onboardingComplete: updated.onboardingComplete,
+        guildXp: user!.guildXp || 0, // Phase 2a: Explorer's Guild XP
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }

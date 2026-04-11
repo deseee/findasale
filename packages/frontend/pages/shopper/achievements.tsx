@@ -5,6 +5,15 @@ import { useAuth } from '../../components/AuthContext';
 import { useMyAchievements } from '../../hooks/useAchievements';
 import { AchievementBadge } from '../../components/AchievementBadge';
 
+// Explorer Rank definitions
+const RANKS = [
+  { name: 'Initiate', xp: 0, icon: '⭐' },
+  { name: 'Scout', xp: 100, icon: '🗺️' },
+  { name: 'Ranger', xp: 250, icon: '🏹' },
+  { name: 'Sage', xp: 500, icon: '📚' },
+  { name: 'Grandmaster', xp: 1000, icon: '👑' },
+];
+
 export default function AchievementsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
@@ -21,7 +30,21 @@ export default function AchievementsPage() {
   }
 
   const achievements = data?.achievements ?? [];
-  const streak = data?.streak;
+  const userGuildXp = user?.guildXp ?? 0;
+
+  // Calculate current rank
+  let currentRank = RANKS[0];
+  let nextRank = RANKS[1];
+  for (let i = 0; i < RANKS.length; i++) {
+    if (userGuildXp >= RANKS[i].xp) {
+      currentRank = RANKS[i];
+      nextRank = RANKS[i + 1] || RANKS[RANKS.length - 1];
+    }
+  }
+
+  const xpToNextRank = Math.max(0, nextRank.xp - userGuildXp);
+  const xpProgress = userGuildXp - currentRank.xp;
+  const xpProgressPercent = Math.min(100, (xpProgress / (nextRank.xp - currentRank.xp)) * 100);
 
   const shoppingAchievements = achievements.filter((a) => a.category === 'SHOPPER');
   const organizerAchievements = achievements.filter((a) => a.category === 'ORGANIZER');
@@ -50,7 +73,7 @@ export default function AchievementsPage() {
     <>
       <Head>
         <title>Achievements - FindA.Sale</title>
-        <meta name="description" content="Your achievements and streaks" />
+        <meta name="description" content="Track your achievements and Explorer Rank progression" />
       </Head>
 
       <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white dark:from-gray-800 dark:to-gray-900">
@@ -62,20 +85,50 @@ export default function AchievementsPage() {
             </p>
           </div>
 
-          {streak && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-amber-300 shadow-lg p-6 mb-8 text-center">
-              <div className="text-6xl mb-2">🔥</div>
-              <h2 className="text-2xl font-bold text-amber-700 dark:text-amber-300 mb-2">Current Streak</h2>
-              <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mb-4">{streak.currentStreak} weekends</p>
-              <p className="text-gray-600 dark:text-gray-300 mb-2">Longest streak: {streak.longestStreak} weekends</p>
-              {streak.earlyAccessUnlocked && (
-                <div className="mt-4 bg-emerald-100 dark:bg-emerald-900 border-2 border-emerald-500 rounded-lg p-3">
-                  <p className="text-emerald-700 dark:text-emerald-300 font-bold">✨ Early Access Unlocked!</p>
-                  <p className="text-sm text-emerald-600 dark:text-emerald-400">You get early access to upcoming sales</p>
-                </div>
-              )}
+          <div className="bg-white dark:bg-gray-800 rounded-lg border-2 border-purple-300 shadow-lg p-6 mb-8">
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-2">{currentRank.icon}</div>
+              <h2 className="text-2xl font-bold text-purple-700 dark:text-purple-300 mb-2">Explorer Rank</h2>
+              <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{currentRank.name}</p>
             </div>
-          )}
+
+            {currentRank.name !== 'Grandmaster' && (
+              <div className="mb-6">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {xpProgress} / {nextRank.xp - currentRank.xp} XP to {nextRank.name}
+                  </span>
+                  <span className="text-gray-600 dark:text-gray-300">{xpToNextRank} XP remaining</span>
+                </div>
+                <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-purple-500 to-purple-600 dark:from-purple-400 dark:to-purple-500 h-full transition-all"
+                    style={{ width: `${xpProgressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-5 gap-2">
+              {RANKS.map((rank, idx) => (
+                <div
+                  key={idx}
+                  className={`p-2 rounded-lg text-center transition-all ${
+                    userGuildXp >= rank.xp
+                      ? 'bg-purple-100 dark:bg-purple-900 border-2 border-purple-500'
+                      : 'bg-gray-100 dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 opacity-50'
+                  }`}
+                >
+                  <div className="text-2xl mb-1">{rank.icon}</div>
+                  <p className="text-xs font-bold text-gray-700 dark:text-gray-200">{rank.name}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
+              Earn XP from shopping actions to progress through the Explorer's Guild ranks
+            </p>
+          </div>
 
           {shoppingAchievements.length > 0 && (
             <section className="mb-8">

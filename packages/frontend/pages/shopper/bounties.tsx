@@ -46,6 +46,8 @@ export default function ShopperBountiesPage() {
     xpReward: 50,
     referenceUrl: '',
   });
+  const [submittingMatch, setSubmittingMatch] = useState(false);
+  const [selectedBountyId, setSelectedBountyId] = useState<string | null>(null);
 
   // Load active bounties when page loads
   React.useEffect(() => {
@@ -108,6 +110,23 @@ export default function ShopperBountiesPage() {
       showToast('Failed to submit bounty request', 'error');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitMatch = async (bountyId: string) => {
+    try {
+      setSubmittingMatch(true);
+      // For now, as organizer matching is from organizer side, we're submitting an interest
+      // from the shopper side. This could be a simple match interest endpoint.
+      // Using the submitBountySubmission endpoint which requires itemId
+      // For MVP, organizers submit matches from their items, not shoppers submitting matches from bounties
+      showToast('This feature requires you to be an organizer. Please list items in a sale to submit matches.', 'info');
+      setExpandedBountyId(null);
+    } catch (error) {
+      console.error('Error submitting match:', error);
+      showToast('Failed to submit match', 'error');
+    } finally {
+      setSubmittingMatch(false);
     }
   };
 
@@ -259,8 +278,11 @@ export default function ShopperBountiesPage() {
                     min="50"
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 mb-2">
                     Minimum 50 XP. Organizers earn this as a reward if they find your item
+                  </p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-slate-700/50 p-3 rounded border border-gray-200 dark:border-gray-700">
+                    <strong>How XP works:</strong> Organizers receive half the bounty amount after fulfillment. The more XP you offer, the more likely organizers are to respond. XP is taken from your account at posting and is non-refundable.
                   </p>
                 </div>
               </div>
@@ -368,10 +390,23 @@ export default function ShopperBountiesPage() {
                           )}
 
                           <div className="flex gap-2">
-                            <button className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors text-sm">
-                              Submit a Match
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSubmitMatch(bounty.id);
+                              }}
+                              disabled={submittingMatch}
+                              className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-semibold rounded-lg transition-colors text-sm"
+                            >
+                              {submittingMatch ? 'Submitting...' : 'Submit a Match'}
                             </button>
-                            <button className="flex-1 px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-900 dark:text-gray-100 font-semibold rounded-lg transition-colors text-sm">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedBountyId(null);
+                              }}
+                              className="flex-1 px-4 py-2 bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-900 dark:text-gray-100 font-semibold rounded-lg transition-colors text-sm"
+                            >
                               Close
                             </button>
                           </div>

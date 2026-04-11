@@ -10,6 +10,7 @@ interface User {
   role: string;
   roles?: string[]; // Feature #72 Phase 2: Array of roles
   points: number;
+  guildXp?: number; // Phase 2a: Explorer's Guild XP
   referralCode?: string;
   categoryInterests?: string[];
   streakPoints?: number;
@@ -61,6 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: payload.role,
           roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
           points: payload.points || 0,
+          guildXp: payload.guildXp || 0, // Phase 2a: Explorer's Guild XP
           referralCode: payload.referralCode || '',
           huntPassActive: payload.huntPassActive,
           huntPassExpiry: payload.huntPassExpiry,
@@ -93,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: payload.role,
         roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
         points: payload.points || 0,
+        guildXp: payload.guildXp || 0, // Phase 2a: Explorer's Guild XP
         referralCode: payload.referralCode || '',
         huntPassActive: payload.huntPassActive,
         huntPassExpiry: payload.huntPassExpiry,
