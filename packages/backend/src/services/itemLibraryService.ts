@@ -134,7 +134,6 @@ export const pullFromLibrary = async (
 export const getLibraryItems = async (organizerId: string, filters: LibraryFilters = {}) => {
   const where: any = {
     organizerId,
-    inLibrary: true,
   };
 
   if (filters.search) {

@@ -46,7 +46,7 @@ export default function ShopperBountiesPage() {
   const loadActiveBounties = async () => {
     try {
       setIsLoadingBounties(true);
-      const response = await api.get('/bounties');
+      const response = await api.get('/bounties/community');
       setActiveBounties(response.data.bounties || []);
     } catch (error) {
       console.error('Error fetching bounties:', error);

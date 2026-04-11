@@ -7,37 +7,67 @@ import { awardXp } from '../services/xpService';
 
 /**
  * POST /api/bounties
- * Authenticated shoppers submit a missing-listing request for a sale.
+ * Authenticated shoppers submit a missing-listing request.
+ *
+ * Organizer-style: { saleId, description, offerPrice? }
+ * Shopper-first: { itemName, category, maxBudget, radiusMiles }
  */
 export const createBounty = async (req: AuthRequest, res: Response) => {
   try {
-    const { saleId, description, offerPrice } = req.body;
+    const { saleId, description, offerPrice, itemName, category, maxBudget, radiusMiles } = req.body;
     const userId = req.user.id;
 
-    if (!saleId || !description?.trim()) {
-      return res.status(400).json({ message: 'saleId and description are required.' });
+    // Determine if organizer-style (with saleId) or shopper-first (without saleId)
+    const isOrganizerStyle = !!saleId;
+    const isShopperFirst = !saleId && itemName && category;
+
+    if (!isOrganizerStyle && !isShopperFirst) {
+      return res.status(400).json({
+        message: 'Either provide saleId + description (organizer) or itemName + category + maxBudget + radiusMiles (shopper-first).',
+      });
     }
 
-    const sale = await prisma.sale.findUnique({ where: { id: saleId }, select: { id: true, status: true } });
-    if (!sale) return res.status(404).json({ message: 'Sale not found.' });
-    if (sale.status === 'ENDED') {
-      return res.status(400).json({ message: 'Cannot submit a bounty for an ended sale.' });
+    // Organizer-style bounty validation
+    if (isOrganizerStyle) {
+      if (!description?.trim()) {
+        return res.status(400).json({ message: 'description is required for organizer-style bounties.' });
+      }
+
+      const sale = await prisma.sale.findUnique({ where: { id: saleId }, select: { id: true, status: true } });
+      if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+      if (sale.status === 'ENDED') {
+        return res.status(400).json({ message: 'Cannot submit a bounty for an ended sale.' });
+      }
+
+      // One open bounty per user per sale (dedup)
+      const existing = await prisma.missingListingBounty.findFirst({
+        where: { saleId, userId, status: 'OPEN' },
+      });
+      if (existing) {
+        return res.status(409).json({ message: 'You already have an open bounty for this sale.' });
+      }
     }
 
-    // One open bounty per user per sale with the same description (dedup)
-    const existing = await prisma.missingListingBounty.findFirst({
-      where: { saleId, userId, status: 'OPEN' },
-    });
-    if (existing) {
-      return res.status(409).json({ message: 'You already have an open bounty for this sale.' });
+    // Shopper-first bounty validation
+    if (isShopperFirst) {
+      if (!itemName?.trim() || !category?.trim()) {
+        return res.status(400).json({ message: 'itemName and category are required for shopper-first bounties.' });
+      }
+      if (maxBudget == null || radiusMiles == null) {
+        return res.status(400).json({ message: 'maxBudget and radiusMiles are required for shopper-first bounties.' });
+      }
     }
 
     const bounty = await prisma.missingListingBounty.create({
       data: {
-        saleId,
+        saleId: saleId || null,
         userId,
-        description: description.trim(),
+        description: description?.trim() || null,
         offerPrice: offerPrice != null ? Number(offerPrice) : null,
+        itemName: itemName?.trim() || null,
+        category: category?.trim() || null,
+        maxBudget: maxBudget != null ? Number(maxBudget) : null,
+        radiusMiles: radiusMiles != null ? Number(radiusMiles) : null,
       },
       include: { user: { select: { name: true } } },
     });
@@ -576,6 +606,48 @@ export const matchItemToBounties = async (req: AuthRequest, res: Response) => {
     return res.json({ matches });
   } catch (error) {
     console.error('matchItemToBounties error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/bounties/community
+ * Browse community bounties (shopper-created, no saleId)
+ * Filter by category and radius
+ */
+export const getCommunityBounties = async (req: AuthRequest, res: Response) => {
+  try {
+    const { category, radiusMiles, offset = '0', limit = '20' } = req.query;
+
+    const where: any = { saleId: null, status: 'OPEN' };
+
+    if (category && category !== '') {
+      where.category = category as string;
+    }
+
+    if (radiusMiles) {
+      where.radiusMiles = { lte: Number(radiusMiles) };
+    }
+
+    const [bounties, total] = await Promise.all([
+      prisma.missingListingBounty.findMany({
+        where,
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: Number(offset),
+        take: Math.min(100, Number(limit) || 20),
+      }),
+      prisma.missingListingBounty.count({ where }),
+    ]);
+
+    return res.json({
+      bounties,
+      total,
+      limit: Math.min(100, Number(limit) || 20),
+      offset: Number(offset),
+    });
+  } catch (error) {
+    console.error('getCommunityBounties error:', error);
     return res.status(500).json({ message: 'Server error.' });
   }
 };

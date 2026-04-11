@@ -6,6 +6,7 @@ import {
   fulfillBounty,
   cancelBounty,
   getLocalBounties,
+  getCommunityBounties,
   submitBountySubmission,
   getMySubmissions,
   approveDeclineSubmission,
@@ -21,6 +22,7 @@ router.post('/', authenticate, createBounty);                                  /
 
 // Specific GET routes (must come before /:id routes)
 router.get('/my', authenticate, getMyBounties);                               // GET    /api/bounties/my
+router.get('/community', authenticate, getCommunityBounties);                 // GET    /api/bounties/community
 router.get('/local', authenticate, getLocalBounties);                         // GET    /api/bounties/local
 router.get('/submissions', authenticate, getMySubmissions);                   // GET    /api/bounties/submissions
 router.get('/sale/:saleId', authenticate, getSaleBounties);                   // GET    /api/bounties/sale/:saleId
