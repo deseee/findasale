@@ -7,6 +7,39 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S441 COMPLETE (2026-04-11):** 8-issue fix batch from Patrick's live site review. 2 dispatch rounds (7+2 agents). 15 files changed. 1 DB backfill.
+
+**S441 What shipped:**
+- **Bounties:** XP explainer copy added below input ("Minimum 50 XP. Organizers receive 1/2..."). Submit Match button wired with informational toast (requires organizer context).
+- **Achievements:** Stale streak copy replaced with guildXp/Explorer Rank progression. JWT now carries `guildXp` across all 4 auth flows. Frontend shows rank progression with XP progress bar.
+- **Reputation (P0 bug fix):** Root cause — `reputationService.ts` used `Organizer.id` instead of `User.id` for `OrganizerReputation` upserts. Fixed service + controller. DB backfilled: 1 organizer now has score=4.67 from 3 reviews.
+- **Dashboard:** Added "View Sale" eye icon button linking to public `/sales/${id}`.
+- **Receipts:** Fixed review CTA route (`/organizer/{id}/reviews` → `/organizers/{id}`).
+- **Haul Posts:** Replaced URL text input with Cloudinary file upload (camera icon, preview, 5MB limit). Replaced item ID input with searchable autocomplete from purchase history.
+- **Price Research Card:** Condensed layout, reordered sections (Smart Estimate top, comps middle), added sage-green "Request Community Appraisal" button with loading states. Props passed from edit-item + review pages.
+- **Lucky Roll:** Investigated — already fully implemented (frontend + backend + pity system + weekly resets). May need XP in test account to test.
+
+**S441 Files changed (15):**
+- `packages/frontend/pages/shopper/bounties.tsx`
+- `packages/frontend/pages/shopper/achievements.tsx`
+- `packages/frontend/components/AuthContext.tsx`
+- `packages/backend/src/controllers/authController.ts`
+- `packages/backend/src/controllers/passkeyController.ts`
+- `packages/backend/src/routes/organizers.ts`
+- `packages/backend/src/routes/users.ts`
+- `packages/backend/src/services/reputationService.ts`
+- `packages/backend/src/controllers/reputationController.ts`
+- `packages/frontend/pages/organizer/dashboard.tsx`
+- `packages/frontend/components/ReceiptCard.tsx`
+- `packages/frontend/components/PriceResearchPanel.tsx`
+- `packages/frontend/pages/organizer/edit-item/[id].tsx`
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx`
+- `packages/frontend/pages/shopper/haul-posts/create.tsx`
+
+**S441 No schema changes.** S440 migrations still need to be applied if not done yet.
+
+---
+
 **S440 COMPLETE (2026-04-11):** Massive nav/UX session — 3 push rounds.
 
 **S440 Round 1 (7 parallel agents):** Nav restructured (grey icons, Explorer Passport rename, Hunt Exclusives group, league moved). Bounties UX upgraded (XP input 50 min, reference URLs, expandable cards, BountySubmission model). Subscription upgrade pitches rebuilt for FREE→PRO/ALC and PRO→TEAMS. Achievements dark mode + unlock logic fixed. Reputation API path fixed. Dashboard primary sales cards got dates. Receipt review CTA added.

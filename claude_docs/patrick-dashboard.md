@@ -1,57 +1,67 @@
-# Patrick's Dashboard — April 11, 2026 (S440)
+# Patrick's Dashboard — April 11, 2026 (S441)
 
-## S440 Summary
+## S441 Summary
 
-3-round session from Patrick's live site review. Round 1: 7 parallel agents fixed 10 issues. Round 2: nav reorder + holds icon + Inspiration removed. Round 3: leaderboard consolidated, messages dual-role fix, missing Connect links added.
-
-All 3 rounds pushed. Migrations applied. 8 bugs queued for S441.
+8-issue fix batch from your live site review. 9 agents across 2 parallel batches. 15 files changed. Reputation DB backfilled.
 
 ---
 
-## What S440 Shipped
+## What S441 Shipped
 
-### Round 1 — 10-Issue Fix Batch (7 parallel agents)
-- Nav: grey icons (Command Center, Calendar, Staff), Explorer Passport rename, Hunt Exclusives group, league moved
-- Bounties: XP input (50 min), reference URL, expandable cards, BountySubmission model
-- Subscription: dark mode fix, upgrade pitches (FREE→PRO/ALC, PRO→TEAMS)
-- Achievements: dark mode styling + unlockedAt nullable fix
-- Reputation: API path fix (`/users/me/purchases` → `/users/purchases`)
-- Dashboard: dates on primary sales cards
-- Receipt: review CTA + organizer data in response
-
-### Round 2 — Nav Reorder + Holds Icon
-- Nav order: Connect > Hunt Pass > Hunt Exclusives (all 3 locations + avatar)
-- Inspiration removed from desktop header
-- CartIcon: shopping bag → Clock icon
-- Mobile header: holds icon with live badge next to alerts
-- Command Center icon grey in mobile
-
-### Round 3 — Leaderboard + Messages + Connect Links
-- Leaderboard: `/shopper/leaderboard` → redirect to `/leaderboard`, backend uses `guildXp`
-- Messages: dual-role fix — organizer AND shopper conversations with roleContext badges, `/organizer/messages` → redirect to `/messages`
-- Connect nav: added Appraisals, Leaderboard, Achievements to both mobile sections
+- **Bounties:** XP explainer copy + Submit Match button wired (shows toast — needs organizer role to submit)
+- **Achievements:** Streak copy gone, replaced with guildXp/Explorer Rank progression + XP progress bar
+- **Reputation (P0):** Scores were 0 because wrong ID type used in DB upsert. Fixed code + backfilled DB (score=4.67 for organizer with 3 reviews)
+- **Dashboard:** "View Sale" eye icon added to primary sales cards (links to public sale page)
+- **Receipts:** Review CTA route fixed (was pointing to wrong URL)
+- **Haul Posts:** Photo URL input → file upload with Cloudinary. Item ID input → searchable purchase history autocomplete
+- **Price Research Card:** Condensed layout, reordered, "Request Community Appraisal" button added (sage green)
+- **Lucky Roll:** Already fully built — frontend + backend + pity system. Likely needs XP in your test account to try
 
 ---
 
-## S441 Priority Queue (8 items)
+## Push Block (S441)
 
-1. **Remove Messages from avatar dropdown** — standalone Messages link still showing in dropdown nav
-2. **Bounties: Submit a Match** — button just closes card, needs actual POST to BountySubmission endpoint
-3. **Bounties: XP explainer copy** — add text near XP input (minimum, organizer split, non-refundable)
-4. **Achievements: stale copy** — references legacy "streak achievements", needs content audit
-5. **Reputation: scores all 0** — API path fixed but scoring formula returns 0
-6. **Dashboard: live view link** — dates added, need link to public sale view (not just edit)
-7. **Receipt: review CTA** — verify renders with test data in Chrome
-8. **Bounties: dollars vs XP** — open decision, Stripe/legal research needed
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+git add packages/frontend/pages/shopper/bounties.tsx
+git add packages/frontend/pages/shopper/achievements.tsx
+git add packages/frontend/components/AuthContext.tsx
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/controllers/passkeyController.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/backend/src/routes/users.ts
+git add packages/backend/src/services/reputationService.ts
+git add packages/backend/src/controllers/reputationController.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/components/ReceiptCard.tsx
+git add packages/frontend/components/PriceResearchPanel.tsx
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
+git add packages/frontend/pages/shopper/haul-posts/create.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+
+git commit -m "S441: 8-issue fix batch — bounties XP copy, achievements guildXp, reputation score bug, dashboard live view, receipt CTA route, price research card refactor, haul posts upload/search"
+.\push.ps1
+```
 
 ---
 
-## Migrations (S440 — already applied)
+## If S440 Migrations Not Yet Applied
 
-3 migrations applied: `add_reference_url_bounty`, `bounty_submissions`, `make_unlockedAt_nullable`
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
 ---
 
-## S440 Push Block (all 3 rounds already pushed)
+## Next Session (S442)
 
-No action needed — all code pushed during session.
+- Chrome QA all 8 fixes from S441
+- Lucky Roll: test with XP-loaded account, verify roll mechanics work
+- Bounties dollars vs XP: open decision (Stripe/legal)
+- Reputation: verify scores display correctly on live site after deploy
