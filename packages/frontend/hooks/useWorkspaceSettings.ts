@@ -16,6 +16,11 @@ import api from '../lib/api';
 export interface WorkspaceSettings {
   id: string;
   workspaceId: string;
+  name?: string;
+  description?: string;
+  brandRules?: string;
+  templateUsed?: string;
+  maxMembers?: number;
   enableAnalytics: boolean;
   enableLeaderboard: boolean;
   enableTeamChat: boolean;

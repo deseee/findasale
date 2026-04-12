@@ -191,9 +191,7 @@ export default function WorkspaceSettingsPage() {
     if (!workspace) return;
     try {
       await updateSettingsMutation.mutateAsync({
-        workspaceId: workspace.id,
-        workspaceName: workspaceName,
-        enableAnalytics: true
+        name: workspaceName,
       });
       showToast('Workspace name updated', 'success');
     } catch (error: any) {
@@ -234,9 +232,7 @@ export default function WorkspaceSettingsPage() {
     if (!workspace) return;
     try {
       await updateSettingsMutation.mutateAsync({
-        workspaceId: workspace.id,
-        enableAnalytics: settings?.enableAnalytics ?? true,
-        brandRules: brandRules,
+        brandRules: JSON.stringify(brandRules),
       });
       showToast('Brand rules saved', 'success');
     } catch (error: any) {
