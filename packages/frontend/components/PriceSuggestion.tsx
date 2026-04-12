@@ -82,13 +82,12 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
         type="button"
         onClick={handleSuggestPrice}
         disabled={!isEnabled || loading}
-        className={`inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-medium transition ${
+        className={`px-6 py-2.5 rounded-full font-medium transition text-xs ${
           isEnabled && !loading
             ? 'bg-amber-500 hover:bg-amber-600 text-white cursor-pointer dark:bg-amber-500 dark:hover:bg-amber-600'
             : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
         }`}
       >
-        <span className="text-base">💡</span>
         {loading ? 'Analyzing...' : 'Suggest Price'}
       </button>
 
@@ -125,7 +124,7 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
           <button
             type="button"
             onClick={handleApplyPrice}
-            className="inline-flex bg-amber-500 hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white font-medium py-2.5 px-6 rounded-full transition text-sm"
+            className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white text-xs font-medium rounded-full transition-colors"
           >
             Use ${suggestion.suggested.toFixed(2)}
           </button>

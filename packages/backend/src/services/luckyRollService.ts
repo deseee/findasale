@@ -139,20 +139,15 @@ export async function getEligibility(userId: string) {
 
   // Check weekly reset boundary
   const weeklyResetBoundary = getWeeklyResetBoundary(now);
-  const lastRolledAfterReset = user.luckyRollLastRolledAt && user.luckyRollLastRolledAt > weeklyResetBoundary;
   const weeklyLimit = user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > now ? 2 : 1;
 
-  // Count rolls this week
-  let rollsThisWeek = 0;
-  if (lastRolledAfterReset) {
-    const rollCountThisWeek = await prisma.luckyRoll.count({
-      where: {
-        userId,
-        createdAt: { gte: weeklyResetBoundary },
-      },
-    });
-    rollsThisWeek = rollCountThisWeek;
-  }
+  // Count rolls this week (always count from DB, don't rely on lastRolledAt gate)
+  const rollsThisWeek = await prisma.luckyRoll.count({
+    where: {
+      userId,
+      createdAt: { gte: weeklyResetBoundary },
+    },
+  });
 
   const canRoll = accountOldEnough && hasXp && rollsThisWeek < weeklyLimit;
 
@@ -232,6 +227,8 @@ export async function performRoll(
 
   const weeklyResetBoundary = getWeeklyResetBoundary(now);
   const weeklyLimit = user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > now ? 2 : 1;
+
+  // Count rolls this week (from DB, not from lastRolledAt)
   const rollCountThisWeek = await prisma.luckyRoll.count({
     where: {
       userId,

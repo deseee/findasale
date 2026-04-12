@@ -61,13 +61,13 @@ export interface CostCalculator {
   totalMonthlyCost: number;
 }
 
-// ─── GET /api/workspaces/:workspaceId/settings ────────────────────────────
+// ─── GET /api/workspace/:workspaceId/settings ────────────────────────────
 export function useWorkspaceSettings(workspaceId: string | null) {
   return useQuery<WorkspaceSettings>({
     queryKey: ['workspaceSettings', workspaceId],
     queryFn: async () => {
       if (!workspaceId) throw new Error('workspaceId required');
-      const res = await api.get(`/workspaces/${workspaceId}/settings`);
+      const res = await api.get(`/workspace/${workspaceId}/settings`);
       return res.data;
     },
     enabled: !!workspaceId,
@@ -75,13 +75,13 @@ export function useWorkspaceSettings(workspaceId: string | null) {
   });
 }
 
-// ─── PATCH /api/workspaces/:workspaceId/settings ────────────────────────────
+// ─── PATCH /api/workspace/:workspaceId/settings ────────────────────────────
 export function useUpdateWorkspaceSettings(workspaceId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (updates: Partial<WorkspaceSettings>) => {
       if (!workspaceId) throw new Error('workspaceId required');
-      const res = await api.patch(`/workspaces/${workspaceId}/settings`, updates);
+      const res = await api.patch(`/workspace/${workspaceId}/settings`, updates);
       return res.data;
     },
     onSuccess: (data) => {
@@ -90,13 +90,13 @@ export function useUpdateWorkspaceSettings(workspaceId: string | null) {
   });
 }
 
-// ─── POST /api/workspaces/:workspaceId/apply-template ────────────────────────
+// ─── POST /api/workspace/:workspaceId/apply-template ────────────────────────
 export function useApplyTemplate(workspaceId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (templateName: string) => {
       if (!workspaceId) throw new Error('workspaceId required');
-      const res = await api.post(`/workspaces/${workspaceId}/apply-template`, {
+      const res = await api.post(`/workspace/${workspaceId}/apply-template`, {
         templateName,
       });
       return res.data;
@@ -108,13 +108,13 @@ export function useApplyTemplate(workspaceId: string | null) {
   });
 }
 
-// ─── GET /api/workspaces/:workspaceId/permissions ────────────────────────────
+// ─── GET /api/workspace/:workspaceId/permissions ────────────────────────────
 export function useWorkspacePermissions(workspaceId: string | null) {
   return useQuery<RolePermissions[]>({
     queryKey: ['workspacePermissions', workspaceId],
     queryFn: async () => {
       if (!workspaceId) throw new Error('workspaceId required');
-      const res = await api.get(`/workspaces/${workspaceId}/permissions`);
+      const res = await api.get(`/workspace/${workspaceId}/permissions`);
       return res.data;
     },
     enabled: !!workspaceId,
@@ -122,14 +122,14 @@ export function useWorkspacePermissions(workspaceId: string | null) {
   });
 }
 
-// ─── PATCH /api/workspaces/:workspaceId/permissions/:role ────────────────────
+// ─── PATCH /api/workspace/:workspaceId/permissions/:role ────────────────────
 export function useUpdatePermissions(workspaceId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { role: string; permissions: string[] }) => {
       if (!workspaceId) throw new Error('workspaceId required');
       const res = await api.patch(
-        `/workspaces/${workspaceId}/permissions/${payload.role}`,
+        `/workspace/${workspaceId}/permissions/${payload.role}`,
         { permissions: payload.permissions }
       );
       return res.data;
