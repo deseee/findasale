@@ -44,10 +44,11 @@ const ShopperReputationPage = () => {
       Promise.all([
         api.get('/users/purchases'),
         api.get('/users/me'),
+        api.get('/users/favorites'),
       ])
-        .then(([purchasesRes, userRes]) => {
-          const purchases = purchasesRes.data?.purchases || [];
-          const favorites = userRes.data?.favorites || [];
+        .then(([purchasesRes, userRes, favoritesRes]) => {
+          const purchases = Array.isArray(purchasesRes.data) ? purchasesRes.data : (purchasesRes.data?.purchases || []);
+          const favorites = Array.isArray(favoritesRes.data) ? favoritesRes.data : [];
           const userData = userRes.data;
 
           const paidPurchases = purchases.filter((p: any) => p.status === 'PAID').length;

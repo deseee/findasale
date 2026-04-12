@@ -10,6 +10,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuth } from '../../components/AuthContext';
+import api from '../../lib/api';
 
 interface Eligibility {
   canRoll: boolean;
@@ -56,22 +57,7 @@ const LuckyRollPage = () => {
 
     const fetchEligibility = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setError('Authentication required. Please log in.');
-          setIsLoading2(false);
-          return;
-        }
-        const response = await fetch('/api/lucky-roll/eligibility', {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!response.ok) {
-          throw new Error('Failed to fetch eligibility');
-        }
-        const data = await response.json();
+        const { data } = await api.get('/lucky-roll/eligibility');
         setEligibility(data);
         setIsLoading2(false);
       } catch (err) {
@@ -92,37 +78,11 @@ const LuckyRollPage = () => {
     setResult(null);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-      const response = await fetch('/api/lucky-roll/roll', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to perform roll');
-      }
-
-      const rollResult: RollResult = await response.json();
+      const { data: rollResult } = await api.post<RollResult>('/lucky-roll/roll');
       setResult(rollResult);
 
       // Refresh eligibility
-      const eligResponse = await fetch('/api/lucky-roll/eligibility', {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!eligResponse.ok) {
-        throw new Error('Failed to refresh eligibility');
-      }
-      const newEligibility = await eligResponse.json();
+      const { data: newEligibility } = await api.get('/lucky-roll/eligibility');
       setEligibility(newEligibility);
     } catch (err: any) {
       setError(err.message || 'Failed to perform roll');
