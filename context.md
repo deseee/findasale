@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-04-05T08:11:31.683Z*
+*Generated at 2026-04-12T08:10:54.891Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -15,13 +15,13 @@ See report for details.
 - Dev stack: native (backend/frontend/postgres run natively on Windows — no Docker)
 
 ## Signals
-⚠ Env drift — in .env.example but missing from .env: 
+⚠ Env drift — in .env.example but missing from .env: STRIPE_PRO_MONTHLY_PRICE_ID, STRIPE_TEAMS_MONTHLY_PRICE_ID, STRIPE_TRIAL_COUPON_ID, MAILERLITE_SHOPPERS_GROUP_ID, CLOUDINARY_AVG_IMAGE_SIZE_KB, AI_COST_CEILING_USD, OLLAMA_URL, OLLAMA_VISION_MODEL, GOOGLE_PLACES_API_KEY, EBAY_DELETION_ENDPOINT_URL, EBAY_VERIFICATION_TOKEN, OSRM_API_URL, RATE_LIMIT_WHITELIST_IPS
 ⚠ 10+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/controllers/appraisalController.ts:38:    // TODO: Add PAID_ADDON check if billing is wired
-  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
-  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/helpers/itemQueries.ts:43:// TODO: Make draftStatus String? (optional) or backfill NULLs before re-enabling.
-  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/jobs/auctionJob.ts:61:          // TODO Phase 2: organizer dashboard UI to approve/relist
-  /sessions/eager-beautiful-thompson/mnt/FindaSale/packages/backend/src/jobs/fraudDetectionJob.ts:23:    // TODO: Integrate with node-cron:
+  /sessions/eager-exciting-mayer/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:250:      // TODO: implement distance sorting once Sales have consistent lat/lng
+  /sessions/eager-exciting-mayer/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:258:        // TODO: add category filter if needed
+  /sessions/eager-exciting-mayer/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:285:      distance: null, // TODO: calculate if lat/lng available
+  /sessions/eager-exciting-mayer/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:503:        checkoutUrl: null, // TODO: integrate Stripe
+  /sessions/eager-exciting-mayer/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:745:      orderId: null, // TODO: create Order record
 
 ## Project File Tree
 ```
@@ -1021,8 +1021,14 @@ See report for details.
 ├── camera-mode-mockup.jsx
 ├── claude_docs/
 │   ├── .last-wrap
+│   ├── ARCHITECT_ASSESSMENT_FEEDBACK_SCHEMA.md
+│   ├── ARCHITECT_PATRICK_SUMMARY.md
 │   ├── COMPLETED_PHASES.md
 │   ├── CORE.md
+│   ├── FEEDBACK_DEV_QUICKSTART.md
+│   ├── FEEDBACK_SURVEY_MAPPING.md
+│   ├── FEEDBACK_SYSTEM_HANDOFF.md
+│   ├── FEEDBACK_SYSTEM_SPEC.md
 │   ├── PRICING_PAGE_UX_SPEC_S392.md
 │   ├── RECOVERY.md
 │   ├── S248-walkthrough-findings.md
@@ -1036,7 +1042,11 @@ See report for details.
 │   │   ├── save-wishlist-item-card.md
 │   │   └── shopper_to_organizer_conversion_flow.md
 │   ├── architecture/
+│   │   ├── ADR-012-DEV-CHECKLIST.md
+│   │   ├── ADR-012-SUMMARY.md
 │   │   ├── ADR-013-060-TEAMS-BUNDLE-SPEC.md
+│   │   ├── ADR-013-auction-overhaul.md
+│   │   ├── ADR-014-hubs-flea-market-repurpose.md
 │   │   ├── ADR-017-019-BID-BOT-PASSKEY-SPEC.md
 │   │   ├── ADR-030-046-069-AI-OFFLINE-SPEC.md
 │   │   ├── ADR-040-044-048-HUBS-TRAIL-SPEC.md
@@ -1049,10 +1059,14 @@ See report for details.
 │   │   ├── ADR-068-QUICK-REFERENCE.md
 │   │   ├── ADR-068-SPRINT1-IMPLEMENTATION-SPEC.md
 │   │   ├── ADR-PHASE4-BRIEF.md
+│   │   ├── ADR-holds-to-cart-invoice.md
 │   │   ├── ADR-roadmap-batch-d-72-75.md
 │   │   ├── AUCTION_WIN_SPEC.md
 │   │   ├── BATCH-D-SUMMARY.md
 │   │   ├── ItemCard-Unification-Spec.md
+│   │   ├── POS_IN_APP_PAYMENT_REQUEST_ADR.md
+│   │   ├── POS_IN_APP_PAYMENT_REQUEST_SUMMARY.md
+│   │   ├── POS_IN_APP_TECHNICAL_REFERENCE.md
 │   │   ├── adr-072-dual-role-account-schema.md
 │   │   ├── adr-073-two-channel-notification-system.md
 │   │   ├── feature-spec-73-notifications.md
@@ -1068,6 +1082,7 @@ See report for details.
 │   │   ├── accessibility-audit-2026-03-18.md
 │   │   ├── brand-drift-2026-03-24.md
 │   │   ├── brand-drift-2026-03-31.md
+│   │   ├── brand-drift-2026-04-07.md
 │   │   ├── business-plan-brand-review-2026-03-19.md
 │   │   ├── chrome-audit-2026-03-20-roadmap-updates.md
 │   │   ├── chrome-audit-2026-03-20.md
@@ -1100,13 +1115,16 @@ See report for details.
 │   │   ├── ux-audit-nav-overload-2026-03-18.md
 │   │   ├── weekly-audit-2026-03-22.md
 │   │   ├── weekly-audit-2026-03-26.md
-│   │   └── weekly-audit-2026-04-02.md
+│   │   ├── weekly-audit-2026-04-02.md
+│   │   └── weekly-audit-2026-04-09.md
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (11 files)
 │   ├── brand-voice/
 │   │   └── COLLECTORS_GUILD_BRAND_VOICE.md
 │   ├── competitor-intel/ (5 files)
 │   ├── decisions-log.md
+│   ├── design/
+│   │   └── PRICE_RESEARCH_CARD_UX_SPEC.md
 │   ├── escalation-log.md
 │   ├── feature-decisions/
 │   │   ├── CAMERA_WORKFLOW_V2_ARCHITECTURE.md
@@ -1121,43 +1139,48 @@ See report for details.
 │   │   ├── advisory-board-S236-print-kit-etsy.md
 │   │   ├── demo-readiness-plan-S236.md
 │   │   └── ebay-quick-list-spec.md
-│   ├── feature-notes/ (32 files)
+│   ├── feature-notes/ (45 files)
 │   ├── guides/ (1 files)
 │   ├── handoffs/
 │   │   └── 125_csv_export_handoff.md
-│   ├── health-reports/ (10 files)
+│   ├── health-reports/ (12 files)
 │   ├── human-QA-walkthrough-findings.md
-│   ├── improvement-memos/ (3 files)
+│   ├── improvement-memos/ (4 files)
+│   ├── innovation-shopper-engagement-ideas.md
 │   ├── legal-hold-to-pay-risk-review.md
 │   ├── logs/ (3 files)
 │   ├── marketing/
 │   │   └── content-pipeline/
 │   │       ├── content-2026-03-23.md
 │   │       ├── content-2026-03-26.md
-│   │       └── content-2026-04-02.md
+│   │       ├── content-2026-04-02.md
+│   │       └── content-2026-04-09.md
 │   ├── monthly-digest-2026-04.md
 │   ├── next-session-brief.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (66 files)
+│   ├── operations/ (70 files)
 │   ├── patrick-dashboard.md
 │   ├── patrick-walkthrough-S248.md
-│   ├── research/ (41 files)
+│   ├── research/ (45 files)
 │   ├── self-healing/ (1 files)
 │   ├── session-log.md
 │   ├── skill-updates/
 │   │   ├── findasale-dev-SKILL.md
 │   │   └── findasale-qa-SKILL.md
-│   ├── skills-package/ (48 files)
+│   ├── skills-package/ (52 files)
 │   ├── specs/
 │   │   ├── concurrent-sales-gate-spec.md
+│   │   ├── explorers-guild-master-spec.md
 │   │   ├── pos-upgrade-architecture-spec.md
 │   │   └── pos-upgrade-ux-flows.md
-│   ├── strategy/ (22 files)
+│   ├── strategy/ (32 files)
 │   ├── ux-audits/
 │   │   └── explorer-guild-phase2-audit.md
+│   ├── ux-shopper-engagement-ecosystem.md
 │   ├── ux-spotchecks/
 │   │   ├── 2026-03-25.md
 │   │   ├── 2026-04-01.md
+│   │   ├── 2026-04-08.md
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
 │   │   ├── S256-UX-HANDOFF.md
 │   │   ├── S256-UX-SPECS-41-items-onboarding.md
@@ -1169,9 +1192,10 @@ See report for details.
 │   │   ├── nav-dashboard-consolidation-2026-03-20.md
 │   │   ├── organizer-guidance-spec-s350.md
 │   │   ├── photo-capture-protocol-s350.md
+│   │   ├── review-card-layout-spec.md
 │   │   ├── smart-photo-crop-ux-spec.md
 │   │   └── ux-audit-S236.md
-│   └── workflow-retrospectives/ (3 files)
+│   └── workflow-retrospectives/ (4 files)
 ├── conversation-defaults-SKILL-v8.md.tmp.35852.1773930503120
 ├── frontend-pages-inventory-S294.html
 ├── next
@@ -1210,28 +1234,31 @@ See report for details.
 │   │   ├── package.json
 │   │   ├── src/
 │   │   │   ├── __tests__/
+│   │   │   │   ├── auctionClosing.integration.ts
+│   │   │   │   ├── auth.integration.ts
 │   │   │   │   ├── emailReminders.e2e.ts
+│   │   │   │   ├── payment.integration.ts
+│   │   │   │   ├── reservation.integration.ts
 │   │   │   │   ├── stripe.e2e.ts
-│   │   │   │   ├── typologyClassifier.integration.ts
 │   │   │   │   └── weeklyDigest.e2e.ts
 │   │   │   ├── _triggerDigest.ts
 │   │   │   ├── config/
 │   │   │   │   └── regionConfig.ts
 │   │   │   ├── constants/
 │   │   │   │   └── tierLimits.ts
-│   │   │   ├── controllers/ (110 files)
+│   │   │   ├── controllers/ (115 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
 │   │   │   ├── instrument.ts
-│   │   │   ├── jobs/ (19 files)
-│   │   │   ├── lib/ (12 files)
-│   │   │   ├── middleware/ (12 files)
+│   │   │   ├── jobs/ (21 files)
+│   │   │   ├── lib/ (13 files)
+│   │   │   ├── middleware/ (13 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (100 files)
-│   │   │   ├── services/ (56 files)
-│   │   │   ├── types/ (1 files)
-│   │   │   └── utils/ (6 files)
+│   │   │   ├── routes/ (104 files)
+│   │   │   ├── services/ (61 files)
+│   │   │   ├── types/ (2 files)
+│   │   │   └── utils/ (10 files)
 │   │   └── tsconfig.json
 │   ├── database/
 │   │   ├── .env
@@ -1243,7 +1270,7 @@ See report for details.
 │   │   ├── prisma/
 │   │   │   ├── EXPLORER_PROFILE_DECISION.md
 │   │   │   ├── fix-seed-city.ts
-│   │   │   ├── migrations/ (149 migrations)
+│   │   │   ├── migrations/ (171 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   └── seed.ts
 │   │   └── tsconfig.json
@@ -1254,18 +1281,18 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (204 files)
-│   │   ├── context/ (1 files)
+│   │   ├── components/ (217 files)
+│   │   ├── context/ (2 files)
 │   │   ├── contexts/ (3 files)
-│   │   ├── hooks/ (61 files)
-│   │   ├── lib/ (11 files)
+│   │   ├── hooks/ (65 files)
+│   │   ├── lib/ (12 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js
 │   │   ├── next.config.js
 │   │   ├── package.json
-│   │   ├── pages/ (64 files)
+│   │   ├── pages/ (65 files)
 │   │   ├── postcss.config.js
-│   │   ├── public/ (14 files)
+│   │   ├── public/ (15 files)
 │   │   ├── sentry.client.config.ts
 │   │   ├── sentry.edge.config.ts
 │   │   ├── sentry.server.config.ts
@@ -1280,10 +1307,12 @@ See report for details.
 │       ├── src/
 │       │   ├── cloudinaryUtils.ts
 │       │   ├── constants/
+│       │   │   ├── ebayCategories.ts
 │       │   │   └── tagVocabulary.ts
 │       │   ├── index.ts
 │       │   ├── tierGate.ts
-│       │   └── types/ (5 files)
+│       │   ├── types/ (7 files)
+│       │   └── utils/ (1 files)
 │       └── tsconfig.json
 ├── pnpm
 ├── pnpm-workspace.yaml
