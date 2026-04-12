@@ -5,7 +5,7 @@ export interface WorkspaceMember {
   id: string;
   workspaceId: string;
   organizerId: string;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+  role: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER';
   invitedAt: string;
   acceptedAt: string | null;
   organizer: {
@@ -93,7 +93,7 @@ export const useCreateWorkspace = () => {
 export const useInviteMember = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ email, role }: { email: string; role: 'OWNER' | 'ADMIN' | 'MEMBER' }) => {
+    mutationFn: async ({ email, role }: { email: string; role: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER' }) => {
       const response = await api.post('/workspace/invite', { email, role });
       return response.data;
     },
