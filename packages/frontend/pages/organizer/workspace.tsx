@@ -37,7 +37,7 @@ const PERMISSION_CATEGORIES = [
   },
   {
     name: 'Pricing',
-    permissions: ['view_pricing', 'edit_pricing', 'view_ai_suggestions', 'approve_ai_tags'],
+    permissions: ['view_pricing', 'edit_pricing'],
   },
   {
     name: 'POS',
@@ -112,7 +112,7 @@ export default function WorkspaceSettingsPage() {
   const [brandRules, setBrandRules] = useState({
     dressCode: '',
     photoStandards: '',
-    arrivalTime: '',
+    customerServiceStandards: '',
     customRules: '',
   });
 
@@ -255,7 +255,19 @@ export default function WorkspaceSettingsPage() {
 
           {/* SECTION 1: Workspace Identity */}
           <section className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Workspace Identity</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Workspace Identity</h2>
+              {workspace && (
+                <a
+                  href={`/workspace/${workspace.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block bg-sage-600 hover:bg-sage-700 text-white font-semibold py-2 px-4 rounded-md text-sm transition"
+                >
+                  View Public Workspace →
+                </a>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Name */}
               <div>
@@ -465,21 +477,22 @@ export default function WorkspaceSettingsPage() {
                 />
               </div>
 
-              {/* Arrival Time */}
-              <div>
+              {/* Customer Service Standards */}
+              <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Arrival Time
+                  Customer Service Standards
                 </label>
-                <input
-                  type="time"
-                  value={brandRules.arrivalTime}
-                  onChange={(e) => setBrandRules({ ...brandRules, arrivalTime: e.target.value })}
+                <textarea
+                  placeholder="e.g., Response time expectations, customer communication guidelines"
+                  value={brandRules.customerServiceStandards}
+                  onChange={(e) => setBrandRules({ ...brandRules, customerServiceStandards: e.target.value })}
+                  rows={3}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
                 />
               </div>
 
               {/* Photo Standards */}
-              <div className="md:col-span-2">
+              <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                   Photo Standards
                 </label>

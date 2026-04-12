@@ -289,11 +289,7 @@ export const getCoverageGaps = async (workspaceId: string, saleId?: string) => {
 
     // For now, return empty gaps — this would be populated by workspace config
     // Example: { requiredRoles: ['PHOTOGRAPHER', 'CASHIER'], coverage: [...] }
-    return {
-      workspaceId,
-      saleId: saleId || null,
-      gaps: [] // No gaps if all roles are covered
-    };
+    return [];
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error checking coverage gaps:', error);

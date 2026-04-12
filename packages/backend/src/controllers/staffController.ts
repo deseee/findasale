@@ -26,11 +26,7 @@ export const listStaff = async (req: AuthRequest, res: Response) => {
 
     const staff = await getStaffMembers(workspaceId);
 
-    return res.json({
-      workspaceId,
-      staff,
-      count: staff.length
-    });
+    return res.json(staff);
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error listing staff:', error);

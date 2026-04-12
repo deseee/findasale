@@ -71,6 +71,12 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
 
   const createAppraisal = useCreateAppraisal();
   const [appraisalSubmitting, setAppraisalSubmitting] = useState(false);
+  const [showAppraisalConfirm, setShowAppraisalConfirm] = useState(false);
+  const [appraisalCost, setAppraisalCost] = useState(0);
+  const [userTier, setUserTier] = useState<string>('SIMPLE');
+
+  // Determine appraisal cost based on tier
+  const APPRAISAL_XP_COST = 50;
 
   const handleGetPriceComps = async () => {
     if (!itemTitle.trim()) {
@@ -97,6 +103,36 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
       return;
     }
 
+    if (!user) {
+      showToast('Please sign in to request an appraisal', 'error');
+      return;
+    }
+
+    // Determine tier and cost
+    const tier = user.organizerTier || 'SIMPLE';
+    setUserTier(tier);
+
+    if (tier === 'SIMPLE') {
+      // Check if user has enough XP
+      const userXp = user.guildXp || 0;
+      if (userXp < APPRAISAL_XP_COST) {
+        showToast(
+          `You need ${APPRAISAL_XP_COST} XP to request an appraisal. You have ${userXp} XP.`,
+          'error'
+        );
+        return;
+      }
+      setAppraisalCost(APPRAISAL_XP_COST);
+    } else {
+      // PRO/TEAMS: free
+      setAppraisalCost(0);
+    }
+
+    // Show confirmation dialog
+    setShowAppraisalConfirm(true);
+  };
+
+  const handleConfirmAppraisal = async () => {
     setAppraisalSubmitting(true);
     try {
       createAppraisal.mutate(
@@ -109,9 +145,12 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
         {
           onSuccess: () => {
             showToast('🤝 Appraisal request submitted! Community will estimate value.', 'success');
+            setShowAppraisalConfirm(false);
           },
-          onError: () => {
-            showToast('Failed to submit appraisal request', 'error');
+          onError: (error: any) => {
+            const message = error?.response?.data?.message || 'Failed to submit appraisal request';
+            showToast(message, 'error');
+            setShowAppraisalConfirm(false);
           },
           onSettled: () => {
             setAppraisalSubmitting(false);
@@ -121,23 +160,25 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
     } catch (error: any) {
       showToast('Error submitting appraisal request', 'error');
       setAppraisalSubmitting(false);
+      setShowAppraisalConfirm(false);
     }
   };
 
   return (
-    <div className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-      {/* Collapsible Header — Condensed */}
-      <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
-      >
-        <h3 className="font-fraunces font-semibold text-sm text-warm-900 dark:text-warm-100 flex items-center gap-2">
-          🔍 Price Research
-        </h3>
-        <span className="text-warm-500 text-sm">
-          {isCollapsed ? '▶' : '▼'}
-        </span>
-      </button>
+    <>
+      <div className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+        {/* Collapsible Header — Condensed */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="w-full flex items-center justify-between px-4 py-3 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <h3 className="font-fraunces font-semibold text-sm text-warm-900 dark:text-warm-100 flex items-center gap-2">
+            🔍 Price Research
+          </h3>
+          <span className="text-warm-500 text-sm">
+            {isCollapsed ? '▶' : '▼'}
+          </span>
+        </button>
 
       {/* Panel Content — Compact Layout */}
       {!isCollapsed && (
@@ -293,7 +334,62 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
           </div>
         </div>
       )}
-    </div>
+      </div>
+
+      {/* Appraisal Cost Confirmation Modal */}
+      {showAppraisalConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-sm mx-4">
+            <h3 className="text-lg font-fraunces font-semibold text-warm-900 dark:text-warm-100 mb-3">
+              Request Community Appraisal
+            </h3>
+
+            {/* Cost Information */}
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              {appraisalCost > 0 ? (
+                <>
+                  <p className="text-sm text-warm-700 dark:text-warm-300 mb-2">
+                    <span className="font-medium">Cost:</span> {appraisalCost} XP
+                  </p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">
+                    <span className="font-medium">Your balance:</span> {user?.guildXp || 0} XP
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                  ✓ Free for {userTier} tier members
+                </p>
+              )}
+            </div>
+
+            {/* Message */}
+            <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">
+              Submit your item for community valuation. Community members will provide price estimates based on your photos.
+            </p>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAppraisalConfirm(false)}
+                disabled={appraisalSubmitting}
+                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAppraisal}
+                disabled={appraisalSubmitting}
+                className="flex-1 px-4 py-2 bg-[#4A7C59] hover:bg-[#3d654a] disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {appraisalSubmitting ? 'Submitting...' : 'Confirm & Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

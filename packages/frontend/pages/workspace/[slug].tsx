@@ -22,7 +22,9 @@ interface WorkspacePublicData {
   ownerName: string;
   ownerUserId: string | null;
   ownerId: string | null;
-  publishedSales: PublishedSale[];
+  description: string | null;
+  upcomingSales: PublishedSale[];
+  pastSales: PublishedSale[];
 }
 
 export default function PublicWorkspacePage() {
@@ -110,6 +112,16 @@ export default function PublicWorkspacePage() {
             </p>
           </div>
 
+          {/* Workspace Description */}
+          {workspace.description && (
+            <div className="mb-8 bg-warm-50 dark:bg-gray-700 rounded-lg p-6">
+              <h3 className="text-sm font-semibold text-warm-600 dark:text-warm-400 mb-2">About This Workspace</h3>
+              <p className="text-warm-900 dark:text-warm-100 leading-relaxed">
+                {workspace.description}
+              </p>
+            </div>
+          )}
+
           {/* Workspace Stats */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
             <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
@@ -134,14 +146,14 @@ export default function PublicWorkspacePage() {
             </div>
           </div>
 
-          {/* Published Sales Section */}
+          {/* Upcoming Sales Section */}
           <div className="mt-8 pt-6 border-t border-warm-200 dark:border-gray-700">
             <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
               Upcoming Sales
             </h2>
-            {workspace.publishedSales && workspace.publishedSales.length > 0 ? (
+            {workspace.upcomingSales && workspace.upcomingSales.length > 0 ? (
               <div className="space-y-3">
-                {workspace.publishedSales.map((sale) => {
+                {workspace.upcomingSales.map((sale) => {
                   const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
@@ -174,6 +186,41 @@ export default function PublicWorkspacePage() {
               </div>
             )}
           </div>
+
+          {/* Past Sales Section */}
+          {workspace.pastSales && workspace.pastSales.length > 0 && (
+            <div className="mt-8 pt-6 border-t border-warm-200 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+                Past Sales
+              </h2>
+              <div className="space-y-3">
+                {workspace.pastSales.map((sale) => {
+                  const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  });
+                  const endDate = new Date(sale.endDate).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  });
+                  return (
+                    <a
+                      key={sale.id}
+                      href={`/sales/${sale.id}`}
+                      className="block bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md hover:border-sage-300 dark:hover:border-sage-600 transition opacity-75"
+                    >
+                      <p className="font-semibold text-warm-900 dark:text-warm-100 mb-1">
+                        {sale.title}
+                      </p>
+                      <p className="text-sm text-warm-600 dark:text-warm-400">
+                        {startDate} — {endDate} • {sale.city}
+                      </p>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Contact Section */}
           <div className="mt-8 pt-6 border-t border-warm-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-4">

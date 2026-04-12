@@ -204,7 +204,75 @@ export const checkAndAward = async (
 };
 
 /**
+ * Evaluate actual user data to calculate achievement progress
+ * This ensures achievements reflect real activity, even if checkAndAward wasn't called
+ */
+const evaluateAchievementProgress = async (userId: string, achievementKey: string): Promise<number> => {
+  try {
+    switch (achievementKey) {
+      case 'FIRST_PURCHASE':
+      case 'FIVE_PURCHASES': {
+        const purchaseCount = await prisma.purchase.count({
+          where: { userId }
+        });
+        return purchaseCount;
+      }
+
+      case 'FIRST_SALE_ATTENDED': {
+        const attendedCount = await prisma.saleRSVP.count({
+          where: { userId }
+        });
+        return attendedCount;
+      }
+
+      case 'FIRST_ITEM_LISTED':
+      case 'HUNDRED_ITEMS_LISTED': {
+        const organizer = await prisma.organizer.findUnique({
+          where: { userId }
+        });
+        if (!organizer) return 0;
+
+        // Count items across all sales by this organizer
+        const itemCount = await prisma.item.count({
+          where: {
+            sale: {
+              organizerId: organizer.id
+            }
+          }
+        });
+        return itemCount;
+      }
+
+      case 'FIRST_SALE_CREATED': {
+        const organizer = await prisma.organizer.findUnique({
+          where: { userId }
+        });
+        if (!organizer) return 0;
+
+        const saleCount = await prisma.sale.count({
+          where: { organizerId: organizer.id }
+        });
+        return saleCount;
+      }
+
+      case 'WEEKEND_WARRIOR':
+      case 'STREAK_3': {
+        // These are handled by the streak service, return 0 here
+        return 0;
+      }
+
+      default:
+        return 0;
+    }
+  } catch (error) {
+    console.error(`[Achievement] Failed to evaluate progress for ${achievementKey}:`, error);
+    return 0;
+  }
+};
+
+/**
  * Get all achievements for a user with progress
+ * Now evaluates actual data to ensure organizer achievements reflect real sales/items
  */
 export const getUserAchievements = async (userId: string) => {
   try {
@@ -221,21 +289,33 @@ export const getUserAchievements = async (userId: string) => {
       },
     });
 
-    return allAchievements.map((ach) => ({
-      id: ach.id,
-      key: ach.key,
-      name: ach.name,
-      description: ach.description,
-      icon: ach.icon,
-      category: ach.category,
-      targetValue: ach.targetValue,
-      unlocked:
-        ach.userAchievements.length > 0 && ach.userAchievements[0].unlockedAt
-          ? true
-          : false,
-      progress: ach.userAchievements.length > 0 ? ach.userAchievements[0].progress : 0,
-      unlockedAt:
-        ach.userAchievements.length > 0 ? ach.userAchievements[0].unlockedAt : null,
+    return await Promise.all(allAchievements.map(async (ach: any) => {
+      const userAch = ach.userAchievements.length > 0 ? ach.userAchievements[0] : null;
+
+      // For organizer achievements, evaluate against actual data
+      let progress = userAch?.progress ?? 0;
+      if (ach.category === 'ORGANIZER') {
+        const actualProgress = await evaluateAchievementProgress(userId, ach.key);
+        // Use the actual data if it's higher than recorded progress
+        progress = Math.max(progress, actualProgress);
+      }
+
+      // Determine if unlocked: either already marked as unlocked, or progress meets target
+      const isUnlocked = (userAch?.unlockedAt !== null && userAch?.unlockedAt !== undefined) ||
+                         progress >= ach.targetValue;
+
+      return {
+        id: ach.id,
+        key: ach.key,
+        name: ach.name,
+        description: ach.description,
+        icon: ach.icon,
+        category: ach.category,
+        targetValue: ach.targetValue,
+        unlocked: isUnlocked,
+        progress: progress,
+        unlockedAt: userAch?.unlockedAt || null,
+      };
     }));
   } catch (error) {
     console.error(`[Achievement] Failed to fetch achievements for ${userId}:`, error);

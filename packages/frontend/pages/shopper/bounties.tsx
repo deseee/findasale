@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Head from 'next/head';
 import { useAuth } from '../../components/AuthContext';
-import { Target, MapPin, Clock, DollarSign } from 'lucide-react';
+import { Target, MapPin, Clock, DollarSign, X } from 'lucide-react';
 import api from '../../lib/api';
 import { useToast } from '../../components/ToastContext';
 
@@ -29,6 +29,27 @@ interface BountyRequest {
   referenceUrl: string;
 }
 
+interface Sale {
+  id: string;
+  title: string;
+}
+
+interface Item {
+  id: string;
+  title: string;
+  price?: number;
+  status: string;
+}
+
+interface SubmissionModalState {
+  isOpen: boolean;
+  bountyId: string | null;
+  selectedSaleId: string | null;
+  selectedItemId: string | null;
+  message: string;
+  isSubmitting: boolean;
+}
+
 export default function ShopperBountiesPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -48,6 +69,16 @@ export default function ShopperBountiesPage() {
   });
   const [submittingMatch, setSubmittingMatch] = useState(false);
   const [selectedBountyId, setSelectedBountyId] = useState<string | null>(null);
+  const [submissionModal, setSubmissionModal] = useState<SubmissionModalState>({
+    isOpen: false,
+    bountyId: null,
+    selectedSaleId: null,
+    selectedItemId: null,
+    message: '',
+    isSubmitting: false,
+  });
+  const [organizerSales, setOrganizerSales] = useState<Sale[]>([]);
+  const [organizerItems, setOrganizerItems] = useState<Map<string, Item[]>>(new Map());
 
   // Load active bounties when page loads
   React.useEffect(() => {
@@ -114,19 +145,80 @@ export default function ShopperBountiesPage() {
   };
 
   const handleSubmitMatch = async (bountyId: string) => {
-    try {
-      setSubmittingMatch(true);
-      // For now, as organizer matching is from organizer side, we're submitting an interest
-      // from the shopper side. This could be a simple match interest endpoint.
-      // Using the submitBountySubmission endpoint which requires itemId
-      // For MVP, organizers submit matches from their items, not shoppers submitting matches from bounties
+    // Check if user is an organizer
+    const isOrganizer = user?.roles?.includes('ORGANIZER') || user?.role === 'ORGANIZER';
+
+    if (!isOrganizer) {
       showToast('This feature requires you to be an organizer. Please list items in a sale to submit matches.', 'info');
+      return;
+    }
+
+    // Load organizer's sales for the modal
+    try {
+      const response = await api.get('/sales/mine');
+      const sales = response.data.sales || [];
+      setOrganizerSales(sales);
+
+      // Initialize items map
+      const itemsMap = new Map<string, Item[]>();
+
+      // Fetch items for each sale
+      for (const sale of sales) {
+        try {
+          const saleResponse = await api.get(`/sales/${sale.id}`);
+          const items = saleResponse.data.items || [];
+          itemsMap.set(sale.id, items);
+        } catch (err) {
+          console.error(`Error fetching items for sale ${sale.id}:`, err);
+          itemsMap.set(sale.id, []);
+        }
+      }
+
+      setOrganizerItems(itemsMap);
+      setSubmissionModal({
+        isOpen: true,
+        bountyId,
+        selectedSaleId: sales.length > 0 ? sales[0].id : null,
+        selectedItemId: null,
+        message: '',
+        isSubmitting: false,
+      });
       setExpandedBountyId(null);
     } catch (error) {
+      console.error('Error loading sales for submission:', error);
+      showToast('Failed to load your sales', 'error');
+    }
+  };
+
+  const handleSubmitBountyMatch = async () => {
+    if (!submissionModal.bountyId || !submissionModal.selectedItemId) {
+      showToast('Please select an item', 'error');
+      return;
+    }
+
+    try {
+      setSubmissionModal(prev => ({ ...prev, isSubmitting: true }));
+
+      await api.post(`/bounties/${submissionModal.bountyId}/submissions`, {
+        itemId: submissionModal.selectedItemId,
+        message: submissionModal.message.trim() || null,
+      });
+
+      showToast('Match submitted successfully!', 'success');
+      setSubmissionModal({
+        isOpen: false,
+        bountyId: null,
+        selectedSaleId: null,
+        selectedItemId: null,
+        message: '',
+        isSubmitting: false,
+      });
+    } catch (error) {
       console.error('Error submitting match:', error);
-      showToast('Failed to submit match', 'error');
+      const errorMsg = (error as any).response?.data?.message || 'Failed to submit match';
+      showToast(errorMsg, 'error');
     } finally {
-      setSubmittingMatch(false);
+      setSubmissionModal(prev => ({ ...prev, isSubmitting: false }));
     }
   };
 
@@ -136,6 +228,120 @@ export default function ShopperBountiesPage() {
         <title>Bounty Board - FindA.Sale</title>
         <meta name="description" content="Request hard-to-find items from local organizers" />
       </Head>
+
+      {/* Submission Modal */}
+      {submissionModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Submit a Match
+              </h2>
+              <button
+                onClick={() => setSubmissionModal(prev => ({ ...prev, isOpen: false }))}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Sale Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select a Sale *
+                </label>
+                <select
+                  value={submissionModal.selectedSaleId || ''}
+                  onChange={(e) => {
+                    const saleId = e.target.value;
+                    setSubmissionModal(prev => ({
+                      ...prev,
+                      selectedSaleId: saleId,
+                      selectedItemId: null,
+                    }));
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="">-- Select a sale --</option>
+                  {organizerSales.map(sale => (
+                    <option key={sale.id} value={sale.id}>
+                      {sale.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Item Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select an Item *
+                </label>
+                <select
+                  value={submissionModal.selectedItemId || ''}
+                  onChange={(e) => {
+                    setSubmissionModal(prev => ({
+                      ...prev,
+                      selectedItemId: e.target.value,
+                    }));
+                  }}
+                  disabled={!submissionModal.selectedSaleId}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 disabled:opacity-50"
+                >
+                  <option value="">-- Select an item --</option>
+                  {submissionModal.selectedSaleId && organizerItems.get(submissionModal.selectedSaleId)?.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.title} {item.price ? `($${item.price.toFixed(2)})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Optional Message */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Message to Shopper <span className="text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                  value={submissionModal.message}
+                  onChange={(e) => {
+                    const text = e.target.value.slice(0, 500);
+                    setSubmissionModal(prev => ({
+                      ...prev,
+                      message: text,
+                    }));
+                  }}
+                  placeholder="Add a note about this item or the match..."
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 resize-none"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {submissionModal.message.length}/500
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setSubmissionModal(prev => ({ ...prev, isOpen: false }))}
+                  className="flex-1 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitBountyMatch}
+                  disabled={!submissionModal.selectedItemId || submissionModal.isSubmitting}
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {submissionModal.isSubmitting ? 'Submitting...' : 'Submit Match'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}

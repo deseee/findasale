@@ -199,20 +199,32 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
           select: {
             user: { select: { id: true, name: true, email: true } },
             sales: {
-              where: { status: { in: ['PUBLISHED'] }, deletedAt: null },
-              select: { id: true, title: true, startDate: true, endDate: true, city: true },
-              orderBy: { startDate: 'asc' }
+              where: { status: { in: ['PUBLISHED', 'ENDED', 'COMPLETED'] }, deletedAt: null },
+              select: { id: true, title: true, startDate: true, endDate: true, city: true, status: true },
+              orderBy: { startDate: 'desc' }
             }
           }
         },
-        members: true
+        members: true,
+        settings: {
+          select: {
+            description: true
+          }
+        }
       },
     });
     if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
     const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length + 1;
     const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
     const ownerUserId = workspace.owner?.user?.id || null;
-    const publishedSales = workspace.owner?.sales || [];
+    const description = workspace.settings?.description || null;
+
+    // Separate upcoming and past sales
+    const now = new Date();
+    const allSales = workspace.owner?.sales || [];
+    const upcomingSales = allSales.filter((s: any) => new Date(s.endDate) >= now && s.status === 'PUBLISHED');
+    const pastSales = allSales.filter((s: any) => new Date(s.endDate) < now || ['ENDED', 'COMPLETED'].includes(s.status));
+
     return res.json({
       id: workspace.id,
       name: workspace.name,
@@ -222,7 +234,9 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
       ownerName,
       ownerUserId,
       ownerId: workspace.ownerId,  // Organizer ID for messaging
-      publishedSales
+      description,
+      upcomingSales: upcomingSales.map((s: any) => ({ id: s.id, title: s.title, startDate: s.startDate, endDate: s.endDate, city: s.city })),
+      pastSales: pastSales.map((s: any) => ({ id: s.id, title: s.title, startDate: s.startDate, endDate: s.endDate, city: s.city }))
     });
   } catch (error) {
     Sentry.captureException(error);

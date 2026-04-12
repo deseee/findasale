@@ -266,9 +266,9 @@ export async function calculateOrganizerReputationScore(organizerId: string): Pr
       return;
     }
 
-    // Fetch all published sales for this organizer with their items
+    // Fetch all ended (completed) sales for this organizer with their items
     const sales = await prisma.sale.findMany({
-      where: { organizerId, status: 'PUBLISHED' },
+      where: { organizerId, status: 'ENDED' },
       select: {
         id: true,
         items: {
