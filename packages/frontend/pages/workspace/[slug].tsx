@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import Skeleton from '../../components/Skeleton';
-import useAuthStore from '../../lib/stores/useAuthStore';
+import { useAuth } from '../../components/AuthContext';
 
 interface WorkspaceMember {
   id: string;
@@ -38,7 +38,7 @@ interface WorkspaceInternal {
 export default function WorkspacePage() {
   const router = useRouter();
   const { slug } = router.query;
-  const { user, isLoading: authLoading } = useAuthStore();
+  const { user, isLoading: authLoading } = useAuth();
 
   const { data: workspace, isLoading, isError } = useQuery({
     queryKey: ['workspace-internal', slug],
