@@ -47,7 +47,6 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
       select: {
         id: true,
         guildXp: true,
-        organizerTier: true,
         roleSubscriptions: {
           where: { role: 'SHOPPER' },
           select: { subscriptionTier: true },
@@ -60,8 +59,8 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
     }
 
     const APPRAISAL_XP_COST = 50;
-    // For shoppers, check SHOPPER role subscription; for organizers/others, use organizerTier
-    const userSubscriptionTier = user.roleSubscriptions?.[0]?.subscriptionTier || user.organizerTier || 'SIMPLE';
+    // For shoppers, check SHOPPER role subscription; default to SIMPLE if no subscription found
+    const userSubscriptionTier = user.roleSubscriptions?.[0]?.subscriptionTier || 'SIMPLE';
 
     // Check if user is on FREE tier (SIMPLE subscription)
     if (userSubscriptionTier === 'SIMPLE') {

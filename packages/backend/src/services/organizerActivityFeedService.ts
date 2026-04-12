@@ -117,7 +117,7 @@ export async function getOrganizerActivityFeed(
         id: `msg-${msg.id}`,
         type: 'message' as const,
         saleName: msg.conversation.sale?.title || 'Unknown Sale',
-        saleId: msg.conversation.saleId || '',
+        saleId: msg.conversation.sale?.id || '',
         message: 'New message',
         timestamp: msg.createdAt.toISOString(),
       }))
@@ -166,7 +166,7 @@ export async function getOrganizerActivityFeed(
         id: `hold-${hold.id}`,
         type: 'hold' as const,
         saleName: hold.item.sale?.title || 'Unknown Sale',
-        saleId: hold.item.saleId || '',
+        saleId: hold.item.sale?.id || '',
         message: `Item held — expires in ${Math.ceil((hold.expiresAt.getTime() - Date.now()) / 60 / 60 / 1000)}h`,
         timestamp: hold.createdAt.toISOString(),
       }))
