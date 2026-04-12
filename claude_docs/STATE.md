@@ -7,6 +7,33 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S442 COMPLETE (2026-04-11):** Team Collaboration Phase 2 schema fix + test data seeding. Fixed 18 TS errors in workspaceController.ts by adding 5 missing fields to WorkspaceSettings model. Seeded full team test data for user1 (Alice) and user3 (Carol).
+
+**S442 What shipped:**
+- **Schema fix:** Added `name`, `description`, `brandRules` (Text), `templateUsed`, `maxMembers` (default 5) to WorkspaceSettings model — these were specified in the ADR but omitted by the schema agent in Phase 1.
+- **Migration:** `20260411000003_workspace_settings_fields/migration.sql` — 5 ALTER TABLE ADD COLUMN statements.
+- **Cache bust:** Updated `Dockerfile.production` cache-bust date to force Railway rebuild.
+- **Test data seeded (Railway DB direct via psycopg2):**
+  - Alice (user1): 7-member team — Alice (OWNER), David Jones (ADMIN), Bob Smith (MEMBER), Emma Brown (MANAGER), Frank Davis (STAFF), Iris Moore (STAFF), Grace Miller (VIEWER). All with departments, phone numbers, Mon-Sat availability, weekly+monthly performance stats, 3 weeks of leaderboard history.
+  - Carol (user3): 4-member team — Henry Wilson (ADMIN), Bob Smith (MEMBER), Frank Davis (MANAGER), Emma Brown (STAFF). Same data completeness.
+  - Both workspaces: WorkspaceSettings (templates, brand rules, commission override), 76 workspace permissions across all roles, 33 leaderboard entries.
+  - Alice's team = $119/mo scenario (5 base + 2 extra seats × $20).
+
+**S442 Files changed (3):**
+- `packages/database/prisma/schema.prisma` — 5 fields added to WorkspaceSettings
+- `packages/database/prisma/migrations/20260411000003_workspace_settings_fields/migration.sql` — NEW
+- `packages/backend/Dockerfile.production` — cache bust 2026-04-11
+
+**S442 Migration required:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+---
+
 **S441 COMPLETE (2026-04-11):** 8-issue fix batch from Patrick's live site review. 2 dispatch rounds (7+2 agents). 15 files changed. 1 DB backfill.
 
 **S441 What shipped:**
@@ -532,24 +559,54 @@ npx prisma generate
 
 ## Next Session Priority
 
-**S440 shipped:** 3 push rounds — nav restructure, leaderboard consolidation, messages dual-role fix, bounties UX, subscription pitches, achievements/reputation/dashboard/receipts fixes, Connect nav links.
+### Immediate (S443) — Shopper Page Strategic UX Exploration
 
-### Immediate (S441) — Patrick's end-of-S440 bug reports
+**Mode: EXPLORE (same pattern as S441-organizer team collab ecosystem)**
 
-1. **Bounties XP copy** (`/shopper/bounties`) — Add explainer text near XP input: "Minimum 50 XP. Organizers receive 1/2 the bounty amount after fulfillment. The more XP you offer the more likely organizers are to respond to your requests. XP is taken from your account at bounty posting and is non-refundable."
-2. **Bounties "Submit a Match" button** — Cards expand but Submit a Match just closes the card. Needs actual submission flow (POST to BountySubmission endpoint, success feedback).
-3. **Achievements stale copy** (`/shopper/achievements`) — References "streak achievements" which is legacy. Needs copy audit + verify badges render for test data. The S440 dark mode fix + unlockedAt nullable fix shipped but content may still reference old system.
-4. **Reputation scores all 0** (`/shopper/reputation`) — S440 fixed the API path (`/users/purchases` not `/users/me/purchases`) but scores still show 0 even for organizers with 3+ reviews. Likely needs more test data in DB or the score calculation logic is wrong. Diagnose the scoring formula in the frontend.
-5. **Dashboard primary sales — dates + live view link** (`/organizer/dashboard`) — S440 added dates (verify in Chrome). Still missing: a way to link to the live public view of the sale, not just the edit page.
-6. **Receipt review CTA** (`/shopper/history?view=receipts`) — S440 added review CTA in ReceiptCard. Verify it actually renders in Chrome with test data. May need receipts in DB for test users.
-7. **Messages link still in avatar nav** — Patrick confirmed with screenshot that Messages is still a standalone link in the avatar dropdown. Code at AvatarDropdown.tsx line ~355 has `href="/messages"`. Remove it — messages is accessible from the Connect group and header icon.
-8. **Bounties: dollars vs XP open decision** — Should shoppers offer real dollars as bounty rewards? Stripe/legal implications need research before committing.
+Patrick wants strategic UX/innovation thinking applied to 4 interconnected shopper pages that need cohesive design, possible merges, and name/nav cleanup. Same approach as the Staff/Workspace/Command Center ecosystem design: UX spec first, then innovation ideas, then Patrick approves, then parallel dev dispatch.
+
+**Pages to evaluate (read all 4 current implementations first):**
+
+1. **`/shopper/loyalty`** — Needs work. Patrick asks: combine with shopper dashboard? Nav/header names need changing at minimum.
+
+2. **`/shopper/dashboard`** — Still needs work. Patrick asks: combine with similar pages?
+
+3. **`/shopper/explorer-passport`** — Needs work. Patrick asks: combine with shopper dashboard?
+
+4. **`/shopper/hunt-pass`** — Patrick thinks this should split into 2 pages: (a) Hunt Pass upsell/purchase page, and (b) How to Earn XP / How to Spend XP guide. Whether 1 or 2 pages, it needs cohesiveness with the others.
+
+**Key questions the exploration must answer:**
+- Which pages merge? Which stay separate? Which split?
+- What should each page be called in nav? (Current names may not match content)
+- How do these pages relate to each other in the shopper journey?
+- What's the information architecture? (Where does a shopper go to see XP? Rank? Rewards? Progress?)
+- What innovations from the idea bank apply here?
+
+**Approach:**
+1. Dispatch `findasale-ux` with all 4 page paths — get UX spec for the shopper engagement ecosystem
+2. Dispatch `findasale-innovation` — brainstorm ideas for shopper engagement/gamification pages
+3. Present Patrick with combined findings + recommendations
+4. After Patrick approves: parallel dev dispatch (same Phase pattern as team collab)
+
+**Pre-read for next session:**
+- `packages/frontend/pages/shopper/loyalty.tsx`
+- `packages/frontend/pages/shopper/dashboard.tsx`
+- `packages/frontend/pages/shopper/explorer-passport.tsx`
+- `packages/frontend/pages/shopper/hunt-pass.tsx`
+- `packages/frontend/components/Layout.tsx` (nav structure for shopper sections)
+
+### Team Collab Phases Remaining
+- **Phase 2 status:** Code pushed, Railway rebuild pending (cache bust + schema fix in S442 push block). Migration needed.
+- **Phase 3:** Workspace View internal collaboration hub (live sales board, per-sale chat, task distribution, team leaderboard) + WebSocket integration
+- **Phase 4:** Smart tasks + leaderboard
+- **Phase 5:** Analytics + Command Center alerts + polish
 
 ### Deferred
 - hunt-pass.tsx 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP)
 - Bounty redesign Phase 2: auto-match on publish, shopper notifications, expiry cron
 - Flea Market Events full implementation (ADR-014 locked, schema ready)
 - Stripe Connect webhook config (items not marking SOLD after POS card payment — see Standing Notes)
+- Bounties dollars vs XP: open decision (Stripe/legal)
 
 **⏸️ QA QUEUE — postponed:**
 - S436: earnings/qr-codes/staff pages

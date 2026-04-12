@@ -1,54 +1,34 @@
-# Patrick's Dashboard — April 11, 2026 (S441)
+# Patrick's Dashboard — April 11, 2026 (S442)
 
-## S441 Summary
+## S442 Summary
 
-8-issue fix batch from your live site review. 9 agents across 2 parallel batches. 15 files changed. Reputation DB backfilled.
-
----
-
-## What S441 Shipped
-
-- **Bounties:** XP explainer copy + Submit Match button wired (shows toast — needs organizer role to submit)
-- **Achievements:** Streak copy gone, replaced with guildXp/Explorer Rank progression + XP progress bar
-- **Reputation (P0):** Scores were 0 because wrong ID type used in DB upsert. Fixed code + backfilled DB (score=4.67 for organizer with 3 reviews)
-- **Dashboard:** "View Sale" eye icon added to primary sales cards (links to public sale page)
-- **Receipts:** Review CTA route fixed (was pointing to wrong URL)
-- **Haul Posts:** Photo URL input → file upload with Cloudinary. Item ID input → searchable purchase history autocomplete
-- **Price Research Card:** Condensed layout, reordered, "Request Community Appraisal" button added (sage green)
-- **Lucky Roll:** Already fully built — frontend + backend + pity system. Likely needs XP in your test account to try
+Fixed the 18 TS errors blocking Railway (WorkspaceSettings missing 5 fields). Seeded team test data for user1 + user3. Cache busted Railway.
 
 ---
 
-## Push Block (S441)
+## What S442 Shipped
+
+- **Schema fix:** Added `name`, `description`, `brandRules`, `templateUsed`, `maxMembers` to WorkspaceSettings — the Phase 1 schema agent missed them
+- **Test data (Railway DB):** Alice (user1) has a 7-member team across all roles (OWNER/ADMIN/MANAGER/MEMBER/STAFF/VIEWER) with availability schedules, performance stats, and 3 weeks of leaderboard history. Carol (user3) has a 4-member team. Both have workspace settings, permissions, and brand rules populated.
+- **Alice's pricing scenario:** 7 members = $79 base + $40 (2 extra seats) = $119/mo — good for testing the cost calculator
+- **Cache bust:** Dockerfile.production updated to force Railway rebuild
+
+---
+
+## Push Block (S442) — STILL NEEDED
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-
-git add packages/frontend/pages/shopper/bounties.tsx
-git add packages/frontend/pages/shopper/achievements.tsx
-git add packages/frontend/components/AuthContext.tsx
-git add packages/backend/src/controllers/authController.ts
-git add packages/backend/src/controllers/passkeyController.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/backend/src/routes/users.ts
-git add packages/backend/src/services/reputationService.ts
-git add packages/backend/src/controllers/reputationController.ts
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/components/ReceiptCard.tsx
-git add packages/frontend/components/PriceResearchPanel.tsx
-git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
-git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
-git add packages/frontend/pages/shopper/haul-posts/create.tsx
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260411000003_workspace_settings_fields/migration.sql
+git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-
-git commit -m "S441: 8-issue fix batch — bounties XP copy, achievements guildXp, reputation score bug, dashboard live view, receipt CTA route, price research card refactor, haul posts upload/search"
+git commit -m "S442: fix WorkspaceSettings schema (5 missing fields) + cache bust Railway"
 .\push.ps1
 ```
 
----
-
-## If S440 Migrations Not Yet Applied
+## Migration (after push)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
@@ -59,9 +39,18 @@ npx prisma generate
 
 ---
 
-## Next Session (S442)
+## Next Session (S443) — Shopper Page Strategic UX Exploration
 
-- Chrome QA all 8 fixes from S441
-- Lucky Roll: test with XP-loaded account, verify roll mechanics work
-- Bounties dollars vs XP: open decision (Stripe/legal)
-- Reputation: verify scores display correctly on live site after deploy
+Same explore-mode pattern as the Staff/Workspace/Command Center ecosystem design. 4 shopper pages need strategic cohesive thinking:
+
+1. **`/shopper/loyalty`** — combine with dashboard? rename at minimum
+2. **`/shopper/dashboard`** — needs work, combine with similar?
+3. **`/shopper/explorer-passport`** — combine with dashboard?
+4. **`/shopper/hunt-pass`** — split into 2? (upsell page + earn/spend guide)
+
+Key decisions: which merge, which split, what nav names, how they connect in the shopper journey. UX + Innovation agents first, then Patrick approves, then parallel dev dispatch.
+
+### Team Collab Remaining (after shopper pages)
+- Phase 3: Workspace View (live sales board, chat, tasks, leaderboard) + WebSocket
+- Phase 4: Smart tasks + leaderboard
+- Phase 5: Analytics + Command Center alerts + polish
