@@ -130,9 +130,14 @@ export default function WorkspaceSettingsPage() {
   useEffect(() => {
     if (workspace) {
       setWorkspaceName(workspace.name || '');
-      setDescription(workspace.description || '');
     }
   }, [workspace]);
+
+  useEffect(() => {
+    if (settings) {
+      setDescription((settings as any).description || '');
+    }
+  }, [settings]);
 
   useEffect(() => {
     if (permissions && activeRoleTab) {
