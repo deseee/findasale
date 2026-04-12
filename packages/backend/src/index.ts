@@ -132,6 +132,7 @@ import achievementRoutes from './routes/achievements';        // Features #58-59
 import fraudRoutes from './routes/fraud';                     // Feature #17: Bid Bot Detector
 import trailRoutes from './routes/trails';                    // Feature #48: Treasure Trail Route Builder
 import workspaceRoutes from './routes/workspace';              // Feature #13: TEAMS Multi-User Workspace
+import staffRoutes from './routes/staff';                        // Team Collaboration: Staff Management
 import encyclopediaRoutes from './routes/encyclopedia';        // Feature #52: Estate Sale Encyclopedia
 import appraisalRoutes from './routes/appraisals';            // Feature #54: Crowdsourced Appraisal API
 // REMOVED S437: Typology deprecated — auto-tagging + tags replaced it
@@ -467,6 +468,7 @@ app.use('/api/achievements', achievementRoutes);                     // Features
 app.use('/api/fraud', fraudRoutes);                                  // Feature #17: Bid Bot Detector
 app.use('/api/trails', trailRoutes);                                 // Feature #48: Treasure Trail Route Builder
 app.use('/api/workspace', workspaceRoutes);                          // Feature #13: TEAMS Multi-User Workspace
+app.use('/api/workspaces', staffRoutes);                               // Team Collaboration: Staff Management
 app.use('/api/encyclopedia', encyclopediaRoutes);                     // Feature #52: Estate Sale Encyclopedia
 app.use('/api/appraisals', appraisalRoutes);                          // Feature #54: Crowdsourced Appraisal API
 // REMOVED S437: Typology deprecated
