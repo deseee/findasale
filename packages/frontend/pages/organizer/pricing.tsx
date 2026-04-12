@@ -94,6 +94,7 @@ const TIERS: PricingTier[] = [
       'Extra members: $20/mo',
       'Team roles & permissions',
       'Webhooks',
+      'Market Hubs',
     ],
   },
 ];

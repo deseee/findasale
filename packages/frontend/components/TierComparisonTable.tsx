@@ -44,7 +44,7 @@ const FEATURES: Feature[] = [
     teams: 'Unlimited*',
   },
   {
-    name: 'QR codes',
+    name: 'QR sales codes',
     simple: true,
     pro: true,
     teams: true,
@@ -68,13 +68,13 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Signage Kit',
+    name: 'QR Price Tags & Signs',
     simple: true,
     pro: true,
     teams: true,
   },
   {
-    name: 'Price Tags & Yard Signs',
+    name: 'QR Directions & Yard Signs',
     simple: true,
     pro: true,
     teams: true,
@@ -91,12 +91,6 @@ const FEATURES: Feature[] = [
     pro: true,
     teams: true,
   },
-    {
-    name: 'Bounties',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
   {
     name: 'Ripples',
     simple: true,
@@ -104,7 +98,7 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Item Library',
+    name: 'Persistent Inventory',
     simple: true,
     pro: true,
     teams: true,
@@ -164,13 +158,31 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Appraisals',
-    simple: 'À la Carte',
+    name: 'Claim Bounties',
+    simple: true,
     pro: true,
     teams: true,
   },
   {
+    name: 'Request Appraisals',
+    simple: 'À la Carte',
+    pro: 'À la Carte',
+    teams: 'À la Carte',
+  },
+  {
+    name: 'Support',
+    simple: 'Help center + guides',
+    pro: '24/7 support assistant',
+    teams: '24/7 support assistant',
+  },
+  {
     name: 'Virtual Queue (Line Queue)',
+    simple: false,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'Flip Report (post-sale PDF)',
     simple: false,
     pro: true,
     teams: true,
@@ -188,13 +200,7 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Smart Pricing',
-    simple: false,
-    pro: true,
-    teams: true,
-  },
-  {
-    name: 'Flip Report (post-sale PDF)',
+    name: 'Multi-Market Smart Pricing',
     simple: false,
     pro: true,
     teams: true,
@@ -206,22 +212,16 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Data export (CSV/PDF)',
+    name: 'Data export (Accounting, Inventory, Ecommerce)',
     simple: false,
     pro: true,
     teams: true,
   },
   {
-    name: 'Multi-platform exports (CSV, JSON, Text)',
+    name: 'Multi-platform exports (Ebay, Facebook, Craigslist)',
     simple: false,
     pro: true,
     teams: true,
-  },
-  {
-    name: 'Support',
-    simple: 'Help center + guides',
-    pro: '24/7 support assistant',
-    teams: '24/7 support assistant',
   },
   {
     name: 'Custom storefront slug',
@@ -273,6 +273,12 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'Webhooks',
+    simple: false,
+    pro: false,
+    teams: true,
+  },
+  {
+    name: 'Market Hubs',
     simple: false,
     pro: false,
     teams: true,
