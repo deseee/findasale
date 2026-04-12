@@ -50,6 +50,7 @@ const LuckyRollPage = () => {
   const [isRolling, setIsRolling] = useState(false);
   const [result, setResult] = useState<RollResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAnimation, setShowAnimation] = useState(false);
 
   // Fetch eligibility on mount
   useEffect(() => {
@@ -71,21 +72,27 @@ const LuckyRollPage = () => {
   }, [user]);
 
   const handleRoll = async () => {
-    if (!user || !eligibility || !eligibility.canRoll) return;
+    if (!user || !eligibility || !eligibility.canRoll || !eligibility.canAfford) return;
 
     setIsRolling(true);
+    setShowAnimation(true);
     setError(null);
     setResult(null);
 
     try {
+      // Simulate animation delay for dramatic effect (2 seconds)
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
       const { data: rollResult } = await api.post<RollResult>('/lucky-roll/roll');
       setResult(rollResult);
+      setShowAnimation(false);
 
       // Refresh eligibility
       const { data: newEligibility } = await api.get('/lucky-roll/eligibility');
       setEligibility(newEligibility);
     } catch (err: any) {
       setError(err.message || 'Failed to perform roll');
+      setShowAnimation(false);
     } finally {
       setIsRolling(false);
     }
@@ -132,11 +139,27 @@ const LuckyRollPage = () => {
       <Head>
         <title>Lucky Roll - FindA.Sale</title>
       </Head>
+      <style>{`
+        @keyframes spin-dice {
+          0% { transform: rotateX(0deg) rotateY(0deg); }
+          100% { transform: rotateX(720deg) rotateY(720deg); }
+        }
+        @keyframes bounce-dice {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-20px); }
+        }
+        .dice-animation {
+          animation: spin-dice 2s cubic-bezier(0.34, 1.56, 0.64, 1), bounce-dice 2s ease-in-out;
+          perspective: 1000px;
+        }
+      `}</style>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto px-4 py-12">
           {/* Header */}
           <div className="text-center mb-12">
-            <div className="text-6xl mb-4">🎲</div>
+            <div className={`text-6xl mb-4 inline-block ${showAnimation ? 'dice-animation' : ''}`}>
+              🎲
+            </div>
             <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">
               Lucky Roll
             </h1>
@@ -163,30 +186,40 @@ const LuckyRollPage = () => {
                 </div>
               </div>
 
-              {eligibility.canRoll ? (
-                <>
-                  <button
-                    onClick={handleRoll}
-                    disabled={isRolling}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-bold rounded-lg transition-all mb-2"
-                  >
-                    {isRolling ? 'Rolling...' : 'Roll (100 XP)'}
-                  </button>
-                  <p className="text-xs text-center text-warm-500 dark:text-warm-400">
-                    Your lucky chance awaits!
+              <button
+                onClick={handleRoll}
+                disabled={isRolling || !eligibility.canRoll || !eligibility.canAfford}
+                className={`w-full py-3 px-4 font-bold rounded-lg transition-all mb-2 ${
+                  !eligibility.canRoll || !eligibility.canAfford
+                    ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 dark:text-gray-300 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white'
+                }`}
+              >
+                {isRolling ? 'Rolling...' : 'Roll (100 XP)'}
+              </button>
+
+              {eligibility.canRoll && eligibility.canAfford ? (
+                <p className="text-xs text-center text-warm-500 dark:text-warm-400">
+                  Your lucky chance awaits!
+                </p>
+              ) : !eligibility.canAfford ? (
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg text-center">
+                  <p className="text-sm font-semibold text-red-900 dark:text-red-200 mb-1">
+                    Not enough XP
                   </p>
-                </>
+                  <p className="text-xs text-red-700 dark:text-red-300">
+                    You need 100 XP to roll. You have {eligibility.userXpBalance}.
+                  </p>
+                </div>
               ) : (
-                <>
-                  <div className="p-4 bg-warm-100 dark:bg-gray-700 rounded-lg mb-4">
-                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
-                      Weekly cap reached
-                    </p>
-                    <p className="text-xs text-warm-600 dark:text-warm-400">
-                      Next roll available {nextRollDate}
-                    </p>
-                  </div>
-                </>
+                <div className="p-3 bg-warm-100 dark:bg-gray-700 rounded-lg text-center">
+                  <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
+                    Weekly cap reached
+                  </p>
+                  <p className="text-xs text-warm-600 dark:text-warm-400">
+                    Next roll available {nextRollDate}
+                  </p>
+                </div>
               )}
 
               {error && (
