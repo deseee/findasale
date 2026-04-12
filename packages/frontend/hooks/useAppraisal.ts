@@ -126,6 +126,7 @@ export const useCreateAppraisal = () => {
       itemDescription?: string;
       itemCategory?: string;
       photoUrls: string[];
+      xpOffer?: number;
     }) => {
       const response = await api.post('/appraisals', data);
       return response.data;

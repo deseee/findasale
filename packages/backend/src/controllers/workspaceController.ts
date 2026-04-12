@@ -474,11 +474,11 @@ export const getWorkspaceCostCalculator = async (req: AuthRequest, res: Response
     const totalMonthlyCost = baseTeamsFee + additionalSeats * additionalSeatPrice;
 
     return res.json({
-      baseTeamsFee,
-      currentMemberCount,
+      baseFee: baseTeamsFee,
+      currentMembers: currentMemberCount,
       maxMembers,
       additionalSeats,
-      additionalSeatPrice,
+      additionalSeatsCost: additionalSeats * additionalSeatPrice,
       totalMonthlyCost,
     });
   } catch (error) {

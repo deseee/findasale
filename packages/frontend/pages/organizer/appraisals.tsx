@@ -264,7 +264,7 @@ const AppraisalsPage = () => {
           {/* Top explainer */}
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-8">
             <p className="text-sm text-amber-900 dark:text-amber-100">
-              Get community price estimates on items you&apos;re unsure about. Submit a request for 25 XP. Community members earn reputation by providing estimates.
+              Get community price estimates on items you&apos;re unsure about. Offer 250+ XP to attract qualified appraisers — higher offers get faster, better responses. Community members earn reputation by providing estimates.
             </p>
           </div>
 
@@ -286,7 +286,7 @@ const AppraisalsPage = () => {
                   New Appraisal Request
                 </h2>
                 <p className="text-sm text-warm-600 dark:text-gray-400">
-                  Each appraisal request costs 25 XP. Community members will provide price estimates within 7 days.
+                  Appraisal requests start at 250 XP. You choose how much to offer — community members will provide price estimates within 7 days.
                 </p>
               </div>
               <form onSubmit={handleSubmit} className="space-y-4">

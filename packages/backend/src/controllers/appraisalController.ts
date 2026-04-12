@@ -18,9 +18,9 @@ import { prisma } from '../lib/prisma';
  * Create a new appraisal request
  * Auth required: USER+
  *
- * Pricing:
- * - PRO/TEAMS tier: free (included in plan)
- * - SIMPLE (FREE) tier: costs 50 XP per appraisal request
+ * Pricing: Variable XP — 250 XP minimum, requester chooses offer amount.
+ * Higher offers attract more/better qualified community responses.
+ * Decision: S443 (2026-04-11), confirmed by Patrick.
  */
 export const createAppraisalRequest = async (req: AuthRequest, res: Response) => {
   try {
@@ -28,7 +28,7 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const { itemTitle, itemDescription, itemCategory, photoUrls } = req.body;
+    const { itemTitle, itemDescription, itemCategory, photoUrls, xpOffer } = req.body;
 
     // Validate required fields
     if (!itemTitle || typeof itemTitle !== 'string') {
@@ -41,16 +41,16 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
       });
     }
 
-    // Fetch full user record to check subscription tier
+    // Variable XP pricing — 250 XP minimum, requester sets offer
+    const MIN_APPRAISAL_XP = 250;
+    const appraisalXpCost = Math.max(MIN_APPRAISAL_XP, Math.floor(Number(xpOffer) || MIN_APPRAISAL_XP));
+
+    // Fetch user's XP balance
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: {
         id: true,
         guildXp: true,
-        roleSubscriptions: {
-          where: { role: 'SHOPPER' },
-          select: { subscriptionTier: true },
-        },
       },
     });
 
@@ -58,31 +58,29 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const APPRAISAL_XP_COST = 50;
-
-    // All tiers pay XP for appraisals
-    if (user.guildXp < APPRAISAL_XP_COST) {
+    if (user.guildXp < appraisalXpCost) {
       return res.status(402).json({
-        message: `Insufficient XP. Need ${APPRAISAL_XP_COST} XP to request appraisal.`,
-        required: APPRAISAL_XP_COST,
+        message: `Insufficient XP. You offered ${appraisalXpCost} XP but only have ${user.guildXp} XP.`,
+        required: appraisalXpCost,
+        minimum: MIN_APPRAISAL_XP,
         current: user.guildXp,
-        cost: APPRAISAL_XP_COST,
+        cost: appraisalXpCost,
       });
     }
 
     const spendSuccess = await spendXp(
       req.user.id,
-      APPRAISAL_XP_COST,
+      appraisalXpCost,
       'APPRAISAL_REQUEST',
       {
-        description: `Appraisal request for: ${itemTitle}`,
+        description: `Appraisal request for: ${itemTitle} (${appraisalXpCost} XP offered)`,
       }
     );
 
     if (!spendSuccess) {
       return res.status(402).json({
         message: 'Failed to deduct XP. Please check your balance and try again.',
-        cost: APPRAISAL_XP_COST,
+        cost: appraisalXpCost,
       });
     }
 
@@ -108,7 +106,7 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
       status: 'PENDING',
       expiresAt: request.expiresAt,
       message: 'Appraisal request created. Community members can submit estimates.',
-      xpDeducted: APPRAISAL_XP_COST,
+      xpDeducted: appraisalXpCost,
     });
   } catch (error) {
     console.error('[Appraisal] Failed to create request:', error);
