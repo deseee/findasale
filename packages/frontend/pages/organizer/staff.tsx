@@ -33,7 +33,7 @@ import Skeleton from '../../components/Skeleton';
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const STAFF_ROLES = ['MANAGER', 'STAFF', 'VIEWER'];
+const STAFF_ROLES = ['ADMIN', 'MANAGER', 'STAFF', 'VIEWER'];
 
 interface ExpandedState {
   [staffId: string]: boolean;
