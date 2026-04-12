@@ -4,7 +4,7 @@ import api from '../lib/api';
 
 interface ReputationData {
   score: number | null;
-  breakdown: {
+  breakdown?: {
     holdResponseTime: number;
     saleFrequency: number;
     photoQuality: number;
@@ -57,14 +57,17 @@ const OrganizerReputation: React.FC<OrganizerReputationProps> = ({ organizerId }
     return null;
   }
 
-  // New Organizer badge
-  if (reputation.score === null) {
+  // Normalize API response shape — backend may return saleCount or salesCount
+  const salesCount = reputation.salesCount ?? (reputation as any).saleCount ?? 0;
+
+  // New Organizer badge (score is null or 0 with isNew flag)
+  if (reputation.score === null || reputation.score === 0) {
     return (
       <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full">
         <span className="text-sm font-medium text-blue-700">New Organizer</span>
-        {reputation.salesCount > 0 && (
+        {salesCount > 0 && (
           <span className="text-xs text-blue-600">
-            ({reputation.salesCount} sale{reputation.salesCount !== 1 ? 's' : ''} so far)
+            ({salesCount} sale{salesCount !== 1 ? 's' : ''} so far)
           </span>
         )}
       </div>
@@ -78,7 +81,7 @@ const OrganizerReputation: React.FC<OrganizerReputationProps> = ({ organizerId }
         <div className="flex flex-col gap-1">
           <StarRating score={reputation.score} />
           <span className="text-sm text-warm-600 dark:text-gray-400">
-            {reputation.score.toFixed(1)} out of 5 • {reputation.salesCount} sales
+            {reputation.score.toFixed(1)} out of 5 • {salesCount} sales
           </span>
         </div>
         {reputation.badge === 'established' && (
@@ -88,25 +91,27 @@ const OrganizerReputation: React.FC<OrganizerReputationProps> = ({ organizerId }
         )}
       </div>
 
-      {/* Breakdown Details (optional expandable, but shown on hover tooltip in full version) */}
-      <div className="text-xs text-warm-500 dark:text-gray-400 grid grid-cols-2 gap-2 pt-2 border-t border-warm-200 dark:border-gray-700">
-        <div>
-          <span className="block font-medium text-warm-700 dark:text-gray-300">Response Time</span>
-          <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.holdResponseTime.toFixed(1)}/5</span>
+      {/* Breakdown Details — only shown when backend returns breakdown object */}
+      {reputation.breakdown && (
+        <div className="text-xs text-warm-500 dark:text-gray-400 grid grid-cols-2 gap-2 pt-2 border-t border-warm-200 dark:border-gray-700">
+          <div>
+            <span className="block font-medium text-warm-700 dark:text-gray-300">Response Time</span>
+            <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.holdResponseTime.toFixed(1)}/5</span>
+          </div>
+          <div>
+            <span className="block font-medium text-warm-700 dark:text-gray-300">Sale Frequency</span>
+            <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.saleFrequency.toFixed(1)}/5</span>
+          </div>
+          <div>
+            <span className="block font-medium text-warm-700 dark:text-gray-300">Photo Quality</span>
+            <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.photoQuality.toFixed(1)}/5</span>
+          </div>
+          <div>
+            <span className="block font-medium text-warm-700 dark:text-gray-300">Reliability</span>
+            <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.disputeRate.toFixed(1)}/5</span>
+          </div>
         </div>
-        <div>
-          <span className="block font-medium text-warm-700 dark:text-gray-300">Sale Frequency</span>
-          <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.saleFrequency.toFixed(1)}/5</span>
-        </div>
-        <div>
-          <span className="block font-medium text-warm-700 dark:text-gray-300">Photo Quality</span>
-          <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.photoQuality.toFixed(1)}/5</span>
-        </div>
-        <div>
-          <span className="block font-medium text-warm-700 dark:text-gray-300">Reliability</span>
-          <span className="text-warm-600 dark:text-gray-400">{reputation.breakdown.disputeRate.toFixed(1)}/5</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
