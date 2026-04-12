@@ -3,8 +3,10 @@ UPDATE "WorkspaceMember" SET "role" = 'MEMBER' WHERE "role" = 'STAFF';
 UPDATE "StaffMember" SET "role" = 'MEMBER' WHERE "role" = 'STAFF';
 
 -- Remove STAFF from WorkspaceRole enum
+-- Must drop default before changing type, then re-set after
 ALTER TYPE "WorkspaceRole" RENAME TO "WorkspaceRole_old";
 CREATE TYPE "WorkspaceRole" AS ENUM ('OWNER', 'ADMIN', 'MANAGER', 'MEMBER', 'VIEWER');
+ALTER TABLE "WorkspaceMember" ALTER COLUMN "role" DROP DEFAULT;
 ALTER TABLE "WorkspaceMember" ALTER COLUMN "role" TYPE "WorkspaceRole" USING "role"::text::"WorkspaceRole";
 ALTER TABLE "WorkspaceMember" ALTER COLUMN "role" SET DEFAULT 'MEMBER'::"WorkspaceRole";
 DROP TYPE "WorkspaceRole_old";
