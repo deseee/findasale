@@ -26,7 +26,7 @@ export function useOrganizerActivityFeed(saleIds?: string[]) {
   return useQuery({
     queryKey: ['organizer-activity-feed', saleIds],
     queryFn: async () => {
-      const response = await api.get('/organizer/activity-feed', {
+      const response = await api.get('/organizer/command-center/activity-feed', {
         params: saleIds ? { saleIds: saleIds.join(',') } : undefined,
       });
       return response.data as OrganizerActivityFeedResponse;
