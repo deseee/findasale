@@ -108,8 +108,7 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
       status: 'PENDING',
       expiresAt: request.expiresAt,
       message: 'Appraisal request created. Community members can submit estimates.',
-      xpDeducted: userSubscriptionTier === 'SIMPLE' ? APPRAISAL_XP_COST : 0,
-      tier: userSubscriptionTier,
+      xpDeducted: APPRAISAL_XP_COST,
     });
   } catch (error) {
     console.error('[Appraisal] Failed to create request:', error);

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useToast } from './ToastContext';
 import api from '../lib/api';
-import FlashDealForm from './FlashDealForm';
 import SocialPostGenerator from './SocialPostGenerator';
 import BoostPurchaseModal from './BoostPurchaseModal';
 import { Clock, ShoppingCart } from 'lucide-react';
@@ -14,7 +13,7 @@ interface CommandCenterCardProps {
 
 const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
   const { showToast } = useToast();
-  const [flashDealSaleId, setFlashDealSaleId] = useState<string | null>(null);
+  // FlashDeal navigates to sale page instead of modal (needs item data)
   const [socialPostSale, setSocialPostSale] = useState<{ id: string; title: string } | null>(null);
   const [boostSaleId, setBoostSaleId] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
@@ -186,13 +185,13 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
             {/* PUBLISHED-only buttons */}
             {sale.status === 'PUBLISHED' && (
               <>
-                <button
-                  onClick={() => setFlashDealSaleId(sale.id)}
-                  className="text-sm px-3 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded-full hover:bg-yellow-200 dark:hover:bg-yellow-800 transition-colors"
+                <Link
+                  href={`/organizer/sales/${sale.id}/flash-deals`}
+                  className="text-sm px-3 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded-full hover:bg-yellow-200 dark:hover:bg-yellow-800 transition-colors inline-block"
                   title="Create a flash deal to boost sales for specific items"
                 >
                   ⚡ Flash Deal
-                </button>
+                </Link>
 
                 <button
                   onClick={() => setSocialPostSale({ id: sale.id, title: sale.title })}
@@ -258,13 +257,6 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
       </div>
 
       {/* Modals for PUBLISHED sales */}
-      {flashDealSaleId && (
-        <FlashDealForm
-          saleId={flashDealSaleId}
-          onClose={() => setFlashDealSaleId(null)}
-        />
-      )}
-
       {socialPostSale && (
         <SocialPostGenerator
           saleId={socialPostSale.id}
@@ -275,7 +267,9 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
 
       {boostSaleId && (
         <BoostPurchaseModal
-          saleId={boostSaleId}
+          boostType="FEATURED"
+          targetType="sale"
+          targetId={boostSaleId}
           onClose={() => setBoostSaleId(null)}
         />
       )}
