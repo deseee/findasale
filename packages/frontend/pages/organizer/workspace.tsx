@@ -33,11 +33,11 @@ import TierGate from '../../components/TierGate';
 const PERMISSION_CATEGORIES = [
   {
     name: 'Inventory',
-    permissions: ['view_inventory', 'add_items', 'edit_items', 'delete_items', 'bulk_import'],
+    permissions: ['view_inventory', 'add_items', 'edit_items', 'delete_items', 'bulk_import', 'approve_ai_tags'],
   },
   {
     name: 'Pricing',
-    permissions: ['view_pricing', 'edit_pricing'],
+    permissions: ['view_pricing', 'edit_pricing', 'view_ai_suggestions'],
   },
   {
     name: 'POS',
@@ -54,10 +54,6 @@ const PERMISSION_CATEGORIES = [
   {
     name: 'Communication',
     permissions: ['send_team_chat', 'broadcast_alerts', 'create_tasks'],
-  },
-  {
-    name: 'AI Features',
-    permissions: ['view_ai_suggestions', 'approve_ai_tags'],
   },
 ];
 

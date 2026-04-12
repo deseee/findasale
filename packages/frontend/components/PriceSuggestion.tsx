@@ -82,10 +82,10 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
         type="button"
         onClick={handleSuggestPrice}
         disabled={!isEnabled || loading}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition ${
           isEnabled && !loading
-            ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 cursor-pointer'
-            : 'bg-warm-100 text-warm-400 cursor-not-allowed opacity-50'
+            ? 'bg-[#4A7C59] hover:bg-[#3d654a] text-white cursor-pointer dark:bg-[#4A7C59] dark:hover:bg-[#3d654a]'
+            : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
         }`}
       >
         <span className="text-base">💡</span>
@@ -93,39 +93,39 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
       </button>
 
       {error && !suggestion && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-700 dark:text-red-300">
           {error}
         </div>
       )}
 
       {suggestion && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg space-y-3">
           <div className="flex justify-between items-start">
             <div>
-              <h4 className="font-semibold text-warm-900 mb-1">
+              <h4 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">
                 Smart Price Suggestion
               </h4>
-              <p className="text-sm text-warm-600">
-                <span className="font-medium text-amber-700">
+              <p className="text-sm text-warm-600 dark:text-warm-400">
+                <span className="font-medium text-amber-700 dark:text-amber-300">
                   ${suggestion.low} – ${suggestion.high}
                 </span>
-                <span className="text-warm-500"> (suggested: </span>
-                <span className="font-bold text-amber-700">
+                <span className="text-warm-500 dark:text-warm-400"> (suggested: </span>
+                <span className="font-bold text-amber-700 dark:text-amber-300">
                   ${suggestion.suggested}
                 </span>
-                <span className="text-warm-500">)</span>
+                <span className="text-warm-500 dark:text-warm-400">)</span>
               </p>
             </div>
           </div>
 
-          <p className="text-sm text-warm-600 italic">
+          <p className="text-sm text-warm-600 dark:text-warm-400 italic">
             {suggestion.reasoning}
           </p>
 
           <button
             type="button"
             onClick={handleApplyPrice}
-            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-3 rounded-lg transition text-sm"
+            className="w-full bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white font-medium py-2.5 px-4 rounded-lg transition text-sm"
           >
             Use ${suggestion.suggested.toFixed(2)}
           </button>

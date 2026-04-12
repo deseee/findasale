@@ -5,13 +5,13 @@ import { useAuth } from '../../components/AuthContext';
 import { useMyAchievements } from '../../hooks/useAchievements';
 import { AchievementBadge } from '../../components/AchievementBadge';
 
-// Explorer Rank definitions
+// Explorer Rank definitions — must match RANK_THRESHOLDS in backend xpService.ts
 const RANKS = [
   { name: 'Initiate', xp: 0, icon: '⭐' },
-  { name: 'Scout', xp: 100, icon: '🗺️' },
-  { name: 'Ranger', xp: 250, icon: '🏹' },
-  { name: 'Sage', xp: 500, icon: '📚' },
-  { name: 'Grandmaster', xp: 1000, icon: '👑' },
+  { name: 'Scout', xp: 500, icon: '🗺️' },
+  { name: 'Ranger', xp: 2000, icon: '🏹' },
+  { name: 'Sage', xp: 5000, icon: '📚' },
+  { name: 'Grandmaster', xp: 12000, icon: '👑' },
 ];
 
 export default function AchievementsPage() {
