@@ -136,7 +136,7 @@ export default function WorkspaceSettingsPage() {
   }, [settings]);
 
   useEffect(() => {
-    if (permissions && activeRoleTab) {
+    if (permissions && Array.isArray(permissions) && activeRoleTab) {
       const rolePerms = permissions.find((rp) => rp.role === activeRoleTab);
       if (rolePerms) {
         const permMap: Record<string, boolean> = {};
