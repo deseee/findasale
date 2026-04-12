@@ -3175,6 +3175,11 @@ model WorkspaceSettings {
   id                 String             @id @default(cuid())
   workspaceId        String             @unique
   workspace          OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name               String?
+  description        String?
+  brandRules         String?            @db.Text
+  templateUsed       String?
+  maxMembers         Int                @default(5)
   enableAnalytics    Boolean            @default(true)
   enableLeaderboard  Boolean            @default(true)
   enableTeamChat     Boolean            @default(true)
