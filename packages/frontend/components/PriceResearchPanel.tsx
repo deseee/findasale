@@ -72,11 +72,11 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
   const createAppraisal = useCreateAppraisal();
   const [appraisalSubmitting, setAppraisalSubmitting] = useState(false);
   const [showAppraisalConfirm, setShowAppraisalConfirm] = useState(false);
-  const [appraisalCost, setAppraisalCost] = useState(0);
-  const [userTier, setUserTier] = useState<string>('SIMPLE');
+  const [appraisalCost, setAppraisalCost] = useState(250);
+  const [xpOffer, setXpOffer] = useState(250);
 
-  // Determine appraisal cost based on tier
-  const APPRAISAL_XP_COST = 50;
+  // Variable pricing: 250 XP minimum, higher offers attract better responses (S443)
+  const MIN_APPRAISAL_XP = 250;
 
   const handleGetPriceComps = async () => {
     if (!itemTitle.trim()) {
@@ -108,20 +108,17 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
       return;
     }
 
-    // Determine tier and cost
-    const tier = user.organizerTier || 'SIMPLE';
-    setUserTier(tier);
-
-    // All tiers pay XP for appraisal
+    // Variable pricing: user offers XP (minimum 250)
+    const offerAmount = Math.max(MIN_APPRAISAL_XP, xpOffer);
     const userXp = user.guildXp || 0;
-    if (userXp < APPRAISAL_XP_COST) {
+    if (userXp < offerAmount) {
       showToast(
-        `You need ${APPRAISAL_XP_COST} XP to request an appraisal. You have ${userXp} XP.`,
+        `You need ${offerAmount} XP to request an appraisal. You have ${userXp} XP.`,
         'error'
       );
       return;
     }
-    setAppraisalCost(APPRAISAL_XP_COST);
+    setAppraisalCost(offerAmount);
 
     // Show confirmation dialog
     setShowAppraisalConfirm(true);
@@ -136,6 +133,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
           itemDescription: itemDescription || '',
           itemCategory: category || '',
           photoUrls: photoUrls,
+          xpOffer: appraisalCost,
         },
         {
           onSuccess: () => {
@@ -321,7 +319,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                   ? 'Submitting Appraisal...'
                   : photoUrls.length === 0
                   ? 'Add Photo to Request Appraisal'
-                  : 'Request Community Appraisal'}
+                  : `Request Community Appraisal (${MIN_APPRAISAL_XP}+ XP)`}
               </span>
             </button>
             <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
@@ -340,22 +338,29 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
               Request Community Appraisal
             </h3>
 
-            {/* Cost Information */}
+            {/* XP Offer Input */}
             <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-              {appraisalCost > 0 ? (
-                <>
-                  <p className="text-sm text-warm-700 dark:text-warm-300 mb-2">
-                    <span className="font-medium">Cost:</span> {appraisalCost} XP
-                  </p>
-                  <p className="text-sm text-warm-600 dark:text-warm-400">
-                    <span className="font-medium">Your balance:</span> {user?.guildXp || 0} XP
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-green-700 dark:text-green-300 font-medium">
-                  ✓ Free for {userTier} tier members
-                </p>
-              )}
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                XP Offer (min {MIN_APPRAISAL_XP})
+              </label>
+              <input
+                type="number"
+                min={MIN_APPRAISAL_XP}
+                step={50}
+                value={xpOffer}
+                onChange={(e) => {
+                  const val = Math.max(MIN_APPRAISAL_XP, parseInt(e.target.value) || MIN_APPRAISAL_XP);
+                  setXpOffer(val);
+                  setAppraisalCost(val);
+                }}
+                className="w-full px-3 py-1.5 border border-blue-300 dark:border-blue-600 rounded-md dark:bg-gray-700 dark:text-white text-sm mb-2"
+              />
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Offer more XP for faster, more qualified responses.
+              </p>
+              <p className="text-sm text-warm-600 dark:text-warm-400 mt-2">
+                <span className="font-medium">Your balance:</span> {user?.guildXp || 0} XP
+              </p>
             </div>
 
             {/* Message */}
