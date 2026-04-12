@@ -6,11 +6,11 @@ import * as Sentry from '@sentry/node';
  */
 
 /**
- * Get all staff members for a workspace with availability and performance
+ * Get all team members for a workspace with availability and performance
  */
 export const getStaffMembers = async (workspaceId: string) => {
   try {
-    const staff = await prisma.staffMember.findMany({
+    const staff = await prisma.teamMember.findMany({
       where: { workspaceMember: { workspaceId } },
       include: {
         workspaceMember: {
@@ -39,17 +39,17 @@ export const getStaffMembers = async (workspaceId: string) => {
     return staff;
   } catch (error) {
     Sentry.captureException(error);
-    console.error('Error fetching staff members:', error);
+    console.error('Error fetching team members:', error);
     throw error;
   }
 };
 
 /**
- * Get a single staff member with full details
+ * Get a single team member with full details
  */
 export const getStaffMember = async (staffId: string) => {
   try {
-    const staff = await prisma.staffMember.findUnique({
+    const staff = await prisma.teamMember.findUnique({
       where: { id: staffId },
       include: {
         workspaceMember: {
@@ -74,19 +74,19 @@ export const getStaffMember = async (staffId: string) => {
     });
 
     if (!staff) {
-      throw new Error('Staff member not found');
+      throw new Error('Team member not found');
     }
 
     return staff;
   } catch (error) {
     Sentry.captureException(error);
-    console.error('Error fetching staff member:', error);
+    console.error('Error fetching team member:', error);
     throw error;
   }
 };
 
 /**
- * Create or update staff profile
+ * Create or update team member profile
  */
 export const createOrUpdateStaffProfile = async (
   workspaceMemberId: string,
@@ -97,14 +97,14 @@ export const createOrUpdateStaffProfile = async (
   }
 ) => {
   try {
-    // Check if staff member already exists
-    const existing = await prisma.staffMember.findUnique({
+    // Check if team member already exists
+    const existing = await prisma.teamMember.findUnique({
       where: { workspaceMemberId }
     });
 
     if (existing) {
       // Update existing
-      return await prisma.staffMember.update({
+      return await prisma.teamMember.update({
         where: { workspaceMemberId },
         data: {
           role: data.role ?? existing.role,
@@ -131,10 +131,10 @@ export const createOrUpdateStaffProfile = async (
       });
     } else {
       // Create new
-      return await prisma.staffMember.create({
+      return await prisma.teamMember.create({
         data: {
           workspaceMemberId,
-          role: data.role || 'STAFF',
+          role: data.role || 'MEMBER',
           department: data.department,
           primaryPhone: data.primaryPhone,
           createdAt: new Date(),
@@ -160,16 +160,16 @@ export const createOrUpdateStaffProfile = async (
     }
   } catch (error) {
     Sentry.captureException(error);
-    console.error('Error creating/updating staff profile:', error);
+    console.error('Error creating/updating team member profile:', error);
     throw error;
   }
 };
 
 /**
- * Update staff member availability (time slots for week/month)
+ * Update team member availability (time slots for week/month)
  */
 export const updateAvailability = async (
-  staffMemberId: string,
+  teamMemberId: string,
   data: {
     monStartTime?: string | null;
     monEndTime?: string | null;
@@ -189,14 +189,14 @@ export const updateAvailability = async (
 ) => {
   try {
     // Check if availability record exists
-    const existing = await prisma.staffAvailability.findUnique({
-      where: { staffMemberId }
+    const existing = await prisma.teamMemberAvailability.findUnique({
+      where: { teamMemberId }
     });
 
     if (existing) {
       // Update
-      return await prisma.staffAvailability.update({
-        where: { staffMemberId },
+      return await prisma.teamMemberAvailability.update({
+        where: { teamMemberId },
         data: {
           ...data,
           updatedAt: new Date()
@@ -204,9 +204,9 @@ export const updateAvailability = async (
       });
     } else {
       // Create
-      return await prisma.staffAvailability.create({
+      return await prisma.teamMemberAvailability.create({
         data: {
-          staffMemberId,
+          teamMemberId,
           ...data,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -224,13 +224,13 @@ export const updateAvailability = async (
  * Get availability for a date range (currently returns weekly schedule)
  */
 export const getAvailabilityForDateRange = async (
-  staffMemberId: string,
+  teamMemberId: string,
   from: Date,
   to: Date
 ) => {
   try {
-    const availability = await prisma.staffAvailability.findUnique({
-      where: { staffMemberId }
+    const availability = await prisma.teamMemberAvailability.findUnique({
+      where: { teamMemberId }
     });
 
     if (!availability) {
@@ -298,15 +298,15 @@ export const getCoverageGaps = async (workspaceId: string, saleId?: string) => {
 };
 
 /**
- * Get performance snapshot for a staff member (current or specified period)
+ * Get performance snapshot for a team member (current or specified period)
  */
 export const getPerformanceSnapshot = async (
-  staffMemberId: string,
+  teamMemberId: string,
   period?: string
 ) => {
   try {
     const query: any = {
-      where: { staffMemberId },
+      where: { teamMemberId },
       orderBy: { createdAt: 'desc' }
     };
 
@@ -316,12 +316,12 @@ export const getPerformanceSnapshot = async (
       query.take = 1; // Latest performance
     }
 
-    const performances = await prisma.staffPerformance.findMany(query);
+    const performances = await prisma.teamMemberPerformance.findMany(query);
 
     if (performances.length === 0) {
       // Return default if no performance record exists
       return {
-        staffMemberId,
+        teamMemberId,
         period: period || 'CURRENT',
         itemsSold: 0,
         revenue: '0',
@@ -340,14 +340,14 @@ export const getPerformanceSnapshot = async (
 };
 
 /**
- * Verify staff member belongs to workspace
+ * Verify team member belongs to workspace
  */
 export const verifyStaffBelongsToWorkspace = async (
   staffId: string,
   workspaceId: string
 ): Promise<boolean> => {
   try {
-    const staff = await prisma.staffMember.findUnique({
+    const staff = await prisma.teamMember.findUnique({
       where: { id: staffId },
       include: {
         workspaceMember: {
@@ -363,7 +363,7 @@ export const verifyStaffBelongsToWorkspace = async (
     return staff.workspaceMember.workspaceId === workspaceId;
   } catch (error) {
     Sentry.captureException(error);
-    console.error('Error verifying staff workspace membership:', error);
+    console.error('Error verifying team member workspace membership:', error);
     return false;
   }
 };

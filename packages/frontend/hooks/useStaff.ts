@@ -7,7 +7,7 @@ import api from '../lib/api';
 export interface StaffMember {
   id: string;
   workspaceMemberId: string;
-  role: string; // "MANAGER", "STAFF", "VIEWER"
+  role: string; // "ADMIN", "MANAGER", "MEMBER", "VIEWER" (legacy data may contain "STAFF")
   department?: string;
   primaryPhone?: string;
   createdAt: string;

@@ -420,7 +420,7 @@ export const getWorkspacePermissions = async (req: AuthRequest, res: Response) =
 
     const { getPermissionsForRole } = await import('../services/workspacePermissionService');
 
-    const roles = ['ADMIN', 'MANAGER', 'STAFF', 'VIEWER'];
+    const roles = ['ADMIN', 'MANAGER', 'MEMBER', 'VIEWER'];
     const result: Record<string, string[]> = {};
 
     for (const role of roles) {

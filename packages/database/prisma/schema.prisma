@@ -1805,8 +1805,7 @@ enum WorkspaceRole {
   OWNER
   ADMIN
   MANAGER
-  MEMBER // keep for backward compat
-  STAFF
+  MEMBER
   VIEWER
 }
 
@@ -1838,7 +1837,7 @@ model WorkspaceMember {
   acceptedAt  DateTime?
   workspace   OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   organizer   Organizer          @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade)
-  staffMember StaffMember?
+  teamMember  TeamMember?
 
   @@unique([workspaceId, organizerId])
   @@index([workspaceId])
@@ -3110,16 +3109,16 @@ model WorkspaceRoleTemplate {
   @@index([name])
 }
 
-// StaffMember — organizer staff member linked to a WorkspaceMember
-model StaffMember {
+// TeamMember — organizer team member linked to a WorkspaceMember
+model TeamMember {
   id                 String                      @id @default(cuid())
   workspaceMemberId  String                      @unique
   workspaceMember    WorkspaceMember             @relation(fields: [workspaceMemberId], references: [id], onDelete: Cascade)
-  role               String                      @default("STAFF") // "MANAGER", "STAFF", "VIEWER"
+  role               String                      @default("MEMBER") // "MANAGER", "MEMBER", "VIEWER"
   department         String? // "Sales", "Operations", "Photography", etc.
   primaryPhone       String?
-  availability       StaffAvailability?
-  performances       StaffPerformance[]
+  availability       TeamMemberAvailability?
+  performances       TeamMemberPerformance[]
   leaderboardEntries WorkspaceLeaderboardEntry[]
   createdAt          DateTime                    @default(now())
   updatedAt          DateTime                    @updatedAt
@@ -3127,11 +3126,11 @@ model StaffMember {
   @@index([workspaceMemberId])
 }
 
-// StaffAvailability — one-to-one link to StaffMember
-model StaffAvailability {
-  id            String      @id @default(cuid())
-  staffMemberId String      @unique
-  staffMember   StaffMember @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+// TeamMemberAvailability — one-to-one link to TeamMember
+model TeamMemberAvailability {
+  id            String     @id @default(cuid())
+  teamMemberId  String     @unique
+  teamMember    TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
   monStartTime  String? // "08:00"
   monEndTime    String? // "17:00"
   tueStartTime  String?
@@ -3150,14 +3149,14 @@ model StaffAvailability {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  @@index([staffMemberId])
+  @@index([teamMemberId])
 }
 
-// StaffPerformance — one-to-many link to StaffMember
-model StaffPerformance {
-  id             String      @id @default(cuid())
-  staffMemberId  String
-  staffMember    StaffMember @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
+// TeamMemberPerformance — one-to-many link to TeamMember
+model TeamMemberPerformance {
+  id             String     @id @default(cuid())
+  teamMemberId   String
+  teamMember     TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
   period         String // "WEEKLY" | "MONTHLY"
   itemsSold      Int         @default(0)
   revenue        Decimal     @default(0)
@@ -3166,8 +3165,8 @@ model StaffPerformance {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  @@unique([staffMemberId, period])
-  @@index([staffMemberId, period])
+  @@unique([teamMemberId, period])
+  @@index([teamMemberId, period])
 }
 
 // WorkspaceSettings — workspace-level configuration
@@ -3260,23 +3259,23 @@ model WorkspaceTask {
   @@index([assignedTo])
 }
 
-// WorkspaceLeaderboardEntry — individual staff performance on leaderboard
+// WorkspaceLeaderboardEntry — individual team member performance on leaderboard
 model WorkspaceLeaderboardEntry {
-  id            String             @id @default(cuid())
-  workspaceId   String
-  workspace     OrganizerWorkspace @relation("WorkspaceLeaderboard", fields: [workspaceId], references: [id], onDelete: Cascade)
-  staffMemberId String
-  staffMember   StaffMember        @relation(fields: [staffMemberId], references: [id], onDelete: Cascade)
-  week          String // "2026-W15" ISO week format
-  itemsSold     Int                @default(0)
-  revenue       Decimal            @default(0)
-  rank          Int? // computed rank within workspace for that week
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id           String             @id @default(cuid())
+  workspaceId  String
+  workspace    OrganizerWorkspace @relation("WorkspaceLeaderboard", fields: [workspaceId], references: [id], onDelete: Cascade)
+  teamMemberId String
+  teamMember   TeamMember         @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  week         String // "2026-W15" ISO week format
+  itemsSold    Int                @default(0)
+  revenue      Decimal            @default(0)
+  rank         Int? // computed rank within workspace for that week
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
-  @@unique([workspaceId, staffMemberId, week])
+  @@unique([workspaceId, teamMemberId, week])
   @@index([workspaceId, week])
-  @@index([staffMemberId, week])
+  @@index([teamMemberId, week])
 }
 
 // WorkspaceRevenueSnapshot — daily revenue snapshot for a workspace

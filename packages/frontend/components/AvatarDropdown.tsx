@@ -739,12 +739,12 @@ const AvatarDropdown: React.FC = () => {
                         <span>Calendar</span>
                       </Link>
                       <Link
-                        href="/organizer/staff"
+                        href="/organizer/members"
                         className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setIsOpen(false)}
                       >
                         <UserPlus size={16} className="text-gray-400" />
-                        <span>Staff Accounts</span>
+                        <span>Team Members</span>
                       </Link>
                       <Link
                         href="/organizer/webhooks"
@@ -759,7 +759,7 @@ const AvatarDropdown: React.FC = () => {
                         href="/organizer/workspace"
                         className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                         onClick={() => setIsOpen(false)}
-                        title="Team and staff management — TEAMS"
+                        title="Team and member management — TEAMS"
                       >
                         <Network size={16} className="text-gray-500" />
                         <span>Workspace</span>
