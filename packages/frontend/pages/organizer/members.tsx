@@ -88,7 +88,7 @@ const OrganizerMembersPage = () => {
 
   // Form state
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<string>('MEMBER');
+  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER'>('MEMBER');
 
   // Expansion and editing states
   const [expandedCards, setExpandedCards] = useState<ExpandedState>({});
@@ -358,7 +358,7 @@ const OrganizerMembersPage = () => {
                       </label>
                       <select
                         value={inviteRole}
-                        onChange={(e) => setInviteRole(e.target.value)}
+                        onChange={(e) => setInviteRole(e.target.value as 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER')}
                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       >
                         {INVITE_ROLES.map((r) => (
