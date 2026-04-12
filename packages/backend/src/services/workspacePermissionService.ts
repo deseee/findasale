@@ -21,16 +21,16 @@ export const checkPermission = async (
     // First check for custom override
     const customOverride = await prisma.workspacePermission.findUnique({
       where: {
-        workspaceId_role_permission: {
+        workspaceId_role_action: {
           workspaceId,
           role,
-          permission,
+          action: permission,
         },
       },
     });
 
     if (customOverride) {
-      return true; // Explicit custom permission exists
+      return customOverride.allowed;
     }
 
     // Fall back to default role permissions
@@ -60,14 +60,14 @@ export const getPermissionsForRole = async (
       },
     });
 
-    const customPermSet = new Set(customPerms.map(p => p.permission));
+    const customPermSet = new Set(customPerms.filter(p => p.allowed).map(p => p.action));
 
     // Start with defaults for this role
     const defaultPerms = DEFAULT_ROLE_PERMISSIONS[role] || [];
 
     // Merge: keep all defaults, plus any custom additions
     const merged = new Set<string>(defaultPerms);
-    customPerms.forEach(p => merged.add(p.permission));
+    customPerms.filter(p => p.allowed).forEach(p => merged.add(p.action));
 
     return Array.from(merged);
   } catch (error) {
@@ -102,10 +102,11 @@ export const setPermissionsForRole = async (
 
     if (customPerms.length > 0) {
       await prisma.workspacePermission.createMany({
-        data: customPerms.map(permission => ({
+        data: customPerms.map(action => ({
           workspaceId,
           role,
-          permission,
+          action,
+          allowed: true,
         })),
         skipDuplicates: true,
       });
@@ -155,22 +156,16 @@ export const applyTemplate = async (
       throw new Error(`Template '${templateName}' not found`);
     }
 
-    // Parse permissions JSON from template
-    let templatePermissions: Record<string, string[]>;
-    try {
-      templatePermissions = JSON.parse(template.permissions);
-    } catch (e) {
-      throw new Error(`Invalid permissions JSON in template '${templateName}'`);
-    }
+    // Template permissions is a String[] of action names
+    const templatePermActions = template.permissions || [];
 
     // Delete existing custom permissions for this workspace
     await resetToDefaults(workspaceId);
 
-    // Apply template permissions for each role
-    for (const [role, permissions] of Object.entries(templatePermissions)) {
-      if (Array.isArray(permissions)) {
-        await setPermissionsForRole(workspaceId, role as WorkspaceRole, permissions);
-      }
+    // Apply template permissions as custom overrides for the STAFF role
+    // (templates define what non-owner roles can do)
+    if (templatePermActions.length > 0) {
+      await setPermissionsForRole(workspaceId, 'STAFF' as WorkspaceRole, templatePermActions);
     }
   } catch (error) {
     console.error(
