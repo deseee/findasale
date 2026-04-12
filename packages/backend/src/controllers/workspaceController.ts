@@ -28,6 +28,10 @@ export const createWorkspace = async (req: AuthRequest, res: Response) => {
       finalSlug = `${slug}-${counter}`;
     }
     const workspace = await prisma.organizerWorkspace.create({ data: { name, slug: finalSlug, ownerId: organizerId } });
+    // Auto-add owner as OWNER member so workspace middleware grants access
+    await prisma.workspaceMember.create({
+      data: { workspaceId: workspace.id, organizerId, role: 'OWNER' },
+    });
     return res.status(201).json(workspace);
   } catch (error) {
     Sentry.captureException(error);
