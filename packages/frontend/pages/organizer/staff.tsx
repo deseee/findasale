@@ -1,30 +1,57 @@
 /**
  * Staff / Team Management Page
  *
- * TEAMS organizers can manage workspace members:
- * - Create workspace if not exists
- * - View current members with join dates and roles
- * - Invite new members by email
- * - Remove members (owner only)
+ * TEAMS organizers can manage workspace staff members:
+ * - View all staff with contact info, role, department
+ * - Manage staff role (MANAGER/STAFF/VIEWER)
+ * - Update availability schedule (Mon-Sun with start/end times)
+ * - View performance snapshots (items sold, revenue, tasks)
+ * - Coverage gap alerts for upcoming sales
+ * - Remove members (workspace owner only)
  * - Tier upgrade wall for non-TEAMS organizers
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { ChevronDown, ChevronUp, Phone, Mail, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import { useMyWorkspace, useInviteMember } from '../../hooks/useWorkspace';
 import {
-  useMyWorkspace,
-  useWorkspaceMembers,
-  useCreateWorkspace,
-  useInviteMember,
-  useRemoveWorkspaceMember,
-} from '../../hooks/useWorkspace';
-import { formatDistanceToNow, parseISO } from 'date-fns';
+  useStaffList,
+  useUpdateStaffProfile,
+  useUpdateAvailability,
+  useCoverageGaps,
+  useRemoveStaffMember,
+  useStaffPerformance,
+  type StaffMember,
+} from '../../hooks/useStaff';
 import Skeleton from '../../components/Skeleton';
+
+const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const STAFF_ROLES = ['MANAGER', 'STAFF', 'VIEWER'];
+
+interface ExpandedState {
+  [staffId: string]: boolean;
+}
+
+interface EditState {
+  [staffId: string]: {
+    role?: string;
+    department?: string;
+    primaryPhone?: string;
+  };
+}
+
+interface AvailabilityEditState {
+  [staffId: string]: {
+    [dayKey: string]: { start?: string; end?: string };
+  };
+}
 
 const OrganizerStaffPage = () => {
   const router = useRouter();
@@ -35,17 +62,24 @@ const OrganizerStaffPage = () => {
   // Form state
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
-  const [workspaceName, setWorkspaceName] = useState('');
-  const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // Workspace & members queries
+  // Expansion and editing states
+  const [expandedCards, setExpandedCards] = useState<ExpandedState>({});
+  const [editingProfile, setEditingProfile] = useState<EditState>({});
+  const [editingAvailability, setEditingAvailability] = useState<AvailabilityEditState>({});
+  const [removingStaffId, setRemovingStaffId] = useState<string | null>(null);
+
+  // Workspace & staff queries
   const { data: workspace, isLoading: workspaceLoading } = useMyWorkspace();
-  const { data: membersData, isLoading: membersLoading } = useWorkspaceMembers();
+  const workspaceId = workspace?.id;
+  const { data: staffList, isLoading: staffLoading } = useStaffList(workspaceId);
+  const { data: coverageGaps, isLoading: gapsLoading } = useCoverageGaps(workspaceId);
 
   // Mutations
-  const createWorkspaceMutation = useCreateWorkspace();
   const inviteMutation = useInviteMember();
-  const removeMutation = useRemoveWorkspaceMember();
+  const updateProfileMutation = useUpdateStaffProfile(workspaceId);
+  const updateAvailabilityMutation = useUpdateAvailability(workspaceId);
+  const removeStaffMutation = useRemoveStaffMember(workspaceId);
 
   if (authLoading) return null;
   if (!user || !user.roles?.includes('ORGANIZER')) {
@@ -58,21 +92,21 @@ const OrganizerStaffPage = () => {
     return (
       <>
         <Head>
-          <title>Staff Accounts - FindA.Sale</title>
+          <title>Staff Management - FindA.Sale</title>
           <meta name="description" content="Upgrade to TEAMS to manage your staff" />
         </Head>
         <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800 flex items-center justify-center px-4">
           <div className="text-center max-w-md">
             <div className="text-6xl mb-6">👥</div>
             <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-100 mb-4">
-              Staff Accounts
+              Staff Management
             </h1>
             <p className="text-lg text-warm-700 dark:text-gray-400 mb-8">
-              Upgrade to TEAMS to manage your staff and collaborate with team members.
+              Upgrade to TEAMS to manage staff roles, availability, and performance.
             </p>
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
               <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
-                <strong>TEAMS feature</strong> — Includes workspace management and team collaboration
+                <strong>TEAMS feature</strong> — Full employee management with scheduling and performance tracking
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300">
                 Current tier: <strong>{tier}</strong>
@@ -92,20 +126,25 @@ const OrganizerStaffPage = () => {
 
   // TEAMS tier: show staff management
   const isOwner = workspace?.ownerId === user?.id;
-  const members = membersData?.members || [];
+  const staff = staffList || [];
 
-  const handleCreateWorkspace = async () => {
-    if (!workspaceName.trim()) {
-      showToast('Workspace name is required', 'error');
-      return;
-    }
-    try {
-      await createWorkspaceMutation.mutateAsync(workspaceName.trim());
-      setWorkspaceName('');
-      setShowCreateForm(false);
-      showToast('Workspace created', 'success');
-    } catch (error: any) {
-      showToast(error.response?.data?.message || 'Failed to create workspace', 'error');
+  const handleToggleExpand = (staffId: string) => {
+    setExpandedCards((prev) => ({
+      ...prev,
+      [staffId]: !prev[staffId],
+    }));
+    // Clear editing state when collapsing
+    if (expandedCards[staffId]) {
+      setEditingProfile((prev) => {
+        const next = { ...prev };
+        delete next[staffId];
+        return next;
+      });
+      setEditingAvailability((prev) => {
+        const next = { ...prev };
+        delete next[staffId];
+        return next;
+      });
     }
   };
 
@@ -128,27 +167,96 @@ const OrganizerStaffPage = () => {
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
-    if (!window.confirm('Are you sure you want to remove this member?')) {
+  const handleUpdateProfile = async (staffId: string) => {
+    const edits = editingProfile[staffId];
+    if (!edits) return;
+    try {
+      await updateProfileMutation.mutateAsync({ staffId, ...edits });
+      setEditingProfile((prev) => {
+        const next = { ...prev };
+        delete next[staffId];
+        return next;
+      });
+      showToast('Profile updated', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to update profile', 'error');
+    }
+  };
+
+  const handleUpdateAvailability = async (staffId: string) => {
+    const edits = editingAvailability[staffId];
+    if (!edits) return;
+    try {
+      // Build availability object from day-based edits
+      const availability: Record<string, string | undefined> = {};
+      DAYS.forEach((day) => {
+        const dayEdits = edits[day];
+        if (dayEdits?.start !== undefined) {
+          availability[`${day}StartTime`] = dayEdits.start || undefined;
+        }
+        if (dayEdits?.end !== undefined) {
+          availability[`${day}EndTime`] = dayEdits.end || undefined;
+        }
+      });
+      await updateAvailabilityMutation.mutateAsync({ staffId, availability });
+      setEditingAvailability((prev) => {
+        const next = { ...prev };
+        delete next[staffId];
+        return next;
+      });
+      showToast('Availability updated', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to update availability', 'error');
+    }
+  };
+
+  const handleRemoveStaff = async (staffId: string) => {
+    if (!window.confirm('Are you sure? This will remove the staff member from your team.')) {
+      setRemovingStaffId(null);
       return;
     }
     try {
-      await removeMutation.mutateAsync(memberId);
-      showToast('Member removed', 'success');
+      await removeStaffMutation.mutateAsync(staffId);
+      showToast('Staff member removed', 'success');
+      setRemovingStaffId(null);
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'Failed to remove member', 'error');
+      showToast(error.response?.data?.message || 'Failed to remove staff member', 'error');
     }
+  };
+
+  const getAvailabilityValue = (staffMember: StaffMember, day: string, type: 'start' | 'end') => {
+    if (!staffMember.availability) return '';
+    const key = type === 'start' ? `${day}StartTime` : `${day}EndTime`;
+    return (staffMember.availability as any)[key] || '';
+  };
+
+  const setAvailabilityValue = (staffId: string, day: string, type: 'start' | 'end', value: string) => {
+    setEditingAvailability((prev) => {
+      const dayKey = day;
+      const existing = prev[staffId] || {};
+      const dayEdits = existing[dayKey] || {};
+      return {
+        ...prev,
+        [staffId]: {
+          ...existing,
+          [dayKey]: {
+            ...dayEdits,
+            [type === 'start' ? 'start' : 'end']: value,
+          },
+        },
+      };
+    });
   };
 
   return (
     <>
       <Head>
-        <title>Staff Accounts - FindA.Sale</title>
-        <meta name="description" content="Manage your team members and staff access" />
+        <title>Staff Management - FindA.Sale</title>
+        <meta name="description" content="Manage your team members, roles, and availability" />
       </Head>
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           {/* Header */}
           <div className="mb-8">
             <Link
@@ -157,77 +265,44 @@ const OrganizerStaffPage = () => {
             >
               ← Back to Dashboard
             </Link>
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Staff & Team</h1>
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Staff Management</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Manage team members and collaboration
+              Manage team members, roles, availability, and performance
             </p>
           </div>
 
           {/* Loading state */}
-          {workspaceLoading || (membersLoading && workspace) ? (
+          {workspaceLoading || (staffLoading && workspace) ? (
             <div className="space-y-4">
-              <Skeleton className="h-32 rounded-lg" />
+              <Skeleton className="h-24 rounded-lg" />
               <Skeleton className="h-64 rounded-lg" />
             </div>
           ) : null}
 
-          {/* No workspace */}
-          {!workspace && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-8 mb-8 border border-gray-200 dark:border-gray-700">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                Create Your Workspace
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Set up a workspace to invite team members and collaborate on sales.
-              </p>
-
-              {!showCreateForm ? (
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          {/* Coverage gap alerts */}
+          {!gapsLoading && coverageGaps && coverageGaps.length > 0 && (
+            <div className="mb-8 space-y-2">
+              {coverageGaps.map((gap) => (
+                <div
+                  key={gap.id}
+                  className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 flex items-start gap-3"
                 >
-                  Create Workspace
-                </button>
-              ) : (
-                <div className="flex gap-4">
-                  <input
-                    type="text"
-                    placeholder="Workspace name (e.g., My Sales Team)"
-                    value={workspaceName}
-                    onChange={(e) => setWorkspaceName(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <button
-                    onClick={handleCreateWorkspace}
-                    disabled={createWorkspaceMutation.isPending || !workspaceName.trim()}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
-                  >
-                    {createWorkspaceMutation.isPending ? 'Creating...' : 'Create'}
-                  </button>
-                  <button
-                    onClick={() => setShowCreateForm(false)}
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                  >
-                    Cancel
-                  </button>
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                      {gap.message}
+                    </p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                      {gap.saleName} — {gap.saleDate}
+                    </p>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
-          {/* Workspace info & invite form */}
           {workspace && (
             <div className="space-y-8">
-              {/* Workspace header */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {workspace.name}
-                </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                  {isOwner ? 'You own this workspace' : 'You are a member of this workspace'}
-                </p>
-              </div>
-
               {/* Invite form */}
               {isOwner && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
@@ -271,99 +346,226 @@ const OrganizerStaffPage = () => {
                 </div>
               )}
 
-              {/* Members list */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Team Members ({members.length + 1})
-                  </h3>
+              {/* Team Overview Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Team</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {staff.length} member{staff.length !== 1 ? 's' : ''}
+                  </p>
                 </div>
+              </div>
 
-                {members.length === 0 ? (
-                  <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+              {/* Staff member cards */}
+              {staff.length === 0 ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center border border-gray-200 dark:border-gray-700">
+                  <div className="text-4xl mb-4">👤</div>
+                  <p className="text-gray-600 dark:text-gray-400">
                     No team members yet. Invite someone to get started.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">
-                            Name
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">
-                            Email
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">
-                            Role
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">
-                            Joined
-                          </th>
-                          {isOwner && (
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">
-                              Actions
-                            </th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {members.map((member) => (
-                          <tr
-                            key={member.id}
-                            className="hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                          >
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                {member.organizer?.profilePhoto && (
-                                  <img
-                                    src={member.organizer.profilePhoto}
-                                    alt={member.organizer?.businessName}
-                                    className="h-8 w-8 rounded-full object-cover"
-                                  />
-                                )}
-                                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {member.organizer?.businessName || 'Unknown'}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                              {member.organizer?.user?.email || 'N/A'}
-                            </td>
-                            <td className="px-6 py-4">
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {staff.map((staffMember) => (
+                    <div
+                      key={staffMember.id}
+                      className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden transition"
+                    >
+                      {/* Collapsed view */}
+                      <button
+                        onClick={() => handleToggleExpand(staffMember.id)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
+                      >
+                        <div className="flex items-center gap-4 flex-1 text-left">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 dark:text-white">
+                              {staffMember.workspaceMember?.organizer?.businessName || 'Unknown'}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-1">
                               <span
                                 className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
-                                  member.role === 'ADMIN'
+                                  staffMember.role === 'MANAGER'
                                     ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200'
-                                    : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
+                                    : staffMember.role === 'STAFF'
+                                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
+                                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                                 }`}
                               >
-                                {member.role}
+                                {staffMember.role}
                               </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                              {formatDistanceToNow(parseISO(member.invitedAt), {
-                                addSuffix: true,
+                              {staffMember.department && (
+                                <span className="text-xs text-gray-600 dark:text-gray-400">
+                                  {staffMember.department}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {staffMember.primaryPhone && (
+                            <div className="text-xs text-gray-600 dark:text-gray-400">
+                              {staffMember.primaryPhone}
+                            </div>
+                          )}
+                        </div>
+                        {expandedCards[staffMember.id] ? (
+                          <ChevronUp className="w-5 h-5 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+
+                      {/* Expanded view */}
+                      {expandedCards[staffMember.id] && (
+                        <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-6">
+                          {/* Contact info */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                              Contact Information
+                            </h4>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                                <Mail className="w-4 h-4" />
+                                {staffMember.workspaceMember?.organizer?.user?.email || 'N/A'}
+                              </div>
+                              <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                                <Phone className="w-4 h-4" />
+                                {staffMember.primaryPhone || 'Not provided'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Role and department */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase">
+                                Role
+                              </label>
+                              <select
+                                value={editingProfile[staffMember.id]?.role ?? staffMember.role}
+                                onChange={(e) =>
+                                  setEditingProfile((prev) => ({
+                                    ...prev,
+                                    [staffMember.id]: {
+                                      ...prev[staffMember.id],
+                                      role: e.target.value,
+                                    },
+                                  }))
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white"
+                              >
+                                {STAFF_ROLES.map((r) => (
+                                  <option key={r} value={r}>
+                                    {r}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase">
+                                Department
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g., Sales"
+                                value={editingProfile[staffMember.id]?.department ?? staffMember.department ?? ''}
+                                onChange={(e) =>
+                                  setEditingProfile((prev) => ({
+                                    ...prev,
+                                    [staffMember.id]: {
+                                      ...prev[staffMember.id],
+                                      department: e.target.value || undefined,
+                                    },
+                                  }))
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Availability grid */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                              Availability
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {DAYS.map((day, idx) => {
+                                const startValue =
+                                  editingAvailability[staffMember.id]?.[day]?.start ??
+                                  getAvailabilityValue(staffMember, day, 'start');
+                                const endValue =
+                                  editingAvailability[staffMember.id]?.[day]?.end ??
+                                  getAvailabilityValue(staffMember, day, 'end');
+
+                                return (
+                                  <div key={day} className="flex items-end gap-2">
+                                    <div className="flex-1">
+                                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                        {DAY_LABELS[idx]}
+                                      </label>
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="time"
+                                          value={startValue}
+                                          onChange={(e) =>
+                                            setAvailabilityValue(staffMember.id, day, 'start', e.target.value)
+                                          }
+                                          className="flex-1 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                          placeholder="Start"
+                                        />
+                                        <input
+                                          type="time"
+                                          value={endValue}
+                                          onChange={(e) =>
+                                            setAvailabilityValue(staffMember.id, day, 'end', e.target.value)
+                                          }
+                                          className="flex-1 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                          placeholder="End"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
                               })}
-                            </td>
+                            </div>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <button
+                              onClick={() => handleUpdateProfile(staffMember.id)}
+                              disabled={
+                                updateProfileMutation.isPending ||
+                                !editingProfile[staffMember.id]
+                              }
+                              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition text-sm font-medium"
+                            >
+                              Save Profile
+                            </button>
+                            <button
+                              onClick={() => handleUpdateAvailability(staffMember.id)}
+                              disabled={
+                                updateAvailabilityMutation.isPending ||
+                                !editingAvailability[staffMember.id]
+                              }
+                              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition text-sm font-medium"
+                            >
+                              Save Availability
+                            </button>
                             {isOwner && (
-                              <td className="px-6 py-4">
-                                <button
-                                  onClick={() => handleRemoveMember(member.organizerId)}
-                                  disabled={removeMutation.isPending}
-                                  className="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition disabled:opacity-50"
-                                >
-                                  Remove
-                                </button>
-                              </td>
+                              <button
+                                onClick={() => handleRemoveStaff(staffMember.id)}
+                                disabled={removeStaffMutation.isPending}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition text-sm font-medium flex items-center gap-2"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

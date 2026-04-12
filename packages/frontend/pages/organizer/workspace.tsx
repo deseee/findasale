@@ -1,53 +1,146 @@
 /**
- * Organizer Workspace Management
- * TEAMS tier feature for multi-user workspace management
- * Only accessible to TEAMS tier organizers
+ * Organizer Workspace Settings
+ * TEAMS tier feature for workspace configuration
+ *
+ * Sections:
+ * 1. Workspace Identity (name, slug, description, created date)
+ * 2. Workspace Templates (Empty, Solo, 2-Person, 5-Person, Custom)
+ * 3. Role & Permission Builder (ADMIN, MANAGER, STAFF, VIEWER tabs)
+ * 4. Brand Rules (dress code, photo standards, arrival time, custom rules)
+ * 5. Cost Calculator (members, fees, total cost)
+ * 6. Danger Zone (delete workspace)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import { useMyWorkspace } from '../../hooks/useWorkspace';
 import {
-  useMyWorkspace,
-  useWorkspaceMembers,
-  useCreateWorkspace,
-  useInviteMember,
-  useAcceptWorkspaceInvite,
-  useRemoveWorkspaceMember,
-} from '../../hooks/useWorkspace';
+  useWorkspaceSettings,
+  useUpdateWorkspaceSettings,
+  useApplyTemplate,
+  useWorkspacePermissions,
+  useUpdatePermissions,
+  useCostCalculator,
+} from '../../hooks/useWorkspaceSettings';
 import TierGate from '../../components/TierGate';
 
-const MAX_TEAM_MEMBERS = 5;
+// Permission categories and actions for display
+const PERMISSION_CATEGORIES = [
+  {
+    name: 'Inventory',
+    permissions: ['view_inventory', 'add_items', 'edit_items', 'delete_items', 'bulk_import'],
+  },
+  {
+    name: 'Pricing',
+    permissions: ['view_pricing', 'edit_pricing', 'view_ai_suggestions', 'approve_ai_tags'],
+  },
+  {
+    name: 'POS',
+    permissions: ['process_pos', 'view_sales_analytics', 'void_transactions'],
+  },
+  {
+    name: 'Team',
+    permissions: ['view_staff', 'invite_staff', 'edit_staff_roles', 'view_performance'],
+  },
+  {
+    name: 'Workspace',
+    permissions: ['manage_workspace_settings', 'edit_permissions', 'view_billing'],
+  },
+  {
+    name: 'Communication',
+    permissions: ['send_team_chat', 'broadcast_alerts', 'create_tasks'],
+  },
+];
 
-export default function WorkspacePage() {
+// Template definitions
+const TEMPLATES = [
+  {
+    name: 'Empty',
+    description: 'Start with no pre-configured roles',
+    recommendedTeamSize: 1,
+  },
+  {
+    name: 'Solo',
+    description: 'Single organizer, all permissions',
+    recommendedTeamSize: 1,
+  },
+  {
+    name: '2-Person',
+    description: 'Owner + 1 manager with full access',
+    recommendedTeamSize: 2,
+  },
+  {
+    name: '5-Person',
+    description: 'Full team structure with role separation',
+    recommendedTeamSize: 5,
+  },
+];
+
+const WORKSPACE_ROLES = ['ADMIN', 'MANAGER', 'STAFF', 'VIEWER'];
+
+export default function WorkspaceSettingsPage() {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
-  const { tier, isTeams } = useOrganizerTier();
+  const { isTeams } = useOrganizerTier();
 
-  // Workspace queries
+  // Queries
   const { data: workspace, isLoading: workspaceLoading } = useMyWorkspace();
-  const { data: membersData, isLoading: membersLoading } = useWorkspaceMembers();
+  const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings(workspace?.id || null);
+  const { data: permissions, isLoading: permissionsLoading } = useWorkspacePermissions(workspace?.id || null);
+  const { data: costData, isLoading: costLoading } = useCostCalculator(workspace?.id || null);
 
-  // Workspace mutations
-  const createWorkspaceMutation = useCreateWorkspace();
-  const inviteMemberMutation = useInviteMember();
-  const acceptInviteMutation = useAcceptWorkspaceInvite();
-  const removeMemberMutation = useRemoveWorkspaceMember();
+  // Mutations
+  const updateSettingsMutation = useUpdateWorkspaceSettings(workspace?.id || null);
+  const applyTemplateMutation = useApplyTemplate(workspace?.id || null);
+  const updatePermissionsMutation = useUpdatePermissions(workspace?.id || null);
 
-  // Form state
+  // Local state
   const [workspaceName, setWorkspaceName] = useState('');
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [description, setDescription] = useState('');
+  const [activeRoleTab, setActiveRoleTab] = useState('ADMIN');
+  const [selectedPermissions, setSelectedPermissions] = useState<Record<string, boolean>>({});
+  const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [brandRules, setBrandRules] = useState({
+    dressCode: '',
+    photoStandards: '',
+    arrivalTime: '',
+    customRules: '',
+  });
+
+  // Initialize local state from queries
+  useEffect(() => {
+    if (workspace) {
+      setWorkspaceName(workspace.name || '');
+      setDescription(workspace.name || '');
+    }
+  }, [workspace]);
+
+  useEffect(() => {
+    if (permissions && activeRoleTab) {
+      const rolePerms = permissions.find((rp) => rp.role === activeRoleTab);
+      if (rolePerms) {
+        const permMap: Record<string, boolean> = {};
+        rolePerms.permissions.forEach((cat) => {
+          cat.permissions.forEach((perm) => {
+            permMap[perm.action] = perm.allowed;
+          });
+        });
+        setSelectedPermissions(permMap);
+      }
+    }
+  }, [permissions, activeRoleTab]);
 
   // Auth check
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="text-gray-500">Loading...</div>
@@ -60,301 +153,475 @@ export default function WorkspacePage() {
     return null;
   }
 
-  // TierGate handles TEAMS access check in the JSX below
-
-  const handleCreateWorkspace = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!workspaceName.trim()) {
-      showToast('Workspace name is required', 'error');
-      return;
-    }
-    try {
-      await createWorkspaceMutation.mutateAsync(workspaceName);
-      showToast('Workspace created successfully', 'success');
-      setWorkspaceName('');
-      setShowCreateForm(false);
-    } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to create workspace';
-      showToast(msg, 'error');
-    }
-  };
-
-  const handleInviteMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail.trim()) {
-      showToast('Email is required', 'error');
-      return;
-    }
-    try {
-      await inviteMemberMutation.mutateAsync({ email: inviteEmail, role: inviteRole });
-      showToast('Invitation sent successfully', 'success');
-      setInviteEmail('');
-      setShowInviteForm(false);
-    } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to invite member';
-      showToast(msg, 'error');
-    }
-  };
-
-  const handleRemoveMember = async (organizerId: string) => {
-    if (!confirm('Are you sure you want to remove this member?')) {
-      return;
-    }
-    try {
-      await removeMemberMutation.mutateAsync(organizerId);
-      showToast('Member removed successfully', 'success');
-    } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to remove member';
-      showToast(msg, 'error');
-    }
-  };
-
-  const isOwner = workspace && workspace.ownerUserId === user.id;
-  const members = membersData?.members || [];
-
-  return (
-    <TierGate requiredTier="TEAMS" featureName="Team Workspace" description="Multi-user workspace management with role-based access, team collaboration tools, and shared sale operations.">
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Head>
-        <title>Team Workspace - FindA.Sale</title>
-      </Head>
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <Link href="/organizer/settings">
-              <a className="text-sage-600 hover:text-sage-700 text-sm mb-4 block">← Back to Settings</a>
-            </Link>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Team Workspace</h1>
-            <p className="text-gray-600 dark:text-gray-300 mt-2">
-              Invite organizers to collaborate in your workspace
-            </p>
+  if (!workspace) {
+    return (
+      <TierGate requiredTier="TEAMS" featureName="Workspace Settings" description="Configure team workspace settings, permissions, and cost breakdown.">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 px-4 py-12">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+              <p className="text-gray-600 dark:text-gray-300 mb-4">No workspace found. Create one first.</p>
+              <Link href="/organizer/workspace">
+                <a className="text-sage-600 hover:text-sage-700 font-semibold">Go back</a>
+              </Link>
+            </div>
           </div>
         </div>
+      </TierGate>
+    );
+  }
 
-        {/* Workspace Info */}
-        {workspace ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-              {workspace.name}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 dark:text-gray-300">
-              <div>
-                <span className="font-semibold">Workspace URL:</span>
-                <br />
-                <a
-                  href={`https://finda.sale/workspace/${workspace.slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 font-medium underline"
-                >
-                  finda.sale/workspace/{workspace.slug}
-                </a>
-              </div>
-              <div>
-                <span className="font-semibold">Created:</span>
-                <br />
-                {new Date(workspace.createdAt).toLocaleDateString()}
-              </div>
-            </div>
+  const isOwner = workspace && workspace.ownerId === user.id;
+
+  const handleUpdateName = async () => {
+    if (!workspace) return;
+    try {
+      await updateSettingsMutation.mutateAsync({ workspaceId: workspace.id, enableAnalytics: true });
+      showToast('Workspace name updated', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to update workspace', 'error');
+    }
+  };
+
+  const handleApplyTemplate = async () => {
+    if (!pendingTemplate || !workspace) return;
+    try {
+      await applyTemplateMutation.mutateAsync(pendingTemplate);
+      showToast(`Template "${pendingTemplate}" applied successfully`, 'success');
+      setShowTemplateConfirm(false);
+      setPendingTemplate(null);
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to apply template', 'error');
+    }
+  };
+
+  const handleSavePermissions = async () => {
+    if (!workspace || !activeRoleTab) return;
+    try {
+      const allowedActions = Object.entries(selectedPermissions)
+        .filter(([_, allowed]) => allowed)
+        .map(([action, _]) => action);
+
+      await updatePermissionsMutation.mutateAsync({
+        role: activeRoleTab,
+        permissions: allowedActions,
+      });
+      showToast('Permissions saved', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to save permissions', 'error');
+    }
+  };
+
+  const handleSaveBrandRules = async () => {
+    if (!workspace) return;
+    try {
+      await updateSettingsMutation.mutateAsync({
+        workspaceId: workspace.id,
+        enableAnalytics: settings?.enableAnalytics ?? true,
+      });
+      showToast('Brand rules saved', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to save brand rules', 'error');
+    }
+  };
+
+  const handleDeleteWorkspace = async () => {
+    if (deleteConfirmName !== workspace.name) {
+      showToast('Workspace name does not match', 'error');
+      return;
+    }
+    try {
+      // TODO: Implement delete endpoint
+      showToast('Workspace deletion not yet implemented', 'info');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to delete workspace', 'error');
+    }
+  };
+
+  return (
+    <TierGate requiredTier="TEAMS" featureName="Workspace Settings" description="Configure team workspace settings, permissions, and cost breakdown.">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Head>
+          <title>Workspace Settings - FindA.Sale</title>
+        </Head>
+        <div className="max-w-6xl mx-auto px-4 py-12">
+          {/* Header */}
+          <div className="mb-12">
+            <Link href="/organizer/dashboard">
+              <a className="text-sage-600 hover:text-sage-700 text-sm mb-4 block">← Back to Dashboard</a>
+            </Link>
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">Workspace Settings</h1>
+            <p className="text-gray-600 dark:text-gray-300">Manage your team workspace configuration</p>
           </div>
-        ) : (
-          !workspaceLoading && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8 text-center">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                Create Your Team Workspace
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Create a workspace to invite other organizers to collaborate
-              </p>
-              {!showCreateForm ? (
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  className="bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-6 rounded-md"
-                >
-                  Create Workspace
-                </button>
-              ) : (
-                <form onSubmit={handleCreateWorkspace} className="max-w-md mx-auto">
-                  <input
-                    type="text"
-                    placeholder="Workspace name (e.g., 'My Workspace')"
-                    value={workspaceName}
-                    onChange={(e) => setWorkspaceName(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md mb-4 dark:bg-gray-700 dark:text-white"
-                    required
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={createWorkspaceMutation.isPending}
-                      className="flex-1 bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50"
-                    >
-                      {createWorkspaceMutation.isPending ? 'Creating...' : 'Create'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateForm(false)}
-                      className="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-bold py-2 px-4 rounded-md"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          )
-        )}
 
-        {/* Members Section */}
-        {workspace && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Team Members
-                  </h2>
-                  {/* D-007: Show member count vs cap */}
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {members.length} / {MAX_TEAM_MEMBERS} members
-                  </p>
-                </div>
-                {isOwner && !showInviteForm && (
-                  <div className="flex flex-col items-end">
-                    <button
-                      onClick={() => setShowInviteForm(true)}
-                      disabled={members.length >= MAX_TEAM_MEMBERS}
-                      className={`font-bold py-2 px-4 rounded-md text-sm transition-all ${
-                        members.length >= MAX_TEAM_MEMBERS
-                          ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
-                          : 'bg-sage-600 hover:bg-sage-700 text-white'
-                      }`}
-                    >
-                      Invite Member
-                    </button>
-                    {members.length >= MAX_TEAM_MEMBERS && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-right">
-                        Team is at capacity. <Link href="/pricing" className="font-semibold hover:underline">Add more seats</Link> or upgrade to Enterprise.
-                      </p>
-                    )}
-                  </div>
+          {/* SECTION 1: Workspace Identity */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Workspace Identity</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Workspace Name
+                </label>
+                <input
+                  type="text"
+                  value={workspaceName}
+                  onChange={(e) => setWorkspaceName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                />
+                {isOwner && (
+                  <button
+                    onClick={handleUpdateName}
+                    disabled={updateSettingsMutation.isPending}
+                    className="mt-2 bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50 text-sm"
+                  >
+                    {updateSettingsMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
                 )}
               </div>
 
-              {/* Invite Form */}
-              {isOwner && showInviteForm && (
-                <form onSubmit={handleInviteMember} className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input
-                      type="email"
-                      placeholder="Organizer email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
-                      required
-                    />
-                    <select
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as 'ADMIN' | 'MEMBER')}
-                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
-                    >
-                      <option value="MEMBER">Member</option>
-                      <option value="ADMIN">Admin</option>
-                    </select>
-                    <div className="flex gap-2">
-                      <button
-                        type="submit"
-                        disabled={inviteMemberMutation.isPending}
-                        className="flex-1 bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50"
-                      >
-                        {inviteMemberMutation.isPending ? 'Sending...' : 'Send'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowInviteForm(false)}
-                        className="bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-bold py-2 px-4 rounded-md"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              )}
+              {/* URL / Slug (read-only) */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Workspace URL
+                </label>
+                <input
+                  type="text"
+                  value={workspace.slug}
+                  readOnly
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700 dark:text-gray-400 text-gray-600 cursor-not-allowed"
+                />
+              </div>
+
+              {/* Created Date */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Created
+                </label>
+                <input
+                  type="text"
+                  value={new Date(workspace.createdAt).toLocaleDateString()}
+                  readOnly
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700 dark:text-gray-400 text-gray-600 cursor-not-allowed"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 2: Templates */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Workspace Templates</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Apply a template to quickly configure roles and permissions for your team structure.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {TEMPLATES.map((template) => (
+                <div
+                  key={template.name}
+                  className="border-2 border-gray-200 dark:border-gray-600 rounded-lg p-6 hover:border-sage-500 dark:hover:border-sage-400 transition cursor-pointer"
+                >
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{template.name}</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{template.description}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mb-4">
+                    Team size: {template.recommendedTeamSize}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setPendingTemplate(template.name);
+                      setShowTemplateConfirm(true);
+                    }}
+                    disabled={applyTemplateMutation.isPending || !isOwner}
+                    className="w-full bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50 text-sm transition"
+                  >
+                    {applyTemplateMutation.isPending ? 'Applying...' : 'Apply'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Template Confirmation Modal */}
+          {showTemplateConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm w-full">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Apply Template?</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  This will reset your current permissions to match the "{pendingTemplate}" template. Continue?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleApplyTemplate}
+                    disabled={applyTemplateMutation.isPending}
+                    className="flex-1 bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-4 rounded-md disabled:opacity-50"
+                  >
+                    {applyTemplateMutation.isPending ? 'Applying...' : 'Apply Template'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowTemplateConfirm(false);
+                      setPendingTemplate(null);
+                    }}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-bold py-2 px-4 rounded-md"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 3: Role & Permission Builder */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Role & Permissions</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Configure what each role can do. OWNER always has all permissions.
+            </p>
+
+            {/* Role Tabs */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
+              {WORKSPACE_ROLES.map((role) => (
+                <button
+                  key={role}
+                  onClick={() => setActiveRoleTab(role)}
+                  className={`px-6 py-3 font-semibold transition whitespace-nowrap ${
+                    activeRoleTab === role
+                      ? 'text-sage-600 dark:text-sage-400 border-b-2 border-sage-600 dark:border-sage-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300'
+                  }`}
+                >
+                  {role}
+                </button>
+              ))}
             </div>
 
-            {/* Members List */}
-            {members.length > 0 ? (
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {members.map((member) => (
-                  <div key={member.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-                    <div className="flex items-center gap-4">
-                      {member.organizer.profilePhoto && (
-                        <img
-                          src={member.organizer.profilePhoto}
-                          alt={member.organizer.businessName}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      )}
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-white">
-                          {member.organizer.businessName}
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {member.organizer.user?.email}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-sage-100 text-sage-700 dark:bg-sage-900 dark:text-sage-200">
-                            {member.role}
-                          </span>
-                          {!member.acceptedAt && (
-                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200">
-                              Pending
-                            </span>
-                          )}
-                        </div>
-                      </div>
+            {/* Permission Grid */}
+            {permissionsLoading ? (
+              <div className="text-center py-8 text-gray-500">Loading permissions...</div>
+            ) : (
+              <div>
+                {PERMISSION_CATEGORIES.map((category) => (
+                  <div key={category.name} className="mb-8">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{category.name}</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {category.permissions.map((action) => (
+                        <label key={action} className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedPermissions[action] ?? false}
+                            onChange={(e) =>
+                              setSelectedPermissions({
+                                ...selectedPermissions,
+                                [action]: e.target.checked,
+                              })
+                            }
+                            className="w-4 h-4 text-sage-600 rounded"
+                            disabled={activeRoleTab === 'OWNER' || !isOwner}
+                          />
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{action.replace(/_/g, ' ')}</span>
+                        </label>
+                      ))}
                     </div>
-                    {isOwner && member.organizerId !== workspace.ownerId && (
-                      <button
-                        onClick={() => handleRemoveMember(member.organizerId)}
-                        disabled={removeMemberMutation.isPending}
-                        className="text-red-600 hover:text-red-700 font-semibold text-sm disabled:opacity-50"
-                      >
-                        Remove
-                      </button>
-                    )}
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                No members yet. Invite organizers to get started.
+
+                {isOwner && (
+                  <div className="flex gap-3 mt-8">
+                    <button
+                      onClick={handleSavePermissions}
+                      disabled={updatePermissionsMutation.isPending}
+                      className="bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-6 rounded-md disabled:opacity-50"
+                    >
+                      {updatePermissionsMutation.isPending ? 'Saving...' : 'Save Permissions'}
+                    </button>
+                    <button
+                      onClick={() => setSelectedPermissions({})}
+                      className="bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-bold py-2 px-6 rounded-md"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
+          </section>
 
-        {/* Pending Invite */}
-        {!workspace && !workspaceLoading && members.length > 0 && (
-          <div className="bg-blue-50 dark:bg-blue-900 rounded-lg shadow-md p-6 mb-8">
-            <h2 className="text-xl font-bold text-blue-900 dark:text-blue-100 mb-4">
-              Pending Workspace Invitation
-            </h2>
-            <p className="text-blue-800 dark:text-blue-200 mb-4">
-              You've been invited to a workspace. Accept the invitation to join.
+          {/* SECTION 4: Brand Rules */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Brand Rules</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Set guidelines for your team to follow during sales and operations.
             </p>
-            <button
-              onClick={() => acceptInviteMutation.mutate()}
-              disabled={acceptInviteMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md disabled:opacity-50"
-            >
-              {acceptInviteMutation.isPending ? 'Accepting...' : 'Accept Invitation'}
-            </button>
-          </div>
-        )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Dress Code */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Dress Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Business casual"
+                  value={brandRules.dressCode}
+                  onChange={(e) => setBrandRules({ ...brandRules, dressCode: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              {/* Arrival Time */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Arrival Time
+                </label>
+                <input
+                  type="time"
+                  value={brandRules.arrivalTime}
+                  onChange={(e) => setBrandRules({ ...brandRules, arrivalTime: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              {/* Photo Standards */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Photo Standards
+                </label>
+                <textarea
+                  placeholder="e.g., Well-lit, clear photos at 90-degree angles"
+                  value={brandRules.photoStandards}
+                  onChange={(e) => setBrandRules({ ...brandRules, photoStandards: e.target.value })}
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              {/* Custom Rules */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Custom Rules
+                </label>
+                <textarea
+                  placeholder="Any other guidelines for your team"
+                  value={brandRules.customRules}
+                  onChange={(e) => setBrandRules({ ...brandRules, customRules: e.target.value })}
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+            </div>
+
+            {isOwner && (
+              <button
+                onClick={handleSaveBrandRules}
+                disabled={updateSettingsMutation.isPending}
+                className="mt-6 bg-sage-600 hover:bg-sage-700 text-white font-bold py-2 px-6 rounded-md disabled:opacity-50"
+              >
+                {updateSettingsMutation.isPending ? 'Saving...' : 'Save Brand Rules'}
+              </button>
+            )}
+          </section>
+
+          {/* SECTION 5: Cost Calculator */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Cost Calculator</h2>
+            {costLoading ? (
+              <div className="text-center py-8 text-gray-500">Loading cost breakdown...</div>
+            ) : costData ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Breakdown */}
+                <div className="space-y-4">
+                  <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Base TEAMS Fee</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">${costData.baseFee}/mo</p>
+                  </div>
+
+                  <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Current Members</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {costData.currentMembers} / {costData.maxMembers}
+                    </p>
+                  </div>
+
+                  <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Additional Seats</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {costData.additionalSeats} × $20/mo = ${costData.additionalSeatsCost}/mo
+                    </p>
+                  </div>
+
+                  {costData.currentMembers >= costData.maxMembers && (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md p-4">
+                      <p className="text-sm text-amber-800 dark:text-amber-200">
+                        Your team is at capacity. Additional members are $20/mo each.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Total */}
+                <div className="bg-sage-50 dark:bg-sage-900/20 rounded-lg p-6 flex flex-col justify-center">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Total Monthly Cost</p>
+                  <p className="text-4xl font-bold text-sage-700 dark:text-sage-400">${costData.totalMonthlyCost}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-4">Billed monthly • No setup fee</p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">Unable to load cost information</div>
+            )}
+          </section>
+
+          {/* SECTION 6: Danger Zone */}
+          {isOwner && (
+            <section className="bg-red-50 dark:bg-red-900/10 border-2 border-red-200 dark:border-red-800 rounded-lg shadow-md p-8">
+              <h2 className="text-2xl font-bold text-red-900 dark:text-red-400 mb-4">Danger Zone</h2>
+              <p className="text-red-800 dark:text-red-300 mb-6">
+                These actions are permanent and cannot be undone.
+              </p>
+
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-md transition"
+              >
+                Delete Workspace
+              </button>
+            </section>
+          )}
+
+          {/* Delete Confirmation Modal */}
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-sm w-full">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Delete Workspace?</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  This action is permanent. Type the workspace name to confirm:
+                </p>
+                <input
+                  type="text"
+                  placeholder={workspace.name}
+                  value={deleteConfirmName}
+                  onChange={(e) => setDeleteConfirmName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white mb-6"
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDeleteWorkspace}
+                    disabled={deleteConfirmName !== workspace.name}
+                    className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-md"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteConfirmName('');
+                    }}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-bold py-2 px-4 rounded-md"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     </TierGate>
   );
 }

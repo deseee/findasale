@@ -209,7 +209,7 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
       },
     });
     if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
-    const memberCount = workspace.members.filter(m => m.acceptedAt !== null).length + 1;
+    const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length + 1;
     const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
     const ownerUserId = workspace.owner?.user?.id || null;
     const publishedSales = workspace.owner?.sales || [];
@@ -228,5 +228,275 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
     Sentry.captureException(error);
     console.error('Error fetching public workspace:', error);
     return res.status(500).json({ message: 'Failed to fetch public workspace' });
+  }
+};
+
+export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
+
+    let settings = await prisma.workspaceSettings.findUnique({ where: { workspaceId } });
+
+    // Create default settings if none exist
+    if (!settings) {
+      settings = await prisma.workspaceSettings.create({
+        data: {
+          workspaceId,
+          name: null,
+          description: null,
+          brandRules: null,
+          templateUsed: 'SOLO',
+          maxMembers: 5,
+          enableAnalytics: true,
+          enableLeaderboard: true,
+          enableTeamChat: true,
+          commissionOverride: null,
+        },
+      });
+    }
+
+    // Get member count and owner name
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { id: workspaceId },
+      include: {
+        owner: { select: { user: { select: { name: true, email: true } } } },
+        members: true,
+      },
+    });
+
+    if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
+
+    const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length + 1;
+    const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
+
+    const brandRules = settings.brandRules ? JSON.parse(settings.brandRules) : null;
+
+    return res.json({
+      id: settings.id,
+      workspaceId: settings.workspaceId,
+      name: settings.name,
+      description: settings.description,
+      brandRules,
+      templateUsed: settings.templateUsed,
+      maxMembers: settings.maxMembers,
+      enableAnalytics: settings.enableAnalytics,
+      enableLeaderboard: settings.enableLeaderboard,
+      enableTeamChat: settings.enableTeamChat,
+      commissionOverride: settings.commissionOverride?.toString() || null,
+      memberCount,
+      ownerName,
+      createdAt: settings.createdAt,
+      updatedAt: settings.updatedAt,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error fetching workspace settings:', error);
+    return res.status(500).json({ message: 'Failed to fetch workspace settings' });
+  }
+};
+
+export const updateWorkspaceSettings = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    const { name, description, brandRules, templateUsed, enableAnalytics, enableLeaderboard, enableTeamChat } = req.body;
+
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
+
+    const settings = await prisma.workspaceSettings.upsert({
+      where: { workspaceId },
+      create: {
+        workspaceId,
+        name: name || null,
+        description: description || null,
+        brandRules: brandRules ? JSON.stringify(brandRules) : null,
+        templateUsed: templateUsed || 'SOLO',
+        maxMembers: 5,
+        enableAnalytics: enableAnalytics !== undefined ? enableAnalytics : true,
+        enableLeaderboard: enableLeaderboard !== undefined ? enableLeaderboard : true,
+        enableTeamChat: enableTeamChat !== undefined ? enableTeamChat : true,
+        commissionOverride: null,
+      },
+      update: {
+        ...(name !== undefined && { name: name || null }),
+        ...(description !== undefined && { description: description || null }),
+        ...(brandRules !== undefined && { brandRules: brandRules ? JSON.stringify(brandRules) : null }),
+        ...(templateUsed !== undefined && { templateUsed }),
+        ...(enableAnalytics !== undefined && { enableAnalytics }),
+        ...(enableLeaderboard !== undefined && { enableLeaderboard }),
+        ...(enableTeamChat !== undefined && { enableTeamChat }),
+      },
+    });
+
+    const brandRulesParsed = settings.brandRules ? JSON.parse(settings.brandRules) : null;
+
+    return res.json({
+      id: settings.id,
+      workspaceId: settings.workspaceId,
+      name: settings.name,
+      description: settings.description,
+      brandRules: brandRulesParsed,
+      templateUsed: settings.templateUsed,
+      maxMembers: settings.maxMembers,
+      enableAnalytics: settings.enableAnalytics,
+      enableLeaderboard: settings.enableLeaderboard,
+      enableTeamChat: settings.enableTeamChat,
+      commissionOverride: settings.commissionOverride?.toString() || null,
+      createdAt: settings.createdAt,
+      updatedAt: settings.updatedAt,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error updating workspace settings:', error);
+    return res.status(500).json({ message: 'Failed to update workspace settings' });
+  }
+};
+
+export const applyWorkspaceTemplate = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    const { template } = req.body;
+
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
+    if (!template || typeof template !== 'string') return res.status(400).json({ message: 'Template name is required' });
+
+    // Import the service and apply template
+    const { applyTemplate } = await import('../services/workspacePermissionService');
+    await applyTemplate(workspaceId, template);
+
+    // Update the WorkspaceSettings.templateUsed
+    const settings = await prisma.workspaceSettings.upsert({
+      where: { workspaceId },
+      create: {
+        workspaceId,
+        templateUsed: template,
+        name: null,
+        description: null,
+        brandRules: null,
+        maxMembers: 5,
+        enableAnalytics: true,
+        enableLeaderboard: true,
+        enableTeamChat: true,
+        commissionOverride: null,
+      },
+      update: { templateUsed: template },
+    });
+
+    return res.json({ message: 'Template applied successfully', templateUsed: settings.templateUsed });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error applying workspace template:', error);
+    return res.status(500).json({ message: 'Failed to apply template' });
+  }
+};
+
+export const getWorkspacePermissions = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
+
+    const { getPermissionsForRole } = await import('../services/workspacePermissionService');
+
+    const roles = ['ADMIN', 'MANAGER', 'STAFF', 'VIEWER'];
+    const result: Record<string, string[]> = {};
+
+    for (const role of roles) {
+      const perms = await getPermissionsForRole(workspaceId, role as any);
+      result[role] = perms;
+    }
+
+    return res.json({ roles: result });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error fetching workspace permissions:', error);
+    return res.status(500).json({ message: 'Failed to fetch workspace permissions' });
+  }
+};
+
+export const updateWorkspacePermissions = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId, role } = req.params;
+    const { permissions } = req.body;
+
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
+    if (!role || typeof role !== 'string') return res.status(400).json({ message: 'Role is required' });
+    if (!Array.isArray(permissions)) return res.status(400).json({ message: 'Permissions must be an array' });
+
+    const { setPermissionsForRole } = await import('../services/workspacePermissionService');
+    await setPermissionsForRole(workspaceId, role as any, permissions);
+
+    return res.json({ message: `Permissions updated for role ${role}`, role, permissions });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error updating workspace permissions:', error);
+    return res.status(500).json({ message: 'Failed to update permissions' });
+  }
+};
+
+export const getWorkspaceCostCalculator = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { id: workspaceId },
+      include: { members: true },
+    });
+
+    if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
+
+    const settings = await prisma.workspaceSettings.findUnique({
+      where: { workspaceId },
+    });
+
+    const maxMembers = settings?.maxMembers || 5;
+    const currentMemberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length + 1; // +1 for owner
+    const additionalSeats = Math.max(0, currentMemberCount - maxMembers);
+    const additionalSeatPrice = 20;
+    const baseTeamsFee = 79;
+
+    const totalMonthlyCost = baseTeamsFee + additionalSeats * additionalSeatPrice;
+
+    return res.json({
+      baseTeamsFee,
+      currentMemberCount,
+      maxMembers,
+      additionalSeats,
+      additionalSeatPrice,
+      totalMonthlyCost,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error calculating workspace cost:', error);
+    return res.status(500).json({ message: 'Failed to calculate cost' });
+  }
+};
+
+export const deleteWorkspace = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    const organizerId = req.user?.organizerProfile?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { id: workspaceId },
+      select: { ownerId: true },
+    });
+
+    if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
+    if (workspace.ownerId !== organizerId) return res.status(403).json({ message: 'Only workspace owner can delete the workspace' });
+
+    // Cascading delete is handled by Prisma schema
+    await prisma.organizerWorkspace.delete({ where: { id: workspaceId } });
+
+    return res.json({ message: 'Workspace deleted successfully' });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error deleting workspace:', error);
+    return res.status(500).json({ message: 'Failed to delete workspace' });
   }
 };
