@@ -105,7 +105,7 @@ export async function getOrganizerActivityFeed(
       },
       include: {
         conversation: {
-          select: { sale: { select: { title: true } } },
+          select: { saleId: true, sale: { select: { title: true } } },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -117,7 +117,7 @@ export async function getOrganizerActivityFeed(
         id: `msg-${msg.id}`,
         type: 'message' as const,
         saleName: msg.conversation.sale?.title || 'Unknown Sale',
-        saleId: msg.conversation.sale?.id || '',
+        saleId: msg.conversation.saleId || '',
         message: 'New message',
         timestamp: msg.createdAt.toISOString(),
       }))
@@ -155,7 +155,7 @@ export async function getOrganizerActivityFeed(
         status: { in: ['PENDING', 'CONFIRMED'] },
       },
       include: {
-        item: { select: { sale: { select: { title: true } } } },
+        item: { select: { saleId: true, sale: { select: { title: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       take: 5,
@@ -166,7 +166,7 @@ export async function getOrganizerActivityFeed(
         id: `hold-${hold.id}`,
         type: 'hold' as const,
         saleName: hold.item.sale?.title || 'Unknown Sale',
-        saleId: hold.item.sale?.id || '',
+        saleId: hold.item.saleId || '',
         message: `Item held — expires in ${Math.ceil((hold.expiresAt.getTime() - Date.now()) / 60 / 60 / 1000)}h`,
         timestamp: hold.createdAt.toISOString(),
       }))
