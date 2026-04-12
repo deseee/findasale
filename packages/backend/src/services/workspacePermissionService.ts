@@ -162,10 +162,10 @@ export const applyTemplate = async (
     // Delete existing custom permissions for this workspace
     await resetToDefaults(workspaceId);
 
-    // Apply template permissions as custom overrides for the STAFF role
+    // Apply template permissions as custom overrides for the MEMBER role
     // (templates define what non-owner roles can do)
     if (templatePermActions.length > 0) {
-      await setPermissionsForRole(workspaceId, 'STAFF' as WorkspaceRole, templatePermActions);
+      await setPermissionsForRole(workspaceId, 'MEMBER' as WorkspaceRole, templatePermActions);
     }
   } catch (error) {
     console.error(

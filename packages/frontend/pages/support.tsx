@@ -209,7 +209,7 @@ const FAQ_DATA = [
     category: 'Teams & Permissions',
     question: 'How do I add team members to my sale?',
     answer:
-      'On a TEAMS plan, go to Settings → Team and invite members by email. You can assign roles: Admin (full access), Manager (add/edit items, manage holds), or Staff (view only). Team members log in with their own accounts — no shared passwords needed.',
+      'On a TEAMS plan, go to Team Members and invite by email. You can assign roles: Admin (manage team & settings), Manager (assign tasks, approve work), Member (view inventory, process sales), or Viewer (read-only for accountants, executors, or family). Team members log in with their own accounts — no shared passwords needed.',
   },
   {
     id: 'teams-2',

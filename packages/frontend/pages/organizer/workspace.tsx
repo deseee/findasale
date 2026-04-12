@@ -61,6 +61,9 @@ const PERMISSION_CATEGORIES = [
 const PERMISSION_DISPLAY_NAMES: Record<string, string> = {
   view_ai_suggestions: 'View Suggestions',
   approve_ai_tags: 'Approve Tags',
+  view_staff: 'View Members',
+  invite_staff: 'Invite Members',
+  edit_staff_roles: 'Edit Member Roles',
 };
 
 // Template definitions
@@ -87,7 +90,7 @@ const TEMPLATES = [
   },
 ];
 
-const WORKSPACE_ROLES = ['ADMIN', 'MANAGER', 'STAFF', 'VIEWER'];
+const WORKSPACE_ROLES = ['ADMIN', 'MANAGER', 'MEMBER', 'VIEWER'];
 
 export default function WorkspaceSettingsPage() {
   const router = useRouter();

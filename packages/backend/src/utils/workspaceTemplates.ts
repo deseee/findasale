@@ -41,7 +41,7 @@ export const WORKSPACE_TEMPLATES: Record<string, WorkspaceTemplate> = {
     isSystemDefault: true,
     roles: {
       OWNER: Object.values(WORKSPACE_PERMISSIONS),
-      STAFF: [
+      MEMBER: [
         WORKSPACE_PERMISSIONS.VIEW_INVENTORY,
         WORKSPACE_PERMISSIONS.ADD_ITEMS,
         WORKSPACE_PERMISSIONS.VIEW_PRICING,
@@ -53,7 +53,7 @@ export const WORKSPACE_TEMPLATES: Record<string, WorkspaceTemplate> = {
 
   FIVE_PERSON: {
     name: '5-Person Team',
-    description: 'Full team with managers and staff',
+    description: 'Full team with managers and members',
     isSystemDefault: true,
     roles: {
       OWNER: Object.values(WORKSPACE_PERMISSIONS),
@@ -72,7 +72,7 @@ export const WORKSPACE_TEMPLATES: Record<string, WorkspaceTemplate> = {
         WORKSPACE_PERMISSIONS.SEND_TEAM_CHAT,
         WORKSPACE_PERMISSIONS.CREATE_TASKS,
       ],
-      STAFF: [
+      MEMBER: [
         WORKSPACE_PERMISSIONS.VIEW_INVENTORY,
         WORKSPACE_PERMISSIONS.ADD_ITEMS,
         WORKSPACE_PERMISSIONS.VIEW_PRICING,

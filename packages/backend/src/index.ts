@@ -132,7 +132,7 @@ import achievementRoutes from './routes/achievements';        // Features #58-59
 import fraudRoutes from './routes/fraud';                     // Feature #17: Bid Bot Detector
 import trailRoutes from './routes/trails';                    // Feature #48: Treasure Trail Route Builder
 import workspaceRoutes from './routes/workspace';              // Feature #13: TEAMS Multi-User Workspace
-import staffRoutes from './routes/staff';                        // Team Collaboration: Staff Management
+import staffRoutes from './routes/staff';                        // Team Collaboration: Member Management
 import encyclopediaRoutes from './routes/encyclopedia';        // Feature #52: Estate Sale Encyclopedia
 import appraisalRoutes from './routes/appraisals';            // Feature #54: Crowdsourced Appraisal API
 // REMOVED S437: Typology deprecated — auto-tagging + tags replaced it

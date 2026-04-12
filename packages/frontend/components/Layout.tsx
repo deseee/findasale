@@ -325,9 +325,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <DollarSign size={16} className="text-amber-500" />
               <span>Earnings</span>
             </Link>
-            <Link href="/organizer/staff" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+            <Link href="/organizer/members" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <UserPlus size={16} className="text-amber-500" />
-              <span>Staff Accounts</span>
+              <span>Team Members</span>
             </Link>
             <Link href="/organizer/payouts" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Stripe payout schedule and on-demand transfers">
               <Wallet size={16} className="text-amber-500" />
@@ -416,7 +416,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <span>Webhooks</span>
                 </Link>
                 <SectionHeader icon={Users} label="Workspace" />
-                <Link href="/organizer/workspace" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Team and staff management — TEAMS">
+                <Link href="/organizer/workspace" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Team and member management — TEAMS">
                   <Users size={16} className="text-gray-500" />
                   <span>Workspace</span>
                 </Link>
@@ -1119,8 +1119,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/organizer/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Calendar size={14} className="inline mr-2 text-gray-400" /> Calendar
                         </Link>
-                        <Link href="/organizer/staff" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <UserPlus size={14} className="inline mr-2 text-gray-400" /> Staff Accounts
+                        <Link href="/organizer/members" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <UserPlus size={14} className="inline mr-2 text-gray-400" /> Team Members
                         </Link>
                         <Link href="/organizer/webhooks" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Webhook size={14} className="inline mr-2 text-gray-500" /> Webhooks

@@ -402,7 +402,7 @@ export default function SubscriptionPage() {
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">5 team members included</p>
-                      <p className="text-sm text-teal-700 dark:text-teal-300">Add staff, set custom roles & permissions. Add more at $20/mo each.</p>
+                      <p className="text-sm text-teal-700 dark:text-teal-300">Add members, set custom roles & permissions. Add more at $20/mo each.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Unlimited items & photos</p>
@@ -423,7 +423,7 @@ export default function SubscriptionPage() {
                   </div>
 
                   <p className="text-sm text-teal-700 dark:text-teal-300 mb-6">
-                    TEAMS is designed for organizers running flea markets, auction houses, or multi-location operations with staff.
+                    TEAMS is designed for organizers running flea markets, auction houses, or multi-location operations with team members.
                   </p>
 
                   <Link href="/organizer/pricing" className="inline-block bg-teal-600 dark:bg-teal-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-teal-700 dark:hover:bg-teal-600 transition">
