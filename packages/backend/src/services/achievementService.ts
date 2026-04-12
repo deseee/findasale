@@ -292,9 +292,9 @@ export const getUserAchievements = async (userId: string) => {
     return await Promise.all(allAchievements.map(async (ach: any) => {
       const userAch = ach.userAchievements.length > 0 ? ach.userAchievements[0] : null;
 
-      // For organizer achievements, evaluate against actual data
+      // For organizer and shopper achievements, evaluate against actual data
       let progress = userAch?.progress ?? 0;
-      if (ach.category === 'ORGANIZER') {
+      if (ach.category === 'ORGANIZER' || ach.category === 'SHOPPER') {
         const actualProgress = await evaluateAchievementProgress(userId, ach.key);
         // Use the actual data if it's higher than recorded progress
         progress = Math.max(progress, actualProgress);
