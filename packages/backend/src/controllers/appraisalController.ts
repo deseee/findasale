@@ -10,11 +10,17 @@ import {
   getOpenRequests,
   voteOnResponse,
 } from '../services/appraisalService';
+import { spendXp, XP_SINKS } from '../services/xpService';
+import { prisma } from '../lib/prisma';
 
 /**
  * POST /api/appraisals
  * Create a new appraisal request
  * Auth required: USER+
+ *
+ * Pricing:
+ * - PRO/TEAMS tier: free (included in plan)
+ * - SIMPLE (FREE) tier: costs 50 XP per appraisal request
  */
 export const createAppraisalRequest = async (req: AuthRequest, res: Response) => {
   try {
@@ -35,8 +41,58 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
       });
     }
 
-    // TODO: Add PAID_ADDON check if billing is wired
-    // For now, assume all authenticated users can submit
+    // Fetch full user record to check subscription tier
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        guildXp: true,
+        organizerTier: true,
+        roleSubscriptions: {
+          where: { role: 'SHOPPER' },
+          select: { subscriptionTier: true },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const APPRAISAL_XP_COST = 50;
+    // For shoppers, check SHOPPER role subscription; for organizers/others, use organizerTier
+    const userSubscriptionTier = user.roleSubscriptions?.[0]?.subscriptionTier || user.organizerTier || 'SIMPLE';
+
+    // Check if user is on FREE tier (SIMPLE subscription)
+    if (userSubscriptionTier === 'SIMPLE') {
+      // Check XP balance
+      if (user.guildXp < APPRAISAL_XP_COST) {
+        return res.status(402).json({
+          message: `Insufficient XP. Need ${APPRAISAL_XP_COST} XP to request appraisal.`,
+          required: APPRAISAL_XP_COST,
+          current: user.guildXp,
+          cost: APPRAISAL_XP_COST,
+        });
+      }
+
+      // Spend XP
+      const spendSuccess = await spendXp(
+        req.user.id,
+        APPRAISAL_XP_COST,
+        'APPRAISAL_REQUEST',
+        {
+          description: `Appraisal request for: ${itemTitle}`,
+        }
+      );
+
+      if (!spendSuccess) {
+        return res.status(402).json({
+          message: 'Failed to deduct XP. Please check your balance and try again.',
+          cost: APPRAISAL_XP_COST,
+        });
+      }
+    }
+    // PRO and TEAMS tiers: appraisal is free
 
     // Create request
     const request = await createRequest(req.user.id, {
@@ -60,6 +116,8 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
       status: 'PENDING',
       expiresAt: request.expiresAt,
       message: 'Appraisal request created. Community members can submit estimates.',
+      xpDeducted: userSubscriptionTier === 'SIMPLE' ? APPRAISAL_XP_COST : 0,
+      tier: userSubscriptionTier,
     });
   } catch (error) {
     console.error('[Appraisal] Failed to create request:', error);

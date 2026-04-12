@@ -56,8 +56,12 @@ const LuckyRollPage = () => {
 
     const fetchEligibility = async () => {
       try {
+        const token = localStorage.getItem('token');
         const response = await fetch('/api/lucky-roll/eligibility', {
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token || ''}`,
+          },
         });
         const data = await response.json();
         setEligibility(data);
@@ -79,9 +83,13 @@ const LuckyRollPage = () => {
     setResult(null);
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/lucky-roll/roll', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token || ''}`,
+        },
       });
 
       if (!response.ok) {
@@ -93,7 +101,12 @@ const LuckyRollPage = () => {
       setResult(rollResult);
 
       // Refresh eligibility
-      const eligResponse = await fetch('/api/lucky-roll/eligibility');
+      const eligResponse = await fetch('/api/lucky-roll/eligibility', {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token || ''}`,
+        },
+      });
       const newEligibility = await eligResponse.json();
       setEligibility(newEligibility);
     } catch (err: any) {

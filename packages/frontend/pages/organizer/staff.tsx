@@ -125,7 +125,7 @@ const OrganizerStaffPage = () => {
   }
 
   // TEAMS tier: show staff management
-  const isOwner = workspace?.ownerId === user?.id;
+  const isOwner = workspace?.ownerUserId === user?.id;
   const staff = staffList || [];
 
   const handleToggleExpand = (staffId: string) => {

@@ -6,16 +6,21 @@
  * Tier gating: TEAMS minimum (PRO/SIMPLE redirected to /organizer/pricing)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useCommandCenter } from '../../hooks/useCommandCenter';
+import { useOrganizerActivityFeed } from '../../hooks/useOrganizerActivityFeed';
 import { useToast } from '../../components/ToastContext';
 import CommandCenterCard from '../../components/CommandCenterCard';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
+import OrganizerActivityFeedCard from '../../components/OrganizerActivityFeedCard';
+import QuickActionsBar from '../../components/QuickActionsBar';
+import SaleHealthMiniCard from '../../components/SaleHealthMiniCard';
+import WeatherAlertCard from '../../components/WeatherAlertCard';
 import Skeleton from '../../components/Skeleton';
 import TierGate from '../../components/TierGate';
 
@@ -29,6 +34,10 @@ const CommandCenterPage = () => {
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('active');
 
   const { data, isLoading, error, refetch } = useCommandCenter(selectedStatus);
+
+  // Get sale IDs for activity feed query
+  const saleIds = useMemo(() => (data?.sales || []).map((s) => s.id), [data?.sales]);
+  const { data: activityData, isLoading: activityLoading } = useOrganizerActivityFeed(saleIds.length > 0 ? saleIds : undefined);
 
   // Show loading spinner during auth check
   if (authLoading) {
@@ -78,14 +87,30 @@ const CommandCenterPage = () => {
             <Skeleton className="h-8 w-64 mb-2" />
             <Skeleton className="h-4 w-80" />
           </div>
+          {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32" />)}
           </div>
-          <div className="flex gap-4 mb-8">
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-10 w-24" />)}
+          {/* Activity Feed & Weather */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div className="lg:col-span-2">
+              <Skeleton className="h-64" />
+            </div>
+            <div>
+              <Skeleton className="h-64" />
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-64" />)}
+          {/* Quick Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20" />)}
+          </div>
+          {/* Sale Health Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40" />)}
+          </div>
+          {/* Sale Cards */}
+          <div className="space-y-8">
+            {[1, 2].map((i) => <Skeleton key={i} className="h-64" />)}
           </div>
         </div>
       </div>
@@ -144,6 +169,37 @@ const CommandCenterPage = () => {
                 <p className="text-xs text-warm-500 dark:text-gray-400 mt-2">Across all sales</p>
               </div>
             </div>
+          )}
+
+          {/* Live Activity Feed & Quick Actions Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            {/* Activity Feed (spans 2 cols on lg) */}
+            <div className="lg:col-span-2">
+              <OrganizerActivityFeedCard
+                activities={activityData?.activities || []}
+                isLoading={activityLoading}
+              />
+            </div>
+
+            {/* Weather Alert Card (spans 1 col on lg) */}
+            <div>
+              <WeatherAlertCard city="Grand Rapids" />
+            </div>
+          </div>
+
+          {/* Quick Actions Bar */}
+          <QuickActionsBar />
+
+          {/* Sale Health Overview - Show mini cards for active sales */}
+          {selectedStatus === 'active' && sales.length > 0 && (
+            <>
+              <h3 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Active Sale Health</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                {sales.map((sale) => (
+                  <SaleHealthMiniCard key={sale.id} sale={sale} />
+                ))}
+              </div>
+            </>
           )}
 
           <div className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700">
