@@ -177,7 +177,7 @@ const SaleDetailPage = () => {
   // Award 10 XP for visiting a sale (once per sale per day, auth required)
   useEffect(() => {
     if (!id || !user) return;
-    api.post(`/api/sales/${id}/visit`).catch(() => { /* fire-and-forget */ });
+    api.post(`/sales/${id}/visit`).catch(() => { /* fire-and-forget */ });
   }, [id, user?.id]);
 
   // Feature #51: Record VIEW ripple for analytics
