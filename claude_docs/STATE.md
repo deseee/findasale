@@ -7,6 +7,48 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S443 COMPLETE (2026-04-11):** 9 live-site bug fixes from Patrick's walkthrough + command center upgrade + appraisal gating + UX spec.
+
+**S443 What shipped:**
+- **Staff page crash (P0):** Fixed backend response shape mismatches (wrapped objects vs arrays) + owner ID check (organizer ID vs user ID). 3 files.
+- **Reputation scores 0 (P0):** Root cause — `calculateOrganizerReputationScore()` queried PUBLISHED sales instead of ENDED. 1 file.
+- **Bounties submit match:** Added full submission modal with sale/item picker for organizers. Auth check uses roles array, not single role string. 1 file.
+- **Achievements organizer data:** Added `evaluateAchievementProgress()` that queries actual DB data (item counts, sale counts, purchases) instead of relying on pre-recorded UserAchievement records. 1 file.
+- **Lucky Roll no functionality:** Missing Bearer token auth headers on all 3 API fetch calls — backend returned 401 HTML which crashed JSON parsing, hiding the interactive UI. 1 file.
+- **Workspace wrong text:** Removed AI Suggestions/AI Tags from permissions, replaced Arrival Time with Customer Service Standards, added "View Public Workspace" link. 1 file.
+- **Workspace public page:** Enhanced with description section + past sales history. Backend now returns ENDED/COMPLETED sales. 2 files.
+- **Appraisal gating:** SIMPLE tier costs 50 XP (confirmation modal with balance), PRO/TEAMS free. Backend deducts atomically. 2 files.
+- **Command Center upgrade:** Live activity feed (6 data sources, 30s auto-refresh), sale health mini-cards with scores, weather alert card, quick actions bar. 10 new files + 1 modified.
+- **Price Research Card UX spec:** Full redesign spec at `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md` — ready for dev in follow-up session.
+
+**S443 Files changed (22):**
+- `packages/backend/src/controllers/staffController.ts` — response shape fix
+- `packages/backend/src/services/staffService.ts` — response shape fix
+- `packages/frontend/pages/organizer/staff.tsx` — owner ID check fix
+- `packages/backend/src/services/reputationService.ts` — PUBLISHED → ENDED
+- `packages/frontend/pages/shopper/bounties.tsx` — submission modal + auth fix
+- `packages/backend/src/services/achievementService.ts` — evaluateAchievementProgress()
+- `packages/frontend/pages/shopper/lucky-roll.tsx` — auth headers on 3 fetches
+- `packages/frontend/pages/organizer/workspace.tsx` — AI text removed, customer service, public link
+- `packages/frontend/pages/workspace/[slug].tsx` — description + past sales
+- `packages/backend/src/controllers/workspaceController.ts` — enhanced public workspace response
+- `packages/backend/src/controllers/appraisalController.ts` — tier/XP gating
+- `packages/frontend/components/PriceResearchPanel.tsx` — confirmation modal
+- `packages/frontend/hooks/useOrganizerActivityFeed.ts` — NEW
+- `packages/frontend/components/OrganizerActivityFeedCard.tsx` — NEW
+- `packages/frontend/components/QuickActionsBar.tsx` — NEW
+- `packages/frontend/components/SaleHealthMiniCard.tsx` — NEW
+- `packages/frontend/components/WeatherAlertCard.tsx` — NEW
+- `packages/backend/src/services/organizerActivityFeedService.ts` — NEW
+- `packages/backend/src/controllers/organizerActivityFeedController.ts` — NEW
+- `packages/backend/src/types/activityFeed.ts` — NEW
+- `packages/backend/src/routes/commandCenter.ts` — activity feed endpoint
+- `packages/frontend/pages/organizer/command-center.tsx` — integrated all new components
+
+**S443 No schema changes.** No migrations needed.
+
+---
+
 **S442 COMPLETE (2026-04-11):** Team Collaboration Phase 2 schema fix + test data seeding. Fixed 18 TS errors in workspaceController.ts by adding 5 missing fields to WorkspaceSettings model. Seeded full team test data for user1 (Alice) and user3 (Carol).
 
 **S442 What shipped:**
