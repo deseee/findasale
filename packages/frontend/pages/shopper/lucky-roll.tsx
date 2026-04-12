@@ -57,17 +57,26 @@ const LuckyRollPage = () => {
     const fetchEligibility = async () => {
       try {
         const token = localStorage.getItem('token');
+        if (!token) {
+          setError('Authentication required. Please log in.');
+          setIsLoading2(false);
+          return;
+        }
         const response = await fetch('/api/lucky-roll/eligibility', {
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token || ''}`,
+            Authorization: `Bearer ${token}`,
           },
         });
+        if (!response.ok) {
+          throw new Error('Failed to fetch eligibility');
+        }
         const data = await response.json();
         setEligibility(data);
         setIsLoading2(false);
       } catch (err) {
         console.error('Failed to fetch eligibility:', err);
+        setError('Failed to load eligibility. Please refresh the page.');
         setIsLoading2(false);
       }
     };
@@ -84,11 +93,14 @@ const LuckyRollPage = () => {
 
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
       const response = await fetch('/api/lucky-roll/roll', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token || ''}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -104,9 +116,12 @@ const LuckyRollPage = () => {
       const eligResponse = await fetch('/api/lucky-roll/eligibility', {
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token || ''}`,
+          Authorization: `Bearer ${token}`,
         },
       });
+      if (!eligResponse.ok) {
+        throw new Error('Failed to refresh eligibility');
+      }
       const newEligibility = await eligResponse.json();
       setEligibility(newEligibility);
     } catch (err: any) {

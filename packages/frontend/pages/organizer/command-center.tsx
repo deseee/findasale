@@ -18,7 +18,6 @@ import { useToast } from '../../components/ToastContext';
 import CommandCenterCard from '../../components/CommandCenterCard';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
 import OrganizerActivityFeedCard from '../../components/OrganizerActivityFeedCard';
-import QuickActionsBar from '../../components/QuickActionsBar';
 import SaleHealthMiniCard from '../../components/SaleHealthMiniCard';
 import WeatherAlertCard from '../../components/WeatherAlertCard';
 import Skeleton from '../../components/Skeleton';
@@ -171,7 +170,7 @@ const CommandCenterPage = () => {
             </div>
           )}
 
-          {/* Live Activity Feed & Quick Actions Row */}
+          {/* Live Activity Feed & Weather Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
             {/* Activity Feed (spans 2 cols on lg) */}
             <div className="lg:col-span-2">
@@ -186,9 +185,6 @@ const CommandCenterPage = () => {
               <WeatherAlertCard city="Grand Rapids" />
             </div>
           </div>
-
-          {/* Quick Actions Bar */}
-          <QuickActionsBar />
 
           {/* Sale Health Overview - Show mini cards for active sales */}
           {selectedStatus === 'active' && sales.length > 0 && (

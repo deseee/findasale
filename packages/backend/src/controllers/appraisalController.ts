@@ -59,39 +59,32 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
     }
 
     const APPRAISAL_XP_COST = 50;
-    // For shoppers, check SHOPPER role subscription; default to SIMPLE if no subscription found
-    const userSubscriptionTier = user.roleSubscriptions?.[0]?.subscriptionTier || 'SIMPLE';
 
-    // Check if user is on FREE tier (SIMPLE subscription)
-    if (userSubscriptionTier === 'SIMPLE') {
-      // Check XP balance
-      if (user.guildXp < APPRAISAL_XP_COST) {
-        return res.status(402).json({
-          message: `Insufficient XP. Need ${APPRAISAL_XP_COST} XP to request appraisal.`,
-          required: APPRAISAL_XP_COST,
-          current: user.guildXp,
-          cost: APPRAISAL_XP_COST,
-        });
-      }
-
-      // Spend XP
-      const spendSuccess = await spendXp(
-        req.user.id,
-        APPRAISAL_XP_COST,
-        'APPRAISAL_REQUEST',
-        {
-          description: `Appraisal request for: ${itemTitle}`,
-        }
-      );
-
-      if (!spendSuccess) {
-        return res.status(402).json({
-          message: 'Failed to deduct XP. Please check your balance and try again.',
-          cost: APPRAISAL_XP_COST,
-        });
-      }
+    // All tiers pay XP for appraisals
+    if (user.guildXp < APPRAISAL_XP_COST) {
+      return res.status(402).json({
+        message: `Insufficient XP. Need ${APPRAISAL_XP_COST} XP to request appraisal.`,
+        required: APPRAISAL_XP_COST,
+        current: user.guildXp,
+        cost: APPRAISAL_XP_COST,
+      });
     }
-    // PRO and TEAMS tiers: appraisal is free
+
+    const spendSuccess = await spendXp(
+      req.user.id,
+      APPRAISAL_XP_COST,
+      'APPRAISAL_REQUEST',
+      {
+        description: `Appraisal request for: ${itemTitle}`,
+      }
+    );
+
+    if (!spendSuccess) {
+      return res.status(402).json({
+        message: 'Failed to deduct XP. Please check your balance and try again.',
+        cost: APPRAISAL_XP_COST,
+      });
+    }
 
     // Create request
     const request = await createRequest(req.user.id, {

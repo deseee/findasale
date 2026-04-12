@@ -112,21 +112,16 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
     const tier = user.organizerTier || 'SIMPLE';
     setUserTier(tier);
 
-    if (tier === 'SIMPLE') {
-      // Check if user has enough XP
-      const userXp = user.guildXp || 0;
-      if (userXp < APPRAISAL_XP_COST) {
-        showToast(
-          `You need ${APPRAISAL_XP_COST} XP to request an appraisal. You have ${userXp} XP.`,
-          'error'
-        );
-        return;
-      }
-      setAppraisalCost(APPRAISAL_XP_COST);
-    } else {
-      // PRO/TEAMS: free
-      setAppraisalCost(0);
+    // All tiers pay XP for appraisal
+    const userXp = user.guildXp || 0;
+    if (userXp < APPRAISAL_XP_COST) {
+      showToast(
+        `You need ${APPRAISAL_XP_COST} XP to request an appraisal. You have ${userXp} XP.`,
+        'error'
+      );
+      return;
     }
+    setAppraisalCost(APPRAISAL_XP_COST);
 
     // Show confirmation dialog
     setShowAppraisalConfirm(true);
@@ -169,6 +164,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
       <div className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
         {/* Collapsible Header — Condensed */}
         <button
+          type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="w-full flex items-center justify-between px-4 py-3 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
         >

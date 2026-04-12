@@ -55,7 +55,17 @@ const PERMISSION_CATEGORIES = [
     name: 'Communication',
     permissions: ['send_team_chat', 'broadcast_alerts', 'create_tasks'],
   },
+  {
+    name: 'AI Features',
+    permissions: ['view_ai_suggestions', 'approve_ai_tags'],
+  },
 ];
+
+// Display name mapping for permission actions
+const PERMISSION_DISPLAY_NAMES: Record<string, string> = {
+  view_ai_suggestions: 'View Suggestions',
+  approve_ai_tags: 'Approve Tags',
+};
 
 // Template definitions
 const TEMPLATES = [
@@ -120,7 +130,7 @@ export default function WorkspaceSettingsPage() {
   useEffect(() => {
     if (workspace) {
       setWorkspaceName(workspace.name || '');
-      setDescription(workspace.name || '');
+      setDescription(workspace.description || '');
     }
   }, [workspace]);
 
@@ -175,7 +185,11 @@ export default function WorkspaceSettingsPage() {
   const handleUpdateName = async () => {
     if (!workspace) return;
     try {
-      await updateSettingsMutation.mutateAsync({ workspaceId: workspace.id, enableAnalytics: true });
+      await updateSettingsMutation.mutateAsync({
+        workspaceId: workspace.id,
+        workspaceName: workspaceName,
+        enableAnalytics: true
+      });
       showToast('Workspace name updated', 'success');
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to update workspace', 'error');
@@ -217,6 +231,7 @@ export default function WorkspaceSettingsPage() {
       await updateSettingsMutation.mutateAsync({
         workspaceId: workspace.id,
         enableAnalytics: settings?.enableAnalytics ?? true,
+        brandRules: brandRules,
       });
       showToast('Brand rules saved', 'success');
     } catch (error: any) {
@@ -428,7 +443,9 @@ export default function WorkspaceSettingsPage() {
                             className="w-4 h-4 text-sage-600 rounded"
                             disabled={activeRoleTab === 'OWNER' || !isOwner}
                           />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">{action.replace(/_/g, ' ')}</span>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">
+                            {PERMISSION_DISPLAY_NAMES[action] || action.replace(/_/g, ' ')}
+                          </span>
                         </label>
                       ))}
                     </div>
