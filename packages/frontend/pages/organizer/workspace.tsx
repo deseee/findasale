@@ -97,9 +97,9 @@ export default function WorkspaceSettingsPage() {
 
   // Queries
   const { data: workspace, isLoading: workspaceLoading } = useMyWorkspace();
-  const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings(workspace?.id || null);
-  const { data: permissions, isLoading: permissionsLoading } = useWorkspacePermissions(workspace?.id || null);
-  const { data: costData, isLoading: costLoading } = useCostCalculator(workspace?.id || null);
+  const { data: settings, isLoading: settingsLoading } = useWorkspaceSettings(isTeams ? workspace?.id || null : null);
+  const { data: permissions, isLoading: permissionsLoading } = useWorkspacePermissions(isTeams ? workspace?.id || null : null);
+  const { data: costData, isLoading: costLoading } = useCostCalculator(isTeams ? workspace?.id || null : null);
 
   // Mutations
   const updateSettingsMutation = useUpdateWorkspaceSettings(workspace?.id || null);

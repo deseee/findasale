@@ -152,7 +152,7 @@ export default function ValuationWidget({
           {onPriceSelect && (
             <button
               onClick={() => onPriceSelect(valuation.priceMedian)}
-              className="inline-flex px-6 py-2.5 text-xs font-semibold bg-purple-500 dark:bg-purple-600 hover:bg-purple-600 dark:hover:bg-purple-700 text-white rounded-full transition"
+              className="px-6 py-2.5 bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 text-white text-xs font-medium rounded-full transition-colors"
             >
               Use ${formatPrice(valuation.priceMedian).slice(1)}
             </button>

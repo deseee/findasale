@@ -245,7 +245,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
               disabled={compsLoading}
               className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors disabled:opacity-50"
             >
-              💰 {compsLoading ? 'Searching...' : 'Search eBay'}
+              {compsLoading ? 'Searching...' : 'Search eBay'}
             </button>
 
             {compsData && (
@@ -332,16 +332,13 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
               type="button"
               onClick={handleRequestAppraisal}
               disabled={appraisalSubmitting || photoUrls.length === 0}
-              className="w-full px-4 py-2.5 bg-[#4A7C59] hover:bg-[#3d654a] disabled:bg-gray-400 dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-sm font-medium rounded-full transition-colors duration-200 flex items-center justify-center gap-2"
+              className="px-6 py-2.5 bg-[#4A7C59] hover:bg-[#3d654a] disabled:bg-gray-400 dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-medium rounded-full transition-colors"
             >
-              <span>🤝</span>
-              <span>
-                {appraisalSubmitting
-                  ? 'Submitting...'
-                  : photoUrls.length === 0
-                  ? 'Add Photos to Request Appraisal'
-                  : 'Request Appraisal'}
-              </span>
+              {appraisalSubmitting
+                ? 'Submitting...'
+                : photoUrls.length === 0
+                ? 'Add Photos'
+                : 'Request Appraisal'}
             </button>
           </div>
         </div>
