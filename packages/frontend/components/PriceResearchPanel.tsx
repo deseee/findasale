@@ -243,9 +243,9 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
               type="button"
               onClick={handleGetPriceComps}
               disabled={compsLoading}
-              className="px-3 py-1.5 border border-blue-400 dark:border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors disabled:opacity-50"
             >
-              {compsLoading ? 'Searching...' : 'Search eBay'}
+              💰 {compsLoading ? 'Searching...' : 'Search eBay'}
             </button>
 
             {compsData && (
@@ -269,7 +269,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                     <p className="text-warm-700 dark:text-warm-300">
                       <span className="font-medium">Range:</span> ${compsData.min.toFixed(2)}–${compsData.max.toFixed(2)} | <span className="font-medium">Median:</span> ${compsData.median.toFixed(2)}
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <button
                         type="button"
                         onClick={() => {
@@ -278,7 +278,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                           }
                           showToast(`Price set to $${compsData.median.toFixed(2)}`, 'success');
                         }}
-                        className="flex-1 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors"
+                        className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors"
                       >
                         Use ${compsData.median.toFixed(2)}
                       </button>
@@ -286,7 +286,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                         href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(itemTitle)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 px-3 py-1.5 border border-gray-400 dark:border-gray-500 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium rounded-lg transition-colors text-center"
+                        className="px-6 py-2.5 border border-gray-400 dark:border-gray-500 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium rounded-full transition-colors text-center"
                       >
                         eBay ↗
                       </a>
@@ -301,6 +301,9 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
           <div className="py-3 border-t border-warm-100 dark:border-gray-800">
             <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
               📊 Sales Comps (PRO Feature)
+            </p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-3">
+              Compare against actual sales from FindA.Sale's network.
             </p>
             <ValuationWidget
               itemId={itemId}
