@@ -42,7 +42,7 @@ export default function ValuationWidget({
         </p>
         <a
           href="/pricing"
-          className="inline-flex items-center px-3 py-1.5 border border-amber-500 text-amber-600 dark:text-amber-400 dark:border-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-xs font-medium rounded-lg transition-colors"
+          className="inline-flex items-center px-4 py-1.5 border border-amber-500 text-amber-600 dark:text-amber-400 dark:border-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-xs font-medium rounded-full transition-colors"
         >
           View Plans →
         </a>
@@ -86,7 +86,7 @@ export default function ValuationWidget({
             loadValuation();
           }}
           disabled={loading}
-          className="px-3 py-1.5 border border-[#4A7C59] dark:border-[#4A7C59] text-[#4A7C59] dark:text-[#4A7C59] hover:bg-amber-50 dark:hover:bg-amber-900/20 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+          className="px-4 py-1.5 border border-[#4A7C59] dark:border-[#4A7C59] text-[#4A7C59] dark:text-[#4A7C59] hover:bg-amber-50 dark:hover:bg-amber-900/20 text-xs font-medium rounded-full transition-colors disabled:opacity-50"
         >
           {loading ? 'Loading...' : 'Load Comparable Sales'}
         </button>
@@ -152,7 +152,7 @@ export default function ValuationWidget({
           {onPriceSelect && (
             <button
               onClick={() => onPriceSelect(valuation.priceMedian)}
-              className="w-full px-3 py-2 text-xs font-semibold bg-[#4A7C59] dark:bg-[#4A7C59] hover:bg-[#3d654a] dark:hover:bg-[#3d654a] text-white rounded-lg transition"
+              className="w-full px-3 py-2 text-xs font-semibold bg-[#4A7C59] dark:bg-[#4A7C59] hover:bg-[#3d654a] dark:hover:bg-[#3d654a] text-white rounded-full transition"
             >
               Use ${formatPrice(valuation.priceMedian).slice(1)}
             </button>

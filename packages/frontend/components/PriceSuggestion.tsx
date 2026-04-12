@@ -82,7 +82,7 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
         type="button"
         onClick={handleSuggestPrice}
         disabled={!isEnabled || loading}
-        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition ${
+        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full font-medium transition ${
           isEnabled && !loading
             ? 'bg-[#4A7C59] hover:bg-[#3d654a] text-white cursor-pointer dark:bg-[#4A7C59] dark:hover:bg-[#3d654a]'
             : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'
@@ -125,7 +125,7 @@ const PriceSuggestion: React.FC<PriceSuggestionProps> = ({
           <button
             type="button"
             onClick={handleApplyPrice}
-            className="w-full bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white font-medium py-2.5 px-4 rounded-lg transition text-sm"
+            className="w-full bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white font-medium py-2.5 px-4 rounded-full transition text-sm"
           >
             Use ${suggestion.suggested.toFixed(2)}
           </button>

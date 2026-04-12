@@ -382,6 +382,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         createdAt: user.createdAt.toISOString(),
         huntPassActive: user.huntPassActive,
         huntPassExpiry: user.huntPassExpiry,
+        guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -657,6 +658,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
         createdAt: updatedUser.createdAt.toISOString(),
         huntPassActive: updatedUser.huntPassActive,
         huntPassExpiry: updatedUser.huntPassExpiry,
+        guildXp: updatedUser.guildXp || 0, // Phase 2a: Explorer's Guild XP
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
