@@ -72,7 +72,18 @@ const LuckyRollPage = () => {
   }, [user]);
 
   const handleRoll = async () => {
-    if (!user || !eligibility || !eligibility.canRoll || !eligibility.canAfford) return;
+    if (!user || !eligibility) {
+      setError('Session error. Please refresh and try again.');
+      return;
+    }
+    if (!eligibility.canRoll) {
+      setError('You are not eligible to roll at this time.');
+      return;
+    }
+    if (!eligibility.canAfford) {
+      setError('You do not have enough XP to roll.');
+      return;
+    }
 
     setIsRolling(true);
     setShowAnimation(true);
@@ -190,7 +201,7 @@ const LuckyRollPage = () => {
                 onClick={handleRoll}
                 disabled={isRolling || !eligibility.canRoll || !eligibility.canAfford}
                 className={`w-full py-3 px-4 font-bold rounded-lg transition-all mb-2 ${
-                  !eligibility.canRoll || !eligibility.canAfford
+                  isRolling || !eligibility.canRoll || !eligibility.canAfford
                     ? 'bg-gray-400 dark:bg-gray-600 text-gray-200 dark:text-gray-300 cursor-not-allowed'
                     : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white'
                 }`}
@@ -211,13 +222,22 @@ const LuckyRollPage = () => {
                     You need 100 XP to roll. You have {eligibility.userXpBalance}.
                   </p>
                 </div>
-              ) : (
+              ) : eligibility.rollsRemainingThisWeek === 0 ? (
                 <div className="p-3 bg-warm-100 dark:bg-gray-700 rounded-lg text-center">
                   <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
                     Weekly cap reached
                   </p>
                   <p className="text-xs text-warm-600 dark:text-warm-400">
                     Next roll available {nextRollDate}
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg text-center">
+                  <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-200 mb-1">
+                    Account requirement
+                  </p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                    Your account must be at least 30 days old to roll.
                   </p>
                 </div>
               )}

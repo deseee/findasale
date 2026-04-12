@@ -140,13 +140,13 @@ export function useUpdatePermissions(workspaceId: string | null) {
   });
 }
 
-// ─── GET /api/workspaces/:workspaceId/cost-calculator ────────────────────────
+// ─── GET /api/workspace/:workspaceId/cost-calculator ────────────────────────
 export function useCostCalculator(workspaceId: string | null) {
   return useQuery<CostCalculator>({
     queryKey: ['costCalculator', workspaceId],
     queryFn: async () => {
       if (!workspaceId) throw new Error('workspaceId required');
-      const res = await api.get(`/workspaces/${workspaceId}/cost-calculator`);
+      const res = await api.get(`/workspace/${workspaceId}/cost-calculator`);
       return res.data;
     },
     enabled: !!workspaceId,

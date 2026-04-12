@@ -467,7 +467,7 @@ app.use('/api/health', healthRoutes);                                // Feature 
 app.use('/api/achievements', achievementRoutes);                     // Features #58-59: Achievement Badges & Streak Rewards
 app.use('/api/fraud', fraudRoutes);                                  // Feature #17: Bid Bot Detector
 app.use('/api/trails', trailRoutes);                                 // Feature #48: Treasure Trail Route Builder
-app.use('/api/workspaces', workspaceRoutes);                         // Feature #13: TEAMS Multi-User Workspace
+app.use('/api/workspace', workspaceRoutes);                          // Feature #13: TEAMS Multi-User Workspace
 app.use('/api/workspaces', staffRoutes);                               // Team Collaboration: Staff Management
 app.use('/api/encyclopedia', encyclopediaRoutes);                     // Feature #52: Estate Sale Encyclopedia
 app.use('/api/appraisals', appraisalRoutes);                          // Feature #54: Crowdsourced Appraisal API
