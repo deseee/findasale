@@ -288,7 +288,10 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
     const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length + 1;
     const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
 
-    const brandRules = settings.brandRules ? JSON.parse(settings.brandRules) : null;
+    let brandRules = null;
+    if (settings.brandRules) {
+      try { brandRules = JSON.parse(settings.brandRules); } catch { brandRules = settings.brandRules; }
+    }
 
     return res.json({
       id: settings.id,
