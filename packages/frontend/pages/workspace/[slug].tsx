@@ -170,7 +170,7 @@ export default function WorkspacePage() {
             <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
               <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Team Members</p>
               <p className="text-2xl font-bold text-warm-900 dark:text-warm-100 mt-1">
-                {acceptedMembers.length + 1}
+                {acceptedMembers.length}
               </p>
             </div>
 
@@ -251,6 +251,16 @@ export default function WorkspacePage() {
                   </p>
                 </div>
               )}
+
+              {/* Add Members CTA */}
+              <div className="mt-4">
+                <a
+                  href="/organizer/workspace"
+                  className="block w-full text-center bg-sage-50 dark:bg-gray-700 hover:bg-sage-100 dark:hover:bg-gray-600 border border-sage-200 dark:border-gray-600 text-sage-700 dark:text-sage-300 font-semibold py-2 px-4 rounded-lg text-sm transition"
+                >
+                  + Invite Members
+                </a>
+              </div>
 
               {/* Pending Invitations */}
               {workspace.members.some((m) => !m.acceptedAt) && (

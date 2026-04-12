@@ -50,7 +50,8 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
       owner: {
         select: {
           id: true,
-          user: { select: { id: true } }
+          businessName: true,
+          user: { select: { id: true, name: true, email: true } }
         }
       },
       members: {
@@ -218,7 +219,7 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
       },
     });
     if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
-    const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length + 1;
+    const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length;
     const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
     const ownerUserId = workspace.owner?.user?.id || null;
     const description = workspace.settings?.description || null;
@@ -285,7 +286,7 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
 
     if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
 
-    const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length + 1;
+    const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length;
     const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
 
     let brandRules = null;
@@ -473,7 +474,7 @@ export const getWorkspaceCostCalculator = async (req: AuthRequest, res: Response
     });
 
     const maxMembers = settings?.maxMembers || 5;
-    const currentMemberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length + 1; // +1 for owner
+    const currentMemberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length; // owner is in members table
     const additionalSeats = Math.max(0, currentMemberCount - maxMembers);
     const additionalSeatPrice = 20;
     const baseTeamsFee = 79;

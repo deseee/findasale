@@ -181,7 +181,7 @@ export default function WorkspaceSettingsPage() {
     );
   }
 
-  const isOwner = workspace && workspace.ownerId === user.id;
+  const isOwner = workspace && (workspace.ownerId === user.id || (workspace as any).ownerUserId === user.id);
 
   const handleUpdateName = async () => {
     if (!workspace) return;
