@@ -102,6 +102,7 @@ export default function WorkspacePage() {
   }
 
   const acceptedMembers = workspace.members.filter((m) => m.acceptedAt !== null);
+  const isOwner = workspace.owner?.user?.id === user?.id;
   const createdDate = new Date(workspace.createdAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -136,12 +137,14 @@ export default function WorkspacePage() {
                 Team collaboration hub
               </p>
             </div>
-            <a
-              href={`/organizer/workspace`}
-              className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition whitespace-nowrap"
-            >
-              Workspace Settings
-            </a>
+            {isOwner && (
+              <a
+                href={`/organizer/workspace`}
+                className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition whitespace-nowrap"
+              >
+                Workspace Settings
+              </a>
+            )}
           </div>
 
           {/* Workspace Description */}
@@ -243,18 +246,20 @@ export default function WorkspacePage() {
                 </div>
               )}
 
-              {/* Add Members CTA */}
-              <div className="mt-4">
-                <a
-                  href="/organizer/workspace"
-                  className="block w-full text-center bg-sage-50 dark:bg-gray-700 hover:bg-sage-100 dark:hover:bg-gray-600 border border-sage-200 dark:border-gray-600 text-sage-700 dark:text-sage-300 font-semibold py-2 px-4 rounded-lg text-sm transition"
-                >
-                  + Invite Members
-                </a>
-              </div>
+              {/* Add Members CTA — owner only */}
+              {isOwner && (
+                <div className="mt-4">
+                  <a
+                    href="/organizer/workspace"
+                    className="block w-full text-center bg-sage-50 dark:bg-gray-700 hover:bg-sage-100 dark:hover:bg-gray-600 border border-sage-200 dark:border-gray-600 text-sage-700 dark:text-sage-300 font-semibold py-2 px-4 rounded-lg text-sm transition"
+                  >
+                    + Invite Members
+                  </a>
+                </div>
+              )}
 
-              {/* Pending Invitations */}
-              {workspace.members.some((m) => !m.acceptedAt) && (
+              {/* Pending Invitations — owner only */}
+              {isOwner && workspace.members.some((m) => !m.acceptedAt) && (
                 <div className="mt-6 pt-6 border-t border-warm-200 dark:border-gray-700">
                   <p className="text-xs font-semibold text-warm-600 dark:text-warm-400 mb-3 uppercase">
                     Pending Invitations
@@ -325,13 +330,15 @@ export default function WorkspacePage() {
             Quick Actions
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <a
-              href="/organizer/workspace"
-              className="block bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600 border border-warm-200 dark:border-gray-600 rounded-lg p-4 transition text-center"
-            >
-              <p className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Manage Workspace</p>
-              <p className="text-xs text-warm-600 dark:text-warm-400">Settings, members, roles</p>
-            </a>
+            {isOwner && (
+              <a
+                href="/organizer/workspace"
+                className="block bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600 border border-warm-200 dark:border-gray-600 rounded-lg p-4 transition text-center"
+              >
+                <p className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Manage Workspace</p>
+                <p className="text-xs text-warm-600 dark:text-warm-400">Settings, members, roles</p>
+              </a>
+            )}
 
             <a
               href="/organizer/dashboard"
