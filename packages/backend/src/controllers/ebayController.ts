@@ -598,6 +598,97 @@ async function refreshEbayAccessToken(organizerId: string): Promise<string | nul
 }
 
 /**
+ * Fetch organizer's real business policies from eBay and store them
+ * Called after OAuth connect completes. Fire-and-forget on error.
+ */
+async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: string): Promise<void> {
+  try {
+    // Fetch payment policies
+    const paymentRes = await fetch('https://api.ebay.com/sell/account/v1/payment_policy', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    // Fetch fulfillment policies
+    const fulfillmentRes = await fetch('https://api.ebay.com/sell/account/v1/fulfillment_policy', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    // Fetch return policies
+    const returnRes = await fetch('https://api.ebay.com/sell/account/v1/return_policy', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    let paymentPolicyId: string | null = null;
+    let fulfillmentPolicyId: string | null = null;
+    let returnPolicyId: string | null = null;
+
+    // Extract payment policy ID (first from list)
+    if (paymentRes.ok) {
+      const paymentData = (await paymentRes.json()) as any;
+      if (paymentData.paymentPolicies && paymentData.paymentPolicies.length > 0) {
+        paymentPolicyId = paymentData.paymentPolicies[0].paymentPolicyId;
+      }
+    } else {
+      console.warn(`[eBay] Failed to fetch payment policies: ${paymentRes.status}`);
+    }
+
+    // Extract fulfillment policy ID (first from list)
+    if (fulfillmentRes.ok) {
+      const fulfillmentData = (await fulfillmentRes.json()) as any;
+      if (fulfillmentData.fulfillmentPolicies && fulfillmentData.fulfillmentPolicies.length > 0) {
+        fulfillmentPolicyId = fulfillmentData.fulfillmentPolicies[0].fulfillmentPolicyId;
+      }
+    } else {
+      console.warn(`[eBay] Failed to fetch fulfillment policies: ${fulfillmentRes.status}`);
+    }
+
+    // Extract return policy ID (first from list)
+    if (returnRes.ok) {
+      const returnData = (await returnRes.json()) as any;
+      if (returnData.returnPolicies && returnData.returnPolicies.length > 0) {
+        returnPolicyId = returnData.returnPolicies[0].returnPolicyId;
+      }
+    } else {
+      console.warn(`[eBay] Failed to fetch return policies: ${returnRes.status}`);
+    }
+
+    // Update EbayConnection with policy IDs (at least one may be null)
+    if (paymentPolicyId || fulfillmentPolicyId || returnPolicyId) {
+      await prisma.ebayConnection.update({
+        where: { organizerId },
+        data: {
+          paymentPolicyId,
+          fulfillmentPolicyId,
+          returnPolicyId,
+          policiesFetchedAt: new Date(),
+        },
+      });
+      console.log(
+        `[eBay] Stored policies for organizer ${organizerId}: payment=${paymentPolicyId}, fulfillment=${fulfillmentPolicyId}, return=${returnPolicyId}`
+      );
+    } else {
+      console.warn(`[eBay] No policies could be fetched for organizer ${organizerId}`);
+    }
+  } catch (error) {
+    console.error('[eBay] Error fetching and storing policies:', error);
+    // Don't throw — policy fetch failure should not break OAuth callback
+  }
+  }
+}
+
+/**
  * GET /api/ebay/connect
  * Redirect organizer to eBay OAuth authorization URL
  */
@@ -769,6 +860,11 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
         lastErrorMessage: null,
       },
     });
+
+    // Fire-and-forget: fetch and store organizer's business policies
+    fetchAndStoreEbayPolicies(organizer.id, accessToken).catch(err =>
+      console.error('[eBay] Failed to fetch policies after OAuth:', err)
+    );
 
     res.redirect(`/organizer/settings?ebay_connected=true`);
   } catch (error) {
@@ -1001,6 +1097,16 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Check if policies are configured
+    const conn = organizer.ebayConnection;
+    if (!conn.paymentPolicyId || !conn.fulfillmentPolicyId || !conn.returnPolicyId) {
+      return res.status(400).json({
+        error: 'POLICIES_NOT_CONFIGURED',
+        message:
+          'Please connect your eBay account again to configure business policies, or set up business policies in eBay Seller Hub first.',
+      });
+    }
+
     // Refresh token if needed
     const accessToken = await refreshEbayAccessToken(organizer.id);
     if (!accessToken) {
@@ -1133,11 +1239,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           condition: mapConditionIdToEbayCondition(conditionId),
           listingDuration: 'GTC',
           listingPolicies: {
-            // Note: These policy IDs would need to be fetched from organizer's account
-            // For MVP, using placeholder — should be configurable
-            paymentPolicyId: 'EBAY_DEFAULT',
-            fulfillmentPolicyId: 'EBAY_DEFAULT',
-            returnPolicyId: 'EBAY_DEFAULT',
+            paymentPolicyId: conn.paymentPolicyId,
+            fulfillmentPolicyId: conn.fulfillmentPolicyId,
+            returnPolicyId: conn.returnPolicyId,
           },
           referralUrl: `https://www.ebay.com/?campid=${EBAY_EPN_CAMPID}`,
         };
@@ -1167,6 +1271,12 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         const offerData = (await offerResponse.json()) as any;
         const offerId = offerData.offerId;
+
+        // Store ebayOfferId for later withdrawal if item sells
+        await prisma.item.update({
+          where: { id: item.id },
+          data: { ebayOfferId: offerId },
+        });
 
         // Step 3: Publish offer
         const publishUrl = `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`;
@@ -1291,6 +1401,89 @@ function getCategoryLabel(categoryId: string): string {
   // This would normally look up from eBay's category taxonomy
   // For now, return a generic label
   return `eBay Category ${categoryId}`;
+}
+
+/**
+ * Withdraw an eBay offer when the item sells on FindA.Sale
+ * Fire-and-forget: logs errors but does not throw
+ * Prevents double-sell risk (item stays active on eBay after FindA.Sale sale)
+ */
+export async function endEbayListingIfExists(itemId: string): Promise<void> {
+  try {
+    // Query the item for offer and listing IDs
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        ebayOfferId: true,
+        ebayListingId: true,
+        saleId: true,
+      },
+    });
+
+    if (!item) {
+      console.warn(`[eBay] Item ${itemId} not found`);
+      return;
+    }
+
+    // If no eBay offer ID, item was never pushed to eBay
+    if (!item.ebayOfferId) {
+      return;
+    }
+
+    // Get organizer's eBay connection via the sale
+    const sale = await prisma.sale.findUnique({
+      where: { id: item.saleId },
+      select: { organizerId: true },
+    });
+
+    if (!sale) {
+      console.warn(`[eBay] Sale ${item.saleId} not found for item ${itemId}`);
+      return;
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: sale.organizerId },
+      select: { ebayConnection: true },
+    });
+
+    if (!organizer?.ebayConnection) {
+      console.warn(`[eBay] No eBay connection for organizer of item ${itemId}`);
+      return;
+    }
+
+    // Refresh access token if needed
+    const accessToken = await refreshEbayAccessToken(organizer.ebayConnection.organizerId);
+    if (!accessToken) {
+      console.error(`[eBay] Could not refresh token to withdraw offer for item ${itemId}`);
+      return;
+    }
+
+    // Call eBay API to withdraw the offer
+    const withdrawUrl = `https://api.ebay.com/sell/inventory/v1/offer/${item.ebayOfferId}/withdraw`;
+    const response = await fetch(withdrawUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error(
+        `[eBay] Failed to withdraw offer ${item.ebayOfferId} for item ${itemId}: ${response.status} ${errorData}`
+      );
+      return;
+    }
+
+    console.log(
+      `[eBay] Successfully withdrew offer ${item.ebayOfferId} for item ${itemId} — item sold on FindA.Sale`
+    );
+  } catch (error) {
+    console.error(`[eBay] Error withdrawing eBay listing for item ${itemId}:`, error);
+    // Fire-and-forget: don't throw
+  }
 }
 
 /**

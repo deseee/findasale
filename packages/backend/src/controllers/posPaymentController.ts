@@ -5,6 +5,7 @@ import { getStripe } from '../utils/stripe';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpService';
+import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 
 const stripe = () => getStripe();
 
@@ -925,6 +926,11 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           where: { id: item.id },
           data: { status: 'SOLD' },
         });
+
+        // Fire-and-forget: end eBay listing if item was pushed there
+        endEbayListingIfExists(item.id).catch(err =>
+          console.error('[eBay] Failed to withdraw offer:', err)
+        );
 
         // Update ItemReservation if exists
         await prisma.itemReservation.updateMany({
