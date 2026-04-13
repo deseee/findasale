@@ -85,12 +85,24 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
   const handleComplete = async () => {
     setIsLoading(true);
     try {
-      // Step 1: Create workspace
-      const workspaceRes = await api.post('/api/workspace', {
-        name: workspaceName.trim(),
-      });
-
-      const workspaceId = workspaceRes.data.id;
+      // Step 1: Create workspace (with recovery for retry scenario)
+      let workspaceId: string;
+      try {
+        const workspaceRes = await api.post('/api/workspace', {
+          name: workspaceName.trim(),
+        });
+        workspaceId = workspaceRes.data.id;
+      } catch (createErr: any) {
+        const status = createErr.response?.status;
+        const msg = createErr.response?.data?.message || '';
+        if (status === 400 && msg.toLowerCase().includes('already exists')) {
+          // Workspace was already created (retry scenario) — fetch existing
+          const existing = await api.get('/api/workspace');
+          workspaceId = existing.data.id;
+        } else {
+          throw createErr; // surface real error
+        }
+      }
 
       // Step 2: Invite members
       for (const invitee of invitees) {
@@ -115,7 +127,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
       router.push('/organizer/workspace');
     } catch (error: any) {
       console.error('Error completing TEAMS onboarding:', error);
-      const msg = error.response?.data?.error || 'Failed to setup workspace';
+      const msg = error.response?.data?.message || error.response?.data?.error || 'Failed to setup workspace';
       showToast(msg, 'error');
     } finally {
       setIsLoading(false);
