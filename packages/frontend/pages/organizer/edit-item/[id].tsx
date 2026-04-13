@@ -65,6 +65,15 @@ const EditItemPage = () => {
   const [inlineCaptureMode, setInlineCaptureMode] = useState<'rapidfire' | 'regular'>('regular');
   const [inlineRapidItems, setInlineRapidItems] = useState<RapidItem[]>([]);
 
+  // D-XP-003: Organizer discount modal
+  const [discountModalOpen, setDiscountModalOpen] = useState(false);
+  const [pendingXpToSpend, setPendingXpToSpend] = useState<number | null>(null);
+
+  const openDiscountModal = (xpToSpend: number) => {
+    setPendingXpToSpend(xpToSpend);
+    setDiscountModalOpen(true);
+  };
+
   const handlePhotoUpload = async (files: FileList | null, mode: 'upload' | 'camera') => {
     if (!files || files.length === 0 || !id) return;
 
@@ -280,6 +289,38 @@ const EditItemPage = () => {
     },
     onError: () => {
       showToast('Failed to delete item', 'error');
+    },
+  });
+
+  // D-XP-003: Apply organizer discount
+  const applyDiscountMutation = useMutation({
+    mutationFn: async (xpToSpend: number) => {
+      return await api.post(`/items/${id}/organizer-discount`, { xpToSpend });
+    },
+    onSuccess: (data: any) => {
+      showToast('Organizer Special applied!', 'success');
+      setDiscountModalOpen(false);
+      setPendingXpToSpend(null);
+      queryClient.invalidateQueries({ queryKey: ['item', id] });
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to apply discount';
+      showToast(message, 'error');
+    },
+  });
+
+  // D-XP-003: Remove organizer discount
+  const removeDiscountMutation = useMutation({
+    mutationFn: async () => {
+      return await api.delete(`/items/${id}/organizer-discount`);
+    },
+    onSuccess: () => {
+      showToast('Discount removed (XP was permanently burned)', 'success');
+      queryClient.invalidateQueries({ queryKey: ['item', id] });
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || 'Failed to remove discount';
+      showToast(message, 'error');
     },
   });
 
@@ -659,6 +700,75 @@ const EditItemPage = () => {
               </p>
             </div>
 
+            {/* D-XP-003: Organizer Special Section */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Organizer Special</h3>
+                {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
+                  <span className="inline-block bg-amber-600 text-white text-xs font-bold px-2 py-1 rounded">
+                    ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off
+                  </span>
+                )}
+              </div>
+
+              {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-warm-600 dark:text-warm-300">
+                    This item currently has an Organizer Special discount applied for ${parseFloat(item.organizerDiscountAmount.toString()).toFixed(2)} off.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => removeDiscountMutation.mutate()}
+                    disabled={removeDiscountMutation.isPending}
+                    className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {removeDiscountMutation.isPending ? 'Removing...' : 'Remove Discount'}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-warm-600 dark:text-warm-300">
+                    Spend XP to create a shopper-facing discount on this item. No stacking with shopper coupons.
+                  </p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400">
+                    Your XP Balance: <span className="font-semibold">{user?.guildXp || 0} XP</span>
+                  </p>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
+                      Select Discount Amount
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openDiscountModal(200)}
+                        disabled={!user || (user.guildXp || 0) < 200}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        $2 off (200 XP)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDiscountModal(400)}
+                        disabled={!user || (user.guildXp || 0) < 400}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        $4 off (400 XP)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDiscountModal(500)}
+                        disabled={!user || (user.guildXp || 0) < 500}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        $5 off (500 XP)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3">
               <button
                 type="submit"
@@ -702,6 +812,45 @@ const EditItemPage = () => {
               </button>
             </div>
           </form>
+
+          {/* D-XP-003: Discount Confirmation Modal */}
+          {discountModalOpen && pendingXpToSpend && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 max-w-sm mx-4">
+                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+                  Confirm Organizer Special
+                </h2>
+                <p className="text-sm text-warm-600 dark:text-warm-300 mb-4">
+                  Spend <span className="font-semibold">{pendingXpToSpend} XP</span> to apply a ${(pendingXpToSpend / 200) * 2} discount to this item?
+                </p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mb-6">
+                  XP is permanently burned. Shoppers will see "Organizer Special" at checkout. This discount cannot stack with shopper coupons.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscountModalOpen(false);
+                      setPendingXpToSpend(null);
+                    }}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-warm-900 font-bold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      applyDiscountMutation.mutate(pendingXpToSpend);
+                    }}
+                    disabled={applyDiscountMutation.isPending}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {applyDiscountMutation.isPending ? 'Applying...' : 'Confirm'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {inlineCameraOpen ? (
             <RapidCapture
