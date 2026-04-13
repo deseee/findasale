@@ -6,6 +6,7 @@ import { Heart } from 'lucide-react';
 import { useAuth } from '@/components/AuthContext';
 import { useToast } from '@/components/ToastContext';
 import { useHaulPosts, useAddHaulReaction, useRemoveHaulReaction } from '@/hooks/useHaulPosts';
+import api from '../../lib/api';
 
 interface HaulPostWithReaction {
   id: number;
