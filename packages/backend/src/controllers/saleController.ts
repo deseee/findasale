@@ -311,7 +311,8 @@ export const getSale = async (req: Request, res: Response) => {
             id: true, title: true, description: true, price: true,
             auctionStartPrice: true, auctionReservePrice: true, currentBid: true, bidIncrement: true,
             auctionEndTime: true, auctionClosed: true, listingType: true,
-            status: true, photoUrls: true, category: true, condition: true
+            status: true, photoUrls: true, category: true, condition: true,
+            organizerDiscountAmount: true, organizerDiscountXp: true
           }
         }
       }

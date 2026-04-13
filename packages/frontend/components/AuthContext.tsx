@@ -11,6 +11,7 @@ interface User {
   roles?: string[]; // Feature #72 Phase 2: Array of roles
   points: number;
   guildXp?: number; // Phase 2a: Explorer's Guild XP
+  explorerRank?: string; // Phase 2a: Current explorer rank (INITIATE/SCOUT/RANGER/SAGE/GRANDMASTER)
   referralCode?: string;
   categoryInterests?: string[];
   streakPoints?: number;
@@ -32,6 +33,7 @@ interface AuthContextType {
   user: User | null;
   login: (token: string) => void;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
   isLoading: boolean;
 }
 
@@ -63,6 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
           points: payload.points || 0,
           guildXp: payload.guildXp || 0, // Phase 2a: Explorer's Guild XP
+          explorerRank: payload.explorerRank || 'INITIATE', // Phase 2a: Explorer rank from JWT
           referralCode: payload.referralCode || '',
           huntPassActive: payload.huntPassActive,
           huntPassExpiry: payload.huntPassExpiry,
@@ -96,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
         points: payload.points || 0,
         guildXp: payload.guildXp || 0, // Phase 2a: Explorer's Guild XP
+        explorerRank: payload.explorerRank || 'INITIATE', // Phase 2a: Explorer rank from JWT
         referralCode: payload.referralCode || '',
         huntPassActive: payload.huntPassActive,
         huntPassExpiry: payload.huntPassExpiry,
@@ -116,8 +120,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((updates: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : null);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

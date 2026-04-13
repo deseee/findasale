@@ -277,6 +277,8 @@ export const getItemById = async (req: Request, res: Response) => {
         rarity: true,
         priceBeforeMarkdown: true,
         markdownApplied: true,
+        organizerDiscountAmount: true,
+        organizerDiscountXp: true,
         createdAt: true,
         updatedAt: true,
         // embedding intentionally excluded — crashes serialization
@@ -403,6 +405,8 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         priceBeforeMarkdown: true,
         markdownApplied: true,
         draftStatus: true,
+        organizerDiscountAmount: true,
+        organizerDiscountXp: true,
         createdAt: true,
         updatedAt: true,
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response

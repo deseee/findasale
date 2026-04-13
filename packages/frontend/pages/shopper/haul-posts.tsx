@@ -80,6 +80,7 @@ function HaulPostsFeedPage() {
   };
 
   // D-XP-006: Haul Unboxing Animation handler
+  const { updateUser } = useAuth();
   const handleUnlockAnimation = async (photoId: number) => {
     if (!user) {
       router.push('/login');
@@ -90,6 +91,13 @@ function HaulPostsFeedPage() {
     try {
       const response = await api.post(`/xp/spend/haul-unboxing/${photoId}`);
       if (response.data.success) {
+        // Sync rank updates to AuthContext
+        if (response.data?.newRank) {
+          updateUser({
+            explorerRank: response.data.newRank,
+            guildXp: response.data.remainingXp,
+          });
+        }
         showToast('Animation unlocked! 🎉', 'success');
         // Trigger confetti/animation effect
         triggerConfetti();
@@ -114,6 +122,13 @@ function HaulPostsFeedPage() {
     try {
       const response = await api.post(`/xp/spend/bump-post/${photoId}`);
       if (response.data.success) {
+        // Sync rank updates to AuthContext
+        if (response.data?.newRank) {
+          updateUser({
+            explorerRank: response.data.newRank,
+            guildXp: response.data.remainingXp,
+          });
+        }
         showToast('Post bumped to top! 🚀', 'success');
         setBumpModalOpen(null);
       }

@@ -186,13 +186,13 @@ const ShopperDashboard = () => {
   // Fetch XP profile for rank progress
   const { data: xpProfile, isLoading: xpLoading } = useXpProfile(!!user?.id);
 
-  // Rank threshold configuration
+  // Rank threshold configuration — must match backend xpService.ts RANK_THRESHOLDS
   const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
-    INITIATE: 500,
-    SCOUT: 1500,
-    RANGER: 2500,
+    INITIATE: 0,
+    SCOUT: 500,
+    RANGER: 2000,
     SAGE: 5000,
-    GRANDMASTER: Infinity,
+    GRANDMASTER: 12000,
   };
 
   const getRankCopy = (rank: ExplorerRank, xp: number, nextRank: ExplorerRank | null) => {
@@ -209,7 +209,7 @@ const ShopperDashboard = () => {
         ctaHref: '/',
       },
       SCOUT: {
-        progressLabel: `${xp} / 1500 XP`,
+        progressLabel: `${xp} / 2000 XP`,
         untilNextRank: `${xpUntilNext} more XP until Ranger`,
         earnTip: 'Make a purchase (+25 XP each)',
         tipDetail: "You're unlocking more perks — keep going.",
@@ -217,7 +217,7 @@ const ShopperDashboard = () => {
         ctaHref: '/sales',
       },
       RANGER: {
-        progressLabel: `${xp} / 2500 XP`,
+        progressLabel: `${xp} / 5000 XP`,
         untilNextRank: `${xpUntilNext} more XP until Sage`,
         earnTip: 'Check in to sales daily (+2 XP each, once per sale)',
         tipDetail: "Daily visits build your streak. You're close to Sage perks.",
@@ -225,7 +225,7 @@ const ShopperDashboard = () => {
         ctaHref: '/map',
       },
       SAGE: {
-        progressLabel: `${xp} / 5000 XP`,
+        progressLabel: `${xp} / 12000 XP`,
         untilNextRank: `${xpUntilNext} more XP until Grandmaster — the ultimate explorer rank`,
         earnTip: 'Keep your streak going',
         tipDetail: 'You unlock 6h Legendary-first access at Grandmaster.',

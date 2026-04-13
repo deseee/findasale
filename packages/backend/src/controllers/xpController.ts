@@ -7,6 +7,7 @@ import {
   spendXp,
   getSpendableXp,
   XP_SINKS,
+  getRankForXp,
 } from '../services/xpService';
 import { prisma } from '../lib/prisma';
 const router = Router();
@@ -106,6 +107,12 @@ router.post(
         });
       }
 
+      // Get user's current rank before spend
+      const userBefore = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
       // Attempt to spend XP
       const spent = await spendXp(
         userId,
@@ -118,6 +125,15 @@ router.post(
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
+      // Get updated user to calculate new rank
+      const userAfter = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
+      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const rankChanged = newRank !== userBefore?.explorerRank;
+
       // Create rarity boost
       const rarityBoost = await prisma.rarityBoost.create({
         data: {
@@ -128,7 +144,12 @@ router.post(
         },
       });
 
-      return res.status(201).json(rarityBoost);
+      return res.status(201).json({
+        ...rarityBoost,
+        newRank,
+        rankChanged,
+        remainingXp: (userAfter?.guildXp || 0),
+      });
     } catch (error) {
       console.error('[xpController] POST /rarity-boost error:', error);
       return res.status(500).json({ error: 'Internal server error' });
@@ -172,6 +193,12 @@ router.post(
         });
       }
 
+      // Get user's current rank before spend
+      const userBefore = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
       // Attempt to spend XP
       const spent = await spendXp(userId, XP_SINKS.COUPON_GENERATE, 'COUPON_GENERATE', {
         description: 'Generated coupon via XP sink',
@@ -180,6 +207,15 @@ router.post(
       if (!spent) {
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
+
+      // Get updated user to calculate new rank
+      const userAfter = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
+      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const rankChanged = newRank !== userBefore?.explorerRank;
 
       // Generate coupon code
       const couponCode = `XP-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
@@ -198,7 +234,12 @@ router.post(
         },
       });
 
-      return res.status(201).json(coupon);
+      return res.status(201).json({
+        ...coupon,
+        newRank,
+        rankChanged,
+        remainingXp: (userAfter?.guildXp || 0),
+      });
     } catch (error) {
       console.error('[xpController] POST /coupon error:', error);
       return res.status(500).json({ error: 'Internal server error' });
@@ -208,8 +249,8 @@ router.post(
 
 /**
  * POST /api/xp/spend/scout-reveal/:itemId
- * Authenticated shopper endpoint: spend 5 XP to reveal earliest interested flag on an item
- * Returns: { success: true, remainingXp: number }
+ * Authenticated shopper endpoint: spend 5 XP to reveal who favorited this item
+ * Returns: { success: true, remainingXp: number, interestedUsers: [{ displayName, avatarUrl, savedAt }] }
  */
 router.post(
   '/spend/scout-reveal/:itemId',
@@ -259,6 +300,12 @@ router.post(
         });
       }
 
+      // Get user's current rank before spend
+      const userBefore = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
       // Spend 5 XP
       const spent = await spendXp(
         userId,
@@ -270,6 +317,15 @@ router.post(
       if (!spent) {
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
+
+      // Get updated user to calculate new rank
+      const userAfter = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
+      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const rankChanged = newRank !== userBefore?.explorerRank;
 
       // Record the reveal in the item (or create a temporary tracking record)
       // For MVP, we'll update any haul post linked to this item
@@ -284,12 +340,40 @@ router.post(
         },
       });
 
+      // Query all users who have favorited this item (order by createdAt to show earliest first)
+      const favorites = await prisma.favorite.findMany({
+        where: {
+          itemId: itemId,
+        },
+        select: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+              avatarUrl: true,
+            },
+          },
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 20, // Limit to 20 users to avoid exposing massive lists
+      });
+
+      const interestedUsers = favorites.map((fav: any) => ({
+        displayName: fav.user.displayName,
+        avatarUrl: fav.user.avatarUrl,
+        savedAt: fav.createdAt,
+      }));
+
       // Get remaining spendable XP
       const remainingXp = await getSpendableXp(userId);
 
       return res.status(200).json({
         success: true,
         remainingXp,
+        interestedUsers,
+        newRank,
+        rankChanged,
       });
     } catch (error) {
       console.error('[xpController] POST /scout-reveal error:', error);
@@ -356,6 +440,12 @@ router.post(
         });
       }
 
+      // Get user's current rank before spend
+      const userBefore = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
       // Spend 2 XP
       const spent = await spendXp(
         userId,
@@ -368,6 +458,15 @@ router.post(
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
+      // Get updated user to calculate new rank
+      const userAfter = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
+      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const rankChanged = newRank !== userBefore?.explorerRank;
+
       // Update haul post
       await prisma.uGCPhoto.update({
         where: { id: ugcPhotoId },
@@ -379,6 +478,9 @@ router.post(
       return res.status(200).json({
         success: true,
         animationUnlocked: true,
+        newRank,
+        rankChanged,
+        remainingXp: (userAfter?.guildXp || 0),
       });
     } catch (error) {
       console.error('[xpController] POST /haul-unboxing error:', error);
@@ -441,6 +543,12 @@ router.post(
         });
       }
 
+      // Get user's current rank before spend
+      const userBefore = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
       // Spend 10 XP
       const spent = await spendXp(
         userId,
@@ -452,6 +560,15 @@ router.post(
       if (!spent) {
         return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
+
+      // Get updated user to calculate new rank
+      const userAfter = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { guildXp: true, explorerRank: true },
+      });
+
+      const newRank = getRankForXp(userAfter?.guildXp || 0);
+      const rankChanged = newRank !== userBefore?.explorerRank;
 
       // Calculate 24 hours from now
       const bumpedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -467,6 +584,9 @@ router.post(
       return res.status(200).json({
         success: true,
         bumpedUntil: updatedPhoto.bumpedUntil?.toISOString(),
+        newRank,
+        rankChanged,
+        remainingXp: (userAfter?.guildXp || 0),
       });
     } catch (error) {
       console.error('[xpController] POST /bump-post error:', error);
