@@ -161,8 +161,6 @@ router.post('/confirm-huntpass', authenticate, async (req: AuthRequest, res: Res
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 30);
 
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
     await prisma.user.update({
       where: { id: req.user.id },
       data: {
@@ -171,7 +169,6 @@ router.post('/confirm-huntpass', authenticate, async (req: AuthRequest, res: Res
         streakPoints: { increment: 100 }, // Bonus points for upgrading
       },
     });
-    await prisma.$disconnect();
 
     res.json({
       success: true,

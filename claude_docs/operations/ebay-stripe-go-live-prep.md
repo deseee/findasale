@@ -20,10 +20,61 @@
 | Connect Express onboarding | ✅ Working | |
 | Online payments (shopper checkout) | ✅ Working | |
 | POS Terminal card payments | ✅ Working | Items NOT marking SOLD (see below) |
-| Subscriptions (PRO/TEAMS purchase) | ✅ Working | Webhook-driven |
+| Subscriptions (PRO/TEAMS purchase) | ✅ Fixed S453 | pricing.tsx was calling wrong endpoint; now uses billingController |
+| Subscription ID persistence | ✅ Fixed S453 | syncTier now saves stripeSubscriptionId on subscription.created/updated |
 | Refunds | ✅ Working | |
 | Payouts (organizer) | ✅ Working | |
+| Hunt Pass activation | ⚠️ Partial S453 | PaymentIntent (not subscription). Webhook confirmation added. No auto-renewal. |
+| Hunt Pass expiry | ✅ Fixed S453 | Daily cron added — passes deactivate when huntPassExpiry < now |
 | Stripe Connect webhook | 🔴 Not configured | Items don't mark SOLD after POS card payment (P2 deferred since S421) |
+
+### S453 Audit — Critical Findings Fixed
+| Bug | Severity | Fix |
+|-----|----------|-----|
+| `pricing.tsx` called `/stripe/checkout-session` (broken) instead of `/billing/checkout` (correct) | P0 | Fixed — subscriptions now use billingController with proper customer/subscription ID storage |
+| `stripeSubscriptionId` never saved on Organizer after subscription created | P0 | Fixed — syncTier now accepts optional subscriptionId param, billingController passes subscription.id |
+| Hunt Pass activation relied entirely on client-side callback (gameable) | P1 | Fixed — `payment_intent.succeeded` webhook now activates Hunt Pass server-side |
+| `new PrismaClient()` resource leak in `/api/streaks/confirm-huntpass` | P1 | Fixed — uses shared `prisma` instance |
+| Hunt Pass passes never auto-expired | P1 | Fixed — `huntPassExpiryCron.ts` runs daily at 03:00 UTC |
+
+### S453 Audit — Remaining Issues (Patrick decisions needed)
+| Issue | Notes |
+|-------|-------|
+| Hunt Pass is NOT a Stripe Subscription (no auto-renewal) | Decisions-log says "$4.99/mo subscription" but implementing requires schema change + new Stripe price ID. Current: manual monthly renewal via PaymentIntent. Patrick: decide if auto-renewal is needed before go-live. |
+| Two webhook endpoints with same secret | `/api/billing/webhook` handles subscription events; `/api/stripe/webhook` handles payment events. Both registered with `STRIPE_WEBHOOK_SECRET`. If BOTH are registered in Stripe, Stripe gives different signing secrets per endpoint — you'd need `STRIPE_BILLING_WEBHOOK_SECRET` separately. See Webhook Setup section below. |
+| `markHuntPassCancellation` fires on ALL organizer subscription cancellations | Calling it for every organizer cancel regardless of whether they have a Hunt Pass. Benign but messy. Not fixed this session (surgical change risk). |
+
+---
+
+## Stripe Webhook Setup — What Goes Where
+
+### Recommended Configuration (two endpoints in Stripe Dashboard)
+
+**Endpoint 1 — Subscription events (already should be configured):**
+- URL: `https://backend-production-153c9.up.railway.app/api/billing/webhook`
+- Events to subscribe: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, `invoice.payment_succeeded`
+- Secret: Copy from Stripe → paste as `STRIPE_WEBHOOK_SECRET` in Railway
+- This is the billing lifecycle handler with idempotency protection
+
+**Endpoint 2 — Payment events (also handles Connect if you don't use separate endpoint):**
+- URL: `https://backend-production-153c9.up.railway.app/api/stripe/webhook`
+- Events to subscribe: `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.dispute.created`, `checkout.session.completed`, `charge.succeeded`, `charge.failed`
+- Secret: If this is a DIFFERENT endpoint from Endpoint 1, it gets its own signing secret from Stripe — set it as `STRIPE_PAYMENT_WEBHOOK_SECRET` and update the stripeController to use that env var (currently uses `STRIPE_WEBHOOK_SECRET`)
+- **For simplicity at launch:** register only Endpoint 1 in Stripe, and add the payment events to it. The billingController handles ALL subscription events, so payment events (POS, boosts) would need to be added there OR kept separate.
+
+**Connect events (for POS card payments):**
+- Register as a separate endpoint or select "Events on Connected accounts" in Stripe Dashboard
+- URL: `https://backend-production-153c9.up.railway.app/api/stripe/webhook`
+- Events: `payment_intent.succeeded` (Connected account version)
+- Secret: Set as `STRIPE_CONNECT_WEBHOOK_SECRET` in Railway
+
+**SIMPLEST GO-LIVE SETUP (recommended):**
+1. Register ONE webhook at `/api/stripe/webhook` for ALL platform events (payment_intent.*, charge.*, checkout.session.*, customer.subscription.*)
+   - The stripeController already handles all these. Subscription handling in billingController becomes backup.
+   - Signing secret → `STRIPE_WEBHOOK_SECRET` in Railway
+2. Register ONE Connect webhook at `/api/stripe/webhook` for Connected account events
+   - Signing secret → `STRIPE_CONNECT_WEBHOOK_SECRET` in Railway
+3. Confirm billing webhook endpoint is NOT separately registered (prevents double-processing)
 
 ---
 

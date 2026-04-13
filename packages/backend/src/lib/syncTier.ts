@@ -8,7 +8,8 @@ import { prisma } from './prisma';
 export async function syncTier(
   organizerId: string,
   status: string,
-  priceId: string | null
+  priceId: string | null,
+  stripeSubscriptionId?: string | null
 ): Promise<void> {
   try {
     // Map price ID to tier
@@ -17,13 +18,22 @@ export async function syncTier(
     // Determine subscription status
     const subscriptionStatus = status === 'canceled' ? 'canceled' : status;
 
+    // Build update — include stripeSubscriptionId only when explicitly passed
+    const updateData: {
+      subscriptionTier: SubscriptionTier;
+      subscriptionStatus: string;
+      stripeSubscriptionId?: string | null;
+    } = { subscriptionTier: tier, subscriptionStatus };
+
+    if (stripeSubscriptionId !== undefined) {
+      // null clears it (on cancel), string sets it (on create/update)
+      updateData.stripeSubscriptionId = stripeSubscriptionId;
+    }
+
     // Update organizer subscription tier and status
     await prisma.organizer.update({
       where: { id: organizerId },
-      data: {
-        subscriptionTier: tier,
-        subscriptionStatus,
-      },
+      data: updateData,
     });
 
     // Increment tokenVersion to invalidate stale tier JWTs

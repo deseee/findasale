@@ -117,7 +117,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         const priceId = subscription.items.data[0]?.price.id;
         const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
         if (organizerId) {
-          await syncTier(organizerId, subscription.status, priceId);
+          await syncTier(organizerId, subscription.status, priceId, subscription.id);
         }
         break;
       }
@@ -127,7 +127,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         const priceId = subscription.items.data[0]?.price.id;
         const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
         if (organizerId) {
-          await syncTier(organizerId, subscription.status, priceId);
+          await syncTier(organizerId, subscription.status, priceId, subscription.id);
         }
         break;
       }
@@ -138,7 +138,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         if (organizerId) {
           // Feature #75: Downgrade to SIMPLE tier on lapse, but keep User roles intact
           // Do NOT remove ORGANIZER role — only downgrade subscription tier
-          await syncTier(organizerId, 'canceled', null);
+          await syncTier(organizerId, 'canceled', null, null); // null clears stripeSubscriptionId
 
           // Record tier lapse timestamp for UserRoleSubscription
           const user = await prisma.user.findFirst({
@@ -174,7 +174,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         const organizerId = await getOrganizerIdFromStripeCustomer(invoice.customer);
         if (organizerId) {
           // Feature #75: Restore tier on payment recovery
-          await syncTier(organizerId, 'active', priceId);
+          await syncTier(organizerId, 'active', priceId, subscription.id);
 
           // Clear tier lapse timestamp
           const user = await prisma.user.findFirst({
