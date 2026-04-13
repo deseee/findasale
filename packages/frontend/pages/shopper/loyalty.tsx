@@ -560,6 +560,16 @@ function LoyaltyPage() {
                 </div>
               </div>
             </div>
+
+            {/* View All Ranks Link */}
+            <div className="mt-8 pt-6 border-t border-green-200 dark:border-green-800">
+              <Link
+                href="/shopper/ranks"
+                className="inline-flex items-center gap-2 text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 font-semibold transition-colors"
+              >
+                See all rank benefits →
+              </Link>
+            </div>
           </div>
 
           {/* CTA Section */}

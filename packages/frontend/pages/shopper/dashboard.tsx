@@ -41,6 +41,9 @@ import RankProgressBar from '../../components/RankProgressBar';
 import RankBenefitsCard from '../../components/RankBenefitsCard';
 import PointsBadge from '../../components/PointsBadge';
 import MyTeamsCard from '../../components/MyTeamsCard';
+import RankHeroSection from '../../components/RankHeroSection';
+import ActionBar from '../../components/ActionBar';
+import RankLevelingHint from '../../components/RankLevelingHint';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -355,56 +358,13 @@ const ShopperDashboard = () => {
             </div>
           )}
 
-          {/* Quick Links */}
-          <div className="flex flex-wrap gap-2 mb-8">
-            <Link
-              href="/shopper/explorer-passport"
-              className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-200 dark:border-purple-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
-            >
-              <div className="text-lg mb-0.5">🗺️</div>
-              <p className="text-xs font-semibold text-purple-900 dark:text-purple-300">Explorer</p>
-            </Link>
-            <Link
-              href="/shopper/loyalty"
-              className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
-            >
-              <div className="text-lg mb-0.5">✨</div>
-              <p className="text-xs font-semibold text-amber-900 dark:text-amber-300">Loyalty</p>
-            </Link>
-            <Link
-              href="/shopper/wishlist"
-              className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
-            >
-              <div className="text-lg mb-0.5">💕</div>
-              <p className="text-xs font-semibold text-blue-900 dark:text-blue-300">Collections</p>
-            </Link>
-            <Link
-              href="/shopper/trails"
-              className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200 dark:border-green-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
-            >
-              <div className="text-lg mb-0.5">🗺️</div>
-              <p className="text-xs font-semibold text-green-900 dark:text-green-300">Trails</p>
-            </Link>
-            <Link
-              href="/shopper/history"
-              className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
-            >
-              <div className="text-lg mb-0.5">📋</div>
-              <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">My History</p>
-            </Link>
-            <Link
-              href="/shopper/history?view=gallery"
-              className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/30 border border-orange-200 dark:border-orange-700 rounded-lg p-2 hover:shadow-md transition-shadow flex flex-col items-center"
-            >
-              <div className="text-lg mb-0.5">📸</div>
-              <p className="text-xs font-semibold text-orange-900 dark:text-orange-300">My Finds</p>
-            </Link>
-          </div>
+          {/* Action Bar */}
+          <ActionBar className="mb-8" />
 
           {/* Gamification Section */}
           <div className="space-y-6 mb-8">
-            {/* Guild Onboarding Card - Show only for new/low-XP shoppers */}
-            {xpProfile && !xpLoading && !isGuildOnboardingDismissed && (xpProfile.guildXp < 50 || xpProfile.explorerRank === 'INITIATE') && (
+            {/* Guild Onboarding Card - Show only for Initiate + Scout, hide for Ranger+ */}
+            {xpProfile && !xpLoading && !isGuildOnboardingDismissed && (xpProfile.explorerRank === 'INITIATE' || xpProfile.explorerRank === 'SCOUT') && (
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-6 relative">
                 <button
                   onClick={handleDismissGuildOnboarding}
@@ -441,106 +401,41 @@ const ShopperDashboard = () => {
               </div>
             )}
 
-            {/* Streak Widget with permanent explainer */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6">
-              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4 italic">
-                Visit one sale per week to keep your streak alive and earn bonus XP.
-              </p>
-              <StreakWidget />
-            </div>
-
-            {/* Rank Progress Card */}
-            {xpProfile && !xpLoading ? (
+            {/* Streak Widget - Visible for Scout+ only */}
+            {xpProfile && !xpLoading && xpProfile.explorerRank !== 'INITIATE' && (
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <RankBadge rank={xpProfile.explorerRank} size="md" />
-                    <div>
-                      <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">
-                        {xpProfile.explorerRank.charAt(0) + xpProfile.explorerRank.slice(1).toLowerCase()}
-                      </h3>
-                      <p className="text-sm text-warm-600 dark:text-warm-400">Explorer Rank</p>
-                    </div>
-                  </div>
-                  <PointsBadge points={user?.streakPoints ?? 0} />
-                </div>
-
-                {(() => {
-                  const rankCopy = getRankCopy(
-                    xpProfile.explorerRank,
-                    xpProfile.rankProgress.currentXp,
-                    xpProfile.rankProgress.nextRank
-                  );
-
-                  // Rank-specific benefits for next rank
-                  const nextRankBenefits: Record<ExplorerRank, string> = {
-                    INITIATE: '+15 min holds',
-                    SCOUT: '+1 extra concurrent hold',
-                    RANGER: '+30 min holds + 2x Treasure Hunt XP',
-                    SAGE: 'Access to Collector\'s League + premium features',
-                    GRANDMASTER: 'You\'ve reached the top rank!',
-                  };
-
-                  return (
-                    <>
-                      <div className="mb-4">
-                        <p className="text-sm text-warm-600 dark:text-warm-400 mb-2">{rankCopy.progressLabel}</p>
-                        <RankProgressBar
-                          currentXp={xpProfile.rankProgress.currentXp}
-                          nextRankXp={RANK_THRESHOLDS[xpProfile.explorerRank]}
-                          currentRank={xpProfile.explorerRank}
-                          nextRank={xpProfile.rankProgress.nextRank}
-                        />
-                      </div>
-
-                      <div className="mb-4">
-                        <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                          {rankCopy.untilNextRank}
-                        </p>
-                        {xpProfile.rankProgress.nextRank && xpProfile.rankProgress.nextRank !== 'GRANDMASTER' && (
-                          <p className="text-sm text-amber-700 dark:text-amber-300 mb-3 font-medium">
-                            Next rank: {xpProfile.rankProgress.nextRank.charAt(0) + xpProfile.rankProgress.nextRank.slice(1).toLowerCase()} — {nextRankBenefits[xpProfile.rankProgress.nextRank]}
-                          </p>
-                        )}
-                        <p className="text-sm text-warm-600 dark:text-warm-400">
-                          Best way to earn right now: {rankCopy.earnTip}
-                        </p>
-                        <p className="text-xs text-warm-500 dark:text-warm-500 mt-1">
-                          {rankCopy.tipDetail}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Link
-                          href={rankCopy.ctaHref}
-                          className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                        >
-                          {rankCopy.ctaText} →
-                        </Link>
-                        <Link
-                          href="/shopper/explorer-passport"
-                          className="inline-block bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                        >
-                          See all rank benefits →
-                        </Link>
-                      </div>
-                    </>
-                  );
-                })()}
+                <p className="text-sm text-warm-600 dark:text-warm-400 mb-4 italic">
+                  Visit one sale per week to keep your streak alive and earn bonus XP.
+                </p>
+                <StreakWidget />
               </div>
+            )}
+
+            {/* Hero Section - Character Sheet */}
+            {xpProfile && !xpLoading ? (
+              <>
+                <RankHeroSection
+                  rank={xpProfile.explorerRank}
+                  guildXp={xpProfile.guildXp}
+                  xpToNext={RANK_THRESHOLDS[xpProfile.explorerRank]}
+                  xpPercent={(xpProfile.rankProgress.currentXp / RANK_THRESHOLDS[xpProfile.explorerRank]) * 100}
+                  userName={user?.firstName || user?.name || 'Explorer'}
+                />
+
+                {/* Rank Leveling Hint */}
+                <RankLevelingHint
+                  rank={xpProfile.explorerRank}
+                  currentXp={xpProfile.rankProgress.currentXp}
+                  nextRankXp={RANK_THRESHOLDS[xpProfile.explorerRank]}
+                  nextRank={xpProfile.rankProgress.nextRank}
+                />
+              </>
             ) : (
               <Skeleton className="h-64" />
             )}
 
-            {/* Rank Benefits Card */}
-            {xpProfile && !xpLoading ? (
-              <RankBenefitsCard rank={xpProfile.explorerRank} compact={true} />
-            ) : (
-              <Skeleton className="h-32" />
-            )}
-
-            {/* Hunt Pass CTA — Rank-Aware */}
-            {user && xpProfile && !user.huntPassActive ? (
+            {/* Hunt Pass CTA — Rank-Aware (hidden for GRANDMASTER) */}
+            {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' ? (
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-300 dark:border-purple-600 rounded-lg p-6">
                 <div className="flex items-start gap-4">
                   <span className="text-3xl">🎯</span>
