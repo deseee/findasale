@@ -97,7 +97,7 @@ export function useApplyTemplate(workspaceId: string | null) {
     mutationFn: async (templateName: string) => {
       if (!workspaceId) throw new Error('workspaceId required');
       const res = await api.post(`/workspace/${workspaceId}/apply-template`, {
-        templateName,
+        template: templateName,
       });
       return res.data;
     },
