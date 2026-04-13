@@ -102,6 +102,8 @@ interface Item {
   variantSku?: string; // V4: Multi-variant support
   priceBeforeMarkdown?: number; // Feature #91: Auto-Markdown
   markdownApplied?: boolean; // Feature #91: Auto-Markdown
+  organizerDiscountAmount?: number; // D-XP-003: Organizer-funded item discount
+  organizerDiscountXp?: number; // D-XP-003: XP cost of discount
 }
 
 interface BidHistory {
@@ -159,6 +161,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [pendingCartItem, setPendingCartItem] = useState<any>(null); // Phase 1: Smart Cart
   const [bidModalOpen, setBidModalOpen] = useState(false);
   const [scoutRevealModalOpen, setScoutRevealModalOpen] = useState(false);
+  const [scoutRevealResults, setScoutRevealResults] = useState<Array<{ displayName: string; avatarUrl: string | null; savedAt: string }> | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   // Queries
@@ -247,13 +250,22 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   });
 
   // D-XP-006: Scout Reveal mutation
+  const { updateUser } = useAuth();
   const scoutRevealMutation = useMutation({
     mutationFn: async () => {
       const response = await api.post(`/xp/spend/scout-reveal/${id}`);
       return response.data;
     },
     onSuccess: (data) => {
+      // Sync rank updates to AuthContext
+      if (data?.newRank) {
+        updateUser({
+          explorerRank: data.newRank,
+          guildXp: data.remainingXp,
+        });
+      }
       showToast('Scout reveal unlocked! (5 XP spent)', 'success');
+      setScoutRevealResults(data.interestedUsers || []);
       setScoutRevealModalOpen(false);
       refetchItem();
     },
@@ -626,6 +638,19 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 {item.listingType === 'REVERSE_AUCTION' && (item.reverseFloorPrice ?? 0) > 0 && (
                   <div className="text-sm text-gray-600 dark:text-gray-400">
                     Floor Price: ${(item.reverseFloorPrice ?? 0).toFixed(2)}
+                  </div>
+                )}
+                {/* D-XP-003: Organizer discount badge */}
+                {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div className="inline-block px-3 py-1.5 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 text-sm font-semibold rounded-full">
+                      Organizer Special: ${item.organizerDiscountAmount.toFixed(2)} off — spend {item.organizerDiscountXp} XP
+                    </div>
+                    {user && user.xpBalance && user.xpBalance >= (item.organizerDiscountXp ?? 0) && (
+                      <div className="mt-2 text-xs font-semibold text-green-600 dark:text-green-400">
+                        ✓ You have enough XP!
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1017,25 +1042,75 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
             <h3 className="text-lg font-bold text-warm-900 dark:text-gray-50 mb-4">
               Scout Reveal
             </h3>
-            <p className="text-warm-700 dark:text-gray-300 mb-6">
-              Spend 5 XP to see who was interested in this item first?
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setScoutRevealModalOpen(false)}
-                disabled={scoutRevealMutation.isPending}
-                className="px-4 py-2 rounded border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => scoutRevealMutation.mutate()}
-                disabled={scoutRevealMutation.isPending}
-                className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-medium transition-colors disabled:opacity-50"
-              >
-                {scoutRevealMutation.isPending ? 'Spending...' : 'Spend 5 XP'}
-              </button>
-            </div>
+
+            {/* Show results after reveal is complete */}
+            {scoutRevealResults !== null ? (
+              <div>
+                <p className="text-warm-700 dark:text-gray-300 mb-4">
+                  {scoutRevealResults.length > 0
+                    ? `${scoutRevealResults.length} shopper${scoutRevealResults.length !== 1 ? 's' : ''} ${scoutRevealResults.length === 1 ? 'is' : 'are'} interested in this item:`
+                    : 'No one else has saved this item yet — you may have the edge!'}
+                </p>
+
+                {scoutRevealResults.length > 0 && (
+                  <div className="space-y-3 mb-6 max-h-64 overflow-y-auto">
+                    {scoutRevealResults.map((user, idx) => (
+                      <div key={idx} className="flex items-center gap-3 p-2 rounded bg-warm-50 dark:bg-gray-700">
+                        {user.avatarUrl && (
+                          <img
+                            src={user.avatarUrl}
+                            alt={user.displayName}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-warm-900 dark:text-gray-50">
+                            {user.displayName}
+                          </p>
+                          <p className="text-xs text-warm-600 dark:text-gray-400">
+                            saved {formatDistanceToNow(parseISO(user.savedAt), { addSuffix: true })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => {
+                      setScoutRevealModalOpen(false);
+                      setScoutRevealResults(null);
+                    }}
+                    className="px-4 py-2 rounded bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-gray-50 hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-warm-700 dark:text-gray-300 mb-6">
+                  Spend 5 XP to see who was interested in this item first?
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setScoutRevealModalOpen(false)}
+                    disabled={scoutRevealMutation.isPending}
+                    className="px-4 py-2 rounded border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => scoutRevealMutation.mutate()}
+                    disabled={scoutRevealMutation.isPending}
+                    className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-medium transition-colors disabled:opacity-50"
+                  >
+                    {scoutRevealMutation.isPending ? 'Spending...' : 'Spend 5 XP'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

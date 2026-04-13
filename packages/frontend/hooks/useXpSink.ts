@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import api from '../lib/api';
+import { useAuth } from '../components/AuthContext';
 
 export interface XpSinkResponse {
   success: boolean;
@@ -15,10 +16,12 @@ interface UseXpSinkOptions {
 /**
  * useXpSink — hook for spending XP on sinks (rarity boost, coupon generation)
  * Handles loading, error, and success states for XP sink endpoints.
+ * Syncs rank updates to AuthContext after successful spends.
  */
 export const useXpSink = (options?: UseXpSinkOptions) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { updateUser } = useAuth();
 
   const spendXpRarityBoost = async (saleId: string): Promise<boolean> => {
     setIsLoading(true);
@@ -28,6 +31,14 @@ export const useXpSink = (options?: UseXpSinkOptions) => {
       const response = await api.post('/xp/sink/rarity-boost', {
         saleId,
       });
+
+      // Update context if rank changed
+      if (response.data?.newRank) {
+        updateUser({
+          explorerRank: response.data.newRank,
+          guildXp: response.data.remainingXp,
+        });
+      }
 
       if (options?.onSuccess) {
         options.onSuccess({
@@ -62,6 +73,14 @@ export const useXpSink = (options?: UseXpSinkOptions) => {
 
     try {
       const response = await api.post('/xp/sink/coupon', {});
+
+      // Update context if rank changed
+      if (response.data?.newRank) {
+        updateUser({
+          explorerRank: response.data.newRank,
+          guildXp: response.data.remainingXp,
+        });
+      }
 
       if (options?.onSuccess) {
         options.onSuccess({

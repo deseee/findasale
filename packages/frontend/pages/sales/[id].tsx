@@ -100,6 +100,8 @@ interface Sale {
     photoUrls: string[];
     auctionClosed?: boolean;
     listingType?: string;
+    organizerDiscountAmount?: number; // D-XP-003: Organizer-funded item discount
+    organizerDiscountXp?: number; // D-XP-003: XP cost of discount
   }[];
   isAuctionSale: boolean;
   // Feature 35: Front Door Locator
@@ -1100,6 +1102,11 @@ const SaleDetailPage = () => {
                         {item.condition && (
                           <span className="inline-block bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-100 px-2 py-1 rounded text-xs font-medium">
                             {item.condition.charAt(0).toUpperCase() + item.condition.slice(1)}
+                          </span>
+                        )}
+                        {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
+                          <span className="inline-block bg-teal-100 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 px-2 py-1 rounded text-xs font-bold">
+                            Special: ${item.organizerDiscountAmount.toFixed(2)} off
                           </span>
                         )}
                       </div>
