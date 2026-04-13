@@ -300,7 +300,7 @@ function LoyaltyPage() {
                   </div>
 
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Generate a $1 off coupon to use at any sale. Coupons are valid for 30 days. Redeem your XP for real savings!
+                    Generate $0.75 – $5 off coupons to use at any sale. Coupons are valid for 30 days. Redeem your XP for real savings!
                   </p>
 
                   <button

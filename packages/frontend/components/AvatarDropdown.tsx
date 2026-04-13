@@ -948,13 +948,13 @@ const AvatarDropdown: React.FC = () => {
                     <span>Haul Posts</span>
                   </Link>
                   <Link
-                    href="/shopper/lucky-roll"
+                    href="/shopper/early-access-cache"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                     title="Weekly XP gacha — spend 100 XP for a roll"
                   >
                     <Zap size={16} className="text-indigo-500" />
-                    <span>Lucky Roll</span>
+                    <span>Early Access Cache</span>
                   </Link>
                 </>
               )}

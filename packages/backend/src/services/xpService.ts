@@ -86,14 +86,15 @@ export const XP_SINKS = {
   SEASONAL_CHALLENGE_ACCESS: 250, // Shopper unlocks seasonal challenge tier (gamedesign S418)
   GUIDE_PUBLICATION: 50,       // Shopper publishes a collection guide (raised from 30)
 
-  // Cosmetic sinks (permanent — Sage+ only)
-  CUSTOM_USERNAME_COLOR: 100,  // Permanent color on username (calibrated S418 Pass 4: 1 XP = $0.01)
-  CUSTOM_FRAME_BADGE: 200,     // Permanent profile frame badge (calibrated S418 Pass 4)
+  // Cosmetic sinks (permanent — Sage+ only) — D-XP-005 repricing
+  CUSTOM_USERNAME_COLOR: 1000,  // Permanent color on username (D-XP-005: 1,000 XP)
+  CUSTOM_FRAME_BADGE: 2500,     // Permanent profile frame badge (D-XP-005: 2,500 XP)
 
   // Phase 2c: New XP Sinks
   CUSTOM_MAP_PIN: 75,           // Organizer customizes sale map icon with emoji (one-time)
-  PROFILE_SHOWCASE_SLOT_2: 50,  // Shopper unlocks 2nd profile showcase slot for pinned haul
-  PROFILE_SHOWCASE_SLOT_3: 150, // Shopper unlocks 3rd profile showcase slot for pinned haul
+  PROFILE_SHOWCASE_SLOT_2: 250,  // Shopper unlocks 2nd profile showcase slot — Bronze (D-XP-005: 250 XP)
+  PROFILE_SHOWCASE_SLOT_3: 350, // Shopper unlocks 3rd profile showcase slot — Silver (D-XP-005: 350 XP)
+  PROFILE_SHOWCASE_SLOT_GOLD: 500, // Shopper unlocks 4th profile showcase slot — Gold (D-XP-005: 500 XP)
   TREASURE_TRAIL_SPONSOR: 100,  // Organizer pays to create a Treasure Trail
 
   // Phase 2a Social Retention: Explorer's Guild

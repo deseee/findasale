@@ -17,6 +17,7 @@ export interface HaulPost {
   likesCount: number;
   isHaulPost: boolean;
   status: string;
+  bumpedUntil?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -116,6 +116,7 @@ import cityHeatRoutes from './routes/cityHeat';              // Phase 5: #49 Cit
 import linkClickRoutes from './routes/linkClicks';           // #18: Post Performance Analytics
 import collectorPassportRoutes from './routes/collectorPassport'; // Feature #45: Collector Passport
 import challengeRoutes from './routes/challenges';               // Feature #55: Seasonal Discovery Challenges
+import earlyAccessRoutes from './routes/early-access';           // Early Access Cache: replace Lucky Roll
 import receiptRoutes from './routes/receipts';               // #62: Digital Receipts
 import returnRoutes from './routes/returns';                 // #62: Return Requests
 import itemLibraryRoutes from './routes/itemLibrary';         // Feature #25: Item Library (Consignment Rack)
@@ -431,6 +432,7 @@ if (process.env.NODE_ENV !== 'production') {
 app.use('/api/notifications/inbox', notificationInboxRoutes); // Notification inbox
 app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / "Notify Me"
 app.use('/api/pickup', pickupRoutes); // Pickup Appointment Scheduling
+app.use('/api/early-access-cache', earlyAccessRoutes); // Early Access Cache: replace Lucky Roll
 app.use('/api/invites', inviteRoutes); // Beta invite code validation (public)
 app.use('/api/social-post', socialPostRoutes); // Social media post generator
 app.use('/api/coupons', couponsRouter);         // Sprint 3: Shopper Loyalty Coupons

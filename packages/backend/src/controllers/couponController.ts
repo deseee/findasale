@@ -250,9 +250,9 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 
 const SHOPPER_COUPON_TIERS = {
-  DOLLAR_OFF_TEN:       { xpCost: 100, discount: 1.00, minPurchase: 10,  monthlyLimit: 3 },
-  ONE_FIFTY_OFF_TWENTY: { xpCost: 150, discount: 1.50, minPurchase: 20,  monthlyLimit: 2 },
-  FIVE_OFF_FIFTY:       { xpCost: 500, discount: 5.00, minPurchase: 50,  monthlyLimit: 1 },
+  DOLLAR_OFF_TEN:       { xpCost: 100, discount: 0.75, minPurchase: 10,  monthlyLimitStandard: 2, monthlyLimitHuntPass: 3 },
+  ONE_FIFTY_OFF_TWENTY: { xpCost: 200, discount: 2.00, minPurchase: 25,  monthlyLimitStandard: 2, monthlyLimitHuntPass: 3 },
+  FIVE_OFF_FIFTY:       { xpCost: 500, discount: 5.00, minPurchase: 50,  monthlyLimitStandard: 1, monthlyLimitHuntPass: 1 },
 } as const;
 
 type ShopperCouponTier = keyof typeof SHOPPER_COUPON_TIERS;
@@ -274,6 +274,15 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
   const shopperId = req.user.id;
 
   try {
+    // D-XP-001: Check if user has active Hunt Pass
+    const user = await prisma.user.findUnique({
+      where: { id: shopperId },
+      select: { huntPassActive: true, huntPassExpiry: true },
+    });
+
+    const hasActiveHuntPass = user?.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > new Date();
+    const monthlyLimit = hasActiveHuntPass ? config.monthlyLimitHuntPass : config.monthlyLimitStandard;
+
     // Enforce per-tier monthly cap
     const monthStart = new Date();
     monthStart.setDate(1);
@@ -288,12 +297,13 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
       },
     });
 
-    if (thisMonthCount >= config.monthlyLimit) {
+    if (thisMonthCount >= monthlyLimit) {
       return res.status(429).json({
-        message: `Monthly limit reached for this tier (${config.monthlyLimit}/month). Try a different tier or come back next month.`,
+        message: `Monthly limit reached for this tier (${monthlyLimit}/month). Try a different tier or come back next month.`,
         generated: thisMonthCount,
-        limit: config.monthlyLimit,
+        limit: monthlyLimit,
         tier: shopperTier,
+        huntPassStatus: hasActiveHuntPass ? 'active' : 'inactive',
       });
     }
 
@@ -366,7 +376,8 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
       xpSpent: config.xpCost,
       tier: shopperTier,
       generatedThisMonth: thisMonthCount + 1,
-      monthlyLimit: config.monthlyLimit,
+      monthlyLimit,
+      huntPassStatus: hasActiveHuntPass ? 'active' : 'inactive',
       message: `Coupon ready! Use code ${coupon.code} at checkout for $${config.discount.toFixed(2)} off orders over $${config.minPurchase}. Valid for 30 days.`,
     });
   } catch (err) {

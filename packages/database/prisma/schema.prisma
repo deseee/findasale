@@ -52,6 +52,7 @@ model User {
   reservations                 ItemReservation[]
   bounties                     MissingListingBounty[]
   organizerSubmissions         BountySubmission[]     @relation("OrganizerSubmissions")
+  earlyAccessCaches            EarlyAccessCache[]
   webhooks                     Webhook[]
   treasureHuntFinds            TreasureHuntFind[]
   streakPoints                 Int                    @default(0)
@@ -3360,4 +3361,19 @@ model WorkspaceAlert {
   @@index([workspaceId])
   @@index([workspaceId, severity])
   @@index([saleId])
+}
+
+model EarlyAccessCache {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    String
+  activatedAt DateTime @default(now())
+  expiresAt   DateTime
+  itemsCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, expiresAt])
+  @@index([category, expiresAt])
 }

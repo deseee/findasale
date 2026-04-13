@@ -100,13 +100,62 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 1. Run XP expiry migration on Railway — see migration block below
 2. Add `charge.dispute.created` event to Stripe Dashboard → Webhooks
 
-**S447 Batch 2 (ready for next session):**
-- Dev: Bump Post feed sort (2-line haulPostController.ts change — spec ready)
-- Dev: Early Access Cache (replaces Lucky Roll — full spec ready)
-- Dev: Cosmetics repricing UI D-XP-005 (UI only)
-- Dev: Hunt Pass 3x coupon slot
-- Dev: Coupon backend enforcement (server-side monthly limits)
-- Dev Phase 2: Device fingerprinting (FingerprintJS, defer until beta grows)
+**S447 Batch 2 COMPLETE:**
+- ✅ Bump Post feed sort — haulPostController.ts orderBy updated (both endpoints), useHaulPosts.ts HaulPost interface gets bumpedUntil field
+- ✅ Early Access Cache — replaces Lucky Roll. New models, migration (20260413_early_access_cache), 3 backend endpoints, new frontend page, nav updated
+- ✅ Cosmetics repricing D-XP-005 — xpService.ts constants, users.ts route, hunt-pass.tsx display, profile.tsx display all updated
+- ✅ Hunt Pass 3x coupon enforcement — couponController.ts now dynamic (2/3x based on huntPassActive), hunt-pass.tsx benefit card added
+
+**S447 Batch 3 COMPLETE (stale reference sweep):**
+- ✅ AvatarDropdown.tsx — lucky-roll link → early-access-cache, "Lucky Roll" → "Early Access Cache"
+- ✅ hunt-pass.tsx — lucky-roll route fixed; coupon copy corrected ($1/$1.50 → $0.75/$2.00)
+- ✅ loyalty.tsx — coupon copy range updated
+- ✅ couponController.ts — Tier 1 discount 1.00→0.75, Tier 2 discount 1.50→2.00, Tier 2 xpCost 150→200, Tier 2 minPurchase 20→25 (D-XP-001 correct values)
+- ✅ No remaining "Loyalty Passport", "Explorer Passport", or "Lucky Roll" display text in codebase
+
+**S447 ALL CHANGED FILES (consolidated push block needed):**
+
+Modified:
+- packages/backend/src/services/appraisalService.ts
+- packages/frontend/components/Layout.tsx
+- packages/frontend/components/AvatarDropdown.tsx
+- packages/frontend/pages/shopper/loyalty.tsx
+- packages/frontend/pages/shopper/explorer-passport.tsx
+- packages/frontend/components/LoyaltyPassport.tsx
+- packages/frontend/pages/shopper/league.tsx
+- packages/frontend/pages/shopper/loot-legend.tsx
+- packages/database/prisma/schema.prisma
+- packages/backend/src/services/xpService.ts
+- packages/backend/src/index.ts
+- packages/backend/src/controllers/haulPostController.ts
+- packages/frontend/hooks/useHaulPosts.ts
+- packages/backend/src/routes/users.ts
+- packages/frontend/pages/shopper/hunt-pass.tsx
+- packages/frontend/pages/profile.tsx
+- packages/backend/src/controllers/couponController.ts
+
+New files:
+- packages/backend/src/jobs/xpExpiryCron.ts
+- packages/database/prisma/migrations/20260413_xp_expiry_system/migration.sql
+- packages/database/prisma/migrations/20260413_early_access_cache/migration.sql
+- packages/backend/src/controllers/earlyAccessController.ts
+- packages/backend/src/routes/early-access.ts
+- packages/frontend/pages/shopper/early-access-cache.tsx
+
+**S447 Patrick manual actions (AFTER push):**
+1. Run migrations on Railway (two migrations: xp_expiry_system + early_access_cache)
+2. Add `charge.dispute.created` event to Stripe Dashboard → Webhooks
+
+**S447 Batch 4 — QA (needs deploy first):**
+- Chrome QA: mobile nav (Explorer's Guild, Explorer Profile, Early Access Cache links)
+- Chrome QA: AvatarDropdown dropdown in both desktop and mobile
+- Chrome QA: /shopper/early-access-cache page loads + activation flow
+- Chrome QA: /shopper/loyalty and /shopper/explorer-passport show correct new titles
+- Chrome QA: Bump Post feed sort (bumped post rises to top)
+
+**Device fingerprinting (Phase 2 — deferred):** Fields already on User model. FingerprintJS free tier. Defer until beta scale justifies it.
+
+**S448 next priorities:** Workspace QA, Organizer Special badge, Price Research Card, brand audit copy.
 
 **S448 Next session (existing priorities still valid):**
 Priority 1 — Review workspace QA results (Patrick QA'd out-of-session). Dispatch fixes.
