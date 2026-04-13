@@ -37,6 +37,12 @@ interface Sale {
   maxOrganizerDiscount?: number; // D-XP-003: Max organizer discount across items
 }
 
+interface BadgeConfig {
+  label: string;
+  classes: string;
+  pulse?: boolean;
+}
+
 interface SaleCardProps {
   sale: Sale;
 }
@@ -46,15 +52,12 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
   const [imgError, setImgError] = useState(false);
   const { isLowBandwidth } = useNetworkQuality();
 
-  // Calculate image URLs
   const hasPhoto = sale.photoUrls && sale.photoUrls.length > 0;
   const photoUrl = hasPhoto ? sale.photoUrls[0] : null;
   const lqipUrl = photoUrl ? getLqipUrl(photoUrl) : null;
   const imageQuality = isLowBandwidth ? 40 : 75;
   const optimizedUrl = photoUrl ? getOptimizedUrl(photoUrl, imageQuality) : null;
 
-  // Reset image loading state when the photo URL changes
-  // This ensures new images load even if the component instance is reused
   useEffect(() => {
     setImgLoaded(false);
     setImgError(false);
@@ -85,7 +88,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
 
   const showToday = isHappeningToday();
 
-  const getStatusBadge = () => {
+  const getStatusBadge = (): BadgeConfig | null => {
     if (sale.isSold) return { label: 'SOLD', classes: 'bg-warm-700 text-white' };
     if (sale.isLive) return { label: 'LIVE', pulse: true, classes: 'bg-green-600 text-white' };
     if (sale.isFlashDeal) return { label: 'FLASH', classes: 'bg-amber-600 text-white' };
@@ -94,9 +97,8 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
     return null;
   };
 
-  // D-XP-003: Organizer Special badge (takes priority after SOLD)
-  const getOrganizerSpecialBadge = () => {
-    if (sale.isSold) return null; // Don't show discount on sold items
+  const getOrganizerSpecialBadge = (): BadgeConfig | null => {
+    if (sale.isSold) return null;
     if (sale.maxOrganizerDiscount && sale.maxOrganizerDiscount > 0) {
       return {
         label: `$${sale.maxOrganizerDiscount.toFixed(2)} off`,
@@ -108,14 +110,11 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
 
   const statusBadge = getStatusBadge();
   const organizerSpecialBadge = getOrganizerSpecialBadge();
-  // Display organizer special badge if available, otherwise status badge
-  const badge = organizerSpecialBadge || statusBadge;
+  const badge: BadgeConfig | null = organizerSpecialBadge || statusBadge;
 
   return (
     <div className="bg-white dark:bg-gray-800 overflow-hidden hover:shadow-card-hover dark:hover:shadow-lg transition-all duration-300 hover:scale-105 flex flex-col h-full rounded-lg border border-warm-200 dark:border-gray-700">
-      {/* ── Image area: 4:3 landscape aspect ratio ── */}
       <Link href={`/sales/${sale.id}`} className="block relative aspect-video bg-warm-200 dark:bg-gray-700 overflow-hidden flex-shrink-0">
-        {/* Tier 1: LQIP blurred background (loads instantly) */}
         {lqipUrl && !imgError && (
           <div
             className="absolute inset-0 bg-cover bg-center"
@@ -128,12 +127,10 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
           />
         )}
 
-        {/* Tier 2: Skeleton pulse (shown until main image loads) */}
         {!imgLoaded && !imgError && (
           <Skeleton className="absolute inset-0 rounded-none bg-warm-200/60 dark:bg-gray-600/60" />
         )}
 
-        {/* Tier 3: Main lazy WebP image (fades in on load) */}
         {photoUrl && !imgError ? (
           <img
             key={optimizedUrl}
@@ -157,7 +154,6 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
           </div>
         ) : null}
 
-        {/* Badge overlay — top-left corner (single highest-priority badge) */}
         {badge && (
           <div className="absolute top-2 left-2">
             <span className={`flex items-center gap-1 px-2.5 py-1 rounded text-sm font-bold ${badge.classes} shadow`}>
@@ -168,7 +164,6 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
         )}
       </Link>
 
-      {/* ── Content area with footer redesign ── */}
       <div className="flex flex-col flex-1 p-4 bg-white dark:bg-gray-800">
         <Link href={`/sales/${sale.id}`} className="flex-1 block mb-3">
           <h3 className="font-heading font-bold text-base text-warm-900 dark:text-gray-100 leading-snug line-clamp-2 mb-2">
@@ -179,7 +174,6 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
           </p>
         </Link>
 
-        {/* ── Footer section with organizer and stats ── */}
         <div className="pt-3 border-t border-warm-200 dark:border-gray-700 flex flex-col gap-2">
           <Link href={`/organizers/${sale.organizer.id}`} className="flex items-center gap-2 min-w-0">
             <span className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:underline line-clamp-1 flex-1">
