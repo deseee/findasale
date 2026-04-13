@@ -44,12 +44,6 @@ const FEATURES: Feature[] = [
     teams: 'Unlimited*',
   },
   {
-    name: 'QR sales codes',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
-  {
     name: 'Social post generator',
     simple: true,
     pro: true,
@@ -68,6 +62,12 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
+    name: 'Offline Mode',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
     name: 'QR Price Tags & Signs',
     simple: true,
     pro: true,
@@ -75,6 +75,12 @@ const FEATURES: Feature[] = [
   },
   {
     name: 'QR Directions & Yard Signs',
+    simple: true,
+    pro: true,
+    teams: true,
+  },
+  {
+    name: 'QR sales codes',
     simple: true,
     pro: true,
     teams: true,
@@ -92,25 +98,13 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Ripples',
+    name: 'Ripples - clicks, likes, shares',
     simple: true,
     pro: true,
     teams: true,
   },
   {
     name: 'Persistent Inventory',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
-  {
-    name: 'Offline Mode',
-    simple: true,
-    pro: true,
-    teams: true,
-  },
-  {
-    name: 'Email Digest',
     simple: true,
     pro: true,
     teams: true,
@@ -188,6 +182,12 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
+    name: 'Email Digest',
+    simple: false,
+    pro: true,
+    teams: true,
+  },
+  {
     name: 'Fraud Signals',
     simple: false,
     pro: true,
@@ -212,13 +212,13 @@ const FEATURES: Feature[] = [
     teams: true,
   },
   {
-    name: 'Data export (Accounting, Inventory, Ecommerce)',
+    name: 'Data exports (Accounting, Mailings, + more)',
     simple: false,
     pro: true,
     teams: true,
   },
   {
-    name: 'Multi-platform exports (Ebay, Facebook, Craigslist)',
+    name: 'Marketplace exports (Ebay, Facebook, + more)',
     simple: false,
     pro: true,
     teams: true,
