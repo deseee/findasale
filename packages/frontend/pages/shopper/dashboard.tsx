@@ -51,7 +51,6 @@ const ShopperDashboard = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'subscribed' | 'pickups' | 'brands'>('overview');
   const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
   const [isReferralDismissed, setIsReferralDismissed] = useState(false);
-  const [isGuildOnboardingDismissed, setIsGuildOnboardingDismissed] = useState(false);
   const [referralLink, setReferralLink] = useState<string | null>(null);
   const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
@@ -79,14 +78,6 @@ const ShopperDashboard = () => {
     const dismissed = localStorage.getItem('referral_cta_dismissed');
     if (dismissed) {
       setIsReferralDismissed(true);
-    }
-  }, []);
-
-  // Load Guild Onboarding dismissal state from localStorage
-  useEffect(() => {
-    const dismissed = localStorage.getItem('guild_onboarding_dismissed');
-    if (dismissed) {
-      setIsGuildOnboardingDismissed(true);
     }
   }, []);
 
@@ -133,11 +124,6 @@ const ShopperDashboard = () => {
   const handleDismissReferral = () => {
     localStorage.setItem('referral_cta_dismissed', 'true');
     setIsReferralDismissed(true);
-  };
-
-  const handleDismissGuildOnboarding = () => {
-    localStorage.setItem('guild_onboarding_dismissed', 'true');
-    setIsGuildOnboardingDismissed(true);
   };
 
   const handleCopyReferralLink = () => {
@@ -367,41 +353,33 @@ const ShopperDashboard = () => {
             {/* 2. Action Bar */}
             <ActionBar className="mb-8" />
 
-            {/* 3. Guild Onboarding Card - Show only for Initiate + Scout, hide for Ranger+ */}
-            {xpProfile && !xpLoading && !isGuildOnboardingDismissed && (xpProfile.explorerRank === 'INITIATE' || xpProfile.explorerRank === 'SCOUT') && (
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-6 relative">
+            {/* 3. My QR Code — POS Checkout (collapsible, always near top) */}
+            {shopperQRCodeDataUrl && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
                 <button
-                  onClick={handleDismissGuildOnboarding}
-                  className="absolute top-3 right-3 text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100"
-                  aria-label="Dismiss onboarding"
+                  onClick={() => setQrOpen(!qrOpen)}
+                  className="w-full flex items-center justify-between p-0 text-left"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <span className="text-xl font-bold text-warm-900 dark:text-warm-100">🔳 My QR Code</span>
+                  <span className="text-warm-500 text-sm">{qrOpen ? '▲ Hide' : '▼ Show'}</span>
                 </button>
-                <h3 className="text-lg font-bold text-amber-900 dark:text-amber-100 mb-2">
-                  Welcome to the Explorer's Guild!
-                </h3>
-                <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
-                  Earn XP as you explore sales. Climb from <strong>Initiate → Scout → Ranger → Sage → Grandmaster</strong>.
-                </p>
-                <div className="bg-white dark:bg-gray-800 rounded-md p-3 mb-4 border border-amber-100 dark:border-amber-800">
-                  <p className="text-xs text-warm-700 dark:text-warm-300 font-semibold mb-2">XP Actions:</p>
-                  <ul className="text-xs text-warm-600 dark:text-warm-400 space-y-1">
-                    <li>• <strong>Walk-in visit (check-in)</strong> +2 XP</li>
-                    <li>• <strong>Purchase an item</strong> +10 XP per $</li>
-                    <li>• <strong>Haul post published</strong> +30 XP</li>
-                  </ul>
-                </div>
-                <p className="text-xs text-amber-700 dark:text-amber-300 mb-4 italic">
-                  Longer holds, early access, and exclusive perks await higher ranks.
-                </p>
-                <Link
-                  href="/shopper/explore"
-                  className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm mb-2"
-                >
-                  Start Exploring →
-                </Link>
+                {qrOpen && (
+                  <div className="mt-4">
+                    <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+                      Show this to the organizer at checkout to instantly load your active holds and cart items.
+                    </p>
+                    <div className="flex justify-center mb-4">
+                      <img
+                        src={shopperQRCodeDataUrl}
+                        alt="Your personal QR code for checkout"
+                        className="w-48 h-48 border-2 border-warm-200 dark:border-gray-600 rounded-lg"
+                      />
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-500 text-center">
+                      Scan to verify your account and active holds at POS
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -503,35 +481,6 @@ const ShopperDashboard = () => {
               </div>
             )}
 
-            {/* 7. My QR Code — Collapsible (MOVED DOWN, MADE COLLAPSIBLE) */}
-            {shopperQRCodeDataUrl && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
-                <button
-                  onClick={() => setQrOpen(!qrOpen)}
-                  className="w-full flex items-center justify-between p-0 text-left"
-                >
-                  <span className="text-xl font-bold text-warm-900 dark:text-warm-100">🔳 My QR Code</span>
-                  <span className="text-warm-500 text-sm">{qrOpen ? '▲ Hide' : '▼ Show'}</span>
-                </button>
-                {qrOpen && (
-                  <div className="mt-4">
-                    <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
-                      Show this to the organizer at checkout to instantly load your active holds and cart items.
-                    </p>
-                    <div className="flex justify-center mb-4">
-                      <img
-                        src={shopperQRCodeDataUrl}
-                        alt="Your personal QR code for checkout"
-                        className="w-48 h-48 border-2 border-warm-200 dark:border-gray-600 rounded-lg"
-                      />
-                    </div>
-                    <p className="text-xs text-warm-500 dark:text-warm-500 text-center">
-                      Scan to verify your account and active holds at POS
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
 
@@ -564,6 +513,14 @@ const ShopperDashboard = () => {
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Achievements Badges — First in Overview */}
+              {achievementsData?.achievements && achievementsData.achievements.length > 0 && !achievementsLoading && (
+                <AchievementBadgesSection
+                  achievements={achievementsData.achievements}
+                  showStats={true}
+                />
+              )}
+
               {/* Hold-to-Pay: Pending Payments Section — Priority #1 */}
               {pendingInvoices && pendingInvoices.length > 0 && (
                 <div>
@@ -605,48 +562,6 @@ const ShopperDashboard = () => {
               {/* My Teams Card */}
               <MyTeamsCard />
 
-              {/* Hunt Pass Info Card */}
-              {!isHuntPassDismissed && userData && !userData.huntPassActive && (
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-2 border-purple-300 dark:border-purple-600 rounded-lg p-6">
-                  <div className="flex items-start gap-4">
-                    <span className="text-3xl">👑</span>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg text-purple-900 dark:text-purple-300 mb-2">Unlock Hunt Pass Premium</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-3">Level up your treasure hunting with exclusive benefits:</p>
-                      <ul className="text-sm text-purple-800 dark:text-purple-200 mb-4 space-y-1 ml-4">
-                        <li>⭐ <strong>1.5x XP multiplier</strong> on every action</li>
-                        <li>⚡ <strong>6h early access</strong> to Legendary item drops</li>
-                        <li>🎖️ <strong>Exclusive Hunt Pass badge</strong> on your profile</li>
-                      </ul>
-                      <p className="text-xs text-purple-700 dark:text-purple-400 mb-4 font-semibold">Only $4.99/month. Cancel anytime.</p>
-                      <div className="flex gap-2 mt-4">
-                        <Link
-                          href="/shopper/hunt-pass"
-                          className="inline-block py-2 px-5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
-                        >
-                          Upgrade Now
-                        </Link>
-                        <button
-                          onClick={handleDismissHuntPass}
-                          className="text-sm font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-200 underline"
-                        >
-                          Not interested
-                        </button>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleDismissHuntPass}
-                      className="flex-shrink-0 text-purple-400 dark:text-purple-500 hover:text-purple-600 dark:hover:text-purple-400"
-                      aria-label="Dismiss Hunt Pass banner"
-                    >
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* Hunt Pass Active Badge */}
               {userData && userData.huntPassActive && (
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
@@ -663,14 +578,6 @@ const ShopperDashboard = () => {
               {/* Rare Finds Feed — Hunt Pass only */}
               {userData && userData.huntPassActive && (
                 <RareFindsFeed />
-              )}
-
-              {/* Achievements Badges */}
-              {achievementsData?.achievements && achievementsData.achievements.length > 0 && !achievementsLoading && (
-                <AchievementBadgesSection
-                  achievements={achievementsData.achievements}
-                  showStats={true}
-                />
               )}
 
               <ActivitySummary />
