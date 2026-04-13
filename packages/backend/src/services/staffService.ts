@@ -344,9 +344,30 @@ export const getPerformanceSnapshot = async (
  */
 export const removeStaffMember = async (staffId: string) => {
   try {
-    // Delete the team member (availability and performances will cascade)
-    const deleted = await prisma.teamMember.delete({
+    // Get the TeamMember first to find the linked WorkspaceMember
+    const teamMember = await prisma.teamMember.findUnique({
+      where: { id: staffId },
+      select: { workspaceMemberId: true }
+    });
+
+    if (!teamMember) {
+      throw new Error('Team member not found');
+    }
+
+    // Delete the team member (availability and performances will cascade via DB)
+    await prisma.teamMember.delete({
       where: { id: staffId }
+    });
+
+    // Also explicitly delete the WorkspaceMember to ensure clean removal
+    // even if cascade doesn't fire (defensive programming)
+    await prisma.workspaceMember.delete({
+      where: { id: teamMember.workspaceMemberId }
+    }).catch((error: any) => {
+      // It's ok if WorkspaceMember is already gone (cascade worked)
+      if (error.code !== 'P2025') {
+        throw error;
+      }
     });
 
     return { success: true, deletedId: staffId };

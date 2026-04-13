@@ -107,7 +107,11 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     const existing = await prisma.workspaceMember.findUnique({
       where: { workspaceId_organizerId: { workspaceId: workspace.id, organizerId: invitedOrganizer.id } },
     });
-    if (existing) return res.status(400).json({ message: 'Already a member' });
+    // Only block if they are an active member (accepted the invitation)
+    // Pending/stale invites can be re-sent
+    if (existing && existing.acceptedAt) {
+      return res.status(400).json({ message: 'Already a member' });
+    }
     const ownerOrganizer = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { isEnterpriseAccount: true } });
     if (!ownerOrganizer?.isEnterpriseAccount) {
       const memberCount = await prisma.workspaceMember.count({ where: { workspaceId: workspace.id } });
