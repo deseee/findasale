@@ -2,7 +2,9 @@
 
 ## What Happened This Week
 
-**S445** was a full XP economy redesign session. The loyalty system had critical math problems, uncapped exploit loops, and a gambling law exposure (Forecast Polls — killed). Five P0 security fixes were implemented and shipped. All decisions are locked in `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`.
+**S445** ran two concurrent windows on 2026-04-13:
+- **Window A (XP/fraud):** Full XP economy redesign — coupon tier restructure, 5 P0 fraud gates (appraisal cap, referral gate, HP claw-back, device fingerprinting). 2 migrations applied to Railway. All decisions locked in `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`. Forecast Polls killed (Michigan gambling law).
+- **Window B (workspace flow):** Workspace invitation banner on dashboard, staff delete endpoint, fix for "Already a member" re-invite bug, owner self-delete protection, TeamMember creation on invite accept, workspace page crash fix (undefined role), permissions gate (non-owners see read-only), template apply field name fix, 4 workspace templates seeded into DB.
 
 **S444** completed the STAFF→MEMBER rename and workspace permissions fix.
 
@@ -10,7 +12,9 @@
 
 ## Action Items for Patrick
 
-- [ ] **PUSH permissions fix from S444** (3 backend files — see S444 pushblock in STATE.md)
+- [ ] **PUSH Window B workspace changes** (10 files — pushblock in STATE.md under S445 Window B)
+- [ ] **PUSH permissions fix from S444** if not done yet (3 backend files — see S444 pushblock in STATE.md)
+- [ ] **QA workspace invite flow** — invite → banner → accept → member in staff list; test 5-Person template apply
 - [ ] **QA `/organizer/members`** — invite modal, role dropdowns, role change on cards
 - [ ] **QA `/organizer/workspace`** — permissions tabs switch, save persists
 - [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open, still blocking)
@@ -46,7 +50,7 @@ S446 should focus on the XP frontend implementation:
 
 Full spec: `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`
 
-**Invited member onboarding** — still open: no UI for invited users to accept workspace invites.
+**Invited member onboarding** — banner now built and live on dashboard. Invite → accept flow is end-to-end. QA still needed in Chrome.
 
 **Price Research Card redesign** — UX spec ready: `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`.
 
@@ -56,6 +60,8 @@ Full spec: `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S445-B | 2026-04-13 | Workspace invite banner, staff delete, permissions gate, template seed + fix |
+| S445-A | 2026-04-13 | XP economy redesign + 5 P0 fraud gates + Forecast Polls killed |
 | S444 | 2026-04-13 | STAFF→MEMBER full rename + workspace permissions fixed |
 | S443 | 2026-04-11 | 9 live-site fixes + command center upgrade + appraisal gating |
 | S442 | 2026-04-11 | WorkspaceSettings schema fix + test data seed (Alice/Carol teams) |

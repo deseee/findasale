@@ -7,9 +7,9 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S445 COMPLETE (2026-04-13):** XP economy redesign (strategy + locked decisions) + 5 P0 security fraud gates implemented. Migrations applied ✅.
+**S445 COMPLETE (2026-04-13):** XP economy redesign + fraud gates (Window A) + workspace invitation flow + template fixes + permissions gates (Window B — concurrent).
 
-**S445 What shipped:**
+**S445-A What shipped (XP/fraud — other window):**
 - **XP Economy Redesign (design/decisions):** Full coupon tier restructure, earning table rebalance, sink repricing, fraud gate spec. All locked in `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`.
 - **P0-A — Appraisal daily cap:** `appraisalService.ts` + `xpService.ts` — 5/day hard cap on appraisal selection XP (was uncapped; kills cartel farming).
 - **P0-B — Referral validation:** `stripeController.ts` — 500 XP referral bonus only unlocks after referred organizer's first real external buyer (prevents SIM-farm abuse).
@@ -18,7 +18,21 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Forecast Polls killed:** Patrick decision 2026-04-13. Michigan MCL §432.201 gambling liability. Never coded; decision logged.
 - **Migrations applied to Railway ✅:** `20260413000001_xp_settlement_hold` + `20260413091213_add_device_fingerprint`.
 
-**S445 Files changed (11):**
+**S445-B What shipped (workspace invitation flow — this window):**
+- **Invitation banner:** `WorkspaceInvitationBanner.tsx` — sage-green banner on organizer dashboard showing pending invites with Accept/Dismiss. Accept calls acceptInvite mutation → toast → redirect to dashboard. Wired into `pages/organizer/dashboard.tsx`.
+- **usePendingWorkspaceInvitations hook:** calls `GET /workspace/invitations/pending` (authenticated), returns pending WorkspaceMember rows where `acceptedAt: null`.
+- **Staff delete endpoint:** `removeStaffMember` service does dual-delete (TeamMember + WorkspaceMember, P2025-safe). `deleteStaff` controller guards OWNER deletion with 403. `DELETE /:workspaceId/staff/:staffId` route wired.
+- **"Already a member" bug fixed:** invite check now checks for active members only (acceptedAt set), not any WorkspaceMember existence.
+- **Owner self-delete hidden:** frontend hides delete button when `member.role === 'OWNER'`; backend returns 403 if target is OWNER.
+- **TeamMember creation on accept:** `acceptInvite` now uses `connectOrCreate` to atomically create TeamMember row when invite is accepted. Previously accepted members appeared in WorkspaceMember but not in staff list.
+- **Workspace page crash fixed:** `getPublicWorkspace` now includes `id`, `role`, `acceptedAt` in members array. Page uses `member.role?.toLowerCase() ?? 'member'` (was crashing on undefined role).
+- **Permissions enforcement:** `workspace/[slug].tsx` computes `isOwner = workspace.owner?.user?.id === user?.id`. Workspace Settings button, + Invite Members, Pending Invitations, and Manage Workspace quick action all gated behind `isOwner`. Non-owner members see read-only team view.
+- **Template apply fixed:** Frontend hook sent `{ templateName }` but backend reads `req.body.template`. Fixed field name in `useWorkspaceSettings.ts`.
+- **Template DB seeded:** `WorkspaceRoleTemplate` table was empty (never seeded). Inserted all 4 templates directly via psycopg2: Empty (0 perms), Solo (22 perms), 2-Person (18 perms), 5-Person (11 perms). No migration needed.
+
+**S445 Files changed (total — both windows):**
+
+Window A (XP/fraud — 11 files):
 - `packages/database/prisma/schema.prisma` — huntPassCancelledAt, deviceFingerprint, fraudSuspect, purchaseId, holdUntil, 4 new indexes
 - `packages/database/prisma/migrations/20260413000001_xp_settlement_hold/migration.sql` — NEW ✅
 - `packages/database/prisma/migrations/20260413091213_add_device_fingerprint/migration.sql` — NEW ✅
@@ -31,9 +45,39 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - `packages/frontend/pages/register.tsx` — device fingerprint collection
 - `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` — NEW: all XP locked decisions
 
-**S445 One open P0-C piece:** `markHuntPassCancellation()` is built but NOT yet wired to the `customer.subscription.deleted` Stripe webhook event in `stripeController.ts`. Must be added before Hunt Pass goes live. Small targeted edit (~5 lines).
+Window B (workspace — 10 files):
+- `packages/backend/src/controllers/workspaceController.ts` — acceptInvite TeamMember connectOrCreate, getPendingInvitations controller, getPublicWorkspace returns members with id/role/acceptedAt
+- `packages/backend/src/routes/workspace.ts` — GET /invitations/pending route added
+- `packages/backend/src/services/staffService.ts` — removeStaffMember dual-delete
+- `packages/backend/src/controllers/staffController.ts` — deleteStaff with OWNER 403 guard
+- `packages/backend/src/routes/staff.ts` — DELETE /:workspaceId/staff/:staffId route
+- `packages/frontend/hooks/useWorkspace.ts` — PendingInvitation interface + usePendingWorkspaceInvitations hook
+- `packages/frontend/components/WorkspaceInvitationBanner.tsx` — NEW
+- `packages/frontend/pages/organizer/dashboard.tsx` — WorkspaceInvitationBanner imported + rendered
+- `packages/frontend/pages/workspace/[slug].tsx` — isOwner gate, crash fix (role?.toLowerCase()), Invite Members CTA (owner-only)
+- `packages/frontend/hooks/useWorkspaceSettings.ts` — templateName → template field name fix
+
+**S445 Window B push block (not yet pushed — include with any other pending changes):**
+```powershell
+git add packages/backend/src/controllers/workspaceController.ts
+git add packages/backend/src/routes/workspace.ts
+git add packages/backend/src/services/staffService.ts
+git add packages/backend/src/controllers/staffController.ts
+git add packages/backend/src/routes/staff.ts
+git add packages/frontend/hooks/useWorkspace.ts
+git add packages/frontend/components/WorkspaceInvitationBanner.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/workspace/[slug].tsx
+git add packages/frontend/hooks/useWorkspaceSettings.ts
+git commit -m "feat: workspace invitation banner, staff delete, permissions gate, template fixes"
+.\push.ps1
+```
+
+**S445 Open P0-C piece:** `markHuntPassCancellation()` is built but NOT yet wired to the `customer.subscription.deleted` Stripe webhook event in `stripeController.ts`. Must be added before Hunt Pass goes live. Small targeted edit (~5 lines).
 
 **S445 Next session — XP frontend implementation (S446):**
+
+Priority 0 — Push Window B changes above if not done yet. Confirm Railway redeploys.
 
 Priority 1 — Complete P0-C: Wire `markHuntPassCancellation(userId)` to `customer.subscription.deleted` handler in `packages/backend/src/controllers/stripeController.ts`. Find the existing handler, add the call after setting `huntPassActive = false`.
 
@@ -48,6 +92,8 @@ Priority 3 — Earning table audit: The Hunt Pass page shows XP earning rates. U
 Priority 4 — Micro-sinks UI: Implement the 3 approved micro-sinks (Scout Reveal 5 XP, Haul Unboxing Animation 2 XP, Bump Post 10 XP). Reference `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` D-XP-006 for full spec.
 
 Priority 5 — Organizer-funded discounts UI: Organizers should be able to spend XP (200 XP = $2 off one item, max $5). Backend logic for the discount mechanic is not yet built — needs both backend route + frontend UI in item management.
+
+Priority 6 — Workspace QA (team invite flow): Verify end-to-end in Chrome — invite sent, banner appears on dashboard, accept → member appears in staff list, non-owner sees read-only workspace page, template apply (5-Person) succeeds without error.
 
 Load `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` at session start for full context.
 
