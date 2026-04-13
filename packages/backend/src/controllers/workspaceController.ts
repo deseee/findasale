@@ -138,9 +138,22 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
     if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
     const member = await prisma.workspaceMember.findFirst({ where: { organizerId, acceptedAt: null } });
     if (!member) return res.status(404).json({ message: 'No pending invitations' });
+
+    // Update WorkspaceMember and create TeamMember in same transaction
     const updated = await prisma.workspaceMember.update({
       where: { id: member.id },
-      data: { acceptedAt: new Date() },
+      data: {
+        acceptedAt: new Date(),
+        // Also ensure TeamMember exists for this WorkspaceMember
+        teamMember: {
+          connectOrCreate: {
+            where: { workspaceMemberId: member.id },
+            create: {
+              role: member.role || 'MEMBER',
+            }
+          }
+        }
+      },
       include: { workspace: true, organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } } },
     });
     return res.json(updated);
