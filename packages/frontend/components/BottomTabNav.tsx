@@ -1,0 +1,156 @@
+import React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { Calendar } from 'lucide-react';
+import { useAuth } from './AuthContext';
+import useUnreadMessages from '../hooks/useUnreadMessages';
+
+/**
+ * BottomTabNav — Phase 25 mobile bottom navigation
+ * 5 primary tabs: Map, Calendar, Wishlist, Messages, Profile/Dashboard
+ * Hidden on desktop (md+). Fixed to bottom with safe-area padding.
+ */
+
+// SVG icon components — inline to avoid dependency
+
+const MapIcon = ({ active }: { active: boolean }) => (
+  <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 0 : 1.5}
+      d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"
+    />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 0 : 1.5}
+      d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"
+    />
+  </svg>
+);
+
+const HeartIcon = ({ active }: { active: boolean }) => (
+  <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 0 : 1.5}
+      d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+    />
+  </svg>
+);
+
+const ProfileIcon = ({ active }: { active: boolean }) => (
+  <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 0 : 1.5}
+      d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+    />
+  </svg>
+);
+
+const MessagesIcon = ({ active }: { active: boolean }) => (
+  <svg className="w-6 h-6" fill={active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 0 : 1.5}
+      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+    />
+  </svg>
+);
+
+type Tab = {
+  href: string;
+  label: string;
+  icon: React.FC<{ active: boolean }>;
+  matchPaths: string[];
+};
+
+const BottomTabNav = () => {
+  const router = useRouter();
+  const { user } = useAuth();
+  const isOrganizer = user?.roles?.includes('ORGANIZER');
+  const { data: unreadData } = useUnreadMessages(!!user);
+
+  // Profile tab destination and label depend on user role
+  const profileHref = isOrganizer
+    ? '/organizer/dashboard'
+    : user
+      ? '/shopper/dashboard'
+      : '/login';
+  const profileLabel = isOrganizer ? 'Dashboard' : 'Profile';
+
+  const CalendarIcon = ({ active }: { active: boolean }) => (
+    <Calendar className="w-6 h-6" fill={active ? 'currentColor' : 'none'} />
+  );
+
+  const tabs: Tab[] = [
+    {
+      href: '/map',
+      label: 'Map',
+      icon: MapIcon,
+      matchPaths: ['/map'],
+    },
+    {
+      href: '/calendar',
+      label: 'Calendar',
+      icon: CalendarIcon,
+      matchPaths: ['/calendar', '/organizer/calendar'],
+    },
+    {
+      href: '/shopper/wishlist',
+      label: 'Wishlist',
+      icon: HeartIcon,
+      matchPaths: ['/shopper/wishlist'],
+    },
+    {
+      href: '/messages',
+      label: 'Messages',
+      icon: MessagesIcon,
+      matchPaths: ['/messages'],
+    },
+    {
+      href: profileHref,
+      label: profileLabel,
+      icon: ProfileIcon,
+      matchPaths: ['/organizer', '/shopper', '/profile', '/login', '/register'],
+    },
+  ];
+
+  const isActive = (tab: Tab) => {
+    return tab.matchPaths.some((path) => {
+      if (path === '/') return router.pathname === '/';
+      return router.pathname.startsWith(path);
+    });
+  };
+
+  return (
+    <nav
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 shadow-nav pb-safe"
+      aria-label="Bottom navigation"
+    >
+      <div className="flex items-center justify-around h-14">
+        {tabs.map((tab) => {
+          const active = isActive(tab);
+          const Icon = tab.icon;
+          return (
+            <Link
+              key={tab.label}
+              href={tab.href}
+              className={`flex flex-col items-center justify-center flex-1 h-full min-w-touch transition-colors duration-150 ${
+                active
+                  ? 'text-amber-600'
+                  : 'text-warm-500 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-100'
+              }`}
+              aria-label={tab.label}
+              aria-current={active ? 'page' : undefined}
+            >
+              <div className="relative">
+                <Icon active={active} />
+                {tab.label === 'Messages' && unreadData && unreadData.unread > 0 && (
+                  <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-bold flex items-center justify-center leading-none" aria-hidden="true">
+                    {unreadData.unread > 9 ? '9+' : unreadData.unread}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] mt-0.5 font-medium leading-none" aria-hidden="true">
+                {tab.label}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+};
+
+export default BottomTabNav;

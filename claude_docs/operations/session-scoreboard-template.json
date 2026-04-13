@@ -1,0 +1,15 @@
+{
+  "_comment": "Copy this template to session-log entry at wrap time",
+  "session": 0,
+  "date": "YYYY-MM-DD",
+  "files_changed": 0,
+  "compressions": 0,
+  "compression_details": [],
+  "subagents_dispatched": [],
+  "push_method": "MCP|PS1|both",
+  "mcp_pushes": 0,
+  "rule_violations": [],
+  "tasks_completed": [],
+  "tasks_blocked": [],
+  "notes": ""
+}

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FindA.Sale Frontend Pages Audit — S380</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; padding: 40px 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 40px; }
+        h1 { color: #222; margin-bottom: 10px; font-size: 28px; }
+        .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+        h2 { color: #333; margin-top: 35px; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e0e0e0; font-size: 18px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th { background: #f9f9f9; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #ddd; font-size: 13px; text-transform: uppercase; color: #555; }
+        td { padding: 12px; border-bottom: 1px solid #e5e5e5; font-size: 14px; vertical-align: top; }
+        tr:hover { background: #fafafa; }
+        code { font-family: 'Monaco', 'Courier New', monospace; color: #c0392b; font-size: 13px; font-weight: 500; background: #fef9f9; padding: 1px 4px; border-radius: 3px; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+        .badge-red { background: #ffebee; color: #c62828; }
+        .badge-orange { background: #fff3e0; color: #e65100; }
+        .badge-blue { background: #e3f2fd; color: #1565c0; }
+        .check { color: #388e3c; font-weight: bold; }
+        .cross { color: #c62828; font-weight: bold; }
+        .summary-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-box { background: #f9f9f9; padding: 15px; border-radius: 6px; border-left: 4px solid #c62828; }
+        .stat-box.warn { border-left-color: #e65100; }
+        .stat-box.info { border-left-color: #1565c0; }
+        .stat-number { font-size: 28px; font-weight: bold; color: #333; }
+        .stat-label { font-size: 12px; color: #666; text-transform: uppercase; margin-top: 4px; }
+        .cat-header { background: #f5f5f5; padding: 10px 14px; margin: 20px 0 8px; border-left: 4px solid #999; font-weight: 600; font-size: 13px; text-transform: uppercase; color: #555; border-radius: 0 3px 3px 0; }
+        .item { padding: 10px 14px; margin-bottom: 8px; background: #fafafa; border-left: 3px solid #ddd; border-radius: 0 3px 3px 0; font-size: 13px; }
+        .item.important { background: #fffde7; border-left-color: #f9a825; }
+        .item.context { background: #e8f5e9; border-left-color: #388e3c; }
+        .item.public { background: #e3f2fd; border-left-color: #1565c0; }
+        .item.system { background: #f5f5f5; border-left-color: #9e9e9e; }
+        .item-path { font-family: 'Monaco', 'Courier New', monospace; font-size: 13px; color: #c0392b; font-weight: 500; }
+        .item-desc { color: #555; margin-top: 3px; }
+        .item-action { color: #1565c0; font-size: 12px; margin-top: 5px; font-weight: 500; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #999; }
+        .note { background: #fff8e1; border: 1px solid #ffe082; padding: 12px 16px; border-radius: 4px; font-size: 13px; color: #555; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>FindA.Sale Frontend Pages Audit</h1>
+    <p class="subtitle">Complete navigation + pages inventory scan. Generated S380 · April 2, 2026. Research only — no code changed.</p>
+
+    <div class="summary-stats">
+        <div class="stat-box">
+            <div class="stat-number">9</div>
+            <div class="stat-label">🔴 Dead Nav Links</div>
+        </div>
+        <div class="stat-box warn">
+            <div class="stat-number">5</div>
+            <div class="stat-label">⚠️ Parity Gaps</div>
+        </div>
+        <div class="stat-box info">
+            <div class="stat-number">20+</div>
+            <div class="stat-label">🟡 Orphaned Pages</div>
+        </div>
+        <div class="stat-box info">
+            <div class="stat-number">3</div>
+            <div class="stat-label">ℹ️ Admin Unlinked</div>
+        </div>
+    </div>
+
+    <!-- SECTION 1 -->
+    <h2>🔴 Section 1 — Dead Nav Links (Will 404 When Clicked)</h2>
+    <p class="note">These nav entries exist in mobile or desktop nav but point to pages that don't exist or have no index page (dynamic-only). Every one of these is a real user-facing 404.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Nav Link</th>
+                <th>Issue</th>
+                <th>Found In</th>
+                <th>Proposed Fix</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>/organizer/analytics</code></td>
+                <td><span class="badge badge-red">No Page</span></td>
+                <td>Mobile</td>
+                <td>Remove or redirect → <code>/organizer/sales/[id]/analytics</code></td>
+            </tr>
+            <tr>
+                <td><code>/organizer/item-tagger</code></td>
+                <td><span class="badge badge-red">Wrong Path</span></td>
+                <td>Mobile</td>
+                <td>Fix href → <code>/organizer/typology</code> (page exists at correct path)</td>
+            </tr>
+            <tr>
+                <td><code>/organizer/line-queue</code></td>
+                <td><span class="badge badge-orange">No Index</span></td>
+                <td>Mobile + Desktop</td>
+                <td>Create sale-picker index page, OR redirect to <code>/organizer/sales</code></td>
+            </tr>
+            <tr>
+                <td><code>/organizer/map</code></td>
+                <td><span class="badge badge-red">No Page</span></td>
+                <td>Mobile</td>
+                <td>Remove from nav (no page exists — top-level <code>/map</code> exists)</td>
+            </tr>
+            <tr>
+                <td><code>/organizer/photo-ops</code></td>
+                <td><span class="badge badge-orange">No Index</span></td>
+                <td>Mobile + Desktop</td>
+                <td>Create sale-picker index page, OR redirect to <code>/organizer/sales</code></td>
+            </tr>
+            <tr>
+                <td><code>/organizer/promote</code></td>
+                <td><span class="badge badge-orange">No Index</span></td>
+                <td>Mobile + Desktop</td>
+                <td>Create sale-picker index page, OR redirect to <code>/organizer/sales</code></td>
+            </tr>
+            <tr>
+                <td><code>/organizer/sale-hubs</code></td>
+                <td><span class="badge badge-red">Wrong Path</span></td>
+                <td>Mobile</td>
+                <td>Fix href → <code>/organizer/hubs</code> (page exists at correct path)</td>
+            </tr>
+            <tr>
+                <td><code>/organizer/send-update</code></td>
+                <td><span class="badge badge-orange">No Index</span></td>
+                <td>Mobile + Desktop</td>
+                <td>Create sale-picker index page, OR redirect to <code>/organizer/sales</code></td>
+            </tr>
+            <tr>
+                <td><code>/shopper/saved-items</code></td>
+                <td><span class="badge badge-red">No Page</span></td>
+                <td>Mobile</td>
+                <td>Fix href → <code>/shopper/wishlist</code> (that page exists)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- SECTION 2 -->
+    <h2>⚠️ Section 2 — Mobile ↔ Desktop Nav Parity Gaps</h2>
+    <p class="note">Items present in one nav but absent from the other. Both nav menus should offer equivalent access to the same features.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Path</th>
+                <th>Mobile</th>
+                <th>Desktop</th>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>/organizer/hubs</code></td>
+                <td><span class="cross">✗</span> (broken as /sale-hubs)</td>
+                <td><span class="check">✓</span></td>
+                <td>Mobile has wrong path. Fix to /organizer/hubs.</td>
+            </tr>
+            <tr>
+                <td><code>/organizer/calendar</code></td>
+                <td><span class="check">✓</span></td>
+                <td><span class="cross">✗</span></td>
+                <td>Desktop missing organizer calendar. Add to desktop nav.</td>
+            </tr>
+            <tr>
+                <td><code>/organizer/inventory</code></td>
+                <td><span class="check">✓</span></td>
+                <td><span class="cross">✗</span></td>
+                <td>Desktop missing inventory. Add to desktop nav.</td>
+            </tr>
+            <tr>
+                <td><code>/organizer/typology</code></td>
+                <td><span class="cross">✗</span> (broken as /item-tagger)</td>
+                <td><span class="check">✓</span></td>
+                <td>Mobile has wrong path. Fix to /organizer/typology.</td>
+            </tr>
+            <tr>
+                <td><code>/leaderboard</code> or <code>/shopper/leaderboard</code></td>
+                <td><span class="check">✓</span> (/leaderboard)</td>
+                <td><span class="cross">✗</span></td>
+                <td>Desktop missing leaderboard link. Add to Explore section.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- SECTION 3 -->
+    <h2>🟡 Section 3 — Orphaned Pages (Exist, Not In Any Nav)</h2>
+
+    <div class="cat-header">A) Important functional pages — may need nav entry or prominent link</div>
+
+    <div class="item important">
+        <div class="item-path">/shopper/alerts</div>
+        <div class="item-desc">Sale/price alerts for shoppers. Feature #37. Key engagement driver.</div>
+        <div class="item-action">→ Add to shopper section in both navs (or link from wishlist/explorer-passport)</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/shopper/loyalty</div>
+        <div class="item-desc">Explorer's Guild loyalty page. /shopper/explorer-passport IS in nav — check if these are the same page or separate features.</div>
+        <div class="item-action">→ Clarify: is /shopper/loyalty a duplicate of /shopper/explorer-passport? If so, consolidate or redirect.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/shopper/loot-legend</div>
+        <div class="item-desc">Loot Legend portfolio feature. Hunt Pass exclusive. Linked from hunt-pass page?</div>
+        <div class="item-action">→ Add to shopper nav, OR ensure hunt-pass page links here prominently.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/shopper/settings</div>
+        <div class="item-desc">Shopper-specific settings. /organizer/settings is in nav — shopper has no settings entry point.</div>
+        <div class="item-action">→ Add to shopper section in both navs.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/shopper/hauls</div>
+        <div class="item-desc">Haul Posts feature (#88). UGC photo gallery for shoppers. Built S274.</div>
+        <div class="item-action">→ Add to shopper Explore & Connect section in both navs.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/shopper/trails</div>
+        <div class="item-desc">Shopping Trails feature (#48). With /shopper/trails/create and /shopper/trails/[trailId].</div>
+        <div class="item-action">→ Add /shopper/trails to shopper nav. Dynamic sub-pages stay out of nav.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/shopper/disputes</div>
+        <div class="item-desc">Shopper dispute resolution. Users need to find this when something goes wrong.</div>
+        <div class="item-action">→ Add to shopper nav (under settings or history), OR link from purchase detail page.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/shopper/achievements</div>
+        <div class="item-desc">Badge/achievement gallery. Linked from loyalty/dashboard but not in main nav.</div>
+        <div class="item-action">→ Add to shopper nav or link prominently from explorer-passport.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/shopper/leaderboard</div>
+        <div class="item-desc">Shopper-specific leaderboard (vs. global /leaderboard). Feature #71.</div>
+        <div class="item-action">→ Verify if different from /leaderboard. If separate, add to shopper section.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/referral-dashboard</div>
+        <div class="item-desc">Referral program tracking (#7). Built but only accessible via direct URL.</div>
+        <div class="item-action">→ Add to shopper or global nav (or profile menu).</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/organizer/bounties</div>
+        <div class="item-desc">Organizer bounties feature. Separate from /shopper/bounties.</div>
+        <div class="item-action">→ Verify if this is live. If so, add to organizer nav (Pro Tools section).</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/organizer/performance</div>
+        <div class="item-desc">Organizer performance analytics. Separate from /organizer/insights?</div>
+        <div class="item-action">→ Clarify if separate from /organizer/insights. If different, add to nav.</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/search</div>
+        <div class="item-desc">Global search page. Users need a search entry point!</div>
+        <div class="item-action">→ Add search icon/link to nav (or ensure search bar is always visible).</div>
+    </div>
+    <div class="item important">
+        <div class="item-path">/organizer/email-digest-preview</div>
+        <div class="item-desc">Preview tool for email digests. Admin/organizer utility.</div>
+        <div class="item-action">→ Link from admin panel or organizer settings. Not primary nav.</div>
+    </div>
+
+    <div class="cat-header">B) Context-launched pages (correctly absent — reached via sale/item flows)</div>
+
+    <div class="item context">
+        <div class="item-path">/organizer/checklist/[saleId] · /organizer/edit-sale/[id] · /organizer/edit-item/[id] · /organizer/settlement/[saleId] · /organizer/storefront/[slug] · /organizer/hubs/[hubId]/manage · /organizer/hubs/create · /organizer/flip-report/[saleId] · /organizer/sales/[id]/analytics</div>
+        <div class="item-desc">Dynamic flow pages. Reached from sale cards, item cards, or parent pages.</div>
+        <div class="item-action">→ Correct. Keep out of nav.</div>
+    </div>
+    <div class="item context">
+        <div class="item-path">/organizer/upgrade · /organizer/premium</div>
+        <div class="item-desc">Upsell flow pages. Reached from upgrade CTAs, not direct nav.</div>
+        <div class="item-action">→ Correct. Keep out of nav.</div>
+    </div>
+
+    <div class="cat-header">C) Public/SEO discovery pages (correctly absent — reached via search/links)</div>
+    <div class="item public">
+        <div class="item-path">/cities · /city/[city] · /neighborhoods/[slug] · /categories/[category] · /encyclopedia/[slug] · /tags/[slug] · /hubs/index · /hubs/[slug] · /challenges · /condition-guide · /surprise-me</div>
+        <div class="item-desc">Discovery content pages. SEO-facing, linked from search results, footer, content.</div>
+        <div class="item-action">→ Mostly correct. Consider adding /cities, /encyclopedia, /search to footer or explore section.</div>
+    </div>
+    <div class="item public">
+        <div class="item-path">/organizer/hubs/index</div>
+        <div class="item-desc">Organizer's marketplace hub management. Desktop nav has /organizer/hubs. Mobile is broken (/sale-hubs).</div>
+        <div class="item-action">→ Fix mobile nav (already in Section 1/2). Page is fine.</div>
+    </div>
+    <div class="item public">
+        <div class="item-path">/wishlist · /wishlists · /wishlists/shared/[slug]</div>
+        <div class="item-desc">Root-level wishlist pages (vs. /shopper/wishlist which IS in nav). May be legacy or public-facing variants.</div>
+        <div class="item-action">→ Verify: are these duplicate pages or different features? If legacy, consider removing.</div>
+    </div>
+    <div class="item public">
+        <div class="item-path">/workspace/[slug]</div>
+        <div class="item-desc">Public TEAMS workspace page. Accessed via team invite link or workspace URL.</div>
+        <div class="item-action">→ Correct. Keep out of nav; reached via link.</div>
+    </div>
+    <div class="item public">
+        <div class="item-path">/city-heat-index</div>
+        <div class="item-desc">S344: confirmed redirects to /cities. Stub page.</div>
+        <div class="item-action">→ Correct. No nav needed.</div>
+    </div>
+    <div class="item public">
+        <div class="item-path">/creator/dashboard</div>
+        <div class="item-desc">Creator role dashboard. Unclear what "creator" means — may be a planned role or legacy page.</div>
+        <div class="item-action">→ Clarify: is this a planned role or orphaned legacy page? If legacy, may be safe to remove.</div>
+    </div>
+
+    <div class="cat-header">D) System/auth/flow pages (correctly absent from nav)</div>
+    <div class="item system">
+        <div class="item-path">/login · /register · /forgot-password · /reset-password · /unsubscribe · /auth/oauth-callback · /offline · /organizer/offline · /shopper/checkout-success · /purchases/[id] · /refer/[code] · /affiliate/[id] · /access-denied · /haul/coming-soon · /shopper/loot-log/[purchaseId] · /shopper/loot-log/public/[userId] · /shopper/profile/[userId] · /organizers/[id] · /trail/[shareToken] · /sales/[id]/treasure-hunt-qr/[clueId] · /sales/zip/[zip] · /messages/[id] · /messages/new</div>
+        <div class="item-desc">Auth, error, flow, and dynamic detail pages. All correctly absent from nav.</div>
+        <div class="item-action">→ No action needed.</div>
+    </div>
+    <div class="item system">
+        <div class="item-path">/shopper/favorites</div>
+        <div class="item-desc">S343: redirects to /shopper/wishlist. Legacy redirect page.</div>
+        <div class="item-action">→ Verify redirect is working. No nav entry needed.</div>
+    </div>
+    <div class="item system">
+        <div class="item-path">/shopper/messages · /shopper/notifications</div>
+        <div class="item-desc">Shopper-prefixed versions of /messages and /notifications. Verify if these are the canonical shopper views or legacy duplicates.</div>
+        <div class="item-action">→ Clarify which is canonical. If /messages is the main one, /shopper/messages may be redundant.</div>
+    </div>
+
+    <!-- SECTION 4 -->
+    <h2>ℹ️ Section 4 — Admin Pages Not in Current Nav</h2>
+    <p class="note">These admin pages exist but are not linked from the admin nav entries in Layout.tsx or AvatarDropdown.tsx. Verify they're accessible from the /admin index page.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Page</th>
+                <th>Description</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>/admin/bid-review</code></td>
+                <td>Auction bid moderation tool</td>
+                <td>Verify accessible from /admin index sidebar. Add to nav if missing.</td>
+            </tr>
+            <tr>
+                <td><code>/admin/disputes</code></td>
+                <td>User dispute management</td>
+                <td>Verify accessible from /admin index sidebar. Add to nav if missing.</td>
+            </tr>
+            <tr>
+                <td><code>/admin/invites</code></td>
+                <td>Beta invites / early access management</td>
+                <td>Verify accessible from /admin index sidebar. Add to nav if missing.</td>
+            </tr>
+            <tr>
+                <td><code>/admin/ab-tests</code></td>
+                <td>A/B test management</td>
+                <td>Verify accessible from /admin index sidebar. Add to nav if missing.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Report generated: April 2, 2026 · Session S380 · Research only, no code changed · Patrick review required before any fixes dispatched
+    </div>
+</div>
+</body>
+</html>

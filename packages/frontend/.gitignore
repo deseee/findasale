@@ -1,0 +1,6 @@
+# next-pwa build artifacts — generated at build time, must not be committed
+# public/sw.js — removed from ignore: now a manually-written file (#69 offline mode)
+public/sw-cache.js
+public/sw-push.js
+public/workbox-*.js
+public/fallback-*.js

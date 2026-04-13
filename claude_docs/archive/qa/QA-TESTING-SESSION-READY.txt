@@ -1,0 +1,185 @@
+═══════════════════════════════════════════════════════════════════════════════
+ CHROME LIVE AUDIT TESTING SESSION — MARCH 20, 2026
+═══════════════════════════════════════════════════════════════════════════════
+
+STATUS: READY FOR EXECUTION
+
+Three complete testing materials have been prepared in:
+  /sessions/lucid-eloquent-faraday/mnt/FindaSale/claude_docs/audits/
+
+═══════════════════════════════════════════════════════════════════════════════
+ WHAT'S READY
+═══════════════════════════════════════════════════════════════════════════════
+
+1. README-QA-SESSION-2026-03-20.md
+   ↳ Overview of entire testing session
+   ↳ 10-phase breakdown with time estimates
+   ↳ What to watch for (dark mode, tier gating, accessibility)
+   ↳ File paths and sign-off instructions
+
+2. QUICK-REFERENCE-QA-2026-03-20.md ← START HERE
+   ↳ One-page cheat sheet
+   ↳ Test account credentials (copy-paste ready)
+   ↳ All key routes to test
+   ↳ Dark mode toggle location hints
+   ↳ Tier gating summary
+   ↳ Common issues checklist
+
+3. chrome-live-audit-2026-03-20-CHECKLIST.md
+   ↳ Detailed step-by-step testing checklist
+   ↳ 13 public pages to visit
+   ↳ 6 shopper routes
+   ↳ 8 organizer routes per tier (with gating expectations)
+   ↳ Dark mode deep-dive section
+   ↳ Accessibility spot check (keyboard, focus states, icon labels)
+   ↳ Console error tracking
+   ↳ Check-off boxes for tracking progress
+
+4. chrome-live-audit-2026-03-20.md ← FILL THIS IN AFTER TESTING
+   ↳ Report template (empty, ready for findings)
+   ↳ Sections for each phase (public pages, shopper, SIMPLE, PRO, TEAMS)
+   ↳ Critical/high/medium/low issue categorization
+   ↳ Roadmap chrome column updates
+   ↳ Sign-off checklist
+
+═══════════════════════════════════════════════════════════════════════════════
+ HOW TO USE THESE MATERIALS
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1: Open QUICK-REFERENCE in your browser while testing
+        Open Chrome and https://finda.sale in one window/tab
+        Keep QUICK-REFERENCE open in another tab
+        This has all account credentials and routes
+
+STEP 2: Use CHECKLIST as your testing roadmap
+        Go through each section in order
+        Check off items as you complete them
+        Note any issues on-the-fly
+
+STEP 3: After testing is complete, fill in the REPORT template
+        Copy findings from checklist into report
+        Categorize issues by severity (critical → low)
+        Update roadmap progress column
+        Mark as [DRAFT] or [FINAL]
+
+═══════════════════════════════════════════════════════════════════════════════
+ KEY TEST ACCOUNTS (COPY-PASTE READY)
+═══════════════════════════════════════════════════════════════════════════════
+
+Shopper:
+  user11@example.com / password123
+
+SIMPLE Organizer:
+  user1@example.com / password123
+
+PRO Organizer:
+  user2@example.com / password123
+
+TEAMS Organizer:
+  user3@example.com / password123
+
+═══════════════════════════════════════════════════════════════════════════════
+ TESTING SCOPE (5 FOCUS AREAS)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. PUBLIC PAGES (no login)
+   • 13 pages: homepage, trending, map, calendar, leaderboard, categories,
+     plan, cities, surprise-me, condition-guide, about, contact, 404 page
+   • Check: loads, dark mode, no broken images, badge explosion, nav density
+
+2. SHOPPER ACCOUNT (user11@example.com)
+   • 6 routes: profile, achievements, wishlists, notifications, loyalty, collection
+   • Check: dark mode, empty state copy, nav item count, accessibility
+
+3. SIMPLE ORGANIZER (user1@example.com)
+   • Dashboard, items, reputation, payout (open routes)
+   • Analytics, batch-ops, command-center, brand-kit (blocked, show upsells)
+   • Check: tier gating works, upsells present, dark mode, rapidfire mode, AI tags
+
+4. PRO ORGANIZER (user2@example.com)
+   • All SIMPLE routes PLUS analytics, batch-ops, command-center, brand-kit
+   • workspace route (should show TEAMS upsell, not fully open)
+   • Check: nav item count (should be > SIMPLE), all gated features unlocked
+
+5. TEAMS ORGANIZER (user3@example.com)
+   • All PRO routes PLUS workspace (fully accessible)
+   • Multi-user management UI
+   • Check: nav item count (should be PRO + 1), workspace fully functional
+
+PLUS: Dark mode accessibility audit and keyboard navigation spot check
+
+═══════════════════════════════════════════════════════════════════════════════
+ ESTIMATED DURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Total: 45–60 minutes
+  • Public pages: 10 min
+  • Shopper: 5 min
+  • SIMPLE: 10 min
+  • PRO: 5 min
+  • TEAMS: 3 min
+  • Accessibility: 5 min
+  • Dark mode: 5 min
+  • Console/network: 2 min
+  • Report: 5 min
+
+═══════════════════════════════════════════════════════════════════════════════
+ WHAT TO LOOK FOR (COMMON ISSUES)
+═══════════════════════════════════════════════════════════════════════════════
+
+DARK MODE:
+  • Amber/golden text hard to read? (amber-600 on dark slate may fail WCAG)
+  • Form input borders invisible?
+  • Card backgrounds distinct from page background?
+  • Status badges (SOLD/LIVE/AUCTION) readable on dark cards?
+
+TIER GATING:
+  • SIMPLE blocked from analytics, batch-ops, command-center, brand-kit, workspace?
+  • PRO blocked from workspace only (shows TEAMS upsell)?
+  • TEAMS has full access?
+  • Upsells visible and on-brand?
+
+NAV ITEM COUNT:
+  • SIMPLE: ~4 items (Dashboard, Items, Reputation, Payout)
+  • PRO: should be ≥ SIMPLE
+  • TEAMS: should be PRO + 1 (Workspace)
+
+ACCESSIBILITY:
+  • TAB key navigates all interactive elements?
+  • Focus states visible (blue outline)?
+  • Icon-only buttons have aria-labels?
+  • Mobile bottom nav icons labeled?
+
+BADGES/CARDS:
+  • Badge explosion? (multiple status badges stacking oddly on sale cards)
+  • Images loading?
+  • No broken 404s in console?
+
+═══════════════════════════════════════════════════════════════════════════════
+ FILE LOCATIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+All files are in:
+  /sessions/lucid-eloquent-faraday/mnt/FindaSale/claude_docs/audits/
+
+Start with:
+  QUICK-REFERENCE-QA-2026-03-20.md        ← Open in browser during testing
+  chrome-live-audit-2026-03-20-CHECKLIST.md ← Detailed steps
+
+Fill in after testing:
+  chrome-live-audit-2026-03-20.md         ← Final report
+
+═══════════════════════════════════════════════════════════════════════════════
+ NEXT STEPS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Open Chrome to https://finda.sale
+2. Keep QUICK-REFERENCE open in another tab
+3. Work through CHECKLIST items in order
+4. Take screenshots (Ctrl+Shift+S or F12 → Capture)
+5. Fill in the REPORT template when complete
+6. Mark report as [FINAL]
+
+═══════════════════════════════════════════════════════════════════════════════
+ Questions? Check README-QA-SESSION-2026-03-20.md for detailed instructions.
+═══════════════════════════════════════════════════════════════════════════════

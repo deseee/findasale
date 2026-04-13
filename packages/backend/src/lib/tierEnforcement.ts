@@ -1,0 +1,105 @@
+/**
+ * Tier Enforcement Helpers
+ * Feature #75: Tier Lapse State Logic
+ *
+ * Helpers to check if organizers are over tier limits for items/photos/AI tags
+ */
+
+import { prisma } from './prisma';
+import { SubscriptionTier, getTierLimit } from '../constants/tierLimits';
+
+/**
+ * Check if a sale exceeds the organizer's item limit for their tier
+ */
+export async function checkSaleOverLimit(
+  saleId: string,
+  tier: SubscriptionTier
+): Promise<{
+  isOverLimit: boolean;
+  itemCount: number;
+  limit: number;
+  message?: string;
+}> {
+  const itemCount = await prisma.item.count({
+    where: { saleId }
+  });
+
+  const limit = getTierLimit(tier, 'itemsPerSale');
+
+  return {
+    isOverLimit: itemCount > limit,
+    itemCount,
+    limit,
+    message: itemCount > limit
+      ? `Sale has ${itemCount} items (limit: ${limit})`
+      : undefined,
+  };
+}
+
+/**
+ * Check if an item exceeds the organizer's photo limit for their tier
+ */
+export async function checkItemOverPhotoLimit(
+  itemId: string,
+  tier: SubscriptionTier
+): Promise<{
+  isOverLimit: boolean;
+  photoCount: number;
+  limit: number;
+  message?: string;
+}> {
+  const photoCount = await prisma.photo.count({
+    where: { itemId }
+  });
+
+  const limit = getTierLimit(tier, 'photosPerItem');
+
+  return {
+    isOverLimit: photoCount >= limit,
+    photoCount,
+    limit,
+    message: photoCount >= limit
+      ? `Item has ${photoCount} photos (limit: ${limit})`
+      : undefined,
+  };
+}
+
+/**
+ * Check if an organizer exceeds their AI tag limit for this calendar month
+ */
+export async function checkAITagLimit(
+  organizerId: string,
+  tier: SubscriptionTier
+): Promise<{
+  isOverLimit: boolean;
+  tagCount: number;
+  limit: number;
+  message?: string;
+}> {
+  // Count items tagged with AI this calendar month
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const tagCount = await prisma.item.count({
+    where: {
+      sale: {
+        organizerId
+      },
+      isAiTagged: true,
+      createdAt: {
+        gte: monthStart
+      }
+    }
+  });
+
+  const limit = getTierLimit(tier, 'aiTagsPerMonth');
+
+  return {
+    isOverLimit: tagCount >= limit,
+    tagCount,
+    limit,
+    message: tagCount >= limit
+      ? `Used ${tagCount} AI tags this month (limit: ${limit})`
+      : undefined,
+  };
+}

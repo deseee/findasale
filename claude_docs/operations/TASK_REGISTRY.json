@@ -1,0 +1,236 @@
+{
+  "version": "1.0",
+  "created": "2026-03-09",
+  "last_updated": "2026-03-09 (Session 103 reconciliation — all loop tasks marked complete)",
+  "tasks": [
+    {
+      "id": "E4",
+      "title": "Inter-agent message board design + prototype",
+      "state": "complete",
+      "owner": "cowork-power-user",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": [
+        "claude_docs/operations/agent-message-board.md",
+        "claude_docs/operations/MESSAGE_BOARD.json"
+      ],
+      "session": 96,
+      "priority": "P1"
+    },
+    {
+      "id": "E5",
+      "title": "Orchestrator task dependency state machine",
+      "state": "complete",
+      "owner": "findasale-workflow",
+      "depends_on": ["E4"],
+      "blocked_by": null,
+      "files_changed": [
+        "claude_docs/operations/task-state-machine.md",
+        "claude_docs/operations/TASK_REGISTRY.json"
+      ],
+      "session": 96,
+      "priority": "P1"
+    },
+    {
+      "id": "E5-heartbeat",
+      "title": "Heartbeat/timeout monitoring for stuck agents",
+      "state": "complete",
+      "owner": "findasale-workflow",
+      "depends_on": ["E5"],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/operations/heartbeat-protocol.md"],
+      "session": 96,
+      "priority": "P1"
+    },
+    {
+      "id": "E16",
+      "title": "Worktrees & multi-terminal workflow research",
+      "state": "complete",
+      "owner": "cowork-power-user",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/research/e16-worktrees-multi-terminal-research.md"],
+      "session": 96,
+      "priority": "P2"
+    },
+    {
+      "id": "E2",
+      "title": "Token budget monitoring research + implementation",
+      "state": "complete",
+      "owner": "cowork-power-user",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/research/e2-token-budget-monitoring.md"],
+      "session": 97,
+      "priority": "P1"
+    },
+    {
+      "id": "E10",
+      "title": "Session capacity baselines",
+      "state": "complete",
+      "owner": "findasale-workflow",
+      "depends_on": ["E2"],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/research/e10-session-capacity-baselines.md"],
+      "session": 97,
+      "priority": "P1"
+    },
+    {
+      "id": "E12.5",
+      "title": "Token-per-goal metric formalization",
+      "state": "complete",
+      "owner": "findasale-records",
+      "depends_on": ["E12"],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/operations/token-per-goal-metric.md"],
+      "session": 97,
+      "priority": "P1"
+    },
+    {
+      "id": "E6",
+      "title": "Steelman method documentation",
+      "state": "complete",
+      "owner": "findasale-workflow",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/operations/steelman-method.md"],
+      "session": 97,
+      "priority": "P2"
+    },
+    {
+      "id": "E1.5",
+      "title": "Continuous batch rule — continue until blocked",
+      "state": "complete",
+      "owner": "findasale-workflow",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/CORE.md (§3 items 6-7)"],
+      "session": 98,
+      "priority": "P1"
+    },
+    {
+      "id": "E9.5",
+      "title": "PowerShell syntax quick-ref table in CORE.md",
+      "state": "complete",
+      "owner": "findasale-workflow",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/CORE.md (§18 table)"],
+      "session": 98,
+      "priority": "P1"
+    },
+    {
+      "id": "E17",
+      "title": "File creation schema + naming enforcement",
+      "state": "complete",
+      "owner": "findasale-records",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": [
+        "claude_docs/operations/file-creation-schema.md",
+        "claude_docs/skills-package/conversation-defaults/SKILL.md"
+      ],
+      "session": "98.5",
+      "priority": "P2"
+    },
+    {
+      "id": "E15",
+      "title": "Skill roster optimization — CLAUDE.md §7",
+      "state": "complete",
+      "owner": "cowork-power-user",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": ["CLAUDE.md (§7 skill roster)"],
+      "session": "98.5",
+      "priority": "P1"
+    },
+    {
+      "id": "F2",
+      "title": "Hacker / Security agent skill",
+      "state": "complete",
+      "owner": "findasale-records",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": [".skills/skills/findasale-hacker/SKILL.md"],
+      "session": 99,
+      "priority": "P1"
+    },
+    {
+      "id": "F1",
+      "title": "Pitchman / Blue-sky idea generator skill",
+      "state": "complete",
+      "owner": "findasale-records",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": [".skills/skills/findasale-pitchman/SKILL.md"],
+      "session": 99,
+      "priority": "P1"
+    },
+    {
+      "id": "F3",
+      "title": "Advisory Board ensemble skill",
+      "state": "complete",
+      "owner": "findasale-records",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": [".skills/skills/findasale-advisory-board/SKILL.md"],
+      "session": 99,
+      "priority": "P1"
+    },
+    {
+      "id": "G-batch",
+      "title": "Cowork platform research (Sentry MCP, GitHub Actions, Cozempic, Agent Teams)",
+      "state": "complete",
+      "owner": "cowork-power-user",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/research/g-batch-cowork-platform-research.md"],
+      "session": 100,
+      "priority": "P2"
+    },
+    {
+      "id": "E7",
+      "title": "PM agent design — decided no separate agent",
+      "state": "complete",
+      "owner": "findasale-architect",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": ["claude_docs/operations/pm-agent-design.md"],
+      "session": 101,
+      "priority": "P2"
+    },
+    {
+      "id": "E14",
+      "title": "Model selection per agent — routing research",
+      "state": "complete",
+      "owner": "cowork-power-user",
+      "depends_on": [],
+      "blocked_by": null,
+      "files_changed": [
+        "claude_docs/research/e14-model-selection-per-agent.md",
+        "claude_docs/CORE.md (§12)"
+      ],
+      "session": 102,
+      "priority": "P2"
+    },
+    {
+      "id": "Session-103-eval",
+      "title": "Fleet optimization evaluation (Session 103)",
+      "state": "complete",
+      "owner": "orchestrator",
+      "depends_on": ["E1.5", "E4", "E5", "F1", "F2", "F3", "E14"],
+      "blocked_by": null,
+      "files_changed": [
+        "claude_docs/operations/fleet-optimization-evaluation-2026-03-09.md",
+        "claude_docs/operations/TASK_REGISTRY.json",
+        "claude_docs/skills-package/conversation-defaults/SKILL.md",
+        "claude_docs/skills-package/conversation-defaults-updated.skill",
+        "claude_docs/logs/session-log.md",
+        "claude_docs/STATE.md",
+        "claude_docs/operations/next-session-prompt.md"
+      ],
+      "session": 103,
+      "priority": "P0"
+    }
+  ]
+}

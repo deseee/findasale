@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FindA.Sale - Modern Homepage Mockup</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --sage: #6B8F71;
+            --sage-dark: #527055;
+            --sage-light: #8BA98F;
+            --bg-light: #FAFAF8;
+            --bg-dark: #0F1419;
+            --text-light: #1A1A1A;
+            --text-dark: #F5F5F1;
+            --border-light: #E5E5E0;
+            --border-dark: #2A2F3A;
+            --card-light: #FFFFFF;
+            --card-dark: #1A1F2E;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --shadow-dark: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-light);
+            transition: background-color 0.3s ease, color 0.3s ease;
+            line-height: 1.6;
+        }
+
+        body.dark-mode {
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
+        }
+
+        /* ==== HEADER & NAV ==== */
+        header {
+            background-color: var(--card-light);
+            border-bottom: 1px solid var(--border-light);
+            padding: 1rem 2rem;
+            sticky: top;
+            z-index: 100;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+
+        body.dark-mode header {
+            background-color: var(--card-dark);
+            border-bottom-color: var(--border-dark);
+        }
+
+        nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-family: 'Fraunces', serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--sage);
+            text-decoration: none;
+            letter-spacing: -1px;
+        }
+
+        .nav-center {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            flex: 1;
+            justify-content: center;
+        }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            background-color: var(--bg-light);
+            border: 1px solid var(--border-light);
+            border-radius: 24px;
+            padding: 0.5rem 1.2rem;
+            gap: 0.5rem;
+            width: 280px;
+            transition: border-color 0.2s ease;
+        }
+
+        body.dark-mode .search-bar {
+            background-color: var(--card-dark);
+            border-color: var(--border-dark);
+        }
+
+        .search-bar:focus-within {
+            border-color: var(--sage);
+            box-shadow: 0 0 0 3px rgba(107, 143, 113, 0.1);
+        }
+
+        .search-bar input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            color: var(--text-light);
+            outline: none;
+        }
+
+        body.dark-mode .search-bar input {
+            color: var(--text-dark);
+        }
+
+        .search-bar input::placeholder {
+            color: #888;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 1.3rem;
+            cursor: pointer;
+            color: var(--text-light);
+            transition: color 0.3s ease;
+        }
+
+        body.dark-mode .theme-toggle {
+            color: var(--text-dark);
+        }
+
+        .theme-toggle:hover {
+            color: var(--sage);
+        }
+
+        .user-menu {
+            background-color: var(--bg-light);
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        body.dark-mode .user-menu {
+            background-color: var(--card-dark);
+            border-color: var(--border-dark);
+        }
+
+        .user-menu:hover {
+            background-color: var(--sage);
+            color: white;
+            border-color: var(--sage);
+        }
+
+        @media (max-width: 768px) {
+            nav {
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+            .nav-center {
+                order: 3;
+                width: 100%;
+                margin-top: 1rem;
+                gap: 1rem;
+            }
+            .search-bar {
+                width: 100%;
+            }
+        }
+
+        /* ==== HERO SECTION ==== */
+        .hero {
+            background: linear-gradient(135deg, var(--sage) 0%, var(--sage-dark) 100%);
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 400px;
+            height: 400px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            z-index: 0;
+        }
+
+        .hero-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero h1 {
+            font-family: 'Fraunces', serif;
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            margin-bottom: 1rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .cta-button {
+            background-color: white;
+            color: var(--sage);
+            border: none;
+            padding: 0.9rem 2.2rem;
+            border-radius: 28px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .cta-button:active {
+            transform: translateY(0);
+        }
+
+        /* ==== FILTER PILLS ==== */
+        .filters-section {
+            padding: 2.5rem 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .filters-label {
+            font-family: 'Fraunces', serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 1rem;
+        }
+
+        .filter-pills {
+            display: flex;
+            gap: 0.8rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+            scroll-behavior: smooth;
+        }
+
+        .filter-pills::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .filter-pills::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .filter-pills::-webkit-scrollbar-thumb {
+            background: var(--border-light);
+            border-radius: 2px;
+        }
+
+        body.dark-mode .filter-pills::-webkit-scrollbar-thumb {
+            background: var(--border-dark);
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.65rem 1.4rem;
+            border-radius: 24px;
+            background-color: var(--bg-light);
+            color: var(--text-light);
+            border: 1px solid var(--border-light);
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        body.dark-mode .pill {
+            background-color: var(--card-dark);
+            color: var(--text-dark);
+            border-color: var(--border-dark);
+        }
+
+        .pill:hover {
+            background-color: var(--sage);
+            color: white;
+            border-color: var(--sage);
+        }
+
+        .pill.active {
+            background-color: var(--sage);
+            color: white;
+            border-color: var(--sage);
+        }
+
+        /* ==== CARDS GRID ==== */
+        .cards-section {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            font-family: 'Fraunces', serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: var(--text-light);
+        }
+
+        body.dark-mode .section-title {
+            color: var(--text-dark);
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background-color: var(--card-light);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body.dark-mode .card {
+            background-color: var(--card-dark);
+            box-shadow: var(--shadow-dark);
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        body.dark-mode .card:hover {
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-image {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: linear-gradient(135deg, #E8E8E0 0%, #D5D5CC 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: #999;
+        }
+
+        .card-footer {
+            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+            flex-grow: 1;
+        }
+
+        .card-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.8rem;
+        }
+
+        .card-title {
+            font-family: 'Fraunces', serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-light);
+            flex: 1;
+            line-height: 1.2;
+        }
+
+        body.dark-mode .card-title {
+            color: var(--text-dark);
+        }
+
+        .card-badge {
+            background-color: var(--sage);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .card-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        body.dark-mode .card-meta {
+            color: #AAA;
+        }
+
+        .card-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 0.6rem;
+            padding-top: 0.6rem;
+            border-top: 1px solid var(--border-light);
+        }
+
+        body.dark-mode .card-actions {
+            border-top-color: var(--border-dark);
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 0.6rem 1rem;
+            border: 1px solid var(--border-light);
+            background-color: var(--bg-light);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--text-light);
+        }
+
+        body.dark-mode .action-btn {
+            background-color: var(--card-dark);
+            border-color: var(--border-dark);
+            color: var(--text-dark);
+        }
+
+        .action-btn:hover {
+            background-color: var(--sage);
+            color: white;
+            border-color: var(--sage);
+        }
+
+        /* ==== HOW IT WORKS ==== */
+        .how-it-works {
+            background-color: var(--bg-light);
+            padding: 3rem 2rem;
+            margin-top: 3rem;
+        }
+
+        body.dark-mode .how-it-works {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .how-it-works-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .how-it-works h2 {
+            font-family: 'Fraunces', serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 3rem;
+            color: var(--text-light);
+        }
+
+        body.dark-mode .how-it-works h2 {
+            color: var(--text-dark);
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            text-align: center;
+        }
+
+        .step {
+            padding: 1.5rem;
+        }
+
+        .step-number {
+            width: 48px;
+            height: 48px;
+            background-color: var(--sage);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Fraunces', serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0 auto 1rem;
+        }
+
+        .step h3 {
+            font-family: 'Fraunces', serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-light);
+        }
+
+        body.dark-mode .step h3 {
+            color: var(--text-dark);
+        }
+
+        .step p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        body.dark-mode .step p {
+            color: #AAA;
+        }
+
+        /* ==== FOOTER ==== */
+        footer {
+            background-color: var(--card-light);
+            border-top: 1px solid var(--border-light);
+            padding: 3rem 2rem;
+            margin-top: 3rem;
+        }
+
+        body.dark-mode footer {
+            background-color: var(--card-dark);
+            border-top-color: var(--border-dark);
+        }
+
+        .footer-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .footer-section h3 {
+            font-family: 'Fraunces', serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 1rem;
+            color: var(--text-light);
+        }
+
+        body.dark-mode .footer-section h3 {
+            color: var(--text-dark);
+        }
+
+        .footer-section a {
+            display: block;
+            color: #666;
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 0.8rem;
+            transition: color 0.2s ease;
+        }
+
+        body.dark-mode .footer-section a {
+            color: #AAA;
+        }
+
+        .footer-section a:hover {
+            color: var(--sage);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid var(--border-light);
+            padding-top: 2rem;
+            text-align: center;
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        body.dark-mode .footer-bottom {
+            border-top-color: var(--border-dark);
+            color: #AAA;
+        }
+
+        /* ==== MODAL / MAP TOGGLE ==== */
+        .map-section {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .map-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .map-toggle-btn {
+            background-color: var(--sage);
+            color: white;
+            border: none;
+            padding: 0.7rem 1.6rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .map-toggle-btn:hover {
+            background-color: var(--sage-dark);
+        }
+
+        .map-placeholder {
+            width: 100%;
+            height: 300px;
+            background-color: var(--bg-light);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 1rem;
+        }
+
+        body.dark-mode .map-placeholder {
+            background-color: var(--card-dark);
+        }
+
+        /* ==== RESPONSIVE ==== */
+        @media (max-width: 768px) {
+            header {
+                padding: 1rem;
+            }
+
+            nav {
+                flex-direction: column;
+            }
+
+            .nav-center {
+                order: 3;
+                width: 100%;
+                margin-top: 1rem;
+            }
+
+            .search-bar {
+                width: 100%;
+            }
+
+            .hero {
+                padding: 2.5rem 1rem;
+            }
+
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+
+            .filters-section {
+                padding: 1.5rem 1rem;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ==== UTILITY ==== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <header>
+        <nav>
+            <a href="#" class="logo">FindA.Sale</a>
+            <div class="nav-center">
+                <div class="search-bar">
+                    <span>🔍</span>
+                    <input type="text" placeholder="Search sales, locations...">
+                </div>
+            </div>
+            <div class="nav-right">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+                <button class="user-menu">Sign In</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Find Amazing Sales Near You</h1>
+            <p>Discover estate sales, yard sales, auctions, and flea markets happening right now in Grand Rapids.</p>
+            <button class="cta-button" onclick="scrollToCards()">Explore Sales</button>
+        </div>
+    </section>
+
+    <!-- FILTERS -->
+    <section class="filters-section">
+        <div class="filters-label">Filter by type</div>
+        <div class="filter-pills">
+            <button class="pill active">All Sales</button>
+            <button class="pill">Estate Sales</button>
+            <button class="pill">Yard Sales</button>
+            <button class="pill">Auctions</button>
+            <button class="pill">Flea Markets</button>
+            <button class="pill">Consignment</button>
+            <button class="pill">Liquidation</button>
+        </div>
+    </section>
+
+    <!-- CARDS GRID -->
+    <section class="cards-section" id="cards-section">
+        <h2 class="section-title">Sales Happening This Weekend</h2>
+        <div class="cards-grid">
+            <!-- Card 1 -->
+            <div class="card">
+                <div class="card-image">🏠</div>
+                <div class="card-footer">
+                    <div class="card-header-row">
+                        <h3 class="card-title">Riverside Estate Sale</h3>
+                        <span class="card-badge">Estate Sale</span>
+                    </div>
+                    <div class="card-meta">
+                        <div class="card-meta-item">📅 Mar 29–30, 9 AM–5 PM</div>
+                        <div class="card-meta-item">📍 East Hills, Grand Rapids</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="action-btn">View Details</button>
+                        <button class="action-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="card">
+                <div class="card-image">🏘️</div>
+                <div class="card-footer">
+                    <div class="card-header-row">
+                        <h3 class="card-title">Downtown Yard Sale</h3>
+                        <span class="card-badge">Yard Sale</span>
+                    </div>
+                    <div class="card-meta">
+                        <div class="card-meta-item">📅 Mar 29, 8 AM–2 PM</div>
+                        <div class="card-meta-item">📍 Downtown GR</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="action-btn">View Details</button>
+                        <button class="action-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="card">
+                <div class="card-image">🎪</div>
+                <div class="card-footer">
+                    <div class="card-header-row">
+                        <h3 class="card-title">Spring Flea Market</h3>
+                        <span class="card-badge">Flea Market</span>
+                    </div>
+                    <div class="card-meta">
+                        <div class="card-meta-item">📅 Mar 29–30, 10 AM–6 PM</div>
+                        <div class="card-meta-item">📍 Convention Center</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="action-btn">View Details</button>
+                        <button class="action-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 4 -->
+            <div class="card">
+                <div class="card-image">🏛️</div>
+                <div class="card-footer">
+                    <div class="card-header-row">
+                        <h3 class="card-title">Antique Auction</h3>
+                        <span class="card-badge">Auction</span>
+                    </div>
+                    <div class="card-meta">
+                        <div class="card-meta-item">📅 Mar 30, 1 PM–5 PM</div>
+                        <div class="card-meta-item">📍 Fulton Street</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="action-btn">View Details</button>
+                        <button class="action-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 5 -->
+            <div class="card">
+                <div class="card-image">💼</div>
+                <div class="card-footer">
+                    <div class="card-header-row">
+                        <h3 class="card-title">Office Liquidation</h3>
+                        <span class="card-badge">Liquidation</span>
+                    </div>
+                    <div class="card-meta">
+                        <div class="card-meta-item">📅 Mar 28–29, 9 AM–4 PM</div>
+                        <div class="card-meta-item">📍 West GR</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="action-btn">View Details</button>
+                        <button class="action-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 6 -->
+            <div class="card">
+                <div class="card-image">👗</div>
+                <div class="card-footer">
+                    <div class="card-header-row">
+                        <h3 class="card-title">Boutique Consignment</h3>
+                        <span class="card-badge">Consignment</span>
+                    </div>
+                    <div class="card-meta">
+                        <div class="card-meta-item">📅 Open Daily, 10 AM–6 PM</div>
+                        <div class="card-meta-item">📍 Pearl Street</div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="action-btn">View Details</button>
+                        <button class="action-btn">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="how-it-works">
+        <div class="how-it-works-container">
+            <h2>How It Works</h2>
+            <div class="steps-grid">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Search & Browse</h3>
+                    <p>Find sales by type, date, or location. Filter to exactly what you're looking for.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Save Your Favorites</h3>
+                    <p>Bookmark sales you want to attend. Get reminders before they start.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Plan Your Route</h3>
+                    <p>View all your saved sales on a map. Plan the perfect shopping trip.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- MAP SECTION -->
+    <section class="map-section">
+        <div class="map-header">
+            <h2 class="section-title">Sales on the Map</h2>
+            <button class="map-toggle-btn" onclick="toggleMap()">View Map</button>
+        </div>
+        <div class="map-placeholder" id="map-placeholder">
+            📍 Interactive map would display here with sale locations and details on hover
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>For Shoppers</h3>
+                <a href="#">Browse Sales</a>
+                <a href="#">How It Works</a>
+                <a href="#">My Saved Sales</a>
+                <a href="#">My Account</a>
+            </div>
+            <div class="footer-section">
+                <h3>For Organizers</h3>
+                <a href="#">Create a Sale</a>
+                <a href="#">Pricing</a>
+                <a href="#">Success Stories</a>
+                <a href="#">Documentation</a>
+            </div>
+            <div class="footer-section">
+                <h3>Company</h3>
+                <a href="#">About Us</a>
+                <a href="#">Blog</a>
+                <a href="#">Contact</a>
+                <a href="#">Careers</a>
+            </div>
+            <div class="footer-section">
+                <h3>Legal</h3>
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Service</a>
+                <a href="#">Cookie Policy</a>
+                <a href="#">Accessibility</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 FindA.Sale. Making secondary sales simple for Grand Rapids.</p>
+        </div>
+    </footer>
+
+    <script>
+        function toggleTheme() {
+            const body = document.body;
+            const isDark = body.classList.contains('dark-mode');
+            body.classList.toggle('dark-mode');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+        }
+
+        function scrollToCards() {
+            document.getElementById('cards-section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function toggleMap() {
+            const placeholder = document.getElementById('map-placeholder');
+            const isShown = placeholder.style.display !== 'none';
+            placeholder.style.display = isShown ? 'none' : 'block';
+        }
+
+        // Load saved theme preference
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            document.querySelector('.theme-toggle').textContent = '☀️';
+        }
+
+        // Animate cards on scroll
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.card').forEach(card => {
+            card.style.opacity = '0.7';
+            card.style.transform = 'translateY(10px)';
+            card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(card);
+        });
+    </script>
+</body>
+</html>

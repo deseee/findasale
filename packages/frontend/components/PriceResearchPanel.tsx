@@ -1,0 +1,412 @@
+/**
+ * Price Research Panel Component — Condensed Layout v2
+ *
+ * Consolidates 5 pricing/valuation tools into one collapsible section:
+ * 1. AI Estimate — read-only if item has estimatedValue or aiSuggestedPrice
+ * 2. Suggest Price (💡) — PriceSuggestion component
+ * 3. eBay Price Comps (💰) — eBay search results
+ * 4. Platform Comps (💰) — ValuationWidget (PRO-only)
+ * 5. Request Community Appraisal (🤝) — crowdsourced valuation
+ *
+ * Props:
+ * - itemId: string (for ValuationWidget)
+ * - itemTitle: string (for eBay search, appraisal)
+ * - itemDescription?: string (for appraisal form)
+ * - category: string (for PriceSuggestion, appraisal)
+ * - condition: string (for PriceSuggestion)
+ * - currentPrice?: number
+ * - photoUrls?: string[] (for appraisal request)
+ * - aiEstimate?: number (AI estimated value if available)
+ * - collapsed?: boolean (default collapsed state)
+ * - onPriceSelect?: (price: number) => void (called when user selects a price)
+ */
+
+import React, { useState, useEffect } from 'react';
+import api from '../lib/api';
+import { useToast } from './ToastContext';
+import { useAuth } from './AuthContext';
+import { useCreateAppraisal } from '../hooks/useAppraisal';
+import PriceSuggestion from './PriceSuggestion';
+import ValuationWidget from './ValuationWidget';
+
+interface PriceResearchPanelProps {
+  itemId: string;
+  itemTitle: string;
+  itemDescription?: string;
+  category: string;
+  condition: string;
+  currentPrice?: number;
+  photoUrls?: string[];
+  aiEstimate?: number;
+  collapsed?: boolean;
+  onPriceSelect?: (price: number) => void;
+}
+
+interface CompsData {
+  count: number;
+  min: number;
+  max: number;
+  median: number;
+  isMockData: boolean;
+}
+
+const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
+  itemId,
+  itemTitle,
+  itemDescription,
+  category,
+  condition,
+  currentPrice,
+  photoUrls = [],
+  aiEstimate,
+  collapsed = false,
+  onPriceSelect,
+}) => {
+  const { showToast } = useToast();
+  const { user } = useAuth();
+  const [isCollapsed, setIsCollapsed] = useState(collapsed);
+  const [compsLoading, setCompsLoading] = useState(false);
+  const [compsData, setCompsData] = useState<CompsData | null>(null);
+  const [showCompsPanel, setShowCompsPanel] = useState(false);
+
+  const createAppraisal = useCreateAppraisal();
+  const [appraisalSubmitting, setAppraisalSubmitting] = useState(false);
+  const [showAppraisalConfirm, setShowAppraisalConfirm] = useState(false);
+  const [appraisalCost, setAppraisalCost] = useState(250);
+  const [xpOffer, setXpOffer] = useState(250);
+
+  // Variable pricing: 250 XP minimum, higher offers attract better responses (S443)
+  const MIN_APPRAISAL_XP = 250;
+
+  const handleGetPriceComps = async () => {
+    if (!itemTitle.trim()) {
+      showToast('Please enter an item title first', 'error');
+      return;
+    }
+
+    setCompsLoading(true);
+    try {
+      const response = await api.post(`/items/${itemId}/comps`);
+      setCompsData(response.data);
+      setShowCompsPanel(true);
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to fetch eBay price comps';
+      showToast(message, 'error');
+    } finally {
+      setCompsLoading(false);
+    }
+  };
+
+  const handleRequestAppraisal = async () => {
+    if (!photoUrls || photoUrls.length === 0) {
+      showToast('Add at least one photo before requesting appraisal', 'info');
+      return;
+    }
+
+    if (!user) {
+      showToast('Please sign in to request an appraisal', 'error');
+      return;
+    }
+
+    // Variable pricing: user offers XP (minimum 250)
+    const offerAmount = Math.max(MIN_APPRAISAL_XP, xpOffer);
+    const userXp = user.guildXp || 0;
+    if (userXp < offerAmount) {
+      showToast(
+        `You need ${offerAmount} XP to request an appraisal. You have ${userXp} XP.`,
+        'error'
+      );
+      return;
+    }
+    setAppraisalCost(offerAmount);
+
+    // Show confirmation dialog
+    setShowAppraisalConfirm(true);
+  };
+
+  const handleConfirmAppraisal = async () => {
+    setAppraisalSubmitting(true);
+    try {
+      createAppraisal.mutate(
+        {
+          itemTitle: itemTitle,
+          itemDescription: itemDescription || '',
+          itemCategory: category || '',
+          photoUrls: photoUrls,
+          xpOffer: appraisalCost,
+        },
+        {
+          onSuccess: () => {
+            showToast('🤝 Appraisal request submitted! Community will estimate value.', 'success');
+            setShowAppraisalConfirm(false);
+          },
+          onError: (error: any) => {
+            const message = error?.response?.data?.message || 'Failed to submit appraisal request';
+            showToast(message, 'error');
+            setShowAppraisalConfirm(false);
+          },
+          onSettled: () => {
+            setAppraisalSubmitting(false);
+          },
+        }
+      );
+    } catch (error: any) {
+      showToast('Error submitting appraisal request', 'error');
+      setAppraisalSubmitting(false);
+      setShowAppraisalConfirm(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
+        {/* Collapsible Header — Condensed */}
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="w-full flex items-center justify-between px-4 py-3 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          <h3 className="font-fraunces font-semibold text-sm text-warm-900 dark:text-warm-100 flex items-center gap-2">
+            🔍 Price Research
+          </h3>
+          <span className="text-warm-500 text-sm">
+            {isCollapsed ? '▶' : '▼'}
+          </span>
+        </button>
+
+      {/* Panel Content — Redesigned Layout per UX Spec */}
+      {!isCollapsed && (
+        <div className="border-t border-warm-200 dark:border-gray-700 px-4 py-3 space-y-0">
+          {/* Section 1: AI Smart Estimate (If Available) */}
+          {aiEstimate && (
+            <>
+              <div className="py-3">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1.5">
+                    🤖 Smart Estimate
+                  </p>
+                  <p className="text-lg font-bold text-blue-900 dark:text-blue-100 mb-2">
+                    ${aiEstimate.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mb-2.5">
+                    Based on title, category & condition
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onPriceSelect) {
+                        onPriceSelect(aiEstimate);
+                      } else {
+                        showToast(`Price set to $${aiEstimate.toFixed(2)}`, 'success');
+                      }
+                    }}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors"
+                  >
+                    Use This Price
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Section 2: Smart Pricing (One-Click AI Suggestion) */}
+          <div className="py-3 border-t border-warm-100 dark:border-gray-800">
+            <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
+              ⚡ Get a Price Suggestion
+            </p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-3">
+              Analyzes title, category, and condition to suggest a competitive price.
+            </p>
+            <PriceSuggestion
+              title={itemTitle}
+              category={category}
+              condition={condition}
+              onApplyPrice={(price) => {
+                if (onPriceSelect) {
+                  onPriceSelect(price);
+                } else {
+                  showToast(`Price suggestion: $${price.toFixed(2)}`, 'info');
+                }
+              }}
+            />
+          </div>
+
+          {/* Section 3: eBay Market Comps (Real-World Sold Prices) */}
+          <div className="py-3 border-t border-warm-100 dark:border-gray-800">
+            <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
+              💰 Search eBay Sold Listings
+            </p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-3">
+              Find real sold prices for identical or similar items.
+            </p>
+            <button
+              type="button"
+              onClick={handleGetPriceComps}
+              disabled={compsLoading}
+              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors disabled:opacity-50"
+            >
+              {compsLoading ? 'Searching...' : 'Search eBay'}
+            </button>
+
+            {compsData && (
+              <div
+                className={`mt-3 p-3 rounded-lg border text-xs ${
+                  compsData.isMockData
+                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700'
+                    : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
+                }`}
+              >
+                <p className="font-semibold text-warm-800 dark:text-warm-200 mb-2">
+                  {compsData.isMockData ? '⚠️ Demo data' : `✓ ${compsData.count || 0} listings found`}
+                </p>
+                {compsData.isMockData && (
+                  <p className="text-amber-700 dark:text-amber-300 mb-2">
+                    eBay credentials not configured
+                  </p>
+                )}
+                {compsData.count > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-warm-700 dark:text-warm-300">
+                      <span className="font-medium">Range:</span> ${compsData.min.toFixed(2)}–${compsData.max.toFixed(2)} | <span className="font-medium">Median:</span> ${compsData.median.toFixed(2)}
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onPriceSelect) {
+                            onPriceSelect(compsData.median);
+                          }
+                          showToast(`Price set to $${compsData.median.toFixed(2)}`, 'success');
+                        }}
+                        className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors"
+                      >
+                        Use ${compsData.median.toFixed(2)}
+                      </button>
+                      <a
+                        href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(itemTitle)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-6 py-2.5 border border-gray-400 dark:border-gray-500 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium rounded-full transition-colors text-center"
+                      >
+                        eBay ↗
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Section 4: Sales Comps (PRO/TEAMS Only) */}
+          <div className="py-3 border-t border-warm-100 dark:border-gray-800">
+            <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
+              📊 Sales Comps (PRO Feature)
+            </p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-3">
+              Compare against actual sales from FindA.Sale's network.
+            </p>
+            <ValuationWidget
+              itemId={itemId}
+              currentPrice={currentPrice}
+              onPriceSelect={(price) => {
+                if (onPriceSelect) {
+                  onPriceSelect(price);
+                }
+              }}
+            />
+          </div>
+
+          {/* Section 5: Request Community Appraisal (Bottom, De-Emphasized) */}
+          <div className="py-3 border-t border-warm-100 dark:border-gray-800">
+            <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
+              🤝 Request Community Appraisal
+            </p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
+              Get crowdsourced estimates from experienced community members.
+            </p>
+            <div className="text-xs text-warm-600 dark:text-warm-400 mb-3 space-y-1">
+              <p>📸 3+ photos required (you've uploaded {photoUrls.length})</p>
+              <p>⏱️ Estimates arrive in 1–24 hrs</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRequestAppraisal}
+              disabled={appraisalSubmitting || photoUrls.length === 0}
+              className="px-6 py-2.5 bg-[#4A7C59] hover:bg-[#3d654a] disabled:bg-gray-400 dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-medium rounded-full transition-colors"
+            >
+              {appraisalSubmitting
+                ? 'Submitting...'
+                : photoUrls.length === 0
+                ? 'Add Photos'
+                : 'Request Appraisal'}
+            </button>
+          </div>
+        </div>
+      )}
+      </div>
+
+      {/* Appraisal Cost Confirmation Modal */}
+      {showAppraisalConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-sm mx-4">
+            <h3 className="text-lg font-fraunces font-semibold text-warm-900 dark:text-warm-100 mb-3">
+              Request Community Appraisal
+            </h3>
+
+            {/* XP Offer Input */}
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                XP Offer (min {MIN_APPRAISAL_XP})
+              </label>
+              <input
+                type="number"
+                min={MIN_APPRAISAL_XP}
+                step={50}
+                value={xpOffer}
+                onChange={(e) => {
+                  const val = Math.max(MIN_APPRAISAL_XP, parseInt(e.target.value) || MIN_APPRAISAL_XP);
+                  setXpOffer(val);
+                  setAppraisalCost(val);
+                }}
+                className="w-full px-3 py-1.5 border border-blue-300 dark:border-blue-600 rounded-md dark:bg-gray-700 dark:text-white text-sm mb-2"
+              />
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Offer more XP for faster, more qualified responses.
+              </p>
+              <p className="text-sm text-warm-600 dark:text-warm-400 mt-2">
+                <span className="font-medium">Your balance:</span> {user?.guildXp || 0} XP
+              </p>
+            </div>
+
+            {/* Message */}
+            <p className="text-sm text-warm-600 dark:text-warm-400 mb-5">
+              Submit your item for community valuation. Community members will provide price estimates based on your photos.
+            </p>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAppraisalConfirm(false)}
+                disabled={appraisalSubmitting}
+                className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAppraisal}
+                disabled={appraisalSubmitting}
+                className="flex-1 px-4 py-2 bg-[#4A7C59] hover:bg-[#3d654a] disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {appraisalSubmitting ? 'Submitting...' : 'Confirm & Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default PriceResearchPanel;

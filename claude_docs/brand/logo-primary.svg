@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80" role="img" aria-label="FindA.Sale logo">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&amp;family=Inter:wght@400;500&amp;display=swap');
+    </style>
+  </defs>
+
+  <!-- ── Icon: Price tag with magnifying glass loop ── -->
+  <!-- Tag body -->
+  <path d="M12 14 L40 14 Q48 14 48 22 L48 50 Q48 58 40 58 L12 58 Q8 58 8 54 L8 18 Q8 14 12 14 Z"
+        fill="#D97706" />
+  <!-- Tag notch (hole) -->
+  <circle cx="17" cy="22" r="3.5" fill="#FAF8F6" />
+  <!-- Tag punch string -->
+  <line x1="17" y1="14" x2="17" y2="10.5" stroke="#FAF8F6" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Magnifying glass circle -->
+  <circle cx="28" cy="38" r="9" fill="none" stroke="#FAF8F6" stroke-width="2.5" />
+  <!-- Magnifying glass handle -->
+  <line x1="34.5" y1="44.5" x2="40" y2="50" stroke="#FAF8F6" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Small sparkle dot inside lens -->
+  <circle cx="25" cy="35" r="1.5" fill="#FAF8F6" opacity="0.7"/>
+
+  <!-- ── Wordmark ── -->
+  <!-- "FindA." in amber -->
+  <text x="62" y="53"
+        font-family="Fraunces, Georgia, serif"
+        font-size="34"
+        font-weight="600"
+        letter-spacing="-0.5"
+        fill="#D97706">FindA.</text>
+  <!-- "Sale" in deep navy -->
+  <text x="175" y="53"
+        font-family="Fraunces, Georgia, serif"
+        font-size="34"
+        font-weight="600"
+        letter-spacing="-0.5"
+        fill="#1F2937">Sale</text>
+
+  <!-- ── Tagline ── -->
+  <text x="63" y="68"
+        font-family="Inter, -apple-system, sans-serif"
+        font-size="11"
+        font-weight="500"
+        letter-spacing="1.8"
+        fill="#6B9E7F">ESTATE SALES · GRAND RAPIDS</text>
+</svg>

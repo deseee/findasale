@@ -1,0 +1,69 @@
+# syntax=docker/dockerfile:1
+# cache-bust: 2026-04-12
+FROM node:20-slim AS base
+
+# Install OpenSSL for Prisma
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+# Enable pnpm
+RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
+
+WORKDIR /app
+
+# --- deps stage ---
+FROM base AS deps
+
+# Copy workspace manifests first for caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/backend/package.json ./packages/backend/
+COPY packages/database/package.json ./packages/database/
+COPY packages/shared/package.json ./packages/shared/
+
+RUN pnpm install --frozen-lockfile
+
+# --- builder stage ---
+FROM base AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/backend/node_modules ./packages/backend/node_modules
+COPY --from=deps /app/packages/database/node_modules ./packages/database/node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+
+COPY . .
+
+# Generate Prisma client (writes into node_modules/.pnpm virtual store)
+RUN cd packages/database && npx prisma generate
+
+# S360 — cache bust 2026-03-31
+RUN cd packages/backend && npx tsc
+
+# --- runner stage ---
+FROM node:20-slim AS runner
+
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
+
+WORKDIR /app
+
+# node_modules includes .pnpm virtual store which contains the regenerated Prisma client
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/backend/node_modules ./packages/backend/node_modules
+COPY --from=builder /app/packages/database/node_modules ./packages/database/node_modules
+COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
+COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
+COPY --from=builder /app/packages/backend/package.json ./packages/backend/
+COPY --from=builder /app/packages/database/package.json ./packages/database/
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+
+ENV NODE_ENV=production
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/health', r => r.statusCode === 200 ? process.exit(0) : process.exit(1)).on('error', () => process.exit(1))"
+
+CMD ["node", "packages/backend/dist/index.js"]

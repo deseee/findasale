@@ -1,0 +1,93 @@
+import { Router, Request, Response } from 'express';
+import { Resend } from 'resend';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+
+const router = Router();
+
+// Contact form validation schema
+const contactFormSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email address'),
+  subject: z.string().min(1, 'Subject is required'),
+  message: z.string().min(1, 'Message is required').max(5000, 'Message must be 5000 characters or less'),
+});
+
+let _resend: any = null;
+const getResend = () => {
+  if (!_resend && process.env.RESEND_API_KEY) {
+    _resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resend;
+};
+
+// Rate limiter for contact form — 5 submissions per 15 minutes
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: 'Too many contact requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// POST /api/contact — public contact form submission
+router.post('/', contactLimiter, async (req: Request, res: Response) => {
+  try {
+    const validatedData = contactFormSchema.parse(req.body);
+    const { name, email, subject, message } = validatedData;
+
+    const supportEmail = process.env.SUPPORT_EMAIL || 'support@finda.sale';
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'noreply@finda.sale';
+    const resend = getResend();
+
+    if (resend) {
+      // Forward to support inbox
+      await resend.emails.send({
+        from: fromEmail,
+        to: supportEmail,
+        replyTo: email,
+        subject: `[FindA.Sale Contact] ${subject}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+            <h2 style="color:#2563eb;">New Contact Form Submission</h2>
+            <table style="width:100%;border-collapse:collapse;">
+              <tr><td style="padding:8px;font-weight:bold;width:120px;">Name</td><td style="padding:8px;">${name}</td></tr>
+              <tr><td style="padding:8px;font-weight:bold;">Email</td><td style="padding:8px;"><a href="mailto:${email}">${email}</a></td></tr>
+              <tr><td style="padding:8px;font-weight:bold;">Subject</td><td style="padding:8px;">${subject}</td></tr>
+              <tr><td style="padding:8px;font-weight:bold;vertical-align:top;">Message</td><td style="padding:8px;white-space:pre-wrap;">${message}</td></tr>
+            </table>
+          </div>
+        `,
+      });
+
+      // Send confirmation to submitter
+      await resend.emails.send({
+        from: fromEmail,
+        to: email,
+        subject: 'We received your message – FindA.Sale',
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+            <h2 style="color:#2563eb;">Thanks for reaching out, ${name}!</h2>
+            <p>We've received your message and will get back to you within 1–2 business days.</p>
+            <p style="color:#6b7280;font-size:13px;">Your message: <em>${subject}</em></p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+            <p style="color:#9ca3af;font-size:12px;">FindA.Sale &mdash; <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}">finda.sale</a></p>
+          </div>
+        `,
+      });
+    } else {
+      // Email not configured — log to console for dev
+      console.log('[Contact Form]', { name, email, subject, message });
+    }
+
+    res.json({ message: 'Message sent successfully.' });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: 'Validation error', errors: error.errors });
+    }
+    console.error('Contact form error:', error);
+    res.status(500).json({ message: 'Failed to send message. Please try again.' });
+  }
+});
+
+export default router;

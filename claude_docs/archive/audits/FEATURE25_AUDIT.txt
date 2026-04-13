@@ -1,0 +1,223 @@
+=== FEATURE #25 AUDIT: Organizer Item Library (Consignment Rack) ===
+Status: SHIPPED S187 — QA Pending
+Tier: PRO
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+COMPONENT VERIFICATION
+
+[✓] 1. DATABASE SCHEMA
+    File: packages/database/prisma/schema.prisma
+    Migration: 20260317000500_add_item_library_fields
+    
+    Fields added to Item model:
+    - libraryId (String?, nullable) — FK to library item namespace
+    - inLibrary (Boolean, default=false) — cached flag for rapid filtering
+    - priceVariants (Json?, nullable) — per-sale pricing map (Phase 5)
+    - organizerId (String?, nullable) — denormalized from sale.organizerId
+    
+    Indexes:
+    - Item_libraryId_idx on (libraryId)
+    - Item_organizerId_inLibrary_idx on (organizerId, inLibrary)
+    
+    ✓ Schema complete. Migration exists and is current (2026-03-17).
+
+[✓] 2. BACKEND SERVICE LAYER
+    File: packages/backend/src/services/itemLibraryService.ts
+    Exports: 6 public functions
+    
+    - addToLibrary(itemId, organizerId)
+      → Sets inLibrary=true, libraryId=itemId
+      → Verifies item ownership via sale.organizerId
+      → VERIFIED: authorization check present (line 26)
+    
+    - removeFromLibrary(itemId)
+      → Sets inLibrary=false, libraryId=null
+      → ⚠️ ISSUE: No authorization check in service (line 43-51)
+      → Mitigation: Controller checks req.user.organizerProfile.id (line 45)
+      → But service doesn't verify ownership — relies on controller only
+    
+    - pullFromLibrary(libraryItemId, saleId, organizerId, priceOverride?)
+      → Creates new item in sale with libraryId link
+      → Records price in ItemPriceHistory with changedBy='library_pulled'
+      → ✓ Authorization: verifies libraryItem.organizerId, sale.organizerId
+      → ✓ Price history tracking present
+    
+    - getLibraryItems(organizerId, filters)
+      → Returns items where organizerId + inLibrary=true
+      → Supports: search (title), category, condition, minPrice, maxPrice, status
+      → Ordering: by updatedAt DESC
+      → ✓ Filtering complete
+    
+    - getPriceHistory(itemId)
+      → Returns ItemPriceHistory sorted by createdAt DESC
+      → ✓ Query correct
+    
+    - getPricingSuggestion(itemId, saleId)
+      → Returns {suggested, min, max} based on item price ±10%
+      → ✓ Stub present (Phase 5 ML stub per line 204 comment)
+
+[✓] 3. BACKEND CONTROLLER
+    File: packages/backend/src/controllers/itemLibraryController.ts
+    Exports: 6 handler functions
+    
+    - addItemToLibrary(POST /api/item-library/add)
+      ✓ Auth check: req.user.organizerProfile.id
+      ✓ Input validation: itemId required
+      ✓ Error handling: 401/400 responses
+    
+    - removeItemFromLibrary(DELETE /api/item-library/:itemId)
+      ⚠️ ISSUE: Auth check present (line 45) BUT service doesn't verify ownership
+      → Anyone authenticated as organizer can remove any library item
+      → No itemId → organizerId → sale.organizerId verification
+      → Service needs to be updated to accept organizerId and check ownership
+    
+    - pullItemFromLibrary(POST /api/item-library/:itemId/pull)
+      ✓ Auth check: req.user.organizerProfile.id
+      ✓ Input validation: itemId, saleId required
+      ✓ Service verifies ownership on both library item and sale
+      ✓ Error handling: 401/403/400 responses
+    
+    - listLibraryItems(GET /api/item-library)
+      ✓ Auth check: req.user.organizerProfile.id
+      ✓ Query param parsing: search, category, condition, minPrice, maxPrice, status
+      ✓ Response: {items, total}
+    
+    - getItemPriceHistory(GET /api/item-library/:itemId/price-history)
+      ✓ Auth check: req.user.organizerProfile.id
+      ✓ Input validation: itemId required
+      ⚠️ No ownership check — any organizer can see any item's price history
+    
+    - getItemPricingAdvice(GET /api/item-library/:itemId/pricing-advice)
+      ✓ Auth check: req.user.organizerProfile.id
+      ✓ Input validation: itemId, saleId required
+      ⚠️ No ownership check — any organizer can get pricing for any item
+
+[✓] 4. BACKEND ROUTES
+    File: packages/backend/src/routes/itemLibrary.ts
+    
+    ✓ Route registration in index.ts (line: app.use('/api/item-library', itemLibraryRoutes))
+    ✓ All routes protected with: authenticate + requireTier('PRO')
+    ✓ 6 routes defined and correctly mapped to controllers
+    
+    Routes:
+    - POST   /api/item-library/add
+    - DELETE /api/item-library/:itemId
+    - POST   /api/item-library/:itemId/pull
+    - GET    /api/item-library
+    - GET    /api/item-library/:itemId/price-history
+    - GET    /api/item-library/:itemId/pricing-advice
+
+[✓] 5. FRONTEND HOOK
+    File: packages/frontend/hooks/useItemLibrary.ts
+    
+    ✓ useQuery: listLibraryItems with caching (5 min stale time)
+    ✓ useMutation: addToLibrary, removeFromLibrary, pullFromLibrary
+    ✓ Async helpers: getPriceHistory, getPricingSuggestion, searchLibraryItems
+    ✓ Cache invalidation: queryKey ['item-library', organizerId]
+    ✓ Loading/error states exported
+    
+    Interface types defined:
+    - LibraryItem (id, title, description, category, condition, price, photoUrls, status, organizerId, inLibrary, priceHistory)
+    - LibraryFilters
+    - PriceHistoryItem
+    - PricingSuggestion
+
+[✓] 6. FRONTEND PAGE
+    File: packages/frontend/pages/organizer/item-library.tsx
+    
+    ✓ Page structure:
+      - Header with title "Item Library" and subtitle "Manage your consignment rack..."
+      - Search & filter panel (search, category, condition, status, min/max price)
+      - Results grid with LibraryItemCard components
+      - Pull modal for selecting target sale and optional price override
+      - History modal for viewing price history
+    
+    ✓ Authorization: Checks user.role === 'ORGANIZER' (line 106)
+    ✓ Filtering: Memoized filter logic across all fields
+    ✓ Modals: Pull modal has sales dropdown (fetched on demand)
+    
+    ⚠️ ISSUE: fetchUserSales stub (line 73-81) is hardcoded empty
+      → Does NOT call /api/sales/mine
+      → Sales dropdown will always be empty
+      → Users cannot pull items without frontend API call
+      → Blocks core feature: pulling items from library to new sales
+
+[✓] 7. FRONTEND CARD COMPONENT
+    File: packages/frontend/components/LibraryItemCard.tsx
+    
+    ✓ Display: Photo, title, category, condition, price, status badge
+    ✓ Actions: Pull to Sale (when AVAILABLE), View History, Remove
+    ✓ Status colors: AVAILABLE (green), IN_SALE (amber), SOLD (gray)
+    ✓ Hover behavior: Actions appear on hover/focus
+    ✓ Loading state: Buttons disabled during mutations
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FEATURE COMPLETENESS CHECK
+
+✓ Upload once, reuse across sales
+  - Schema: libraryId links items, inLibrary flags them
+  - Backend: pullFromLibrary creates copies with libraryId
+  - Frontend: Pull to Sale modal implemented
+
+✓ Items become compounding assets
+  - Schema: priceVariants planned (Phase 5)
+  - ItemPriceHistory tracked per item
+  - Per-sale pricing stubs present
+
+✓ Full cross-sale search
+  - getLibraryItems supports: search, category, condition, price range, status
+  - organizerId + inLibrary filters ensure scope
+
+⚠️ Price history tracking
+  - Backend: getPriceHistory implemented
+  - Frontend: View History modal implemented
+  - BUT: No ownership verification on getItemPriceHistory endpoint
+
+⚠️ Sold vs. unsold analytics
+  - Status field supports: AVAILABLE, IN_SALE, SOLD
+  - Not explicitly queried in UI
+  - Could be inferred from status filter but no dedicated analytics
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ISSUES FOUND
+
+CRITICAL (Blocks Feature):
+1. Frontend fetchUserSales stub empty (item-library.tsx line 73-81)
+   → Sales dropdown in pull modal always empty
+   → User cannot select sale to pull items into
+   → FIX: Replace with api.get('/api/sales/mine')
+
+HIGH (Security/Data Integrity):
+2. removeItemFromLibrary missing ownership check (itemLibraryController.ts line 43-62)
+   → Service doesn't verify organizerId
+   → Any authenticated organizer can remove any item from any other organizer's library
+   → FIX: Add organizerId parameter to removeFromLibrary service, verify ownership
+
+3. getItemPriceHistory no ownership check (itemLibraryController.ts line 125-144)
+   → Any organizer can view price history for any item
+   → Exposes competitor pricing data
+   → FIX: Add ownership verification before returning history
+
+4. getItemPricingAdvice no ownership check (itemLibraryController.ts line 151-172)
+   → Any organizer can get pricing advice for any item
+   → FIX: Add ownership verification before returning suggestion
+
+MEDIUM (Feature Completeness):
+5. Sold vs. unsold analytics not surfaced
+   → Status field exists but UI doesn't highlight sold items or provide summary
+   → Users can't easily see which library items converted to sales
+   → FIX: Add sold count badge, sold items section, or analytics view
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VERDICT: PARTIAL — 6 of 5 critical components wired correctly, but 1 critical UI bug blocks core pull workflow. 3 security issues allow cross-organizer data/operation leaks.
+
+RECOMMENDATION: 
+1. Fix fetchUserSales immediately (critical blocker)
+2. Fix authorization checks in remove, history, pricing endpoints (high priority)
+3. Add sold items analytics (medium priority for PRO tier value)
+4. Test end-to-end: Create item → Add to library → Pull to new sale → Verify price history
+
