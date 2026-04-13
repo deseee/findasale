@@ -7,6 +7,45 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S452 COMPLETE (2026-04-13) — eBay + Stripe go-live prep: bidirectional sync, policy IDs, env audit**
+
+**S452 What happened:**
+- **eBay Phase 2b — Real policy IDs:** `fetchAndStoreEbayPolicies()` added to `ebayController.ts`. Called post-OAuth. Fetches payment/fulfillment/return policies from eBay Account API and stores on `EbayConnection`. `pushSaleToEbay()` now validates all 3 policy IDs present (returns 400 `POLICIES_NOT_CONFIGURED` if missing) and uses real IDs in offer payload.
+- **eBay Phase 2b — ebayOfferId stored:** `ebayOfferId` field added to `Item` model. Stored after offer creation in `pushSaleToEbay()`.
+- **eBay FindA.Sale→eBay sync (withdraw on sold):** `endEbayListingIfExists(itemId)` exported from `ebayController.ts`. Fire-and-forget eBay offer withdrawal. Wired into all 5 SOLD status update locations: `stripeController.ts` (4 webhook paths), `terminalController.ts`, `posPaymentController.ts`, `reservationController.ts`.
+- **eBay→FindA.Sale sync (Phase 3 cron):** `ebaySoldSyncCron.ts` created. 15-minute node-cron polling eBay Fulfillment API. Matches orders by SKU (`FAS-{itemId}`) + legacyItemId fallback. Marks items SOLD, notifies organizer, deduplicates via `lastEbaySoldSyncAt`. Started from `index.ts`. Manual trigger endpoint: `GET /api/ebay/sync-sold`.
+- **Schema:** `EbayConnection` gains `paymentPolicyId`, `fulfillmentPolicyId`, `returnPolicyId`, `policiesFetchedAt`, `lastEbaySoldSyncAt`. `Item` gains `ebayOfferId`.
+- **Stripe env audit:** 4 subscription price IDs confirmed in Railway (PRO monthly/annual, TEAMS monthly/annual). Hunt Pass, boosts, appraisals all use dynamic PaymentIntents or XP — no additional price IDs needed. **Exception flagged by Patrick: Hunt Pass IS a subscription — the `streaks.ts` PaymentIntent implementation may be wrong/incomplete. Requires investigation next session.**
+- **go-live-prep doc:** `claude_docs/operations/ebay-stripe-go-live-prep.md` created with testing checklist.
+
+**S452 Files changed (11):**
+- `packages/database/prisma/schema.prisma` — EbayConnection policy fields + lastEbaySoldSyncAt + Item.ebayOfferId
+- `packages/database/prisma/migrations/20260413_ebay_policy_ids_and_offer_id/migration.sql` — NEW
+- `packages/backend/src/controllers/ebayController.ts` — fetchAndStoreEbayPolicies, endEbayListingIfExists, policy validation
+- `packages/backend/src/controllers/stripeController.ts` — endEbayListingIfExists wired (4 paths)
+- `packages/backend/src/controllers/terminalController.ts` — endEbayListingIfExists wired
+- `packages/backend/src/controllers/posPaymentController.ts` — endEbayListingIfExists wired
+- `packages/backend/src/controllers/reservationController.ts` — endEbayListingIfExists wired
+- `packages/backend/src/jobs/ebaySoldSyncCron.ts` — NEW
+- `packages/backend/src/index.ts` — startEbaySoldSyncCron() startup call
+- `packages/backend/src/routes/ebay.ts` — GET /api/ebay/sync-sold manual trigger
+- `claude_docs/operations/ebay-stripe-go-live-prep.md` — NEW
+
+**S452 Patrick manual actions:**
+1. Run new migration on Railway:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+2. Add `STRIPE_CONNECT_WEBHOOK_SECRET` in Railway — Stripe Dashboard → Webhooks → Add endpoint → Events on Connected accounts → `payment_intent.succeeded` → copy signing secret → paste as env var.
+
+**S452 Next session mandate:**
+Full Stripe go-live audit: (a) Hunt Pass is a subscription — find or implement the subscription purchase flow (not the PaymentIntent stub in streaks.ts); (b) walk every payment path (subscriptions, Hunt Pass, boosts, POS, Connect) and confirm each is production-ready; (c) verify all webhook events are registered and secrets are correct; (d) confirm Stripe sandbox→live switch readiness.
+
+---
+
 **S451 COMPLETE (2026-04-13) — Dashboard layout fix, action buttons, QR inline, rank icon**
 
 **S451 What happened:**

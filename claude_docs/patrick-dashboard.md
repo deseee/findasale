@@ -2,6 +2,8 @@
 
 ## What Happened This Week
 
+**S452** (2026-04-13) — eBay + Stripe go-live prep. Bidirectional eBay sync (both directions). Policy ID fetch post-OAuth. endEbayListingIfExists wired into all 5 SOLD paths. Phase 3 polling cron (15-min). Stripe env confirmed. **Hunt Pass is a subscription — investigation required next session.**
+
 **S451** (2026-04-13) — Dashboard layout fixed, QR inline, broken buttons fixed:
 - **⚠️ Catastrophic push recovered:** Git index desync wiped 1,708 files. Recovery complete via `git add -A`. All files restored.
 - **Dashboard layout now correct:** Hero → Action Buttons → QR Panel (inline toggle) → Hunt Pass strip → Tabs → Content
@@ -57,10 +59,11 @@
 
 ## Action Items for Patrick
 
-- [ ] **Push S451 dashboard changes** (push block below)
-- [ ] **Decide: Followed Brands tab** — keep as "Brand Alerts" (item alerts when brands appear at sales), rename, or remove?
-- [ ] **Decide: Sales Near You** — fix the feature or remove it permanently?
-- [ ] **Run S449 migrations** on Railway (3 migrations: rankUpHistory, holdDurationMinutes, legendary_early_access) — if not already done
+- [ ] **Run S452 eBay migration** on Railway (see STATE.md S452 Patrick manual actions)
+- [ ] **Add `STRIPE_CONNECT_WEBHOOK_SECRET`** in Railway — Stripe Dashboard → Webhooks → endpoint for Connected accounts → `payment_intent.succeeded` → copy signing secret
+- [ ] **Decide: Followed Brands tab** — keep as "Brand Alerts", rename, or remove?
+- [ ] **Decide: Sales Near You** — fix or remove permanently?
+- [ ] **Run S449 migrations** on Railway if not done (rankUpHistory, holdDurationMinutes, legendary_early_access)
 - [ ] **Run S447 pending migrations** on Railway if not done: `20260413_xp_expiry_system` + `20260413_early_access_cache`
 - [ ] **Stripe Dashboard → Webhooks → add `charge.dispute.created` event** (S447, still open)
 - [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open, still blocking)
@@ -85,19 +88,22 @@
 
 ---
 
-## What's Next (S452)
+## What's Next (S453)
 
-**P1 — eBay integration testing:** Figure out how to test the eBay integration end-to-end. Need a plan for what accounts/sandbox environment to use, what the test flow looks like, and what "working" means.
+**P0 — Stripe go-live audit (full pass):**
+Patrick confirmed Hunt Pass IS a subscription — the `streaks.ts` PaymentIntent implementation ($4.99 one-time) is wrong or incomplete. S453 must:
+1. Find or implement the real Hunt Pass subscription purchase flow (needs a Stripe Price ID like the organizer plans)
+2. Walk every payment path end-to-end: organizer subscriptions, Hunt Pass, boosts (cash rail), POS Connect payments, Stripe Terminal
+3. Verify all webhook events registered + secrets correct in Railway
+4. Confirm sandbox→live switch readiness for each path
+5. Identify any missing `STRIPE_*` env vars
 
-**P2 — Test account seed strategy:** Patrick wants to create a test account with full permissions on current seed data. Answer: **Yes, it can survive a DB nuke** — add it to the seed script (`packages/database/prisma/seed.ts`) as a permanent fixture with a fixed email/password. When the DB is nuked before go-live, run `prisma migrate deploy && prisma db seed` and it recreates automatically with correct schema. Next session: read the seed script and add Patrick's full-permissions account as a permanent seed user.
+**P1 — eBay go-live audit:**
+Read `claude_docs/operations/ebay-stripe-go-live-prep.md` and walk through the testing checklist. Verify OAuth flow works with real eBay sandbox credentials, policy fetch fires, and item push creates a real listing.
 
-**P3 — Pricing review before Stripe goes live:** Full pass over:
-- XP/dollar sinks (current state documented in STATE.md XP section)
-- All tier pricing (FREE/SIMPLE/PRO/TEAMS)
-- Ala carte sales (per-sale charges)
-- Extra team member pricing ($20/seat — verify current implementation)
-- Hunt Pass ($4.99/mo — verify)
-- Any unlocked pricing decisions that need a final sanity check
+**P2 — Patrick manual actions from S452 (must be done before eBay/Stripe testing):**
+- Run S452 migration on Railway (see STATE.md)
+- Add `STRIPE_CONNECT_WEBHOOK_SECRET` in Railway (see above)
 
 **Carry-forward:**
 - QA queue (S436/S430/S431/S427/S433) — still postponed
@@ -112,6 +118,7 @@
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S452 | 2026-04-13 | eBay bidirectional sync: policy fetch, offer withdrawal, Phase 3 cron. Stripe env audit. Hunt Pass subscription gap flagged. |
 | S451 | 2026-04-13 | Dashboard layout fix: QR inline, action buttons fixed, Compass icon, layout reordered. Catastrophic git push (1,708 files deleted) — recovered. |
 | S450 | 2026-04-13 | Rank staleness P0 (JWT fix), dashboard character sheet attempt, /shopper/ranks, organizer badge, XP progress bar in nav. QR code landed wrong — fix is P0 next session. |
 | S449 | 2026-04-13 | Rank staleness P0, Scout Reveal P1, discount badge P4, dashboard/perks specs, haul test data. 10 files. |
