@@ -64,6 +64,7 @@ import {
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { useShopperCart } from '../hooks/useShopperCart';
+import useXpProfile from '../hooks/useXpProfile';
 import ShopperCartDrawer from './ShopperCartDrawer';
 import RankBadge, { ExplorerRank } from './RankBadge';
 
@@ -160,6 +161,10 @@ const AvatarDropdown: React.FC = () => {
   const isTeams = canAccess('TEAMS');
   const { items: cartItems } = useShopperCart();
 
+  // Fetch fresh explorer rank (not from stale JWT)
+  const { data: xpProfile } = useXpProfile(!!user);
+  const freshExplorerRank = xpProfile?.explorerRank || 'INITIATE';
+
   return (
     <div className="relative">
       {/* Avatar Button Trigger */}
@@ -219,10 +224,10 @@ const AvatarDropdown: React.FC = () => {
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
               {user.email}
             </p>
-            {/* Rank badge */}
-            {user.explorerRank && (
+            {/* Rank badge — fetch fresh from API, not stale JWT */}
+            {freshExplorerRank && (
               <div className="mt-2">
-                <RankBadge rank={user.explorerRank as ExplorerRank} size="sm" />
+                <RankBadge rank={freshExplorerRank as ExplorerRank} size="sm" />
               </div>
             )}
           </div>

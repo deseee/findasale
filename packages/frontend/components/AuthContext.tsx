@@ -11,7 +11,7 @@ interface User {
   roles?: string[]; // Feature #72 Phase 2: Array of roles
   points: number;
   guildXp?: number; // Phase 2a: Explorer's Guild XP
-  explorerRank?: string; // Phase 2a: Current explorer rank (INITIATE/SCOUT/RANGER/SAGE/GRANDMASTER)
+  // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
   referralCode?: string;
   categoryInterests?: string[];
   streakPoints?: number;
@@ -65,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
           points: payload.points || 0,
           guildXp: payload.guildXp || 0, // Phase 2a: Explorer's Guild XP
-          explorerRank: payload.explorerRank || 'INITIATE', // Phase 2a: Explorer rank from JWT
+          // explorerRank removed: fetch fresh from /api/xp/profile instead
           referralCode: payload.referralCode || '',
           huntPassActive: payload.huntPassActive,
           huntPassExpiry: payload.huntPassExpiry,
@@ -99,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         roles: payload.roles || [payload.role], // Feature #72 Phase 2: Fallback to single-role array
         points: payload.points || 0,
         guildXp: payload.guildXp || 0, // Phase 2a: Explorer's Guild XP
-        explorerRank: payload.explorerRank || 'INITIATE', // Phase 2a: Explorer rank from JWT
+        // explorerRank removed: fetch fresh from /api/xp/profile instead
         referralCode: payload.referralCode || '',
         huntPassActive: payload.huntPassActive,
         huntPassExpiry: payload.huntPassExpiry,

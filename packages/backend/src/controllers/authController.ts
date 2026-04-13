@@ -262,7 +262,7 @@ export const register = async (req: Request, res: Response) => {
         huntPassActive: user.huntPassActive,
         huntPassExpiry: user.huntPassExpiry,
         guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
-        explorerRank: user.explorerRank || 'INITIATE', // Phase 2a: Explorer rank for nav display
+        // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -402,7 +402,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         huntPassActive: user.huntPassActive,
         huntPassExpiry: user.huntPassExpiry,
         guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
-        explorerRank: user.explorerRank || 'INITIATE', // Phase 2a: Explorer rank for nav display
+        // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -563,7 +563,7 @@ export const login = async (req: Request, res: Response) => {
         huntPassActive: user.huntPassActive,
         huntPassExpiry: user.huntPassExpiry,
         guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
-        explorerRank: user.explorerRank || 'INITIATE', // Phase 2a: Explorer rank for nav display
+        // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -680,7 +680,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
         huntPassActive: updatedUser.huntPassActive,
         huntPassExpiry: updatedUser.huntPassExpiry,
         guildXp: updatedUser.guildXp || 0, // Phase 2a: Explorer's Guild XP
-        explorerRank: updatedUser.explorerRank || 'INITIATE', // Phase 2a: Explorer rank for nav display
+        // explorerRank removed: fetch fresh from /api/xp/profile instead of caching stale rank in JWT
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }

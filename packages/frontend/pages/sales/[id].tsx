@@ -573,6 +573,25 @@ const SaleDetailPage = () => {
           </div>
         </div>
 
+        {/* D-XP-003: Organizer Special Discount Callout */}
+        {sale.items.some((item) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0) && (
+          <div className="bg-sage-50 dark:bg-sage-950/30 border-l-4 border-sage-600 dark:border-sage-500 rounded-lg p-4 mb-8 flex items-start gap-3">
+            <span className="text-2xl flex-shrink-0">🎁</span>
+            <div className="flex-1">
+              <h3 className="font-semibold text-sage-900 dark:text-sage-100 text-lg">Organizer Special</h3>
+              <p className="text-sage-700 dark:text-sage-300 text-sm mt-1">
+                Save {(() => {
+                  const discounts = sale.items
+                    .filter((item) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
+                    .map((item) => item.organizerDiscountAmount);
+                  const maxDiscount = Math.max(...discounts);
+                  return `up to $${maxDiscount.toFixed(2)}`;
+                })()} on select items at this sale!
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Organizer Info Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex items-start justify-between">
