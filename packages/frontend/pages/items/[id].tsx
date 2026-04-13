@@ -258,9 +258,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
     },
     onSuccess: (data) => {
       // Sync rank updates to AuthContext
-      if (data?.newRank) {
+      if (data?.remainingXp !== undefined) {
         updateUser({
-          explorerRank: data.newRank,
           guildXp: data.remainingXp,
         });
       }

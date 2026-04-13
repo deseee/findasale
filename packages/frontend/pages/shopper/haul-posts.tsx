@@ -92,9 +92,8 @@ function HaulPostsFeedPage() {
       const response = await api.post(`/xp/spend/haul-unboxing/${photoId}`);
       if (response.data.success) {
         // Sync rank updates to AuthContext
-        if (response.data?.newRank) {
+        if (response.data?.remainingXp !== undefined) {
           updateUser({
-            explorerRank: response.data.newRank,
             guildXp: response.data.remainingXp,
           });
         }
@@ -123,9 +122,8 @@ function HaulPostsFeedPage() {
       const response = await api.post(`/xp/spend/bump-post/${photoId}`);
       if (response.data.success) {
         // Sync rank updates to AuthContext
-        if (response.data?.newRank) {
+        if (response.data?.remainingXp !== undefined) {
           updateUser({
-            explorerRank: response.data.newRank,
             guildXp: response.data.remainingXp,
           });
         }
