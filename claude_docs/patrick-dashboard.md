@@ -46,27 +46,32 @@
 
 ## What's Next (S448)
 
-**S447 dispatched 6 parallel agents — awaiting results:**
-1. Architect: Bump Post feed sort spec + device fingerprinting architecture
-2. Dev: Appraisal 5/day cartel cap
-3. Dev: Chargeback farming (72h XP hold + Stripe webhook)
-4. Dev: Nav rename (Explorer Profile, Explorer's Guild)
-5. Dev: XP expiry D-XP-002 (schema + cron + in-app warnings)
-6. Game Designer: Guaranteed Value Cache spec (Lucky Roll replacement)
+**S448 opens with Chrome QA audit of everything S447 shipped, then attacks rank staleness P0, then dashboard rethink.**
 
-**After Batch 1 returns (Batch 2):**
-- Bump Post feed sort implementation
-- Device fingerprinting implementation
-- Lucky Roll → Guaranteed Value Cache (after spec)
-- Cosmetics repricing UI (D-XP-005): 1,000/2,500 XP cosmetics
-- Hunt Pass 3x coupon slot
-- Coupon backend enforcement (server-side monthly limits)
+**S447 COMPLETE — All 3 batches shipped, pushed, migrated ✅**
 
-**Existing priorities (still queued):**
-1. Review workspace QA results → dispatch fixes
-2. "Organizer Special" badge on public sale + shopper item view
-3. Price Research Card redesign (spec ready at `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`)
-4. Brand audit fixes — 3 copy bugs, no decisions needed
+**What shipped this session:**
+- Appraisal cartel cap: 5/day hard limit on XP credits per user
+- Nav renamed: "Explorer's Guild" (loyalty) + "Explorer Profile" (passport) sitewide — 15 locations
+- XP expiry D-XP-002: schema fields, nightly cron (02:00 UTC), activity tracking, Grandmaster+ exemption
+- Bump Post feed sort: bumped posts rise to top of haul feed
+- Early Access Cache: replaces Lucky Roll entirely — 100 XP → 48h early access to category items
+- Cosmetics repricing D-XP-005: 1,000/2,500/250-500 XP new prices live
+- Hunt Pass 3x coupon enforcement: server-side monthly limits (HP=3x, standard=2x)
+- Stale reference sweep: zero remaining "Lucky Roll", "Loyalty Passport", or "Explorer Passport" copy
+- Coupon amounts corrected: $0.75/$2.00/$5.00 (D-XP-001 compliant)
+- Chargeback farming: already done in prior session — just need Stripe event enabled (see below)
+
+**⚠️ Patrick action still needed:**
+- Stripe Dashboard → Developers → Webhooks → add `charge.dispute.created` event
+
+**S448 OPEN ISSUE — Rank staleness (P0 bug, live on site):**
+Nav shows "Scout" for users who should be "Initiate." XP values inconsistent across pages. Likely root cause: JWT carries stale rank/XP from login and doesn't refresh on XP earn. Next session investigates + fixes.
+
+**NAMING DECISION NEEDED before fix:**
+Patrick said: Initiate → Scout → Hunter → Sage → Grandmaster
+Prior locked: Scout → Ranger → Sage → Grandmaster (no Initiate base tier)
+S448 will surface this for Patrick approval before touching rank code.
 
 ---
 
@@ -74,7 +79,7 @@
 
 | Session | Date | Summary |
 |---------|------|---------|
-| S447 | 2026-04-13 | Explore session: page overlap analysis, naming locked (Explorer Profile/Guild/Hunt Pass), XP gaps identified, 6 parallel agents dispatched |
+| S447 | 2026-04-13 | 3 dispatch batches: Early Access Cache, XP expiry, bump sort, cosmetics repricing, coupon enforcement, nav renames, stale sweep. All pushed + migrated. |
 | S446 | 2026-04-13 | XP frontend, 3 micro-sinks, organizer discounts, workspace magic link invite, WorkspaceMember schema fix |
 | S445 | 2026-04-13 | XP economy redesign + 5 fraud gates + workspace invite flow |
 | S444 | 2026-04-13 | STAFF→MEMBER full rename + workspace permissions fixed |

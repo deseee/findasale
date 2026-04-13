@@ -155,7 +155,7 @@ New files:
 
 **Device fingerprinting (Phase 2 — deferred):** Fields already on User model. FingerprintJS free tier. Defer until beta scale justifies it.
 
-**S448 next priorities:** Workspace QA, Organizer Special badge, Price Research Card, brand audit copy.
+**S448 next priorities — see ## Next Session below.**
 
 **S448 Next session (existing priorities still valid):**
 Priority 1 — Review workspace QA results (Patrick QA'd out-of-session). Dispatch fixes.
@@ -808,54 +808,52 @@ npx prisma generate
 
 ## Next Session Priority
 
-### Immediate (S443) — Shopper Page Strategic UX Exploration
+### S448 — QA Audit + Rank Staleness + Dashboard Rethink
 
-**Mode: EXPLORE (same pattern as S441-organizer team collab ecosystem)**
+**FIRST: QA audit of S447 shipped features (Chrome, sequential — before anything else)**
 
-Patrick wants strategic UX/innovation thinking applied to 4 interconnected shopper pages that need cohesive design, possible merges, and name/nav cleanup. Same approach as the Staff/Workspace/Command Center ecosystem design: UX spec first, then innovation ideas, then Patrick approves, then parallel dev dispatch.
+Real browser evidence required. Do not accept code-read as verification.
+- `/shopper/early-access-cache` — loads, 100 XP activation flow completes
+- Nav desktop + mobile: "Explorer's Guild" and "Explorer Profile" in all 3 sidebar locations
+- AvatarDropdown: "Early Access Cache" present, zero "Lucky Roll" references
+- `/shopper/loyalty` — h1 title reads "Explorer's Guild"
+- `/shopper/explorer-passport` — h1 title reads "Explorer Profile"
+- Haul posts feed: bumped post surfaces to top
+- Coupon display on loyalty page: shows $0.75 / $2.00 / $5.00
 
-**Pages to evaluate (read all 4 current implementations first):**
+**P0 BUG — Rank staleness sitewide (Patrick confirmed live on deployed site)**
 
-1. **`/shopper/loyalty`** — Needs work. Patrick asks: combine with shopper dashboard? Nav/header names need changing at minimum.
+Nav shows "Scout" for users who should be "Initiate". XP amounts inconsistent across pages (e.g. dashboard shows 505/1500 to next rank, loyalty shows 505/2000 — one is wrong).
 
-2. **`/shopper/dashboard`** — Still needs work. Patrick asks: combine with similar pages?
+Investigation order:
+1. DB audit via psycopg2 — query guildXp for all test users; compare to what Chrome shows in nav
+2. Find rank calculation function — grep for where guildXp maps to a rank name string (likely a utility + JWT payload)
+3. **NAMING DECISION (surface to Patrick before fixing):** Patrick says Initiate→Scout→Hunter→Sage→Grandmaster. Prior locked decisions (S388/S445) used Scout→Ranger→Sage→Grandmaster. "Initiate" as 0-499 XP base tier and "Hunter" replacing "Ranger" need explicit Patrick sign-off. Don't rename in code until confirmed.
+4. Root cause hypothesis: JWT carries guildXp/rank at login time; XP-earning events don't refresh the token → rank shown in nav is stale. Check authController — does it refresh rank in JWT on XP award?
+5. XP threshold inconsistency: locked thresholds are 500/2000/5000/12000. Find every place in frontend that hardcodes a different threshold and fix to single source of truth.
+6. After Patrick confirms naming: dispatch findasale-dev to fix rank calculation + JWT refresh + all display locations in one pass.
 
-3. **`/shopper/explorer-passport`** — Needs work. Patrick asks: combine with shopper dashboard?
+**Tier perks visibility**
 
-4. **`/shopper/hunt-pass`** — Patrick thinks this should split into 2 pages: (a) Hunt Pass upsell/purchase page, and (b) How to Earn XP / How to Spend XP guide. Whether 1 or 2 pages, it needs cohesiveness with the others.
+Each rank needs a visible perks list somewhere in the product (what does Scout unlock that Initiate doesn't?). Dispatch findasale-gamedesign to spec perks per tier (if not already done), then build the display — could live on loyalty page, a dedicated ranks page, or a tooltip on the rank badge.
 
-**Key questions the exploration must answer:**
-- Which pages merge? Which stay separate? Which split?
-- What should each page be called in nav? (Current names may not match content)
-- How do these pages relate to each other in the shopper journey?
-- What's the information architecture? (Where does a shopper go to see XP? Rank? Rewards? Progress?)
-- What innovations from the idea bank apply here?
+**Dashboard rethink — creative angle (parallel with rank investigation)**
 
-**Approach:**
-1. Dispatch `findasale-ux` with all 4 page paths — get UX spec for the shopper engagement ecosystem
-2. Dispatch `findasale-innovation` — brainstorm ideas for shopper engagement/gamification pages
-3. Present Patrick with combined findings + recommendations
-4. After Patrick approves: parallel dev dispatch (same Phase pattern as team collab)
+Shopper dashboard is busy/cluttered. The gamification layer (XP, rank, Early Access Cache, achievements, guild) feels like 5 bolted-on widgets. Dispatch findasale-ux to propose a creative consolidation: one cohesive "home base" experience. Include the page staleness/data consistency problem as a constraint — the redesign must surface the right numbers in one canonical place.
 
-**Pre-read for next session:**
-- `packages/frontend/pages/shopper/loyalty.tsx`
-- `packages/frontend/pages/shopper/dashboard.tsx`
-- `packages/frontend/pages/shopper/explorer-passport.tsx`
-- `packages/frontend/pages/shopper/hunt-pass.tsx`
-- `packages/frontend/components/Layout.tsx` (nav structure for shopper sections)
-
-### Team Collab Phases Remaining
-- **Phase 2 status:** Code pushed, Railway rebuild pending (cache bust + schema fix in S442 push block). Migration needed.
-- **Phase 3:** Workspace View internal collaboration hub (live sales board, per-sale chat, task distribution, team leaderboard) + WebSocket integration
-- **Phase 4:** Smart tasks + leaderboard
-- **Phase 5:** Analytics + Command Center alerts + polish
+**Existing queue (lower priority):**
+- Workspace QA results → dispatch fixes
+- Organizer Special badge (public sale page shows $X off when organizerDiscountAmount > 0)
+- Price Research Card redesign (spec at claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md)
+- Brand audit copy: SharePromoteModal, homepage meta, organizer profile meta
 
 ### Deferred
-- hunt-pass.tsx 3 missing XP sink rows (Custom Map Pin 75 XP, Profile Showcase Slot 50/150 XP, Treasure Trail Sponsor 100 XP)
-- Bounty redesign Phase 2: auto-match on publish, shopper notifications, expiry cron
-- Flea Market Events full implementation (ADR-014 locked, schema ready)
-- Stripe Connect webhook config (items not marking SOLD after POS card payment — see Standing Notes)
-- Bounties dollars vs XP: open decision (Stripe/legal)
+- Referral fraud gate (D-XP-004: 24h payment-cleared hold + email+phone verification)
+- Device fingerprinting Phase 2 (FingerprintJS — defer until beta scale justifies)
+- Bounty redesign Phase 2
+- Flea Market Events full implementation (ADR-014 locked)
+- Stripe Connect webhook config (items not marking SOLD after POS payment)
+- Bounties dollars vs XP: open decision
 
 **⏸️ QA QUEUE — postponed:**
 - S436: earnings/qr-codes/staff pages
