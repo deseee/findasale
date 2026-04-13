@@ -45,13 +45,18 @@ export default function WorkspacePage() {
     queryFn: async () => {
       if (!slug) return null;
       try {
-        const { data } = await api.get(`/workspace`);
-        // Filter by slug to verify the user is a member of this workspace
-        if (data?.slug === slug) return data as WorkspaceInternal;
-        // If no workspace found or slug doesn't match, throw error
-        throw new Error('Workspace not found or you are not a member');
+        const { data } = await api.get(`/workspace/public/${slug}`);
+        // Verify the current user is a member of this workspace
+        if (!user?.organizerProfile?.id) {
+          throw new Error('User not authenticated');
+        }
+        const isMember = data?.members?.some((m: any) => m.organizerId === user.organizerProfile.id && m.acceptedAt);
+        if (!isMember) {
+          throw new Error('You are not a member of this workspace');
+        }
+        return data as WorkspaceInternal;
       } catch (error: any) {
-        // 404 or other errors mean the user doesn't have access
+        // 404 or other errors mean the workspace doesn't exist or user is not a member
         throw new Error('Workspace not found or you are not a member');
       }
     },
