@@ -186,6 +186,7 @@ import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily b
 import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transaction detection at 2 AM
 import './jobs/boostExpiryJob';   // Phase 2b: Expire stale ACTIVE BoostPurchase records hourly
 import './jobs/xpExpiryCron';      // D-XP-002: XP expiry system — daily at 02:00 UTC with warning flags
+import './jobs/huntPassExpiryCron'; // Hunt Pass: deactivate expired passes daily at 03:00 UTC
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // ADR-013 Phase 2: Auto-close expired auctions + notify winners

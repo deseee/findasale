@@ -819,6 +819,29 @@ export const webhookHandler = async (req: Request, res: Response) => {
         break; // Boost handled — exit case
       }
 
+      // Hunt Pass activation: server-side confirmation via webhook
+      if (paymentIntent.metadata?.type === 'hunt_pass') {
+        const userId = paymentIntent.metadata?.userId;
+        if (userId) {
+          try {
+            const expiry = new Date();
+            expiry.setDate(expiry.getDate() + 30);
+            await prisma.user.update({
+              where: { id: userId },
+              data: {
+                huntPassActive: true,
+                huntPassExpiry: expiry,
+                huntPassCancelledAt: null, // Clear any prior cancellation record
+              },
+            });
+            console.log(`[hunt-pass] Activated Hunt Pass for user ${userId} via webhook, expires ${expiry.toISOString()}`);
+          } catch (err) {
+            console.error(`[hunt-pass] Failed to activate Hunt Pass for user ${userId}:`, err);
+          }
+        }
+        break; // Hunt Pass handled — exit case
+      }
+
       // Standard Purchase: handle existing purchase records
       const purchase = await prisma.purchase.findFirst({
         where: { stripePaymentIntentId: paymentIntent.id },

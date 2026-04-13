@@ -141,10 +141,9 @@ const PricingPage = () => {
     setError(null);
 
     try {
-      const response = await api.post('/stripe/checkout-session', {
+      const response = await api.post('/billing/checkout', {
         priceId: tier.stripePrice,
-        successUrl: `${window.location.origin}/organizer/dashboard?upgrade=success`,
-        cancelUrl: `${window.location.origin}/organizer/pricing?upgrade=cancelled`,
+        billingInterval: 'monthly',
       });
 
       if (response.data?.url) {
@@ -669,3 +668,4 @@ const PricingPage = () => {
 };
 
 export default PricingPage;
+                                                                                
