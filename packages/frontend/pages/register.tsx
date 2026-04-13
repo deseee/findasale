@@ -122,9 +122,22 @@ const RegisterPage = () => {
 
       // Store token in context and localStorage
       login(response.data.token);
-      
-      // Redirect based on user role
-      if (response.data.user.roles?.includes('ORGANIZER')) {
+
+      // Check for inviteToken in query params
+      const params = new URLSearchParams(window.location.search);
+      const inviteToken = params.get('inviteToken');
+
+      if (inviteToken && response.data.user.roles?.includes('ORGANIZER')) {
+        // Accept the magic link invite
+        try {
+          await api.post(`/workspace/invite/accept/${inviteToken}`);
+          router.push('/organizer/dashboard?welcomed=workspace');
+        } catch (inviteErr: any) {
+          console.error('[register] Failed to accept workspace invite:', inviteErr);
+          // Still redirect to dashboard even if invite acceptance fails
+          router.push('/organizer/dashboard?welcomed=workspace');
+        }
+      } else if (response.data.user.roles?.includes('ORGANIZER')) {
         router.push('/organizer/dashboard');
       } else {
         router.push('/');

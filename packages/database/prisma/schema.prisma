@@ -1832,6 +1832,7 @@ model OrganizerWorkspace {
   updatedAt        DateTime                    @updatedAt
   owner            Organizer                   @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members          WorkspaceMember[]
+  invites          WorkspaceInvite[]           @relation("WorkspaceInvites")
   settings         WorkspaceSettings?
   permissions      WorkspacePermission[]       @relation("WorkspacePermissions")
   salesActivity    WorkspaceSalesActivity[]    @relation("WorkspaceSalesActivity")
@@ -1856,6 +1857,21 @@ model WorkspaceMember {
   @@unique([workspaceId, organizerId])
   @@index([workspaceId])
   @@index([organizerId])
+}
+
+model WorkspaceInvite {
+  id          String             @id @default(cuid())
+  workspaceId String
+  inviteEmail String
+  role        WorkspaceRole      @default(MEMBER)
+  inviteToken String             @unique @default(cuid())
+  invitedAt   DateTime           @default(now())
+  expiresAt   DateTime
+  workspace   OrganizerWorkspace @relation("WorkspaceInvites", fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([inviteToken])
+  @@index([inviteEmail])
+  @@index([workspaceId])
 }
 
 // Feature #65: Subscription Tier Enum

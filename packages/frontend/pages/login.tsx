@@ -30,14 +30,30 @@ const LoginPage = () => {
       // Store token in context and localStorage
       login(response.data.token);
 
-      // Honour ?redirect= param, then fall back to role-based default
-      const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
-      if (redirect && redirect.startsWith('/')) {
-        router.push(redirect);
-      } else if (response.data.user.roles?.includes('ORGANIZER')) {
-        router.push('/organizer/dashboard');
+      // Check for inviteToken in query params
+      const params = new URLSearchParams(window.location.search);
+      const inviteToken = params.get('inviteToken');
+
+      if (inviteToken && response.data.user.roles?.includes('ORGANIZER')) {
+        // Accept the magic link invite
+        try {
+          await api.post(`/workspace/invite/accept/${inviteToken}`);
+          router.push('/organizer/dashboard?welcomed=workspace');
+        } catch (inviteErr: any) {
+          console.error('[login] Failed to accept workspace invite:', inviteErr);
+          // Still redirect to dashboard even if invite acceptance fails
+          router.push('/organizer/dashboard?welcomed=workspace');
+        }
       } else {
-        router.push('/');
+        // Honour ?redirect= param, then fall back to role-based default
+        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
+        if (redirect && redirect.startsWith('/')) {
+          router.push(redirect);
+        } else if (response.data.user.roles?.includes('ORGANIZER')) {
+          router.push('/organizer/dashboard');
+        } else {
+          router.push('/');
+        }
       }
     } catch (err: any) {
       if (err.response?.status === 429) {
@@ -58,14 +74,30 @@ const LoginPage = () => {
       // Store token in context and localStorage
       login(result.token);
 
-      // Honour ?redirect= param, then fall back to role-based default
-      const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
-      if (redirect && redirect.startsWith('/')) {
-        router.push(redirect);
-      } else if (result.user.roles?.includes('ORGANIZER')) {
-        router.push('/organizer/dashboard');
+      // Check for inviteToken in query params
+      const params = new URLSearchParams(window.location.search);
+      const inviteToken = params.get('inviteToken');
+
+      if (inviteToken && result.user.roles?.includes('ORGANIZER')) {
+        // Accept the magic link invite
+        try {
+          await api.post(`/workspace/invite/accept/${inviteToken}`);
+          router.push('/organizer/dashboard?welcomed=workspace');
+        } catch (inviteErr: any) {
+          console.error('[login] Failed to accept workspace invite:', inviteErr);
+          // Still redirect to dashboard even if invite acceptance fails
+          router.push('/organizer/dashboard?welcomed=workspace');
+        }
       } else {
-        router.push('/');
+        // Honour ?redirect= param, then fall back to role-based default
+        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : null;
+        if (redirect && redirect.startsWith('/')) {
+          router.push(redirect);
+        } else if (result.user.roles?.includes('ORGANIZER')) {
+          router.push('/organizer/dashboard');
+        } else {
+          router.push('/');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during passkey authentication');
