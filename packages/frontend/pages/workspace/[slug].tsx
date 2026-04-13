@@ -56,7 +56,7 @@ export default function WorkspacePage() {
   });
 
   // Extract current user's organizer ID from their workspace membership
-  const currentOrganizerIds = myWorkspace?.members?.map(m => m.organizerId) || [];
+  const currentOrganizerIds = myWorkspace?.members?.map((m: WorkspaceMember) => m.organizerId) || [];
 
   const { data: workspace, isLoading, isError } = useQuery({
     queryKey: ['workspace-internal', slug],
