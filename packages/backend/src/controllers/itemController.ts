@@ -22,6 +22,7 @@ import { closeAuction } from '../services/auctionService'; // Auction close flow
 import { resetRapidDraftDebounce, rapidfireAIDebounce, heldAnalysisItems } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
 import { awardXp, XP_AWARDS, spendXp, getSpendableXp } from '../services/xpService'; // Phase 2a: XP awards
+import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -365,6 +366,9 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     // Check if user has active Hunt Pass
     const hasHuntPass = user?.huntPassActive && user?.huntPassExpiry && user.huntPassExpiry > new Date();
 
+    // Phase 2b: Get user rank for Legendary item filtering
+    const userRank = user?.explorerRank ?? 'INITIATE';
+
     // Hunt Pass Feature: Rarity-based visibility filtering
     // Query items without visibility restrictions, then filter in app code based on rarity + Hunt Pass
     const filterWhere: any = {
@@ -407,6 +411,8 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         draftStatus: true,
         organizerDiscountAmount: true,
         organizerDiscountXp: true,
+        isLegendary: true, // Phase 2b: Legendary early access
+        legendaryVisibleAt: true, // Phase 2b: Legendary early access (internal only)
         createdAt: true,
         updatedAt: true,
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
@@ -416,7 +422,30 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     // Filter based on rarity visibility + Hunt Pass status
     items = items.filter(item => isItemVisibleToUser(item, hasHuntPass));
 
-    res.json(items);
+    // Phase 2b: Filter Legendary items based on user rank
+    const isSageOrHigher = ['SAGE', 'GRANDMASTER'].includes(userRank);
+    items = items.filter(item => {
+      if (!item.isLegendary || !item.legendaryVisibleAt) {
+        return true; // Non-legendary items always visible
+      }
+      // Legendary item: check visibility
+      const now = new Date();
+      const legendaryVisibleAtTime = new Date(item.legendaryVisibleAt);
+      if (isSageOrHigher) {
+        // Sage/Grandmaster see all legendary items
+        return true;
+      }
+      // Lower ranks see only if time has passed
+      return now >= legendaryVisibleAtTime;
+    });
+
+    // Remove internal fields before sending to client
+    const itemsForClient = items.map(item => {
+      const { legendaryVisibleAt, ...rest } = item;
+      return rest;
+    });
+
+    res.json(itemsForClient);
   } catch (error) {
     console.error('Error fetching items by sale ID:', error);
     res.status(500).json({ message: 'Server error while fetching items' });

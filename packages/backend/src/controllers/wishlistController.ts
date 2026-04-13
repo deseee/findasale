@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { randomUUID } from 'crypto';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
+import { getRankBenefits } from '../utils/rankUtils';
 
 // GET /api/wishlists — get all wishlists for authenticated user
 export const getMyWishlists = async (req: AuthRequest, res: Response) => {
@@ -80,6 +81,9 @@ export const addToWishlist = async (req: AuthRequest, res: Response) => {
     // Verify wishlist belongs to the user
     const wishlist = await prisma.wishlist.findUnique({
       where: { id: wishlistId },
+      include: {
+        items: { select: { id: true } }, // Get current item count
+      },
     });
 
     if (!wishlist) {
@@ -88,6 +92,27 @@ export const addToWishlist = async (req: AuthRequest, res: Response) => {
 
     if (wishlist.userId !== req.user.id) {
       return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    // Phase 2a: Fetch user and enforce rank-based slot limit
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { explorerRank: true },
+    });
+
+    const rankBenefits = getRankBenefits(user?.explorerRank ?? 'INITIATE');
+    const maxSlots = rankBenefits.wishlistSlots === 'unlimited'
+      ? Infinity
+      : rankBenefits.wishlistSlots;
+
+    // Check if user has exceeded slot limit
+    const currentItemCount = wishlist.items.length;
+    if (currentItemCount >= maxSlots) {
+      return res.status(403).json({
+        error: `Your ${user?.explorerRank || 'INITIATE'} rank allows ${maxSlots} wishlist saves. Upgrade to save more.`,
+        maxSlots,
+        currentCount: currentItemCount,
+      });
     }
 
     // Verify item exists

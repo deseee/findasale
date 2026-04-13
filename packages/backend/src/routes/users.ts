@@ -14,6 +14,7 @@ import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controlle
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { spendXp } from '../services/xpService';
+import { getRankProgressInfo, getRankBenefits, RANK_NAMES } from '../utils/rankUtils';
 
 const router = Router();
 
@@ -543,6 +544,70 @@ router.get('/:userId/showcase', async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching user showcases:', error);
     res.status(500).json({ message: 'Server error while fetching showcases' });
+  }
+});
+
+// Phase 2a: Get user's rank info (rank, XP progress, unlocked perks, rank history)
+router.get('/:id/rank-info', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        guildXp: true,
+        explorerRank: true,
+        rankUpHistory: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const progressInfo = getRankProgressInfo(user.guildXp);
+    const benefits = getRankBenefits(user.explorerRank);
+
+    // Build list of human-readable perks
+    const perksUnlocked: string[] = [];
+    if (benefits.holdDurationMinutes > 30) {
+      perksUnlocked.push(`${benefits.holdDurationMinutes}-minute holds`);
+    }
+    if (benefits.maxConcurrentHolds > 1) {
+      perksUnlocked.push(`${benefits.maxConcurrentHolds} concurrent holds`);
+    }
+    if (benefits.wishlistSlots === 'unlimited') {
+      perksUnlocked.push('Unlimited wishlist slots');
+    } else if (benefits.wishlistSlots > 1) {
+      perksUnlocked.push(`${benefits.wishlistSlots} wishlist slots`);
+    }
+    if (typeof benefits.confirmationSkipsPerSale === 'number' ? benefits.confirmationSkipsPerSale > 0 : benefits.confirmationSkipsPerSale === 'all') {
+      const skipsText = benefits.confirmationSkipsPerSale === 'all'
+        ? 'Auto-confirm all holds'
+        : `Skip ${benefits.confirmationSkipsPerSale} hold confirmation${typeof benefits.confirmationSkipsPerSale === 'number' && benefits.confirmationSkipsPerSale > 1 ? 's' : ''} per sale`;
+      perksUnlocked.push(skipsText);
+    }
+    if (benefits.legendaryEarlyAccessHours > 0) {
+      perksUnlocked.push(`${benefits.legendaryEarlyAccessHours}-hour legendary early access`);
+    }
+    if (benefits.microSinksAvailable.scoutReveal) {
+      perksUnlocked.push('Micro-sinks (scout reveal, haul unboxing, bump post)');
+    }
+
+    res.json({
+      currentRank: user.explorerRank,
+      guildXp: user.guildXp,
+      nextRankXp: progressInfo.nextRankXp,
+      xpToNextRank: progressInfo.xpToNextRank,
+      percentToNextRank: progressInfo.percentToNextRank,
+      perksUnlocked,
+      unlockedPerks: benefits,
+      rankUpHistory: user.rankUpHistory || [],
+    });
+  } catch (error) {
+    console.error('Error fetching user rank info:', error);
+    res.status(500).json({ message: 'Failed to fetch rank info' });
   }
 });
 
