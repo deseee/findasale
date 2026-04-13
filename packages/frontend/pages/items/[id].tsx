@@ -646,7 +646,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                     <div className="inline-block px-3 py-1.5 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 text-sm font-semibold rounded-full">
                       Organizer Special: ${item.organizerDiscountAmount.toFixed(2)} off — spend {item.organizerDiscountXp} XP
                     </div>
-                    {user && user.xpBalance && user.xpBalance >= (item.organizerDiscountXp ?? 0) && (
+                    {user && user.guildXp && user.guildXp >= (item.organizerDiscountXp ?? 0) && (
                       <div className="mt-2 text-xs font-semibold text-green-600 dark:text-green-400">
                         ✓ You have enough XP!
                       </div>

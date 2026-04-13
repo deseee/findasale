@@ -349,8 +349,8 @@ router.post(
           user: {
             select: {
               id: true,
-              displayName: true,
-              avatarUrl: true,
+              name: true,
+              profileSlug: true,
             },
           },
           createdAt: true,
@@ -360,8 +360,8 @@ router.post(
       });
 
       const interestedUsers = favorites.map((fav: any) => ({
-        displayName: fav.user.displayName,
-        avatarUrl: fav.user.avatarUrl,
+        displayName: fav.user.name,
+        avatarUrl: null,
         savedAt: fav.createdAt,
       }));
 
