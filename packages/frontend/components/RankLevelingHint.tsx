@@ -46,7 +46,8 @@ export const RankLevelingHint: React.FC<RankLevelingHintProps> = ({
   const percentToNext = (currentXp / nextRankXp) * 100;
   const xpRemaining = nextRankXp - currentXp;
   const isCloseToNext = percentToNext >= 80;
-  const nextRankInfo = NEXT_RANK_UNLOCKS[nextRank] || NEXT_RANK_UNLOCKS[rank];
+  // NEXT_RANK_UNLOCKS is keyed by current rank (it describes what unlocks on the next rank)
+  const nextRankInfo = NEXT_RANK_UNLOCKS[rank];
 
   // Initiate-specific messaging
   if (rank === 'INITIATE') {

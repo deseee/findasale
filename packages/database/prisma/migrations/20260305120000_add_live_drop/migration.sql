@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "Item" ADD COLUMN "isLiveDrop" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "Item" ADD COLUMN "liveDropAt" TIMESTAMP(3);

@@ -1,5 +1,0 @@
--- AlterTable
-ALTER TABLE "User" ADD COLUMN "shopperCredits" DOUBLE PRECISION NOT NULL DEFAULT 0;
-
--- AlterTable
-ALTER TABLE "Item" ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'USD';
