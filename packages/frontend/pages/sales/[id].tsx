@@ -174,7 +174,7 @@ const SaleDetailPage = () => {
       .catch(() => { /* non-fatal */ });
   }, [id, user]);
 
-  // Award 10 XP for visiting a sale (once per sale per day, auth required)
+  // Award 2 XP for walk-in visit (check-in) at a sale (once per sale per day, auth required)
   useEffect(() => {
     if (!id || !user) return;
     api.post(`/sales/${id}/visit`).catch(() => { /* fire-and-forget */ });

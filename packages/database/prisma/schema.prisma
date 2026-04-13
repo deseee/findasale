@@ -709,6 +709,9 @@ model Item {
   // Feature #244 Phase 2: eBay listing tracking
   ebayListingId         String? // eBay listing ID after successful publish; used for Phase 3 sync
   listedOnEbayAt        DateTime? // Timestamp when item was pushed to eBay
+  // D-XP-003: Organizer-funded item discounts
+  organizerDiscountXp   Int?                   @default(0) // XP spent to create discount (0 = no discount)
+  organizerDiscountAmount Decimal?             @db.Decimal(10,2) // Dollar amount of discount ($2, $4, or $5 max)
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -1938,6 +1941,10 @@ model UGCPhoto {
   linkedItemIds String[]           @default([]) // Feature #88: Items tagged in haul
   reactions     UGCPhotoReaction[] // Feature #88: Photo reactions (likes)
   showcaseSlots UserShowcase[] // Phase 2c: Profile showcase pinned hauls
+  // D-XP-006: Micro-sink XP flows
+  scoutReveals            String[]       @default([]) // Array of user IDs who paid 5 XP to reveal scout info
+  unboxingAnimationUnlocked Boolean       @default(false) // User paid 2 XP to unlock celebration animation
+  bumpedUntil             DateTime? // Bumped post visible at feed top until this time (10 XP cost)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 

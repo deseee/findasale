@@ -3,6 +3,7 @@ import { parse } from 'csv-parse';
 import { AuthRequest } from '../middleware/auth';
 import { Readable } from 'stream';
 import { prisma } from '../index';
+import { Decimal } from '@prisma/client/runtime/library';
 import axios from 'axios';
 import FormData from 'form-data';
 import { z } from 'zod';
@@ -20,7 +21,7 @@ import { createNotification } from '../services/notificationService'; // P0: Bid
 import { closeAuction } from '../services/auctionService'; // Auction close flow
 import { resetRapidDraftDebounce, rapidfireAIDebounce, heldAnalysisItems } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
-import { awardXp, XP_AWARDS } from '../services/xpService'; // Phase 2a: XP awards
+import { awardXp, XP_AWARDS, spendXp, getSpendableXp } from '../services/xpService'; // Phase 2a: XP awards
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -1956,5 +1957,144 @@ export const getRareFindsItems = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error fetching rare finds:', error);
     res.status(500).json({ message: 'Server error while fetching rare finds' });
+  }
+};
+
+/**
+ * D-XP-003: Apply organizer-funded discount to an item
+ * POST /api/items/:itemId/organizer-discount
+ * Body: { xpToSpend: number } — must be 200, 400, or 500
+ * Validates organizer ownership, XP balance, and applies discount permanently
+ */
+export const applyOrganizerDiscount = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthRequest;
+    const { itemId } = req.params;
+    const { xpToSpend } = req.body;
+
+    // Validate authenticated user
+    if (!authReq.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Validate xpToSpend is one of the allowed values
+    if (![200, 400, 500].includes(xpToSpend)) {
+      return res.status(400).json({ message: 'xpToSpend must be 200, 400, or 500' });
+    }
+
+    // Fetch item with sale and organizer details
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { sale: { include: { organizer: { include: { user: { select: { id: true, guildXp: true } } } } } } },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Verify organizer ownership
+    if (item.sale.organizer.userId !== authReq.user.id) {
+      return res.status(403).json({ message: 'You do not own this item' });
+    }
+
+    // Check spendable XP (accounts for holds)
+    const spendable = await getSpendableXp(authReq.user.id);
+    if (spendable < xpToSpend) {
+      return res.status(400).json({
+        message: `Insufficient XP. You have ${spendable} spendable XP, but this discount costs ${xpToSpend}.`
+      });
+    }
+
+    // Calculate discount amount: (xpToSpend / 200) * $2
+    const discountAmount = (xpToSpend / 200) * 2;
+
+    // Spend XP (creates transaction record, deducts from guildXp)
+    const spendSuccess = await spendXp(authReq.user.id, xpToSpend, 'ORGANIZER_ITEM_DISCOUNT', {
+      saleId: item.saleId,
+      description: `Organizer discount on item "${item.title}"`,
+    });
+
+    if (!spendSuccess) {
+      return res.status(400).json({ message: 'Failed to spend XP. Please try again.' });
+    }
+
+    // Update item with discount fields
+    const updatedItem = await prisma.item.update({
+      where: { id: itemId },
+      data: {
+        organizerDiscountXp: xpToSpend,
+        organizerDiscountAmount: new Decimal(discountAmount.toFixed(2)),
+      },
+      include: { sale: { select: { id: true, title: true } } },
+    });
+
+    // Audit log
+    console.log(`[Organizer Discount] User ${authReq.user.id} applied $${discountAmount} discount to item ${itemId} for ${xpToSpend} XP`);
+
+    res.status(200).json({
+      message: 'Organizer Special applied successfully',
+      item: updatedItem,
+    });
+  } catch (error) {
+    console.error('[applyOrganizerDiscount] Error:', error);
+    res.status(500).json({ message: 'Server error while applying discount' });
+  }
+};
+
+/**
+ * D-XP-003: Remove organizer-funded discount from an item
+ * DELETE /api/items/:itemId/organizer-discount
+ * XP is NOT refunded (burning is permanent per spec)
+ */
+export const removeOrganizerDiscount = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthRequest;
+    const { itemId } = req.params;
+
+    // Validate authenticated user
+    if (!authReq.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Fetch item with sale and organizer details
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Verify organizer ownership
+    if (item.sale.organizer.userId !== authReq.user.id) {
+      return res.status(403).json({ message: 'You do not own this item' });
+    }
+
+    // Check if discount is active (organizerDiscountXp > 0)
+    if (!item.organizerDiscountXp || item.organizerDiscountXp === 0) {
+      return res.status(400).json({ message: 'This item does not have an active discount' });
+    }
+
+    // Remove discount — XP is NOT refunded (permanent burn)
+    const updatedItem = await prisma.item.update({
+      where: { id: itemId },
+      data: {
+        organizerDiscountXp: null,
+        organizerDiscountAmount: null,
+      },
+      include: { sale: { select: { id: true, title: true } } },
+    });
+
+    // Audit log
+    console.log(`[Organizer Discount] User ${authReq.user.id} removed discount from item ${itemId} (XP not refunded)`);
+
+    res.status(200).json({
+      message: 'Organizer Special removed (XP was permanently burned)',
+      item: updatedItem,
+    });
+  } catch (error) {
+    console.error('[removeOrganizerDiscount] Error:', error);
+    res.status(500).json({ message: 'Server error while removing discount' });
   }
 };
