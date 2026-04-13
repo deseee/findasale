@@ -8,7 +8,8 @@ import {
   getStaffAvailability,
   updateStaffAvailability,
   checkCoverageGaps,
-  getStaffPerformance
+  getStaffPerformance,
+  deleteStaff
 } from '../controllers/staffController';
 
 const router = Router();
@@ -62,5 +63,11 @@ router.get('/:workspaceId/coverage-gaps', checkCoverageGaps);
  * Get performance snapshot
  */
 router.get('/:workspaceId/staff/:staffId/performance', getStaffPerformance);
+
+/**
+ * DELETE /api/workspaces/:workspaceId/staff/:staffId
+ * Remove a staff member from workspace
+ */
+router.delete('/:workspaceId/staff/:staffId', deleteStaff);
 
 export default router;

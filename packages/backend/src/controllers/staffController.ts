@@ -9,7 +9,8 @@ import {
   getAvailabilityForDateRange,
   getCoverageGaps,
   getPerformanceSnapshot,
-  verifyStaffBelongsToWorkspace
+  verifyStaffBelongsToWorkspace,
+  removeStaffMember
 } from '../services/staffService';
 
 /**
@@ -237,5 +238,34 @@ export const getStaffPerformance = async (req: AuthRequest, res: Response) => {
     Sentry.captureException(error);
     console.error('Error fetching staff performance:', error);
     return res.status(500).json({ message: 'Failed to fetch performance' });
+  }
+};
+
+/**
+ * DELETE /api/workspaces/:workspaceId/staff/:staffId
+ * Remove a staff member from workspace (owner only)
+ */
+export const deleteStaff = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId, staffId } = req.params;
+
+    if (!workspaceId || !staffId) {
+      return res.status(400).json({ message: 'Workspace ID and Staff ID are required' });
+    }
+
+    // Verify staff belongs to workspace
+    const belongs = await verifyStaffBelongsToWorkspace(staffId, workspaceId);
+    if (!belongs) {
+      return res.status(403).json({ message: 'Staff member not found in this workspace' });
+    }
+
+    // Remove the staff member
+    const result = await removeStaffMember(staffId);
+
+    return res.json({ message: 'Staff member removed successfully', ...result });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error removing staff member:', error);
+    return res.status(500).json({ message: 'Failed to remove staff member' });
   }
 };
