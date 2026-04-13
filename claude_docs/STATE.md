@@ -7,6 +7,29 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S448 COMPLETE (2026-04-13):** QA audit of S446/S447 shipped features. Scout Reveal bug identified. Rank naming locked. One file fix shipped.
+
+**S448 What happened:**
+- **Scout Reveal P1 bug identified:** Backend only returns `{ success: true, remainingXp }` — never queries or returns interest data. XP is spent, toast fires, but nothing is revealed to the user. Feature is a hollow stub. Frontend calls `refetchItem()` on success but item page has no panel to display revealed data. Full flesh-out needed: backend must query item saves/favorites and return them; frontend must render a "revealed" section.
+- **Rank naming LOCKED by Patrick:** Initiate → Scout → Ranger → Sage → Grandmaster. Prior session dropped "Initiate" as base tier — that was the error. Ranger was always correct (confirmed in decisions-log). This decision unlocks rank staleness P0 fix.
+- **explorer-passport.tsx fix shipped:** Line 283 "Save Passport" → "Save Profile" (1-line fix, S447 copy miss).
+- **Stripe sandbox action:** COMPLETED (confirmed by Patrick).
+- **QA verified (S447 output):** AvatarDropdown EXPLORE section has correct links (Explorer Profile, Haul Posts, Early Access Cache). Explorer's Guild title ✅. Early Access Cache page loads with 8 categories ✅. /join invalid token handled gracefully ✅. Edit-item has Organizer Special section ✅.
+- **Bump Post + Haul Unboxing:** UNVERIFIED — no haul post test data in DB. Queued for next session.
+- **MyTeamsCard happy path:** UNVERIFIED — no workspace member test user available.
+
+**S448 Files changed (1):**
+- `packages/frontend/pages/shopper/explorer-passport.tsx` — "Save Passport" → "Save Profile" line 283
+
+**S448 ⚠️ Blocked/Unverified Queue:**
+
+| Feature | Reason | What's Needed | Session Added |
+|---------|--------|---------------|---------------|
+| Bump Post 10 XP flow | No haul posts in test DB | Create haul post as Alice, then test bump | S448 |
+| Haul Unboxing Animation 2 XP | No haul posts in test DB | Same as above | S448 |
+| MyTeamsCard happy path | No workspace member test user | Invite Alice to a workspace, accept, reload dashboard | S448 |
+| Organizer discount badge (public) | Not yet built | Dev dispatch — show "Organizer Special: $X off" on sale/item pages | S448 |
+
 **S446 COMPLETE (2026-04-13):** XP frontend implementation + workspace magic link invite flow + WorkspaceMember schema properly fixed.
 
 **S446 What shipped:**
@@ -157,11 +180,22 @@ New files:
 
 **S448 next priorities — see ## Next Session below.**
 
-**S448 Next session (existing priorities still valid):**
-Priority 1 — Review workspace QA results (Patrick QA'd out-of-session). Dispatch fixes.
-Priority 2 — Organizer-funded discount badge: public sale page + shopper item view should show "Organizer Special: $X off" when `organizerDiscountAmount > 0`.
-Priority 3 — Price Research Card redesign: UX spec ready at `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`. Dispatch Dev.
-Priority 4 — Brand audit copy fixes: SharePromoteModal "estate sale" copy, homepage meta, organizer profile meta.
+**S449 priorities (next session opens with these):**
+
+**P0 — Rank staleness fix (UNBLOCKED — naming now locked):**
+Nav shows "Scout" for Initiate-level users. XP numbers differ between pages. Root cause: JWT carries stale rank from login, doesn't refresh on XP earn. Locked naming: Initiate → Scout → Ranger → Sage → Grandmaster. Fix rank thresholds (500/2000/5000/12000), update all rank references sitewide, fix JWT refresh on XP events.
+
+**P1 — Scout Reveal flesh-out:**
+Backend: query users who have saved/favorited the item, return as `{ success, remainingXp, interestedUsers: [{ displayName, avatarUrl, savedAt }] }`. Frontend: render a "Scout Reveal Results" panel below the item after spending XP, showing interested users. No messaging or coupon mechanic yet — demand intel only.
+
+**P2 — Dashboard rethink + perks system (parallel dispatch):**
+UX agent: creative brief for dashboard redesign — what should each rank tier FEEL like, what cards surface, how perks are communicated. Game Designer: spec what each rank (Initiate/Scout/Hunter/Sage/Grandmaster) actually unlocks (perks, cosmetics, access gates). Both can run in parallel now that naming is locked.
+
+**P3 — Create haul post test data** — needed to verify Bump Post and Haul Unboxing flows.
+
+**P4 — Organizer discount badge:** Show "Organizer Special: $X off" on public sale/item pages when `organizerDiscountAmount > 0`.
+
+**Stripe action already done (Patrick confirmed S448):** sandbox Stripe action is complete.
 
 ---
 

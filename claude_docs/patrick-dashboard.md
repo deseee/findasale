@@ -2,6 +2,15 @@
 
 ## What Happened This Week
 
+**S448** (2026-04-13) — QA audit + Scout Reveal bug + rank naming locked:
+- Scout Reveal is a hollow stub — XP spent, toast fires, nothing revealed. Backend never queries interest data. Full flesh-out queued for S449.
+- Rank naming locked: **Initiate → Scout → Ranger → Sage → Grandmaster** (prior session dropped Initiate — that was the error; Ranger was always correct)
+- "Save Passport" → "Save Profile" copy fix shipped
+- Stripe sandbox: COMPLETED ✅
+- Bump Post + Haul Unboxing: unverified (no test haul posts in DB)
+
+**S447** (2026-04-13) — 3 dispatch batches, all shipped ✅
+
 **S446** (2026-04-13) — XP frontend + workspace invite flow:
 - Hunt Pass cancellation wired to Stripe webhook (exploit gate closed)
 - XP earning rates + coupon tiers updated across 6 frontend pages
@@ -21,7 +30,7 @@
 
 ## Action Items for Patrick
 
-- [ ] **QA workspace invite flow** (doing out-of-session) — see checklist from earlier this session
+- [ ] **Stripe Dashboard → Webhooks → add `charge.dispute.created` event** (S447, still open)
 - [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open, still blocking)
 
 ---
@@ -44,34 +53,20 @@
 
 ---
 
-## What's Next (S448)
+## What's Next (S449)
 
-**S448 opens with Chrome QA audit of everything S447 shipped, then attacks rank staleness P0, then dashboard rethink.**
+**P0 — Rank staleness fix (UNBLOCKED)**
+Naming locked: Initiate → Scout → Ranger → Sage → Grandmaster. Thresholds: 500/2000/5000/12000. Nav shows wrong rank for new users. Fix rank logic + JWT refresh on XP earn.
 
-**S447 COMPLETE — All 3 batches shipped, pushed, migrated ✅**
+**P1 — Scout Reveal flesh-out**
+Backend returns interested users (who saved/favorited the item). Frontend renders a "Scout Reveal Results" panel. Right now the feature takes 5 XP and shows nothing.
 
-**What shipped this session:**
-- Appraisal cartel cap: 5/day hard limit on XP credits per user
-- Nav renamed: "Explorer's Guild" (loyalty) + "Explorer Profile" (passport) sitewide — 15 locations
-- XP expiry D-XP-002: schema fields, nightly cron (02:00 UTC), activity tracking, Grandmaster+ exemption
-- Bump Post feed sort: bumped posts rise to top of haul feed
-- Early Access Cache: replaces Lucky Roll entirely — 100 XP → 48h early access to category items
-- Cosmetics repricing D-XP-005: 1,000/2,500/250-500 XP new prices live
-- Hunt Pass 3x coupon enforcement: server-side monthly limits (HP=3x, standard=2x)
-- Stale reference sweep: zero remaining "Lucky Roll", "Loyalty Passport", or "Explorer Passport" copy
-- Coupon amounts corrected: $0.75/$2.00/$5.00 (D-XP-001 compliant)
-- Chargeback farming: already done in prior session — just need Stripe event enabled (see below)
+**P2 — Dashboard rethink + perks system (parallel)**
+UX agent: dashboard design brief per rank tier. Game Designer: spec what each rank unlocks. Both run in parallel now that naming is locked.
 
-**⚠️ Patrick action still needed:**
-- Stripe Dashboard → Developers → Webhooks → add `charge.dispute.created` event
+**P3 — Create haul test data → verify Bump Post + Haul Unboxing**
 
-**S448 OPEN ISSUE — Rank staleness (P0 bug, live on site):**
-Nav shows "Scout" for users who should be "Initiate." XP values inconsistent across pages. Likely root cause: JWT carries stale rank/XP from login and doesn't refresh on XP earn. Next session investigates + fixes.
-
-**NAMING DECISION NEEDED before fix:**
-Patrick said: Initiate → Scout → Hunter → Sage → Grandmaster
-Prior locked: Scout → Ranger → Sage → Grandmaster (no Initiate base tier)
-S448 will surface this for Patrick approval before touching rank code.
+**P4 — Organizer discount badge on public pages**
 
 ---
 
