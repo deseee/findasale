@@ -192,6 +192,7 @@ import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // A
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
+import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -550,6 +551,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #91: Register auto-markdown cron
   scheduleMarkdownCron();
+
+  // Feature #244 Phase 3: Register eBay sold sync cron (every 15 minutes)
+  startEbaySoldSyncCron();
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();
