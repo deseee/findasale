@@ -7,6 +7,7 @@ import {
   getMyWorkspace,
   inviteMember,
   acceptInvite,
+  getPendingInvitations,
   removeMember,
   listMembers,
   getPublicWorkspace,
@@ -29,6 +30,7 @@ router.post('/', authenticate, requireTier('TEAMS'), createWorkspace);
 router.get('/', authenticate, getMyWorkspace);
 router.post('/invite', authenticate, requireTier('TEAMS'), inviteMember);
 router.post('/accept', authenticate, acceptInvite);
+router.get('/invitations/pending', authenticate, getPendingInvitations);
 router.delete('/members/:organizerId', authenticate, requireTier('TEAMS'), removeMember);
 router.get('/members', authenticate, listMembers);
 

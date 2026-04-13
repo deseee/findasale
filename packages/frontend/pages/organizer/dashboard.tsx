@@ -18,6 +18,7 @@ import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useMyWorkspace } from '../../hooks/useWorkspace';
 import useCountUp from '../../hooks/useCountUp';
 import { TierGatedButton } from '../../components/TierGatedNav';
+import WorkspaceInvitationBanner from '../../components/WorkspaceInvitationBanner';
 import SaleCard from '../../components/SaleCard';
 import ReputationTier from '../../components/ReputationTier';
 import OrganizerTierBadge from '../../components/OrganizerTierBadge';
@@ -519,6 +520,9 @@ const OrganizerDashboard = () => {
           <div className="mb-2">
             <h1 className="text-lg font-bold text-warm-900 dark:text-warm-100">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>
           </div>
+
+          {/* Workspace Invitation Banner */}
+          <WorkspaceInvitationBanner />
 
           {/* Consolidated Action Bar — always visible */}
           <div className="flex flex-wrap gap-2 mb-4 relative">
