@@ -870,9 +870,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
           const baseXp = Math.max(1, Math.floor(Number(purchase.amount) * XP_AWARDS.PURCHASE));
           const multipliedXp = await applyHuntPassMultiplier(purchase.userId, baseXp);
 
+          // P0 Exploit Fix: Add 72-hour hold to purchase XP (chargeback prevention)
+          const holdUntil = new Date(Date.now() + 72 * 60 * 60 * 1000); // +72 hours
+
           awardXp(purchase.userId, 'PURCHASE_COMPLETED', multipliedXp, {
             itemId: purchase.itemId ?? undefined,
-            saleId: purchase.saleId ?? undefined
+            saleId: purchase.saleId ?? undefined,
+            purchaseId: purchase.id, // P0 Exploit Fix: link for claw-back
+            holdUntil, // P0 Exploit Fix: 72-hour hold
           }).catch(err =>
             console.error('[XP] Failed to award XP for purchase completed:', err)
           );
@@ -891,6 +896,52 @@ export const webhookHandler = async (req: Request, res: Response) => {
             }
           } catch (err) {
             console.error('[XP] Failed to check first-purchase referral:', err);
+          }
+
+          // P0 Security Fix: Check if buyer is a referred organizer, and if so, award 500 XP to referrer
+          // This prevents XP farming by requiring an actual external purchase
+          try {
+            const organizerReferral = await prisma.organizerReferral.findUnique({
+              where: { refereeId: purchase.userId }
+            });
+
+            if (organizerReferral && organizerReferral.status === 'PENDING') {
+              // Count completed purchases where buyer is the referee AND NOT the referrer
+              const externalPurchaseCount = await prisma.purchase.count({
+                where: {
+                  userId: purchase.userId,
+                  status: 'PAID',
+                  // Ensure buyer is not the referrer (prevents self-dealing)
+                  sale: {
+                    organizer: {
+                      userId: {
+                        not: organizerReferral.referrerId
+                      }
+                    }
+                  }
+                }
+              });
+
+              if (externalPurchaseCount >= 1) {
+                // Referee has made at least one valid external purchase — award 500 XP to referrer
+                awardXp(organizerReferral.referrerId, 'ORGANIZER_REFERRAL_PURCHASE', 500, {
+                  saleId: purchase.saleId ?? undefined,
+                  description: 'Referred organizer completed external purchase'
+                }).catch(err =>
+                  console.error('[XP] Failed to award organizer referral XP:', err)
+                );
+
+                // Mark OrganizerReferral as CREDITED (one-time award per referral)
+                await prisma.organizerReferral.update({
+                  where: { refereeId: purchase.userId },
+                  data: { status: 'CREDITED' }
+                }).catch(err =>
+                  console.error('[referral] Failed to mark organizer referral as credited:', err)
+                );
+              }
+            }
+          } catch (err) {
+            console.error('[XP] Failed to check organizer referral qualification:', err);
           }
         }
 
@@ -1108,6 +1159,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   `[stripe] Buyer suspended after chargeback #${updatedUser.chargebackCount}: user=${purchase.user.id}`
                 );
               }
+
+              // P0 Exploit Fix: Claw back XP earned from the disputed purchase
+              const { clawBackChargebackXp } = await import('../services/xpService');
+              const clawedBackXp = await clawBackChargebackXp(purchase.id, purchase.user.id);
+              console.log(`[stripe] Clawed back ${clawedBackXp} XP from user ${purchase.user.id} for chargeback`);
             }
 
             // Feature #107: Record chargeback incident in fraud tracking

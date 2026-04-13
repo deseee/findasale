@@ -112,6 +112,7 @@ export const MONTHLY_XP_CAPS = {
 // Daily XP caps (exploit prevention)
 export const DAILY_XP_CAPS = {
   TREASURE_HUNT_SCAN: 100,    // Max 100 XP/day from QR clue scans (150 with Hunt Pass)
+  APPRAISAL_SELECTED: 100,    // Max 100 XP/day from appraisal selections (5 selections × 20 XP) — P0 security fix
 };
 
 /**
@@ -281,10 +282,19 @@ export async function awardXp(
     itemId?: string;
     referralId?: string;
     couponId?: string;
+    purchaseId?: string; // P0 Exploit Fix: link for chargeback claw-back
     description?: string;
+    holdUntil?: Date; // P0 Exploit Fix: when this XP becomes spendable
   }
 ): Promise<{ newXp: number; newRank: ExplorerRank; xpAwarded: number } | null> {
   try {
+    // Platform Safety #118: Device Fingerprinting — block XP awards to fraud suspects
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (user?.fraudSuspect) {
+      console.log(`[FRAUD] Blocked XP award to fraudSuspect user ${userId}, type: ${type}, amount: ${amount}`);
+      return null;
+    }
+
     // Add transaction record
     await prisma.pointsTransaction.create({
       data: {
@@ -293,8 +303,10 @@ export async function awardXp(
         points: amount,
         saleId: context?.saleId,
         itemId: context?.itemId,
+        purchaseId: context?.purchaseId, // P0 Exploit Fix
         couponId: context?.couponId,
         description: context?.description,
+        holdUntil: context?.holdUntil, // P0 Exploit Fix
       },
     });
 
@@ -339,8 +351,45 @@ export async function awardXp(
 }
 
 /**
+ * P0 Exploit Fix: Get user's spendable XP (guildXp minus any XP on hold)
+ * XP on hold: purchases (72-hour hold), Hunt Pass churn (30-day post-cancel hold)
+ */
+export async function getSpendableXp(userId: string): Promise<number> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { guildXp: true },
+    });
+
+    if (!user) return 0;
+
+    // Find all XP transactions still on hold (holdUntil in the future)
+    const onHold = await prisma.pointsTransaction.aggregate({
+      where: {
+        userId,
+        holdUntil: {
+          gt: new Date(), // Still on hold
+        },
+      },
+      _sum: {
+        points: true,
+      },
+    });
+
+    const heldXp = onHold._sum.points || 0;
+    const spendable = Math.max(0, user.guildXp - heldXp);
+
+    return spendable;
+  } catch (error) {
+    console.error(`[xpService] Failed to get spendable XP for user ${userId}:`, error);
+    return 0; // Fail safe: return 0 (user gets error)
+  }
+}
+
+/**
  * Spend XP from a user's balance (for sinks)
- * Returns true if successful, false if insufficient XP
+ * Returns true if successful, false if insufficient spendable XP
+ * P0 Exploit Fix: Checks holdUntil restrictions (72h for chargebacks, 30d for HP churn)
  */
 export async function spendXp(
   userId: string,
@@ -352,12 +401,11 @@ export async function spendXp(
   }
 ): Promise<boolean> {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
+    // P0 Exploit Fix: Check spendable XP (not total guildXp)
+    const spendable = await getSpendableXp(userId);
 
-    if (!user || user.guildXp < amount) {
-      return false; // Insufficient XP
+    if (spendable < amount) {
+      return false; // Insufficient spendable XP
     }
 
     // Deduct XP
@@ -384,7 +432,7 @@ export async function spendXp(
     // Recalculate rank based on new balance (updatedUser.guildXp already reflects the decrement)
     // Note: ranks are milestones — spending XP does NOT drop rank (gamedesign S417 decision #14)
     const newRank = getRankForXp(updatedUser.guildXp);
-    if (newRank !== user.explorerRank) {
+    if (newRank !== updatedUser.explorerRank) {
       await prisma.user.update({
         where: { id: userId },
         data: { explorerRank: newRank },
@@ -617,5 +665,140 @@ export async function hasEarnedTrailBonus(userId: string, trailId: string): Prom
   } catch (error) {
     console.error('[xpService] Failed to check trail bonus:', error);
     return false;
+  }
+}
+
+/**
+ * P0 Exploit Fix: Mark XP earned during HP subscription for settlement hold on cancellation
+ * Called when user cancels Hunt Pass subscription
+ * XP earned while HP was active will be held for 30 days after cancellation
+ * to prevent HP churn exploit (buy HP, farm XP at 1.5x, cancel, redeem)
+ */
+export async function markHuntPassCancellation(userId: string): Promise<void> {
+  try {
+    // Record the cancellation timestamp on the user
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        huntPassCancelledAt: new Date(),
+      },
+    });
+
+    console.log(`[xpService] Hunt Pass cancellation recorded for user ${userId}`);
+  } catch (error) {
+    console.error(
+      `[xpService] Failed to record Hunt Pass cancellation for user ${userId}:`,
+      error
+    );
+  }
+}
+
+/**
+ * P0 Exploit Fix: Check if XP from HP-earned window is still on hold post-cancellation
+ * Called before allowing XP redemption
+ * If user cancelled HP within last 30 days, hold any XP earned during their HP subscription
+ */
+export async function applyHuntPassChurnHold(
+  userId: string,
+  xpAmount: number
+): Promise<Date | null> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        huntPassCancelledAt: true,
+        huntPassActive: true,
+        huntPassExpiry: true,
+      },
+    });
+
+    if (!user || !user.huntPassCancelledAt) {
+      return null; // No hold needed
+    }
+
+    // Check if cancellation was within last 30 days
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    if (user.huntPassCancelledAt < thirtyDaysAgo) {
+      return null; // Cancellation was >30 days ago, hold expired
+    }
+
+    // Apply 30-day hold from cancellation date
+    const holdUntil = new Date(user.huntPassCancelledAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return holdUntil;
+  } catch (error) {
+    console.error(
+      `[xpService] Failed to check Hunt Pass churn hold for user ${userId}:`,
+      error
+    );
+    return null; // Fail open: no hold
+  }
+}
+
+/**
+ * P0 Exploit Fix: Claw back XP earned from a disputed purchase
+ * Called when charge.dispute.created webhook fires
+ * Removes all XP awarded for the purchase within a 72-hour window
+ */
+export async function clawBackChargebackXp(
+  purchaseId: string,
+  userId: string
+): Promise<number> {
+  try {
+    // Find all XP transactions linked to this purchase
+    const xpTransactions = await prisma.pointsTransaction.findMany({
+      where: {
+        purchaseId,
+        userId,
+      },
+    });
+
+    if (xpTransactions.length === 0) {
+      console.log(`[xpService] No XP to claw back for purchase ${purchaseId}`);
+      return 0;
+    }
+
+    // Calculate total XP to claw back
+    const totalXpToRemove = xpTransactions.reduce((sum, tx) => sum + tx.points, 0);
+
+    // Remove XP from user's guildXp
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        guildXp: {
+          decrement: totalXpToRemove,
+        },
+      },
+    });
+
+    // Create a reverse transaction to record the claw-back in audit log
+    await prisma.pointsTransaction.create({
+      data: {
+        userId,
+        type: 'CHARGEBACK_XP_CLAWBACK', // Audit record for reverse
+        points: -totalXpToRemove,
+        purchaseId,
+        description: `Chargeback dispute — XP reversed from purchase ${purchaseId}`,
+      },
+    });
+
+    // Recalculate rank (may drop if spending would have dropped it)
+    const newRank = getRankForXp(updatedUser.guildXp);
+    if (newRank !== updatedUser.explorerRank) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { explorerRank: newRank },
+      });
+    }
+
+    console.log(
+      `[xpService] Clawed back ${totalXpToRemove} XP from user ${userId} for purchase ${purchaseId}`
+    );
+    return totalXpToRemove;
+  } catch (error) {
+    console.error(
+      `[xpService] Failed to claw back XP for purchase ${purchaseId}:`,
+      error
+    );
+    return 0;
   }
 }

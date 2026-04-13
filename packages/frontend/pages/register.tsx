@@ -43,6 +43,43 @@ const RegisterPage = () => {
     });
   };
 
+  // Platform Safety #118: Generate device fingerprint for fraud detection
+  const generateDeviceFingerprint = async (): Promise<string> => {
+    try {
+      // Collect browser signals
+      const signals = [
+        navigator.userAgent,
+        screen.width + 'x' + screen.height,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        navigator.language,
+      ];
+
+      // Optional: canvas fingerprint (requires canvas API)
+      let canvasSignal = '';
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.textBaseline = 'top';
+          ctx.font = '12px Arial';
+          ctx.fillText('fingerprint', 2, 2);
+          canvasSignal = canvas.toDataURL();
+        }
+      } catch (e) {
+        // Canvas not available or blocked — no-op
+      }
+
+      if (canvasSignal) signals.push(canvasSignal);
+
+      // Hash to string (base64 encode the concatenated signals)
+      const fingerprintStr = signals.join('|');
+      return btoa(fingerprintStr);
+    } catch (error) {
+      console.error('[fingerprint] Error generating device fingerprint:', error);
+      return ''; // Return empty string if fingerprinting fails — don't block registration
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -60,6 +97,9 @@ const RegisterPage = () => {
     }
 
     try {
+      // Generate device fingerprint
+      const deviceFingerprint = await generateDeviceFingerprint();
+
       const payload: any = {
         email: formData.email,
         password: formData.password,
@@ -67,6 +107,7 @@ const RegisterPage = () => {
         role: formData.role,
         referralCode: formData.referralCode || undefined,
         inviteCode: formData.inviteCode || undefined,
+        deviceFingerprint, // Platform Safety #118: Include fingerprint
       };
       if (formData.role === 'ORGANIZER') {
         payload.businessName = formData.businessName;

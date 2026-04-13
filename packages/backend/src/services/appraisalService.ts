@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { awardXp, checkDailyXpCap } from './xpService';
 
 /**
  * Appraisal Service — Feature #54: Crowdsourced Appraisal API
@@ -118,6 +119,8 @@ export const submitResponse = async (
  * Triggers when request has ≥5 responses
  * Median = (sum of all lows + sum of all highs) / (2 * count)
  * Confidence = min(((responseCount - 5) * 5), 100)
+ *
+ * P0 SECURITY FIX: Award 20 XP to each responder, with a daily cap of 5 selections (100 XP/day)
  */
 export const calculateConsensus = async (requestId: string) => {
   try {
@@ -160,8 +163,37 @@ export const calculateConsensus = async (requestId: string) => {
       data: { status: 'COMPLETED' },
     });
 
+    // Award XP to each responder (20 XP per selection, capped at 5 selections/day = 100 XP/day)
+    const XP_AWARD_AMOUNT = 20;
+    const awardedResponders: string[] = [];
+    const cappedResponders: string[] = [];
+
+    for (const response of responses) {
+      try {
+        // Check daily cap for this responder
+        const remainingDaily = await checkDailyXpCap(response.responderId, 'APPRAISAL_SELECTED');
+
+        if (remainingDaily >= XP_AWARD_AMOUNT) {
+          // Award XP
+          await awardXp(response.responderId, 'APPRAISAL_SELECTED', XP_AWARD_AMOUNT, {
+            description: `Appraisal response selected in consensus for request ${requestId}`,
+          });
+          awardedResponders.push(response.responderId);
+        } else {
+          // Daily cap reached
+          cappedResponders.push(response.responderId);
+        }
+      } catch (xpError) {
+        console.error(
+          `[AppraisalService] Failed to award XP to responder ${response.responderId}:`,
+          xpError
+        );
+        // Continue with other responders even if one fails
+      }
+    }
+
     console.log(
-      `[AppraisalService] Consensus calculated for request ${requestId}: $${finalLow}–$${finalHigh}, confidence ${confidenceScore}%`
+      `[AppraisalService] Consensus calculated for request ${requestId}: $${finalLow}–$${finalHigh}, confidence ${confidenceScore}%. XP awarded to ${awardedResponders.length} responders${cappedResponders.length > 0 ? `, ${cappedResponders.length} hit daily cap` : ''}.`
     );
 
     return consensus;

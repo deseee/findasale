@@ -60,6 +60,7 @@ model User {
   lastVisitDate                DateTime?
   huntPassActive               Boolean                @default(false)
   huntPassExpiry               DateTime?
+  huntPassCancelledAt          DateTime? // P0 Exploit Fix: timestamp when HP was cancelled, for XP redemption hold
   userStreaks                  UserStreak[]
   wishlists                    Wishlist[]
   createdPools                 BuyingPool[]           @relation("CreatedPools")
@@ -176,6 +177,10 @@ model User {
   // Platform Safety #102: Payment Method Deduplication
   stripeCardFingerprint String?
 
+  // Platform Safety #118: Device Fingerprinting for Multi-Account Fraud Detection
+  deviceFingerprint String? // Hashed device fingerprint (user agent + screen + timezone + canvas)
+  fraudSuspect      Boolean @default(false) // Flag: set true if 2+ accounts share same device fingerprint
+
   // Platform Safety #107-#114: Organizer Reputation & Suspension Tracking
   chargebackCount      Int               @default(0) // Total chargebacks on user's organizer account
   bidCancellationCount Int               @default(0) // Total bids cancelled by user (as buyer)
@@ -216,6 +221,8 @@ model User {
   @@index([guildXp])
   @@index([explorerRank])
   @@index([suspendedAt])
+  @@index([deviceFingerprint]) // Platform Safety #118: Fast fraud detection lookups
+  @@index([fraudSuspect]) // Platform Safety #118: Fast fraud account filtering
 }
 
 model Organizer {
@@ -935,16 +942,20 @@ model PointsTransaction {
   points      Int
   saleId      String?
   itemId      String?
+  purchaseId  String? // P0 Exploit Fix: Link to purchase for chargeback XP claw-back
   couponId    String? // Phase 2a: For COUPON_GENERATE sink type
   coupon      Coupon?   @relation(fields: [couponId], references: [id], onDelete: SetNull)
   boostType   String? // Phase 2a: For RARITY_BOOST type (e.g., "SALE_SPECIFIC")
   boostPct    Int? // Phase 2a: Boost percentage (e.g., +2)
   expiresAt   DateTime? // Phase 2a: For boost window expiration
+  holdUntil   DateTime? // P0 Exploit Fix: XP not spendable until this time (72h for purchases, 30d for HP churn)
   description String?
   createdAt   DateTime  @default(now())
 
   @@index([userId, type])
   @@index([type])
+  @@index([purchaseId])
+  @@index([userId, holdUntil])
 }
 
 // Phase 20: Shopper messaging — conversation thread per shopper+organizer+sale

@@ -5,6 +5,7 @@ import {
   getLeaderboard,
   getRankProgress,
   spendXp,
+  getSpendableXp,
   XP_SINKS,
 } from '../services/xpService';
 import { prisma } from '../lib/prisma';
@@ -95,6 +96,16 @@ router.post(
         return res.status(400).json({ error: 'Rarity boost already active for this sale' });
       }
 
+      // P0 Exploit Fix: Check spendable XP (not total, accounting for 72h/30d holds)
+      const spendable = await getSpendableXp(userId);
+      if (spendable < XP_SINKS.RARITY_BOOST) {
+        return res.status(400).json({
+          error: 'Insufficient spendable XP. Newly earned XP is held for 72 hours.',
+          required: XP_SINKS.RARITY_BOOST,
+          available: spendable,
+        });
+      }
+
       // Attempt to spend XP
       const spent = await spendXp(
         userId,
@@ -104,7 +115,7 @@ router.post(
       );
 
       if (!spent) {
-        return res.status(400).json({ error: 'Insufficient XP (requires 15 XP)' });
+        return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
       // Create rarity boost
@@ -151,13 +162,23 @@ router.post(
         return res.status(403).json({ error: 'Only organizers can generate coupons' });
       }
 
+      // P0 Exploit Fix: Check spendable XP (not total, accounting for 72h/30d holds)
+      const spendable = await getSpendableXp(userId);
+      if (spendable < XP_SINKS.COUPON_GENERATE) {
+        return res.status(400).json({
+          error: 'Insufficient spendable XP. Newly earned XP is held for 72 hours.',
+          required: XP_SINKS.COUPON_GENERATE,
+          available: spendable,
+        });
+      }
+
       // Attempt to spend XP
       const spent = await spendXp(userId, XP_SINKS.COUPON_GENERATE, 'COUPON_GENERATE', {
         description: 'Generated coupon via XP sink',
       });
 
       if (!spent) {
-        return res.status(400).json({ error: 'Insufficient XP (requires 20 XP)' });
+        return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
       }
 
       // Generate coupon code
