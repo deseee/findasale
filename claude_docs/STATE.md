@@ -7,59 +7,112 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S446 COMPLETE (2026-04-13):** XP frontend implementation — Hunt Pass UI updated, 3 micro-sinks, organizer-funded discounts, markHuntPassCancellation wired.
+**S446 COMPLETE (2026-04-13):** XP frontend implementation + workspace magic link invite flow + WorkspaceMember schema properly fixed.
 
 **S446 What shipped:**
-- **P1 — markHuntPassCancellation wired:** `stripeController.ts` — `customer.subscription.deleted` handler now calls `markHuntPassCancellation(organizer.user.id)` after tier downgrade. P0-C exploit gate fully closed.
-- **P2+P3 — XP display values updated (6 files):** All hardcoded XP earning rates and coupon tiers updated to locked decisions: hunt-pass.tsx, shopper/dashboard.tsx, faq.tsx, shopper/loyalty.tsx, referral-dashboard.tsx, sales/[id].tsx. Hold completed activity eliminated from UI. Coupon tiers now show 100/200/500 XP thresholds with correct limits.
-- **P4 — Micro-sinks UI:** 3 new XP-spend features for shoppers. Schema: `scoutReveals[]`, `unboxingAnimationUnlocked`, `bumpedUntil` added to UGCPhoto model. Backend: 3 POST endpoints in `xpController.ts` (scout-reveal 5 XP, haul-unboxing 2 XP, bump-post 10 XP). Frontend: Scout Reveal button on item detail page, Unboxing Animation + Bump Post buttons on haul posts page. Migration: `20260413_add_micro_sinks`.
-- **P5 — Organizer-funded discounts:** Schema: `organizerDiscountXp`, `organizerDiscountAmount` on Item. Backend: `POST /api/items/:itemId/organizer-discount` (200/400/500 XP = $2/$4/$5 off) + `DELETE` (remove, no refund). No-stacking rule enforced in `createPaymentIntent()` — organizer discount blocks shopper coupon. Frontend: "Organizer Special" section in `edit-item/[id].tsx` with XP spend selector, balance display, confirmation modal. Migration: `20260413_add_organizer_discount_fields`.
+- **P1 — markHuntPassCancellation wired:** `stripeController.ts` — `customer.subscription.deleted` handler calls `markHuntPassCancellation(organizer.user.id)`. P0-C exploit gate fully closed.
+- **P2+P3 — XP display values updated (6 files):** All hardcoded XP earning rates and coupon tiers updated to locked D-XP-001/D-XP-004 decisions across hunt-pass.tsx, shopper/dashboard.tsx, faq.tsx, loyalty.tsx, referral-dashboard.tsx, sales/[id].tsx.
+- **P4 — Micro-sinks UI:** Scout Reveal (5 XP), Haul Unboxing Animation (2 XP), Bump Post (10 XP). Schema fields on UGCPhoto, 3 backend endpoints, frontend buttons + modals. Migration: `20260413_add_micro_sinks`.
+- **P5 — Organizer-funded discounts:** 200/400/500 XP = $2/$4/$5 off one item. Backend POST/DELETE endpoints, no-stacking in `createPaymentIntent()`, frontend section in edit-item. Migration: `20260413_add_organizer_discount_fields`.
+- **Workspace magic link invite flow:** New `WorkspaceInvite` model (email + token, 7-day expiry). Invite creates a `WorkspaceInvite` row + sends Resend email with `finda.sale/join?token=<uuid>`. New `/join` page handles logged-in (accept button) and new users (signup/login links). Post-accept redirects to dashboard with welcome banner. `MyTeamsCard` component on both organizer and shopper dashboards. `useMyWorkspaceMemberships` hook. Migration: `20260413_workspace_magic_link_invite`.
+- **WorkspaceMember schema properly fixed:** `organizerId String?` (nullable), `userId String?` added. Shoppers and new users join workspaces via userId — no ghost organizer accounts. `workspaceAuth.ts` middleware and all membership queries updated to OR [organizerId, userId]. Migration: `20260413_workspace_member_user_id`.
+- **workspace/[slug].tsx type fixes:** `WorkspaceInternal` interface now matches actual API response shape (`ownerUserId`, `ownerName`, `description` flat fields). `isOwner` check fixed.
+- **All migrations applied to Railway ✅**
 
-**S446 ⚠️ Flagged — Bump Post feed sorting not implemented:** `bumpedUntil` is written to DB and set correctly, but the haul posts feed query does NOT yet sort bumped posts to the top. Feature is functional (data persists) but the bump visibility effect won't be felt until the feed query is updated. Needs Architect sign-off on sort strategy before dev dispatch.
+**S446 ⚠️ Flagged — Bump Post feed sorting not implemented:** `bumpedUntil` written to DB correctly but haul posts feed doesn't sort by it. Feature functional (data persists, 10 XP deducted) but bump visibility won't work until feed query updated. Needs Architect sign-off before dev dispatch.
 
-**S446 Files changed (15):**
-- `packages/backend/src/controllers/stripeController.ts` — P1 markHuntPassCancellation + P5 no-stacking in createPaymentIntent
-- `packages/frontend/pages/shopper/hunt-pass.tsx` — P2+P3 earning table + coupon tiers
-- `packages/frontend/pages/shopper/dashboard.tsx` — P2+P3 XP tip values
-- `packages/frontend/pages/faq.tsx` — P2+P3 XP earning copy
-- `packages/frontend/pages/shopper/loyalty.tsx` — P2+P3 XP display values
-- `packages/frontend/pages/referral-dashboard.tsx` — P2+P3 referral 500 XP
-- `packages/frontend/pages/sales/[id].tsx` — P2+P3 walk-in 2 XP comment
-- `packages/database/prisma/schema.prisma` — P4 UGCPhoto fields + P5 Item discount fields
-- `packages/database/prisma/migrations/20260413_add_micro_sinks/migration.sql` — NEW
-- `packages/backend/src/controllers/xpController.ts` — P4 scout-reveal/haul-unboxing/bump-post endpoints
-- `packages/frontend/pages/items/[id].tsx` — P4 Scout Reveal UI
-- `packages/frontend/pages/shopper/haul-posts.tsx` — P4 Unboxing Animation + Bump Post UI
-- `packages/database/prisma/migrations/20260413_add_organizer_discount_fields/migration.sql` — NEW
-- `packages/backend/src/controllers/itemController.ts` — P5 applyOrganizerDiscount + removeOrganizerDiscount
-- `packages/backend/src/routes/items.ts` — P5 route wiring
+**S446 Files changed (27):**
+- `packages/backend/src/controllers/stripeController.ts` — P1 + P5 no-stacking
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — P2+P3
+- `packages/frontend/pages/shopper/dashboard.tsx` — P2+P3 + MyTeamsCard
+- `packages/frontend/pages/faq.tsx` — P2+P3
+- `packages/frontend/pages/shopper/loyalty.tsx` — P2+P3
+- `packages/frontend/pages/referral-dashboard.tsx` — P2+P3
+- `packages/frontend/pages/sales/[id].tsx` — P2+P3
+- `packages/database/prisma/schema.prisma` — P4 + P5 + WorkspaceInvite + WorkspaceMember userId
+- `packages/database/prisma/migrations/20260413_add_micro_sinks/migration.sql` — NEW ✅
+- `packages/backend/src/controllers/xpController.ts` — P4
+- `packages/frontend/pages/items/[id].tsx` — P4
+- `packages/frontend/pages/shopper/haul-posts.tsx` — P4
+- `packages/database/prisma/migrations/20260413_add_organizer_discount_fields/migration.sql` — NEW ✅
+- `packages/backend/src/controllers/itemController.ts` — P5
+- `packages/backend/src/routes/items.ts` — P5
+- `packages/backend/src/controllers/workspaceController.ts` — magic link endpoints + OR membership queries
+- `packages/backend/src/routes/workspace.ts` — magic link routes
+- `packages/frontend/pages/join.tsx` — NEW: magic link landing page
+- `packages/frontend/pages/register.tsx` — inviteToken post-signup handling
+- `packages/frontend/pages/login.tsx` — inviteToken post-login handling
+- `packages/frontend/hooks/useWorkspace.ts` — useMyWorkspaceMemberships hook
+- `packages/frontend/components/MyTeamsCard.tsx` — NEW
+- `packages/frontend/pages/organizer/dashboard.tsx` — MyTeamsCard + welcome banner
+- `packages/database/prisma/migrations/20260413_workspace_magic_link_invite/migration.sql` — NEW ✅
+- `packages/database/prisma/migrations/20260413_workspace_member_user_id/migration.sql` — NEW ✅
+- `packages/backend/src/middleware/workspaceAuth.ts` — OR [organizerId, userId] lookup
+- `packages/frontend/pages/workspace/[slug].tsx` — WorkspaceInternal type fix + isOwner fix
 
-**S446 Migrations — Patrick must run:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+**S447 COMPLETE (2026-04-13):** Explore session — researched /shopper/settings, /organizer/settings, /shopper/loyalty, /shopper/dashboard, /shopper/explorer-passport. Reviewed D-XP-001 through D-XP-006 locked decisions. Verified S446 completion. Identified and scoped all remaining XP economy gaps and security P0s. Named system locked: Explorer Profile (hunting prefs), Explorer's Guild (gamification), Hunt Pass (paid tier).
 
-**S446 QA needed:**
-- Scout Reveal (5 XP): item detail page → "Scout (5 XP)" button → modal → deduct XP → result shown; insufficient XP shows error
-- Haul Unboxing (2 XP): haul post → "Animate (2 XP)" → modal → animation triggers
-- Bump Post (10 XP): haul post → "Bump (10 XP)" → modal → bumpedUntil set (feed sort is pending — verify DB only for now)
-- Organizer-funded discount: edit-item → Organizer Special section visible → spend 200 XP → $2 off badge; checkout blocks shopper coupon when discount active
-- XP earning rates: hunt-pass page shows 2 XP walk-in, 3 XP QR scan, 500 XP referral, 30 XP haul post, 20 XP appraisal selected, 5 XP seller review
+**S447 findings — Dispatch in S448:**
 
-**S446 Next session (S447):**
+**🔴 Security P0s (from Hacker audit — not yet implemented):**
+- ❌ Appraisal cartel cap — 5/day hard platform cap on appraisal selections per user
+- ❌ Chargeback farming fix — 72h XP settlement hold before crediting + `charge.dispute.created` Stripe webhook for XP clawback
+- ❌ Referral fraud gate — 24h payment-cleared hold + valid email+phone on friend account (D-XP-004 spec)
+- ❌ Device fingerprinting — foundational fraud gate (Architect spec needed first)
 
-Priority 1 — Workspace QA (Patrick doing out-of-session). Review results and dispatch fixes.
+**🟡 XP economy gaps (D-XP decisions locked but not yet implemented):**
+- ❌ XP expiry D-XP-002 — schema `expiresAt` field on UserXP/GuildXP, 365-day nightly cron, 300/350-day in-app warnings, Grandmaster exemption (5,000 total earned)
+- ❌ Cosmetic sink repricing D-XP-005 — UI only: 1,000 XP username color, 2,500 XP frame badge, 250/350/500 XP profile slots (Bronze/Silver/Gold)
+- ❌ Hunt Pass extra coupon slot — 3x/month per tier for HP users vs 2x standard (D-XP-001)
+- ❌ Coupon backend enforcement — server-side monthly redemption limits (2x standard, 3x HP, 1x Tier 3 all users)
 
-Priority 2 — Bump Post feed sort: Dispatch Architect to spec haul posts feed sort by `bumpedUntil DESC NULLS LAST`. Then Dev to implement.
+**🔵 Product gaps:**
+- ❌ Lucky Roll → Guaranteed Value Cache replacement — Game Designer spec needed first, then Dev
+- ❌ Bump Post feed sort — `bumpedUntil DESC NULLS LAST` in haul posts feed query (Architect spec needed first per S446 flag)
+- ❌ Nav naming rename — "Loyalty Passport" → "Explorer's Guild", "Explorer Passport" → "Explorer Profile" in Layout.tsx, AvatarDropdown.tsx, loyalty.tsx page title, explorer-passport page title
 
-Priority 3 — Organizer-funded discount item display: The public sale page and shopper item view should show "Organizer Special: $X off" badge when `organizerDiscountAmount > 0`. Currently only wired in checkout. Dispatch Dev.
+**S447 Batch 1 COMPLETE:**
 
-Priority 4 — Price Research Card redesign: UX spec ready at `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`. Dispatch Dev to implement.
+1. ✅ **Architect — Bump Post sort spec:** `orderBy: [{ bumpedUntil: 'desc' }, { likesCount: 'desc' }, { createdAt: 'desc' }]` in haulPostController.ts lines 17 + 77. No migration needed.
+2. ✅ **Dev A — Appraisal cartel cap SHIPPED:** appraisalService.ts counts pointsTransaction APPRAISAL_SELECTED per user per UTC day, hard-caps at 5. No migration.
+3. ✅ **Dev B — Chargeback farming ALREADY DONE:** 72h hold + dispute webhook + XP clawback already implemented in prior sessions. Patrick manual action: enable `charge.dispute.created` event in Stripe Dashboard → Webhooks.
+4. ✅ **Dev C — Nav naming SHIPPED:** 7 files, 15 text updates. Explorer Profile / Explorer's Guild live across Layout, AvatarDropdown, loyalty.tsx, explorer-passport.tsx, LoyaltyPassport, league, loot-legend.
+5. ✅ **Dev D — XP expiry D-XP-002 SHIPPED:** 5 fields on User model. Migration 20260413_xp_expiry_system. xpService.ts updated. New cron jobs/xpExpiryCron.ts (02:00 UTC). Patrick migration action required.
+6. ✅ **Game Designer — Early Access Cache spec:** Replaces Lucky Roll. 100 XP → 48h early access to chosen category's new items. 8 categories, 1x/week. Models: EarlyAccessCache + EarlyAccessItem. Ready for Dev dispatch.
+7. ✅ **Architect — Device fingerprinting spec:** Fields already on User model. FingerprintJS free tier. Phase 1 = defer (existing gates sufficient at beta scale). Phase 2 = signup+referral hard-block.
 
-Priority 5 — Brand audit fixes (3 open items): SharePromoteModal "estate sale" copy, homepage meta, organizer profile meta. All dispatch-ready, no decisions needed.
+**S447 Batch 1 files changed:**
+- `packages/backend/src/services/appraisalService.ts`
+- `packages/frontend/components/Layout.tsx`
+- `packages/frontend/components/AvatarDropdown.tsx`
+- `packages/frontend/pages/shopper/loyalty.tsx`
+- `packages/frontend/pages/shopper/explorer-passport.tsx`
+- `packages/frontend/components/LoyaltyPassport.tsx`
+- `packages/frontend/pages/shopper/league.tsx`
+- `packages/frontend/pages/shopper/loot-legend.tsx`
+- `packages/database/prisma/schema.prisma`
+- `packages/backend/src/services/xpService.ts`
+- `packages/backend/src/index.ts`
+- NEW: `packages/backend/src/jobs/xpExpiryCron.ts`
+- NEW: `packages/database/prisma/migrations/20260413_xp_expiry_system/migration.sql`
+
+**S447 Patrick manual actions (before next dev dispatch):**
+1. Run XP expiry migration on Railway — see migration block below
+2. Add `charge.dispute.created` event to Stripe Dashboard → Webhooks
+
+**S447 Batch 2 (ready for next session):**
+- Dev: Bump Post feed sort (2-line haulPostController.ts change — spec ready)
+- Dev: Early Access Cache (replaces Lucky Roll — full spec ready)
+- Dev: Cosmetics repricing UI D-XP-005 (UI only)
+- Dev: Hunt Pass 3x coupon slot
+- Dev: Coupon backend enforcement (server-side monthly limits)
+- Dev Phase 2: Device fingerprinting (FingerprintJS, defer until beta grows)
+
+**S448 Next session (existing priorities still valid):**
+Priority 1 — Review workspace QA results (Patrick QA'd out-of-session). Dispatch fixes.
+Priority 2 — Organizer-funded discount badge: public sale page + shopper item view should show "Organizer Special: $X off" when `organizerDiscountAmount > 0`.
+Priority 3 — Price Research Card redesign: UX spec ready at `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`. Dispatch Dev.
+Priority 4 — Brand audit copy fixes: SharePromoteModal "estate sale" copy, homepage meta, organizer profile meta.
 
 ---
 

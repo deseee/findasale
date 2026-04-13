@@ -122,7 +122,7 @@ function LoyaltyPage() {
   return (
     <>
       <Head>
-        <title>Loyalty Passport - FindA.Sale</title>
+        <title>Explorer's Guild - FindA.Sale</title>
       </Head>
 
       {/* Onboarding Modal */}
@@ -192,7 +192,7 @@ function LoyaltyPage() {
       <div className="max-w-5xl mx-auto py-8 px-4">
           {/* Header */}
           <div className="mb-10">
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-warm-100 mb-2">Explorer's Guild Passport</h1>
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-warm-100 mb-2">Explorer's Guild</h1>
             <p className="text-gray-600 dark:text-gray-400">
               Earn stamps and unlock rewards as you shop and explore
             </p>

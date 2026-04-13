@@ -36,7 +36,7 @@ export function LoyaltyPassport() {
       {/* Total Stamps & Next Milestone */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-semibold text-gray-900">Loyalty Passport</h3>
+          <h3 className="font-semibold text-gray-900">Explorer's Guild</h3>
           <span className="text-2xl font-bold" style={{ color: '#8FB897' }}>
             {passport.totalStamps}
           </span>

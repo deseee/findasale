@@ -160,11 +160,17 @@ model User {
   posPaymentRequestsAsReceiver POSPaymentRequest[]    @relation("ShopperPaymentRequests")
 
   // Phase 2a: Explorer's Guild — XP Economy
-  guildXp           Int           @default(0) // Phase 2a: Cumulative XP, never resets, used for rank calculation
-  explorerRank      ExplorerRank  @default(INITIATE) // Phase 2a: Current explorer rank (derived from guildXp, denormalized for fast lookup)
-  seasonalResetAt   DateTime? // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
-  rarityBoosts      RarityBoost[] @relation("RarityBoosts") // Phase 2a: Active rarity boosts for upcoming sales
-  passportCompleted Boolean       @default(false) // Phase 2a: Collector Passport completed (earned COLLECTOR_PASSPORT_COMPLETE 50 XP)
+  guildXp                 Int           @default(0) // Phase 2a: Cumulative XP, never resets, used for rank calculation
+  explorerRank            ExplorerRank  @default(INITIATE) // Phase 2a: Current explorer rank (derived from guildXp, denormalized for fast lookup)
+  seasonalResetAt         DateTime? // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
+  // D-XP-002: XP Expiry System
+  lifetimeXpEarned        Int           @default(0) // Total XP ever earned (never decremented) — used for Grandmaster+ (5000+) expiry exemption
+  lastXpActivityAt        DateTime? // Last time XP-earning activity occurred (purchase, haul post, referral) — basis for expiry calculation
+  xpExpiresAt             DateTime? // When remaining XP balance expires (computed: lastXpActivityAt + 365 days)
+  xpExpiryWarned300       Boolean       @default(false) // Flag: 300-day warning (65 days remaining) notification sent
+  xpExpiryWarned350       Boolean       @default(false) // Flag: 350-day warning (15 days remaining) notification sent
+  rarityBoosts            RarityBoost[] @relation("RarityBoosts") // Phase 2a: Active rarity boosts for upcoming sales
+  passportCompleted       Boolean       @default(false) // Phase 2a: Collector Passport completed (earned COLLECTOR_PASSPORT_COMPLETE 50 XP)
   foundedCrews      Crew[]        @relation("CrewFounder")
   crewMemberships   CrewMember[]  @relation("CrewMemberships")
 
@@ -223,6 +229,8 @@ model User {
   @@index([guildXp])
   @@index([explorerRank])
   @@index([suspendedAt])
+  @@index([xpExpiresAt]) // D-XP-002: For nightly expiry cron query
+  @@index([lastXpActivityAt]) // D-XP-002: For tracking last activity
   @@index([deviceFingerprint]) // Platform Safety #118: Fast fraud detection lookups
   @@index([fraudSuspect]) // Platform Safety #118: Fast fraud account filtering
 }

@@ -271,6 +271,7 @@ export async function checkMonthlyXpCap(
 /**
  * Award XP to a user for an event
  * Creates PointsTransaction record and updates guildXp + explorerRank
+ * Updates lastXpActivityAt and xpExpiresAt (D-XP-002)
  * Non-blocking: wraps in try/catch so failures don't break main flow
  */
 export async function awardXp(
@@ -310,13 +311,24 @@ export async function awardXp(
       },
     });
 
-    // Update User guildXp and recalculate rank
+    // Calculate expiry window (365 days from now for D-XP-002)
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+    // Update User guildXp, lifetime XP earned, and expiry tracking (D-XP-002)
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         guildXp: {
           increment: amount,
         },
+        lifetimeXpEarned: {
+          increment: amount, // Track total XP ever earned
+        },
+        lastXpActivityAt: now, // Reset activity timer
+        xpExpiresAt: expiresAt, // Recalculate expiry (365 days from now)
+        xpExpiryWarned300: false, // Reset warning flags on new activity
+        xpExpiryWarned350: false,
       },
     });
 
@@ -520,6 +532,25 @@ export async function applySeasonalReset() {
     console.log('[xpService] Seasonal reset applied to all users');
   } catch (error) {
     console.error('[xpService] Failed to apply seasonal reset:', error);
+  }
+}
+
+/**
+ * D-XP-002: Check if user is exempt from XP expiry
+ * Grandmaster+ (lifetime XP earned >= 5000) never expires
+ */
+export async function isXpExpiryExempt(userId: string): Promise<boolean> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lifetimeXpEarned: true },
+    });
+
+    if (!user) return false;
+    return user.lifetimeXpEarned >= 5000; // Grandmaster+ exemption
+  } catch (error) {
+    console.error(`[xpService] Failed to check XP expiry exemption for user ${userId}:`, error);
+    return false;
   }
 }
 
