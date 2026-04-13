@@ -4,10 +4,6 @@
  * Consolidated pricing page for organizers.
  * Shows all tiers (SIMPLE/PRO/TEAMS/ENTERPRISE) with upgrade CTAs.
  * Logged-in organizers see their current tier highlighted.
- *
- * Previously split across:
- * - /pages/pricing.tsx (public page)
- * - /pages/organizer/premium.tsx (legacy organizer page)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -50,6 +46,7 @@ const TIERS: PricingTier[] = [
       'Built-in point-of-sale',
       'Social post generator',
       'Batch operations',
+      'Marketplace exports (Ebay, Facebook, + more)',
       'Ripples — track clicks, saves and shares',
       'Self-serve help center + organizer guides',
     ],
@@ -71,7 +68,7 @@ const TIERS: PricingTier[] = [
       'Flip Report — post-sale earnings breakdown',
       'Insights - Advanced sale analytics',
       'Brand Kit — custom logo, colors, storefront',
-      'Multi-platform exports (CSV, JSON, Text)',
+      'Data exports (Accounting, Mailings, + more)',
       'Weekly email digest',
       '24/7 support assistant + help center',
     ],
@@ -214,7 +211,7 @@ const PricingPage = () => {
               Sell smarter.
             </h1>
             <p className="text-xl text-warm-600 dark:text-warm-300">
-              Whether you're running one sale or managing a team, FindA.Sale handles listings, paperwork, and payments so you can focus on customers.
+              Whether you're running one sale or managing a team, FindA.Sale handles listings, payments and paperwork so you can focus on customers.
             </p>
           </div>
 
@@ -271,7 +268,7 @@ const PricingPage = () => {
                   List everywhere at once
                 </h3>
                 <p className="text-sm text-warm-700 dark:text-warm-300">
-                  One-click exports for Facebook Marketplace, Craigslist, eBay, and EstateSales.net
+                  One-click exports for Facebook Marketplace, Craigslist, eBay, EstateSales.net + more
                 </p>
               </div>
 
