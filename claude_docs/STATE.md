@@ -7,6 +7,35 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S451 COMPLETE (2026-04-13) — Dashboard layout fix, action buttons, QR inline, rank icon**
+
+**S451 What happened:**
+- **⚠️ CATASTROPHIC PUSH (root cause documented):** VM git index desynced from Patrick's Windows repo. Push block staged 17 files against empty index → git treated all other files as deleted → 1,708 files wiped from GitHub. Recovery: Patrick ran `git add -A && git commit && .\push.ps1` — full repo restored. The 17 S450/S451 files were already locally modified, so they survived. Root cause: never give Patrick `git add [explicit files]` when VM git index is known to be empty/desynced. Always use MCP push for targeted changes in that state.
+- **Railway cache bust:** `Dockerfile.production` date bumped to 2026-04-13 via MCP push — unblocked Railway build after catastrophic push deployed a 17-file repo.
+- **Dashboard layout shipped:**
+  - Saved items banner removed ("You have items saved. Ready to continue your hunt?")
+  - Browse Sales button removed (was 404ing to `/sales`)
+  - Button routes fixed: Collections → `/shopper/wishlist`, Purchase History → `/shopper/history`, Treasure Trails → `/shopper/trails`
+  - My QR added as 5th action button — toggles inline QR panel directly below button row (no more standalone card)
+  - Initiate rank icon: sprout → Compass (lucide-react)
+  - Refer a friend banner removed (stale)
+  - Sales Near You hidden (`{false && ...}`) — route/feature broken
+  - Purchases tab removed from tab row (redundant with Purchase History button)
+  - Layout order locked: Hero → Action Buttons → QR Panel → Hunt Pass strip → Tabs → Content
+
+**S451 Files changed (4):**
+- `packages/frontend/pages/shopper/dashboard.tsx` — layout reorder, removed banners/tabs, QR panel inline
+- `packages/frontend/components/ActionBar.tsx` — 5th button (My QR), Browse Sales removed, routes fixed
+- `packages/frontend/components/RankBadge.tsx` — Compass icon for INITIATE
+- `packages/frontend/components/RankHeroSection.tsx` — Compass import
+
+**S451 Still open:**
+- Followed Brands tab: Patrick questioned "what feature is this for?" — pending Patrick decision (brand tracking for item alerts). Did not remove per Removal Gate.
+- Sales Near You: hidden not deleted — needs fix or permanent removal decision.
+- S449/S450 push blocks may still be pending depending on Patrick's push history — verify before next dev dispatch.
+
+---
+
 **S450 (2026-04-13) — Dashboard character sheet, rank staleness fix, organizer badge, /shopper/ranks**
 
 **S450 shipped:**

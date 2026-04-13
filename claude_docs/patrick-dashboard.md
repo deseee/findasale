@@ -2,6 +2,15 @@
 
 ## What Happened This Week
 
+**S451** (2026-04-13) — Dashboard layout fixed, QR inline, broken buttons fixed:
+- **⚠️ Catastrophic push recovered:** Git index desync wiped 1,708 files. Recovery complete via `git add -A`. All files restored.
+- **Dashboard layout now correct:** Hero → Action Buttons → QR Panel (inline toggle) → Hunt Pass strip → Tabs → Content
+- **Browse Sales removed** (was 404ing). **Button routes fixed:** Collections → `/shopper/wishlist`, Purchase History → `/shopper/history`
+- **My QR button** added to action row — QR expands inline below buttons, no more separate card
+- **Initiate icon:** sprout → Compass
+- **Purchases tab removed** (redundant). Referral banner removed (stale). Saved items banner removed.
+- **Pending Patrick decision:** Followed Brands tab — brand tracking for item alerts — keep, rename, or remove?
+
 **S450** (2026-04-13) — Rank staleness P0 fixed, dashboard character sheet attempt, organizer badge, /shopper/ranks:
 - **P0 rank staleness FIXED:** `explorerRank` removed from JWT entirely. `AvatarDropdown` now calls `useXpProfile()` API hook for fresh rank on every render. Cascade fixes in `useXpSink`, `haul-posts`, `items/[id]`, `dashboard` (5 files updated).
 - **Tier names LOCKED:** Initiate → Scout → Ranger → Sage → Grandmaster (0/500/2000/5000/12000 XP). "Hunter" was wrong — Ranger confirmed.
@@ -48,7 +57,9 @@
 
 ## Action Items for Patrick
 
-- [ ] **Push S450 push block** (15 files — see full block in STATE.md `## Next Session Priority`)
+- [ ] **Push S451 dashboard changes** (push block below)
+- [ ] **Decide: Followed Brands tab** — keep as "Brand Alerts" (item alerts when brands appear at sales), rename, or remove?
+- [ ] **Decide: Sales Near You** — fix the feature or remove it permanently?
 - [ ] **Run S449 migrations** on Railway (3 migrations: rankUpHistory, holdDurationMinutes, legendary_early_access) — if not already done
 - [ ] **Run S447 pending migrations** on Railway if not done: `20260413_xp_expiry_system` + `20260413_early_access_cache`
 - [ ] **Stripe Dashboard → Webhooks → add `charge.dispute.created` event** (S447, still open)
@@ -74,20 +85,23 @@
 
 ---
 
-## What's Next (S451)
+## What's Next (S452)
 
-**MANDATE: Dashboard must not look like shit. Research first, then build.**
+**P1 — eBay integration testing:** Figure out how to test the eBay integration end-to-end. Need a plan for what accounts/sandbox environment to use, what the test flow looks like, and what "working" means.
 
-S451 opens with findasale-ux + findasale-innovation studying real loyalty progression UX (Duolingo, Strava, Nike Run Club, RPG character screens) and returning a concrete visual directive before any code is written.
+**P2 — Test account seed strategy:** Patrick wants to create a test account with full permissions on current seed data. Answer: **Yes, it can survive a DB nuke** — add it to the seed script (`packages/database/prisma/seed.ts`) as a permanent fixture with a fixed email/password. When the DB is nuked before go-live, run `prisma migrate deploy && prisma db seed` and it recreates automatically with correct schema. Next session: read the seed script and add Patrick's full-permissions account as a permanent seed user.
 
-**First code task (P0):** Move QR code from position 7 to position 3-4 in `shopper/dashboard.tsx`. QR is how shoppers pay at POS checkout. Collapsible is fine. Must not be near the bottom.
+**P3 — Pricing review before Stripe goes live:** Full pass over:
+- XP/dollar sinks (current state documented in STATE.md XP section)
+- All tier pricing (FREE/SIMPLE/PRO/TEAMS)
+- Ala carte sales (per-sale charges)
+- Extra team member pricing ($20/seat — verify current implementation)
+- Hunt Pass ($4.99/mo — verify)
+- Any unlocked pricing decisions that need a final sanity check
 
-**Then:** Dashboard full rebuild with creative direction — identity-first, progress-second, action-third. No more stacked card pattern.
-
-**Carry-forward queue after dashboard:**
+**Carry-forward:**
 - QA queue (S436/S430/S431/S427/S433) — still postponed
-- Bump Post feed sort (Architect sign-off needed first)
-- Price Research Card redesign
+- Bump Post feed sort (Architect sign-off in place, dev pending)
 - Brand audit copy fixes (3 items, dispatch-ready)
 - RankUpModal — not connected to AuthContext rank-change yet
 - Legendary item flag — no organizer UI yet
@@ -98,6 +112,7 @@ S451 opens with findasale-ux + findasale-innovation studying real loyalty progre
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S451 | 2026-04-13 | Dashboard layout fix: QR inline, action buttons fixed, Compass icon, layout reordered. Catastrophic git push (1,708 files deleted) — recovered. |
 | S450 | 2026-04-13 | Rank staleness P0 (JWT fix), dashboard character sheet attempt, /shopper/ranks, organizer badge, XP progress bar in nav. QR code landed wrong — fix is P0 next session. |
 | S449 | 2026-04-13 | Rank staleness P0, Scout Reveal P1, discount badge P4, dashboard/perks specs, haul test data. 10 files. |
 | S448 | 2026-04-13 | QA audit. Scout Reveal bug ID'd. Rank naming locked. 1-line fix. |
