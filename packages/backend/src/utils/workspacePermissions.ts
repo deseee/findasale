@@ -37,6 +37,65 @@ export const WORKSPACE_PERMISSIONS = {
 export type WorkspacePermissionKey = typeof WORKSPACE_PERMISSIONS[keyof typeof WORKSPACE_PERMISSIONS];
 
 /**
+ * Permission categories for UI display
+ * Organizes permissions by functional area
+ */
+export const PERMISSION_CATEGORIES = [
+  {
+    name: 'Inventory',
+    permissions: [
+      WORKSPACE_PERMISSIONS.VIEW_INVENTORY,
+      WORKSPACE_PERMISSIONS.ADD_ITEMS,
+      WORKSPACE_PERMISSIONS.EDIT_ITEMS,
+      WORKSPACE_PERMISSIONS.DELETE_ITEMS,
+      WORKSPACE_PERMISSIONS.BULK_IMPORT,
+      WORKSPACE_PERMISSIONS.APPROVE_AI_TAGS,
+    ],
+  },
+  {
+    name: 'Pricing',
+    permissions: [
+      WORKSPACE_PERMISSIONS.VIEW_PRICING,
+      WORKSPACE_PERMISSIONS.EDIT_PRICING,
+      WORKSPACE_PERMISSIONS.VIEW_AI_SUGGESTIONS,
+    ],
+  },
+  {
+    name: 'POS',
+    permissions: [
+      WORKSPACE_PERMISSIONS.PROCESS_POS,
+      WORKSPACE_PERMISSIONS.VIEW_SALES_ANALYTICS,
+      WORKSPACE_PERMISSIONS.VOID_TRANSACTIONS,
+    ],
+  },
+  {
+    name: 'Team',
+    permissions: [
+      WORKSPACE_PERMISSIONS.VIEW_STAFF,
+      WORKSPACE_PERMISSIONS.INVITE_STAFF,
+      WORKSPACE_PERMISSIONS.EDIT_STAFF_ROLES,
+      WORKSPACE_PERMISSIONS.VIEW_PERFORMANCE,
+    ],
+  },
+  {
+    name: 'Workspace',
+    permissions: [
+      WORKSPACE_PERMISSIONS.MANAGE_WORKSPACE_SETTINGS,
+      WORKSPACE_PERMISSIONS.EDIT_PERMISSIONS,
+      WORKSPACE_PERMISSIONS.VIEW_BILLING,
+    ],
+  },
+  {
+    name: 'Communication',
+    permissions: [
+      WORKSPACE_PERMISSIONS.SEND_TEAM_CHAT,
+      WORKSPACE_PERMISSIONS.BROADCAST_ALERTS,
+      WORKSPACE_PERMISSIONS.CREATE_TASKS,
+    ],
+  },
+];
+
+/**
  * Default role → permission mappings
  * Applied when no custom overrides exist in WorkspacePermission table
  */
