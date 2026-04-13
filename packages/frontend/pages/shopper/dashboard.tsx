@@ -39,6 +39,7 @@ import useXpProfile from '../../hooks/useXpProfile';
 import RankBadge, { ExplorerRank } from '../../components/RankBadge';
 import RankProgressBar from '../../components/RankProgressBar';
 import PointsBadge from '../../components/PointsBadge';
+import MyTeamsCard from '../../components/MyTeamsCard';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -686,6 +687,9 @@ const ShopperDashboard = () => {
 
               {/* Recently Viewed */}
               <RecentlyViewed />
+
+              {/* My Teams Card */}
+              <MyTeamsCard />
 
               {/* Hunt Pass Info Card */}
               {!isHuntPassDismissed && userData && !userData.huntPassActive && (

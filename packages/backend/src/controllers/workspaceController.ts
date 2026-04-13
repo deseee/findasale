@@ -95,36 +95,74 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     const organizerId = req.user?.organizerProfile?.id;
     if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
     if (!email || typeof email !== 'string') return res.status(400).json({ message: 'Email is required' });
-    if (!role || !['OWNER', 'ADMIN', 'MEMBER'].includes(role)) return res.status(400).json({ message: 'Invalid role' });
+    if (!role || !['OWNER', 'ADMIN', 'MANAGER', 'MEMBER', 'VIEWER'].includes(role)) return res.status(400).json({ message: 'Invalid role' });
+
     const workspace = await prisma.organizerWorkspace.findUnique({ where: { ownerId: organizerId } });
     if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
+
     const requester = await prisma.workspaceMember.findFirst({ where: { workspaceId: workspace.id, organizerId } });
     const isOwner = workspace.ownerId === organizerId;
     const isAdmin = requester && requester.role === 'ADMIN';
     if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Insufficient permissions' });
-    const invitedOrganizer = await prisma.organizer.findFirst({ where: { user: { email } }, select: { id: true } });
-    if (!invitedOrganizer) return res.status(404).json({ message: 'Organizer not found' });
-    const existing = await prisma.workspaceMember.findUnique({
-      where: { workspaceId_organizerId: { workspaceId: workspace.id, organizerId: invitedOrganizer.id } },
-    });
-    // Only block if they are an active member (accepted the invitation)
-    // Pending/stale invites can be re-sent
-    if (existing && existing.acceptedAt) {
-      return res.status(400).json({ message: 'Already a member' });
-    }
+
+    // Check member capacity (count pending invites + accepted members)
     const ownerOrganizer = await prisma.organizer.findUnique({ where: { id: organizerId }, select: { isEnterpriseAccount: true } });
     if (!ownerOrganizer?.isEnterpriseAccount) {
       const memberCount = await prisma.workspaceMember.count({ where: { workspaceId: workspace.id } });
+      const inviteCount = await prisma.workspaceInvite.count({ where: { workspaceId: workspace.id } });
       const maxMembers = TIER_LIMITS.TEAMS.maxTeamMembers;
-      if (memberCount + 1 > maxMembers) {
-        return res.status(403).json({ message: `Team member limit (${maxMembers}) reached. Add more seats ($20/mo each) or upgrade to Enterprise for unlimited members.`, code: 'MEMBER_CAP_EXCEEDED', limit: maxMembers, current: memberCount + 1 });
+      if (memberCount + inviteCount + 1 > maxMembers) {
+        return res.status(403).json({ message: `Team member limit (${maxMembers}) reached. Add more seats ($20/mo each) or upgrade to Enterprise for unlimited members.`, code: 'MEMBER_CAP_EXCEEDED', limit: maxMembers, current: memberCount + inviteCount + 1 });
       }
     }
-    const member = await prisma.workspaceMember.create({
-      data: { workspaceId: workspace.id, organizerId: invitedOrganizer.id, role: role as any },
-      include: { organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } } },
+
+    // Check if already invited or member
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser && existingUser.organizer) {
+      const existingMember = await prisma.workspaceMember.findUnique({
+        where: { workspaceId_organizerId: { workspaceId: workspace.id, organizerId: existingUser.organizer.id } },
+      });
+      if (existingMember && existingMember.acceptedAt) {
+        return res.status(400).json({ message: 'Already a member' });
+      }
+    }
+
+    // Create magic link invite instead of immediate membership
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+
+    const invite = await prisma.workspaceInvite.create({
+      data: {
+        workspaceId: workspace.id,
+        inviteEmail: email.toLowerCase(),
+        role: role as any,
+        expiresAt,
+      },
     });
-    return res.status(201).json(member);
+
+    // Send invite email via Resend
+    try {
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const joinLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/join?token=${invite.inviteToken}`;
+
+      await resend.emails.send({
+        from: 'invites@finda.sale',
+        to: email,
+        subject: `You're invited to join "${workspace.name}" on FindA.Sale`,
+        html: `
+          <h2>You've been invited to join "${workspace.name}"</h2>
+          <p>Click the link below to accept the invitation:</p>
+          <p><a href="${joinLink}">${joinLink}</a></p>
+          <p>This link expires in 7 days.</p>
+        `,
+      });
+    } catch (emailError) {
+      console.error('[workspace-invite] Failed to send invite email:', emailError);
+      // Don't fail the request if email fails — the invite was created
+    }
+
+    return res.status(201).json({ success: true, inviteEmail: email, inviteToken: invite.inviteToken });
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error inviting member:', error);
@@ -574,5 +612,136 @@ export const deleteWorkspace = async (req: AuthRequest, res: Response) => {
     Sentry.captureException(error);
     console.error('Error deleting workspace:', error);
     return res.status(500).json({ message: 'Failed to delete workspace' });
+  }
+};
+
+export const validateInviteToken = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    if (!token || typeof token !== 'string') return res.status(400).json({ valid: false, reason: 'not_found' });
+
+    const invite = await prisma.workspaceInvite.findUnique({
+      where: { inviteToken: token },
+      include: { workspace: { select: { id: true, name: true, slug: true } } },
+    });
+
+    if (!invite) return res.json({ valid: false, reason: 'not_found' });
+    if (invite.expiresAt < new Date()) return res.json({ valid: false, reason: 'expired' });
+
+    return res.json({
+      valid: true,
+      workspaceName: invite.workspace.name,
+      workspaceSlug: invite.workspace.slug,
+      inviteEmail: invite.inviteEmail,
+      role: invite.role,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error validating invite token:', error);
+    return res.status(500).json({ valid: false, reason: 'error' });
+  }
+};
+
+export const acceptMagicLinkInvite = async (req: AuthRequest, res: Response) => {
+  try {
+    const { token } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!token || typeof token !== 'string') return res.status(400).json({ message: 'Invalid invite token' });
+
+    const invite = await prisma.workspaceInvite.findUnique({
+      where: { inviteToken: token },
+      include: { workspace: { select: { id: true, slug: true, name: true } } },
+    });
+
+    if (!invite) return res.status(404).json({ message: 'Invite not found' });
+    if (invite.expiresAt < new Date()) return res.status(400).json({ message: 'Invite expired' });
+
+    // Get the user to verify email matches
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Find or create Organizer
+    let organizer = await prisma.organizer.findUnique({ where: { userId: user.id } });
+    if (!organizer) {
+      organizer = await prisma.organizer.create({
+        data: {
+          userId: user.id,
+          subscriptionTier: 'SIMPLE',
+          subscriptionStatus: null,
+          businessName: user.name || user.email,
+          phone: '',
+          address: '',
+        },
+      });
+    }
+
+    // Create WorkspaceMember in transaction with invite deletion
+    await prisma.$transaction(async (tx: any) => {
+      // Create member
+      await tx.workspaceMember.create({
+        data: {
+          workspaceId: invite.workspace.id,
+          organizerId: organizer.id,
+          role: invite.role,
+          acceptedAt: new Date(),
+        },
+      });
+
+      // Delete the invite
+      await tx.workspaceInvite.delete({ where: { id: invite.id } });
+    });
+
+    return res.json({
+      success: true,
+      workspaceSlug: invite.workspace.slug,
+      workspaceName: invite.workspace.name,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error accepting invite:', error);
+    return res.status(500).json({ message: 'Failed to accept invite' });
+  }
+};
+
+export const getMyWorkspaceMemberships = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+
+    // Find all workspaces where this organizer is a member (not the owner)
+    const memberships = await prisma.workspaceMember.findMany({
+      where: {
+        organizerId,
+        acceptedAt: { not: null }, // Only accepted invitations
+      },
+      include: {
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            ownerId: true,
+          },
+        },
+      },
+    });
+
+    // Filter out workspaces where this organizer is the owner
+    const teamWorkspaces = memberships
+      .filter((m: any) => m.workspace.ownerId !== organizerId)
+      .map((m: any) => ({
+        workspaceId: m.workspace.id,
+        workspaceName: m.workspace.name,
+        workspaceSlug: m.workspace.slug,
+        role: m.role,
+      }));
+
+    return res.json({ memberships: teamWorkspaces });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error fetching workspace memberships:', error);
+    return res.status(500).json({ message: 'Failed to fetch workspace memberships' });
   }
 };

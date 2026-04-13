@@ -45,6 +45,7 @@ import HighValueTrackerWidget from '../../components/HighValueTrackerWidget';
 import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget';
 import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
+import MyTeamsCard from '../../components/MyTeamsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
 import { Clock, ShoppingCart, Megaphone, Pencil, Eye } from 'lucide-react';
 
@@ -115,10 +116,18 @@ const OrganizerDashboard = () => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('dashboard_otherSalesExpanded') === 'true';
   });
+  const [welcomedWorkspace, setWelcomedWorkspace] = useState<string | null>(null);
   const hasAutoExpandedOtherSales = useRef(false);
 
   useEffect(() => {
     setIsClient(true);
+    // Handle welcomed=workspace query param for workspace invite acceptance
+    if (router.isReady && router.query.welcomed === 'workspace') {
+      const workspaceName = router.query.workspaceName as string;
+      setWelcomedWorkspace(workspaceName || 'Your workspace');
+      // Remove query param from URL
+      router.push('/organizer/dashboard', undefined, { shallow: true });
+    }
     // Show onboarding modal once for new organizers — only if localStorage hasn't marked it dismissed
     if (typeof window !== 'undefined' && !localStorage.getItem('onboardingModalDismissed')) {
       setShowOnboardingModal(true);
@@ -523,6 +532,23 @@ const OrganizerDashboard = () => {
 
           {/* Workspace Invitation Banner */}
           <WorkspaceInvitationBanner />
+
+          {/* Workspace Welcome Banner */}
+          {welcomedWorkspace && (
+            <div className="mb-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 flex items-start justify-between">
+              <div>
+                <p className="text-sm text-green-800 dark:text-green-300">
+                  Welcome to <strong>{welcomedWorkspace}!</strong> You can always find your team workspaces in the "My Teams" section below.
+                </p>
+              </div>
+              <button
+                onClick={() => setWelcomedWorkspace(null)}
+                className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-semibold"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Consolidated Action Bar — always visible */}
           <div className="flex flex-wrap gap-2 mb-4 relative">
@@ -1380,6 +1406,11 @@ const OrganizerDashboard = () => {
                   </div>
                 </>
               )}
+
+              {/* My Teams Card — show team workspaces user is a member of */}
+              <div className="mt-8 pt-8 border-t border-warm-200 dark:border-gray-700">
+                <MyTeamsCard />
+              </div>
 
             </div>
           )}

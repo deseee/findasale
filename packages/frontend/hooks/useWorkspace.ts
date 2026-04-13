@@ -168,3 +168,30 @@ export const usePendingWorkspaceInvitations = () => {
     },
   });
 };
+
+export interface WorkspaceMembership {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceSlug: string;
+  role: string;
+}
+
+/**
+ * Fetch team workspaces this user is a member of (but doesn't own)
+ */
+export const useMyWorkspaceMemberships = () => {
+  return useQuery<WorkspaceMembership[]>({
+    queryKey: ['workspace', 'my-memberships'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/workspace/my-memberships');
+        return response.data.memberships || [];
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          return [];
+        }
+        throw error;
+      }
+    },
+  });
+};
