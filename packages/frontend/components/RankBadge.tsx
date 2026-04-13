@@ -1,4 +1,5 @@
 import React from 'react';
+import { Compass } from 'lucide-react';
 
 export type ExplorerRank = 'INITIATE' | 'SCOUT' | 'RANGER' | 'SAGE' | 'GRANDMASTER';
 export type RankSize = 'sm' | 'md' | 'lg';
@@ -8,9 +9,9 @@ interface RankBadgeProps {
   size?: RankSize;
 }
 
-const RANK_CONFIG: Record<ExplorerRank, { emoji: string; label: string; bgColor: string; textColor: string; borderColor: string; darkBg: string; darkText: string; darkBorder: string }> = {
+const RANK_CONFIG: Record<ExplorerRank, { emoji?: string; icon?: React.ReactNode; label: string; bgColor: string; textColor: string; borderColor: string; darkBg: string; darkText: string; darkBorder: string }> = {
   INITIATE: {
-    emoji: '🌱',
+    icon: <Compass className="w-6 h-6" />,
     label: 'Initiate',
     bgColor: 'bg-blue-50',
     textColor: 'text-blue-700',
@@ -91,7 +92,11 @@ export const RankBadge: React.FC<RankBadgeProps> = ({ rank, size = 'md' }) => {
       className={`inline-flex flex-col items-center justify-center rounded-lg ${sizeConfig.containerPadding} ${sizeConfig.borderWidth} ${config.borderColor} ${config.bgColor} ${config.darkBorder} ${config.darkBg} transition-all`}
       title={config.label}
     >
-      <span className={sizeConfig.emojiSize}>{config.emoji}</span>
+      {config.icon ? (
+        <div className={sizeConfig.emojiSize}>{config.icon}</div>
+      ) : (
+        <span className={sizeConfig.emojiSize}>{config.emoji}</span>
+      )}
       <span className={`${sizeConfig.textSize} font-semibold ${config.textColor} ${config.darkText} mt-1`}>
         {config.label}
       </span>
