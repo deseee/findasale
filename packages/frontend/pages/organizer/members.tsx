@@ -582,7 +582,7 @@ const OrganizerMembersPage = () => {
                             >
                               Save Availability
                             </button>
-                            {isOwner && (
+                            {isOwner && member.workspaceMember?.role !== 'OWNER' && (
                               <button
                                 onClick={() => handleRemoveMember(member.id)}
                                 disabled={removeStaffMutation.isPending}

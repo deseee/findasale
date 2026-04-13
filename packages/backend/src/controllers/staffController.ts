@@ -244,6 +244,7 @@ export const getStaffPerformance = async (req: AuthRequest, res: Response) => {
 /**
  * DELETE /api/workspaces/:workspaceId/staff/:staffId
  * Remove a staff member from workspace (owner only)
+ * Guard: cannot remove a workspace owner
  */
 export const deleteStaff = async (req: AuthRequest, res: Response) => {
   try {
@@ -257,6 +258,12 @@ export const deleteStaff = async (req: AuthRequest, res: Response) => {
     const belongs = await verifyStaffBelongsToWorkspace(staffId, workspaceId);
     if (!belongs) {
       return res.status(403).json({ message: 'Staff member not found in this workspace' });
+    }
+
+    // Get the staff member to check their role
+    const staff = await getStaffMember(staffId);
+    if (staff.workspaceMember?.role === 'OWNER') {
+      return res.status(403).json({ message: 'Workspace owner cannot be removed' });
     }
 
     // Remove the staff member
