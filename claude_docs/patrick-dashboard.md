@@ -1,66 +1,61 @@
-# Patrick's Dashboard — April 11, 2026 (S443)
+# Patrick's Dashboard — Week of April 13, 2026
 
-## S443 Summary
+## What Happened This Week
 
-Fixed 9 live-site bugs from your walkthrough + upgraded command center + added appraisal XP gating + produced UX spec for Price Research Card redesign.
+S444 completed a full STAFF→MEMBER rename across the entire product — schema models, DB columns, enum, nav links, page titles, copy, FAQ, dropdowns, and templates. The old `/organizer/staff` page is now a redirect to the new `/organizer/members` page, which has a proper 4-role hierarchy (ADMIN, MANAGER, MEMBER, VIEWER) with descriptions in both the invite modal and member card dropdowns.
 
----
-
-## What S443 Fixed
-
-- **Staff page crash** — response shape mismatches + wrong owner ID check. Should load now.
-- **Reputation scores all 0** — was counting active sales instead of completed. Now counts ENDED sales.
-- **Bounties submit match** — added real submission modal (pick sale → pick item → submit). Organizer role check fixed for admin+organizer users.
-- **Achievements not reflecting organizer data** — now evaluates actual DB data (sale counts, item counts) instead of only pre-recorded progress.
-- **Lucky Roll "just text"** — missing auth headers meant API calls silently failed. Full interactive UI was there but hidden behind parsing errors.
-- **Workspace wrong text** — removed AI Suggestions/AI Tags, replaced Arrival Time with Customer Service Standards, added link to public workspace page.
-- **Workspace public page** — added About section + Past Sales history.
-- **Appraisal not gating** — SIMPLE tier now costs 50 XP (shows confirmation with balance), PRO/TEAMS free.
-- **Command Center empty cards** — added live activity feed (auto-refreshes every 30s), sale health cards with scores, weather card, quick actions bar.
+Workspace permissions were also fixed. Roles weren't switching between tabs and saves weren't working — two root causes found and fixed on the backend. Once you push the 3-file permissions block below and Railway redeploys, the permissions page should work correctly.
 
 ---
 
-## Push Block (S443)
+## Action Items for Patrick
+
+- [ ] **PUSH permissions fix** (3 backend files — see pushblock below)
+- [ ] **Run S442 migrations** if not done — WorkspaceSettings fields (`prisma migrate deploy` + `prisma generate` with Railway URL)
+- [ ] **QA `/organizer/members`** — invite modal, role dropdowns, role change on cards
+- [ ] **QA `/organizer/workspace`** — permissions tabs switch, save persists
+- [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open decision, still blocking bounty rewards finalization)
+- [ ] **QA smoke test of S439–S443 fixes** — 9 bug fixes still need browser-verification
+
+---
+
+## Pending Push (Permissions Fix)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-
-git add packages/backend/src/controllers/staffController.ts
-git add packages/backend/src/services/staffService.ts
-git add packages/frontend/pages/organizer/staff.tsx
-git add packages/backend/src/services/reputationService.ts
-git add packages/frontend/pages/shopper/bounties.tsx
-git add packages/backend/src/services/achievementService.ts
-git add packages/frontend/pages/shopper/lucky-roll.tsx
-git add packages/frontend/pages/organizer/workspace.tsx
-git add packages/frontend/pages/workspace/[slug].tsx
 git add packages/backend/src/controllers/workspaceController.ts
-git add packages/backend/src/controllers/appraisalController.ts
-git add packages/frontend/components/PriceResearchPanel.tsx
-git add packages/frontend/hooks/useOrganizerActivityFeed.ts
-git add packages/frontend/components/OrganizerActivityFeedCard.tsx
-git add packages/frontend/components/QuickActionsBar.tsx
-git add packages/frontend/components/SaleHealthMiniCard.tsx
-git add packages/frontend/components/WeatherAlertCard.tsx
-git add packages/backend/src/services/organizerActivityFeedService.ts
-git add packages/backend/src/controllers/organizerActivityFeedController.ts
-git add packages/backend/src/types/activityFeed.ts
-git add packages/backend/src/routes/commandCenter.ts
-git add packages/frontend/pages/organizer/command-center.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-
-git commit -m "S443: Fix 9 live-site bugs + command center upgrade + appraisal gating"
+git add packages/backend/src/services/workspacePermissionService.ts
+git add packages/backend/src/utils/workspacePermissions.ts
+git commit -m "fix: workspace permissions — correct API response shape and save logic"
 .\push.ps1
 ```
 
-No migrations needed for this session.
+---
+
+## What's Open / Coming Next
+
+**Invited member onboarding** — When a team member is invited, a WorkspaceMember row is created but there's no UI for the invited user to see or accept the invitation after login. This needs to be built (likely a banner/modal on their dashboard). No decisions needed from you — it's a clear feature gap.
+
+**Price Research Card redesign** — UX spec is ready in `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`. Ready for dev dispatch whenever.
 
 ---
 
-## Next Session (S444)
+## Recent Sessions
 
-1. **Price Research Card redesign** — UX spec ready at `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`. Dev dispatch to implement.
-2. **QA verification** — smoke test all 9 fixes on live site after deploy.
-3. **Shopper page strategic UX exploration** — loyalty, dashboard, explorer passport, hunt pass consolidation (carried from S442 next-session).
-4. **Team Collab remaining** — Phase 3 (workspace view, chat, tasks, leaderboard + WebSocket).
+| Session | Date | Summary |
+|---------|------|---------|
+| S444 | 2026-04-13 | STAFF→MEMBER full rename + workspace permissions fixed |
+| S443 | 2026-04-11 | 9 live-site fixes + command center upgrade + appraisal gating |
+| S442 | 2026-04-11 | WorkspaceSettings schema fix + test data seed (Alice/Carol teams) |
+| S441 | 2026-04-11 | 8-issue fix batch: bounties, achievements, reputation P0, haul posts, price research card |
+| S440 | 2026-04-11 | Massive nav/UX session — bounties V3, subscriptions, leaderboard, messages dual-role |
+
+---
+
+## Brand Audit (still open from last week)
+
+- SharePromoteModal generates "estate sale" copy for ALL sale types — 3 audits open
+- Homepage meta/SEO omits flea markets and consignment
+- Organizer profile meta says "Estate sales by [name]" regardless of sale type
+
+All routable to dev, no decisions needed.

@@ -7,6 +7,55 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S444 COMPLETE (2026-04-13):** STAFF→MEMBER full rename (schema, DB, models, UI) + workspace permissions fix.
+
+**S444 What shipped:**
+- **STAFF→MEMBER everywhere:** WorkspaceRole enum STAFF removed (MEMBER is primary). Schema models renamed: StaffMember→TeamMember, StaffAvailability→TeamMemberAvailability, StaffPerformance→TeamMemberPerformance. Column renames in migration (staffMemberId→teamMemberId in 3 tables). All nav links, copy, FAQ, dropdowns, templates updated.
+- **New members page:** `/organizer/members` — full team management with 4-role hierarchy (ADMIN/MANAGER/MEMBER/VIEWER) with descriptions in invite and member card dropdowns. `/organizer/staff` now redirects to /organizer/members.
+- **Workspace permissions fixed (2 root causes):** (1) Backend returned `{ roles: { ADMIN: [...] } }` but frontend expected `RolePermissions[]` categorized array — rewritten. (2) `setPermissionsForRole` only stored non-default permissions, making defaults untoggleable — rewritten to store ALL permissions (allowed + denied). PERMISSION_CATEGORIES constant added to utils.
+- **Owner double-count fix:** Removed `+ 1` from all 3 memberCount calculations in workspaceController.
+- **Migration:** `20260412000001_rename_staff_to_member` — applied to Railway DB ✅ (3 iterations to resolve type cast error, WorkspacePermission dependency, and duplicate key constraint).
+
+**S444 Pending push (permissions fix — 3 backend files):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/workspaceController.ts
+git add packages/backend/src/services/workspacePermissionService.ts
+git add packages/backend/src/utils/workspacePermissions.ts
+git commit -m "fix: workspace permissions — correct API response shape and save logic"
+.\push.ps1
+```
+
+**S444 Files changed (16):**
+- `packages/database/prisma/schema.prisma` — StaffMember→TeamMember models, STAFF removed from WorkspaceRole
+- `packages/database/prisma/migrations/20260412000001_rename_staff_to_member/migration.sql` — NEW, applied ✅
+- `packages/frontend/pages/organizer/members.tsx` — NEW: team management page with 4-role hierarchy
+- `packages/frontend/pages/organizer/staff.tsx` — redirect → /organizer/members
+- `packages/frontend/pages/organizer/workspace.tsx` — WORKSPACE_ROLES updated, isOwner fix, permission display names
+- `packages/frontend/hooks/useWorkspace.ts` — role type expanded to MANAGER/VIEWER
+- `packages/frontend/components/Layout.tsx` — nav: /staff→/members, "Staff Accounts"→"Team Members"
+- `packages/frontend/components/AvatarDropdown.tsx` — same nav changes
+- `packages/frontend/pages/organizer/subscription.tsx` — "Add staff"→"Add members"
+- `packages/frontend/pages/support.tsx` — FAQ updated with 4-role hierarchy
+- `packages/backend/src/controllers/workspaceController.ts` — owner fix, permissions response shape, role list, double-count removed
+- `packages/backend/src/services/workspacePermissionService.ts` — getPermissionsForRole + setPermissionsForRole rewritten
+- `packages/backend/src/utils/workspacePermissions.ts` — STAFF removed, PERMISSION_CATEGORIES added
+- `packages/backend/src/services/staffService.ts` — prisma.staffMember→prisma.teamMember etc
+- `packages/backend/src/utils/workspaceTemplates.ts` — STAFF→MEMBER in templates
+- `packages/frontend/pages/workspace/[slug].tsx` — "Invite Members" CTA added
+
+**S444 No new migrations needed at next session.** Migration already applied.
+
+**S444 QA needed:**
+- `/organizer/members` — invite modal shows 4 roles with descriptions; member cards show correct role badges; role change dropdown works
+- `/organizer/workspace` — permissions tabs switch between ADMIN/MANAGER/MEMBER/VIEWER; save persists changes; owner not double-counted in member count
+- `/organizer/staff` — redirects to /organizer/members
+- Nav: "Team Members" link in both Layout and AvatarDropdown goes to /organizer/members
+
+**S444 Open:** No onboarding flow for invited team members to accept invites from within the app. WorkspaceMember row created on invite but new user has no UI showing "you've been invited to workspace X." Needs design + implementation.
+
+---
+
 **S443 COMPLETE (2026-04-11):** 9 live-site bug fixes from Patrick's walkthrough + command center upgrade + appraisal gating + UX spec.
 
 **S443 What shipped:**
