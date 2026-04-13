@@ -43,7 +43,6 @@ import PointsBadge from '../../components/PointsBadge';
 import MyTeamsCard from '../../components/MyTeamsCard';
 import RankHeroSection from '../../components/RankHeroSection';
 import ActionBar from '../../components/ActionBar';
-import RankLevelingHint from '../../components/RankLevelingHint';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -53,7 +52,7 @@ const ShopperDashboard = () => {
   const [isReferralDismissed, setIsReferralDismissed] = useState(false);
   const [referralLink, setReferralLink] = useState<string | null>(null);
   const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
-  const [qrOpen, setQrOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(true);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
@@ -183,6 +182,15 @@ const ShopperDashboard = () => {
     SCOUT: 500,
     RANGER: 2000,
     SAGE: 5000,
+    GRANDMASTER: 12000,
+  };
+
+  // Next rank thresholds (XP required to reach the next rank from current rank)
+  const NEXT_RANK_THRESHOLDS: Record<ExplorerRank, number> = {
+    INITIATE: 500,
+    SCOUT: 2000,
+    RANGER: 5000,
+    SAGE: 12000,
     GRANDMASTER: 12000,
   };
 
@@ -329,23 +337,13 @@ const ShopperDashboard = () => {
           <div className="space-y-6 mb-8">
             {/* 1. Hero Section - Character Sheet (MOVED UP) */}
             {xpProfile && !xpLoading ? (
-              <>
-                <RankHeroSection
-                  rank={xpProfile.explorerRank}
-                  guildXp={xpProfile.guildXp}
-                  xpToNext={RANK_THRESHOLDS[xpProfile.explorerRank]}
-                  xpPercent={(xpProfile.rankProgress.currentXp / RANK_THRESHOLDS[xpProfile.explorerRank]) * 100}
-                  userName={user?.firstName || user?.name || 'Explorer'}
-                />
-
-                {/* Rank Leveling Hint */}
-                <RankLevelingHint
-                  rank={xpProfile.explorerRank}
-                  currentXp={xpProfile.rankProgress.currentXp}
-                  nextRankXp={RANK_THRESHOLDS[xpProfile.explorerRank]}
-                  nextRank={xpProfile.rankProgress.nextRank}
-                />
-              </>
+              <RankHeroSection
+                rank={xpProfile.explorerRank}
+                guildXp={xpProfile.guildXp}
+                xpToNext={NEXT_RANK_THRESHOLDS[xpProfile.explorerRank]}
+                xpPercent={(xpProfile.rankProgress.currentXp / NEXT_RANK_THRESHOLDS[xpProfile.explorerRank]) * 100}
+                userName={user?.firstName || user?.name || 'Explorer'}
+              />
             ) : (
               <Skeleton className="h-64" />
             )}
@@ -393,89 +391,46 @@ const ShopperDashboard = () => {
               </div>
             )}
 
-            {/* 5. Hunt Pass CTA — Rank-Aware (hidden for GRANDMASTER) */}
-            {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' ? (
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-300 dark:border-purple-600 rounded-lg p-6">
-                <div className="flex items-start gap-4">
-                  <span className="text-3xl">🎯</span>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-lg text-purple-900 dark:text-purple-300 mb-2">Hunt Pass — Level Up Faster</h3>
-                    {(xpProfile.explorerRank === 'INITIATE' || xpProfile.explorerRank === 'SCOUT') && (
-                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-4">
-                        <strong>Earn 1.5x XP on every purchase</strong> and unlock exclusive perks as you explore.
-                      </p>
-                    )}
-                    {xpProfile.explorerRank === 'RANGER' && (
-                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-4">
-                        <strong>Get 6-hour early access to Legendary Items</strong> — you're almost at Sage!
-                      </p>
-                    )}
-                    {xpProfile.explorerRank === 'SAGE' && (
-                      <p className="text-sm text-purple-800 dark:text-purple-200 mb-4">
-                        <strong>Join the Collector's League</strong> — unlock exclusive Sage perks and premium features.
-                      </p>
-                    )}
-                    <ul className="text-sm text-purple-800 dark:text-purple-200 mb-4 space-y-1">
-                      <li>⭐ <strong>1.5x XP multiplier</strong> on everything you do</li>
-                      <li>⚡ <strong>6-hour early access</strong> to Legendary items</li>
-                      <li>🏆 <strong>Exclusive badge</strong> on your profile</li>
-                    </ul>
-                    <p className="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-4">$4.99/month. Cancel anytime.</p>
-                    <Link
-                      href="/shopper/hunt-pass"
-                      className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-                    >
-                      Unlock Hunt Pass →
-                    </Link>
-                  </div>
-                </div>
+            {/* 5. Hunt Pass CTA — Rank-Aware (hidden for GRANDMASTER) - Compact Strip */}
+            {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' && (
+              <div className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg px-4 py-3 mb-4">
+                <span className="text-sm text-purple-800 dark:text-purple-200">
+                  ⭐ <strong>Hunt Pass</strong> — earn 1.5x XP on every purchase
+                </span>
+                <Link
+                  href="/shopper/hunt-pass"
+                  className="text-sm font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-100 whitespace-nowrap ml-4"
+                >
+                  $4.99/mo →
+                </Link>
               </div>
-            ) : user && user.huntPassActive ? (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-600 rounded-lg p-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">✅</span>
-                  <div>
-                    <h3 className="font-semibold text-green-900 dark:text-green-300">Hunt Pass Active</h3>
-                    <p className="text-sm text-green-800 dark:text-green-300">You're earning 1.5x XP and get 6-hour early access to Legendary items.</p>
-                  </div>
-                </div>
+            )}
+            {user && user.huntPassActive && (
+              <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-4 py-2 mb-4">
+                <span className="text-green-700 dark:text-green-300 text-sm">✓ Hunt Pass active — you're earning 1.5x XP</span>
               </div>
-            ) : null}
+            )}
 
-            {/* 6. Referral Card — Share & Earn */}
+            {/* 6. Referral Card — Share & Earn - Compact Strip */}
             {user && !isReferralDismissed && (
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-300 dark:border-blue-600 rounded-lg p-6">
-                <div className="flex items-start gap-4">
-                  <span className="text-3xl">🎁</span>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-lg text-blue-900 dark:text-blue-300 mb-2">Share & Earn</h3>
-                    <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
-                      Refer a friend and earn <strong>20 XP</strong> when they sign up and make their first purchase.
-                    </p>
-                    <div className="flex gap-2 mt-4">
-                      <button
-                        onClick={handleCopyReferralLink}
-                        disabled={!referralLink}
-                        className="inline-block bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                      >
-                        📋 Copy referral link
-                      </button>
-                      <Link
-                        href="/referral-dashboard"
-                        className="inline-block bg-blue-100 dark:bg-blue-800 hover:bg-blue-200 dark:hover:bg-blue-700 text-blue-900 dark:text-blue-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
-                      >
-                        View my referrals →
-                      </Link>
-                    </div>
-                  </div>
+              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-3 mb-4">
+                <span className="text-sm text-amber-800 dark:text-amber-200">
+                  🎁 Refer a friend — you both earn 20 XP when they make their first purchase
+                </span>
+                <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                  <button
+                    onClick={handleCopyReferralLink}
+                    disabled={!referralLink}
+                    className="text-sm font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 disabled:text-gray-400"
+                  >
+                    Copy link
+                  </button>
                   <button
                     onClick={handleDismissReferral}
-                    className="flex-shrink-0 text-blue-400 dark:text-blue-500 hover:text-blue-600 dark:hover:text-blue-400"
-                    aria-label="Dismiss referral card"
+                    className="text-amber-400 hover:text-amber-600 dark:text-amber-600 dark:hover:text-amber-400"
+                    aria-label="Dismiss"
                   >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
+                    ×
                   </button>
                 </div>
               </div>

@@ -1,1 +1,0 @@
-[FULL ADR-065-PATRICK-DECISIONS.md content from local file - 257 lines]

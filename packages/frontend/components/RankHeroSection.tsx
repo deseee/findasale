@@ -53,6 +53,15 @@ const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   GRANDMASTER: 12000,
 };
 
+// Map current rank to next rank
+const NEXT_RANK_MAP: Record<ExplorerRank, ExplorerRank | null> = {
+  INITIATE: 'SCOUT',
+  SCOUT: 'RANGER',
+  RANGER: 'SAGE',
+  SAGE: 'GRANDMASTER',
+  GRANDMASTER: null,
+};
+
 // Rank-specific hero section styles (gradient background and border colors)
 const getRankHeroStyles = (rank: ExplorerRank): string => {
   switch (rank) {
@@ -135,7 +144,7 @@ export const RankHeroSection: React.FC<RankHeroSectionProps> = ({
   const calculatedXpToNext = Math.max(0, nextRankThreshold - guildXp);
 
   return (
-    <div className={`rounded-lg border-2 p-8 mb-8 ${getRankHeroStyles(rank)}`}>
+    <div className={`rounded-lg border-2 p-5 mb-4 ${getRankHeroStyles(rank)}`}>
       {/* Header: Rank Badge + Title */}
       <div className="flex items-start gap-6 mb-6">
         <RankBadge rank={rank} size="lg" />
@@ -155,29 +164,18 @@ export const RankHeroSection: React.FC<RankHeroSectionProps> = ({
           currentXp={guildXp}
           nextRankXp={xpToNext}
           currentRank={rank}
-          nextRank={rank === 'GRANDMASTER' ? null : ('UNKNOWN' as ExplorerRank)} // nextRank determined by parent
+          nextRank={NEXT_RANK_MAP[rank]}
         />
       </div>
 
-      {/* Current Rank Perks */}
-      <div className="mb-6">
-        <h3 className="text-sm font-semibold text-sage-900 dark:text-sage-100 mb-3">
-          Your Current Perks
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {displayPerks.map((perk, idx) => (
-            <div
-              key={idx}
-              className="flex items-start gap-2 p-2 bg-white dark:bg-gray-800/50 rounded border border-sage-100 dark:border-sage-800"
-            >
-              <span className="text-sage-600 dark:text-sage-400 text-lg flex-shrink-0">✓</span>
-              <span className="text-sm text-sage-700 dark:text-sage-300">{perk}</span>
-            </div>
-          ))}
-        </div>
+      {/* Current Rank Perks - Single Line */}
+      <div className="mb-4">
+        <p className="text-sm text-sage-600 dark:text-sage-400 mb-3">
+          {displayPerks.join(' · ')}
+        </p>
         <Link
           href="/shopper/ranks"
-          className="text-sm font-semibold text-sage-700 hover:text-sage-900 dark:text-sage-300 dark:hover:text-sage-100 mt-3 inline-flex items-center gap-1"
+          className="text-sm font-semibold text-sage-700 hover:text-sage-900 dark:text-sage-300 dark:hover:text-sage-100 inline-flex items-center gap-1"
         >
           See all perks →
         </Link>

@@ -1,1 +1,0 @@
-[FULL ADR-065-IMPLEMENTATION-PLAN.md content from local file - 1237 lines]

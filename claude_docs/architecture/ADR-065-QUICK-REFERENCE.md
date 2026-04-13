@@ -1,1 +1,0 @@
-[FULL ADR-065-QUICK-REFERENCE.md content from local file - 273 lines]
