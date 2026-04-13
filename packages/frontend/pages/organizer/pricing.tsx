@@ -86,15 +86,14 @@ const TIERS: PricingTier[] = [
     stripePrice: 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
       'Everything in Pro, plus:',
-      'Unlimited concurrent sales*',
-      '2,000+ items per sale, unlimited photos*',
-      'Unlimited auto tags*',
+      'Unlimited sales*, Unlimited Items*',
+      'Unlimited photos*, Unlimited auto tags*',
       'Command Center — manage all sales at once',
       'Multi-user workspace — Includes 5 team members',
       'Extra members: $20/mo',
       'Team roles & permissions',
-      'Webhooks',
-      'Market Hubs',
+      'Webhooks - Connect your systems',
+      'Market Hubs - Multi-vendor events',
     ],
   },
 ];
@@ -372,7 +371,7 @@ const PricingPage = () => {
                       {tier.id === 'PRO' &&
                         'Lower fees (8%) plus tools that speed your workflow and attract more buyers.'}
                       {tier.id === 'TEAMS' &&
-                        'Tools for running multiple sales at once, webhook connections to your other systems. Unlimited photos and auto tags.'}
+                        'Manage your team members. Webhooks connect your other systems.'}
                     </p>
 
                     {/* Price */}
