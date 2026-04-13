@@ -17,7 +17,8 @@ export interface WorkspaceAuthRequest extends AuthRequest {
   workspaceMember?: {
     id: string;
     workspaceId: string;
-    organizerId: string;
+    organizerId?: string | null;
+    userId?: string | null;
     role: string;
   };
 }
@@ -31,25 +32,27 @@ export const requireWorkspaceMember = () => {
   return async (req: WorkspaceAuthRequest, res: Response, next: NextFunction) => {
     try {
       // Ensure user is authenticated
-      if (!req.user?.id || !req.user?.organizerProfile?.id) {
+      if (!req.user?.id) {
         return res.status(401).json({ message: 'Authentication required' });
       }
 
-      // Check TEAMS tier
-      const tier = (req.user?.organizerProfile?.subscriptionTier ?? 'SIMPLE') as SubscriptionTier;
-      const TIER_RANK: Record<SubscriptionTier, number> = {
-        SIMPLE: 0,
-        PRO: 1,
-        TEAMS: 2,
-      };
+      // Check TEAMS tier (only if user is an organizer)
+      if (req.user?.organizerProfile?.id) {
+        const tier = (req.user?.organizerProfile?.subscriptionTier ?? 'SIMPLE') as SubscriptionTier;
+        const TIER_RANK: Record<SubscriptionTier, number> = {
+          SIMPLE: 0,
+          PRO: 1,
+          TEAMS: 2,
+        };
 
-      if (TIER_RANK[tier] < TIER_RANK.TEAMS) {
-        return res.status(403).json({
-          message: 'This feature requires the TEAMS plan or higher.',
-          requiredTier: 'TEAMS',
-          currentTier: tier,
-          upgradeUrl: '/organizer/upgrade',
-        });
+        if (TIER_RANK[tier] < TIER_RANK.TEAMS) {
+          return res.status(403).json({
+            message: 'This feature requires the TEAMS plan or higher.',
+            requiredTier: 'TEAMS',
+            currentTier: tier,
+            upgradeUrl: '/organizer/upgrade',
+          });
+        }
       }
 
       // Get workspaceId from route params
@@ -58,11 +61,15 @@ export const requireWorkspaceMember = () => {
         return res.status(400).json({ message: 'Workspace ID is required' });
       }
 
-      // Find workspace membership record
+      // Find workspace membership record by organizerId OR userId
       const member = await prisma.workspaceMember.findFirst({
         where: {
           workspaceId,
-          organizerId: req.user.organizerProfile.id,
+          acceptedAt: { not: null },
+          OR: [
+            ...(req.user.organizerProfile?.id ? [{ organizerId: req.user.organizerProfile.id }] : []),
+            { userId: req.user.id },
+          ],
         },
       });
 
@@ -75,6 +82,7 @@ export const requireWorkspaceMember = () => {
         id: member.id,
         workspaceId: member.workspaceId,
         organizerId: member.organizerId,
+        userId: member.userId,
         role: member.role,
       };
 
