@@ -31,9 +31,8 @@ const WorkspaceInvitationBanner: React.FC = () => {
     try {
       await acceptMutation.mutateAsync();
       showToast(`You've joined ${invitation.workspace.name}!`, 'success');
-      // Navigate to workspace page
       setTimeout(() => {
-        router.push(`/workspace/${invitation.workspace.slug}`);
+        router.push('/organizer/dashboard');
       }, 500);
     } catch (error: any) {
       showToast('Failed to accept invitation. Please try again.', 'error');

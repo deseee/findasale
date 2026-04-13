@@ -39,46 +39,14 @@ export default function WorkspacePage() {
   const router = useRouter();
   const { slug } = router.query;
   const { user, isLoading: authLoading } = useAuth();
-  const { data: myWorkspace } = useQuery({
-    queryKey: ['workspace', 'me'],
-    queryFn: async () => {
-      try {
-        const response = await api.get('/workspace');
-        return response.data;
-      } catch (error: any) {
-        if (error.response?.status === 404) {
-          return null;
-        }
-        throw error;
-      }
-    },
-    enabled: !!user && !authLoading,
-  });
-
-  // Extract current user's organizer ID from their workspace membership
-  const currentOrganizerIds = myWorkspace?.members?.map((m: WorkspaceMember) => m.organizerId) || [];
-
   const { data: workspace, isLoading, isError } = useQuery({
     queryKey: ['workspace-internal', slug],
     queryFn: async () => {
       if (!slug) return null;
-      try {
-        const { data } = await api.get(`/workspace/public/${slug}`);
-        // Verify the current user is a member of this workspace
-        if (!currentOrganizerIds.length) {
-          throw new Error('User not authenticated');
-        }
-        const isMember = data?.members?.some((m: any) => currentOrganizerIds.includes(m.organizerId) && m.acceptedAt);
-        if (!isMember) {
-          throw new Error('You are not a member of this workspace');
-        }
-        return data as WorkspaceInternal;
-      } catch (error: any) {
-        // 404 or other errors mean the workspace doesn't exist or user is not a member
-        throw new Error('Workspace not found or you are not a member');
-      }
+      const { data } = await api.get(`/workspace/public/${slug}`);
+      return data as WorkspaceInternal;
     },
-    enabled: !!slug && !authLoading && !!user && currentOrganizerIds.length > 0,
+    enabled: !!slug && !authLoading && !!user,
     retry: 1,
   });
 
