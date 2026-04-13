@@ -2,41 +2,53 @@
 
 ## What Happened This Week
 
-S444 completed a full STAFF→MEMBER rename across the entire product — schema models, DB columns, enum, nav links, page titles, copy, FAQ, dropdowns, and templates. The old `/organizer/staff` page is now a redirect to the new `/organizer/members` page, which has a proper 4-role hierarchy (ADMIN, MANAGER, MEMBER, VIEWER) with descriptions in both the invite modal and member card dropdowns.
+**S445** was a full XP economy redesign session. The loyalty system had critical math problems, uncapped exploit loops, and a gambling law exposure (Forecast Polls — killed). Five P0 security fixes were implemented and shipped. All decisions are locked in `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`.
 
-Workspace permissions were also fixed. Roles weren't switching between tabs and saves weren't working — two root causes found and fixed on the backend. Once you push the 3-file permissions block below and Railway redeploys, the permissions page should work correctly.
+**S444** completed the STAFF→MEMBER rename and workspace permissions fix.
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **PUSH permissions fix** (3 backend files — see pushblock below)
-- [ ] **Run S442 migrations** if not done — WorkspaceSettings fields (`prisma migrate deploy` + `prisma generate` with Railway URL)
+- [ ] **PUSH permissions fix from S444** (3 backend files — see S444 pushblock in STATE.md)
 - [ ] **QA `/organizer/members`** — invite modal, role dropdowns, role change on cards
 - [ ] **QA `/organizer/workspace`** — permissions tabs switch, save persists
-- [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open decision, still blocking bounty rewards finalization)
-- [ ] **QA smoke test of S439–S443 fixes** — 9 bug fixes still need browser-verification
+- [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open, still blocking)
 
 ---
 
-## Pending Push (Permissions Fix)
+## XP System — What's New (S445)
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/workspaceController.ts
-git add packages/backend/src/services/workspacePermissionService.ts
-git add packages/backend/src/utils/workspacePermissions.ts
-git commit -m "fix: workspace permissions — correct API response shape and save logic"
-.\push.ps1
-```
+**Coupon tiers changed:**
+- 100 XP → $0.75 off $10+ (2x/mo standard, 3x/mo Hunt Pass)
+- 200 XP → $2.00 off $25+ (2x/mo standard, 3x/mo Hunt Pass)
+- 500 XP → $5.00 off $50+ (1x/mo all users)
+
+**5 fraud gates now live (migrations applied):**
+1. Appraisal selections capped at 5/day per user
+2. Referral 500 XP requires referred organizer's first real buyer
+3. 72-hour XP hold on purchases + chargeback claw-back webhook
+4. Hunt Pass cancel = 30-day redemption hold on HP-earned XP
+5. Device fingerprinting on signup — multi-account fraud blocked at XP award
+
+**Forecast Polls:** Killed. Michigan gambling law. Never coded, nothing to remove.
 
 ---
 
-## What's Open / Coming Next
+## What's Next (S446)
 
-**Invited member onboarding** — When a team member is invited, a WorkspaceMember row is created but there's no UI for the invited user to see or accept the invitation after login. This needs to be built (likely a banner/modal on their dashboard). No decisions needed from you — it's a clear feature gap.
+S446 should focus on the XP frontend implementation:
+1. Wire Hunt Pass cancellation → Stripe webhook (10-min fix in stripeController.ts)
+2. Update Hunt Pass page + coupon UI to show new tier values
+3. Audit + update all XP earning rate displays (hardcoded old values likely in several pages)
+4. Implement 3 micro-sinks: Scout Reveal (5 XP), Haul Unboxing (2 XP), Bump Post (10 XP)
+5. Organizer-funded discounts (200 XP = $2 off one item)
 
-**Price Research Card redesign** — UX spec is ready in `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`. Ready for dev dispatch whenever.
+Full spec: `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`
+
+**Invited member onboarding** — still open: no UI for invited users to accept workspace invites.
+
+**Price Research Card redesign** — UX spec ready: `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`.
 
 ---
 

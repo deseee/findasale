@@ -7,6 +7,52 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S445 COMPLETE (2026-04-13):** XP economy redesign (strategy + locked decisions) + 5 P0 security fraud gates implemented. Migrations applied ✅.
+
+**S445 What shipped:**
+- **XP Economy Redesign (design/decisions):** Full coupon tier restructure, earning table rebalance, sink repricing, fraud gate spec. All locked in `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`.
+- **P0-A — Appraisal daily cap:** `appraisalService.ts` + `xpService.ts` — 5/day hard cap on appraisal selection XP (was uncapped; kills cartel farming).
+- **P0-B — Referral validation:** `stripeController.ts` — 500 XP referral bonus only unlocks after referred organizer's first real external buyer (prevents SIM-farm abuse).
+- **P0-C — HP churn + chargeback:** `xpService.ts` + `stripeController.ts` + `couponController.ts` + `xpController.ts` — 72-hour XP hold on purchases, chargeback claw-back on `charge.dispute.created`, 30-day post-HP-cancel redemption hold. Schema: `huntPassCancelledAt` on User, `purchaseId`+`holdUntil` on PointsTransaction.
+- **P0-D — Device fingerprinting:** `authController.ts` + `xpService.ts` + `register.tsx` — browser fingerprint stored at signup; 2+ accounts same device → `fraudSuspect=true`; fraudSuspect accounts blocked from XP awards. Schema: `deviceFingerprint`+`fraudSuspect` on User.
+- **Forecast Polls killed:** Patrick decision 2026-04-13. Michigan MCL §432.201 gambling liability. Never coded; decision logged.
+- **Migrations applied to Railway ✅:** `20260413000001_xp_settlement_hold` + `20260413091213_add_device_fingerprint`.
+
+**S445 Files changed (11):**
+- `packages/database/prisma/schema.prisma` — huntPassCancelledAt, deviceFingerprint, fraudSuspect, purchaseId, holdUntil, 4 new indexes
+- `packages/database/prisma/migrations/20260413000001_xp_settlement_hold/migration.sql` — NEW ✅
+- `packages/database/prisma/migrations/20260413091213_add_device_fingerprint/migration.sql` — NEW ✅
+- `packages/backend/src/controllers/authController.ts` — device fingerprint + fraud detection on signup
+- `packages/backend/src/controllers/couponController.ts` — spendable XP check before coupon generation
+- `packages/backend/src/controllers/stripeController.ts` — referral gate + chargeback claw-back
+- `packages/backend/src/controllers/xpController.ts` — spendable XP check on sink operations
+- `packages/backend/src/services/appraisalService.ts` — appraisal selection daily cap
+- `packages/backend/src/services/xpService.ts` — cap logic, fraud check, spendable XP, HP claw-back
+- `packages/frontend/pages/register.tsx` — device fingerprint collection
+- `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` — NEW: all XP locked decisions
+
+**S445 One open P0-C piece:** `markHuntPassCancellation()` is built but NOT yet wired to the `customer.subscription.deleted` Stripe webhook event in `stripeController.ts`. Must be added before Hunt Pass goes live. Small targeted edit (~5 lines).
+
+**S445 Next session — XP frontend implementation (S446):**
+
+Priority 1 — Complete P0-C: Wire `markHuntPassCancellation(userId)` to `customer.subscription.deleted` handler in `packages/backend/src/controllers/stripeController.ts`. Find the existing handler, add the call after setting `huntPassActive = false`.
+
+Priority 2 — Hunt Pass UI audit + coupon tier update: The Hunt Pass subscription page and any pricing/comparison tables likely show OLD coupon values. Find and update to new tiers:
+  - Tier 1: 100 XP → $0.75 off $10+ (2x standard / 3x HP)
+  - Tier 2: 200 XP → $2.00 off $25+ (2x standard / 3x HP)
+  - Tier 3: 500 XP → $5.00 off $50+ (1x all)
+  Check: `pages/organizer/subscription.tsx`, `components/TierComparisonTable.tsx`, Hunt Pass page, any XP info modal/tooltip.
+
+Priority 3 — Earning table audit: The Hunt Pass page shows XP earning rates. Update to match locked decisions (walk-in 2 XP not 5, QR scan 3 XP not 12, referral 500 XP not 30, haul post 30 XP not 10, appraisal selected 20 XP not 40, seller review 5 XP not 8). Grep for hardcoded XP values: `grep -r "5 XP\|12 XP\|30 XP\|40 XP\|8 XP" packages/frontend --include="*.tsx"`.
+
+Priority 4 — Micro-sinks UI: Implement the 3 approved micro-sinks (Scout Reveal 5 XP, Haul Unboxing Animation 2 XP, Bump Post 10 XP). Reference `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` D-XP-006 for full spec.
+
+Priority 5 — Organizer-funded discounts UI: Organizers should be able to spend XP (200 XP = $2 off one item, max $5). Backend logic for the discount mechanic is not yet built — needs both backend route + frontend UI in item management.
+
+Load `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` at session start for full context.
+
+---
+
 **S444 COMPLETE (2026-04-13):** STAFF→MEMBER full rename (schema, DB, models, UI) + workspace permissions fix.
 
 **S444 What shipped:**
