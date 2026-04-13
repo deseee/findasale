@@ -114,6 +114,25 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
     switch (event.type) {
       case 'customer.subscription.created': {
         const subscription: any = event.data.object;
+        // Hunt Pass: shopper subscription — route by metadata before organizer path
+        if (subscription.metadata?.type === 'hunt_pass') {
+          const userId = subscription.metadata?.userId;
+          if (userId) {
+            const expiry = new Date(subscription.current_period_end * 1000);
+            await prisma.user.update({
+              where: { id: userId },
+              data: {
+                huntPassActive: true,
+                huntPassExpiry: expiry,
+                huntPassStripeSubscriptionId: subscription.id,
+                huntPassCancelledAt: null,
+              },
+            });
+            console.log(`[billing] Hunt Pass activated for user ${userId}, expires ${expiry.toISOString()}`);
+          }
+          break;
+        }
+        // Organizer subscription path
         const priceId = subscription.items.data[0]?.price.id;
         const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
         if (organizerId) {
@@ -124,6 +143,23 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
 
       case 'customer.subscription.updated': {
         const subscription: any = event.data.object;
+        // Hunt Pass: refresh expiry on renewal or update
+        if (subscription.metadata?.type === 'hunt_pass') {
+          const userId = subscription.metadata?.userId;
+          if (userId && subscription.status === 'active') {
+            const expiry = new Date(subscription.current_period_end * 1000);
+            await prisma.user.update({
+              where: { id: userId },
+              data: {
+                huntPassActive: true,
+                huntPassExpiry: expiry,
+              },
+            });
+            console.log(`[billing] Hunt Pass renewed for user ${userId}, expires ${expiry.toISOString()}`);
+          }
+          break;
+        }
+        // Organizer subscription path
         const priceId = subscription.items.data[0]?.price.id;
         const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
         if (organizerId) {
@@ -134,6 +170,23 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
 
       case 'customer.subscription.deleted': {
         const subscription: any = event.data.object;
+        // Hunt Pass: deactivate when subscription ends
+        if (subscription.metadata?.type === 'hunt_pass') {
+          const userId = subscription.metadata?.userId;
+          if (userId) {
+            await prisma.user.update({
+              where: { id: userId },
+              data: {
+                huntPassActive: false,
+                huntPassStripeSubscriptionId: null,
+                huntPassCancelledAt: new Date(),
+              },
+            });
+            console.log(`[billing] Hunt Pass deactivated for user ${userId}`);
+          }
+          break;
+        }
+        // Organizer subscription path
         const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
         if (organizerId) {
           // Feature #75: Downgrade to SIMPLE tier on lapse, but keep User roles intact

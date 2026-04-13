@@ -277,12 +277,20 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
       const feeRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
       const platformFeeAmount = Math.round(amountCents * feeRate);
 
+      // Use a shared generic product when configured to avoid cluttering the Stripe catalog.
+      // Patrick: create a "FindA.Sale — Item Sale" product in Stripe Dashboard, then add
+      // STRIPE_GENERIC_ITEM_PRODUCT_ID to Railway env vars to activate this path.
+      const genericProductId = process.env.STRIPE_GENERIC_ITEM_PRODUCT_ID;
       const adHocPrice = await stripe().prices.create({
         currency: 'usd',
         unit_amount: amountCents,
-        product_data: {
-          name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200)}`,
-        },
+        ...(genericProductId
+          ? { product: genericProductId }
+          : {
+              product_data: {
+                name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200)}`,
+              },
+            }),
       });
 
       const paymentLink = await stripe().paymentLinks.create({

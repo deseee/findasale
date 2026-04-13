@@ -23,6 +23,7 @@ router.get('/profile', authenticate, async (req: AuthRequest, res: Response) => 
         visitStreak: true,
         huntPassActive: true,
         huntPassExpiry: true,
+        huntPassStripeSubscriptionId: true,
       },
     });
 
@@ -38,6 +39,7 @@ router.get('/profile', authenticate, async (req: AuthRequest, res: Response) => 
       visitStreak: user.visitStreak || streakData.currentStreak,
       huntPassActive: user.huntPassActive,
       huntPassExpiry: user.huntPassExpiry ? user.huntPassExpiry.toISOString() : null,
+      huntPassSubscriptionId: user.huntPassStripeSubscriptionId,
       streaks: streakData,
     });
   } catch (err) {
@@ -107,76 +109,122 @@ router.get('/leaderboard', async (_req, res: Response) => {
 });
 
 /**
- * POST /api/streaks/activate-huntpass
- * Creates a Stripe PaymentIntent for $4.99 Hunt Pass (30-day subscription).
- * Returns { clientSecret } for the frontend to confirm with Stripe Elements.
+ * POST /api/streaks/subscribe-huntpass
+ * Creates a Stripe Checkout Session (mode: subscription) for the $4.99/mo Hunt Pass.
+ * Returns { url } — frontend redirects to Stripe-hosted checkout.
+ * Activation is handled server-side via customer.subscription.created webhook.
  */
-router.post('/activate-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/subscribe-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const priceId = process.env.STRIPE_HUNT_PASS_PRICE_ID;
+    if (!priceId) {
+      console.error('[hunt-pass] STRIPE_HUNT_PASS_PRICE_ID env var not set');
+      return res.status(500).json({ message: 'Hunt Pass is not configured. Please try again later.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        huntPassStripeCustomerId: true,
+        huntPassStripeSubscriptionId: true,
+      },
+    });
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
     const { getStripe } = await import('../utils/stripe');
     const stripe = getStripe();
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: 499, // $4.99 in cents
-      currency: 'usd',
-      metadata: {
-        type: 'hunt_pass',
-        userId: req.user.id,
+    // Guard: check for already-active subscription in Stripe
+    if (user.huntPassStripeSubscriptionId) {
+      try {
+        const existingSub = await stripe.subscriptions.retrieve(user.huntPassStripeSubscriptionId);
+        if (existingSub.status === 'active' || existingSub.status === 'trialing') {
+          return res.status(400).json({ message: 'You already have an active Hunt Pass subscription.' });
+        }
+      } catch {
+        // Stale subscription ID — clear it and let the user re-subscribe
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { huntPassStripeSubscriptionId: null },
+        });
+      }
+    }
+
+    // Get or create a Stripe Customer for Hunt Pass billing (shopper-side, separate from organizer)
+    let stripeCustomerId = user.huntPassStripeCustomerId;
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: user.name,
+        metadata: { userId: user.id, type: 'hunt_pass_shopper' },
+      });
+      stripeCustomerId = customer.id;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { huntPassStripeCustomerId: stripeCustomerId },
+      });
+    }
+
+    const origin = process.env.FRONTEND_URL || 'https://finda.sale';
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: stripeCustomerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      subscription_data: {
+        metadata: { type: 'hunt_pass', userId: user.id },
       },
-      description: 'FindA.Sale Hunt Pass — 30 days',
+      success_url: `${origin}/shopper/hunt-pass?success=true`,
+      cancel_url: `${origin}/shopper/hunt-pass?canceled=true`,
     });
 
-    res.json({ clientSecret: paymentIntent.client_secret });
+    res.json({ url: session.url });
   } catch (err) {
-    console.error('POST /api/streaks/activate-huntpass error:', err);
+    console.error('POST /api/streaks/subscribe-huntpass error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 /**
- * POST /api/streaks/confirm-huntpass
- * Called after Stripe payment confirmation succeeds client-side.
- * Verifies the PaymentIntent succeeded server-side, then activates Hunt Pass for 30 days.
+ * POST /api/streaks/cancel-huntpass
+ * Sets the Hunt Pass subscription to cancel at the end of the current billing period.
+ * The pass stays active until expiry; customer.subscription.deleted webhook handles deactivation.
  */
-router.post('/confirm-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/cancel-huntpass', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    const { paymentIntentId } = req.body as { paymentIntentId: string };
-    if (!paymentIntentId) return res.status(400).json({ message: 'paymentIntentId required' });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { huntPassStripeSubscriptionId: true },
+    });
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user.huntPassStripeSubscriptionId) {
+      return res.status(400).json({ message: 'No active Hunt Pass subscription found.' });
+    }
 
     const { getStripe } = await import('../utils/stripe');
     const stripe = getStripe();
 
-    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    if (intent.status !== 'succeeded') {
-      return res.status(400).json({ message: 'Payment not completed' });
-    }
-    if (intent.metadata?.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Payment intent does not belong to this user' });
-    }
-
-    const expiry = new Date();
-    expiry.setDate(expiry.getDate() + 30);
-
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: {
-        huntPassActive: true,
-        huntPassExpiry: expiry,
-        streakPoints: { increment: 100 }, // Bonus points for upgrading
-      },
+    const updated = await stripe.subscriptions.update(user.huntPassStripeSubscriptionId, {
+      cancel_at_period_end: true,
     });
+
+    const expiresAt = new Date(updated.current_period_end * 1000).toISOString();
 
     res.json({
-      success: true,
-      huntPassExpiry: expiry.toISOString(),
-      message: 'Hunt Pass activated! +100 bonus points.',
+      cancelAtPeriodEnd: true,
+      expiresAt,
+      message: `Your Hunt Pass will remain active until ${new Date(expiresAt).toLocaleDateString()}.`,
     });
   } catch (err) {
-    console.error('POST /api/streaks/confirm-huntpass error:', err);
+    console.error('POST /api/streaks/cancel-huntpass error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
