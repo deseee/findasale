@@ -226,10 +226,10 @@ export default function WorkspacePage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm truncate">
-                          {member.organizer?.businessName || member.organizer?.user?.email}
+                          {member.organizer?.businessName || member.organizer?.user?.email || 'Team Member'}
                         </p>
                         <p className="text-xs text-warm-600 dark:text-warm-400 capitalize">
-                          {member.role.toLowerCase()}
+                          {member.role?.toLowerCase() ?? 'member'}
                         </p>
                       </div>
                     </div>
@@ -266,7 +266,7 @@ export default function WorkspacePage() {
                         <div key={member.id} className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0" />
                           <p className="text-xs text-warm-600 dark:text-warm-400 truncate">
-                            {member.organizer?.user?.email}
+                            {member.organizer?.user?.email || 'Pending member'}
                           </p>
                           <span className="text-xs text-amber-600 dark:text-amber-400 font-medium ml-auto flex-shrink-0">
                             Pending
