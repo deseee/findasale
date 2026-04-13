@@ -47,7 +47,7 @@ import ActionBar from '../../components/ActionBar';
 const ShopperDashboard = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'subscribed' | 'pickups' | 'brands'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'subscribed' | 'pickups' | 'brands'>('overview');
   const [isHuntPassDismissed, setIsHuntPassDismissed] = useState(false);
   const [isReferralDismissed, setIsReferralDismissed] = useState(false);
   const [referralLink, setReferralLink] = useState<string | null>(null);
@@ -58,7 +58,7 @@ const ShopperDashboard = () => {
   useEffect(() => {
     if (router.isReady && router.asPath.includes('#')) {
       const hash = router.asPath.split('#')[1];
-      if (['overview', 'purchases', 'subscribed', 'pickups', 'brands'].includes(hash)) {
+      if (['overview', 'subscribed', 'pickups', 'brands'].includes(hash)) {
         setActiveTab(hash as any);
       }
     }
@@ -380,7 +380,6 @@ const ShopperDashboard = () => {
           <div className="flex gap-2 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
             {[
               { id: 'overview', label: 'Overview' },
-              { id: 'purchases', label: 'Purchases' },
               { id: 'subscribed', label: 'Subscribed' },
               { id: 'pickups', label: 'Pickups' },
               { id: 'brands', label: 'Brands' },
@@ -478,39 +477,6 @@ const ShopperDashboard = () => {
               {false && <SalesNearYou />}
 
               <FlashDealsBanner />
-            </div>
-          )}
-
-          {/* Purchases Tab */}
-          {activeTab === 'purchases' && (
-            <div>
-              {purchases && purchases.length > 0 ? (
-                <div className="space-y-4">
-                  {purchases.map((purchase: any) => (
-                    <Link key={purchase.id} href={purchase.itemId ? `/items/${purchase.itemId}` : `/sales/${purchase.saleId}`}>
-                      <div className="card p-4 flex justify-between items-center dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow cursor-pointer">
-                        <div>
-                          <h3 className="font-semibold text-warm-900 dark:text-warm-100">{purchase.itemTitle}</h3>
-                          <p className="text-sm text-warm-600 dark:text-warm-400">Purchased on {purchase.purchasedAt}</p>
-                        </div>
-                        <span className="font-bold text-warm-900 dark:text-warm-100">${purchase.amount}</span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16">
-                  <p className="text-5xl mb-4">🛍️</p>
-                  <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No purchases yet</h3>
-                  <p className="text-warm-600 dark:text-warm-400 mb-6">When you buy an item at a sale, it will show up here.</p>
-                  <Link
-                    href="/"
-                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
-                  >
-                    Browse Sales
-                  </Link>
-                </div>
-              )}
             </div>
           )}
 
