@@ -2,6 +2,15 @@
 
 ## What Happened This Week
 
+**S449** (2026-04-13) — Rank staleness, Scout Reveal, dashboard specs, discount badge:
+- **Rank staleness P0 fixed:** Nav now updates rank instantly after XP earn — no re-login needed. JWT carries explorerRank; all 5 XP endpoints return newRank; AuthContext.updateUser() propagates it live.
+- **Scout Reveal fleshed out:** Spending 5 XP now reveals who has saved/favorited the item (name, avatar, timestamp). Empty state: "you may have the edge!"
+- **Organizer discount badge live:** Items with `organizerDiscountAmount > 0` now show a teal badge on the item detail page and a subtle "Special: $X off" pill on sale listing cards.
+- **Dashboard UX brief written:** Per-rank tone + card prioritization + perks communication strategy → `claude_docs/feature-notes/`
+- **Rank perks spec written:** Full Initiate→Grandmaster perks table + rank-up moment design → `claude_docs/feature-specs/`
+- **Haul post test data seeded:** 3 approved haul posts for Alice in Railway DB — Bump Post + Haul Unboxing flows can now be QA'd
+- **Push block ready below** — 10 files + 2 spec docs
+
 **S448** (2026-04-13) — QA audit + Scout Reveal bug + rank naming locked:
 - Scout Reveal is a hollow stub — XP spent, toast fires, nothing revealed. Backend never queries interest data. Full flesh-out queued for S449.
 - Rank naming locked: **Initiate → Scout → Ranger → Sage → Grandmaster** (prior session dropped Initiate — that was the error; Ranger was always correct)
@@ -30,6 +39,8 @@
 
 ## Action Items for Patrick
 
+- [ ] **Push S449 push block** (10 files — see block in STATE.md or session summary)
+- [ ] **Run S447 pending migrations** on Railway if not done: `20260413_xp_expiry_system` + `20260413_early_access_cache`
 - [ ] **Stripe Dashboard → Webhooks → add `charge.dispute.created` event** (S447, still open)
 - [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open, still blocking)
 
@@ -53,20 +64,19 @@
 
 ---
 
-## What's Next (S449)
+## What's Next (S450)
 
-**P0 — Rank staleness fix (UNBLOCKED)**
-Naming locked: Initiate → Scout → Ranger → Sage → Grandmaster. Thresholds: 500/2000/5000/12000. Nav shows wrong rank for new users. Fix rank logic + JWT refresh on XP earn.
+**QA priority — post-deploy verification:**
+- Scout Reveal: spend 5 XP on item page, verify results panel shows
+- Rank sync: earn XP, verify nav rank updates without re-login
+- Discount badge: visit item with organizerDiscountAmount > 0, verify teal badge
+- Bump Post: login as Alice (user11@example.com), bump haul post ID 2, verify 10 XP deducted
+- Haul Unboxing: same Alice account, unlock animation on haul post ID 3, verify 2 XP deducted
 
-**P1 — Scout Reveal flesh-out**
-Backend returns interested users (who saved/favorited the item). Frontend renders a "Scout Reveal Results" panel. Right now the feature takes 5 XP and shows nothing.
+**Dev priority — rank perks implementation:**
+Game Designer spec is ready at `claude_docs/feature-specs/EXPLORER_GUILD_RANK_PERKS_SPEC.md`. Dashboard UX brief at `claude_docs/feature-notes/shopper-dashboard-creative-brief-P2-rank-tiers.md`. Architect review needed before dev dispatch (perks require schema decisions for hold timer overrides, early access flags).
 
-**P2 — Dashboard rethink + perks system (parallel)**
-UX agent: dashboard design brief per rank tier. Game Designer: spec what each rank unlocks. Both run in parallel now that naming is locked.
-
-**P3 — Create haul test data → verify Bump Post + Haul Unboxing**
-
-**P4 — Organizer discount badge on public pages**
+**MyTeamsCard happy path:** Still needs a workspace member test user. Invite Alice to a workspace, accept via magic link, reload shopper dashboard.
 
 ---
 
@@ -74,12 +84,12 @@ UX agent: dashboard design brief per rank tier. Game Designer: spec what each ra
 
 | Session | Date | Summary |
 |---------|------|---------|
-| S447 | 2026-04-13 | 3 dispatch batches: Early Access Cache, XP expiry, bump sort, cosmetics repricing, coupon enforcement, nav renames, stale sweep. All pushed + migrated. |
+| S449 | 2026-04-13 | Rank staleness P0, Scout Reveal P1, discount badge P4, dashboard/perks specs, haul test data. 10 files. |
+| S448 | 2026-04-13 | QA audit. Scout Reveal bug ID'd. Rank naming locked. 1-line fix. |
+| S447 | 2026-04-13 | 3 dispatch batches: Early Access Cache, XP expiry, bump sort, cosmetics repricing, coupon enforcement, nav renames. |
 | S446 | 2026-04-13 | XP frontend, 3 micro-sinks, organizer discounts, workspace magic link invite, WorkspaceMember schema fix |
 | S445 | 2026-04-13 | XP economy redesign + 5 fraud gates + workspace invite flow |
 | S444 | 2026-04-13 | STAFF→MEMBER full rename + workspace permissions fixed |
-| S443 | 2026-04-11 | 9 live-site fixes + command center upgrade + appraisal gating |
-| S442 | 2026-04-11 | WorkspaceSettings schema fix + test data seed (Alice/Carol teams) |
 
 ---
 

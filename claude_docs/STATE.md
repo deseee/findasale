@@ -7,6 +7,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S449 COMPLETE (2026-04-13):** Rank staleness P0, Scout Reveal P1, Dashboard UX brief + Rank Perks spec (P2), haul post test data (P3), organizer discount badge (P4). JWT rank sync live.
+
+**S449 What shipped:**
+- **P0 — Rank staleness fix:** `dashboard.tsx` thresholds corrected (0/500/2000/5000/12000). JWT now carries `explorerRank`. All 5 XP endpoints return `newRank + rankChanged`. `AuthContext.updateUser()` propagates rank change to nav instantly — no re-login required. Sitewide rank name audit run.
+- **P1 — Scout Reveal flesh-out:** `xpController.ts` now queries `Favorite` model and returns `interestedUsers: [{ displayName, avatarUrl, savedAt }]` (max 20). `items/[id].tsx` renders "Scout Reveal Results" panel with user list + empty state ("you may have the edge!").
+- **P2 — Dashboard creative brief:** `claude_docs/feature-notes/shopper-dashboard-creative-brief-P2-rank-tiers.md` — per-rank tone, card prioritization, perks communication strategy, mobile-first patterns, zero state design.
+- **P2 — Rank perks spec:** `claude_docs/feature-specs/EXPLORER_GUILD_RANK_PERKS_SPEC.md` — full perks table (Initiate through Grandmaster), rank-up moment design, retroactive stacking, non-perks rationale.
+- **P3 — Haul post test data:** 3 approved haul posts seeded for Alice (user11@example.com) in Railway DB directly via psycopg2 (IDs: 2, 3, 4).
+- **P4 — Organizer discount badge:** `itemController.ts` + `saleController.ts` return `organizerDiscountAmount/Xp`. `items/[id].tsx` shows sage-green pill badge ("Organizer Special: $X off — spend Y XP"). `sales/[id].tsx` shows subtle "Special: $X off" pill on item cards.
+
+**S449 Files changed (10):**
+- `packages/backend/src/controllers/authController.ts` — explorerRank in JWT (all 4 auth flows)
+- `packages/backend/src/controllers/xpController.ts` — Scout Reveal returns interestedUsers + all 5 XP endpoints return newRank/rankChanged
+- `packages/backend/src/controllers/itemController.ts` — discount fields in getItemById + getItemsBySaleId
+- `packages/backend/src/controllers/saleController.ts` — discount fields in getSale items
+- `packages/frontend/pages/shopper/dashboard.tsx` — rank thresholds corrected
+- `packages/frontend/pages/items/[id].tsx` — Scout Reveal results panel + discount badge + JWT updateUser
+- `packages/frontend/pages/sales/[id].tsx` — discount badge on item cards
+- `packages/frontend/pages/shopper/haul-posts.tsx` — updateUser on bump post + haul unboxing success
+- `packages/frontend/components/AuthContext.tsx` — explorerRank + updateUser()
+- `packages/frontend/hooks/useXpSink.ts` — updateUser calls on XP sink success
+
+**S449 ⚠️ Blocked/Unverified Queue (carry forward from S448):**
+
+| Feature | Reason | What's Needed | Session Added |
+|---------|--------|---------------|---------------|
+| Bump Post 10 XP flow | Test data now exists (haul post IDs 2-4 for Alice) | QA: login as Alice, bump a post, verify 10 XP deducted + bumpedUntil set | S448 → S449 |
+| Haul Unboxing Animation 2 XP | Test data now exists | QA: login as Alice, unlock animation on haul post, verify 2 XP deducted | S448 → S449 |
+| MyTeamsCard happy path | No workspace member test user | Invite Alice to a workspace, accept, reload dashboard | S448 |
+| Scout Reveal results (post-deploy) | Needs deploy + QA | Navigate to item page, spend 5 XP, verify interestedUsers panel renders | S449 |
+| Rank sync live (post-deploy) | Needs deploy + QA | Earn XP, verify nav rank updates without re-login | S449 |
+
+**S449 Patrick manual actions (before QA):**
+1. Run S447 pending migrations on Railway (if not done): `20260413_xp_expiry_system` + `20260413_early_access_cache`
+2. Push the S449 push block above — then Railway + Vercel auto-deploy
+3. Add `charge.dispute.created` to Stripe Dashboard → Webhooks (if not done)
+
 **S448 COMPLETE (2026-04-13):** QA audit of S446/S447 shipped features. Scout Reveal bug identified. Rank naming locked. One file fix shipped.
 
 **S448 What happened:**
