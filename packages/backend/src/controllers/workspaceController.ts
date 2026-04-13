@@ -278,6 +278,7 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
       ownerUserId,
       ownerId: workspace.ownerId,  // Organizer ID for messaging
       description,
+      members: workspace.members.map((m: any) => ({ organizerId: m.organizerId, acceptedAt: m.acceptedAt })),
       upcomingSales: upcomingSales.map((s: any) => ({ id: s.id, title: s.title, startDate: s.startDate, endDate: s.endDate, city: s.city })),
       pastSales: pastSales.map((s: any) => ({ id: s.id, title: s.title, startDate: s.startDate, endDate: s.endDate, city: s.city }))
     });
