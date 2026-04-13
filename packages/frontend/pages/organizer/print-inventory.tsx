@@ -1,0 +1,564 @@
+/**
+ * Organizer Print Inventory Page
+ *
+ * Allows organizers to view and print a full inventory list grouped by sale and category.
+ * Features:
+ * - Fetch all items across all organizer sales
+ * - Group items by sale → category
+ * - Table columns: Title, Category, Condition, Price, Status
+ * - Print CSS to hide navigation and show only the table
+ * - Print and Back buttons
+ */
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../lib/api';
+import { useAuth } from '../../components/AuthContext';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import { useToast } from '../../components/ToastContext';
+import Head from 'next/head';
+import Link from 'next/link';
+
+interface Item {
+  id: string;
+  title: string;
+  category: string;
+  condition: string;
+  price: number;
+  auctionStartPrice?: number;
+  status: string;
+  saleId: string;
+}
+
+interface Sale {
+  id: string;
+  title: string;
+  items?: Item[];
+}
+
+interface SaleGroup {
+  saleTitle: string;
+  categories: Record<string, Item[]>;
+}
+
+interface GroupedData {
+  [saleId: string]: SaleGroup;
+}
+
+const PrintInventoryPage = () => {
+  const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
+  const { tier } = useOrganizerTier();
+  const { showToast } = useToast();
+  const [groupedData, setGroupedData] = useState<GroupedData>({});
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [isPrintKitLoading, setIsPrintKitLoading] = useState(false);
+
+  // Redirect if not authenticated or not an organizer
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
+
+  // Fetch organizer's sales — same endpoint as dashboard
+  const { data: salesData, isLoading: salesLoading } = useQuery<Sale[]>({
+    queryKey: ['organizer-sales', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/sales/mine');
+      return response.data.sales as Sale[];
+    },
+    enabled: !!user?.id,
+  });
+
+  // Fetch all items for all sales
+  const { data: inventoryData, isLoading: itemsLoading, error: itemsError } = useQuery<
+    Array<{ saleId: string; saleTitle: string; items: Item[] }>
+  >({
+    queryKey: ['organizer-inventory', salesData],
+    queryFn: async () => {
+      if (!salesData || salesData.length === 0) {
+        return [];
+      }
+
+      // Fetch items for each sale in parallel
+      const itemsPromises = salesData.map((sale: Sale) =>
+        api.get('/items', { params: { saleId: sale.id } })
+          .then((res) => ({ saleId: sale.id, saleTitle: sale.title, items: res.data as Item[] }))
+          .catch(() => ({ saleId: sale.id, saleTitle: sale.title, items: [] as Item[] }))
+      );
+
+      return Promise.all(itemsPromises);
+    },
+    enabled: !!salesData && salesData.length > 0,
+  });
+
+  // Group inventory data whenever it changes (replaces removed onSuccess)
+  useEffect(() => {
+    if (!inventoryData) return;
+    const grouped: GroupedData = {};
+    inventoryData.forEach((saleData) => {
+      grouped[saleData.saleId] = { saleTitle: saleData.saleTitle, categories: {} };
+      saleData.items.forEach((item) => {
+        const category = item.category || 'Uncategorized';
+        if (!grouped[saleData.saleId].categories[category]) {
+          grouped[saleData.saleId].categories[category] = [];
+        }
+        grouped[saleData.saleId].categories[category].push(item);
+      });
+    });
+    setGroupedData(grouped);
+  }, [inventoryData]);
+
+  const handlePrint = () => {
+    // Hide all sale sections except the selected one (if selected)
+    const saleElements = document.querySelectorAll('[data-sale-section]');
+    saleElements.forEach((el) => {
+      const el_ = el as HTMLElement;
+      if (selectedSaleId && el_.getAttribute('data-sale-id') !== selectedSaleId) {
+        el_.style.display = 'none';
+      }
+    });
+
+    window.print();
+
+    // Restore visibility
+    saleElements.forEach((el) => {
+      const el_ = el as HTMLElement;
+      el_.style.display = '';
+    });
+  };
+
+  const handleBack = () => {
+    router.push('/organizer/dashboard');
+  };
+
+  const handleExport = async (format: 'ebay' | 'amazon' | 'facebook') => {
+    // Check if any sale is selected
+    if (!selectedSaleId) {
+      showToast('Please select a sale to export', 'error');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const response = await api.get('/organizers/export/csv', {
+        params: {
+          saleId: selectedSaleId,
+          format: format,
+        },
+        responseType: 'blob',
+      });
+
+      // Get filename from Content-Disposition header or generate one
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `export_${format}.csv`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Create blob and download
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast(`Exported ${format} CSV successfully`, 'success');
+      setShowExportDropdown(false);
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast(
+        error instanceof Error && error.message === 'PRO tier required for advanced brand kit features (font, banner, accent color)'
+          ? 'CSV export requires PRO subscription'
+          : 'Failed to export CSV',
+        'error'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDownloadPrintKit = async () => {
+    if (!selectedSaleId) {
+      showToast('Please select a sale to download print kit', 'error');
+      return;
+    }
+
+    setIsPrintKitLoading(true);
+    try {
+      const response = await api.get(`/organizers/${selectedSaleId}/print-kit`, {
+        responseType: 'blob',
+      });
+
+      // Get filename from Content-Disposition header or generate one
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `print-kit-${selectedSaleId}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+?)"?$/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Create blob and download
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('Print kit downloaded successfully', 'success');
+    } catch (error) {
+      console.error('Print kit download error:', error);
+      showToast('Failed to download print kit', 'error');
+    } finally {
+      setIsPrintKitLoading(false);
+    }
+  };
+
+  if (authLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
+
+  const isLoading = salesLoading || itemsLoading;
+  const totalItems = Object.values(groupedData).reduce(
+    (sum, sale) =>
+      sum + Object.values(sale.categories).reduce((catSum, items) => catSum + items.length, 0),
+    0
+  );
+
+  return (
+    <>
+      <Head>
+        <title>Print Inventory - FindA.Sale</title>
+      </Head>
+
+      <style>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          body {
+            font-size: 12pt;
+            margin: 0;
+            padding: 0;
+            background: white;
+          }
+          .print-container {
+            page-break-after: auto;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            page-break-inside: avoid;
+          }
+          tr {
+            page-break-inside: avoid;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
+          }
+          .section-title {
+            page-break-after: avoid;
+            margin-top: 20pt;
+            margin-bottom: 10pt;
+          }
+          .category-header {
+            background-color: #f5f5f5 !important;
+            font-weight: bold;
+            page-break-after: avoid;
+          }
+        }
+      `}</style>
+
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+        {/* Header - Hidden in print */}
+        <div className="no-print bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">Print Inventory</h1>
+              <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
+                All items grouped by sale and category
+              </p>
+            </div>
+            <div className="flex gap-2 items-center">
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportDropdown(!showExportDropdown)}
+                  disabled={tier === 'SIMPLE' || isExporting}
+                  className={`${
+                    tier === 'SIMPLE'
+                      ? 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  } font-bold py-2 px-6 rounded-lg transition-colors`}
+                  title={tier === 'SIMPLE' ? 'PRO subscription required' : 'Export for marketplace platforms'}
+                >
+                  📤 Export {isExporting && '...'}
+                </button>
+                {showExportDropdown && tier !== 'SIMPLE' && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
+                    <button
+                      onClick={() => handleExport('ebay')}
+                      disabled={!selectedSaleId || isExporting}
+                      className="w-full text-left px-4 py-3 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="font-semibold text-warm-900 dark:text-gray-100">📤 Export for eBay</div>
+                      <div className="text-sm text-warm-600 dark:text-gray-400">CSV format for eBay bulk uploads</div>
+                    </button>
+                    <button
+                      onClick={() => handleExport('amazon')}
+                      disabled={!selectedSaleId || isExporting}
+                      className="w-full text-left px-4 py-3 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors border-t border-warm-100 dark:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="font-semibold text-warm-900 dark:text-gray-100">📤 Export for Amazon</div>
+                      <div className="text-sm text-warm-600 dark:text-gray-400">CSV format for Amazon seller central</div>
+                    </button>
+                    <button
+                      onClick={() => handleExport('facebook')}
+                      disabled={!selectedSaleId || isExporting}
+                      className="w-full text-left px-4 py-3 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors border-t border-warm-100 dark:border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="font-semibold text-warm-900 dark:text-gray-100">📤 Export for Facebook</div>
+                      <div className="text-sm text-warm-600 dark:text-gray-400">CSV format for Marketplace</div>
+                    </button>
+                  </div>
+                )}
+                {tier === 'SIMPLE' && (
+                  <div className="absolute right-0 mt-2 w-48 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg shadow-lg z-10 p-3">
+                    <div className="text-sm text-amber-900 dark:text-amber-200">
+                      <div className="font-semibold mb-1">Upgrade to PRO</div>
+                      <p>CSV export is available for PRO subscribers</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleDownloadPrintKit}
+                disabled={!selectedSaleId || isPrintKitLoading}
+                className={`${
+                  !selectedSaleId || isPrintKitLoading
+                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                } font-bold py-2 px-6 rounded-lg transition-colors`}
+                title={!selectedSaleId ? 'Select a sale first' : 'Download QR code + item stickers'}
+              >
+                📦 Print Kit {isPrintKitLoading && '...'}
+              </button>
+              <button
+                onClick={handlePrint}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                🖨️ Print
+              </button>
+              <button
+                onClick={handleBack}
+                className="bg-warm-200 hover:bg-warm-300 text-warm-900 font-bold py-2 px-6 rounded-lg transition-colors"
+              >
+                ← Back
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          {isLoading ? (
+            <div className="text-center py-12">
+              <p className="text-warm-600 dark:text-warm-400">Loading inventory...</p>
+            </div>
+          ) : itemsError ? (
+            <div className="p-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-red-700 dark:text-red-400">Failed to load inventory. Please try again.</p>
+            </div>
+          ) : totalItems === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-warm-600 dark:text-warm-400 mb-4">No items in your inventory yet.</p>
+              <Link
+                href="/organizer/add-items"
+                className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg"
+              >
+                Add Items
+              </Link>
+            </div>
+          ) : (
+            <div className="print-container space-y-8">
+              {/* Summary */}
+              <div className="no-print bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Summary</h2>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-warm-600 dark:text-warm-400 text-sm">Total Sales</p>
+                    <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">
+                      {Object.keys(groupedData).length}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-warm-600 dark:text-warm-400 text-sm">Total Items</p>
+                    <p className="text-3xl font-bold text-amber-600 dark:text-amber-500">{totalItems}</p>
+                  </div>
+                  <div>
+                    <p className="text-warm-600 dark:text-warm-400 text-sm">Total Value</p>
+                    <p className="text-3xl font-bold text-green-600 dark:text-green-500">
+                      $
+                      {Object.values(groupedData)
+                        .reduce((sum, sale) =>
+                          sum + Object.values(sale.categories).reduce(
+                            (catSum, items) =>
+                              catSum + items.reduce(
+                                (itemSum, item) => itemSum + (item.price || item.auctionStartPrice || 0),
+                                0
+                              ),
+                            0
+                          ),
+                          0
+                        )
+                        .toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sale Selector - Hidden in print */}
+              <div className="no-print bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                  Filter by Sale (optional):
+                </label>
+                <select
+                  value={selectedSaleId || ''}
+                  onChange={(e) => setSelectedSaleId(e.target.value || null)}
+                  className="w-full md:w-64 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
+                >
+                  <option value="">All Sales</option>
+                  {Object.entries(groupedData).map(([saleId, saleData]) => (
+                    <option key={saleId} value={saleId}>
+                      {saleData.saleTitle}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sales with grouped items */}
+              {Object.entries(groupedData).map(([saleId, saleData]) => {
+                const categories = Object.keys(saleData.categories);
+                const saleItemCount = categories.reduce(
+                  (sum, category) => sum + saleData.categories[category].length,
+                  0
+                );
+
+                return (
+                  <div key={saleId} data-sale-section data-sale-id={saleId} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+                    {/* Sale title */}
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-4">
+                      <h2 className="text-xl font-bold text-amber-900 dark:text-amber-400">
+                        {saleData.saleTitle}
+                      </h2>
+                      <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                        {saleItemCount} item{saleItemCount !== 1 ? 's' : ''} • {categories.length} categor{categories.length !== 1 ? 'ies' : 'y'}
+                      </p>
+                    </div>
+
+                    {/* Items table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-warm-200 dark:border-gray-700 bg-warm-50 dark:bg-gray-700">
+                            <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
+                              Title
+                            </th>
+                            <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
+                              Category
+                            </th>
+                            <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
+                              Condition
+                            </th>
+                            <th className="text-right py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
+                              Price
+                            </th>
+                            <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">
+                              Status
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {categories.map((category) => {
+                            const items = saleData.categories[category];
+                            return (
+                              <React.Fragment key={category}>
+                                {/* Category header row */}
+                                <tr className="category-header border-b border-warm-200 dark:border-gray-700 bg-warm-100 dark:bg-gray-700">
+                                  <td colSpan={5} className="py-2 px-4 text-sm font-semibold text-warm-900 dark:text-warm-200">
+                                    {category}
+                                  </td>
+                                </tr>
+
+                                {/* Item rows */}
+                                {items.map((item) => (
+                                  <tr
+                                    key={item.id}
+                                    className="border-b border-warm-100 dark:border-gray-700 hover:bg-warm-50 dark:hover:bg-gray-700"
+                                  >
+                                    <td className="py-3 px-4 text-warm-900 dark:text-warm-200 font-medium">
+                                      {item.title}
+                                    </td>
+                                    <td className="py-3 px-4 text-warm-600 dark:text-warm-400 capitalize">
+                                      {category}
+                                    </td>
+                                    <td className="py-3 px-4 text-warm-600 dark:text-warm-400 capitalize">
+                                      {item.condition || '—'}
+                                    </td>
+                                    <td className="py-3 px-4 text-right font-semibold text-warm-900 dark:text-warm-200">
+                                      $
+                                      {(item.price || item.auctionStartPrice || 0).toFixed(2)}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <span
+                                        className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                                          item.status === 'SOLD'
+                                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                            : item.status === 'AVAILABLE'
+                                              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                              : item.status === 'ON_HOLD'
+                                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                : 'bg-warm-100 dark:bg-warm-900/30 text-warm-700 dark:text-warm-300'
+                                        }`}
+                                      >
+                                        {item.status === 'ON_HOLD'
+                                          ? 'On Hold'
+                                          : item.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default PrintInventoryPage;

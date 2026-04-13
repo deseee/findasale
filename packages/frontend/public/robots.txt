@@ -1,0 +1,47 @@
+User-agent: *
+Allow: /
+Allow: /sales
+Allow: /items
+Allow: /organizers
+Allow: /search
+Allow: /categories
+Allow: /city
+Allow: /about
+Allow: /guide
+Allow: /faq
+Allow: /contact
+Allow: /plan
+
+Disallow: /admin
+Disallow: /organizer
+Disallow: /api
+Disallow: /auth
+Disallow: /profile
+Disallow: /_next
+Disallow: /*.json$
+Disallow: /*?*sort=
+Disallow: /*?*filter=
+Disallow: /offline
+
+Sitemap: https://finda.sale/sitemap.xml
+Sitemap: https://finda.sale/server-sitemap.xml
+
+# Crawl delay and request rate
+Crawl-delay: 1
+Request-rate: 1/1s
+
+# Google-specific directives
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /organizer
+Disallow: /api
+Crawl-delay: 0
+
+# Bing-specific directives
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /organizer
+Disallow: /api
+Crawl-delay: 1

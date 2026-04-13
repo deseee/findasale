@@ -1,0 +1,464 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import Head from 'next/head';
+import { useQuery } from '@tanstack/react-query';
+import api from '../lib/api';
+import SaleMap, { SalePin } from '../components/SaleMap';
+import HeatmapLegend from '../components/HeatmapLegend';
+import Skeleton from '../components/Skeleton';
+import { useToast } from '../components/ToastContext';
+import { useHeatmapTiles } from '../hooks/useHeatmapTiles';
+import RouteBuilder from '../components/RouteBuilder';
+import type { HeatmapTile } from '../types/heatmap';
+
+interface Sale {
+  id: string;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  lat: number;
+  lng: number;
+  photoUrls: string[];
+  organizer: {
+    id: string;
+    businessName: string;
+    customMapPin?: string;
+  };
+  tags?: string[];
+  isAuctionSale?: boolean;
+  saleType?: string;
+  hasActiveTrail?: boolean;
+  trailShareToken?: string;
+}
+
+type DateFilter = 'all' | 'this-week' | 'this-weekend' | 'today';
+type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'consignment';
+
+interface TrailStop {
+  id: string;
+  order: number;
+  stopName: string;
+  latitude: number;
+  longitude: number;
+  stopType: string;
+}
+
+interface ActiveTrail {
+  name: string;
+  shareToken: string;
+  stops: TrailStop[];
+}
+
+const MapPage = () => {
+  const { showToast } = useToast();
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
+  const [filteredPins, setFilteredPins] = useState<SalePin[]>([]);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [activeTrail, setActiveTrail] = useState<ActiveTrail | null>(null);
+
+  // Helper function to determine sale type from saleType field
+  const getSaleType = (sale: Sale): string => {
+    const t = (sale.saleType || '').toUpperCase();
+    if (t === 'ESTATE') return 'estate';
+    if (t === 'YARD') return 'yard';
+    if (t === 'AUCTION') return 'auction';
+    if (t === 'FLEA_MARKET') return 'flea-market';
+    if (t === 'CONSIGNMENT') return 'consignment';
+    return 'other';
+  };
+
+  // Feature #28: Fetch heatmap tiles
+  const { data: heatmapData, isLoading: isHeatmapLoading } = useHeatmapTiles({
+    enabled: showHeatmap,
+    days: 7,
+  });
+
+  const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
+  const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || '';
+
+  const { data: sales, isLoading, isError, refetch } = useQuery({
+    queryKey: ['sales', { limit: 200 }],
+    queryFn: async () => {
+      try {
+        // Backend filters by status: 'PUBLISHED' by default
+        const response = await api.get('/sales?limit=200');
+        const salesData = response.data.sales ?? response.data;
+        return Array.isArray(salesData) ? salesData : [];
+      } catch (err: any) {
+        console.error('Error fetching sales:', err);
+        throw new Error('Failed to load sales. Please try again later.');
+      }
+    },
+    retry: 1,
+  });
+
+  // Phase 2b: Fetch active SALE_BUMP boosts (public endpoint, no auth required)
+  const { data: featuredBoosts } = useQuery({
+    queryKey: ['active-boosts', 'SALE'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/boosts/active?targetType=SALE');
+        return (response.data.boosts ?? []) as Array<{ targetId: string | null }>;
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 min — boosts don't change frequently
+    retry: 0,
+  });
+
+  // Auto-locate only when permission is already granted.
+  // Avoids the iOS Safari race condition (getCurrentPosition fires PERMISSION_DENIED
+  // before the user can tap Allow on the dialog). Older iOS without the Permissions
+  // API falls through the .catch silently — user taps My Location instead.
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.permissions
+      ?.query({ name: 'geolocation' as PermissionName })
+      .then((result) => {
+        if (result.state === 'granted') {
+          navigator.geolocation.getCurrentPosition(
+            (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
+            () => {} // granted but position failed — silent
+          );
+        }
+      })
+      .catch(() => {}); // Permissions API unsupported (older iOS) — skip auto-request
+  }, []);
+
+  // Filter sales by date, sale type, and geo-location
+  const filteredSales = useMemo(() => {
+    if (!sales) return [];
+    let result = [...sales];
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart);
+    todayEnd.setHours(23, 59, 59, 999);
+
+    // This Week = today through next 7 days
+    const weekEnd = new Date(todayStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    // This Weekend = Saturday and Sunday of current week
+    const day = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
+    const satDiff = day === 0 ? -1 : day === 6 ? 0 : 6 - day;
+    const weekendStart = new Date(todayStart);
+    weekendStart.setDate(weekendStart.getDate() + satDiff);
+    const weekendEnd = new Date(weekendStart);
+    weekendEnd.setDate(weekendEnd.getDate() + 1);
+    weekendEnd.setHours(23, 59, 59, 999);
+
+    result = result.filter((s) => {
+      let start: Date, end: Date;
+      try {
+        start = new Date(s.startDate);
+        end = new Date(s.endDate);
+      } catch {
+        return false;
+      }
+      if (isNaN(start.getTime())) return false;
+
+      if (dateFilter === 'today') return end >= todayStart && start <= todayEnd;
+      if (dateFilter === 'this-weekend') return start <= weekendEnd && end >= weekendStart;
+      if (dateFilter === 'this-week') return end >= todayStart && start <= weekEnd;
+      return true; // 'all'
+    });
+
+    // Filter by sale type
+    if (saleTypeFilter !== 'all') {
+      result = result.filter((s) => getSaleType(s) === saleTypeFilter);
+    }
+
+    return result;
+  }, [sales, dateFilter, saleTypeFilter]);
+
+  // Convert filtered sales to map pins
+  useMemo(() => {
+    // Build a Set of sale IDs that have an active SALE_BUMP boost
+    const featuredSaleIds = new Set(
+      (featuredBoosts ?? [])
+        .filter((b) => b.targetId != null)
+        .map((b) => b.targetId as string)
+    );
+
+    const pins = filteredSales
+      .filter((s) => s.lat && s.lng)
+      .map((s): SalePin => {
+        const now = new Date();
+        const saleStart = new Date(s.startDate);
+        const saleEnd = new Date(s.endDate);
+        const isActive = saleStart <= now && now <= saleEnd;
+        const daysUntilStart = Math.ceil((saleStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const isWithin7Days = daysUntilStart <= 7 && daysUntilStart > 0;
+
+        return {
+          id: s.id,
+          title: s.title,
+          lat: s.lat,
+          lng: s.lng,
+          city: s.city,
+          state: s.state,
+          startDate: s.startDate,
+          endDate: s.endDate,
+          organizerName: s.organizer?.businessName ?? '',
+          photoUrl: s.photoUrls?.[0],
+          status: isActive ? 'active' : isWithin7Days ? 'upcoming-soon' : 'upcoming',
+          hasActiveTrail: s.hasActiveTrail ?? false,
+          trailShareToken: s.trailShareToken,
+          hasFeaturedBoost: featuredSaleIds.has(s.id),
+          customMapPin: s.organizer?.customMapPin,
+        };
+      });
+    setFilteredPins(pins);
+  }, [filteredSales, featuredBoosts]);
+
+  const handleUseLocation = () => {
+    if (!navigator.geolocation) {
+      showToast('Geolocation is not supported by your browser.', 'error');
+      return;
+    }
+
+    const onSuccess = (position: GeolocationPosition) => {
+      setUserLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      });
+    };
+
+    const onError = (error: GeolocationPositionError) => {
+      console.error('Error getting location:', error);
+      if (error.code === 1) {
+        // PERMISSION_DENIED
+        // Detect iOS Safari (standalone PWA) vs browser — different settings path
+        const isStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS && isStandalone) {
+          showToast('Location blocked. Go to iOS Settings → Privacy → Location Services → Safari and set to "While Using".', 'error');
+        } else if (isIOS) {
+          showToast('Location blocked. In iOS Settings → Privacy → Location Services, allow Safari to access location.', 'error');
+        } else {
+          showToast('Location permission denied. Allow location access in your browser settings and try again.', 'error');
+        }
+      } else if (error.code === 3) {
+        // TIMEOUT — GPS cold start on mobile; retry with low accuracy
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          () => showToast('Location request timed out. Make sure Location Services are on and try again.', 'error'),
+          { timeout: 15000, maximumAge: 300000, enableHighAccuracy: false }
+        );
+      } else {
+        // POSITION_UNAVAILABLE (code 2)
+        showToast('Unable to determine your location. Check that Location Services are enabled.', 'error');
+      }
+    };
+
+    // Phase 1: try high accuracy (GPS) with generous timeout for mobile cold starts
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+      timeout: 15000,
+      maximumAge: 60000,
+      enableHighAccuracy: true,
+    });
+  };
+
+  const handleHeatmapCellClick = (tile: HeatmapTile) => {
+    // Optional: filter pins to those in the clicked cell
+    // For now, just zoom (already handled by HeatmapOverlay click handler)
+  };
+
+  const saleCount = filteredSales.length;
+
+  return (
+    <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex flex-col">
+      <Head>
+        <title>FindA.Sale Map — Sales Near You</title>
+        <meta name="description" content="View sales on an interactive map near you" />
+        <meta property="og:title" content="FindA.Sale Map — Sales Near You" />
+        <meta property="og:description" content="See all upcoming sales on an interactive map. Filter by date and find sales near you." />
+        <meta property="og:url" content="https://finda.sale/map" />
+        <meta property="og:image" content="https://finda.sale/og-default.png" />
+        <meta name="twitter:card" content="summary" />
+      </Head>
+
+      {/* Header Strip */}
+      <section className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4">
+        <div className="container mx-auto">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">Sales Near You</h1>
+              <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">
+                {isLoading ? '...' : `${saleCount} sale${saleCount !== 1 ? 's' : ''} near you`}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <button
+                onClick={() => {
+                  const routeBuilder = document.getElementById('route-builder');
+                  if (routeBuilder) {
+                    routeBuilder.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+                className="hidden sm:flex bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2 flex-shrink-0"
+                title="Open the route planner below to plan your visit"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                Plan Your Route
+              </button>
+              <button
+                onClick={() => setShowHeatmap(!showHeatmap)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                  showHeatmap
+                    ? 'bg-amber-600 text-white hover:bg-amber-700'
+                    : 'bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 hover:bg-warm-200 dark:hover:bg-gray-600'
+                }`}
+                title="Toggle neighborhood heatmap overlay"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+                  />
+                </svg>
+                <span className="hidden sm:inline">Heatmap</span>
+              </button>
+              <button
+                onClick={handleUseLocation}
+                className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 flex-shrink-0"
+                title="Use your current location"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="hidden sm:inline">My Location</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Chips */}
+          <div className="flex gap-2 flex-wrap">
+            {/* Date Filters */}
+            {(['all', 'today', 'this-weekend', 'this-week'] as DateFilter[]).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setDateFilter(f)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  dateFilter === f
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-amber-400 dark:hover:border-gray-500'
+                }`}
+              >
+                {f === 'all' ? 'All Dates' : f === 'today' ? 'Today' : f === 'this-weekend' ? 'This Weekend' : 'This Week'}
+              </button>
+            ))}
+
+            {/* Sale Type Filters */}
+            {(['all', 'estate', 'yard', 'auction', 'flea-market', 'consignment'] as SaleTypeFilter[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setSaleTypeFilter(type)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  saleTypeFilter === type
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-gray-500'
+                }`}
+              >
+                {type === 'all' ? 'All Types' : type === 'estate' ? 'Estate' : type === 'yard' ? 'Yard' : type === 'auction' ? 'Auction' : type === 'flea-market' ? 'Flea Market' : 'Consignment'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Map Container */}
+      <section className="flex-grow overflow-hidden relative">
+        {isLoading ? (
+          <Skeleton className="w-full h-full" />
+        ) : isError ? (
+          <div className="w-full h-full flex items-center justify-center bg-warm-50 dark:bg-gray-900">
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Map</h2>
+              <p className="text-warm-600 dark:text-warm-400 mb-4">There was a problem loading sales data.</p>
+              <button
+                onClick={() => refetch()}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Treasure Trail activation bar */}
+            {activeTrail && (
+              <div className="bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-4 py-2 flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-medium text-blue-900 dark:text-blue-100">
+                  🗺️ {activeTrail.name}
+                </span>
+                <div className="flex gap-2">
+                  <a
+                    href={`/trail/${activeTrail.shareToken}`}
+                    className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                  >
+                    View Details →
+                  </a>
+                  <button
+                    onClick={() => setActiveTrail(null)}
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 text-sm font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+            <SaleMap
+              pins={filteredPins}
+              userLocation={userLocation}
+              height="calc(100vh - 200px)"
+              center={userLocation ? [userLocation.lat, userLocation.lng] : [42.9634, -85.6681]}
+              zoom={userLocation ? 13 : 11}
+              heatmapTiles={showHeatmap ? heatmapData?.tiles : undefined}
+              onHeatmapCellClick={handleHeatmapCellClick}
+              activeTrail={activeTrail}
+              setActiveTrail={setActiveTrail}
+            />
+            {/* Feature #28: Heatmap legend */}
+            {showHeatmap && heatmapData && (
+              <HeatmapLegend
+                legend={heatmapData.legend}
+                cacheAge={heatmapData.cacheAge}
+              />
+            )}
+          </>
+        )}
+      </section>
+
+      {/* D3: Route Builder — collapsible panel below map */}
+      {!isLoading && !isError && (
+        <div id="route-builder">
+          <RouteBuilder sales={filteredSales} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default MapPage;
