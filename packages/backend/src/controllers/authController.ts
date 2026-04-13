@@ -30,7 +30,7 @@ const isValidRedirectUri = (uri: string | null | undefined): boolean => {
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -83,8 +83,26 @@ export const register = async (req: Request, res: Response) => {
           role: effectiveRole,
           password: hashedPassword,
           referralCode: userReferralCode,
+          deviceFingerprint: deviceFingerprint || null,
         }
       });
+
+      // Platform Safety #118: Device Fingerprinting — flag if 2+ accounts share same fingerprint
+      if (deviceFingerprint) {
+        const otherAccounts = await tx.user.count({
+          where: {
+            deviceFingerprint,
+            id: { not: newUser.id }
+          }
+        });
+        if (otherAccounts > 0) {
+          await tx.user.update({
+            where: { id: newUser.id },
+            data: { fraudSuspect: true }
+          });
+          console.log(`[FRAUD] New account ${newUser.id} (${newUser.email}) shares device fingerprint with ${otherAccounts} existing account(s)`);
+        }
+      }
 
       if (effectiveRole === 'ORGANIZER') {
         await tx.organizer.create({

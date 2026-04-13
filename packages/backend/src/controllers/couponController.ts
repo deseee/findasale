@@ -10,7 +10,7 @@ import { Response } from 'express';
 import { Resend } from 'resend';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { spendXp, XP_SINKS } from '../services/xpService';
+import { spendXp, XP_SINKS, getSpendableXp } from '../services/xpService';
 import { buildEmail } from '../services/emailTemplateService';
 
 let _resend: any = null;
@@ -166,14 +166,24 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Spend 50 XP — spendXp returns false if insufficient balance or below rank floor
+    // P0 Exploit Fix: Check spendable XP (not total, accounting for 72h/30d holds)
+    const spendable = await getSpendableXp(organizerId);
+    if (spendable < XP_SINKS.COUPON_GENERATE) {
+      return res.status(400).json({
+        message: `Not enough available XP. You have ${spendable} spendable XP (${XP_SINKS.COUPON_GENERATE} required). Newly earned XP is held for 72 hours.`,
+        required: XP_SINKS.COUPON_GENERATE,
+        available: spendable,
+      });
+    }
+
+    // Spend 50 XP — spendXp returns false if insufficient balance
     const spent = await spendXp(organizerId, XP_SINKS.COUPON_GENERATE, 'COUPON_GENERATE', {
       description: 'Generated $1-off shopper coupon',
     });
 
     if (!spent) {
       return res.status(400).json({
-        message: `Not enough XP. Coupon generation costs ${XP_SINKS.COUPON_GENERATE} XP.`,
+        message: `Failed to spend XP. Please try again.`,
       });
     }
 
@@ -287,6 +297,16 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
       });
     }
 
+    // P0 Exploit Fix: Check spendable XP (not total, accounting for 72h/30d holds)
+    const spendable = await getSpendableXp(shopperId);
+    if (spendable < config.xpCost) {
+      return res.status(400).json({
+        message: `Not enough available XP. You have ${spendable} spendable XP (${config.xpCost} required). Newly earned XP is held for 72 hours.`,
+        required: config.xpCost,
+        available: spendable,
+      });
+    }
+
     // Spend XP — spendXp returns false if insufficient balance
     const spent = await spendXp(shopperId, config.xpCost, 'COUPON_GENERATE', {
       description: `Generated shopper coupon tier ${shopperTier}: $${config.discount.toFixed(2)} off $${config.minPurchase}+`,
@@ -294,7 +314,7 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
 
     if (!spent) {
       return res.status(400).json({
-        message: `Not enough XP. This tier requires ${config.xpCost} XP.`,
+        message: `Failed to spend XP. Please try again.`,
         required: config.xpCost,
       });
     }
