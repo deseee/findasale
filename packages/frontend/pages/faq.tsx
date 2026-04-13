@@ -98,7 +98,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'How do I earn XP?',
     answer: (
       <>
-        You earn XP from a wide range of activities. Main sources include: purchasing items ($1 spent = 1 XP), visiting sales (5 XP per visit, max 2 per day), posting haul reviews with photos (10 XP + 5 bonus for likes), completing holds (7 XP), and seasonal challenges. You also earn XP from Treasure Trails and community activities like crowd appraisals, referrals, and streak bonuses. Visit your <strong>Account → Loyalty</strong> page to see all available actions and track your progress.
+        You earn XP from a wide range of activities. Main sources include: purchasing items ($1 spent = 10 XP), walking into a sale (2 XP per check-in, max 2 per day), posting haul reviews (30 XP), submitting appraisals (5 XP), and referring friends (500 XP per friend purchase). You also earn XP from Treasure Trails, QR code scans (3 XP), community activities, and streak bonuses. Visit your <strong>Account → Loyalty</strong> page to see all available actions and track your progress.
       </>
     ),
   },
@@ -215,7 +215,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is a Treasure Hunt scan and how do QR codes work?',
     answer: (
       <>
-        Each item at a participating sale has a QR sticker printed by the organizer. When you scan an item's QR code at the sale, you earn 25 XP (Hunt Pass: 28 XP). Scanning also pulls up the item's full listing so you can check price, condition, and description right from your phone. It's like a built-in shopping assistant at every sale you attend.
+        Each item at a participating sale has a QR sticker printed by the organizer. When you scan an item's QR code at the sale, you earn 3 XP (Hunt Pass: 4.5 XP). Scanning also pulls up the item's full listing so you can check price, condition, and description right from your phone. It's like a built-in shopping assistant at every sale you attend.
       </>
     ),
   },

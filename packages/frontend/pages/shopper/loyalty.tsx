@@ -258,15 +258,15 @@ function LoyaltyPage() {
               <div className="flex gap-3">
                 <span className="text-2xl">📱</span>
                 <div>
-                  <p className="font-semibold text-gray-900 dark:text-warm-100">Scan an Item</p>
-                  <p className="text-gray-600 dark:text-gray-400">+10 XP per scan</p>
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Scan a QR Code</p>
+                  <p className="text-gray-600 dark:text-gray-400">+3 XP per scan</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <span className="text-2xl">🚪</span>
                 <div>
-                  <p className="font-semibold text-gray-900 dark:text-warm-100">Visit a Sale</p>
-                  <p className="text-gray-600 dark:text-gray-400">+5 XP per visit</p>
+                  <p className="font-semibold text-gray-900 dark:text-warm-100">Walk-in Visit</p>
+                  <p className="text-gray-600 dark:text-gray-400">+2 XP per check-in</p>
                 </div>
               </div>
               <div className="flex gap-3">

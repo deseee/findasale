@@ -2,57 +2,55 @@
 
 ## What Happened This Week
 
-**S445** ran two concurrent windows on 2026-04-13:
-- **Window A (XP/fraud):** Full XP economy redesign — coupon tier restructure, 5 P0 fraud gates (appraisal cap, referral gate, HP claw-back, device fingerprinting). 2 migrations applied to Railway. All decisions locked in `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`. Forecast Polls killed (Michigan gambling law).
-- **Window B (workspace flow):** Workspace invitation banner on dashboard, staff delete endpoint, fix for "Already a member" re-invite bug, owner self-delete protection, TeamMember creation on invite accept, workspace page crash fix (undefined role), permissions gate (non-owners see read-only), template apply field name fix, 4 workspace templates seeded into DB.
+**S446** (2026-04-13) — XP frontend implementation:
+- Hunt Pass cancellation now fully wired to Stripe webhook (exploit gate closed)
+- All XP earning rates and coupon tier values updated across 6 frontend pages
+- 3 micro-sinks built: Scout Reveal (5 XP on item detail), Haul Unboxing Animation (2 XP), Bump Post (10 XP)
+- Organizer-funded discounts live: spend 200/400/500 XP to put $2/$4/$5 off an item; blocks shopper coupons from stacking
+- ⚠️ Bump Post feed sorting pending — DB field is set correctly but haul posts feed doesn't sort by bump yet
 
-**S444** completed the STAFF→MEMBER rename and workspace permissions fix.
+**S445** (2026-04-13) — XP economy redesign + workspace flows:
+- 5 P0 fraud gates shipped (appraisal cap, referral gate, HP claw-back, device fingerprinting, chargeback)
+- Workspace invite banner, staff delete, owner permissions gate, template fixes
+
+**S444** (2026-04-13) — STAFF→MEMBER rename + workspace permissions fix.
 
 ---
 
 ## Action Items for Patrick
 
-- [ ] **PUSH Window B workspace changes** (10 files — pushblock in STATE.md under S445 Window B)
-- [ ] **PUSH permissions fix from S444** if not done yet (3 backend files — see S444 pushblock in STATE.md)
-- [ ] **QA workspace invite flow** — invite → banner → accept → member in staff list; test 5-Person template apply
-- [ ] **QA `/organizer/members`** — invite modal, role dropdowns, role change on cards
-- [ ] **QA `/organizer/workspace`** — permissions tabs switch, save persists
+- [ ] **PUSH everything** — comprehensive pushblock below (29 files: S446 + S445-B + S444 pending)
+- [ ] **Run migrations** — 2 new ones from S446 (micro-sinks + organizer discounts). Command in pushblock below.
+- [ ] **QA workspace invite flow** (doing out-of-session) — checklist from S446 session
 - [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open, still blocking)
 
 ---
 
-## XP System — What's New (S445)
+## XP System — Current State
 
-**Coupon tiers changed:**
-- 100 XP → $0.75 off $10+ (2x/mo standard, 3x/mo Hunt Pass)
-- 200 XP → $2.00 off $25+ (2x/mo standard, 3x/mo Hunt Pass)
-- 500 XP → $5.00 off $50+ (1x/mo all users)
+**Coupon tiers (locked D-XP-001):**
+- 100 XP → $0.75 off $10+ | 2x/mo standard, 3x/mo Hunt Pass
+- 200 XP → $2.00 off $25+ | 2x/mo standard, 3x/mo Hunt Pass
+- 500 XP → $5.00 off $50+ | 1x/mo all users
 
-**5 fraud gates now live (migrations applied):**
-1. Appraisal selections capped at 5/day per user
-2. Referral 500 XP requires referred organizer's first real buyer
-3. 72-hour XP hold on purchases + chargeback claw-back webhook
-4. Hunt Pass cancel = 30-day redemption hold on HP-earned XP
-5. Device fingerprinting on signup — multi-account fraud blocked at XP award
+**Micro-sinks (new S446):**
+- Scout Reveal: 5 XP → see who flagged interest first on an item
+- Haul Unboxing: 2 XP → celebratory animation on haul post share
+- Bump Post: 10 XP → bumps haul post to feed top for 24h (feed sort pending)
 
-**Forecast Polls:** Killed. Michigan gambling law. Never coded, nothing to remove.
+**Organizer-funded discounts (new S446):**
+- Spend 200/400/500 XP in item edit → puts $2/$4/$5 off the item
+- Shopper coupon doesn't stack — best single discount wins
 
 ---
 
-## What's Next (S446)
+## What's Next (S447)
 
-S446 should focus on the XP frontend implementation:
-1. Wire Hunt Pass cancellation → Stripe webhook (10-min fix in stripeController.ts)
-2. Update Hunt Pass page + coupon UI to show new tier values
-3. Audit + update all XP earning rate displays (hardcoded old values likely in several pages)
-4. Implement 3 micro-sinks: Scout Reveal (5 XP), Haul Unboxing (2 XP), Bump Post (10 XP)
-5. Organizer-funded discounts (200 XP = $2 off one item)
-
-Full spec: `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`
-
-**Invited member onboarding** — banner now built and live on dashboard. Invite → accept flow is end-to-end. QA still needed in Chrome.
-
-**Price Research Card redesign** — UX spec ready: `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`.
+1. Review workspace QA results → dispatch fixes
+2. Bump Post feed sort (Architect spec → Dev dispatch)
+3. "Organizer Special" badge on public sale + shopper item view
+4. Price Research Card redesign (spec ready at `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`)
+5. Brand audit fixes — 3 copy bugs, no decisions needed
 
 ---
 
@@ -60,20 +58,19 @@ Full spec: `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`
 
 | Session | Date | Summary |
 |---------|------|---------|
-| S445-B | 2026-04-13 | Workspace invite banner, staff delete, permissions gate, template seed + fix |
-| S445-A | 2026-04-13 | XP economy redesign + 5 P0 fraud gates + Forecast Polls killed |
+| S446 | 2026-04-13 | XP frontend: earning rates, coupon tiers, 3 micro-sinks, organizer discounts, HP webhook |
+| S445 | 2026-04-13 | XP economy redesign + 5 fraud gates + workspace invite flow |
 | S444 | 2026-04-13 | STAFF→MEMBER full rename + workspace permissions fixed |
 | S443 | 2026-04-11 | 9 live-site fixes + command center upgrade + appraisal gating |
 | S442 | 2026-04-11 | WorkspaceSettings schema fix + test data seed (Alice/Carol teams) |
 | S441 | 2026-04-11 | 8-issue fix batch: bounties, achievements, reputation P0, haul posts, price research card |
-| S440 | 2026-04-11 | Massive nav/UX session — bounties V3, subscriptions, leaderboard, messages dual-role |
 
 ---
 
-## Brand Audit (still open from last week)
+## Brand Audit (still open)
 
-- SharePromoteModal generates "estate sale" copy for ALL sale types — 3 audits open
+- SharePromoteModal generates "estate sale" copy for ALL sale types
 - Homepage meta/SEO omits flea markets and consignment
 - Organizer profile meta says "Estate sales by [name]" regardless of sale type
 
-All routable to dev, no decisions needed.
+All dispatch-ready, no decisions needed.

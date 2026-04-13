@@ -24,6 +24,8 @@ import {
   recordQrScan,
   closeAuctionEndpoint,
   getRareFindsItems,
+  applyOrganizerDiscount,
+  removeOrganizerDiscount,
 } from '../controllers/itemController';
 import { getComps } from '../controllers/ebayController'; // Feature #229: eBay price comps
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
@@ -99,6 +101,11 @@ router.post('/:id/release-analysis', authenticate, releaseAnalysis);
 // Feature #229: eBay price comps
 // Declared before /:id to prevent param capture
 router.post('/:id/comps', authenticate, getComps);
+
+// D-XP-003: Organizer-funded item discounts
+// Declared before /:id to prevent param capture
+router.post('/:itemId/organizer-discount', authenticate, applyOrganizerDiscount);
+router.delete('/:itemId/organizer-discount', authenticate, removeOrganizerDiscount);
 
 // Phase 1: Batch Operations Toolkit — Status-safe validation + dry-run + tags operation
 // Declared before /:id to prevent 'bulk' being captured as an item ID.

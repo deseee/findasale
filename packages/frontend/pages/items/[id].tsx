@@ -158,6 +158,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false); // Phase 1: Smart Cart — cross-sale confirmation
   const [pendingCartItem, setPendingCartItem] = useState<any>(null); // Phase 1: Smart Cart
   const [bidModalOpen, setBidModalOpen] = useState(false);
+  const [scoutRevealModalOpen, setScoutRevealModalOpen] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
   // Queries
@@ -242,6 +243,23 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
       refetchFavoriteStatus();
       queryClient.invalidateQueries({ queryKey: ['favorites'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+  });
+
+  // D-XP-006: Scout Reveal mutation
+  const scoutRevealMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.post(`/xp/spend/scout-reveal/${id}`);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      showToast('Scout reveal unlocked! (5 XP spent)', 'success');
+      setScoutRevealModalOpen(false);
+      refetchItem();
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.error || 'Failed to reveal scout info';
+      showToast(message, 'error');
     },
   });
 
@@ -694,6 +712,16 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                     ✓ Mark Sold
                   </button>
                 )}
+                {user && (
+                  <button
+                    onClick={() => setScoutRevealModalOpen(true)}
+                    disabled={scoutRevealMutation.isPending}
+                    title="Spend 5 XP to reveal who was interested first"
+                    className="flex items-center justify-center px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition font-semibold disabled:opacity-50"
+                  >
+                    🔍 Scout (5 XP)
+                  </button>
+                )}
               </div>
 
               {/* Hold-to-Pay: Show payment status card if item is INVOICE_ISSUED */}
@@ -976,6 +1004,36 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 className="px-4 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
               >
                 Start New Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D-XP-006: Scout Reveal Modal */}
+      {scoutRevealModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm p-6">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-gray-50 mb-4">
+              Scout Reveal
+            </h3>
+            <p className="text-warm-700 dark:text-gray-300 mb-6">
+              Spend 5 XP to see who was interested in this item first?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setScoutRevealModalOpen(false)}
+                disabled={scoutRevealMutation.isPending}
+                className="px-4 py-2 rounded border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => scoutRevealMutation.mutate()}
+                disabled={scoutRevealMutation.isPending}
+                className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-medium transition-colors disabled:opacity-50"
+              >
+                {scoutRevealMutation.isPending ? 'Spending...' : 'Spend 5 XP'}
               </button>
             </div>
           </div>

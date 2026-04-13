@@ -206,4 +206,273 @@ router.post(
   }
 );
 
+/**
+ * POST /api/xp/spend/scout-reveal/:itemId
+ * Authenticated shopper endpoint: spend 5 XP to reveal earliest interested flag on an item
+ * Returns: { success: true, remainingXp: number }
+ */
+router.post(
+  '/spend/scout-reveal/:itemId',
+  authenticate,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const { itemId } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      if (!itemId || typeof itemId !== 'string') {
+        return res.status(400).json({ error: 'Missing or invalid itemId' });
+      }
+
+      // Verify item exists
+      const item = await prisma.item.findUnique({
+        where: { id: itemId },
+        select: { id: true, title: true },
+      });
+
+      if (!item) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+
+      // Check if user has already revealed this item
+      const ugcPhoto = await prisma.uGCPhoto.findFirst({
+        where: {
+          itemId: itemId,
+          isHaulPost: false, // Only check actual items, not haul posts
+        },
+      });
+
+      if (ugcPhoto && ugcPhoto.scoutReveals.includes(userId)) {
+        return res.status(400).json({ error: 'You have already revealed this item' });
+      }
+
+      // P0 Exploit Fix: Check spendable XP
+      const spendable = await getSpendableXp(userId);
+      if (spendable < XP_SINKS.RARITY_BOOST) { // Using RARITY_BOOST as placeholder for 5 XP
+        return res.status(400).json({
+          error: 'Insufficient spendable XP. You need 5 XP.',
+          required: 5,
+          available: spendable,
+        });
+      }
+
+      // Spend 5 XP
+      const spent = await spendXp(
+        userId,
+        5,
+        'SCOUT_REVEAL',
+        { description: `Scout reveal for item ${itemId}: ${item.title}` }
+      );
+
+      if (!spent) {
+        return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
+      }
+
+      // Record the reveal in the item (or create a temporary tracking record)
+      // For MVP, we'll update any haul post linked to this item
+      await prisma.uGCPhoto.updateMany({
+        where: {
+          itemId: itemId,
+        },
+        data: {
+          scoutReveals: {
+            push: userId,
+          },
+        },
+      });
+
+      // Get remaining spendable XP
+      const remainingXp = await getSpendableXp(userId);
+
+      return res.status(200).json({
+        success: true,
+        remainingXp,
+      });
+    } catch (error) {
+      console.error('[xpController] POST /scout-reveal error:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * POST /api/xp/spend/haul-unboxing/:ugcPhotoId
+ * Authenticated shopper endpoint: spend 2 XP to unlock celebratory animation for haul post
+ * Returns: { success: true, animationUnlocked: true }
+ */
+router.post(
+  '/spend/haul-unboxing/:ugcPhotoId',
+  authenticate,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const ugcPhotoId = parseInt(req.params.ugcPhotoId, 10);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      if (isNaN(ugcPhotoId)) {
+        return res.status(400).json({ error: 'Invalid ugcPhotoId' });
+      }
+
+      // Verify haul post exists and user owns it
+      const ugcPhoto = await prisma.uGCPhoto.findUnique({
+        where: { id: ugcPhotoId },
+        select: {
+          id: true,
+          userId: true,
+          isHaulPost: true,
+          unboxingAnimationUnlocked: true,
+        },
+      });
+
+      if (!ugcPhoto) {
+        return res.status(404).json({ error: 'Haul post not found' });
+      }
+
+      if (ugcPhoto.userId !== userId) {
+        return res.status(403).json({ error: 'You can only unlock animation on your own haul' });
+      }
+
+      if (!ugcPhoto.isHaulPost) {
+        return res.status(400).json({ error: 'This is not a haul post' });
+      }
+
+      if (ugcPhoto.unboxingAnimationUnlocked) {
+        return res.status(400).json({ error: 'Animation already unlocked for this haul' });
+      }
+
+      // Check spendable XP
+      const spendable = await getSpendableXp(userId);
+      if (spendable < 2) {
+        return res.status(400).json({
+          error: 'Insufficient spendable XP. You need 2 XP.',
+          required: 2,
+          available: spendable,
+        });
+      }
+
+      // Spend 2 XP
+      const spent = await spendXp(
+        userId,
+        2,
+        'HAUL_UNBOXING_ANIMATION',
+        { description: `Haul unboxing animation unlock for post ${ugcPhotoId}` }
+      );
+
+      if (!spent) {
+        return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
+      }
+
+      // Update haul post
+      await prisma.uGCPhoto.update({
+        where: { id: ugcPhotoId },
+        data: {
+          unboxingAnimationUnlocked: true,
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        animationUnlocked: true,
+      });
+    } catch (error) {
+      console.error('[xpController] POST /haul-unboxing error:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * POST /api/xp/spend/bump-post/:ugcPhotoId
+ * Authenticated shopper endpoint: spend 10 XP to bump haul post to feed top for 24 hours
+ * Returns: { success: true, bumpedUntil: ISO string }
+ */
+router.post(
+  '/spend/bump-post/:ugcPhotoId',
+  authenticate,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const ugcPhotoId = parseInt(req.params.ugcPhotoId, 10);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      if (isNaN(ugcPhotoId)) {
+        return res.status(400).json({ error: 'Invalid ugcPhotoId' });
+      }
+
+      // Verify haul post exists and user owns it
+      const ugcPhoto = await prisma.uGCPhoto.findUnique({
+        where: { id: ugcPhotoId },
+        select: {
+          id: true,
+          userId: true,
+          isHaulPost: true,
+          bumpedUntil: true,
+        },
+      });
+
+      if (!ugcPhoto) {
+        return res.status(404).json({ error: 'Haul post not found' });
+      }
+
+      if (ugcPhoto.userId !== userId) {
+        return res.status(403).json({ error: 'You can only bump your own haul posts' });
+      }
+
+      if (!ugcPhoto.isHaulPost) {
+        return res.status(400).json({ error: 'This is not a haul post' });
+      }
+
+      // Check spendable XP
+      const spendable = await getSpendableXp(userId);
+      if (spendable < 10) {
+        return res.status(400).json({
+          error: 'Insufficient spendable XP. You need 10 XP.',
+          required: 10,
+          available: spendable,
+        });
+      }
+
+      // Spend 10 XP
+      const spent = await spendXp(
+        userId,
+        10,
+        'BUMP_POST',
+        { description: `Bump post for haul ${ugcPhotoId}` }
+      );
+
+      if (!spent) {
+        return res.status(400).json({ error: 'Failed to spend XP. Please try again.' });
+      }
+
+      // Calculate 24 hours from now
+      const bumpedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // Update haul post
+      const updatedPhoto = await prisma.uGCPhoto.update({
+        where: { id: ugcPhotoId },
+        data: {
+          bumpedUntil,
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        bumpedUntil: updatedPhoto.bumpedUntil?.toISOString(),
+      });
+    } catch (error) {
+      console.error('[xpController] POST /bump-post error:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 export default router;

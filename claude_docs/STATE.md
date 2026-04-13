@@ -7,95 +7,59 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S445 COMPLETE (2026-04-13):** XP economy redesign + fraud gates (Window A) + workspace invitation flow + template fixes + permissions gates (Window B — concurrent).
+**S446 COMPLETE (2026-04-13):** XP frontend implementation — Hunt Pass UI updated, 3 micro-sinks, organizer-funded discounts, markHuntPassCancellation wired.
 
-**S445-A What shipped (XP/fraud — other window):**
-- **XP Economy Redesign (design/decisions):** Full coupon tier restructure, earning table rebalance, sink repricing, fraud gate spec. All locked in `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md`.
-- **P0-A — Appraisal daily cap:** `appraisalService.ts` + `xpService.ts` — 5/day hard cap on appraisal selection XP (was uncapped; kills cartel farming).
-- **P0-B — Referral validation:** `stripeController.ts` — 500 XP referral bonus only unlocks after referred organizer's first real external buyer (prevents SIM-farm abuse).
-- **P0-C — HP churn + chargeback:** `xpService.ts` + `stripeController.ts` + `couponController.ts` + `xpController.ts` — 72-hour XP hold on purchases, chargeback claw-back on `charge.dispute.created`, 30-day post-HP-cancel redemption hold. Schema: `huntPassCancelledAt` on User, `purchaseId`+`holdUntil` on PointsTransaction.
-- **P0-D — Device fingerprinting:** `authController.ts` + `xpService.ts` + `register.tsx` — browser fingerprint stored at signup; 2+ accounts same device → `fraudSuspect=true`; fraudSuspect accounts blocked from XP awards. Schema: `deviceFingerprint`+`fraudSuspect` on User.
-- **Forecast Polls killed:** Patrick decision 2026-04-13. Michigan MCL §432.201 gambling liability. Never coded; decision logged.
-- **Migrations applied to Railway ✅:** `20260413000001_xp_settlement_hold` + `20260413091213_add_device_fingerprint`.
+**S446 What shipped:**
+- **P1 — markHuntPassCancellation wired:** `stripeController.ts` — `customer.subscription.deleted` handler now calls `markHuntPassCancellation(organizer.user.id)` after tier downgrade. P0-C exploit gate fully closed.
+- **P2+P3 — XP display values updated (6 files):** All hardcoded XP earning rates and coupon tiers updated to locked decisions: hunt-pass.tsx, shopper/dashboard.tsx, faq.tsx, shopper/loyalty.tsx, referral-dashboard.tsx, sales/[id].tsx. Hold completed activity eliminated from UI. Coupon tiers now show 100/200/500 XP thresholds with correct limits.
+- **P4 — Micro-sinks UI:** 3 new XP-spend features for shoppers. Schema: `scoutReveals[]`, `unboxingAnimationUnlocked`, `bumpedUntil` added to UGCPhoto model. Backend: 3 POST endpoints in `xpController.ts` (scout-reveal 5 XP, haul-unboxing 2 XP, bump-post 10 XP). Frontend: Scout Reveal button on item detail page, Unboxing Animation + Bump Post buttons on haul posts page. Migration: `20260413_add_micro_sinks`.
+- **P5 — Organizer-funded discounts:** Schema: `organizerDiscountXp`, `organizerDiscountAmount` on Item. Backend: `POST /api/items/:itemId/organizer-discount` (200/400/500 XP = $2/$4/$5 off) + `DELETE` (remove, no refund). No-stacking rule enforced in `createPaymentIntent()` — organizer discount blocks shopper coupon. Frontend: "Organizer Special" section in `edit-item/[id].tsx` with XP spend selector, balance display, confirmation modal. Migration: `20260413_add_organizer_discount_fields`.
 
-**S445-B What shipped (workspace invitation flow — this window):**
-- **Invitation banner:** `WorkspaceInvitationBanner.tsx` — sage-green banner on organizer dashboard showing pending invites with Accept/Dismiss. Accept calls acceptInvite mutation → toast → redirect to dashboard. Wired into `pages/organizer/dashboard.tsx`.
-- **usePendingWorkspaceInvitations hook:** calls `GET /workspace/invitations/pending` (authenticated), returns pending WorkspaceMember rows where `acceptedAt: null`.
-- **Staff delete endpoint:** `removeStaffMember` service does dual-delete (TeamMember + WorkspaceMember, P2025-safe). `deleteStaff` controller guards OWNER deletion with 403. `DELETE /:workspaceId/staff/:staffId` route wired.
-- **"Already a member" bug fixed:** invite check now checks for active members only (acceptedAt set), not any WorkspaceMember existence.
-- **Owner self-delete hidden:** frontend hides delete button when `member.role === 'OWNER'`; backend returns 403 if target is OWNER.
-- **TeamMember creation on accept:** `acceptInvite` now uses `connectOrCreate` to atomically create TeamMember row when invite is accepted. Previously accepted members appeared in WorkspaceMember but not in staff list.
-- **Workspace page crash fixed:** `getPublicWorkspace` now includes `id`, `role`, `acceptedAt` in members array. Page uses `member.role?.toLowerCase() ?? 'member'` (was crashing on undefined role).
-- **Permissions enforcement:** `workspace/[slug].tsx` computes `isOwner = workspace.owner?.user?.id === user?.id`. Workspace Settings button, + Invite Members, Pending Invitations, and Manage Workspace quick action all gated behind `isOwner`. Non-owner members see read-only team view.
-- **Template apply fixed:** Frontend hook sent `{ templateName }` but backend reads `req.body.template`. Fixed field name in `useWorkspaceSettings.ts`.
-- **Template DB seeded:** `WorkspaceRoleTemplate` table was empty (never seeded). Inserted all 4 templates directly via psycopg2: Empty (0 perms), Solo (22 perms), 2-Person (18 perms), 5-Person (11 perms). No migration needed.
+**S446 ⚠️ Flagged — Bump Post feed sorting not implemented:** `bumpedUntil` is written to DB and set correctly, but the haul posts feed query does NOT yet sort bumped posts to the top. Feature is functional (data persists) but the bump visibility effect won't be felt until the feed query is updated. Needs Architect sign-off on sort strategy before dev dispatch.
 
-**S445 Files changed (total — both windows):**
+**S446 Files changed (15):**
+- `packages/backend/src/controllers/stripeController.ts` — P1 markHuntPassCancellation + P5 no-stacking in createPaymentIntent
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — P2+P3 earning table + coupon tiers
+- `packages/frontend/pages/shopper/dashboard.tsx` — P2+P3 XP tip values
+- `packages/frontend/pages/faq.tsx` — P2+P3 XP earning copy
+- `packages/frontend/pages/shopper/loyalty.tsx` — P2+P3 XP display values
+- `packages/frontend/pages/referral-dashboard.tsx` — P2+P3 referral 500 XP
+- `packages/frontend/pages/sales/[id].tsx` — P2+P3 walk-in 2 XP comment
+- `packages/database/prisma/schema.prisma` — P4 UGCPhoto fields + P5 Item discount fields
+- `packages/database/prisma/migrations/20260413_add_micro_sinks/migration.sql` — NEW
+- `packages/backend/src/controllers/xpController.ts` — P4 scout-reveal/haul-unboxing/bump-post endpoints
+- `packages/frontend/pages/items/[id].tsx` — P4 Scout Reveal UI
+- `packages/frontend/pages/shopper/haul-posts.tsx` — P4 Unboxing Animation + Bump Post UI
+- `packages/database/prisma/migrations/20260413_add_organizer_discount_fields/migration.sql` — NEW
+- `packages/backend/src/controllers/itemController.ts` — P5 applyOrganizerDiscount + removeOrganizerDiscount
+- `packages/backend/src/routes/items.ts` — P5 route wiring
 
-Window A (XP/fraud — 11 files):
-- `packages/database/prisma/schema.prisma` — huntPassCancelledAt, deviceFingerprint, fraudSuspect, purchaseId, holdUntil, 4 new indexes
-- `packages/database/prisma/migrations/20260413000001_xp_settlement_hold/migration.sql` — NEW ✅
-- `packages/database/prisma/migrations/20260413091213_add_device_fingerprint/migration.sql` — NEW ✅
-- `packages/backend/src/controllers/authController.ts` — device fingerprint + fraud detection on signup
-- `packages/backend/src/controllers/couponController.ts` — spendable XP check before coupon generation
-- `packages/backend/src/controllers/stripeController.ts` — referral gate + chargeback claw-back
-- `packages/backend/src/controllers/xpController.ts` — spendable XP check on sink operations
-- `packages/backend/src/services/appraisalService.ts` — appraisal selection daily cap
-- `packages/backend/src/services/xpService.ts` — cap logic, fraud check, spendable XP, HP claw-back
-- `packages/frontend/pages/register.tsx` — device fingerprint collection
-- `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` — NEW: all XP locked decisions
-
-Window B (workspace — 10 files):
-- `packages/backend/src/controllers/workspaceController.ts` — acceptInvite TeamMember connectOrCreate, getPendingInvitations controller, getPublicWorkspace returns members with id/role/acceptedAt
-- `packages/backend/src/routes/workspace.ts` — GET /invitations/pending route added
-- `packages/backend/src/services/staffService.ts` — removeStaffMember dual-delete
-- `packages/backend/src/controllers/staffController.ts` — deleteStaff with OWNER 403 guard
-- `packages/backend/src/routes/staff.ts` — DELETE /:workspaceId/staff/:staffId route
-- `packages/frontend/hooks/useWorkspace.ts` — PendingInvitation interface + usePendingWorkspaceInvitations hook
-- `packages/frontend/components/WorkspaceInvitationBanner.tsx` — NEW
-- `packages/frontend/pages/organizer/dashboard.tsx` — WorkspaceInvitationBanner imported + rendered
-- `packages/frontend/pages/workspace/[slug].tsx` — isOwner gate, crash fix (role?.toLowerCase()), Invite Members CTA (owner-only)
-- `packages/frontend/hooks/useWorkspaceSettings.ts` — templateName → template field name fix
-
-**S445 Window B push block (not yet pushed — include with any other pending changes):**
+**S446 Migrations — Patrick must run:**
 ```powershell
-git add packages/backend/src/controllers/workspaceController.ts
-git add packages/backend/src/routes/workspace.ts
-git add packages/backend/src/services/staffService.ts
-git add packages/backend/src/controllers/staffController.ts
-git add packages/backend/src/routes/staff.ts
-git add packages/frontend/hooks/useWorkspace.ts
-git add packages/frontend/components/WorkspaceInvitationBanner.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/workspace/[slug].tsx
-git add packages/frontend/hooks/useWorkspaceSettings.ts
-git commit -m "feat: workspace invitation banner, staff delete, permissions gate, template fixes"
-.\push.ps1
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
 ```
 
-**S445 Open P0-C piece:** `markHuntPassCancellation()` is built but NOT yet wired to the `customer.subscription.deleted` Stripe webhook event in `stripeController.ts`. Must be added before Hunt Pass goes live. Small targeted edit (~5 lines).
+**S446 QA needed:**
+- Scout Reveal (5 XP): item detail page → "Scout (5 XP)" button → modal → deduct XP → result shown; insufficient XP shows error
+- Haul Unboxing (2 XP): haul post → "Animate (2 XP)" → modal → animation triggers
+- Bump Post (10 XP): haul post → "Bump (10 XP)" → modal → bumpedUntil set (feed sort is pending — verify DB only for now)
+- Organizer-funded discount: edit-item → Organizer Special section visible → spend 200 XP → $2 off badge; checkout blocks shopper coupon when discount active
+- XP earning rates: hunt-pass page shows 2 XP walk-in, 3 XP QR scan, 500 XP referral, 30 XP haul post, 20 XP appraisal selected, 5 XP seller review
 
-**S445 Next session — XP frontend implementation (S446):**
+**S446 Next session (S447):**
 
-Priority 0 — Push Window B changes above if not done yet. Confirm Railway redeploys.
+Priority 1 — Workspace QA (Patrick doing out-of-session). Review results and dispatch fixes.
 
-Priority 1 — Complete P0-C: Wire `markHuntPassCancellation(userId)` to `customer.subscription.deleted` handler in `packages/backend/src/controllers/stripeController.ts`. Find the existing handler, add the call after setting `huntPassActive = false`.
+Priority 2 — Bump Post feed sort: Dispatch Architect to spec haul posts feed sort by `bumpedUntil DESC NULLS LAST`. Then Dev to implement.
 
-Priority 2 — Hunt Pass UI audit + coupon tier update: The Hunt Pass subscription page and any pricing/comparison tables likely show OLD coupon values. Find and update to new tiers:
-  - Tier 1: 100 XP → $0.75 off $10+ (2x standard / 3x HP)
-  - Tier 2: 200 XP → $2.00 off $25+ (2x standard / 3x HP)
-  - Tier 3: 500 XP → $5.00 off $50+ (1x all)
-  Check: `pages/organizer/subscription.tsx`, `components/TierComparisonTable.tsx`, Hunt Pass page, any XP info modal/tooltip.
+Priority 3 — Organizer-funded discount item display: The public sale page and shopper item view should show "Organizer Special: $X off" badge when `organizerDiscountAmount > 0`. Currently only wired in checkout. Dispatch Dev.
 
-Priority 3 — Earning table audit: The Hunt Pass page shows XP earning rates. Update to match locked decisions (walk-in 2 XP not 5, QR scan 3 XP not 12, referral 500 XP not 30, haul post 30 XP not 10, appraisal selected 20 XP not 40, seller review 5 XP not 8). Grep for hardcoded XP values: `grep -r "5 XP\|12 XP\|30 XP\|40 XP\|8 XP" packages/frontend --include="*.tsx"`.
+Priority 4 — Price Research Card redesign: UX spec ready at `claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`. Dispatch Dev to implement.
 
-Priority 4 — Micro-sinks UI: Implement the 3 approved micro-sinks (Scout Reveal 5 XP, Haul Unboxing Animation 2 XP, Bump Post 10 XP). Reference `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` D-XP-006 for full spec.
-
-Priority 5 — Organizer-funded discounts UI: Organizers should be able to spend XP (200 XP = $2 off one item, max $5). Backend logic for the discount mechanic is not yet built — needs both backend route + frontend UI in item management.
-
-Priority 6 — Workspace QA (team invite flow): Verify end-to-end in Chrome — invite sent, banner appears on dashboard, accept → member appears in staff list, non-owner sees read-only workspace page, template apply (5-Person) succeeds without error.
-
-Load `claude_docs/feature-notes/gamedesign-decisions-2026-04-13.md` at session start for full context.
+Priority 5 — Brand audit fixes (3 open items): SharePromoteModal "estate sale" copy, homepage meta, organizer profile meta. All dispatch-ready, no decisions needed.
 
 ---
 

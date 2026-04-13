@@ -218,7 +218,7 @@ const ShopperDashboard = () => {
       RANGER: {
         progressLabel: `${xp} / 2500 XP`,
         untilNextRank: `${xpUntilNext} more XP until Sage`,
-        earnTip: 'Visit sales daily (+5 XP each, once per sale)',
+        earnTip: 'Check in to sales daily (+2 XP each, once per sale)',
         tipDetail: "Daily visits build your streak. You're close to Sage perks.",
         ctaText: 'See Sales Near You',
         ctaHref: '/map',
@@ -422,9 +422,9 @@ const ShopperDashboard = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-md p-3 mb-4 border border-amber-100 dark:border-amber-800">
                   <p className="text-xs text-warm-700 dark:text-warm-300 font-semibold mb-2">XP Actions:</p>
                   <ul className="text-xs text-warm-600 dark:text-warm-400 space-y-1">
-                    <li>• <strong>Visit a sale</strong> +5 XP</li>
-                    <li>• <strong>Scan a Treasure Hunt QR</strong> +25 XP</li>
-                    <li>• <strong>Purchase an item</strong> +1 XP per $</li>
+                    <li>• <strong>Walk-in visit (check-in)</strong> +2 XP</li>
+                    <li>• <strong>Purchase an item</strong> +10 XP per $</li>
+                    <li>• <strong>Haul post published</strong> +30 XP</li>
                   </ul>
                 </div>
                 <p className="text-xs text-amber-700 dark:text-amber-300 mb-4 italic">

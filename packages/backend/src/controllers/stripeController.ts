@@ -15,7 +15,7 @@ import { pushSaleStatus } from '../services/saleStatusService';
 import { sendItemSoldAlert } from '../services/saleAlertEmailService';
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
-import { awardXp, applyHuntPassMultiplier, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
+import { awardXp, applyHuntPassMultiplier, XP_AWARDS, markHuntPassCancellation } from '../services/xpService'; // Explorer's Guild XP awards
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
@@ -421,9 +421,19 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       ? buyerPremiumAmount  // Auction: 5% buyer premium = application_fee
       : Math.round(priceCents * feePercent);  // Regular: 10% platform fee on item + shipping
 
-    let couponId: string | undefined;
+    // D-XP-003: Organizer discount takes priority (no stacking with shopper XP coupon)
+    let organizerDiscountActive = false;
     let discountAmount = 0;
-    if (couponCode) {
+    let couponId: string | undefined;
+
+    // Check if organizer discount is active
+    if (item.organizerDiscountAmount && item.organizerDiscountAmount > 0) {
+      // Organizer discount active — block shopper coupon
+      organizerDiscountActive = true;
+      discountAmount = Math.round(parseFloat(item.organizerDiscountAmount.toString()) * 100);
+      discountAmount = Math.min(discountAmount, priceCents - 50); // Ensure price doesn't go below $0.50
+    } else if (couponCode) {
+      // Organizer discount not active — allow shopper coupon
       const coupon = await prisma.coupon.findUnique({ where: { code: (couponCode as string).trim().toUpperCase() } });
       if (!coupon || coupon.userId !== req.user.id || coupon.status !== 'ACTIVE' || coupon.expiresAt < new Date()) {
         return res.status(400).json({ message: 'Invalid or expired coupon code' });
@@ -460,6 +470,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         ...(affiliateLinkId ? { affiliateLinkId } : {}),
         ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
         ...(couponId ? { couponId } : {}),
+        ...(organizerDiscountActive ? { isOrganizerDiscountActive: 'true' } : {}),
       },
     };
 
@@ -1235,6 +1246,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.error(`[tier-lapse] Failed to process tier lapse for ${roleSubscription.id}:`, err);
         }
       }
+
+      // P0-C: Record Hunt Pass cancellation timestamp (30-day post-cancel XP redemption hold)
+      await markHuntPassCancellation(organizer.user.id);
 
       // Fire async job: send "Tier Lapsed" email
       setImmediate(() => {
