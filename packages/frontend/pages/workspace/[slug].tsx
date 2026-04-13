@@ -24,15 +24,11 @@ interface WorkspaceInternal {
   name: string;
   slug: string;
   createdAt: string;
-  ownerId: string;
-  owner: {
-    id: string;
-    user: { id: string; name?: string; email: string };
-  };
+  ownerId: string;       // Organizer ID
+  ownerUserId: string;   // User ID — used for isOwner check
+  ownerName: string;
   members: WorkspaceMember[];
-  settings?: {
-    description?: string;
-  };
+  description?: string;
 }
 
 export default function WorkspacePage() {
@@ -171,7 +167,7 @@ export default function WorkspacePage() {
             <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
               <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Workspace Owner</p>
               <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mt-1 truncate">
-                {workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown'}
+                {workspace.ownerName || 'Unknown'}
               </p>
             </div>
 
@@ -203,14 +199,12 @@ export default function WorkspacePage() {
               {/* Owner */}
               <div className="mb-4 pb-4 border-b border-warm-200 dark:border-gray-700">
                 <div className="flex items-center gap-3">
-                  {workspace.owner?.id && (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sage-400 to-sage-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                      {(workspace.owner?.user?.name || workspace.owner?.user?.email || 'O')[0].toUpperCase()}
-                    </div>
-                  )}
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sage-400 to-sage-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    {(workspace.ownerName || 'O')[0].toUpperCase()}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">
-                      {workspace.owner?.user?.name || workspace.owner?.user?.email || 'Owner'}
+                      {workspace.ownerName || 'Owner'}
                     </p>
                     <p className="text-xs text-warm-600 dark:text-warm-400">
                       Owner
