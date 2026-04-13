@@ -134,3 +134,37 @@ export const useRemoveWorkspaceMember = () => {
     },
   });
 };
+
+/**
+ * Fetch pending workspace invitations for current user
+ */
+export interface PendingInvitation {
+  id: string;
+  workspaceId: string;
+  organizerId: string;
+  role: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER';
+  invitedAt: string;
+  acceptedAt: string | null;
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+}
+
+export const usePendingWorkspaceInvitations = () => {
+  return useQuery<PendingInvitation[]>({
+    queryKey: ['workspace', 'invitations', 'pending'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/workspace/invitations/pending');
+        return response.data;
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          return [];
+        }
+        throw error;
+      }
+    },
+  });
+};

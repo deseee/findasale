@@ -147,6 +147,27 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getPendingInvitations = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    const pendingInvitations = await prisma.workspaceMember.findMany({
+      where: { organizerId, acceptedAt: null },
+      include: {
+        workspace: {
+          select: { id: true, name: true, slug: true },
+        },
+      },
+      orderBy: { invitedAt: 'desc' },
+    });
+    return res.json(pendingInvitations);
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error fetching pending invitations:', error);
+    return res.status(500).json({ message: 'Failed to fetch pending invitations' });
+  }
+};
+
 export const removeMember = async (req: AuthRequest, res: Response) => {
   try {
     const { organizerId: targetOrganizerId } = req.params;
