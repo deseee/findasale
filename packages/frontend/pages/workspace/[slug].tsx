@@ -39,6 +39,24 @@ export default function WorkspacePage() {
   const router = useRouter();
   const { slug } = router.query;
   const { user, isLoading: authLoading } = useAuth();
+  const { data: myWorkspace } = useQuery({
+    queryKey: ['workspace', 'me'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/workspace');
+        return response.data;
+      } catch (error: any) {
+        if (error.response?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    enabled: !!user && !authLoading,
+  });
+
+  // Extract current user's organizer ID from their workspace membership
+  const currentOrganizerIds = myWorkspace?.members?.map(m => m.organizerId) || [];
 
   const { data: workspace, isLoading, isError } = useQuery({
     queryKey: ['workspace-internal', slug],
@@ -47,10 +65,10 @@ export default function WorkspacePage() {
       try {
         const { data } = await api.get(`/workspace/public/${slug}`);
         // Verify the current user is a member of this workspace
-        if (!user?.organizerProfile?.id) {
+        if (!currentOrganizerIds.length) {
           throw new Error('User not authenticated');
         }
-        const isMember = data?.members?.some((m: any) => m.organizerId === user.organizerProfile.id && m.acceptedAt);
+        const isMember = data?.members?.some((m: any) => currentOrganizerIds.includes(m.organizerId) && m.acceptedAt);
         if (!isMember) {
           throw new Error('You are not a member of this workspace');
         }
@@ -60,7 +78,7 @@ export default function WorkspacePage() {
         throw new Error('Workspace not found or you are not a member');
       }
     },
-    enabled: !!slug && !authLoading && !!user,
+    enabled: !!slug && !authLoading && !!user && currentOrganizerIds.length > 0,
     retry: 1,
   });
 
