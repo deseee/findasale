@@ -419,16 +419,31 @@ export const getWorkspacePermissions = async (req: AuthRequest, res: Response) =
     if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
 
     const { getPermissionsForRole } = await import('../services/workspacePermissionService');
+    const { PERMISSION_CATEGORIES } = await import('../utils/workspacePermissions');
 
     const roles = ['ADMIN', 'MANAGER', 'MEMBER', 'VIEWER'];
-    const result: Record<string, string[]> = {};
+    const result: any[] = [];
 
     for (const role of roles) {
-      const perms = await getPermissionsForRole(workspaceId, role as any);
-      result[role] = perms;
+      const allowedPerms = await getPermissionsForRole(workspaceId, role as any);
+      const allowedSet = new Set(allowedPerms);
+
+      // Build categorized permissions structure
+      const categorizedPerms = PERMISSION_CATEGORIES.map(category => ({
+        category: category.name,
+        permissions: category.permissions.map(action => ({
+          action,
+          allowed: allowedSet.has(action),
+        })),
+      }));
+
+      result.push({
+        role,
+        permissions: categorizedPerms,
+      });
     }
 
-    return res.json({ roles: result });
+    return res.json(result);
   } catch (error) {
     Sentry.captureException(error);
     console.error('Error fetching workspace permissions:', error);

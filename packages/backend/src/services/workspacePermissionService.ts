@@ -45,7 +45,8 @@ export const checkPermission = async (
 
 /**
  * Get all permissions for a role in a workspace
- * Combines custom overrides with defaults
+ * If custom overrides exist, they represent the complete permission state.
+ * If no overrides exist, fall back to defaults.
  */
 export const getPermissionsForRole = async (
   workspaceId: string,
@@ -60,16 +61,14 @@ export const getPermissionsForRole = async (
       },
     });
 
-    const customPermSet = new Set(customPerms.filter(p => p.allowed).map(p => p.action));
+    // If custom overrides exist, they are the source of truth
+    if (customPerms.length > 0) {
+      return customPerms.filter(p => p.allowed).map(p => p.action);
+    }
 
-    // Start with defaults for this role
+    // Otherwise fall back to default role permissions
     const defaultPerms = DEFAULT_ROLE_PERMISSIONS[role] || [];
-
-    // Merge: keep all defaults, plus any custom additions
-    const merged = new Set<string>(defaultPerms);
-    customPerms.filter(p => p.allowed).forEach(p => merged.add(p.action));
-
-    return Array.from(merged);
+    return defaultPerms;
   } catch (error) {
     console.error(`[workspacePermissionService] Error fetching permissions for role ${role}:`, error);
     // Return defaults on error
@@ -79,8 +78,8 @@ export const getPermissionsForRole = async (
 
 /**
  * Set custom permissions for a role in a workspace
- * Replaces any existing custom permissions for this role
- * Note: Does NOT override defaults — adds additional permissions or creates overrides
+ * Stores the COMPLETE permission state (allowed and denied)
+ * Deletes all existing permissions and recreates from the provided list
  */
 export const setPermissionsForRole = async (
   workspaceId: string,
@@ -88,7 +87,7 @@ export const setPermissionsForRole = async (
   permissions: string[]
 ): Promise<void> => {
   try {
-    // Delete existing custom permissions for this role in this workspace
+    // Delete all existing custom permissions for this role in this workspace
     await prisma.workspacePermission.deleteMany({
       where: {
         workspaceId,
@@ -96,21 +95,22 @@ export const setPermissionsForRole = async (
       },
     });
 
-    // Create new custom permissions (only non-default ones)
-    const defaultPerms = DEFAULT_ROLE_PERMISSIONS[role] || [];
-    const customPerms = permissions.filter(p => !defaultPerms.includes(p));
+    // Get all known permission actions to determine allowed/denied state
+    const allPermissions = Object.values(WORKSPACE_PERMISSIONS);
+    const permissionSet = new Set(permissions);
 
-    if (customPerms.length > 0) {
-      await prisma.workspacePermission.createMany({
-        data: customPerms.map(action => ({
-          workspaceId,
-          role,
-          action,
-          allowed: true,
-        })),
-        skipDuplicates: true,
-      });
-    }
+    // Create rows for ALL permissions — allowed if in the list, denied if not
+    const permissionRows = allPermissions.map(action => ({
+      workspaceId,
+      role,
+      action,
+      allowed: permissionSet.has(action),
+    }));
+
+    await prisma.workspacePermission.createMany({
+      data: permissionRows,
+      skipDuplicates: true,
+    });
   } catch (error) {
     console.error(
       `[workspacePermissionService] Error setting permissions for role ${role}:`,
