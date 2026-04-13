@@ -20,6 +20,7 @@ import { processTierLapse, recordTierResumption } from '../services/tierLapseSer
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
+import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -685,6 +686,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     data: { status: 'SOLD' },
                   });
 
+                  // Fire-and-forget: end eBay listing if item was pushed there
+                  endEbayListingIfExists(item.id).catch(err =>
+                    console.error('[eBay] Failed to withdraw offer:', err)
+                  );
+
                   // Update ItemReservation if exists
                   await prisma.itemReservation.updateMany({
                     where: { itemId: item.id, userId: posRequest.shopperUserId },
@@ -1000,6 +1006,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
             where: { id: paymentIntent.metadata.itemId },
             data: { status: 'SOLD' },
           });
+
+          // Fire-and-forget: end eBay listing if item was pushed there
+          endEbayListingIfExists(paymentIntent.metadata.itemId).catch(err =>
+            console.error('[eBay] Failed to withdraw offer:', err)
+          );
 
           if (soldItem) {
             try {
@@ -1461,6 +1472,16 @@ export const webhookHandler = async (req: Request, res: Response) => {
               });
             }
           });
+
+          // Fire-and-forget: end eBay listings if items were marked SOLD
+          if (posPaymentLink.itemIds?.length) {
+            setImmediate(() => {
+              Promise.allSettled(
+                posPaymentLink.itemIds!.map((itemId: string) => endEbayListingIfExists(itemId))
+              ).catch(() => {});
+            });
+          }
+
           console.log(`[pos] Payment link completed via checkout: ${stripePaymentLinkId}`);
         }
       }
@@ -1557,6 +1578,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 },
               ],
             });
+          });
+
+          // Fire-and-forget: end eBay listings if items were marked SOLD
+          setImmediate(() => {
+            Promise.allSettled(
+              holdInvoice.itemIds.map((itemId: string) => endEbayListingIfExists(itemId))
+            ).catch(() => {});
           });
 
           // Award XP to shopper (+15 guildXP for payment completion)

@@ -13,6 +13,7 @@ import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
+import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 
 const stripe = () => getStripe();
 
@@ -585,6 +586,11 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
           where: { id: item.itemId },
           data: { status: 'SOLD' },
         });
+
+        // Fire-and-forget: end eBay listing if item was pushed there
+        endEbayListingIfExists(item.itemId).catch(err =>
+          console.error('[eBay] Failed to withdraw offer:', err)
+        );
       }
     }
 

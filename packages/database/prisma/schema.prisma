@@ -345,6 +345,12 @@ model EbayConnection {
   lastErrorAt      DateTime?
   lastErrorMessage String?
 
+  // Feature #244 Phase 2b: eBay business policy IDs (fetched from eBay Account API after OAuth)
+  paymentPolicyId      String?   // eBay payment policy ID (required for offer publishing)
+  fulfillmentPolicyId  String?   // eBay fulfillment policy ID (required for offer publishing)
+  returnPolicyId       String?   // eBay return policy ID (required for offer publishing)
+  policiesFetchedAt    DateTime? // When policies were last synced from eBay Account API
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -720,6 +726,7 @@ model Item {
   saleTransactions      SaleTransaction[]
   // Feature #244 Phase 2: eBay listing tracking
   ebayListingId         String? // eBay listing ID after successful publish; used for Phase 3 sync
+  ebayOfferId           String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
   listedOnEbayAt        DateTime? // Timestamp when item was pushed to eBay
   // D-XP-003: Organizer-funded item discounts
   organizerDiscountXp   Int?                   @default(0) // XP spent to create discount (0 = no discount)

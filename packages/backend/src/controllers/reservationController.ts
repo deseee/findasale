@@ -7,6 +7,7 @@ import { pushSaleStatus } from '../services/saleStatusService';
 import { sendHoldPlacedAlert, sendHoldStatusToShopper } from '../services/saleAlertEmailService';
 import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetectionService';
 import { getRankBenefits, calculateRankFromXp } from '../utils/rankUtils';
+import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 
 const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
 const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
@@ -635,6 +636,15 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
                 action: emailAction,
               })
             )
+          ).catch(() => {});
+        });
+      }
+
+      // Fire-and-forget: end eBay listings if items were marked SOLD
+      if (action === 'sold') {
+        setImmediate(() => {
+          Promise.allSettled(
+            batchHolds.map((h) => endEbayListingIfExists(h.item.id))
           ).catch(() => {});
         });
       }
