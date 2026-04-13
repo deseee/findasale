@@ -144,13 +144,13 @@ export default function WorkspacePage() {
           </div>
 
           {/* Workspace Description */}
-          {workspace.settings?.description && (
+          {workspace.description && (
             <div className="mb-6 bg-warm-50 dark:bg-gray-700 rounded-lg p-6">
               <h3 className="text-sm font-semibold text-warm-600 dark:text-warm-400 mb-2">
                 About This Workspace
               </h3>
               <p className="text-warm-900 dark:text-warm-100 leading-relaxed">
-                {workspace.settings.description}
+                {workspace.description}
               </p>
             </div>
           )}
