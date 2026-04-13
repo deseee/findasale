@@ -513,8 +513,9 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
 /**
  * Refresh eBay access token if expired
  * Called internally before every eBay API call
+ * Exported for use by ebaySoldSyncCron
  */
-async function refreshEbayAccessToken(organizerId: string): Promise<string | null> {
+export async function refreshEbayAccessToken(organizerId: string): Promise<string | null> {
   try {
     const connection = await prisma.ebayConnection.findUnique({
       where: { organizerId },
@@ -684,7 +685,6 @@ async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: strin
   } catch (error) {
     console.error('[eBay] Error fetching and storing policies:', error);
     // Don't throw — policy fetch failure should not break OAuth callback
-  }
   }
 }
 
@@ -1018,7 +1018,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
     }
 
     // Apply watermark/clean to photos
-    const photos = item.photoUrls.map(url => {
+    const photos = item.photoUrls.map((url: string) => {
       if (photoMode === 'clean') {
         return url; // Return clean URL
       }
@@ -1027,7 +1027,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
 
     // Build aspects from tags
     const aspects: Record<string, string> = {};
-    item.tags.forEach(tag => {
+    item.tags.forEach((tag: string) => {
       const [key, value] = tag.split(':');
       if (key && value) {
         aspects[key] = value;
@@ -1174,7 +1174,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         }
 
         // Prepare photo URLs
-        const photos = item.photoUrls.map(url => {
+        const photos = item.photoUrls.map((url: string) => {
           if (photoMode === 'clean') {
             return url;
           }

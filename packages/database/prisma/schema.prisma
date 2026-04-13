@@ -351,6 +351,9 @@ model EbayConnection {
   returnPolicyId       String?   // eBay return policy ID (required for offer publishing)
   policiesFetchedAt    DateTime? // When policies were last synced from eBay Account API
 
+  // Feature #244 Phase 3: eBay sold sync deduplication
+  lastEbaySoldSyncAt   DateTime? // Last time this connection's sold orders were synced from eBay
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
