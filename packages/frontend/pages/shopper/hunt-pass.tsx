@@ -178,6 +178,21 @@ const HuntPassPage = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Benefit 6: Enhanced Coupon Slots */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl flex-shrink-0">🎫</div>
+                  <div>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                      3x Monthly Coupon Slots
+                    </h3>
+                    <p className="text-warm-600 dark:text-warm-400">
+                      Unlock bonus coupon generation slots. Earn 3 monthly coupons per tier for Tier 1 ($0.75 off) and Tier 2 ($2.00 off) — vs 2 for standard shoppers. Stretch your budget further.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -539,7 +554,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Username Color</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Make your username stand out with a personalized color.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">1,000 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Ranger+ | Permanent</p>
                   </div>
@@ -549,7 +564,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Frame Badge</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Unlock an exclusive rare avatar frame for your profile.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">200 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">2,500 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Sage+ | Permanent | One choice</p>
                   </div>
@@ -567,11 +582,11 @@ const HuntPassPage = () => {
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Profile Showcase Slot</p>
-                        <p className="text-sm text-warm-600 dark:text-warm-400">Pin your favorite haul post to your public profile (2nd & 3rd slots).</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Pin your favorite haul post to your public profile (Bronze, Silver, Gold tiers).</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">50–150 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">250–500 XP</span>
                     </div>
-                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | Permanent | 50 XP for 2nd, 150 XP for 3rd</p>
+                    <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | Permanent | 250 XP Bronze, 350 XP Silver, 500 XP Gold</p>
                   </div>
                 </div>
               </div>
@@ -684,11 +699,11 @@ const HuntPassPage = () => {
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | One-time bridge to paid</p>
                   </div>
-                  <Link href="/shopper/lucky-roll">
+                  <Link href="/shopper/early-access-cache">
                     <div className="px-6 py-4 cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                       <div className="flex justify-between items-start mb-2">
                         <div>
-                          <p className="font-semibold text-warm-900 dark:text-warm-100">Lucky Roll</p>
+                          <p className="font-semibold text-warm-900 dark:text-warm-100">Early Access Cache</p>
                           <p className="text-sm text-warm-600 dark:text-warm-400">Weekly XP gacha with 7 possible rewards. Spin for a chance at big payouts!</p>
                         </div>
                         <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">100 XP</span>

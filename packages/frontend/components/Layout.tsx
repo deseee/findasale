@@ -519,9 +519,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Camera size={16} className="text-indigo-500" />
               <span>Haul Posts</span>
             </Link>
-            <Link href="/shopper/lucky-roll" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP gacha — spend 100 XP for a roll">
+            <Link href="/shopper/early-access-cache" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Spend 100 XP for 48-hour early access to items">
               <Zap size={16} className="text-indigo-500" />
-              <span>Lucky Roll</span>
+              <span>Early Access Cache</span>
             </Link>
 
             <SectionHeader icon={Share2} label="Connect" color="indigo" />
@@ -1238,8 +1238,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/shopper/haul-posts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Camera size={14} className="inline mr-2 text-indigo-500" /> Haul Posts
                         </Link>
-                        <Link href="/shopper/lucky-roll" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Zap size={14} className="inline mr-2 text-indigo-500" /> Lucky Roll
+                        <Link href="/shopper/early-access-cache" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Zap size={14} className="inline mr-2 text-indigo-500" /> Early Access Cache
                         </Link>
                       </>
                     )}

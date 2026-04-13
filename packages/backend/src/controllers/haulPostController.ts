@@ -14,7 +14,11 @@ export const listHaulPosts = async (req: Request, res: Response) => {
 
     const hauls = await prisma.uGCPhoto.findMany({
       where: { isHaulPost: true, status: 'APPROVED' },
-      orderBy: [{ likesCount: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [
+        { bumpedUntil: 'desc' },
+        { likesCount: 'desc' },
+        { createdAt: 'desc' }
+      ],
       skip,
       take: limit,
       include: {
@@ -74,7 +78,11 @@ export const getSaleHaulPosts = async (req: Request, res: Response) => {
     const { saleId } = req.params;
     const hauls = await prisma.uGCPhoto.findMany({
       where: { saleId, isHaulPost: true, status: 'APPROVED' },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { bumpedUntil: 'desc' },
+        { likesCount: 'desc' },
+        { createdAt: 'desc' }
+      ],
       include: { user: { select: { id: true, name: true } } },
     });
     res.json(hauls);

@@ -407,10 +407,10 @@ router.post('/me/showcase-slot/unlock', authenticate, async (req: AuthRequest, r
     let newSlotCount: number;
 
     if (user.showcaseSlots === 1) {
-      costXp = 50;
+      costXp = 250; // Bronze slot — D-XP-005
       newSlotCount = 2;
     } else if (user.showcaseSlots === 2) {
-      costXp = 150;
+      costXp = 350; // Silver slot — D-XP-005
       newSlotCount = 3;
     } else {
       return res.status(400).json({ message: 'All showcase slots already unlocked.' });

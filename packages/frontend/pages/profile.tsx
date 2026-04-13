@@ -220,7 +220,7 @@ const ProfilePage = () => {
                       >
                         <span className="text-2xl mb-1">🔒</span>
                         <span className="text-xs text-center text-warm-500 dark:text-warm-500">
-                          {slotIndex === 1 ? '50 XP' : '150 XP'}
+                          {slotIndex === 1 ? '250 XP' : slotIndex === 2 ? '350 XP' : '500 XP'}
                         </span>
                       </div>
                     )}
