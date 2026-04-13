@@ -224,10 +224,30 @@ const AvatarDropdown: React.FC = () => {
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
               {user.email}
             </p>
-            {/* Rank badge — fetch fresh from API, not stale JWT */}
+            {/* Rank badge + XP progress — fetch fresh from API, not stale JWT */}
             {freshExplorerRank && (
-              <div className="mt-2">
+              <div className="mt-2 space-y-1.5">
                 <RankBadge rank={freshExplorerRank as ExplorerRank} size="sm" />
+                {xpProfile?.rankProgress && (
+                  <div className="w-full">
+                    <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mb-0.5">
+                      <span>{xpProfile.rankProgress.currentXp} XP</span>
+                      {xpProfile.rankProgress.nextRank && (
+                        <span>{xpProfile.rankProgress.nextRankXp} XP</span>
+                      )}
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
+                      <div
+                        className="bg-sage-500 h-1.5 rounded-full transition-all duration-300"
+                        style={{
+                          width: xpProfile.rankProgress.nextRank
+                            ? `${Math.min((xpProfile.rankProgress.currentXp / xpProfile.rankProgress.nextRankXp) * 100, 100)}%`
+                            : '100%',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

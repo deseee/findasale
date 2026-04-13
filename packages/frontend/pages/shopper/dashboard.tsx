@@ -54,6 +54,7 @@ const ShopperDashboard = () => {
   const [isGuildOnboardingDismissed, setIsGuildOnboardingDismissed] = useState(false);
   const [referralLink, setReferralLink] = useState<string | null>(null);
   const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
@@ -338,32 +339,35 @@ const ShopperDashboard = () => {
             </div>
           )}
 
-          {/* My QR Code — Show this at checkout */}
-          {shopperQRCodeDataUrl && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
-              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">📱 My QR Code</h2>
-              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
-                Show this to the organizer at checkout to instantly load your active holds and cart items.
-              </p>
-              <div className="flex justify-center mb-4">
-                <img
-                  src={shopperQRCodeDataUrl}
-                  alt="Your personal QR code for checkout"
-                  className="w-48 h-48 border-2 border-warm-200 dark:border-gray-600 rounded-lg"
-                />
-              </div>
-              <p className="text-xs text-warm-500 dark:text-warm-500 text-center">
-                Scan to verify your account and active holds at POS
-              </p>
-            </div>
-          )}
-
-          {/* Action Bar */}
-          <ActionBar className="mb-8" />
-
-          {/* Gamification Section */}
+          {/* Gamification Section — Reordered */}
           <div className="space-y-6 mb-8">
-            {/* Guild Onboarding Card - Show only for Initiate + Scout, hide for Ranger+ */}
+            {/* 1. Hero Section - Character Sheet (MOVED UP) */}
+            {xpProfile && !xpLoading ? (
+              <>
+                <RankHeroSection
+                  rank={xpProfile.explorerRank}
+                  guildXp={xpProfile.guildXp}
+                  xpToNext={RANK_THRESHOLDS[xpProfile.explorerRank]}
+                  xpPercent={(xpProfile.rankProgress.currentXp / RANK_THRESHOLDS[xpProfile.explorerRank]) * 100}
+                  userName={user?.firstName || user?.name || 'Explorer'}
+                />
+
+                {/* Rank Leveling Hint */}
+                <RankLevelingHint
+                  rank={xpProfile.explorerRank}
+                  currentXp={xpProfile.rankProgress.currentXp}
+                  nextRankXp={RANK_THRESHOLDS[xpProfile.explorerRank]}
+                  nextRank={xpProfile.rankProgress.nextRank}
+                />
+              </>
+            ) : (
+              <Skeleton className="h-64" />
+            )}
+
+            {/* 2. Action Bar */}
+            <ActionBar className="mb-8" />
+
+            {/* 3. Guild Onboarding Card - Show only for Initiate + Scout, hide for Ranger+ */}
             {xpProfile && !xpLoading && !isGuildOnboardingDismissed && (xpProfile.explorerRank === 'INITIATE' || xpProfile.explorerRank === 'SCOUT') && (
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-6 relative">
                 <button
@@ -401,7 +405,7 @@ const ShopperDashboard = () => {
               </div>
             )}
 
-            {/* Streak Widget - Visible for Scout+ only */}
+            {/* 4. Streak Widget - Visible for Scout+ only */}
             {xpProfile && !xpLoading && xpProfile.explorerRank !== 'INITIATE' && (
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6">
                 <p className="text-sm text-warm-600 dark:text-warm-400 mb-4 italic">
@@ -411,30 +415,7 @@ const ShopperDashboard = () => {
               </div>
             )}
 
-            {/* Hero Section - Character Sheet */}
-            {xpProfile && !xpLoading ? (
-              <>
-                <RankHeroSection
-                  rank={xpProfile.explorerRank}
-                  guildXp={xpProfile.guildXp}
-                  xpToNext={RANK_THRESHOLDS[xpProfile.explorerRank]}
-                  xpPercent={(xpProfile.rankProgress.currentXp / RANK_THRESHOLDS[xpProfile.explorerRank]) * 100}
-                  userName={user?.firstName || user?.name || 'Explorer'}
-                />
-
-                {/* Rank Leveling Hint */}
-                <RankLevelingHint
-                  rank={xpProfile.explorerRank}
-                  currentXp={xpProfile.rankProgress.currentXp}
-                  nextRankXp={RANK_THRESHOLDS[xpProfile.explorerRank]}
-                  nextRank={xpProfile.rankProgress.nextRank}
-                />
-              </>
-            ) : (
-              <Skeleton className="h-64" />
-            )}
-
-            {/* Hunt Pass CTA — Rank-Aware (hidden for GRANDMASTER) */}
+            {/* 5. Hunt Pass CTA — Rank-Aware (hidden for GRANDMASTER) */}
             {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' ? (
               <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-300 dark:border-purple-600 rounded-lg p-6">
                 <div className="flex items-start gap-4">
@@ -483,7 +464,7 @@ const ShopperDashboard = () => {
               </div>
             ) : null}
 
-            {/* Referral Card — Share & Earn */}
+            {/* 6. Referral Card — Share & Earn */}
             {user && !isReferralDismissed && (
               <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-300 dark:border-blue-600 rounded-lg p-6">
                 <div className="flex items-start gap-4">
@@ -519,6 +500,36 @@ const ShopperDashboard = () => {
                     </svg>
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* 7. My QR Code — Collapsible (MOVED DOWN, MADE COLLAPSIBLE) */}
+            {shopperQRCodeDataUrl && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
+                <button
+                  onClick={() => setQrOpen(!qrOpen)}
+                  className="w-full flex items-center justify-between p-0 text-left"
+                >
+                  <span className="text-xl font-bold text-warm-900 dark:text-warm-100">🔳 My QR Code</span>
+                  <span className="text-warm-500 text-sm">{qrOpen ? '▲ Hide' : '▼ Show'}</span>
+                </button>
+                {qrOpen && (
+                  <div className="mt-4">
+                    <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+                      Show this to the organizer at checkout to instantly load your active holds and cart items.
+                    </p>
+                    <div className="flex justify-center mb-4">
+                      <img
+                        src={shopperQRCodeDataUrl}
+                        alt="Your personal QR code for checkout"
+                        className="w-48 h-48 border-2 border-warm-200 dark:border-gray-600 rounded-lg"
+                      />
+                    </div>
+                    <p className="text-xs text-warm-500 dark:text-warm-500 text-center">
+                      Scan to verify your account and active holds at POS
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
