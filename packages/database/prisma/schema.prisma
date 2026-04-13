@@ -62,6 +62,8 @@ model User {
   huntPassActive               Boolean                @default(false)
   huntPassExpiry               DateTime?
   huntPassCancelledAt          DateTime? // P0 Exploit Fix: timestamp when HP was cancelled, for XP redemption hold
+  huntPassStripeCustomerId     String? // Stripe Customer for HP billing (shopper-side, separate from organizer)
+  huntPassStripeSubscriptionId String? // Active HP Stripe Subscription ID; null = not subscribed
   userStreaks                  UserStreak[]
   wishlists                    Wishlist[]
   createdPools                 BuyingPool[]           @relation("CreatedPools")
