@@ -583,7 +583,7 @@ const SaleDetailPage = () => {
                 Save {(() => {
                   const discounts = sale.items
                     .filter((item) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
-                    .map((item) => item.organizerDiscountAmount);
+                    .map((item) => item.organizerDiscountAmount as number);
                   const maxDiscount = Math.max(...discounts);
                   return `up to $${maxDiscount.toFixed(2)}`;
                 })()} on select items at this sale!
