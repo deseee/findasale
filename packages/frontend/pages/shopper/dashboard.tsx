@@ -315,27 +315,11 @@ const ShopperDashboard = () => {
                   </Link>
                 </div>
               )}
-
-              {/* Personalized hook: Priority 2 - Collections summary (if no pending payments) */}
-              {(!pendingInvoices || pendingInvoices.length === 0) && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 mb-6 rounded">
-                  <p className="text-blue-900 dark:text-blue-300 font-semibold">
-                    You have items saved. Ready to continue your hunt?
-                  </p>
-                  <Link
-                    href="/shopper/wishlist"
-                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold underline text-sm mt-2 inline-block"
-                  >
-                    View Your Collections →
-                  </Link>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Gamification Section — Reordered */}
-          <div className="space-y-6 mb-8">
-            {/* 1. Hero Section - Character Sheet (MOVED UP) */}
+          {/* 1. Rank/XP Hero Card */}
+          <div className="mb-8">
             {xpProfile && !xpLoading ? (
               <RankHeroSection
                 rank={xpProfile.explorerRank}
@@ -347,96 +331,49 @@ const ShopperDashboard = () => {
             ) : (
               <Skeleton className="h-64" />
             )}
-
-            {/* 2. Action Bar */}
-            <ActionBar className="mb-8" />
-
-            {/* 3. My QR Code — POS Checkout (collapsible, always near top) */}
-            {shopperQRCodeDataUrl && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8">
-                <button
-                  onClick={() => setQrOpen(!qrOpen)}
-                  className="w-full flex items-center justify-between p-0 text-left"
-                >
-                  <span className="text-xl font-bold text-warm-900 dark:text-warm-100">🔳 My QR Code</span>
-                  <span className="text-warm-500 text-sm">{qrOpen ? '▲ Hide' : '▼ Show'}</span>
-                </button>
-                {qrOpen && (
-                  <div className="mt-4">
-                    <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
-                      Show this to the organizer at checkout to instantly load your active holds and cart items.
-                    </p>
-                    <div className="flex justify-center mb-4">
-                      <img
-                        src={shopperQRCodeDataUrl}
-                        alt="Your personal QR code for checkout"
-                        className="w-48 h-48 border-2 border-warm-200 dark:border-gray-600 rounded-lg"
-                      />
-                    </div>
-                    <p className="text-xs text-warm-500 dark:text-warm-500 text-center">
-                      Scan to verify your account and active holds at POS
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 4. Streak Widget - Visible for Scout+ only */}
-            {xpProfile && !xpLoading && xpProfile.explorerRank !== 'INITIATE' && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6">
-                <p className="text-sm text-warm-600 dark:text-warm-400 mb-4 italic">
-                  Visit one sale per week to keep your streak alive and earn bonus XP.
-                </p>
-                <StreakWidget />
-              </div>
-            )}
-
-            {/* 5. Hunt Pass CTA — Rank-Aware (hidden for GRANDMASTER) - Compact Strip */}
-            {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' && (
-              <div className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg px-4 py-3 mb-4">
-                <span className="text-sm text-purple-800 dark:text-purple-200">
-                  ⭐ <strong>Hunt Pass</strong> — earn 1.5x XP on every purchase
-                </span>
-                <Link
-                  href="/shopper/hunt-pass"
-                  className="text-sm font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-100 whitespace-nowrap ml-4"
-                >
-                  $4.99/mo →
-                </Link>
-              </div>
-            )}
-            {user && user.huntPassActive && (
-              <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-4 py-2 mb-4">
-                <span className="text-green-700 dark:text-green-300 text-sm">✓ Hunt Pass active — you're earning 1.5x XP</span>
-              </div>
-            )}
-
-            {/* 6. Referral Card — Share & Earn - Compact Strip */}
-            {user && !isReferralDismissed && (
-              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-3 mb-4">
-                <span className="text-sm text-amber-800 dark:text-amber-200">
-                  🎁 Refer a friend — you both earn 20 XP when they make their first purchase
-                </span>
-                <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                  <button
-                    onClick={handleCopyReferralLink}
-                    disabled={!referralLink}
-                    className="text-sm font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 disabled:text-gray-400"
-                  >
-                    Copy link
-                  </button>
-                  <button
-                    onClick={handleDismissReferral}
-                    className="text-amber-400 hover:text-amber-600 dark:text-amber-600 dark:hover:text-amber-400"
-                    aria-label="Dismiss"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            )}
-
           </div>
+
+          {/* 2. Action buttons row (Browse Sales, Collections, Purchase History, Treasure Trails, My QR) */}
+          <ActionBar className="mb-8" onQrClick={() => setQrOpen(!qrOpen)} />
+
+          {/* 3. QR expanded panel (immediately below buttons, only when qrOpen === true) */}
+          {shopperQRCodeDataUrl && qrOpen && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8 w-full">
+              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+                Show this to the organizer at checkout to instantly load your active holds and cart items.
+              </p>
+              <div className="flex justify-center mb-4">
+                <img
+                  src={shopperQRCodeDataUrl}
+                  alt="Your personal QR code for checkout"
+                  className="w-48 h-48 border-2 border-warm-200 dark:border-gray-600 rounded-lg"
+                />
+              </div>
+              <p className="text-xs text-warm-500 dark:text-warm-500 text-center">
+                Scan to verify your account and active holds at POS
+              </p>
+            </div>
+          )}
+
+          {/* 4. Hunt Pass CTA strip (keep it slim) */}
+          {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' && (
+            <div className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg px-4 py-3 mb-6">
+              <span className="text-sm text-purple-800 dark:text-purple-200">
+                ⭐ <strong>Hunt Pass</strong> — earn 1.5x XP on every purchase
+              </span>
+              <Link
+                href="/shopper/hunt-pass"
+                className="text-sm font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-100 whitespace-nowrap ml-4"
+              >
+                $4.99/mo →
+              </Link>
+            </div>
+          )}
+          {user && user.huntPassActive && (
+            <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-4 py-2 mb-6">
+              <span className="text-green-700 dark:text-green-300 text-sm">✓ Hunt Pass active — you're earning 1.5x XP</span>
+            </div>
+          )}
 
 
           {/* Tabs */}
@@ -537,8 +474,8 @@ const ShopperDashboard = () => {
 
               <ActivitySummary />
 
-              {/* SalesNearYou hides itself on error state */}
-              <SalesNearYou />
+              {/* SalesNearYou hidden per Patrick feedback — feature not working */}
+              {false && <SalesNearYou />}
 
               <FlashDealsBanner />
             </div>

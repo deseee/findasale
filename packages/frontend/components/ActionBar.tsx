@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { QrCode } from 'lucide-react';
 
 interface ActionBarProps {
   className?: string;
+  onQrClick?: () => void;
 }
 
 const ACTION_ITEMS = [
@@ -30,9 +32,15 @@ const ACTION_ITEMS = [
     icon: '🗺️',
     href: '/shopper/trails',
   },
+  {
+    id: 'qr',
+    label: 'My QR',
+    icon: null, // uses lucide icon
+    action: 'qr',
+  },
 ];
 
-export const ActionBar: React.FC<ActionBarProps> = ({ className = '' }) => {
+export const ActionBar: React.FC<ActionBarProps> = ({ className = '', onQrClick }) => {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   const moreItems = [
@@ -55,20 +63,36 @@ export const ActionBar: React.FC<ActionBarProps> = ({ className = '' }) => {
 
   return (
     <div className={`bg-white border border-warm-200 dark:bg-gray-800 dark:border-gray-700 rounded-lg p-3 hover:shadow-md transition-shadow ${className}`}>
-      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+      <div className="grid grid-cols-5 gap-2">
         {/* Main action items */}
-        {ACTION_ITEMS.map((item) => (
-          <Link
-            key={item.id}
-            href={item.href}
-            className="flex flex-col items-center justify-center p-3 rounded-lg bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors"
-          >
-            <span className="text-xl mb-1">{item.icon}</span>
-            <span className="text-xs font-semibold text-warm-900 dark:text-warm-100 text-center">
-              {item.label}
-            </span>
-          </Link>
-        ))}
+        {ACTION_ITEMS.map((item) => {
+          if (item.action === 'qr') {
+            return (
+              <button
+                key={item.id}
+                onClick={onQrClick}
+                className="flex flex-col items-center justify-center p-3 rounded-lg bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors"
+              >
+                <QrCode className="w-5 h-5 mb-1" />
+                <span className="text-xs font-semibold text-warm-900 dark:text-warm-100 text-center">
+                  {item.label}
+                </span>
+              </button>
+            );
+          }
+          return (
+            <Link
+              key={item.id}
+              href={item.href || '#'}
+              className="flex flex-col items-center justify-center p-3 rounded-lg bg-warm-50 dark:bg-gray-700 hover:bg-warm-100 dark:hover:bg-gray-600 transition-colors"
+            >
+              <span className="text-xl mb-1">{item.icon}</span>
+              <span className="text-xs font-semibold text-warm-900 dark:text-warm-100 text-center">
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
 
         {/* More menu */}
         <div className="relative">
