@@ -451,7 +451,7 @@ const ShopperDashboard = () => {
                         <strong>Get 6-hour early access to Legendary Items</strong> — you're almost at Sage!
                       </p>
                     )}
-                    {(xpProfile.explorerRank === 'SAGE' || xpProfile.explorerRank === 'GRANDMASTER') && (
+                    {xpProfile.explorerRank === 'SAGE' && (
                       <p className="text-sm text-purple-800 dark:text-purple-200 mb-4">
                         <strong>Join the Collector's League</strong> — unlock exclusive Sage perks and premium features.
                       </p>
