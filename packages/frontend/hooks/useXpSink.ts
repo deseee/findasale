@@ -16,7 +16,9 @@ interface UseXpSinkOptions {
 /**
  * useXpSink — hook for spending XP on sinks (rarity boost, coupon generation)
  * Handles loading, error, and success states for XP sink endpoints.
- * Syncs rank updates to AuthContext after successful spends.
+ * Syncs XP updates to AuthContext after successful spends.
+ * Note: explorerRank is no longer cached in AuthContext (S450 P0 fix).
+ * Rank is fetched fresh from /api/xp/profile via useXpProfile().
  */
 export const useXpSink = (options?: UseXpSinkOptions) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -32,10 +34,9 @@ export const useXpSink = (options?: UseXpSinkOptions) => {
         saleId,
       });
 
-      // Update context if rank changed
-      if (response.data?.newRank) {
+      // Update guildXp in context if provided (rank refreshes via useXpProfile)
+      if (response.data?.remainingXp !== undefined) {
         updateUser({
-          explorerRank: response.data.newRank,
           guildXp: response.data.remainingXp,
         });
       }
@@ -74,10 +75,9 @@ export const useXpSink = (options?: UseXpSinkOptions) => {
     try {
       const response = await api.post('/xp/sink/coupon', {});
 
-      // Update context if rank changed
-      if (response.data?.newRank) {
+      // Update guildXp in context if provided (rank refreshes via useXpProfile)
+      if (response.data?.remainingXp !== undefined) {
         updateUser({
-          explorerRank: response.data.newRank,
           guildXp: response.data.remainingXp,
         });
       }
