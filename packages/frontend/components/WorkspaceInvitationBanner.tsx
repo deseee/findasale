@@ -32,7 +32,7 @@ const WorkspaceInvitationBanner: React.FC = () => {
       await acceptMutation.mutateAsync();
       showToast(`You've joined ${invitation.workspace.name}!`, 'success');
       setTimeout(() => {
-        router.push('/organizer/dashboard');
+        router.push('/organizer/staff');
       }, 500);
     } catch (error: any) {
       showToast('Failed to accept invitation. Please try again.', 'error');
