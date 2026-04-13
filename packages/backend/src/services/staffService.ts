@@ -340,6 +340,24 @@ export const getPerformanceSnapshot = async (
 };
 
 /**
+ * Remove a team member from workspace
+ */
+export const removeStaffMember = async (staffId: string) => {
+  try {
+    // Delete the team member (availability and performances will cascade)
+    const deleted = await prisma.teamMember.delete({
+      where: { id: staffId }
+    });
+
+    return { success: true, deletedId: staffId };
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error removing team member:', error);
+    throw error;
+  }
+};
+
+/**
  * Verify team member belongs to workspace
  */
 export const verifyStaffBelongsToWorkspace = async (
