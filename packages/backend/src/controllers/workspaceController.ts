@@ -118,11 +118,19 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
 
     // Check if already invited or member
     const existingUser = await prisma.user.findUnique({ where: { email }, include: { organizer: { select: { id: true } } } });
-    if (existingUser && existingUser.organizer) {
-      const existingMember = await prisma.workspaceMember.findUnique({
-        where: { workspaceId_organizerId: { workspaceId: workspace.id, organizerId: existingUser.organizer.id } },
+    if (existingUser) {
+      // Check by organizerId if they're an organizer, or by userId otherwise
+      const existingMember = await prisma.workspaceMember.findFirst({
+        where: {
+          workspaceId: workspace.id,
+          acceptedAt: { not: null },
+          OR: [
+            ...(existingUser.organizer ? [{ organizerId: existingUser.organizer.id }] : []),
+            { userId: existingUser.id },
+          ],
+        },
       });
-      if (existingMember && existingMember.acceptedAt) {
+      if (existingMember) {
         return res.status(400).json({ message: 'Already a member' });
       }
     }
@@ -172,9 +180,20 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
 
 export const acceptInvite = async (req: AuthRequest, res: Response) => {
   try {
-    const organizerId = req.user?.organizerProfile?.id;
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
-    const member = await prisma.workspaceMember.findFirst({ where: { organizerId, acceptedAt: null } });
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    // Find pending membership by userId or organizerId
+    const organizer = await prisma.organizer.findUnique({ where: { userId } });
+    const member = await prisma.workspaceMember.findFirst({
+      where: {
+        acceptedAt: null,
+        OR: [
+          ...(organizer ? [{ organizerId: organizer.id }] : []),
+          { userId },
+        ],
+      },
+    });
     if (!member) return res.status(404).json({ message: 'No pending invitations' });
 
     // Update WorkspaceMember and create TeamMember in same transaction
@@ -192,7 +211,11 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
           }
         }
       },
-      include: { workspace: true, organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } } },
+      include: {
+        workspace: true,
+        organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } },
+        user: { select: { id: true, name: true, email: true } }
+      },
     });
     return res.json(updated);
   } catch (error) {
@@ -204,10 +227,20 @@ export const acceptInvite = async (req: AuthRequest, res: Response) => {
 
 export const getPendingInvitations = async (req: AuthRequest, res: Response) => {
   try {
-    const organizerId = req.user?.organizerProfile?.id;
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    // Find organizer if user has one
+    const organizer = await prisma.organizer.findUnique({ where: { userId } });
+
     const pendingInvitations = await prisma.workspaceMember.findMany({
-      where: { organizerId, acceptedAt: null },
+      where: {
+        acceptedAt: null,
+        OR: [
+          ...(organizer ? [{ organizerId: organizer.id }] : []),
+          { userId },
+        ],
+      },
       include: {
         workspace: {
           select: { id: true, name: true, slug: true },
@@ -662,28 +695,17 @@ export const acceptMagicLinkInvite = async (req: AuthRequest, res: Response) => 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Find or create Organizer
-    let organizer = await prisma.organizer.findUnique({ where: { userId: user.id } });
-    if (!organizer) {
-      organizer = await prisma.organizer.create({
-        data: {
-          userId: user.id,
-          subscriptionTier: 'SIMPLE',
-          subscriptionStatus: null,
-          businessName: user.name || user.email,
-          phone: '',
-          address: '',
-        },
-      });
-    }
+    // Find organizer if user has one
+    const organizer = await prisma.organizer.findUnique({ where: { userId: user.id } });
 
     // Create WorkspaceMember in transaction with invite deletion
+    // Use organizerId if they're an organizer, userId otherwise
     await prisma.$transaction(async (tx: any) => {
       // Create member
       await tx.workspaceMember.create({
         data: {
           workspaceId: invite.workspace.id,
-          organizerId: organizer.id,
+          ...(organizer ? { organizerId: organizer.id } : { userId: user.id }),
           role: invite.role,
           acceptedAt: new Date(),
         },
@@ -707,14 +729,20 @@ export const acceptMagicLinkInvite = async (req: AuthRequest, res: Response) => 
 
 export const getMyWorkspaceMemberships = async (req: AuthRequest, res: Response) => {
   try {
-    const organizerId = req.user?.organizerProfile?.id;
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    // Find all workspaces where this organizer is a member (not the owner)
+    // Find organizer if user has one
+    const organizer = await prisma.organizer.findUnique({ where: { userId } });
+
+    // Find all workspaces where this user is a member (not the owner)
     const memberships = await prisma.workspaceMember.findMany({
       where: {
-        organizerId,
         acceptedAt: { not: null }, // Only accepted invitations
+        OR: [
+          ...(organizer ? [{ organizerId: organizer.id }] : []),
+          { userId },
+        ],
       },
       include: {
         workspace: {
@@ -728,7 +756,8 @@ export const getMyWorkspaceMemberships = async (req: AuthRequest, res: Response)
       },
     });
 
-    // Filter out workspaces where this organizer is the owner
+    // Filter out workspaces where this user (if organizer) is the owner
+    const organizerId = organizer?.id;
     const teamWorkspaces = memberships
       .filter((m: any) => m.workspace.ownerId !== organizerId)
       .map((m: any) => ({

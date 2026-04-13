@@ -217,6 +217,8 @@ model User {
   showcaseSlots Int            @default(1) // How many showcase slots unlocked (1 free, +1 at 50 XP, +1 more at 150 XP)
   showcases     UserShowcase[]
 
+  workspaceMemberships WorkspaceMember[] @relation("UserWorkspaceMemberships")
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
@@ -1846,17 +1848,21 @@ model OrganizerWorkspace {
 model WorkspaceMember {
   id          String             @id @default(cuid())
   workspaceId String
-  organizerId String
+  organizerId String?
+  userId      String?
   role        WorkspaceRole      @default(MEMBER)
   invitedAt   DateTime           @default(now())
   acceptedAt  DateTime?
   workspace   OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  organizer   Organizer          @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer   Organizer?         @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade)
+  user        User?              @relation("UserWorkspaceMemberships", fields: [userId], references: [id], onDelete: Cascade)
   teamMember  TeamMember?
 
   @@unique([workspaceId, organizerId])
+  @@unique([workspaceId, userId])
   @@index([workspaceId])
   @@index([organizerId])
+  @@index([userId])
 }
 
 model WorkspaceInvite {
