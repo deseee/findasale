@@ -102,7 +102,7 @@ export default function WorkspacePage() {
   }
 
   const acceptedMembers = workspace.members.filter((m) => m.acceptedAt !== null);
-  const isOwner = workspace.owner?.user?.id === user?.id;
+  const isOwner = workspace.ownerUserId === user?.id;
   const createdDate = new Date(workspace.createdAt).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
