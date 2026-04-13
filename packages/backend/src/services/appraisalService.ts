@@ -120,7 +120,8 @@ export const submitResponse = async (
  * Median = (sum of all lows + sum of all highs) / (2 * count)
  * Confidence = min(((responseCount - 5) * 5), 100)
  *
- * P0 SECURITY FIX: Award 20 XP to each responder, with a daily cap of 5 selections (100 XP/day)
+ * P0 SECURITY FIX: Award 20 XP to each responder, with a hard platform cap of 5 appraisal selections per day per user
+ * Once a user has been awarded for 5 appraisal selections in a calendar day (UTC), no more XP is awarded for that day
  */
 export const calculateConsensus = async (requestId: string) => {
   try {
@@ -163,26 +164,40 @@ export const calculateConsensus = async (requestId: string) => {
       data: { status: 'COMPLETED' },
     });
 
-    // Award XP to each responder (20 XP per selection, capped at 5 selections/day = 100 XP/day)
+    // Award XP to each responder (20 XP per selection, hard cap of 5 selections/day)
     const XP_AWARD_AMOUNT = 20;
+    const MAX_SELECTIONS_PER_DAY = 5;
     const awardedResponders: string[] = [];
     const cappedResponders: string[] = [];
 
+    // Get today's UTC day boundary
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
     for (const response of responses) {
       try {
-        // Check daily cap for this responder
-        const remainingDaily = await checkDailyXpCap(response.responderId, 'APPRAISAL_SELECTED');
+        // Count how many appraisal selections this user has already had awarded today
+        const todaySelections = await prisma.pointsTransaction.count({
+          where: {
+            userId: response.responderId,
+            type: 'APPRAISAL_SELECTED',
+            createdAt: {
+              gte: today,
+            },
+          },
+        });
 
-        if (remainingDaily >= XP_AWARD_AMOUNT) {
-          // Award XP
-          await awardXp(response.responderId, 'APPRAISAL_SELECTED', XP_AWARD_AMOUNT, {
-            description: `Appraisal response selected in consensus for request ${requestId}`,
-          });
-          awardedResponders.push(response.responderId);
-        } else {
-          // Daily cap reached
+        // Check if user has already reached the 5-selection cap for today
+        if (todaySelections >= MAX_SELECTIONS_PER_DAY) {
           cappedResponders.push(response.responderId);
+          continue;
         }
+
+        // Award XP
+        await awardXp(response.responderId, 'APPRAISAL_SELECTED', XP_AWARD_AMOUNT, {
+          description: `Appraisal response selected in consensus for request ${requestId}`,
+        });
+        awardedResponders.push(response.responderId);
       } catch (xpError) {
         console.error(
           `[AppraisalService] Failed to award XP to responder ${response.responderId}:`,
@@ -193,7 +208,7 @@ export const calculateConsensus = async (requestId: string) => {
     }
 
     console.log(
-      `[AppraisalService] Consensus calculated for request ${requestId}: $${finalLow}–$${finalHigh}, confidence ${confidenceScore}%. XP awarded to ${awardedResponders.length} responders${cappedResponders.length > 0 ? `, ${cappedResponders.length} hit daily cap` : ''}.`
+      `[AppraisalService] Consensus calculated for request ${requestId}: $${finalLow}–$${finalHigh}, confidence ${confidenceScore}%. XP awarded to ${awardedResponders.length} responders${cappedResponders.length > 0 ? `, ${cappedResponders.length} hit 5-selection daily cap` : ''}.`
     );
 
     return consensus;

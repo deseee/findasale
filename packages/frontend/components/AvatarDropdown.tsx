@@ -936,7 +936,7 @@ const AvatarDropdown: React.FC = () => {
                     title="Your collector journey, badges, and discovery history"
                   >
                     <Award size={16} className="text-indigo-500" />
-                    <span>Explorer Passport</span>
+                    <span>Explorer Profile</span>
                   </Link>
                   <Link
                     href="/shopper/haul-posts"
@@ -998,7 +998,7 @@ const AvatarDropdown: React.FC = () => {
                     onClick={() => setIsOpen(false)}
                   >
                     <Star size={16} className="text-indigo-500" />
-                    <span>Loyalty Passport</span>
+                    <span>Explorer's Guild</span>
                   </Link>
                   <Link
                     href="/leaderboard"
