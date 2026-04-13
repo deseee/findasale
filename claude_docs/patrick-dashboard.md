@@ -2,14 +2,14 @@
 
 ## What Happened This Week
 
-**S449** (2026-04-13) — Rank staleness, Scout Reveal, dashboard specs, discount badge:
-- **Rank staleness P0 fixed:** Nav now updates rank instantly after XP earn — no re-login needed. JWT carries explorerRank; all 5 XP endpoints return newRank; AuthContext.updateUser() propagates it live.
-- **Scout Reveal fleshed out:** Spending 5 XP now reveals who has saved/favorited the item (name, avatar, timestamp). Empty state: "you may have the edge!"
-- **Organizer discount badge live:** Items with `organizerDiscountAmount > 0` now show a teal badge on the item detail page and a subtle "Special: $X off" pill on sale listing cards.
-- **Dashboard UX brief written:** Per-rank tone + card prioritization + perks communication strategy → `claude_docs/feature-notes/`
-- **Rank perks spec written:** Full Initiate→Grandmaster perks table + rank-up moment design → `claude_docs/feature-specs/`
-- **Haul post test data seeded:** 3 approved haul posts for Alice in Railway DB — Bump Post + Haul Unboxing flows can now be QA'd
-- **Push block ready below** — 10 files + 2 spec docs
+**S449** (2026-04-13) — Full rank perks system + P0/P1/P4 fixes:
+- **Rank perks system shipped:** `rankUtils.ts`, hold enforcement (rank-based duration snapshot), wishlist cap (server-side), legendary early access (0/0/2/4/6h by rank), Hall of Fame endpoint + page, RankBenefitsCard + RankUpModal, `getRankDashboardConfig()`
+- **3 new migrations:** rankUpHistory, holdDurationMinutes, legendary fields — need Railway deploy
+- **Rank staleness P0:** JWT rank sync + AuthContext.updateUser() — nav rank updates live on XP earn
+- **Scout Reveal:** interestedUsers returned + results panel on item page
+- **Organizer discount badge:** Teal pill on item detail + subtle pill on sale listing cards
+- **Haul post test data seeded:** 3 posts for Alice (IDs 2-4) — Bump Post + Haul Unboxing QA-ready
+- **Two push blocks** — first (10 files, S449 P0-P4), second (20 files, rank perks system)
 
 **S448** (2026-04-13) — QA audit + Scout Reveal bug + rank naming locked:
 - Scout Reveal is a hollow stub — XP spent, toast fires, nothing revealed. Backend never queries interest data. Full flesh-out queued for S449.
@@ -66,15 +66,25 @@
 
 ## What's Next (S450)
 
-**QA priority — post-deploy verification:**
-- Scout Reveal: spend 5 XP on item page, verify results panel shows
-- Rank sync: earn XP, verify nav rank updates without re-login
-- Discount badge: visit item with organizerDiscountAmount > 0, verify teal badge
-- Bump Post: login as Alice (user11@example.com), bump haul post ID 2, verify 10 XP deducted
-- Haul Unboxing: same Alice account, unlock animation on haul post ID 3, verify 2 XP deducted
+**Must push first:**
+1. Push block 1 (10 files — rank staleness, Scout Reveal, discount badge)
+2. Push block 2 (20 files — rank perks system, Hall of Fame, legendary access)
+3. Run all pending migrations on Railway (5 total if S447 still outstanding)
 
-**Dev priority — rank perks implementation:**
-Game Designer spec is ready at `claude_docs/feature-specs/EXPLORER_GUILD_RANK_PERKS_SPEC.md`. Dashboard UX brief at `claude_docs/feature-notes/shopper-dashboard-creative-brief-P2-rank-tiers.md`. Architect review needed before dev dispatch (perks require schema decisions for hold timer overrides, early access flags).
+**QA priority after deploy:**
+- Rank sync: earn XP → verify nav rank updates instantly (no re-login)
+- Scout Reveal: spend 5 XP on item page → verify interestedUsers panel renders
+- Discount badge: visit item with discount → verify teal pill shows
+- Bump Post: login as Alice, bump haul post ID 2 → verify 10 XP deducted + bumpedUntil set
+- Haul Unboxing: Alice, haul post ID 3 → verify 2 XP deducted + animation unlocked
+- Hall of Fame: visit /shopper/hall-of-fame → verify page loads (will be empty until users hit Grandmaster)
+- Hold duration: place hold as Scout → verify 45min expiry (not 30min)
+
+**Remaining rank perks (not yet wired):**
+- RankUpModal trigger — currently built but not connected to AuthContext rank-change event
+- Dashboard card visibility — `getRankDashboardConfig()` exists but dashboard doesn't consume it yet
+- Legendary item flag in organizer UI — organizers have no UI to mark items as Legendary yet
+- Confirmation dialog skip — client-side, Ranger/Sage/Grandmaster hold auto-confirm logic
 
 **MyTeamsCard happy path:** Still needs a workspace member test user. Invite Alice to a workspace, accept via magic link, reload shopper dashboard.
 

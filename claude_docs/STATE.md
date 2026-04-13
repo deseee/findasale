@@ -7,6 +7,47 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S449 (CONTINUED — rank perks system):** Architect ADR + full rank perks backend shipped. See files below.
+
+**S449 Rank Perks — What shipped (second batch):**
+- **rankUtils.ts:** `getRankBenefits()`, `calculateRankFromXp()`, `getRankProgressInfo()` — pure utility, all thresholds + perks locked
+- **Hold enforcement:** duration snapshotted from rank at creation (holdDurationMinutes on ItemReservation); maxConcurrentHolds validated server-side before hold creation
+- **Wishlist cap:** server-side per rank (1/3/10/15/unlimited); returns 403 with rank context for frontend display
+- **Legendary early access:** `isLegendary` + `legendaryVisibleAt` + `legendaryPublishedAt` on Item; item queries filter based on user rank early access hours (0/0/2/4/6h for INITIATE/SCOUT/RANGER/SAGE/GRAND)
+- **Hall of Fame endpoint:** `GET /api/guild/hall-of-fame` — all-time Grandmasters + seasonal top 100 Sage/Grandmaster
+- **Hall of Fame page:** `/shopper/hall-of-fame` — two-section layout, dark mode, empty state
+- **rankDashboardConfig.ts:** `getRankDashboardConfig(rank)` → prominent/secondary/hidden card lists per rank
+- **RankBenefitsCard.tsx + RankUpModal.tsx:** display components built; AvatarDropdown updated with Hall of Fame nav link
+- **Architect ADR:** `claude_docs/architecture/ADR-EXPLORER_GUILD_RANK_ARCHITECTURE.md` (1,488 lines) + dev checklist
+- **3 migrations:** rankUpHistory (User), holdDurationMinutes (ItemReservation), legendary fields (Item)
+
+**S449 Rank Perks — Patrick manual actions:**
+1. Push this session's second push block (20 files)
+2. Run 3 new migrations on Railway (rankUpHistory, holdDurationMinutes, legendary_early_access)
+3. S447 migrations still pending if not done: xp_expiry_system + early_access_cache
+
+**S449 Rank Perks — Files changed (second push block, 20 files):**
+- `packages/backend/src/utils/rankUtils.ts` — NEW
+- `packages/backend/src/controllers/reservationController.ts`
+- `packages/backend/src/controllers/wishlistController.ts`
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/backend/src/controllers/guildController.ts` — NEW
+- `packages/backend/src/routes/users.ts`
+- `packages/backend/src/routes/guild.ts` — NEW
+- `packages/backend/src/index.ts`
+- `packages/frontend/components/RankBenefitsCard.tsx` — NEW
+- `packages/frontend/components/RankUpModal.tsx` — NEW
+- `packages/frontend/components/AvatarDropdown.tsx`
+- `packages/frontend/pages/shopper/dashboard.tsx`
+- `packages/frontend/pages/shopper/hall-of-fame.tsx` — NEW
+- `packages/frontend/utils/rankDashboardConfig.ts` — NEW
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260413_add_rankup_history/migration.sql` — NEW
+- `packages/database/prisma/migrations/20260413_add_hold_duration_minutes/migration.sql` — NEW
+- `packages/database/prisma/migrations/20260413_add_legendary_early_access/migration.sql` — NEW
+- `claude_docs/architecture/ADR-EXPLORER_GUILD_RANK_ARCHITECTURE.md` — NEW
+- `claude_docs/architecture/ADR-EXPLORER_GUILD_RANK_DEV_CHECKLIST.md` — NEW
+
 **S449 COMPLETE (2026-04-13):** Rank staleness P0, Scout Reveal P1, Dashboard UX brief + Rank Perks spec (P2), haul post test data (P3), organizer discount badge (P4). JWT rank sync live.
 
 **S449 What shipped:**
