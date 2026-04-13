@@ -161,6 +161,9 @@ export const listSales = async (req: Request, res: Response) => {
           organizer: {
             select: { id: true, businessName: true, phone: true, reputationTier: true, user: { select: { customMapPin: true } } }
           },
+          items: {
+            select: { organizerDiscountAmount: true }
+          },
           _count: { select: { favorites: true } },
           trails: {
             where: { isActive: true, isPublic: true },
@@ -172,9 +175,15 @@ export const listSales = async (req: Request, res: Response) => {
     ]);
 
     const convertedSales = sales.map((sale: any) => {
-      const { _count, trails, ...rest } = convertDecimalsToNumbers(sale);
+      const { _count, trails, items, ...rest } = convertDecimalsToNumbers(sale);
+      const maxOrganizerDiscount = items && items.length > 0
+        ? Math.max(...items
+            .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
+            .map((item: any) => item.organizerDiscountAmount))
+        : null;
       return {
         ...rest,
+        maxOrganizerDiscount: maxOrganizerDiscount || null,
         favoriteCount: _count?.favorites ?? 0,
         hasActiveTrail: (trails && trails.length > 0) ?? false,
         trailShareToken: trails?.[0]?.shareToken ?? null
@@ -237,7 +246,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
         holdsEnabled: true,
         isAuctionSale: true,
         organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
-        items: { select: { id: true, title: true, price: true, status: true } },
+        items: { select: { id: true, title: true, price: true, status: true, organizerDiscountAmount: true } },
         _count: { select: { items: true } }
       },
       take: 50
@@ -275,14 +284,22 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
     }
 
     // Enrich sales with stats
-    const enrichedSales = sales.map((s: any) => ({
-      ...s,
-      stats: {
-        itemCount: s._count.items,
-        holdCount: holdCountsMap.get(s.id) ?? 0,
-        visitorCount: s.qrScanCount
-      }
-    }));
+    const enrichedSales = sales.map((s: any) => {
+      const maxOrganizerDiscount = s.items && s.items.length > 0
+        ? Math.max(...s.items
+            .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
+            .map((item: any) => item.organizerDiscountAmount))
+        : null;
+      return {
+        ...s,
+        maxOrganizerDiscount: maxOrganizerDiscount || null,
+        stats: {
+          itemCount: s._count.items,
+          holdCount: holdCountsMap.get(s.id) ?? 0,
+          visitorCount: s.qrScanCount
+        }
+      };
+    });
 
     res.json({ sales: enrichedSales.map((s: any) => convertDecimalsToNumbers(s)) });
   } catch (error) {
@@ -773,13 +790,28 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         neighborhood: true, photoUrls: true, tags: true,
         organizer: { select: { businessName: true, avgRating: true } },
+        items: { select: { organizerDiscountAmount: true } },
         _count: { select: { items: true } },
       },
       orderBy: { startDate: 'asc' },
       take: 50,
     });
 
-    res.json({ neighborhood: slug, sales, total: sales.length });
+    const enrichedSales = sales.map((sale: any) => {
+      const convertedSale = convertDecimalsToNumbers(sale);
+      const maxOrganizerDiscount = convertedSale.items && convertedSale.items.length > 0
+        ? Math.max(...convertedSale.items
+            .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
+            .map((item: any) => item.organizerDiscountAmount))
+        : null;
+      const { items, ...saleWithoutItems } = convertedSale;
+      return {
+        ...saleWithoutItems,
+        maxOrganizerDiscount: maxOrganizerDiscount || null
+      };
+    });
+
+    res.json({ neighborhood: slug, sales: enrichedSales, total: enrichedSales.length });
   } catch (error) {
     console.error('Error fetching neighborhood sales:', error);
     res.status(500).json({ message: 'Server error' });
@@ -812,6 +844,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         photoUrls: true, tags: true,
         organizer: { select: { businessName: true, avgRating: true } },
+        items: { select: { organizerDiscountAmount: true } },
         _count: { select: { items: true } },
       },
       orderBy: { startDate: 'asc' },
@@ -825,7 +858,21 @@ export const getSalesByCity = async (req: Request, res: Response) => {
       }
     });
 
-    res.json({ sales: sales.map(convertDecimalsToNumbers), total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
+    const enrichedSales = sales.map((sale: any) => {
+      const convertedSale = convertDecimalsToNumbers(sale);
+      const maxOrganizerDiscount = convertedSale.items && convertedSale.items.length > 0
+        ? Math.max(...convertedSale.items
+            .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
+            .map((item: any) => item.organizerDiscountAmount))
+        : null;
+      const { items, ...saleWithoutItems } = convertedSale;
+      return {
+        ...saleWithoutItems,
+        maxOrganizerDiscount: maxOrganizerDiscount || null
+      };
+    });
+
+    res.json({ sales: enrichedSales, total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
   } catch (error) {
     console.error('Error fetching city sales:', error);
     res.status(500).json({ message: 'Server error while fetching city sales' });

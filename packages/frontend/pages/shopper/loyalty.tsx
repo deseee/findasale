@@ -231,7 +231,7 @@ function LoyaltyPage() {
                     <div className="group relative cursor-help">
                       <span className="text-sm text-indigo-600 dark:text-indigo-400 font-bold">ℹ️</span>
                       <div className="hidden group-hover:block absolute right-0 z-10 w-48 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg whitespace-normal">
-                        Rank thresholds: 🌱 Initiate (0 XP) → 🐦 Scout (500 XP) → 🧗 Ranger (1,500 XP) → 🧙 Sage (2,500 XP) → 👑 Grandmaster (5,000 XP)
+                        Rank thresholds: 🌱 Initiate (0 XP) → 🐦 Scout (500 XP) → 🧗 Ranger (2,000 XP) → 🧙 Sage (5,000 XP) → 👑 Grandmaster (12,000 XP)
                       </div>
                     </div>
                   </div>

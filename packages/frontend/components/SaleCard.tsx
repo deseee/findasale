@@ -34,6 +34,7 @@ interface Sale {
   isFlashDeal?: boolean;
   tags?: string[];
   favoriteCount?: number;
+  maxOrganizerDiscount?: number; // D-XP-003: Max organizer discount across items
 }
 
 interface SaleCardProps {
@@ -93,7 +94,22 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
     return null;
   };
 
-  const badge = getStatusBadge();
+  // D-XP-003: Organizer Special badge (takes priority after SOLD)
+  const getOrganizerSpecialBadge = () => {
+    if (sale.isSold) return null; // Don't show discount on sold items
+    if (sale.maxOrganizerDiscount && sale.maxOrganizerDiscount > 0) {
+      return {
+        label: `$${sale.maxOrganizerDiscount.toFixed(2)} off`,
+        classes: 'bg-sage-600 dark:bg-sage-700 text-white'
+      };
+    }
+    return null;
+  };
+
+  const statusBadge = getStatusBadge();
+  const organizerSpecialBadge = getOrganizerSpecialBadge();
+  // Display organizer special badge if available, otherwise status badge
+  const badge = organizerSpecialBadge || statusBadge;
 
   return (
     <div className="bg-white dark:bg-gray-800 overflow-hidden hover:shadow-card-hover dark:hover:shadow-lg transition-all duration-300 hover:scale-105 flex flex-col h-full rounded-lg border border-warm-200 dark:border-gray-700">
