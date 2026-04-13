@@ -771,6 +771,61 @@ async function main() {
   const totalHolds = holdItems.length;
   const totalReviews = soldItemsForReviews.length;
 
+  // ─── REAL ACCOUNTS (survive database nuke) ───────────────────────────────
+  // These are Patrick's production accounts. Always seeded so local dev
+  // matches the real account structure. Passwords: password123 (local only).
+
+  const patrickAdmin = await prisma.user.upsert({
+    where: { email: 'deseee@gmail.com' },
+    update: { name: 'Patrick Desmet', role: 'ADMIN', roles: ['USER', 'ORGANIZER', 'ADMIN'] },
+    create: {
+      email: 'deseee@gmail.com',
+      name: 'Patrick Desmet',
+      password: defaultPassword,
+      role: 'ADMIN',
+      roles: ['USER', 'ORGANIZER', 'ADMIN'],
+    },
+  });
+  await prisma.organizer.upsert({
+    where: { userId: patrickAdmin.id },
+    update: { subscriptionTier: 'TEAMS', subscriptionStatus: 'active' },
+    create: {
+      userId: patrickAdmin.id,
+      businessName: 'FindA.Sale Admin',
+      phone: '616-555-0001',
+      address: '123 Main St, Grand Rapids, MI 49503',
+      bio: 'Platform administrator',
+      subscriptionTier: 'TEAMS',
+      subscriptionStatus: 'active',
+    },
+  });
+
+  const artifactUser = await prisma.user.upsert({
+    where: { email: 'artifactmi@gmail.com' },
+    update: { name: 'Artifact MI', role: 'ORGANIZER', roles: ['USER', 'ORGANIZER'] },
+    create: {
+      email: 'artifactmi@gmail.com',
+      name: 'Artifact MI',
+      password: defaultPassword,
+      role: 'ORGANIZER',
+      roles: ['USER', 'ORGANIZER'],
+    },
+  });
+  await prisma.organizer.upsert({
+    where: { userId: artifactUser.id },
+    update: { subscriptionTier: 'TEAMS', subscriptionStatus: 'active' },
+    create: {
+      userId: artifactUser.id,
+      businessName: 'Artifact MI',
+      phone: '616-555-0002',
+      address: '456 Commerce Ave, Grand Rapids, MI 49504',
+      bio: 'Estate sales and antique liquidation specialist',
+      subscriptionTier: 'TEAMS',
+      subscriptionStatus: 'active',
+    },
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   console.log('\n✨ Seed complete!');
   console.log('\n📋 Data Summary:');
   console.log(`  • Users:            100 (user1=ADMIN, user2=PRO organizer, user3=TEAMS organizer, user11=primary shopper)`);
@@ -793,10 +848,13 @@ async function main() {
   console.log(`  • Points tx:        6`);
   console.log(`  • Conversations:    up to 2 | Messages: up to 5`);
   console.log('\n🔑 Test accounts (all passwords: password123):');
-  console.log('   user1@example.com  — ADMIN + SIMPLE organizer');
-  console.log('   user2@example.com  — PRO organizer [TD-01: Stripe acct_test_user2]');
-  console.log('   user3@example.com  — TEAMS organizer [TD-01: Stripe acct_test_user3]');
-  console.log('   user11@example.com — Shopper [TD-02: 6+ purchases, 10+ likes, badges, trail, reviews, holds]');
+  console.log('   user1@example.com     — ADMIN + SIMPLE organizer');
+  console.log('   user2@example.com     — PRO organizer [TD-01: Stripe acct_test_user2]');
+  console.log('   user3@example.com     — TEAMS organizer [TD-01: Stripe acct_test_user3]');
+  console.log('   user11@example.com    — Shopper [TD-02: 6+ purchases, 10+ likes, badges, trail, reviews, holds]');
+  console.log('\n🔑 Real accounts (password: password123 locally):');
+  console.log('   deseee@gmail.com      — ADMIN + TEAMS organizer (Patrick)');
+  console.log('   artifactmi@gmail.com  — TEAMS organizer (Artifact MI)');
 }
 
 main()
