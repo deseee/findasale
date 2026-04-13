@@ -2,6 +2,15 @@
 
 ## What Happened This Week
 
+**S450** (2026-04-13) — Rank staleness P0 fixed, dashboard character sheet attempt, organizer badge, /shopper/ranks:
+- **P0 rank staleness FIXED:** `explorerRank` removed from JWT entirely. `AvatarDropdown` now calls `useXpProfile()` API hook for fresh rank on every render. Cascade fixes in `useXpSink`, `haul-posts`, `items/[id]`, `dashboard` (5 files updated).
+- **Tier names LOCKED:** Initiate → Scout → Ranger → Sage → Grandmaster (0/500/2000/5000/12000 XP). "Hunter" was wrong — Ranger confirmed.
+- **AvatarDropdown XP progress bar:** XP progress bar now shows below rank badge in dropdown using `rankProgress.currentXp / rankProgress.nextRankXp`.
+- **Dashboard character sheet attempt:** `RankHeroSection`, `ActionBar`, `RankLevelingHint` built. Dashboard reordered. **BUT QR code landed at position 7 (near bottom) — this is wrong. QR is how shoppers pay at POS. Fix is first job next session.**
+- **`/shopper/ranks` page:** All 5 ranks shown with perks + "you are here" indicator. Linked from loyalty page.
+- **Organizer Special badge:** `maxOrganizerDiscount` on SaleCard + sale detail page. 4 backend feed endpoints updated.
+- **Specs created:** `claude_docs/design/RANK_PERKS_DISPLAY_SPEC.md`, `claude_docs/UX/SHOPPER_DASHBOARD_RETHINK_UX_SPEC.md`
+
 **S449** (2026-04-13) — Full rank perks system + P0/P1/P4 fixes:
 - **Rank perks system shipped:** `rankUtils.ts`, hold enforcement (rank-based duration snapshot), wishlist cap (server-side), legendary early access (0/0/2/4/6h by rank), Hall of Fame endpoint + page, RankBenefitsCard + RankUpModal, `getRankDashboardConfig()`
 - **3 new migrations:** rankUpHistory, holdDurationMinutes, legendary fields — need Railway deploy
@@ -39,7 +48,8 @@
 
 ## Action Items for Patrick
 
-- [ ] **Push S449 push block** (10 files — see block in STATE.md or session summary)
+- [ ] **Push S450 push block** (15 files — see full block in STATE.md `## Next Session Priority`)
+- [ ] **Run S449 migrations** on Railway (3 migrations: rankUpHistory, holdDurationMinutes, legendary_early_access) — if not already done
 - [ ] **Run S447 pending migrations** on Railway if not done: `20260413_xp_expiry_system` + `20260413_early_access_cache`
 - [ ] **Stripe Dashboard → Webhooks → add `charge.dispute.created` event** (S447, still open)
 - [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open, still blocking)
@@ -64,29 +74,23 @@
 
 ---
 
-## What's Next (S450)
+## What's Next (S451)
 
-**Must push first:**
-1. Push block 1 (10 files — rank staleness, Scout Reveal, discount badge)
-2. Push block 2 (20 files — rank perks system, Hall of Fame, legendary access)
-3. Run all pending migrations on Railway (5 total if S447 still outstanding)
+**MANDATE: Dashboard must not look like shit. Research first, then build.**
 
-**QA priority after deploy:**
-- Rank sync: earn XP → verify nav rank updates instantly (no re-login)
-- Scout Reveal: spend 5 XP on item page → verify interestedUsers panel renders
-- Discount badge: visit item with discount → verify teal pill shows
-- Bump Post: login as Alice, bump haul post ID 2 → verify 10 XP deducted + bumpedUntil set
-- Haul Unboxing: Alice, haul post ID 3 → verify 2 XP deducted + animation unlocked
-- Hall of Fame: visit /shopper/hall-of-fame → verify page loads (will be empty until users hit Grandmaster)
-- Hold duration: place hold as Scout → verify 45min expiry (not 30min)
+S451 opens with findasale-ux + findasale-innovation studying real loyalty progression UX (Duolingo, Strava, Nike Run Club, RPG character screens) and returning a concrete visual directive before any code is written.
 
-**Remaining rank perks (not yet wired):**
-- RankUpModal trigger — currently built but not connected to AuthContext rank-change event
-- Dashboard card visibility — `getRankDashboardConfig()` exists but dashboard doesn't consume it yet
-- Legendary item flag in organizer UI — organizers have no UI to mark items as Legendary yet
-- Confirmation dialog skip — client-side, Ranger/Sage/Grandmaster hold auto-confirm logic
+**First code task (P0):** Move QR code from position 7 to position 3-4 in `shopper/dashboard.tsx`. QR is how shoppers pay at POS checkout. Collapsible is fine. Must not be near the bottom.
 
-**MyTeamsCard happy path:** Still needs a workspace member test user. Invite Alice to a workspace, accept via magic link, reload shopper dashboard.
+**Then:** Dashboard full rebuild with creative direction — identity-first, progress-second, action-third. No more stacked card pattern.
+
+**Carry-forward queue after dashboard:**
+- QA queue (S436/S430/S431/S427/S433) — still postponed
+- Bump Post feed sort (Architect sign-off needed first)
+- Price Research Card redesign
+- Brand audit copy fixes (3 items, dispatch-ready)
+- RankUpModal — not connected to AuthContext rank-change yet
+- Legendary item flag — no organizer UI yet
 
 ---
 
@@ -94,12 +98,12 @@
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S450 | 2026-04-13 | Rank staleness P0 (JWT fix), dashboard character sheet attempt, /shopper/ranks, organizer badge, XP progress bar in nav. QR code landed wrong — fix is P0 next session. |
 | S449 | 2026-04-13 | Rank staleness P0, Scout Reveal P1, discount badge P4, dashboard/perks specs, haul test data. 10 files. |
 | S448 | 2026-04-13 | QA audit. Scout Reveal bug ID'd. Rank naming locked. 1-line fix. |
 | S447 | 2026-04-13 | 3 dispatch batches: Early Access Cache, XP expiry, bump sort, cosmetics repricing, coupon enforcement, nav renames. |
 | S446 | 2026-04-13 | XP frontend, 3 micro-sinks, organizer discounts, workspace magic link invite, WorkspaceMember schema fix |
 | S445 | 2026-04-13 | XP economy redesign + 5 fraud gates + workspace invite flow |
-| S444 | 2026-04-13 | STAFF→MEMBER full rename + workspace permissions fixed |
 
 ---
 

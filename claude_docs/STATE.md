@@ -7,7 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S449 (CONTINUED — rank perks system):** Architect ADR + full rank perks backend shipped. See files below.
+**S450 (2026-04-13) — Dashboard character sheet, rank staleness fix, organizer badge, /shopper/ranks**
+
+**S450 shipped:**
+- **P0 rank staleness fixed:** JWT no longer caches `explorerRank`. Nav (`AvatarDropdown`) fetches fresh rank via `useXpProfile()`. `explorerRank` cascade fixes in `useXpSink`, `haul-posts`, `items/[id]`, `dashboard`.
+- **Tier names locked:** Initiate → Scout → Ranger → Sage → Grandmaster (0/500/2000/5000/12000 XP). "Hunter" confirmed wrong, Ranger confirmed.
+- **Dashboard character sheet rebuild:** `RankHeroSection`, `ActionBar`, `RankLevelingHint` created. Dashboard reordered. BUT QR code moved to position 7 — wrong. Patrick flagged immediately: QR is how shoppers pay at POS checkout. Fix is P0 for next session.
+- **AvatarDropdown XP progress bar:** Added XP bar below rank badge using `rankProgress.currentXp / rankProgress.nextRankXp`.
+- **`/shopper/ranks` page:** New page showing all 5 ranks + perks with "you are here" indicator. Link added from loyalty page.
+- **Organizer Special badge:** `organizerDiscountAmount` badge on SaleCard + sale detail page. Backend feed endpoints return `maxOrganizerDiscount`.
+- **Specs created:** `claude_docs/design/RANK_PERKS_DISPLAY_SPEC.md`, `claude_docs/UX/SHOPPER_DASHBOARD_RETHINK_UX_SPEC.md` (note: UX spec in wrong dir — Records to move to `claude_docs/design/`).
+- **Bob (user2) XP = 6** — confirmed accurate in DB, not a bug.
 
 **S449 Rank Perks — What shipped (second batch):**
 - **rankUtils.ts:** `getRankBenefits()`, `calculateRankFromXp()`, `getRankProgressInfo()` — pure utility, all thresholds + perks locked
@@ -920,44 +930,84 @@ npx prisma generate
 
 ## Next Session Priority
 
-### S448 — QA Audit + Rank Staleness + Dashboard Rethink
+### S451 — Dashboard Visual Rethink: Research First, Then Build
 
-**FIRST: QA audit of S447 shipped features (Chrome, sequential — before anything else)**
+**DIRECTIVE FROM PATRICK (S450 wrap):** "Wrap and prepare the next session to study loyalty programs and character sheets and how to make our dashboard not look like shit. You need to take a fucking lead and make these lazy ass agents do more than the bare minimum."
 
-Real browser evidence required. Do not accept code-read as verification.
-- `/shopper/early-access-cache` — loads, 100 XP activation flow completes
-- Nav desktop + mobile: "Explorer's Guild" and "Explorer Profile" in all 3 sidebar locations
-- AvatarDropdown: "Early Access Cache" present, zero "Lucky Roll" references
-- `/shopper/loyalty` — h1 title reads "Explorer's Guild"
-- `/shopper/explorer-passport` — h1 title reads "Explorer Profile"
-- Haul posts feed: bumped post surfaces to top
-- Coupon display on loyalty page: shows $0.75 / $2.00 / $5.00
+---
 
-**P0 BUG — Rank staleness sitewide (Patrick confirmed live on deployed site)**
+**STEP 1 — Research phase (NO CODE until this is done):**
 
-Nav shows "Scout" for users who should be "Initiate". XP amounts inconsistent across pages (e.g. dashboard shows 505/1500 to next rank, loyalty shows 505/2000 — one is wrong).
+Dispatch `findasale-ux` + `findasale-innovation` in parallel to study real loyalty/progression UX patterns. Agents must review:
+- **Duolingo** — streak prominently above fold, XP progress ring, rank shield always visible, one primary action per screen
+- **Strava** — athlete stats as identity, weekly summary as first visible element, social proof inline
+- **Nike Run Club** — tier badges as identity markers, locked features shown as aspirational (grayed with unlock hint), progress arc top-center
+- **RPG character screens** — stat layout, badge/achievement grid, progression bar always present
+- **What they have in common:** Identity first (who am I in this system), progress second (how far to next thing), action third (what should I do now). Never stacked cards.
 
-Investigation order:
-1. DB audit via psycopg2 — query guildXp for all test users; compare to what Chrome shows in nav
-2. Find rank calculation function — grep for where guildXp maps to a rank name string (likely a utility + JWT payload)
-3. **NAMING DECISION (surface to Patrick before fixing):** Patrick says Initiate→Scout→Hunter→Sage→Grandmaster. Prior locked decisions (S388/S445) used Scout→Ranger→Sage→Grandmaster. "Initiate" as 0-499 XP base tier and "Hunter" replacing "Ranger" need explicit Patrick sign-off. Don't rename in code until confirmed.
-4. Root cause hypothesis: JWT carries guildXp/rank at login time; XP-earning events don't refresh the token → rank shown in nav is stale. Check authController — does it refresh rank in JWT on XP award?
-5. XP threshold inconsistency: locked thresholds are 500/2000/5000/12000. Find every place in frontend that hardcodes a different threshold and fix to single source of truth.
-6. After Patrick confirms naming: dispatch findasale-dev to fix rank calculation + JWT refresh + all display locations in one pass.
+Agents must return a concrete **visual directive**, not just principles. "The dashboard should look like X with Y and Z" — specific enough to brief a dev agent.
 
-**Tier perks visibility**
+**STEP 2 — Fix QR code position (P0):**
 
-Each rank needs a visible perks list somewhere in the product (what does Scout unlock that Initiate doesn't?). Dispatch findasale-gamedesign to spec perks per tier (if not already done), then build the display — could live on loyalty page, a dedicated ranks page, or a tooltip on the rank badge.
+QR code is the POS payment mechanism. Patrick confirmed: shoppers use this to pay at checkout. It must be visible without deep scrolling.
 
-**Dashboard rethink — creative angle (parallel with rank investigation)**
+Current state: QR is at position 7 in `packages/frontend/pages/shopper/dashboard.tsx`. This is wrong.
 
-Shopper dashboard is busy/cluttered. The gamification layer (XP, rank, Early Access Cache, achievements, guild) feels like 5 bolted-on widgets. Dispatch findasale-ux to propose a creative consolidation: one cohesive "home base" experience. Include the page staleness/data consistency problem as a constraint — the redesign must surface the right numbers in one canonical place.
+**Fix: Move QR to position 3 or 4** — after RankHeroSection and ActionBar, before secondary content. Collapsible accordion is acceptable (default collapsed is fine). Never hidden behind a rank gate. Never at the bottom of the page.
 
-**Existing queue (lower priority):**
-- Workspace QA results → dispatch fixes
-- Organizer Special badge (public sale page shows $X off when organizerDiscountAmount > 0)
-- Price Research Card redesign (spec at claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md)
+File to edit: `packages/frontend/pages/shopper/dashboard.tsx`. The QR section is the `qrOpen` / `setQrOpen` block with the `<QRCodeCanvas>` component. Move it above the conditional rank-tiered content sections.
+
+This is a single targeted edit (~20 lines repositioned) — acceptable inline. Dispatch if touching more.
+
+**STEP 3 — Dashboard rebuild with creative leadership:**
+
+After research returns a visual directive, dispatch `findasale-dev` with:
+1. The UX spec from `claude_docs/UX/SHOPPER_DASHBOARD_RETHINK_UX_SPEC.md` (or `claude_docs/design/` if Records moved it)
+2. The visual directive from Step 1
+3. Explicit constraint: **QR stays near top. No card stacks. Identity → progress → action hierarchy.**
+4. Constraint: `rankDashboardConfig.ts` already exists — dev must use it for rank-tiered visibility
+5. Constraint: `useXpProfile()` is the canonical rank/XP source — no JWT values
+6. Post-build: full dark mode + mobile check (375px width) before returning
+
+**STEP 4 — S450 wrap push block (push before S451 dev starts):**
+
+All S450 files need to ship first. Push block:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/frontend/components/AuthContext.tsx
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/SaleCard.tsx
+git add packages/frontend/components/RankHeroSection.tsx
+git add packages/frontend/components/ActionBar.tsx
+git add packages/frontend/components/RankLevelingHint.tsx
+git add packages/frontend/hooks/useXpSink.ts
+git add packages/frontend/pages/shopper/dashboard.tsx
+git add packages/frontend/pages/shopper/ranks.tsx
+git add packages/frontend/pages/shopper/loyalty.tsx
+git add packages/frontend/pages/items/[id].tsx
+git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/shopper/haul-posts.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/design/RANK_PERKS_DISPLAY_SPEC.md
+git commit -m "feat: rank staleness P0, dashboard character sheet, organizer badge, /shopper/ranks page"
+.\push.ps1
+```
+
+Note: `claude_docs/UX/SHOPPER_DASHBOARD_RETHINK_UX_SPEC.md` — Records needs to move this to `claude_docs/design/`. Add to the push block after Records moves it.
+
+---
+
+**Carry-forward queue (lower priority, after dashboard):**
+- QA queue remains postponed (S436 earnings/qr-codes, S430 iOS geo/photo upload, S431 trail detail, S427 invoice, S433 auction)
+- Bump Post feed sort — needs Architect sign-off before dev dispatch
+- Price Research Card redesign (`claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`)
 - Brand audit copy: SharePromoteModal, homepage meta, organizer profile meta
+- Referral fraud gate (D-XP-004)
+- RankUpModal — built but not connected to AuthContext rank-change event
+- Legendary item flag — no organizer UI to mark items Legendary yet
 
 ### Deferred
 - Referral fraud gate (D-XP-004: 24h payment-cleared hold + email+phone verification)
