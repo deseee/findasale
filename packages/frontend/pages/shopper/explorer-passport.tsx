@@ -280,7 +280,7 @@ function ExplorerPassportPage() {
               disabled={isUpdating}
               className="w-full md:w-auto px-8 py-3 bg-[#8fb897] text-white rounded-lg hover:bg-[#7ba680] font-medium disabled:opacity-50"
             >
-              {isUpdating ? 'Saving...' : 'Save Passport'}
+              {isUpdating ? 'Saving...' : 'Save Profile'}
             </button>
           </div>
 
