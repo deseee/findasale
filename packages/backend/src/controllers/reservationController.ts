@@ -6,6 +6,7 @@ import { pushEvent } from '../services/liveFeedService';
 import { pushSaleStatus } from '../services/saleStatusService';
 import { sendHoldPlacedAlert, sendHoldStatusToShopper } from '../services/saleAlertEmailService';
 import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetectionService';
+import { getRankBenefits, calculateRankFromXp } from '../utils/rankUtils';
 
 const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
 const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
@@ -21,17 +22,9 @@ function getGpsRadiusBySaleType(saleType: string): number {
   }
 }
 
-// Feature #121: Hold duration in minutes by explorer rank
-function getHoldDurationMinutes(rank: string): number {
-  switch (rank) {
-    case 'INITIATE':    return 30;
-    case 'SCOUT':       return 45;
-    case 'RANGER':      return 60;
-    case 'SAGE':        return 75;
-    case 'GRANDMASTER': return 90;
-    default:            return 30;
-  }
-}
+// Feature #121: Hold duration in minutes by explorer rank — DEPRECATED
+// Replaced with getRankBenefits() from rankUtils.ts
+// Kept for reference but not used; holdDurationMinutes now retrieved via getRankBenefits(rank).holdDurationMinutes
 
 // Feature #121: Max en-route holds by explorer rank
 function getEnRouteHoldLimit(rank: string): number {
@@ -116,6 +109,22 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     });
     const explorerRank = (user?.explorerRank as string) ?? 'INITIATE';
 
+    // Phase 2a: Enforce max concurrent holds based on rank
+    const rankBenefits = getRankBenefits(explorerRank);
+    const currentHolds = await prisma.itemReservation.count({
+      where: {
+        userId: req.user!.id,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+    });
+    if (currentHolds >= rankBenefits.maxConcurrentHolds) {
+      return res.status(403).json({
+        message: `You can only hold ${rankBenefits.maxConcurrentHolds} item${rankBenefits.maxConcurrentHolds > 1 ? 's' : ''} at a time at your current rank (${explorerRank})`,
+        maxHolds: rankBenefits.maxConcurrentHolds,
+        currentHolds,
+      });
+    }
+
     // Feature #121: GPS validation — sale-type-based radius
     let enRoute = false;
     if (latitude && longitude) {
@@ -196,8 +205,8 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Feature #121: Rank-based hold duration
-    const holdMinutes = getHoldDurationMinutes(explorerRank);
+    // Phase 2a: Rank-based hold duration from rankBenefits
+    const holdMinutes = rankBenefits.holdDurationMinutes;
     const expiresAt = new Date(Date.now() + holdMinutes * 60000);
 
     const reservation = await prisma.$transaction(async (tx) => {
@@ -211,6 +220,7 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
           userId: req.user!.id,
           status: 'PENDING',
           expiresAt,
+          holdDurationMinutes: holdMinutes,  // Phase 2a: Store snapshot of duration
           note: note?.trim() || null,
           gpsLatitude: latitude || null,
           gpsLongitude: longitude || null,
@@ -550,7 +560,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         const extendedHolds: Array<{ hold: typeof validHolds[0]; newExpiry: Date }> = [];
         for (const h of validHolds) {
           const rank = (h.user as any)?.explorerRank ?? 'INITIATE';
-          const holdMinutes = getHoldDurationMinutes(rank);
+          const rankBenefits = getRankBenefits(rank);
+          const holdMinutes = rankBenefits.holdDurationMinutes;
           const newExpiry = new Date(Date.now() + holdMinutes * 60000);
           await tx.itemReservation.update({
             where: { id: h.id },

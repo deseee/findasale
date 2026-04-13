@@ -38,6 +38,7 @@ import { AchievementBadgesSection } from '../../components/AchievementBadgesSect
 import useXpProfile from '../../hooks/useXpProfile';
 import RankBadge, { ExplorerRank } from '../../components/RankBadge';
 import RankProgressBar from '../../components/RankProgressBar';
+import RankBenefitsCard from '../../components/RankBenefitsCard';
 import PointsBadge from '../../components/PointsBadge';
 import MyTeamsCard from '../../components/MyTeamsCard';
 
@@ -529,6 +530,13 @@ const ShopperDashboard = () => {
               </div>
             ) : (
               <Skeleton className="h-64" />
+            )}
+
+            {/* Rank Benefits Card */}
+            {xpProfile && !xpLoading ? (
+              <RankBenefitsCard rank={xpProfile.explorerRank} compact={true} />
+            ) : (
+              <Skeleton className="h-32" />
             )}
 
             {/* Hunt Pass CTA — Rank-Aware */}

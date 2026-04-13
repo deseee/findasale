@@ -164,6 +164,7 @@ model User {
   guildXp                 Int           @default(0) // Phase 2a: Cumulative XP, never resets, used for rank calculation
   explorerRank            ExplorerRank  @default(INITIATE) // Phase 2a: Current explorer rank (derived from guildXp, denormalized for fast lookup)
   seasonalResetAt         DateTime? // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
+  rankUpHistory           Json          @default("[]") // Phase 2a: Array of { rank, timestamp, xpAtTime } for Hall of Fame + seasonal tracking
   // D-XP-002: XP Expiry System
   lifetimeXpEarned        Int           @default(0) // Total XP ever earned (never decremented) — used for Grandmaster+ (5000+) expiry exemption
   lastXpActivityAt        DateTime? // Last time XP-earning activity occurred (purchase, haul post, referral) — basis for expiry calculation
@@ -723,6 +724,10 @@ model Item {
   // D-XP-003: Organizer-funded item discounts
   organizerDiscountXp   Int?                   @default(0) // XP spent to create discount (0 = no discount)
   organizerDiscountAmount Decimal?             @db.Decimal(10,2) // Dollar amount of discount ($2, $4, or $5 max)
+  // Phase 2b: Legendary Early Access — Explorer's Guild rank perks
+  isLegendary           Boolean                @default(false) // Organizer marks item as Legendary (exclusive early access)
+  legendaryVisibleAt    DateTime? // When item becomes visible to all ranks (Sage+ see 4-6 hours earlier)
+  legendaryPublishedAt  DateTime? // When organizer published this item as Legendary (audit trail)
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -733,6 +738,7 @@ model Item {
   @@index([organizerId, inLibrary])
   @@index([isHighValue])
   @@index([ebayListingId])
+  @@index([isLegendary, legendaryVisibleAt]) // Phase 2b: Legendary early access query optimization
 }
 
 // Camera Workflow v2: Photo model for multi-photo support (forward-looking schema)
@@ -1024,6 +1030,7 @@ model ItemReservation {
   user         User         @relation(fields: [userId], references: [id])
   status       String       @default("PENDING") // PENDING, CONFIRMED, HOLD_IN_CART, CANCELLED, EXPIRED, INVOICE_ISSUED
   expiresAt    DateTime
+  holdDurationMinutes Int    @default(30) // Snapshot of user's rank-based duration at hold creation time
   note         String?
   // Hold-specific enhancements (Feature #121)
   gpsLatitude  Float? // GPS location at hold creation

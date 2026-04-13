@@ -65,6 +65,7 @@ import {
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { useShopperCart } from '../hooks/useShopperCart';
 import ShopperCartDrawer from './ShopperCartDrawer';
+import RankBadge, { ExplorerRank } from './RankBadge';
 
 const AvatarDropdown: React.FC = () => {
   const { user, logout } = useAuth();
@@ -218,13 +219,12 @@ const AvatarDropdown: React.FC = () => {
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
               {user.email}
             </p>
-            {/* Rank badge — TODO: wire to real XP data */}
-            <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">⚔️ Scout</span>
-              <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full max-w-[120px] overflow-hidden">
-                <div className="h-full bg-indigo-500" style={{ width: '40%' }} />
+            {/* Rank badge */}
+            {user.explorerRank && (
+              <div className="mt-2">
+                <RankBadge rank={user.explorerRank as ExplorerRank} size="sm" />
               </div>
-            </div>
+            )}
           </div>
 
           {/* ADMIN Menu Items */}
@@ -955,6 +955,14 @@ const AvatarDropdown: React.FC = () => {
                   >
                     <Zap size={16} className="text-indigo-500" />
                     <span>Early Access Cache</span>
+                  </Link>
+                  <Link
+                    href="/shopper/hall-of-fame"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Trophy size={16} className="text-amber-500" />
+                    <span>Hall of Fame</span>
                   </Link>
                 </>
               )}
