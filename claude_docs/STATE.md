@@ -7,6 +7,40 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S454 COMPLETE (2026-04-13) — Hunt Pass → recurring Stripe Subscription, go-live audit fixes**
+
+**S454 What happened:**
+- **Hunt Pass architecture (Architect):** Designed full subscription conversion. Schema: add `huntPassStripeCustomerId` + `huntPassStripeSubscriptionId` to User. API: replace PaymentIntent flow with Stripe Checkout (subscription mode). Webhook: metadata routing (`type: 'hunt_pass'`) before organizer path. ADR written.
+- **Hunt Pass implementation (Dev):** Migration created (`20260413000000_add_hunt_pass_stripe_fields`). `streaks.ts` — replaced `activate-huntpass` + `confirm-huntpass` with `subscribe-huntpass` (Stripe Checkout redirect) + `cancel-huntpass`. `billingController.ts` — Hunt Pass metadata detection added to all 3 subscription webhook cases. `HuntPassModal.tsx` — stripped Stripe Elements entirely; now calls `/subscribe-huntpass` and redirects to Stripe Checkout URL.
+- **POS product catalog fix:** `posController.ts` — env-var-gated generic product. When `STRIPE_GENERIC_ITEM_PRODUCT_ID` is set, reuses that product for POS payment link prices instead of creating new Stripe products per item (was polluting the catalog). Patrick created sandbox (`prod_UKYzGv9hOBmARm`) and live (`prod_UKZ2G21VhLJ3CE`) generic products.
+- **pricing.tsx null byte fix:** Stripped trailing null bytes causing TS build error on line 671.
+- **Env vars added:** `STRIPE_HUNT_PASS_PRICE_ID` in local `.env` (sandbox: `price_1TLtc2LTUdEUnHOTTDhR4i42`) + `STRIPE_GENERIC_ITEM_PRODUCT_ID` (sandbox: `prod_UKYzGv9hOBmARm`). Railway needs live values.
+- **Migration deployed:** `20260413000000_add_hunt_pass_stripe_fields` applied to Railway DB.
+
+**S453+S454 combined files changed:**
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260413000000_add_hunt_pass_stripe_fields/migration.sql` — NEW
+- `packages/backend/src/routes/streaks.ts`
+- `packages/backend/src/controllers/stripeController.ts` — Hunt Pass webhook handler, subscription ID persistence
+- `packages/backend/src/controllers/billingController.ts` — Hunt Pass webhook routing + syncTier subscription ID
+- `packages/backend/src/lib/syncTier.ts` — stripeSubscriptionId persistence (P0 fix)
+- `packages/backend/src/jobs/huntPassExpiryCron.ts` — NEW
+- `packages/backend/src/index.ts` — cron import
+- `packages/backend/src/controllers/posController.ts` — generic product env-var gate
+- `packages/frontend/pages/organizer/pricing.tsx` — null byte fix + billing endpoint fix (P0)
+- `packages/frontend/components/HuntPassModal.tsx` — Stripe Checkout redirect
+- `claude_docs/operations/ebay-stripe-go-live-prep.md`
+
+**S454 Railway env vars still needed:**
+- `STRIPE_HUNT_PASS_PRICE_ID` = `price_1TLtY1LIWHQCHu75W9F23hVJ` (live)
+- `STRIPE_GENERIC_ITEM_PRODUCT_ID` = `prod_UKZ2G21VhLJ3CE` (live)
+
+**S454 Still open:**
+- Live Stripe webhook setup (live account has no webhooks yet — needs `/api/billing/webhook` + `/api/stripe/webhook` registered with correct event sets)
+- Stripe sandbox product catalog: archive the ~14 junk test products (only Hunt Pass, Teams, Pro, Item Sale should remain)
+
+---
+
 **S452 COMPLETE (2026-04-13) — eBay + Stripe go-live prep: bidirectional sync, policy IDs, env audit**
 
 **S452 What happened:**
@@ -998,7 +1032,48 @@ npx prisma generate
 
 ## Next Session Priority
 
-### S451 — Dashboard Visual Rethink: Research First, Then Build
+### S455 — Roadmap Audit + Human QA Documentation + Survivor Accounts
+
+**DIRECTIVE FROM PATRICK (S454 wrap):** Audit all work since the last roadmap session. Document Patrick's human QA passes into shipped & verified section of roadmap. Prepare 1-2 real accounts that will survive the database nuke when test data is cleared and real shoppers start.
+
+---
+
+**STEP 1 — Roadmap audit (findasale-records):**
+
+Dispatch `findasale-records` to:
+1. Read `claude_docs/strategy/roadmap.md` — identify last session with a roadmap update
+2. Read STATE.md "## Current Work" and all recent session summaries since that session
+3. For every feature shipped since the last roadmap update:
+   - Move from BROKEN/IN-PROGRESS → FIXED/SHIPPED with session number
+   - For any feature Patrick has manually QA'd and confirmed (human QA pass): mark as ✅ Shipped & Verified
+   - Known human QA passes this cycle: dashboard layout (S451), rank display, action buttons, QR inline panel, dashboard character sheet, eBay sync, Stripe go-live fixes
+4. Update the roadmap file and include it in the wrap push block
+
+**STEP 2 — Survivor accounts (findasale-dev):**
+
+Patrick is planning to nuke all test data when real shoppers onboard. Two accounts must survive:
+- **Patrick's organizer account** — his real login, real org profile, real Stripe Connect ID
+- **One admin/test shopper account** — for ongoing QA after the nuke
+
+Dev must:
+1. Read current seed data to find Patrick's real account (check `packages/database/prisma/seed.ts` for any `@patrickd` or real email entries)
+2. Create `packages/database/prisma/survivor-seed.ts` — a minimal seed that creates ONLY the survivor accounts with known passwords, skipping all fake test organizers/shoppers
+3. Document in the file: "Run this AFTER nuking test data to restore real accounts"
+4. The survivor accounts should use real email addresses Patrick provides — if not already in seed, prompt Patrick for his real organizer email
+
+**STEP 3 — Live Stripe webhook setup:**
+
+Complete the webhook registration Patrick deferred. Two endpoints to register in LIVE Stripe:
+- `/api/billing/webhook` — events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`, `checkout.session.completed`
+- `/api/stripe/webhook` — events: `payment_intent.succeeded`, `charge.dispute.created`, `charge.succeeded`, `charge.failed`
+
+Each gets its own signing secret from Stripe → add as env vars in Railway.
+
+**STEP 4 — Archive junk Stripe sandbox products:**
+
+Patrick still has ~14 junk products in sandbox catalog. He should archive all except: Hunt Pass, FindA.Sale Teams, FindA.Sale Pro, FindA.Sale — Item Sale.
+
+---
 
 **DIRECTIVE FROM PATRICK (S450 wrap):** "Wrap and prepare the next session to study loyalty programs and character sheets and how to make our dashboard not look like shit. You need to take a fucking lead and make these lazy ass agents do more than the bare minimum."
 
@@ -1114,6 +1189,7 @@ Note: `claude_docs/UX/SHOPPER_DASHBOARD_RETHINK_UX_SPEC.md` — Records needs to
 - Railway backend: https://backend-production-153c9.up.railway.app
 - Vercel frontend: https://finda.sale
 - Test accounts: user1 (TEAMS), user2 (organizer SIMPLE), user3 Carol Williams (TEAMS), user11 Karen Anderson (shopper, Hunt Pass active), user12 Leo Thomas (shopper). All passwords: password123
+- **SURVIVOR ACCOUNTS (survive database nuke):** Admin → `deseee@gmail.com` | Teams Organizer → `artifactmi@gmail.com`. See `packages/database/prisma/survivor-seed.ts`.
 - eBay: production credentials live in Railway. Browse API confirmed returning real listings.
 - POS test: Organizer must have Stripe Connect account configured; shopper must be linked via QR scan first
 - DB: Railway PostgreSQL (`maglev.proxy.rlwy.net:13949/railway`) — see CLAUDE.md §6 for migration commands

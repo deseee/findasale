@@ -2,6 +2,14 @@
 
 ## What Happened This Week
 
+**S453+S454** (2026-04-13) — Hunt Pass → real recurring subscription. Stripe go-live audit.
+- **Hunt Pass is now a real Stripe Subscription** ($4.99/mo auto-renewing). Old PaymentIntent flow removed entirely. Users click "Subscribe" → redirected to Stripe Checkout → webhook activates pass. Cancel at period end supported.
+- **Subscription ID persistence fixed (P0):** `stripeSubscriptionId` was never being saved → billing portal and cancel always failed. Fixed in `syncTier.ts`.
+- **Pricing page endpoint fixed (P0):** `pricing.tsx` was calling the broken checkout endpoint (orphaned Stripe customers). Now correctly calls `/billing/checkout`.
+- **POS product catalog guard:** New env var `STRIPE_GENERIC_ITEM_PRODUCT_ID` — when set, all POS payment links reuse one generic product instead of creating new ones per item. Keeps Stripe catalog clean.
+- **pricing.tsx null byte build error fixed.**
+- **Migration deployed:** `huntPassStripeCustomerId` + `huntPassStripeSubscriptionId` added to User table.
+
 **S452** (2026-04-13) — eBay + Stripe go-live prep. Bidirectional eBay sync (both directions). Policy ID fetch post-OAuth. endEbayListingIfExists wired into all 5 SOLD paths. Phase 3 polling cron (15-min). Stripe env confirmed. **Hunt Pass is a subscription — investigation required next session.**
 
 **S451** (2026-04-13) — Dashboard layout fixed, QR inline, broken buttons fixed:
@@ -59,13 +67,17 @@
 
 ## Action Items for Patrick
 
-- [ ] **Run S452 eBay migration** on Railway (see STATE.md S452 Patrick manual actions)
-- [ ] **Add `STRIPE_CONNECT_WEBHOOK_SECRET`** in Railway — Stripe Dashboard → Webhooks → endpoint for Connected accounts → `payment_intent.succeeded` → copy signing secret
+**NEW — S454:**
+- [ ] **Add to Railway env vars:** `STRIPE_HUNT_PASS_PRICE_ID=price_1TLtY1LIWHQCHu75W9F23hVJ` (live)
+- [ ] **Add to Railway env vars:** `STRIPE_GENERIC_ITEM_PRODUCT_ID=prod_UKZ2G21VhLJ3CE` (live)
+- [ ] **Archive junk Stripe sandbox products** — keep only: Hunt Pass, FindA.Sale Teams, FindA.Sale Pro, FindA.Sale — Item Sale
+- [ ] **Set up live Stripe webhooks** — live account has no webhooks yet (see S455 next session)
+- [ ] **Tell Claude your real organizer email** — needed for survivor accounts before database nuke
+
+**Carry-forward:**
+- [ ] **Add `STRIPE_CONNECT_WEBHOOK_SECRET`** in Railway — Stripe Dashboard → Webhooks → Connected accounts endpoint
 - [ ] **Decide: Followed Brands tab** — keep as "Brand Alerts", rename, or remove?
 - [ ] **Decide: Sales Near You** — fix or remove permanently?
-- [ ] **Run S449 migrations** on Railway if not done (rankUpHistory, holdDurationMinutes, legendary_early_access)
-- [ ] **Run S447 pending migrations** on Railway if not done: `20260413_xp_expiry_system` + `20260413_early_access_cache`
-- [ ] **Stripe Dashboard → Webhooks → add `charge.dispute.created` event** (S447, still open)
 - [ ] **Decide: Bounties rewards — dollars, XP, or both?** (S440 open, still blocking)
 
 ---
@@ -88,27 +100,17 @@
 
 ---
 
-## What's Next (S453)
+## What's Next (S455)
 
-**P0 — Stripe go-live audit (full pass):**
-Patrick confirmed Hunt Pass IS a subscription — the `streaks.ts` PaymentIntent implementation ($4.99 one-time) is wrong or incomplete. S453 must:
-1. Find or implement the real Hunt Pass subscription purchase flow (needs a Stripe Price ID like the organizer plans)
-2. Walk every payment path end-to-end: organizer subscriptions, Hunt Pass, boosts (cash rail), POS Connect payments, Stripe Terminal
-3. Verify all webhook events registered + secrets correct in Railway
-4. Confirm sandbox→live switch readiness for each path
-5. Identify any missing `STRIPE_*` env vars
+**P0 — Roadmap audit:** Records agent audits all sessions since last roadmap update. Every shipped feature gets logged. Patrick's human QA passes get marked ✅ Shipped & Verified.
 
-**P1 — eBay go-live audit:**
-Read `claude_docs/operations/ebay-stripe-go-live-prep.md` and walk through the testing checklist. Verify OAuth flow works with real eBay sandbox credentials, policy fetch fires, and item push creates a real listing.
+**P1 — Survivor accounts:** Dev creates `survivor-seed.ts` with Patrick's real organizer account + 1 QA shopper. These survive the database nuke when real users onboard. Patrick provides his real email at session start.
 
-**P2 — Patrick manual actions from S452 (must be done before eBay/Stripe testing):**
-- Run S452 migration on Railway (see STATE.md)
-- Add `STRIPE_CONNECT_WEBHOOK_SECRET` in Railway (see above)
+**P2 — Live Stripe webhooks:** Register both webhook endpoints in LIVE Stripe Dashboard with correct event sets. Get signing secrets → add to Railway.
 
 **Carry-forward:**
 - QA queue (S436/S430/S431/S427/S433) — still postponed
 - Bump Post feed sort (Architect sign-off in place, dev pending)
-- Brand audit copy fixes (3 items, dispatch-ready)
 - RankUpModal — not connected to AuthContext rank-change yet
 - Legendary item flag — no organizer UI yet
 
