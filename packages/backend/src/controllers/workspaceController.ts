@@ -117,7 +117,7 @@ export const inviteMember = async (req: AuthRequest, res: Response) => {
     }
 
     // Check if already invited or member
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findUnique({ where: { email }, include: { organizer: { select: { id: true } } } });
     if (existingUser && existingUser.organizer) {
       const existingMember = await prisma.workspaceMember.findUnique({
         where: { workspaceId_organizerId: { workspaceId: workspace.id, organizerId: existingUser.organizer.id } },
