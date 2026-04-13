@@ -427,7 +427,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     let couponId: string | undefined;
 
     // Check if organizer discount is active
-    if (item.organizerDiscountAmount && item.organizerDiscountAmount > 0) {
+    if (item.organizerDiscountAmount && parseFloat(item.organizerDiscountAmount.toString()) > 0) {
       // Organizer discount active — block shopper coupon
       organizerDiscountActive = true;
       discountAmount = Math.round(parseFloat(item.organizerDiscountAmount.toString()) * 100);
