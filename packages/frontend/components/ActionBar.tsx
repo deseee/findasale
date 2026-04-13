@@ -9,22 +9,16 @@ interface ActionBarProps {
 
 const ACTION_ITEMS = [
   {
-    id: 'browse',
-    label: 'Browse Sales',
-    icon: '🔍',
-    href: '/sales',
-  },
-  {
     id: 'collections',
     label: 'Collections',
     icon: '💕',
-    href: '/shopper/collections',
+    href: '/shopper/wishlist',
   },
   {
     id: 'history',
     label: 'Purchase History',
     icon: '📋',
-    href: '/shopper/purchases',
+    href: '/shopper/history',
   },
   {
     id: 'trails',
