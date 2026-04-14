@@ -319,6 +319,7 @@ model Organizer {
   trails                  TreasureTrail[]        @relation("OrganizerTrails")
   // Feature #244 Phase 2: eBay OAuth connection
   ebayConnection          EbayConnection?        @relation("OrganizerEbayConnection")
+  ebaySubscriptionId      String?                // ORDER_CONFIRMATION subscription ID from eBay Notification API
   workspaceChatMessages   WorkspaceChatMessage[] @relation("WorkspaceChatMessages")
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt

@@ -706,6 +706,63 @@ async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: strin
 }
 
 /**
+ * Create per-organizer eBay ORDER_CONFIRMATION subscription
+ * Uses the organizer's user token (from OAuth) to subscribe to order notifications
+ * Stores the subscriptionId on the Organizer record for later deletion
+ */
+async function createEbayOrderSubscription(organizerId: string, userAccessToken: string): Promise<void> {
+  const endpointUrl = process.env.EBAY_NOTIFICATION_ENDPOINT_URL;
+  const EBAY_NOTIFY_BASE = 'https://api.ebay.com/commerce/notification/v1';
+
+  try {
+    // Find the existing destination (created at startup by ebayNotificationSetup)
+    const destListResp = await fetch(`${EBAY_NOTIFY_BASE}/destination`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${userAccessToken}`, 'Content-Type': 'application/json' },
+    });
+    if (!destListResp.ok) {
+      console.warn(`[eBay Notify] Could not list destinations for organizer ${organizerId}`);
+      return;
+    }
+    const destData = await destListResp.json();
+    const destination = (destData.destinations || []).find((d: any) => d.deliveryConfig?.endpoint === endpointUrl);
+    if (!destination) {
+      console.warn(`[eBay Notify] No matching destination found for endpoint ${endpointUrl}`);
+      return;
+    }
+
+    // Create subscription
+    const subResp = await fetch(`${EBAY_NOTIFY_BASE}/subscription`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${userAccessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topicId: 'ORDER_CONFIRMATION',
+        status: 'ENABLED',
+        destinationId: destination.destinationId,
+        payload: { deliveryProtocol: 'HTTPS', format: 'JSON', schemaVersion: '1.0' },
+      }),
+    });
+
+    if (subResp.ok || subResp.status === 204) {
+      const subText = await subResp.text();
+      const subData = subText ? JSON.parse(subText) : {};
+      const subscriptionId = subData.subscriptionId;
+      if (subscriptionId) {
+        await prisma.organizer.update({ where: { id: organizerId }, data: { ebaySubscriptionId: subscriptionId } });
+        console.log(`[eBay Notify] ORDER_CONFIRMATION subscription created for organizer ${organizerId} (id: ${subscriptionId})`);
+      } else {
+        console.log(`[eBay Notify] Subscription created for organizer ${organizerId} (no subscriptionId in response)`);
+      }
+    } else {
+      const err = await subResp.text();
+      console.warn(`[eBay Notify] Failed to create subscription for organizer ${organizerId}: HTTP ${subResp.status} — ${err.slice(0, 300)}`);
+    }
+  } catch (err: any) {
+    console.warn(`[eBay Notify] Exception creating subscription for organizer ${organizerId}:`, err.message);
+  }
+}
+
+/**
  * GET /api/ebay/connect
  * Redirect organizer to eBay OAuth authorization URL
  */
@@ -753,6 +810,7 @@ export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
       'https://api.ebay.com/oauth/api_scope/sell.account',
       'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
       'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
+      'https://api.ebay.com/oauth/api_scope/commerce.notification.subscription',
       'openid',
     ].join(' '));
     authUrl.searchParams.set('state', stateToken);
@@ -899,6 +957,11 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
       console.error('[eBay] Failed to fetch policies after OAuth:', err)
     );
 
+    // Fire-and-forget: create ORDER_CONFIRMATION subscription using organizer's user token
+    createEbayOrderSubscription(organizer.id, accessToken).catch(err =>
+      console.warn('[eBay Notify] Subscription creation failed:', err.message)
+    );
+
     const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     res.redirect(`${frontendUrl}/organizer/settings?ebay_connected=true`);
   } catch (error) {
@@ -966,15 +1029,32 @@ export const disconnectEbay = async (req: AuthRequest, res: Response) => {
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId },
+      include: { ebayConnection: true },
     });
 
     if (!organizer) {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
+    // Delete eBay ORDER_CONFIRMATION subscription if exists
+    if (organizer.ebaySubscriptionId && organizer.ebayConnection) {
+      const EBAY_NOTIFY_BASE = 'https://api.ebay.com/commerce/notification/v1';
+      // Fire-and-forget subscription deletion — non-fatal if this fails
+      fetch(`${EBAY_NOTIFY_BASE}/subscription/${organizer.ebaySubscriptionId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${organizer.ebayConnection.accessToken}`, 'Content-Type': 'application/json' },
+      }).catch(err => console.warn('[eBay Notify] Failed to delete subscription:', err.message));
+    }
+
     // Delete connection (cascade will clean up any related data)
     await prisma.ebayConnection.deleteMany({
       where: { organizerId: organizer.id },
+    });
+
+    // Clear ebaySubscriptionId from organizer
+    await prisma.organizer.update({
+      where: { id: organizer.id },
+      data: { ebaySubscriptionId: null },
     });
 
     res.json({
