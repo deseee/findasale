@@ -1907,16 +1907,17 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${itemId}</ItemID><OutputSelector>Description</OutputSelector><OutputSelector>ItemSpecifics</OutputSelector><OutputSelector>PictureDetails</OutputSelector><OutputSelector>ConditionID</OutputSelector><OutputSelector>PrimaryCategory</OutputSelector></GetItemRequest>`;
 
         try {
+          const getItemHeaders: Record<string, string> = {
+            'X-EBAY-API-CALL-NAME': 'GetItem',
+            'X-EBAY-API-SITEID': '0',
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+            'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+            'Content-Type': 'text/xml',
+          };
+          if (accessToken) getItemHeaders['X-EBAY-API-IAF-TOKEN'] = accessToken;
           const resp = await fetch('https://api.ebay.com/ws/api.dll', {
             method: 'POST',
-            headers: {
-              'X-EBAY-API-CALL-NAME': 'GetItem',
-              'X-EBAY-API-SITEID': '0',
-              'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-              'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
-              'X-EBAY-API-IAF-TOKEN': accessToken ?? undefined,
-              'Content-Type': 'text/xml',
-            },
+            headers: getItemHeaders,
             body: getItemXml,
           });
 
