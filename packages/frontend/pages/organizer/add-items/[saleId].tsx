@@ -1393,8 +1393,13 @@ const AddItemsDetailPage = () => {
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-1">
-              Add Items{sale?.name ? ` to: ${sale.name}` : ''}
+              Add Items
             </h1>
+            {sale?.name && (
+              <p className="text-amber-700 dark:text-amber-400 font-medium text-base mb-1">
+                {sale.name}
+              </p>
+            )}
             <p className="text-warm-600 dark:text-warm-400 mb-1">
               {items.length > 0 && (
                 <>
