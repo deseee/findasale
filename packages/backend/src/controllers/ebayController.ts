@@ -1913,21 +1913,24 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
     // Fire-and-forget: GetItem enrichment for photos, categories, descriptions, tags
     ;(async () => {
-      const itemsToEnrich = await prisma.item.findMany({
+      const allEbayItems = await prisma.item.findMany({
         where: {
           organizerId: organizer.id,
           ebayListingId: { not: null },
-          OR: [
-            { description: null },
-            { description: '' },
-            { category: null },
-            { category: '' },
-            { tags: { isEmpty: true } },
-            { photoUrls: { isEmpty: true } },
-          ],
         },
         select: { id: true, ebayListingId: true, description: true, category: true, tags: true, conditionGrade: true, photoUrls: true },
       });
+
+      // Filter for items that need enrichment: missing core fields OR have insufficient photos
+      const itemsToEnrich = allEbayItems.filter((item: typeof allEbayItems[0]) =>
+        !item.description ||
+        !item.category ||
+        !item.tags ||
+        item.tags.length === 0 ||
+        !item.photoUrls ||
+        item.photoUrls.length === 0 ||
+        item.photoUrls.length <= 1  // Include items with only 1 photo (from GalleryURL)
+      );
 
       if (itemsToEnrich.length === 0) return;
       console.log(`[eBay Enrich] Starting GetItem enrichment for ${itemsToEnrich.length} items...`);
