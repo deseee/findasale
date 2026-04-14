@@ -1638,12 +1638,12 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
       // Simple XML field extractor
       const xmlVal = (block: string, tag: string): string | null => {
-        const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\s\S]*?)<\\/${tag}>`));
+        const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`));
         return m ? m[1].trim() : null;
       };
       const xmlAll = (block: string, tag: string): string[] => {
         const results: string[] = [];
-        const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\s\S]*?)<\\/${tag}>`, 'g');
+        const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'g');
         let m: RegExpExecArray | null;
         while ((m = re.exec(block)) !== null) results.push(m[1]);
         return results;
