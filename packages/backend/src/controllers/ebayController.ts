@@ -392,6 +392,7 @@ function generateEbayCsv(
     price: number | null;
     category: string | null;
     conditionGrade: string | null;
+    ebayCategoryId: string | null;
     photoUrls: string[];
     estimatedValue: any;
     aiSuggestedPrice: any;
@@ -1309,7 +1310,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
       conditionId,
       conditionLabel: getConditionLabel(conditionId),
       categoryId,
-      categoryLabel: getCategoryLabel(categoryId),
+      categoryLabel: getCategoryLabel(categoryId ?? '99'),
       photos,
       aspects,
       ebayUrl: item.ebayListingId ? `https://www.ebay.com/itm/${item.ebayListingId}` : null,
@@ -1488,7 +1489,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         const desiredCondition = mapGradeToInventoryCondition(item.conditionGrade);
         const ebayCondition = await ensureConditionValidForCategory(
           desiredCondition,
-          categoryId
+          categoryId ?? '99'
         );
         console.log(
           `[eBay Push] ${item.title.slice(0, 40)} → category=${categoryId} condition=${ebayCondition} (grade=${item.conditionGrade || 'none'})`
@@ -1518,7 +1519,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // REQUIRED aspects the category demands (prevents errorId 25002
         // "The item specific X is missing").
         const userAspects = buildAspects(item.tags);
-        const aspects = await fillRequiredAspects(userAspects, categoryId, {
+        const aspects = await fillRequiredAspects(userAspects, categoryId ?? '99', {
           title: item.title,
           tags: item.tags,
           description: item.description,
@@ -1749,7 +1750,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         if (!publishResponse.ok) {
           const publishErrorText = await publishResponse.clone().text();
           if (publishErrorText.includes('25021')) {
-            const accepted = await getAcceptedConditionsForCategory(categoryId);
+            const accepted = await getAcceptedConditionsForCategory(categoryId ?? '99');
             // Preference order for retry: NEW_OTHER, USED_VERY_GOOD, USED_EXCELLENT,
             // NEW, USED_GOOD, USED_ACCEPTABLE — excluding whichever we already tried.
             const retryOrder = [
