@@ -645,18 +645,30 @@ function ebayUserHeaders(accessToken: string): Record<string, string> {
  * 25021 "condition is invalid for primary category" errors caused by the
  * hardcoded name→ID map resolving to branch categories.
  *
+ * IMPORTANT: Taxonomy API requires an APPLICATION access token (client
+ * credentials), NOT the organizer's user token. User tokens do not carry
+ * commerce.taxonomy scope and return 403 errorId 1100 ACCESS/REQUEST.
+ *
  * Returns null on any failure so caller can fall back to the static map.
  * US marketplace tree id is '0'.
  */
-async function suggestEbayCategoryForTitle(
-  title: string,
-  accessToken: string
-): Promise<string | null> {
+async function suggestEbayCategoryForTitle(title: string): Promise<string | null> {
   try {
+    const appToken = await getEbayAccessToken();
+    if (!appToken) {
+      console.warn('[eBay Taxonomy] App token unavailable — check EBAY_CLIENT_ID/SECRET');
+      return null;
+    }
     const treeId = '0'; // EBAY_US
     const q = encodeURIComponent(title.slice(0, 100));
     const url = `https://api.ebay.com/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${q}`;
-    const res = await fetch(url, { headers: ebayUserHeaders(accessToken) });
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${appToken}`,
+        'Content-Type': 'application/json',
+        'Accept-Language': 'en-US',
+      },
+    });
     if (!res.ok) {
       const body = await res.text();
       console.error(`[eBay Taxonomy] getCategorySuggestions ${res.status}: ${body.slice(0, 200)}`);
@@ -1194,22 +1206,13 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
     // for the Taxonomy API call; refresh lazily only when we need to suggest.
     let categoryId: string | null = item.ebayCategoryId || null;
     if (!categoryId) {
-      const organizerForToken = await prisma.organizer.findUnique({
-        where: { userId: userId! },
-        select: { id: true },
-      });
-      if (organizerForToken) {
-        const token = await refreshEbayAccessToken(organizerForToken.id);
-        if (token) {
-          const suggested = await suggestEbayCategoryForTitle(item.title, token);
-          if (suggested) {
-            categoryId = suggested;
-            await prisma.item.update({
-              where: { id: item.id },
-              data: { ebayCategoryId: suggested },
-            });
-          }
-        }
+      const suggested = await suggestEbayCategoryForTitle(item.title);
+      if (suggested) {
+        categoryId = suggested;
+        await prisma.item.update({
+          where: { id: item.id },
+          data: { ebayCategoryId: suggested },
+        });
       }
     }
     if (!categoryId) {
@@ -1383,7 +1386,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // 3. Static name→ID map (last resort; may land on a branch → 25021)
         let categoryId: string | null = item.ebayCategoryId || null;
         if (!categoryId) {
-          categoryId = await suggestEbayCategoryForTitle(item.title, accessToken);
+          categoryId = await suggestEbayCategoryForTitle(item.title);
           if (categoryId) {
             // Cache — idempotent, cheap, avoids repeated API calls on re-push
             await prisma.item.update({
