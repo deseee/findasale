@@ -2,6 +2,14 @@
 
 ## What Happened This Week
 
+**S459** (2026-04-14) — eBay webhook confirmed + enrichment fully operational:
+- **ORDER_CONFIRMATION webhook** ✅ — Per-organizer subscription working. The 409 in logs = correct (subscription already exists from first connect). No action needed.
+- **eBay photos now syncing** ✅ — Items showing 4–22 photos each. Categories populated (Comics, Golf, Magazines, Tobacciana, etc.)
+- **Shopping API killed, Trading API GetItem in use** — eBay's old Shopping API was silently returning empty responses (retired). Replaced with Trading API GetItem calls, 5 concurrent, fire-and-forget after HTTP response.
+- **Timeout error fixed** — Sync now responds immediately with item count. Enrichment runs in background. When done, you'll get a toast: "Photos and details synced for X eBay items."
+- **`&amp;` in categories** — eBay returns HTML-encoded category names. Will be fixed next session (cosmetic).
+- **Two inventory page bugs queued for next session** — images need hard refresh, no click/edit on cards.
+
 **S458** (2026-04-14) — Pull to Sale UX + eBay GetItem enrichment:
 - **Toast on pull** ✅ — "Item added to [sale name]" on pull confirm
 - **Sale title in Add Items header** ✅ — was using `sale.name` (wrong), fixed to `sale.title`

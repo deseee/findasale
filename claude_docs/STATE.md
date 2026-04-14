@@ -7,6 +7,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S459 COMPLETE (2026-04-14) — eBay webhook + enrichment fully operational**
+
+**S459 What happened:**
+- **ORDER_CONFIRMATION webhook:** Confirmed working — 409 "Subscription already exists" on reconnect is correct behavior. Subscription registered per-organizer at OAuth connect time using user token. Destination registered at startup with app token.
+- **Shopping API dead:** `open.api.ebay.com/shopping` returning HTTP 200 with empty body for all batches — API silently retired. Removed entirely.
+- **GetItem enrichment — Trading API replacement:** New fire-and-forget enrichment pass in `ebayController.ts`. After `res.json()` is sent, IIFE runs `GetItem` calls via Trading API (5 concurrent). Fetches Description, ItemSpecifics, PictureDetails, ConditionID, PrimaryCategory per item. Emits `EBAY_ENRICH_COMPLETE` Socket.io event to organizer when done.
+- **SKU → numeric ItemID migration:** `ebayListingId` was storing SKU (e.g. `2025-08-14 02 C0 S2`) instead of numeric eBay ItemID. GetItem needs numeric ID. Fixed: import now stores `ebayItemId` always; existing items get `ebayListingId` migrated to numeric ID on re-sync.
+- **TypeScript fix:** `HeadersInit` doesn't allow `undefined` values — built headers object conditionally, added `X-EBAY-API-IAF-TOKEN` only when `accessToken` is non-null.
+- **Frontend socket listener:** `settings.tsx` — added `useEffect` with `socketIO` listener for `EBAY_ENRICH_COMPLETE` when on eBay tab. Shows toast with enrichment summary when background pass completes.
+- **Result confirmed:** Items now showing 4–22 photos, categories populated (e.g. `Collectibles:Comic Books &amp; Memorabilia:Comics:Comics &amp; Graphic Novels`). Note: `&amp;` HTML entities in category strings — needs decoding before display.
+
+**S459 Open issues for next session:**
+1. **Inventory page images need hard refresh** — photos don't load on first visit, require reload
+2. **No item click/expand/edit** — inventory cards are not clickable; no way to view all fields or go to edit page
+3. **`&amp;` in category display** — eBay returns HTML-encoded category paths; need to decode before storing or rendering
+
+**S459 Files changed:**
+- `packages/backend/src/controllers/ebayController.ts` — Shopping API removed, GetItem fire-and-forget enrichment, SKU→ItemID fix, getIO import, HeadersInit fix
+- `packages/frontend/pages/organizer/settings.tsx` — socketIO import, EBAY_ENRICH_COMPLETE listener
+
+---
+
 **S458 COMPLETE (2026-04-14) — Pull to Sale UX + eBay field extraction + GetItem enrichment**
 
 **S458 What happened:**
@@ -1162,11 +1184,23 @@ npx prisma generate
 
 ## Next Session Priority
 
-### Outstanding Actions (as of S458, 2026-04-14)
+### Outstanding Actions (as of S459, 2026-04-14)
 
 ---
 
-**STEP 0 — eBay sync architecture audit (START HERE — Patrick's S458 directive):**
+**STEP 0 — Inventory page bugs (START HERE):**
+
+Two confirmed UX issues on `/organizer/inventory`:
+
+1. **Images don't load on first visit** — items show without photos until hard refresh (Cmd+Shift+R). Likely lazy loading race condition, Next.js image optimization cache miss on eBay URLs, or CSP header blocking first load. Check: `next.config.js` image domains, `<Image>` unoptimized flag on eBay URLs, any `loading="lazy"` on above-the-fold items.
+
+2. **No click target on inventory cards** — `InventoryItemCard.tsx` cards are not interactive. There is no way to expand a card to see all fields, no link to an edit page, no modal. Need: clicking a card should open an edit/detail view (modal or dedicated page at `/organizer/inventory/[itemId]`). At minimum, must expose: title, description, price, condition, category, tags, all photos, status.
+
+3. **`&amp;` in category display** — eBay returns HTML-encoded strings (e.g. `Comics &amp; Graphic Novels`). Should be decoded (`he.decode()` or similar) before storing, or decoded at render time.
+
+---
+
+**STEP 1 — eBay sync architecture audit (Patrick's S458 directive, now lower priority since enrichment works):**
 
 Patrick flagged that the current eBay sync approach (GetMyeBaySelling → separate GetItem enrichment pass per item) is architecturally wrong. Before any more eBay dev work, dispatch `findasale-architect` + research to answer:
 
