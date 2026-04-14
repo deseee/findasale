@@ -94,72 +94,14 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
     }
 
     if (!destinationId) {
-      console.error('[eBay Notify Setup] No destinationId — cannot create subscription');
+      console.error('[eBay Notify Setup] No destinationId — cannot proceed');
       return;
     }
 
-    // ── Step 1b: Discover schema version for this topic ─────────────────────
-    // The list-all endpoint returns empty supportedSchemaVersions. Call per-topic endpoint.
-    // If still empty, omit schemaVersion from the subscription body (eBay rejects '1.0' for this topic).
-    let schemaVersion: string | null = null;
-    const topicResp = await fetch(`${EBAY_NOTIFY_BASE}/topic/${EBAY_NOTIFICATION_TOPIC}`, {
-      method: 'GET',
-      headers,
-    });
-    if (topicResp.ok) {
-      const topicText = await topicResp.text();
-      const topicData = topicText ? JSON.parse(topicText) : {};
-      const versions: string[] = topicData.supportedSchemaVersions || [];
-      if (versions.length > 0) {
-        schemaVersion = versions[versions.length - 1];
-        console.log(`[eBay Notify Setup] Topic ${EBAY_NOTIFICATION_TOPIC} schemaVersion=${schemaVersion}`);
-      } else {
-        console.log(`[eBay Notify Setup] Topic ${EBAY_NOTIFICATION_TOPIC} found — no schema versions listed, omitting schemaVersion from subscription request`);
-      }
-    } else {
-      const errText = await topicResp.text();
-      console.warn(`[eBay Notify Setup] Could not fetch topic ${EBAY_NOTIFICATION_TOPIC}: HTTP ${topicResp.status} — ${errText.slice(0, 200)}`);
-    }
-
-    // ── Step 2: Find or create subscription ─────────────────────────────────
-    const subListResp = await fetch(`${EBAY_NOTIFY_BASE}/subscription`, {
-      method: 'GET',
-      headers,
-    });
-
-    if (subListResp.ok) {
-      const subListText = await subListResp.text();
-      const subListData = subListText ? JSON.parse(subListText) : {};
-      const subscriptions: any[] = subListData.subscriptions || [];
-      const existingSub = subscriptions.find(
-        (s: any) => s.topicId === EBAY_NOTIFICATION_TOPIC && s.destinationId === destinationId
-      );
-      if (existingSub) {
-        console.log(`[eBay Notify Setup] Subscription already exists (id: ${existingSub.subscriptionId}) — no action needed`);
-        return;
-      }
-    }
-
-    const subBody: Record<string, string> = {
-      topicId: EBAY_NOTIFICATION_TOPIC,
-      status: 'ENABLED',
-      destinationId: destinationId as string,
-    };
-    if (schemaVersion) subBody.schemaVersion = schemaVersion;
-    console.log(`[eBay Notify Setup] Creating subscription:`, JSON.stringify(subBody));
-
-    const subCreateResp = await fetch(`${EBAY_NOTIFY_BASE}/subscription`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(subBody),
-    });
-
-    if (subCreateResp.status === 204 || subCreateResp.ok) {
-      console.log(`[eBay Notify Setup] Subscription registered: ${EBAY_NOTIFICATION_TOPIC} → ${endpointUrl}`);
-    } else {
-      const err = await subCreateResp.text();
-      console.error(`[eBay Notify Setup] Failed to create subscription: HTTP ${subCreateResp.status} — ${err.slice(0, 300)}`);
-    }
+    // ORDER_CONFIRMATION subscriptions are user-based (per-organizer).
+    // They are created in ebayOAuthCallback when an organizer connects their eBay account.
+    // The destination registered above is shared across all organizer subscriptions.
+    console.log(`[eBay Notify Setup] Destination ready (id: ${destinationId}) — ORDER_CONFIRMATION subscriptions are created per-organizer at OAuth connect time`);
   } catch (err: any) {
     console.error('[eBay Notify Setup] Exception:', err.message);
     // Non-fatal — polling cron continues as fallback
