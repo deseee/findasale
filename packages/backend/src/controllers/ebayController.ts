@@ -1332,12 +1332,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           },
           condition: mapConditionIdToEbayCondition(conditionId),
           availability: {
-            shipToLocationAvailability: [
-              {
-                quantity: 1,
-                locationKey: 'DEFAULT',
-              },
-            ],
+            shipToLocationAvailability: {
+              quantity: 1,
+            },
           },
         };
 
