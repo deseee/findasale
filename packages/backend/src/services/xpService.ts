@@ -32,6 +32,9 @@ export const XP_AWARDS = {
   VISIT: 5,
   COMEBACK_BONUS: 20, // One-time if returning after 2+ weeks away
 
+  // Sale creation
+  FIRST_SALE_CREATED: 25, // One-time XP bonus when organizer creates first sale
+
   // Purchases and engagement
   PURCHASE: 1, // Base for completed purchase ($1 = 1 XP)
   REVIEW: 8, // For leaving a product review (raised from 5 — requires text effort)

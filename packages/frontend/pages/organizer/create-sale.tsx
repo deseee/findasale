@@ -140,7 +140,16 @@ const CreateSalePage = () => {
 
     try {
       const response = await api.post('/sales', formData);
-      showToast('Sale created! Add items next.', 'success');
+      const firstSaleUnlocked = response.data.achievements?.some(
+        (a: { key: string }) => a.key === 'FIRST_SALE_CREATED'
+      );
+      if (firstSaleUnlocked) {
+        showToast('🚀 Achievement Unlocked: Sale Launcher! +25 XP', 'success');
+        // Brief delay so user sees the achievement toast before navigating
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } else {
+        showToast('Sale created! Add items next.', 'success');
+      }
       router.push(`/organizer/add-items/${response.data.id}`);
     } catch (error: any) {
       // Feature #249: Handle concurrent sales tier limit (409)

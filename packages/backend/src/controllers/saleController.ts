@@ -428,8 +428,25 @@ export const createSale = async (req: AuthRequest, res: Response) => {
     const sale = await prisma.sale.create({
       data: { ...saleData, organizerId, status: 'DRAFT' }
     });
-    
-    res.status(201).json(convertDecimalsToNumbers(sale));
+
+    // Check achievements and award XP (first sale creation)
+    let newlyUnlockedAchievements: Array<{ id: string; key: string; name: string; icon?: string }> = [];
+    if (req.user?.id) {
+      try {
+        const { checkAndAward } = await import('../services/achievementService');
+        newlyUnlockedAchievements = await checkAndAward(req.user.id, 'SALE_CREATED');
+        if (newlyUnlockedAchievements.some(a => a.key === 'FIRST_SALE_CREATED')) {
+          await awardXp(req.user.id, 'FIRST_SALE_CREATED', XP_AWARDS.FIRST_SALE_CREATED, {
+            saleId: sale.id,
+            description: 'First sale created!',
+          });
+        }
+      } catch (err) {
+        console.error('[createSale] Achievement/XP check failed:', err);
+      }
+    }
+
+    res.status(201).json({ ...convertDecimalsToNumbers(sale), achievements: newlyUnlockedAchievements });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: 'Validation error', errors: error.errors });
