@@ -14,6 +14,7 @@ import {
   getAspectsForCategory,
   searchCatalogProduct,
   suggestIdentifiersFromItem,
+  suggestCategories,
 } from '../services/ebayTaxonomyService';
 import { getEbayAccessToken } from './ebayController';
 
@@ -223,6 +224,44 @@ export async function suggestIdentifiersHandler(req: AuthRequest, res: Response)
     res.json(suggestions);
   } catch (error: any) {
     console.error('[ebayTaxonomy] suggestIdentifiersHandler error:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// ── Handler 4: GET /api/ebay/taxonomy/suggest ────────────────────────────────
+
+export async function suggestCategoriesHandler(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const organizerId = (req.user as any).organizerId || (req.user as any).organizer?.id;
+    if (!organizerId) {
+      res.status(403).json({ error: 'Organizer profile not found' });
+      return;
+    }
+
+    const { q } = req.query;
+    if (!q || typeof q !== 'string') {
+      res.status(400).json({ error: 'q (query) parameter required' });
+      return;
+    }
+
+    // Get eBay access token (app token)
+    const token = await getOrganizerEbayToken(organizerId);
+    if (!token) {
+      res.status(401).json({ error: 'eBay connection not authorized' });
+      return;
+    }
+
+    // Fetch category suggestions
+    const suggestions = await suggestCategories(token, q);
+
+    res.json({ suggestions });
+  } catch (error: any) {
+    console.error('[ebayTaxonomy] suggestCategoriesHandler error:', error.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 }

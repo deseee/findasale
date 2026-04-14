@@ -7,6 +7,39 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S463 COMPLETE (2026-04-14) — Static eBay category picker retired, eBay sync architecture spec, roadmap audit v105**
+
+**S463 What happened:**
+- **STEP 0 (QA):** Deferred per Patrick ("s463 qa is deferred"). Patrick will Chrome-QA S462 eBay listing parity flow himself.
+- **STEP 1 — Static eBay category picker retired (✅ dev shipped):**
+  - NEW `GET /api/ebay/taxonomy/suggest?q=...` endpoint in `ebayTaxonomyController.ts` + `ebayTaxonomyService.ts` — proxies eBay Taxonomy `get_category_suggestions` using app token, 1h in-memory cache, returns top 5 `{ categoryId, categoryName, categoryTreeNodeLevel }`
+  - Route added to `packages/backend/src/routes/ebayTaxonomy.ts`
+  - `EbayCategoryPicker.tsx` fully rewritten — debounced 400ms API calls, dropdown with results, loading/empty states, backward-compatible `value`/`onChange` interface
+  - `packages/backend/src/utils/ebayCategoryMap.ts` DELETED (dead code)
+  - `ebayController.ts` — removed `getEbayCategoryId()` import + all 3 call sites (CSV export fallback → `item.ebayCategoryId || '99'`, push + preview paths already use `suggestEbayCategoryForTitle()`)
+  - TS checks: zero errors frontend + backend
+- **STEP 3 — eBay sync architecture audit (✅ spec produced):**
+  - Key finding: sequential GetItem enrichment loop (~line 2746–2895 of `ebayController.ts`) = 86 calls / ~9s → replace with `GetMultipleItems` Shopping API (20/batch = 5 calls / ~1-2s)
+  - Phase 2: ORDER_CONFIRMATION webhook partial code already exists — extend to eliminate 15-min polling cron
+  - No new OAuth scopes needed. Spec documented as one-pager (not filed as ADR — decision support only)
+- **Roadmap audit (✅ findasale-records shipped):**
+  - `claude_docs/strategy/roadmap.md` updated to v105
+  - Human-verified marks added: S450 rank display, S451 dashboard layout, S454 Hunt Pass Stripe, S456 eBay import, S461 Contigo push
+  - Feature #25 (eBay Sync) updated through S456–S462; #122 Explorer Guild + S449–S450; #133/#213 Hunt Pass + S454
+- **STEP 2 (broader category coverage):** Patrick action — push a book, clothing item, furniture item to verify Phase A/B/C holds beyond the Contigo case.
+- **STEP 4 (Live Stripe webhooks):** Patrick action — register two live Stripe webhook endpoints (see ## Next Session).
+
+**S463 Files changed (6):**
+- `packages/backend/src/services/ebayTaxonomyService.ts` (suggest function + cache added)
+- `packages/backend/src/controllers/ebayTaxonomyController.ts` (suggestCategoriesHandler added)
+- `packages/backend/src/routes/ebayTaxonomy.ts` (GET /taxonomy/suggest added)
+- `packages/backend/src/controllers/ebayController.ts` (getEbayCategoryId removed from 3 sites)
+- `packages/frontend/components/EbayCategoryPicker.tsx` (fully rewritten, live API)
+- `claude_docs/strategy/roadmap.md` (updated to v105)
+- **DELETED:** `packages/backend/src/utils/ebayCategoryMap.ts`
+
+---
+
 **S462 COMPLETE (2026-04-14) — eBay Listing Data Parity Phase A + B + C shipped — native-quality listings**
 
 **S462 Origin:** Patrick compared Contigo mug (FAS-pushed) vs Spawn #4 comic (eBay-native, same seller). FAS listing showed "Free Standard Shipping" + hardcoded Grand Rapids + thin specifics + no catalog match. Directive: "i'd rather be right than fast… look into the ebay fields we should be using." Architect produced ADR at `claude_docs/feature-notes/adr-ebay-listing-data-parity.md`. 4 Dev agents dispatched (Wave 1 sequential schema, then 3 parallel waves).
@@ -1347,7 +1380,7 @@ npx prisma generate
 
 ## Next Session Priority
 
-### Outstanding Actions (as of S462, 2026-04-14 — Listing Data Parity A+B+C shipped, unverified)
+### Outstanding Actions (as of S463, 2026-04-14)
 
 ---
 
@@ -1425,34 +1458,25 @@ Patrick flagged that the current eBay sync approach (GetMyeBaySelling → separa
 
 ---
 
-**STEP 2 — Roadmap audit (findasale-records):**
-
-**DIRECTIVE FROM PATRICK (S454 wrap):** Audit all work since the last roadmap session. Document Patrick's human QA passes into shipped & verified section of roadmap. Survivor accounts: `survivor-seed.ts` already exists (see Standing Notes).
-
-Dispatch `findasale-records` to:
-
-Dispatch `findasale-records` to:
-1. Read `claude_docs/strategy/roadmap.md` — identify last session with a roadmap update
-2. Read STATE.md "## Current Work" and all recent session summaries since that session
-3. For every feature shipped since the last roadmap update:
-   - Move from BROKEN/IN-PROGRESS → FIXED/SHIPPED with session number
-   - For any feature Patrick has manually QA'd and confirmed (human QA pass): mark as ✅ Shipped & Verified
-   - Known human QA passes this cycle: dashboard layout (S451), rank display, action buttons, QR inline panel, dashboard character sheet, eBay sync, Stripe go-live fixes
-4. Update the roadmap file and include it in the wrap push block
+**STEP 2 ✅ DONE (S463) — Roadmap audit complete** — `roadmap.md` updated to v105. Human-verified marks added for S450 rank, S451 dashboard, S454 Hunt Pass Stripe, S456 eBay import, S461 Contigo push.
 
 **STEP 3 — Survivor accounts:** ✅ `packages/database/prisma/survivor-seed.ts` already created. See Standing Notes for survivor account emails (`deseee@gmail.com`, `artifactmi@gmail.com`).
 
-**STEP 4 — Live Stripe webhook setup:**
+**STEP 4 — Live Stripe webhook setup (Patrick action):**
 
-Complete the webhook registration Patrick deferred. Two endpoints to register in LIVE Stripe:
-- `/api/billing/webhook` — events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`, `checkout.session.completed`
-- `/api/stripe/webhook` — events: `payment_intent.succeeded`, `charge.dispute.created`, `charge.succeeded`, `charge.failed`
+Register these two endpoints in **live** Stripe Dashboard → Webhooks:
+- `https://backend-production-153c9.up.railway.app/api/billing/webhook` — events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`, `checkout.session.completed`
+- `https://backend-production-153c9.up.railway.app/api/stripe/webhook` — events: `payment_intent.succeeded`, `charge.dispute.created`, `charge.succeeded`, `charge.failed`
 
-Each gets its own signing secret from Stripe → add as env vars in Railway.
+Each webhook signing secret → add to Railway as `STRIPE_BILLING_WEBHOOK_SECRET` and `STRIPE_WEBHOOK_SECRET`.
 
-**STEP 5 — Archive junk Stripe sandbox products:**
+**STEP 5 — Archive junk Stripe sandbox products (Patrick action):**
 
-Patrick still has ~14 junk products in sandbox catalog. He should archive all except: Hunt Pass, FindA.Sale Teams, FindA.Sale Pro, FindA.Sale — Item Sale.
+Archive all except: Hunt Pass, FindA.Sale Teams, FindA.Sale Pro, FindA.Sale — Item Sale.
+
+**STEP 6 — eBay sync batch refactor (next dev dispatch):**
+
+Dispatch `findasale-dev` to replace sequential GetItem loop (`ebayController.ts` lines 2746–2895) with `GetMultipleItems` Shopping API batches (20/call). Target: 86 items in 5 API calls instead of 86. No schema changes needed.
 
 ---
 

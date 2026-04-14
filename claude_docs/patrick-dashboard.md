@@ -2,6 +2,14 @@
 
 ## What Happened This Week
 
+**S463** (2026-04-14) — Static eBay category picker retired, eBay sync architecture spec, roadmap audit ✅
+- **Live eBay category picker shipped:** `EbayCategoryPicker.tsx` now calls the Taxonomy API as you type (400ms debounce), shows real leaf categories with IDs from eBay. The old 120-entry static JSON (with wrong IDs on several categories) is gone. `ebayCategoryMap.ts` deleted. `getEbayCategoryId()` and all 3 call sites removed. New `GET /api/ebay/taxonomy/suggest?q=...` endpoint added.
+- **eBay sync architecture spec:** The sequential GetItem enrichment loop (86 API calls, ~9 seconds) should be replaced with `GetMultipleItems` Shopping API (5 calls, ~1-2 seconds). Webhook code to retire the 15-min polling cron already partially exists. Next dev dispatch: implement the batch refactor.
+- **Roadmap updated to v105:** Human QA marks added for S450 rank display, S451 dashboard layout, S454 Hunt Pass Stripe, S456 eBay import, S461 Contigo push.
+- **QA deferred:** You indicated you'll Chrome-QA S462 listing parity yourself. Any failures become S464 fix items.
+
+---
+
 **S462** (2026-04-14) — eBay Listing Data Parity (Phases A + B + C shipped) ✅ (pending Chrome QA)
 - **The problem you caught:** Our FAS-pushed Contigo mug showed "Free Standard Shipping" and "Grand Rapids, MI" pickup — both wrong. Meanwhile, a native eBay listing from the same account (Spawn #4 comic) showed real calculated shipping, the correct Fox Island pickup location, rich HTML description, 18+ item specifics, catalog match, and "or Best Offer." Our push was technically working but producing low-credibility listings. Your call: "i'd rather be right than fast."
 - **What shipped (Phase A — code-only fixes):**
@@ -165,6 +173,31 @@
 
 ## Action Items for Patrick
 
+**NEW — S463 Push block (do this now):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/services/ebayTaxonomyService.ts
+git add packages/backend/src/controllers/ebayTaxonomyController.ts
+git add packages/backend/src/routes/ebayTaxonomy.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/components/EbayCategoryPicker.tsx
+git rm packages/backend/src/utils/ebayCategoryMap.ts
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat: live eBay category picker, retire ebayCategoryMap, roadmap v105"
+.\push.ps1
+```
+
+**NEW — S463 Patrick manual actions:**
+- [ ] **STEP 0 Chrome QA:** Walk S462 eBay listing parity flow yourself (PostSaleEbayPanel → Edit eBay → Auto-fill → Push). Any failures = report back as S464 fix items.
+- [ ] **STEP 2 Broader category test:** Push a book, clothing item, and furniture item to eBay to verify Phase A/B/C holds beyond the Contigo case.
+- [ ] **STEP 4 Live Stripe webhooks:** Register in Stripe Live Dashboard:
+  - `https://backend-production-153c9.up.railway.app/api/billing/webhook` (subscription events)
+  - `https://backend-production-153c9.up.railway.app/api/stripe/webhook` (payment + dispute events)
+  - Add signing secrets to Railway as `STRIPE_BILLING_WEBHOOK_SECRET` + `STRIPE_WEBHOOK_SECRET`
+- [ ] **STEP 5 Archive junk Stripe sandbox products** — keep: Hunt Pass, Teams, Pro, Item Sale
+
 **NEW — S461 Session wrap push block (do this now):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -260,25 +293,17 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 ---
 
-## What's Next (S462+)
+## What's Next (S464+)
 
-**STEP 0 — Mandatory post-deploy smoke test (CLAUDE.md §10):** Open Chrome at finda.sale and smoke-test all S460/S461 changed pages (Sale detail push button, Edit Item push button, Review & Publish push button, Post-Sale eBay panel, Inventory page photos). Report results before starting new work.
+**P0 — Patrick Chrome QA of S462 eBay listing parity** (you're driving this — any failures → S464 fix items).
 
-**P0 — eBay push: broader category coverage QA:** S461 verified travel mug (category 177006). Need to verify the same pipeline works for: a book, a piece of clothing, a piece of furniture. Different required-aspect profiles. Dispatch findasale-qa with category-by-category test plan.
+**P1 — eBay sync batch refactor:** Replace sequential GetItem loop with `GetMultipleItems` batches (20/call). 86 API calls → 5. Dev dispatch ready.
 
-**P1 — Retire static EbayCategoryPicker:** S461 proved live Taxonomy API works reliably via app token. Replace the ~120-entry static JSON picker with a live Taxonomy search UI. Delete `ebayCategoryMap.ts` (dead code).
+**P1 — Broader category coverage test:** Push a book, clothing item, furniture item via eBay push to verify Phase A/B/C holds up (Patrick drives).
 
-**P1 — eBay sync architecture audit (Patrick flagged S458):** The current multi-pass approach (GetMyeBaySelling → separate GetItem per item) is wrong. Next session opens with `findasale-architect` researching the correct bidirectional sync design. Key questions: use `GetItems` batch calls (20/call) instead of 1/item? Switch to eBay Platform Notifications for real-time sold sync? What data is actually available from which API? Goal: single-pass import + webhook-based ongoing sync, replacing the polling cron.
+**P2 — Live Stripe webhook setup** (Patrick action — see Action Items above).
 
-**P1 — Verify S460 photo import fix:** After syncing, check items in eBay inventory — they should now show all photos, not just the cover. Railway logs will show `[eBay Enrich]` entries.
-
-**P1 — Run S455 migration on Railway** (still pending — `inInventory` rename, `isInventoryContainer`, `lastEbayInventorySyncAt`). eBay inventory sync won't be fully live until this runs.
-
-**P2 — Add Railway env vars:** `STRIPE_HUNT_PASS_PRICE_ID` + `STRIPE_GENERIC_ITEM_PRODUCT_ID` (live values, see Action Items).
-
-**P2 — Live Stripe webhooks:** Register both webhook endpoints in LIVE Stripe Dashboard with correct event sets.
-
-**P3 — Roadmap audit:** Dispatch `findasale-records` to update roadmap with all sessions since last roadmap update. Mark Patrick's human QA passes as verified.
+**P2 — Archive junk Stripe sandbox products** (Patrick action — keep Hunt Pass / Teams / Pro / Item Sale).
 
 **Carry-forward:**
 - QA queue (S436/S430/S431/S427/S433) — still postponed
@@ -292,6 +317,8 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S463 | 2026-04-14 | Live eBay category picker shipped (Taxonomy API), ebayCategoryMap.ts deleted, eBay sync batch architecture spec (GetMultipleItems), roadmap audit v105 |
+| S462 | 2026-04-14 | eBay Listing Data Parity A+B+C: merchant location fix, policy picker, HTML sanitizer, 17 schema fields, PostSaleEbayPanel, taxonomy service, catalog API, Auto-fill suggest |
 | S461 | 2026-04-14 | eBay push end-to-end WORKING (6 rounds): CategoryID capture, Taxonomy API, app-token fix, condition remap, stale offer cleanup, 25021 retry, required aspect auto-fill. Contigo mug published ✅ |
 | S460 | 2026-04-14 | eBay push UI (3 locations), QR watermark default, photo import fix, PostSaleEbayPanel, shipping classification. 13 files. |
 | S457 | 2026-04-14 | Pull to Sale fixed: embedding[] in create, inInventory=true filter in list query. |

@@ -8,12 +8,14 @@ import {
   getAspectsHandler,
   catalogSearchHandler,
   suggestIdentifiersHandler,
+  suggestCategoriesHandler,
 } from '../controllers/ebayTaxonomyController';
 
 const router = Router();
 
-// All three endpoints require organizer auth
+// All endpoints require organizer auth
 router.get('/taxonomy/aspects/:categoryId', requireOrganizer, getAspectsHandler);
+router.get('/taxonomy/suggest', requireOrganizer, suggestCategoriesHandler);
 router.get('/catalog/search', requireOrganizer, catalogSearchHandler);
 router.post('/suggest/identifiers', requireOrganizer, suggestIdentifiersHandler);
 

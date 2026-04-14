@@ -258,3 +258,92 @@ Only return identifiers that appear explicitly in the text. If unclear, return n
     return {};
   }
 }
+
+// ── In-memory category suggestion cache (1h TTL) ──────────────────────────────
+
+interface CachedCategorySuggestion {
+  data: CategorySuggestion[];
+  expiresAt: number;
+}
+
+interface CategorySuggestion {
+  categoryId: string;
+  categoryName: string;
+  categoryTreeNodeLevel: number;
+}
+
+const categorySuggestionCache = new Map<string, CachedCategorySuggestion>();
+
+function getCachedSuggestions(query: string): CategorySuggestion[] | null {
+  const cached = categorySuggestionCache.get(query);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+  if (cached) {
+    categorySuggestionCache.delete(query);
+  }
+  return null;
+}
+
+function setCachedSuggestions(query: string, data: CategorySuggestion[]): void {
+  const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
+  categorySuggestionCache.set(query, { data, expiresAt });
+}
+
+/**
+ * Suggest eBay categories based on item title.
+ * Calls eBay's get_category_suggestions endpoint and returns top 5 results.
+ * Caches results in-memory for 1 hour.
+ *
+ * @param accessToken eBay OAuth access token (app token)
+ * @param query Item title or search query
+ * @returns Array of category suggestions or empty array on error
+ */
+export async function suggestCategories(
+  accessToken: string,
+  query: string
+): Promise<CategorySuggestion[]> {
+  try {
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+
+    // Check cache first
+    const cached = getCachedSuggestions(query);
+    if (cached) {
+      return cached;
+    }
+
+    // Fetch from eBay Taxonomy API
+    const treeId = '0'; // EBAY_US
+    const q = encodeURIComponent(query.slice(0, 100));
+    const response = await axios.get(
+      `https://api.ebay.com/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
+      {
+        params: { q },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+
+    const suggestions = response.data.categorySuggestions ?? [];
+
+    // Extract top 5 results
+    const results: CategorySuggestion[] = suggestions.slice(0, 5).map((s: any) => ({
+      categoryId: s.categoryId,
+      categoryName: s.categoryName,
+      categoryTreeNodeLevel: s.categoryTreeNodeLevel,
+    }));
+
+    // Cache the result
+    setCachedSuggestions(query, results);
+
+    return results;
+  } catch (error: any) {
+    console.error(`[ebayTaxonomy] suggestCategories error for "${query}":`, error.message || error);
+    return [];
+  }
+}
