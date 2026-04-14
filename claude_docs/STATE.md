@@ -7,6 +7,40 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S456 COMPLETE (2026-04-14) — eBay inventory import fully operational: Trading API, photos, dedup cleanup**
+
+**S456 What happened:**
+- **Trading API OAuth fix:** `ebayController.ts` — replaced `<eBayAuthToken>` in XML body (legacy format) with `X-EBAY-API-IAF-TOKEN` header (correct OAuth 2.0 approach). 86 eBay listings now import successfully.
+- **xmlVal regex bug fixed:** `[\s\S]` in template literal was being parsed as `[sS]` (backslashes consumed by template parser). Fixed to `[\\s\\S]`. This was silently causing all XML tag matching to fail despite correct API response.
+- **`embedding: []` required field:** Added to both Inventory API and Trading API item create paths — Prisma was throwing `P2011 Null constraint violation`.
+- **GranularityLevel=Fine:** Added to Trading API XML request to get `PictureDetails` in response.
+- **sell.fulfillment scope:** Added to eBay OAuth scope list (was causing 403 on ebaySoldSyncCron every 15 min).
+- **i.ebayimg.com image domains:** Added to `next.config.js` `images.domains` AND `img-src` CSP. eBay photos were fetching correctly but being blocked by Next.js/browser CSP.
+- **Duplicate detection fix:** Changed `findFirst({ where: { ebayListingId: ebayItemId } })` to OR logic matching both stored SKU and raw ItemID. Prior sync had created 81 duplicates.
+- **81 duplicate items removed:** Ran dedup via psycopg2 directly on Railway DB — kept oldest per (organizerId, ebayListingId). DB back to 86 items.
+
+**S456 Result:** ✅ 86 eBay listings imported with photos, prices, conditions. Sync is idempotent (re-sync shows 0 new). Photos backfill on re-sync for items that had empty photoUrls.
+
+**S456 Still open:**
+- **"Pull to Sale" broken** for eBay-imported inventory items — Patrick confirmed this after photo fix. Priority for next session.
+- S455 migration still needs to be run on Railway (see S455 block below for block)
+- `git rm` old library files still needed (see S455 block)
+
+**S456 Files changed:**
+- `packages/backend/src/controllers/ebayController.ts` — Trading API auth, xmlVal regex, embedding field, GranularityLevel=Fine, sell.fulfillment scope, dedup OR logic
+- `packages/frontend/next.config.js` — i.ebayimg.com in images.domains + img-src CSP
+- Railway DB dedup — 81 duplicate inInventory items deleted directly
+
+**S456 Push block:**
+```powershell
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/next.config.js
+git commit -m "fix: eBay inventory import fully operational — photos, dedup, CSP, OAuth scopes"
+.\push.ps1
+```
+
+---
+
 **S455 COMPLETE (2026-04-13) — eBay inventory import, terminology cleanup (library→inventory), OAuth/cart fixes**
 
 **S455 What happened:**

@@ -2,6 +2,14 @@
 
 ## What Happened This Week
 
+**S456** (2026-04-14) — eBay inventory import fully operational:
+- **86 eBay listings imported with photos** ✅ — Trading API (GetMyeBaySelling) working. Photos from eBay show correctly on `/organizer/inventory`.
+- **Sync is now idempotent** — re-sync correctly shows 0 new items (duplicate detection fixed).
+- **81 duplicate items cleaned up** from Railway DB directly (from the previous failed sync attempts).
+- **eBay photos were blocked by Next.js CSP** — `i.ebayimg.com` added to image domains and `img-src`. Now visible.
+- **`sell.fulfillment` scope added** to eBay OAuth — stops the 403 errors in sync cron logs. Artifact MI should disconnect + reconnect eBay once to get updated token.
+- **⚠️ "Pull to Sale" not working** for eBay-imported inventory items — confirmed broken, fix is P0 next session.
+
 **S455** (2026-04-13) — eBay inventory import, library→inventory cleanup, OAuth/cart fixes:
 - **eBay "Sync Inventory" button live** on Settings → eBay tab. Pulls all eBay listings into `/organizer/inventory` as persistent items. Deduplicates by SKU on re-sync.
 - **"Library" terminology fully eliminated:** All code, files, hooks, components renamed to "inventory." `inLibrary` DB field renamed to `inInventory` via migration.
@@ -79,6 +87,33 @@
 
 ## Action Items for Patrick
 
+**NEW — S456:**
+- [ ] **Push S456 changes** (see push block below)
+- [ ] **Artifact MI: disconnect + reconnect eBay** — gets new token with `sell.fulfillment` scope (stops 403 cron errors)
+- [ ] **Run S455 migration** (still pending — `inInventory` rename + `isInventoryContainer` + `lastEbayInventorySyncAt`):
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+- [ ] **git rm old library files** (from S455 rename):
+```powershell
+git rm packages/backend/src/services/itemLibraryService.ts
+git rm packages/backend/src/controllers/itemLibraryController.ts
+git rm packages/backend/src/routes/itemLibrary.ts
+git rm packages/frontend/hooks/useItemLibrary.ts
+git rm packages/frontend/components/LibraryItemCard.tsx
+```
+
+**S456 Push block:**
+```powershell
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/next.config.js
+git commit -m "fix: eBay inventory import fully operational — photos, dedup, CSP, OAuth scopes"
+.\push.ps1
+```
+
 **NEW — S454:**
 - [ ] **Add to Railway env vars:** `STRIPE_HUNT_PASS_PRICE_ID=price_1TLtY1LIWHQCHu75W9F23hVJ` (live)
 - [ ] **Add to Railway env vars:** `STRIPE_GENERIC_ITEM_PRODUCT_ID=prod_UKZ2G21VhLJ3CE` (live)
@@ -112,13 +147,13 @@
 
 ---
 
-## What's Next (S455)
+## What's Next (S457)
 
-**P0 — Roadmap audit:** Records agent audits all sessions since last roadmap update. Every shipped feature gets logged. Patrick's human QA passes get marked ✅ Shipped & Verified.
+**P0 — "Pull to Sale" broken for eBay inventory items.** Patrick confirmed after photos started showing. The "Pull to Sale" button on InventoryItemCard is not working. Investigate and fix first thing next session before any other work.
 
-**P1 — Survivor accounts:** Dev creates `survivor-seed.ts` with Patrick's real organizer account + 1 QA shopper. These survive the database nuke when real users onboard. Patrick provides his real email at session start.
+**P1 — Survivor accounts:** Dev creates `survivor-seed.ts` with Patrick's real organizer account + 1 QA shopper. These survive the database nuke when real users onboard.
 
-**P2 — Live Stripe webhooks:** Register both webhook endpoints in LIVE Stripe Dashboard with correct event sets. Get signing secrets → add to Railway.
+**P2 — Live Stripe webhooks:** Register both webhook endpoints in LIVE Stripe Dashboard with correct event sets.
 
 **Carry-forward:**
 - QA queue (S436/S430/S431/S427/S433) — still postponed
@@ -132,6 +167,9 @@
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S456 | 2026-04-14 | eBay import fully working: Trading API auth, xmlVal regex fix, photos via GranularityLevel=Fine, CSP fix, 81 dupes removed. "Pull to Sale" broken — P0 next session. |
+| S455 | 2026-04-13 | eBay sync button, library→inventory rename, Google OAuth auto-link, cart isolation fix. |
+| S454 | 2026-04-13 | Hunt Pass → Stripe Subscription. Pricing page P0. POS catalog guard. |
 | S452 | 2026-04-13 | eBay bidirectional sync: policy fetch, offer withdrawal, Phase 3 cron. Stripe env audit. Hunt Pass subscription gap flagged. |
 | S451 | 2026-04-13 | Dashboard layout fix: QR inline, action buttons fixed, Compass icon, layout reordered. Catastrophic git push (1,708 files deleted) — recovered. |
 | S450 | 2026-04-13 | Rank staleness P0 (JWT fix), dashboard character sheet attempt, /shopper/ranks, organizer badge, XP progress bar in nav. QR code landed wrong — fix is P0 next session. |
