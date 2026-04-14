@@ -1922,21 +1922,13 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         select: { id: true, ebayListingId: true, description: true, category: true, tags: true, conditionGrade: true, photoUrls: true },
       });
 
-      // Filter for items that need enrichment: missing core fields OR have insufficient photos
-      const itemsToEnrich = allEbayItems.filter((item: typeof allEbayItems[0]) =>
-        !item.description ||
-        !item.category ||
-        !item.tags ||
-        item.tags.length === 0 ||
-        !item.photoUrls ||
-        item.photoUrls.length === 0 ||
-        item.photoUrls.length <= 1  // Include items with only 1 photo (from GalleryURL)
-      );
+      // Always enrich ALL eBay items to refresh photos/details on every sync
+      const itemsToEnrich = allEbayItems;
 
       if (itemsToEnrich.length === 0) return;
       console.log(`[eBay Enrich] Starting GetItem enrichment for ${itemsToEnrich.length} items...`);
       let enrichedCount = 0;
-      const ENRICH_CONCURRENCY = 5;
+      const ENRICH_CONCURRENCY = 20;
 
       const enrichSingleItem = async (item: typeof itemsToEnrich[0]): Promise<void> => {
         const itemId = item.ebayListingId!;
@@ -1961,7 +1953,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const backfill: Record<string, any> = {};
           const descRaw = xmlVal(itemBlock, 'Description') || '';
           const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
-          if (descClean && !item.description) backfill.description = descClean;
+          if (descClean) backfill.description = descClean;
           const pictureUrls = xmlAll(itemBlock, 'PictureURL');
           if (pictureUrls.length > 0) backfill.photoUrls = pictureUrls;
           if (!item.conditionGrade) {
@@ -1972,11 +1964,11 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           }
           const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
           const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
-          if (categoryName && !item.category) backfill.category = categoryName;
+          if (categoryName) backfill.category = categoryName;
           const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
           const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
           const tags: string[] = nameValueBlocks.map(b => xmlVal(b, 'Value')).filter((v): v is string => !!v && v.length > 0).slice(0, 10);
-          if (tags.length > 0 && (!item.tags || item.tags.length === 0)) backfill.tags = tags;
+          if (tags.length > 0) backfill.tags = tags;
           if (Object.keys(backfill).length > 0) {
             await prisma.item.update({ where: { id: item.id }, data: backfill });
             enrichedCount++;
