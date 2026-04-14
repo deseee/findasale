@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
+import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
@@ -59,6 +60,45 @@ const CONDITION_ID_MAP: Record<string, string> = {
   'C': '5000', // Good
   'D': '6000', // Acceptable
 };
+
+// Secondary category map: tag keywords to eBay category IDs
+const SECONDARY_CATEGORY_MAP: Record<string, string> = {
+  vintage: '1',          // Collectibles root
+  antique: '20081',      // Antiques root
+  handmade: '14339',     // Crafts root
+  rare: '1',             // Collectibles root
+  collectible: '1',      // Collectibles root
+};
+
+// HTML sanitizer for descriptions
+function sanitizeDescriptionForEbay(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const clean = sanitizeHtml(raw, {
+    allowedTags: ['p', 'br', 'b', 'strong', 'em', 'i', 'u', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'a', 'img', 'table', 'tr', 'td', 'th', 'tbody', 'thead'],
+    allowedAttributes: { a: ['href'], img: ['src', 'alt'] },
+    allowedSchemes: ['http', 'https'],
+  });
+  return clean.length > 4000 ? clean.substring(0, 4000) : clean;
+}
+
+// Build condition description for eBay from grade, notes, and tags
+function buildConditionDescription(item: { condition: string | null; conditionGrade: string | null; description: string | null; conditionNotes: string | null; tags: string[] }): string | undefined {
+  if (item.condition === 'NEW' || !item.condition) return undefined;
+  const parts: string[] = [];
+  if (item.conditionGrade) {
+    const gradeLabels: Record<string, string> = { S: 'Grade S — Mint condition', A: 'Grade A — Excellent condition', B: 'Grade B — Very good condition', C: 'Grade C — Good condition', D: 'Grade D — Fair condition' };
+    parts.push(gradeLabels[item.conditionGrade] || `Grade ${item.conditionGrade}`);
+  }
+  if (item.conditionNotes) parts.push(item.conditionNotes);
+  if (item.description) {
+    const plain = item.description.replace(/<[^>]*>/g, '').trim();
+    if (plain) parts.push(plain.substring(0, 400));
+  }
+  const relevantTags = item.tags.filter(t => ['vintage', 'antique', 'handmade', 'rare', 'collectible', 'signed', 'limited'].includes(t.toLowerCase()));
+  if (relevantTags.length) parts.push(`Notes: ${relevantTags.join(', ')}`);
+  const joined = parts.join('\n\n');
+  return joined.length > 1000 ? joined.substring(0, 1000) : joined;
+}
 
 /**
  * Get or refresh eBay OAuth access token using Client Credentials flow
@@ -721,31 +761,49 @@ async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: strin
     let fulfillmentPolicyId: string | null = null;
     let returnPolicyId: string | null = null;
 
-    // Extract payment policy ID (first from list)
+    // Extract payment policy ID — prefer EBAY_US with default flag, fall back to filtered list, then unfiltered
     if (paymentRes.ok) {
       const paymentData = (await paymentRes.json()) as any;
-      if (paymentData.paymentPolicies && paymentData.paymentPolicies.length > 0) {
-        paymentPolicyId = paymentData.paymentPolicies[0].paymentPolicyId;
+      const allPolicies = paymentData.paymentPolicies || [];
+      const ebayUsPolicies = allPolicies.filter((p: any) => p.marketplaceId === 'EBAY_US');
+      const defaultPolicy = ebayUsPolicies.find((p: any) => p.categoryTypes?.some((ct: any) => ct.default === true));
+      const fallbackEbayUs = ebayUsPolicies[0];
+      const fallbackAny = allPolicies[0];
+      const chosen = defaultPolicy || fallbackEbayUs || fallbackAny;
+      if (chosen) {
+        paymentPolicyId = chosen.paymentPolicyId;
       }
     } else {
       console.warn(`[eBay] Failed to fetch payment policies: ${paymentRes.status}`);
     }
 
-    // Extract fulfillment policy ID (first from list)
+    // Extract fulfillment policy ID — prefer EBAY_US with default flag, fall back to filtered list, then unfiltered
     if (fulfillmentRes.ok) {
       const fulfillmentData = (await fulfillmentRes.json()) as any;
-      if (fulfillmentData.fulfillmentPolicies && fulfillmentData.fulfillmentPolicies.length > 0) {
-        fulfillmentPolicyId = fulfillmentData.fulfillmentPolicies[0].fulfillmentPolicyId;
+      const allPolicies = fulfillmentData.fulfillmentPolicies || [];
+      const ebayUsPolicies = allPolicies.filter((p: any) => p.marketplaceId === 'EBAY_US');
+      const defaultPolicy = ebayUsPolicies.find((p: any) => p.categoryTypes?.some((ct: any) => ct.default === true));
+      const fallbackEbayUs = ebayUsPolicies[0];
+      const fallbackAny = allPolicies[0];
+      const chosen = defaultPolicy || fallbackEbayUs || fallbackAny;
+      if (chosen) {
+        fulfillmentPolicyId = chosen.fulfillmentPolicyId;
       }
     } else {
       console.warn(`[eBay] Failed to fetch fulfillment policies: ${fulfillmentRes.status}`);
     }
 
-    // Extract return policy ID (first from list)
+    // Extract return policy ID — prefer EBAY_US with default flag, fall back to filtered list, then unfiltered
     if (returnRes.ok) {
       const returnData = (await returnRes.json()) as any;
-      if (returnData.returnPolicies && returnData.returnPolicies.length > 0) {
-        returnPolicyId = returnData.returnPolicies[0].returnPolicyId;
+      const allPolicies = returnData.returnPolicies || [];
+      const ebayUsPolicies = allPolicies.filter((p: any) => p.marketplaceId === 'EBAY_US');
+      const defaultPolicy = ebayUsPolicies.find((p: any) => p.categoryTypes?.some((ct: any) => ct.default === true));
+      const fallbackEbayUs = ebayUsPolicies[0];
+      const fallbackAny = allPolicies[0];
+      const chosen = defaultPolicy || fallbackEbayUs || fallbackAny;
+      if (chosen) {
+        returnPolicyId = chosen.returnPolicyId;
       }
     } else {
       console.warn(`[eBay] Failed to fetch return policies: ${returnRes.status}`);
@@ -1327,12 +1385,16 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Fetch items
+    // Fetch items with Phase B fields and sale address
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
       select: {
         id: true,
         organizerId: true,
+        address: true,
+        city: true,
+        state: true,
+        zip: true,
         items: {
           where: {
             id: { in: itemIds },
@@ -1344,7 +1406,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             description: true,
             price: true,
             category: true,
+            condition: true,
             conditionGrade: true,
+            conditionNotes: true,
             photoUrls: true,
             estimatedValue: true,
             aiSuggestedPrice: true,
@@ -1352,6 +1416,22 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayOfferId: true,
             ebayListingId: true,
             ebayCategoryId: true,
+            packageWeightOz: true,
+            packageLengthIn: true,
+            packageWidthIn: true,
+            packageHeightIn: true,
+            packageType: true,
+            upc: true,
+            ean: true,
+            isbn: true,
+            mpn: true,
+            brand: true,
+            ebayEpid: true,
+            ebaySubtitle: true,
+            ebaySecondaryCategoryId: true,
+            allowBestOffer: true,
+            bestOfferAutoAcceptAmt: true,
+            bestOfferMinimumAmt: true,
           },
         },
       },
@@ -1370,7 +1450,20 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     }
 
     // Resolve or create a merchant location key (required by eBay for Item.Country)
-    const merchantLocationKey = await getOrCreateMerchantLocation(accessToken);
+    const saleAddressHint = sale.address ? {
+      address: sale.address,
+      city: sale.city || '',
+      state: sale.state || '',
+      zip: sale.zip || '',
+    } : null;
+    const locationResult = await getOrCreateMerchantLocation(accessToken, saleAddressHint);
+    if ('error' in locationResult) {
+      return res.status(400).json({
+        error: 'MERCHANT_LOCATION_UNAVAILABLE',
+        message: 'Seller has no eBay inventory location and sale address is missing. Please add a pickup/warehouse address in eBay Seller Hub or set the sale address in FindA.Sale first.',
+      });
+    }
+    const merchantLocationKey = locationResult.merchantLocationKey;
 
     // Push each item to eBay
     const results: any[] = [];
@@ -1437,19 +1530,42 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           tags: item.tags,
           description: item.description,
         });
+        const sanitizedDescription = sanitizeDescriptionForEbay(item.description);
         const inventoryPayload: Record<string, unknown> = {
           product: {
             title: item.title.substring(0, 80),
-            description: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 4000),
+            description: sanitizedDescription,
             imageUrls: photos,
             ...(aspects ? { aspects } : {}),
+            ...(item.brand ? { brand: item.brand } : {}),
+            ...(item.mpn ? { mpn: item.mpn } : {}),
+            ...(item.upc ? { upc: [item.upc] } : {}),
+            ...(item.ean ? { ean: [item.ean] } : {}),
+            ...(item.isbn ? { isbn: [item.isbn] } : {}),
+            ...(item.ebayEpid ? { epid: item.ebayEpid } : {}),
+            ...(item.ebaySubtitle ? { subtitle: item.ebaySubtitle } : {}),
           },
           condition: ebayCondition,
+          ...(buildConditionDescription(item) ? { conditionDescription: buildConditionDescription(item) } : {}),
           availability: {
             shipToLocationAvailability: {
               quantity: 1,
             },
           },
+          ...(item.packageWeightOz ? {
+            packageWeightAndSize: {
+              weight: { unit: 'OUNCE', value: item.packageWeightOz },
+              ...(item.packageLengthIn && item.packageWidthIn && item.packageHeightIn ? {
+                dimensions: {
+                  unit: 'INCH',
+                  length: Number(item.packageLengthIn),
+                  width: Number(item.packageWidthIn),
+                  height: Number(item.packageHeightIn),
+                },
+              } : {}),
+              ...(item.packageType ? { packageType: item.packageType } : {}),
+            },
+          } : {}),
         };
 
         const inventoryResponse = await fetch(inventoryUrl, {
@@ -1490,7 +1606,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         }
 
         // Step 2: Upsert offer — find existing or create new, then update price/policies
-        const cleanDescription = (item.description || '').replace(/<[^>]*>/g, '').trim();
         const offerPayload: Record<string, unknown> = {
           sku,
           marketplaceId: 'EBAY_US',
@@ -1509,7 +1624,17 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             fulfillmentPolicyId: conn.fulfillmentPolicyId,
             returnPolicyId: conn.returnPolicyId,
           },
-          ...(cleanDescription ? { listingDescription: cleanDescription } : {}),
+          ...(sanitizedDescription ? { listingDescription: sanitizedDescription } : {}),
+          ...(item.allowBestOffer ? {
+            bestOfferTerms: {
+              bestOfferEnabled: true,
+              ...(item.bestOfferAutoAcceptAmt ? { autoAcceptPrice: { value: Number(item.bestOfferAutoAcceptAmt).toFixed(2), currency: 'USD' } } : {}),
+              ...(item.bestOfferMinimumAmt ? { autoDeclinePrice: { value: Number(item.bestOfferMinimumAmt).toFixed(2), currency: 'USD' } } : {}),
+            },
+          } : {}),
+          ...(item.ebaySecondaryCategoryId ? { secondaryCategoryId: item.ebaySecondaryCategoryId } : item.tags?.some((t: string) => Object.keys(SECONDARY_CATEGORY_MAP).includes(t.toLowerCase())) ? {
+            secondaryCategoryId: Object.entries(SECONDARY_CATEGORY_MAP).find(([tag]) => item.tags.some((t: string) => t.toLowerCase() === tag))?.[1],
+          } : {}),
         };
 
         // Resolve existing offerId: use stored value or look up by SKU on eBay
@@ -1762,8 +1887,10 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
  * eBay requires city + stateOrProvince + postalCode + country for US locations.
  * Status cannot be set at creation — must call /enable separately.
  */
-async function getOrCreateMerchantLocation(accessToken: string): Promise<string> {
-  const DEFAULT_KEY = 'findasale-default';
+async function getOrCreateMerchantLocation(
+  accessToken: string,
+  saleAddressHint?: { address: string; city: string; state: string; zip: string } | null
+): Promise<{ merchantLocationKey: string } | { error: string }> {
   const headers = {
     Authorization: `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
@@ -1781,56 +1908,63 @@ async function getOrCreateMerchantLocation(accessToken: string): Promise<string>
       const chosen = enabled || locations[0];
       if (chosen) {
         console.log(`[eBay] Using existing merchant location: ${chosen.merchantLocationKey}`);
-        return chosen.merchantLocationKey;
+        return { merchantLocationKey: chosen.merchantLocationKey };
       }
     }
   } catch (err) {
     console.error('[eBay] Failed to list merchant locations:', err);
   }
 
-  // Create a US location with the minimum required address fields
-  console.log('[eBay] No merchant location found — creating default US location');
-  try {
-    const createRes = await fetch(
-      `https://api.ebay.com/sell/inventory/v1/location/${DEFAULT_KEY}`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          location: {
-            address: {
-              addressLine1: '1 Commerce Ave SW',
-              city: 'Grand Rapids',
-              stateOrProvince: 'MI',
-              postalCode: '49503',
-              country: 'US',
+  // If saleAddressHint provided, try to create a location from it
+  if (saleAddressHint) {
+    console.log('[eBay] No existing merchant location — creating from sale address');
+    try {
+      const locationKey = `findasale-sale-${Date.now()}`;
+      const createRes = await fetch(
+        `https://api.ebay.com/sell/inventory/v1/location/${locationKey}`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            location: {
+              address: {
+                addressLine1: saleAddressHint.address,
+                city: saleAddressHint.city,
+                stateOrProvince: saleAddressHint.state,
+                postalCode: saleAddressHint.zip,
+                country: 'US',
+              },
             },
-          },
-          locationInstructions: 'Items ship from this location',
-          name: 'FindA.Sale Default',
-          locationTypes: ['WAREHOUSE'],
-        }),
-      }
-    );
-    if (!createRes.ok) {
-      const err = await createRes.text();
-      console.error('[eBay] Failed to create merchant location:', err);
-    } else {
-      // Enable the newly created location
-      const enableRes = await fetch(
-        `https://api.ebay.com/sell/inventory/v1/location/${DEFAULT_KEY}/enable`,
-        { method: 'POST', headers }
+            locationInstructions: 'Items ship from this location',
+            name: `FindA.Sale ${saleAddressHint.city}`,
+            locationTypes: ['WAREHOUSE'],
+          }),
+        }
       );
-      if (!enableRes.ok) {
-        const err = await enableRes.text();
-        console.warn('[eBay] Failed to enable merchant location (may already be enabled):', err);
+      if (!createRes.ok) {
+        const err = await createRes.text();
+        console.error('[eBay] Failed to create merchant location from sale address:', err);
+        return { error: 'MERCHANT_LOCATION_CREATION_FAILED' };
+      } else {
+        // Enable the newly created location
+        const enableRes = await fetch(
+          `https://api.ebay.com/sell/inventory/v1/location/${locationKey}/enable`,
+          { method: 'POST', headers }
+        );
+        if (!enableRes.ok) {
+          const err = await enableRes.text();
+          console.warn('[eBay] Failed to enable merchant location (may already be enabled):', err);
+        }
+        return { merchantLocationKey: locationKey };
       }
+    } catch (err) {
+      console.error('[eBay] Exception creating merchant location from sale address:', err);
+      return { error: 'MERCHANT_LOCATION_CREATION_FAILED' };
     }
-  } catch (err) {
-    console.error('[eBay] Exception creating merchant location:', err);
   }
 
-  return DEFAULT_KEY;
+  // No existing location and no sale address hint — fail
+  return { error: 'MERCHANT_LOCATION_UNAVAILABLE' };
 }
 
 function buildAspects(tags: string[]): Record<string, string[]> | undefined {
