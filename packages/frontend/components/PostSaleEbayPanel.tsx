@@ -269,7 +269,7 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
 
                   {/* Shipping Classification + Override */}
                   <div className="flex-shrink-0 flex items-start gap-3 pt-1">
-                    <ShippingBadge shipping={item.ebayShippingClassification} override={itemOverrides[item.id]} />
+                    <ShippingBadge shipping={item.ebayShippingClassification} override={itemOverrides[item.id] ?? undefined} />
 
                     {['HEAVY_OVERSIZED', 'FRAGILE', 'UNKNOWN'].includes(item.ebayShippingClassification) && !itemOverrides[item.id] && (
                       <select
