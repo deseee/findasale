@@ -5,7 +5,7 @@
  * Allows organizers to view, manage, and push items to eBay.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
@@ -13,6 +13,7 @@ import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import { useEbayConnection } from '../../../../lib/useEbayConnection';
 import { useOrganizerTier } from '../../../../hooks/useOrganizerTier';
+import { PostSaleEbayPanel } from '../../../../components/PostSaleEbayPanel';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../../components/Skeleton';
@@ -49,6 +50,9 @@ const SaleDetailPage = () => {
 
   // State tracking eBay push status per item
   const [ebayPushStatus, setEbayPushStatus] = useState<Record<string, 'idle' | 'pushing' | 'listed' | 'error'>>({});
+  // State for post-sale toast
+  const [showedPostSaleToast, setShowedPostSaleToast] = useState(false);
+  const [postSaleToastDismissed, setPostSaleToastDismissed] = useState(false);
 
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
@@ -124,6 +128,38 @@ const SaleDetailPage = () => {
     },
     [ebayConnected, tier, ebayPushMutation, showToast]
   );
+
+  // Show post-sale toast when sale is ENDED and has unsold items
+  useEffect(() => {
+    if (sale && sale.status === 'ENDED' && items && items.length > 0 && !showedPostSaleToast && !postSaleToastDismissed) {
+      const toastKey = `post_sale_toast_${id}`;
+      const alreadyDismissed = typeof window !== 'undefined' && sessionStorage.getItem(toastKey) === 'true';
+
+      if (!alreadyDismissed) {
+        const unsoldCount = items.filter((item) => item.status !== 'SOLD' && item.status !== 'RESERVED').length;
+        const unsoldWithoutEbay = items.filter(
+          (item) => (item.status !== 'SOLD' && item.status !== 'RESERVED') && !item.ebayListingId
+        ).length;
+
+        if (unsoldWithoutEbay > 0) {
+          const handleOpenPanel = () => {
+            const panelElement = document.getElementById('post-sale-panel');
+            if (panelElement) {
+              panelElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          };
+
+          // Custom toast with action button
+          showToast(`${unsoldWithoutEbay} item${unsoldWithoutEbay !== 1 ? 's' : ''} didn't sell — ready to list on eBay?`, 'info');
+
+          setShowedPostSaleToast(true);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(toastKey, 'true');
+          }
+        }
+      }
+    }
+  }, [sale, items, id, showedPostSaleToast, postSaleToastDismissed]);
 
   const isLoading = authLoading || saleLoading || itemsLoading;
 
@@ -305,6 +341,13 @@ const SaleDetailPage = () => {
           ) : (
             <div className="text-center py-12">
               <p className="text-warm-600 dark:text-warm-400">No items in this sale yet</p>
+            </div>
+          )}
+
+          {/* Post-Sale eBay Push Panel */}
+          {sale && sale.status === 'ENDED' && (
+            <div id="post-sale-panel">
+              <PostSaleEbayPanel saleId={id as string} />
             </div>
           )}
         </div>

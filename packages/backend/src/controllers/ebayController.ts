@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { getEbayCategoryId } from '../utils/ebayCategoryMap';
+import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { getIO } from '../lib/socket';
 
 /**
@@ -2161,5 +2162,160 @@ export const handleEbayNotification = async (req: express.Request, res: Response
   } catch (err: any) {
     console.error('[eBay Notify] Error processing notification:', err.message);
     // Response already sent — just log
+  }
+};
+
+/**
+ * GET /api/organizer/sales/:saleId/unsold-items
+ * Feature #244 Phase 3: Post-sale eBay push — fetch unsold items with shipping classification
+ * Returns items that haven't sold (status NOT IN SOLD, RESERVED)
+ */
+export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
+  try {
+    const { saleId } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Get sale and verify organizer ownership
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: {
+        id: true,
+        organizerId: true,
+        items: {
+          where: {
+            status: {
+              notIn: ['SOLD', 'RESERVED'],
+            },
+          },
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            photoUrls: true,
+            category: true,
+            tags: true,
+            ebayListingId: true,
+            ebayShippingClassification: true,
+            ebayShippingOverride: true,
+          },
+        },
+      },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    // Verify organizer
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer || sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Not authorized to access this sale' });
+    }
+
+    // Compute effective shipping for each item
+    const items = sale.items.map((item: any) => {
+      const effectiveShipping = item.ebayShippingOverride || classifyEbayShipping(item.category, item.tags);
+      return {
+        ...item,
+        effectiveShipping,
+      };
+    });
+
+    res.json({ items });
+  } catch (err: any) {
+    console.error('[eBay] getUnsoldItems error:', err.message);
+    res.status(500).json({ message: 'Failed to fetch unsold items' });
+  }
+};
+
+/**
+ * PATCH /api/organizer/items/:itemId/ebay-shipping
+ * Feature #244 Phase 3: Set organizer's shipping override for an item
+ * Body: { override: 'SHIPPABLE' | 'LOCAL_PICKUP_ONLY' | 'DONT_LIST' | null }
+ */
+export const setEbayShippingOverride = async (req: AuthRequest, res: Response) => {
+  try {
+    const { itemId } = req.params;
+    const { override } = req.body as { override?: string | null };
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Validate override value
+    const validOverrides = ['SHIPPABLE', 'LOCAL_PICKUP_ONLY', 'DONT_LIST', null];
+    if (override !== undefined && override !== null && !validOverrides.includes(override)) {
+      return res.status(400).json({
+        message: 'Invalid override value. Must be SHIPPABLE, LOCAL_PICKUP_ONLY, DONT_LIST, or null',
+      });
+    }
+
+    // Get organizer
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // Get item and verify it belongs to organizer's sale
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        title: true,
+        saleId: true,
+        sale: {
+          select: { organizerId: true },
+        },
+      },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    if (item.sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Not authorized to modify this item' });
+    }
+
+    // Update the override
+    const updated = await prisma.item.update({
+      where: { id: itemId },
+      data: {
+        ebayShippingOverride: override,
+      },
+      select: {
+        id: true,
+        title: true,
+        ebayShippingClassification: true,
+        ebayShippingOverride: true,
+        category: true,
+        tags: true,
+      },
+    });
+
+    // Compute effective shipping
+    const effectiveShipping = updated.ebayShippingOverride || classifyEbayShipping(updated.category, updated.tags);
+
+    res.json({
+      id: updated.id,
+      title: updated.title,
+      ebayShippingClassification: updated.ebayShippingClassification,
+      ebayShippingOverride: updated.ebayShippingOverride,
+      effectiveShipping,
+    });
+  } catch (err: any) {
+    console.error('[eBay] setEbayShippingOverride error:', err.message);
+    res.status(500).json({ message: 'Failed to update shipping override' });
   }
 };

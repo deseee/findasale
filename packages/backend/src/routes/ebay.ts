@@ -12,6 +12,8 @@ import {
   handleEbayAccountDeletion,
   handleEbayNotificationVerification,
   handleEbayNotification,
+  getUnsoldItems,
+  setEbayShippingOverride,
 } from '../controllers/ebayController';
 import { syncSoldItemsForOrganizer } from '../jobs/ebaySoldSyncCron';
 
@@ -30,6 +32,10 @@ router.delete('/connection', authenticate, disconnectEbay);
 // Preview and push endpoints
 router.get('/organizer/items/:itemId/ebay-preview', authenticate, getEbayPreview);
 router.post('/organizer/sales/:saleId/ebay-push', authenticate, pushSaleToEbay);
+
+// Feature #244 Phase 3: Post-sale eBay push — unsold items + shipping overrides
+router.get('/organizer/sales/:saleId/unsold-items', authenticate, getUnsoldItems);
+router.patch('/organizer/items/:itemId/ebay-shipping', authenticate, setEbayShippingOverride);
 
 // Feature #244 Phase 2b: eBay Inventory Import
 // Import eBay inventory items into FindA.Sale
