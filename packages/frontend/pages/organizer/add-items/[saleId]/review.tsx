@@ -273,7 +273,6 @@ const ReviewPage = () => {
       if (!saleId) throw new Error('Sale ID not found');
       return api.post(`/api/organizer/sales/${saleId}/ebay-push`, {
         itemIds,
-        photoMode: 'clean',
       });
     },
     onSuccess: (response) => {

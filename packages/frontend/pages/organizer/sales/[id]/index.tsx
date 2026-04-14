@@ -80,7 +80,6 @@ const SaleDetailPage = () => {
     mutationFn: async (itemIds: string[]) => {
       return api.post(`/api/organizer/sales/${id}/ebay-push`, {
         itemIds,
-        photoMode: 'clean',
       });
     },
     onSuccess: (response) => {
