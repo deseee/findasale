@@ -88,7 +88,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
       // Step 1: Create workspace (with recovery for retry scenario)
       let workspaceId: string;
       try {
-        const workspaceRes = await api.post('/api/workspace', {
+        const workspaceRes = await api.post('/workspace', {
           name: workspaceName.trim(),
         });
         workspaceId = workspaceRes.data.id;
@@ -97,7 +97,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
         const msg = createErr.response?.data?.message || '';
         if (status === 400 && msg.toLowerCase().includes('already exists')) {
           // Workspace was already created (retry scenario) — fetch existing
-          const existing = await api.get('/api/workspace');
+          const existing = await api.get('/workspace');
           workspaceId = existing.data.id;
         } else {
           throw createErr; // surface real error
@@ -106,14 +106,14 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
 
       // Step 2: Invite members
       for (const invitee of invitees) {
-        await api.post('/api/workspace/invite', {
+        await api.post('/workspace/invite', {
           email: invitee.email,
           role: invitee.role,
         });
       }
 
       // Step 3: Mark teams onboarding as complete
-      await api.patch('/api/users/me', {
+      await api.patch('/users/me', {
         teamsOnboardingComplete: true,
       });
 
