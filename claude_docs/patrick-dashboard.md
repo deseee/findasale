@@ -2,6 +2,33 @@
 
 ## What Happened This Week
 
+**S462** (2026-04-14) — eBay Listing Data Parity (Phases A + B + C shipped) ✅ (pending Chrome QA)
+- **The problem you caught:** Our FAS-pushed Contigo mug showed "Free Standard Shipping" and "Grand Rapids, MI" pickup — both wrong. Meanwhile, a native eBay listing from the same account (Spawn #4 comic) showed real calculated shipping, the correct Fox Island pickup location, rich HTML description, 18+ item specifics, catalog match, and "or Best Offer." Our push was technically working but producing low-credibility listings. Your call: "i'd rather be right than fast."
+- **What shipped (Phase A — code-only fixes):**
+  - Merchant location now queries your real eBay location first, falls back to the Sale's structured address, never hardcodes Grand Rapids.
+  - Business policy picker filters to EBAY_US marketplace + prefers the policy you marked as default (not `[0]` alphabetized).
+  - HTML descriptions now sanitize instead of strip — rich formatting carries through to eBay.
+  - Condition description builds from grade + notes + description excerpt + tags (used to be enum-only).
+  - Secondary category auto-adds for vintage/antique/handmade/rare/collectible tags.
+- **What shipped (Phase B — schema additions, 17 new Item fields + 2 EbayConnection fields):**
+  - Package dimensions (weight oz, L/W/H, package type) → unlocks real calculated shipping.
+  - Product identifiers (UPC, EAN, ISBN, MPN, brand, EPID) → unlocks catalog match + product ratings box.
+  - Best Offer opt-in (with auto-accept/auto-decline thresholds) — opt-in only, never forced.
+  - Condition notes, secondary category, subtitle (55-char paid upgrade).
+  - Organizer-facing "Edit eBay" form on the post-sale panel with 3 collapsible sections (Product Details / Shipping / Offers), client validation (UPC 12 digits, ISBN 10/13), dark mode, sage palette.
+- **What shipped (Phase C — new service layer):**
+  - eBay Taxonomy API integration with 24h cache (`get_item_aspects_for_category`).
+  - eBay Catalog API search by GTIN or MPN+brand → returns top 3 matches for catalog hit.
+  - Haiku-powered "Auto-fill" suggest for brand/UPC/MPN from title + description + tags. Skips already-filled fields. Labeled "Auto-fill" per your rule — never says "AI."
+  - 3 new endpoints: `/api/ebay/taxonomy/aspects/:categoryId`, `/api/ebay/catalog/search`, `/api/ebay/suggest/identifiers`.
+- **Answers to your four decisions:** (1) Phase B+C now ✅ (2) HTML allowlist = standard safe tags + tables for comic-seller specs ✅ (3) Best Offer opt-in only ✅ (4) Missing Sale.address blocks push with clear error ✅.
+- **Migration ran:** `add_ebay_listing_parity_fields` applied to Railway production DB. All fields nullable/defaulted — existing items unaffected.
+- **Rollback plan:** code revert reverses Phases A+C cleanly. Phase B migration is additive/nullable so rollback is non-destructive.
+- **Chrome QA queued for you** — you asked to drive the QA. Test flows: (1) push a Contigo-like item with UPC + package dimensions + Best Offer enabled, verify eBay shows calculated shipping + catalog match + offer button. (2) push an item with zero package dims → confirm "Calculated shipping unavailable" warning (or block, depending on policy). (3) open "Edit eBay" panel, click Auto-fill, verify brand/UPC suggestions. (4) verify merchant location reads your real eBay location, not Grand Rapids.
+- **Files pushed:** 12 (schema.prisma, migration.sql, ebayController.ts, itemController.ts, ebayTaxonomyController.ts + service + routes, index.ts, PostSaleEbayPanel.tsx, package.json, pnpm-lock.yaml, ADR doc).
+
+---
+
 **S461** (2026-04-14) — eBay push end-to-end WORKING (6 rounds of fixes) ✅
 - **Verified live:** Contigo Stainless Steel Travel Mug published to eBay successfully. Category 177006 (Mugs), condition NEW_OTHER (after retry), Brand="Contigo" + Color="Black" auto-filled from title.
 - **Why it kept breaking:** Each fix revealed the next layer. (1) Static map returned branch categories, not leaf IDs. (2) No API call for items we created ourselves. (3) Taxonomy API required app token, not user token. (4) `LIKE_NEW` is media-only and was being sent for hard goods. (5) Even after (4), stale offer state from earlier failures persisted. (6) eBay categories require specific item aspects (Type, Brand, Color) that we weren't sending.

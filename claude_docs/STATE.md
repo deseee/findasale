@@ -7,6 +7,62 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S462 COMPLETE (2026-04-14) — eBay Listing Data Parity Phase A + B + C shipped — native-quality listings**
+
+**S462 Origin:** Patrick compared Contigo mug (FAS-pushed) vs Spawn #4 comic (eBay-native, same seller). FAS listing showed "Free Standard Shipping" + hardcoded Grand Rapids + thin specifics + no catalog match. Directive: "i'd rather be right than fast… look into the ebay fields we should be using." Architect produced ADR at `claude_docs/feature-notes/adr-ebay-listing-data-parity.md`. 4 Dev agents dispatched (Wave 1 sequential schema, then 3 parallel waves).
+
+**S462 Phase A shipped (code-only quality fixes):**
+- `getOrCreateMerchantLocation()` rewritten: (1) GETs seller's existing eBay inventory locations first, (2) falls back to Sale.address/city/state/zip, (3) blocks push with clear error when neither available. No more hardcoded `1 Commerce Ave SW`.
+- Policy picker filters by `marketplaceId === 'EBAY_US'` + prefers `default:true` flag before `[0]` fallback. Handles multi-policy sellers correctly.
+- HTML description sanitizer (`sanitize-html` package added) with allowlist including `<table>/<tr>/<td>` for comic/spec grids. Used for BOTH `product.description` and offer `listingDescription` (no more stripping).
+- `buildConditionDescription()` helper: auto-composes rich condition text from grade + conditionNotes + description excerpt + relevant tags (vintage/antique/signed/etc).
+- `SECONDARY_CATEGORY_MAP` (5 entries: vintage→1, antique→20081, handmade→14339, rare→1, collectible→1) adds secondaryCategoryId to offers when tags intersect map and primary differs.
+
+**S462 Phase B shipped (schema + full wiring):**
+- Item model: +17 fields (packageWeightOz, packageLengthIn/Width/Height, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle).
+- EbayConnection model: +2 fields (merchantLocationKey, merchantLocationSource for audit).
+- Migration `20260414222332_add_ebay_listing_parity_fields` — all nullable/defaulted, safe on populated DB.
+- Backend ebayController wires all fields into inventory payload (`product.upc/ean/isbn/mpn/brand/epid/subtitle`, `packageWeightAndSize`, `condition.conditionDescription`) and offer payload (`bestOfferTerms` with autoAccept/autoDecline, `secondaryCategoryId`).
+- itemController `PUT /items/:id` extended to accept and persist all 17 new fields with type coercion.
+- Frontend `PostSaleEbayPanel.tsx`: per-item "Edit eBay" expand with 3 collapsible sections (Product Details / Shipping / Offers). Client validation (UPC 12 digits, ISBN 10/13, subtitle 55 chars, best-offer auto-accept ≥ auto-decline). Dark mode + sage palette. "Auto-fill" button wired (label avoids "AI" per D-006).
+
+**S462 Phase C shipped (taxonomy + catalog + AI suggest):**
+- NEW `packages/backend/src/services/ebayTaxonomyService.ts` with 3 functions:
+  - `getAspectsForCategory()` — eBay Taxonomy API `get_item_aspects_for_category`, 24h in-memory cache
+  - `searchCatalogProduct()` — eBay Catalog API by GTIN or MPN+brand, returns top 3 matches with EPID/title/image/brand
+  - `suggestIdentifiersFromItem()` — Claude Haiku extracts brand/UPC/ISBN/MPN/EAN from title+description+tags, skips already-filled fields
+- NEW controller + route files, mounted at `/api/ebay/taxonomy/aspects/:categoryId`, `/api/ebay/catalog/search`, `/api/ebay/suggest/identifiers`. `index.ts` updated.
+
+**S462 Decisions locked:**
+- **Best Offer: opt-in per item** (disabled by default, organizer toggles)
+- **HTML allowlist includes `<table>`** family for collectible/comic sellers
+- **Sale.address missing → block push with clear error** (don't force through bad data)
+- **"Auto-fill" not "AI Suggest"** as visible label (D-006 no-AI-in-copy)
+
+**S462 Files changed (12):**
+- `packages/database/prisma/schema.prisma` (Phase B fields on Item + EbayConnection)
+- `packages/database/prisma/migrations/20260414222332_add_ebay_listing_parity_fields/migration.sql` (NEW)
+- `packages/backend/src/controllers/ebayController.ts` (Phase A + B wiring)
+- `packages/backend/src/controllers/itemController.ts` (Phase B field acceptance)
+- `packages/backend/src/controllers/ebayTaxonomyController.ts` (NEW)
+- `packages/backend/src/services/ebayTaxonomyService.ts` (NEW)
+- `packages/backend/src/routes/ebayTaxonomy.ts` (NEW)
+- `packages/backend/src/index.ts` (Taxonomy route mount)
+- `packages/backend/package.json` + root `pnpm-lock.yaml` (sanitize-html)
+- `packages/frontend/components/PostSaleEbayPanel.tsx` (Edit eBay UI)
+- `claude_docs/feature-notes/adr-ebay-listing-data-parity.md` (NEW ADR)
+
+**S462 Patrick manual actions (completed before push):**
+- `npx prisma migrate deploy` against Railway DB
+- `npx prisma generate`
+- `pnpm install` on Windows after VM added sanitize-html
+- push.ps1
+
+**S462 Blocked/Unverified:**
+- All of Phase A + B + C shipped but NOT yet browser-verified. Patrick indicated he'll Chrome-QA himself (skip QA dispatch). Full verification matrix deferred to S463 user-led QA.
+
+---
+
 **S461 COMPLETE (2026-04-14) — eBay push end-to-end working (6 rounds of fixes) — Contigo travel mug published successfully**
 
 **S461 What happened:**
@@ -1291,40 +1347,48 @@ npx prisma generate
 
 ## Next Session Priority
 
-### Outstanding Actions (as of S461, 2026-04-14 — eBay push now end-to-end working)
+### Outstanding Actions (as of S462, 2026-04-14 — Listing Data Parity A+B+C shipped, unverified)
 
 ---
 
-**STEP 0 — Post-deploy live-site smoke test (CLAUDE.md §10 mandatory FIRST action):**
+**STEP 0 — Patrick-led Chrome QA of S462 eBay Listing Parity (Patrick handles, not Claude):**
 
-Per the post-fix live verification rule: before starting any new work, open Chrome to finda.sale and verify the S461 fixes still work after the final push to main. Steps:
+Patrick said "skip the qa i'll do that" at S462 wrap. After Railway + Vercel redeploy, Patrick walks the full flow:
 
-1. Log in as an organizer with eBay connected.
-2. Navigate to a sale with at least one unpublished item. Click "Push to eBay" from any of the 3 UI locations (Sale detail page / Edit Item page / Review & Publish).
-3. Watch Railway logs for the expected sequence: `[eBay RequiredAspects]` → `[eBay AspectFill]` → `[eBay ConditionPolicies]` → `[eBay Push]` → `[eBay InventoryVerify]` → `[eBay Retry25021] ... succeeded` (or publish succeeds on first try).
-4. Verify the returned `ebayListingId` resolves to a live eBay listing page.
-5. If any step fails → flag immediately and dispatch findasale-dev before other work.
-
-If smoke test passes, proceed to STEP 1.
-
----
-
-**STEP 1 — eBay push broader category coverage (verify Fix 6 beyond travel mugs):**
-
-Fix 6 was verified for one category (177006 Vacuum Flasks & Mugs). Push 2–3 more items of different categories to confirm `fillRequiredAspects` handles the wider spectrum:
-- A **book** (category 267) — exercises LIKE_NEW / media-only condition path
-- A piece of **clothing** (different required aspects: Size, Color, Material, Style)
-- A **furniture** item — likely HEAVY_OVERSIZED shipping + different aspect set
-
-If any fail with a NEW errorId (not 25002/25021), diagnose and ship Fix 7.
+1. Organizer with unsold items → PostSaleEbayPanel → click "Edit eBay" on an item.
+2. Verify 3 collapsible sections render (Product Details / Shipping / Offers). Enter sample data (brand, UPC, weight + dims, conditionNotes, toggle Best Offer).
+3. Click "Auto-fill" button → verify identifiers pre-fill from AI suggestion (or gracefully no-op).
+4. Save → verify fields persist on page reload.
+5. Push to eBay → verify:
+   - Shipping is NOT "Free" (real rate appears) if weight + dimensions were filled
+   - Pickup/warehouse location is seller's real address (not Grand Rapids default)
+   - `or Best Offer` appears on listing when toggled
+   - Rich HTML formatting preserved in description
+   - conditionDescription appears on listing
+   - Catalog match box appears if UPC/ISBN provided and valid
+6. Block-push test: organizer with no eBay merchant location AND sale with blank address → verify clean error message (not a 500).
+7. Report findings — any failures become S463 Fix items.
 
 ---
 
-**STEP 2 — Retire the static eBay category picker + dead map (S461 follow-up #3 + #4):**
+**STEP 1 — Retire the static eBay category picker (S461 follow-up #3 + #4, still queued):**
 
-Replace `packages/frontend/components/EbayCategoryPicker.tsx` (currently backed by `public/ebay-categories.json`, ~120 hardcoded categories, some with wrong IDs) with a live Taxonomy API picker: as the organizer types a title, call `/commerce/taxonomy/v1/category_tree/0/get_category_suggestions?q=...` (via a backend proxy route using the app token), show real leaf categories, store `categoryId` on Item creation.
+Replace `packages/frontend/components/EbayCategoryPicker.tsx` (currently backed by `public/ebay-categories.json`, ~120 hardcoded categories, some with wrong IDs) with a live Taxonomy API picker. **Phase C infrastructure now in place** — `GET /api/ebay/taxonomy/aspects/:categoryId` exists; add a sister endpoint `GET /api/ebay/taxonomy/suggest?q=...` that proxies `get_category_suggestions` using the app token.
+
+Picker: as organizer types item title, call suggest endpoint, show real leaf categories, store `categoryId` (not just name) on Item creation.
 
 Then delete `packages/backend/src/utils/ebayCategoryMap.ts` and the `getEbayCategoryId()` fallback path — dead code once the picker stores real IDs.
+
+---
+
+**STEP 2 — Broader category coverage (S461 STEP 1 carryforward, now easier with Phase C):**
+
+Push 2–3 more items of different categories to verify Phase A/B/C hold up beyond the Contigo/travel-mug case:
+- A **book** (category 267) — exercises media-only condition path + ISBN catalog match
+- A piece of **clothing** — different required aspects (Size, Color, Material, Style)
+- A **furniture** item — HEAVY_OVERSIZED shipping + different aspect set
+
+With Phase C taxonomy service live, missing aspects can be auto-suggested via Haiku rather than using static fallback values.
 
 ---
 
