@@ -28,6 +28,16 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
+    // eBay images — stale-while-revalidate (synced inventory photos)
+    {
+      urlPattern: /^https:\/\/i\.ebayimg\.com\/.*/i,
+      handler: 'StaleWhileRevalidate',
+      options: {
+        cacheName: 'ebay-images',
+        expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
+        cacheableResponse: { statuses: [0, 200] },
+      },
+    },
     // OSM map tiles — cache first (subdomain tiles: a/b/c.tile.openstreetmap.org)
     {
       urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,

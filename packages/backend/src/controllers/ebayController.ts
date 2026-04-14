@@ -1889,8 +1889,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       data: { lastEbayInventorySyncAt: new Date() }
     });
 
-    // If still 0 items after both API attempts
-    if (totalFetched === 0) {
+    // If truly found no eBay listings at all (imported 0, skipped 0)
+    if (imported === 0 && skipped === 0) {
       const username = ebayConn.ebayUserId && ebayConn.ebayUserId !== 'unknown' ? ebayConn.ebayUserId : null;
       return res.json({
         success: true,
@@ -1908,7 +1908,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       success: true,
       imported,
       skipped,
-      total: totalFetched,
+      total: imported + skipped,
       message: `Imported ${imported} item${imported !== 1 ? 's' : ''} from eBay${skipped > 0 ? ` (${skipped} already existed)` : ''}. Syncing photos and details in the background…`
     });
 
