@@ -68,7 +68,7 @@ function LootLegendPage() {
 
   const handleTrialActivate = async () => {
     try {
-      await api.post('/api/hunt-pass/trial');
+      await api.post('/hunt-pass/trial');
       setBannerDismissed(true);
       showToast('Hunt Pass trial activated! Enjoy 7 days of premium access. 🎟️', 'success');
     } catch (err: any) {

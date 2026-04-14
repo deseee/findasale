@@ -36,7 +36,7 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({ isOpen, onClose }) =
 
     setIsSubmitting(true);
     try {
-      await api.post('/api/feedback', {
+      await api.post('/feedback', {
         rating,
         text: text || null,
         page: typeof window !== 'undefined' ? window.location.pathname : null,

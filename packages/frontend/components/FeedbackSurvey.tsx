@@ -98,7 +98,7 @@ export const FeedbackSurvey: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await api.post('/api/feedback', {
+      await api.post('/feedback', {
         rating: currentSurvey.options.indexOf(answer) + 1,
         text: null,
         page: typeof window !== 'undefined' ? window.location.pathname : null,
@@ -111,7 +111,7 @@ export const FeedbackSurvey: React.FC = () => {
       // If dontAskAgain, create suppression
       if (dontAskAgain) {
         try {
-          await api.post('/api/feedback/suppression', {
+          await api.post('/feedback/suppression', {
             surveyType: currentSurvey.id,
           });
         } catch (err) {

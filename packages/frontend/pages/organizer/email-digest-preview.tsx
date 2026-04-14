@@ -59,7 +59,7 @@ export default function EmailDigestPreview() {
   const { data: userSettings, isLoading: settingsLoading } = useQuery<UserSettings>({
     queryKey: ['user-settings'],
     queryFn: async () => {
-      const response = await api.get('/api/users/me');
+      const response = await api.get('/users/me');
       return response.data;
     },
     enabled: !authLoading && !!user,
@@ -68,7 +68,7 @@ export default function EmailDigestPreview() {
   // Mutation to update email preference
   const updatePreferenceMutation = useMutation({
     mutationFn: async (emailWeeklyOrganizerDigest: boolean) => {
-      const response = await api.patch('/api/users/me', {
+      const response = await api.patch('/users/me', {
         emailWeeklyOrganizerDigest,
       });
       return response.data;

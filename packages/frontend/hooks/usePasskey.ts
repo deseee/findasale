@@ -37,14 +37,14 @@ export const usePasskey = () => {
       }
 
       // Step 1: Get registration options from server
-      const beginResponse = await api.post('/api/auth/passkey/register/begin');
+      const beginResponse = await api.post('/auth/passkey/register/begin');
       const options = beginResponse.data.publicKeyOptions;
 
       // Step 2: Use browser API to create credential
       const credential = await startRegistration(options);
 
       // Step 3: Send credential to server for verification and storage
-      const completeResponse = await api.post('/api/auth/passkey/register/complete', {
+      const completeResponse = await api.post('/auth/passkey/register/complete', {
         id: credential.id,
         rawId: credential.rawId,
         response: credential.response,
@@ -93,7 +93,7 @@ export const usePasskey = () => {
       }
 
       // Step 1: Get authentication options from server (public endpoint)
-      const beginResponse = await api.post('/api/auth/passkey/authenticate/begin');
+      const beginResponse = await api.post('/auth/passkey/authenticate/begin');
       const options = beginResponse.data.publicKeyOptions;
       const challengeId = beginResponse.data.challengeId;
 
