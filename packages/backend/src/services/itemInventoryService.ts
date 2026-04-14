@@ -93,6 +93,7 @@ export const pullFromInventory = async (
       description: inventoryItem.description,
       category: inventoryItem.category,
       condition: inventoryItem.condition,
+      conditionGrade: inventoryItem.conditionGrade,
       photoUrls: inventoryItem.photoUrls,
       tags: inventoryItem.tags,
       saleId,
@@ -102,6 +103,7 @@ export const pullFromInventory = async (
       price: priceOverride ?? inventoryItem.price,
       status: 'AVAILABLE',
       isActive: true,
+      embedding: [], // required field — populated later by search indexer
     },
   });
 
@@ -133,6 +135,7 @@ export const pullFromInventory = async (
  */
 export const getInventoryItems = async (organizerId: string, filters: InventoryFilters = {}) => {
   const where: any = {
+    inInventory: true,
     OR: [
       { organizerId },
       { sale: { organizerId } },
