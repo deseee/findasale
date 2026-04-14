@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useRouter } from 'next/router';
 import { Trash2, Copy, Clock } from 'lucide-react';
 import { getThumbnailUrl } from '../lib/imageUtils';
 
@@ -17,6 +18,20 @@ interface InventoryItemCardProps {
   priceBeforeMarkdown?: number;
   markdownApplied?: boolean;
 }
+
+/**
+ * Decode HTML entities to render raw text without escaped characters
+ * Handles: &amp; &lt; &gt; &quot; &#39;
+ */
+const decodeHtmlEntities = (str: string): string => {
+  if (!str) return '';
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+};
 
 const statusColors: Record<string, { bg: string; text: string }> = {
   AVAILABLE: { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-800 dark:text-green-200' },
@@ -43,16 +58,30 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
   priceBeforeMarkdown,
   markdownApplied,
 }) => {
+  const router = useRouter();
   const [showActions, setShowActions] = useState(false);
   const colors = statusColors[status] || statusColors.AVAILABLE;
   const primaryPhotoUrl = photoUrls?.[0];
   const photoUrl = primaryPhotoUrl ? getThumbnailUrl(primaryPhotoUrl) : '/placeholder-item.png';
+  const decodedCategory = category ? decodeHtmlEntities(category) : undefined;
+
+  const handleCardClick = () => {
+    router.push(`/organizer/inventory/${id}`);
+  };
 
   return (
     <div
-      className="relative bg-white dark:bg-slate-800 rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
+      className="relative bg-white dark:bg-slate-800 rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden cursor-pointer"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
+      onClick={handleCardClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          handleCardClick();
+        }
+      }}
     >
       {/* Photo */}
       <div className="relative w-full h-32 bg-gray-200 dark:bg-gray-700 overflow-hidden">
@@ -60,6 +89,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
           key={photoUrl}
           src={photoUrl}
           alt={title}
+          loading="eager"
           className="w-full h-full object-cover"
         />
         {/* Status badge */}
@@ -74,9 +104,9 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
 
         {/* Meta */}
         <div className="mt-2 flex flex-wrap gap-2">
-          {category && (
+          {decodedCategory && (
             <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-2 py-1 rounded">
-              {category}
+              {decodedCategory}
             </span>
           )}
           {condition && (
