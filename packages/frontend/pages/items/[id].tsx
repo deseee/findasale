@@ -137,7 +137,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const { showToast } = useToast();
   const { showSurvey } = useFeedbackSurvey();
   const queryClient = useQueryClient();
-  const shopperCart = useShopperCart(); // Phase 1: Smart Cart
+  const shopperCart = useShopperCart(user?.id); // Phase 1: Smart Cart — scoped to user
 
   // State
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);

@@ -127,7 +127,7 @@ const SaleDetailPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const shopperCart = useShopperCart();
+  const shopperCart = useShopperCart(user?.id);
 
   const [checkoutItem, setCheckoutItem] = useState<{ id: string; title: string } | null>(null);
   const [bidAmounts, setBidAmounts] = useState<{ [itemId: string]: string }>({});
