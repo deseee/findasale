@@ -64,6 +64,7 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       },
       body: JSON.stringify({
         topicId: EBAY_NOTIFICATION_TOPIC,
+        status: 'ENABLED',
         deliveryConfig: {
           endpoint: endpointUrl,
           verificationToken,
