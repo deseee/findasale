@@ -151,8 +151,13 @@ const useInventory = (organizerId?: string) => {
     // Mutations
     addToInventory: (itemId: string) => addToInventory.mutate(itemId),
     removeFromInventory: (itemId: string) => removeFromInventory.mutate(itemId),
-    pullFromInventory: (inventoryItemId: string, saleId: string, priceOverride?: number) =>
-      pullFromInventory.mutate({ inventoryItemId, saleId, priceOverride }),
+    pullFromInventory: (
+      inventoryItemId: string,
+      saleId: string,
+      priceOverride?: number,
+      callbacks?: { onSuccess?: () => void; onError?: (err: Error) => void }
+    ) =>
+      pullFromInventory.mutate({ inventoryItemId, saleId, priceOverride }, callbacks),
 
     // Functions
     getPriceHistory,

@@ -4,6 +4,7 @@ import Head from 'next/head';
 import InventoryItemCard from '../../components/InventoryItemCard';
 import useInventory from '../../hooks/useInventory';
 import { useAuth } from '../../components/AuthContext';
+import { useToast } from '../../components/ToastContext';
 import { SkeletonCard } from '../../components/SkeletonCards';
 import { Search, Filter } from 'lucide-react';
 import EmptyState from '../../components/EmptyState';
@@ -42,6 +43,7 @@ const InventoryPage: React.FC = () => {
   const [priceOverride, setPriceOverride] = useState('');
   const [sales, setSales] = useState<Array<{ id: string; title: string }>>([]);
 
+  const { showToast } = useToast();
   const { inventoryItems, loading, isRemovingFromInventory, isPullingFromInventory, removeFromInventory, pullFromInventory, getPriceHistory } =
     useInventory(user?.role === 'ORGANIZER' ? user?.id : undefined);
 
@@ -88,7 +90,11 @@ const InventoryPage: React.FC = () => {
       return;
     }
     const price = priceOverride ? parseFloat(priceOverride) : undefined;
-    pullFromInventory(pullModal.inventoryItemId, selectedSaleId, price);
+    const saleTitle = sales.find((s) => s.id === selectedSaleId)?.title ?? 'the sale';
+    pullFromInventory(pullModal.inventoryItemId, selectedSaleId, price, {
+      onSuccess: () => showToast(`Item added to ${saleTitle}`, 'success'),
+      onError: () => showToast('Failed to pull item. Please try again.', 'error'),
+    });
     setPullModal({ isOpen: false });
     setSelectedSaleId('');
     setPriceOverride('');

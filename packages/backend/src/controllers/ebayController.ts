@@ -1602,6 +1602,10 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           'FOR_PARTS_OR_NOT_WORKING': 'D',
         };
         const conditionGrade = conditionMap[ebayItem.condition] || null;
+        const condition = conditionGrade === 'S' ? 'NEW'
+          : conditionGrade === 'D' ? 'PARTS_OR_REPAIR'
+          : conditionGrade ? 'USED'
+          : null;
 
         await prisma.item.create({
           data: {
@@ -1615,6 +1619,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             saleId: containerSale!.id,
             ebayListingId: sku,
             conditionGrade,
+            condition,
             embedding: [],  // populated later when item is indexed for search
           }
         });
@@ -1725,23 +1730,47 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           // GranularityLevel=Fine includes PictureDetails; GalleryURL is fallback
           const pictureUrl = xmlVal(itemBlock, 'PictureURL') || xmlVal(itemBlock, 'GalleryURL');
           const photoUrls = pictureUrl ? [pictureUrl] : [];
-          console.log(`[eBay Import] Item ${ebayItemId}: photo=${pictureUrl || 'none'}`);
+          // Extract description — strip HTML tags from eBay's CDATA description
+          const descriptionRaw = xmlVal(itemBlock, 'Description') || '';
+          const description = descriptionRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+          const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
+          const conditionGrade = tradingConditionMap[conditionId] || null;
+          const condition = conditionGrade === 'S' ? 'NEW'
+            : conditionGrade === 'D' ? 'PARTS_OR_REPAIR'
+            : conditionGrade ? 'USED'
+            : null;
+          // Extract PrimaryCategory name (eBay category names stored directly, e.g. "Electric Guitars")
+          const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
+          const ebayCategory = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
+          // Extract ItemSpecifics values as tags (Brand, Type, Color, Material, etc.)
+          const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
+          const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
+          const ebayCategoryTags: string[] = nameValueBlocks
+            .map(nvBlock => xmlVal(nvBlock, 'Value'))
+            .filter((v): v is string => !!v && v.length > 0)
+            .slice(0, 10);
+          console.log(`[eBay Import] Item ${ebayItemId}: photo=${pictureUrl || 'none'}, condition=${conditionGrade || 'none'}, category=${ebayCategory || 'none'}, tags=${ebayCategoryTags.length}`);
 
-          // If item already exists, backfill photos if it has none
+          // If item already exists, backfill any empty fields on re-sync
           if (existing) {
-            if (photoUrls.length > 0 && existing.photoUrls.length === 0) {
-              await prisma.item.update({ where: { id: existing.id }, data: { photoUrls } });
+            const backfill: Record<string, any> = {};
+            if (photoUrls.length > 0 && existing.photoUrls.length === 0) backfill.photoUrls = photoUrls;
+            if (description && !existing.description) backfill.description = description;
+            if (condition && !existing.condition) backfill.condition = condition;
+            if (conditionGrade && !existing.conditionGrade) backfill.conditionGrade = conditionGrade;
+            if (ebayCategory && !existing.category) backfill.category = ebayCategory;
+            if (ebayCategoryTags.length > 0 && (!existing.tags || existing.tags.length === 0)) backfill.tags = ebayCategoryTags;
+            if (Object.keys(backfill).length > 0) {
+              await prisma.item.update({ where: { id: existing.id }, data: backfill });
             }
             skipped++;
             continue;
           }
-          const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
-          const conditionGrade = tradingConditionMap[conditionId] || null;
 
           await prisma.item.create({
             data: {
               title: titleRaw.slice(0, 255),
-              description: '',
+              description,
               photoUrls,
               price,
               status: 'AVAILABLE',
@@ -1750,6 +1779,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               saleId: containerSale!.id,
               ebayListingId: storedId,
               conditionGrade,
+              condition,
+              category: ebayCategory || undefined,
+              tags: ebayCategoryTags,
               embedding: [],  // populated later when item is indexed for search
             }
           });
