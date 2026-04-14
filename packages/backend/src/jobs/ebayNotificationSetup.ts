@@ -99,23 +99,22 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
     }
 
     // ── Step 1b: Discover schema version for this topic ─────────────────────
-    // The list-all endpoint returns empty supportedSchemaVersions. Call per-topic endpoint.
-    // If still empty, omit schemaVersion from the subscription body (eBay rejects '1.0' for this topic).
-    let schemaVersion: string | null = null;
+    // schemaVersion goes inside the payload object (not top-level).
+    // Call per-topic endpoint to discover supported versions; default to '1.0'.
+    let schemaVersion = '1.0';
     const topicResp = await fetch(`${EBAY_NOTIFY_BASE}/topic/${EBAY_NOTIFICATION_TOPIC}`, {
       method: 'GET',
       headers,
     });
     if (topicResp.ok) {
       const topicText = await topicResp.text();
-      console.log(`[eBay Notify Setup] Topic raw response: ${topicText.slice(0, 500)}`);
       const topicData = topicText ? JSON.parse(topicText) : {};
       const versions: string[] = topicData.supportedSchemaVersions || [];
       if (versions.length > 0) {
         schemaVersion = versions[versions.length - 1];
         console.log(`[eBay Notify Setup] Topic ${EBAY_NOTIFICATION_TOPIC} schemaVersion=${schemaVersion}`);
       } else {
-        console.log(`[eBay Notify Setup] Topic ${EBAY_NOTIFICATION_TOPIC} found — no schema versions listed, omitting schemaVersion from subscription request`);
+        console.log(`[eBay Notify Setup] Topic ${EBAY_NOTIFICATION_TOPIC} found — no schema versions listed, using default ${schemaVersion}`);
       }
     } else {
       const errText = await topicResp.text();
@@ -141,12 +140,17 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       }
     }
 
-    const subBody: Record<string, string> = {
+    // schemaVersion lives inside payload object — NOT as a top-level field
+    const subBody = {
       topicId: EBAY_NOTIFICATION_TOPIC,
       status: 'ENABLED',
       destinationId: destinationId as string,
+      payload: {
+        deliveryProtocol: 'HTTPS',
+        format: 'JSON',
+        schemaVersion,
+      },
     };
-    if (schemaVersion) subBody.schemaVersion = schemaVersion;
     console.log(`[eBay Notify Setup] Creating subscription:`, JSON.stringify(subBody));
 
     const subCreateResp = await fetch(`${EBAY_NOTIFY_BASE}/subscription`, {
