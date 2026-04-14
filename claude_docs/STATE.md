@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S461 IN PROGRESS (2026-04-14) — eBay push 25021 fixes (3 rounds) + Taxonomy API integrated**
+**S461 IN PROGRESS (2026-04-14) — eBay push 25021 fixes (4 rounds) + Taxonomy + condition policy remapping**
 
 **S461 What happened:**
 - **Root cause of ongoing 25021 errors:** `getEbayCategoryId()` name-map was resolving to branch categories (e.g. `"Kitchenware"` → `'20625'` Kitchen Dining & Bar = branch). Default fallback was `'1'` (Collectibles — also a branch). eBay Inventory API rejects any listing under a branch category.
@@ -16,23 +16,29 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Fix 2 (commit 17bb42b4):** For FindA.Sale-created items (no imported ID), call eBay Taxonomy API `getCategorySuggestions` using item title → returns leaf `categoryId`. Cache back to `Item.ebayCategoryId`. Cascade: cached ID → Taxonomy API → static map fallback (now `'99'` Everything Else > Other, a valid LEAF).
 - **Fix 3 (local, not yet pushed):** Taxonomy 403 errorId 1100 "Insufficient permissions" — user OAuth token doesn't carry `commerce.taxonomy` scope. Swapped to **app token** via `getEbayAccessToken()` (client credentials flow) which has broader scopes.
 - **Default fallback changed:** `getEbayCategoryId()` now defaults to `'99'` (valid leaf) instead of `'1'` (branch).
+- **Fix 4 (after round 3 test — Taxonomy returned leaf `177006` Vacuum Flasks & Mugs, but 25021 still fired on condition):** Root cause = `LIKE_NEW` enum is media-only (Books/DVDs/CDs/Video Games). Grade A was mapping to `LIKE_NEW` which is rejected for every non-media category. Two-part fix:
+  1. `mapGradeToInventoryCondition` now returns universal values only (grade A → `USED_VERY_GOOD`, no more `LIKE_NEW`).
+  2. New `ensureConditionValidForCategory()` helper calls eBay Metadata API `get_item_condition_policies` per category, caches accepted condition enums in-memory, and remaps any unsupported condition to the closest accepted substitute via an ordered fallback chain. Logs remap decisions for diagnosis.
 
 **S461 Files changed (this round, not yet pushed):**
-- `packages/backend/src/controllers/ebayController.ts` — `suggestEbayCategoryForTitle()` now uses app token instead of user token
+- `packages/backend/src/controllers/ebayController.ts` — (a) `suggestEbayCategoryForTitle()` uses app token, (b) `mapGradeToInventoryCondition()` swaps `LIKE_NEW` for `USED_VERY_GOOD`, (c) new `ensureConditionValidForCategory()` + `getAcceptedConditionsForCategory()` remap conditions via eBay Metadata API
 
 **S461 Patrick manual actions (push block):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/ebayController.ts
-git commit -m "fix(ebay): use app token for Taxonomy API (fixes 403 on getCategorySuggestions)"
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(ebay): app token for Taxonomy + category-aware condition remapping (fixes 25021)"
 .\push.ps1
 ```
-After Railway deploys: push the same travel mug item to eBay. Expected result: Taxonomy API returns a leaf categoryId, cached to Item, listing publishes without 25021.
+After Railway deploys: push the travel mug to eBay again. Expected logs: `[eBay ConditionPolicies] category 177006 accepts: ...` then `[eBay Push] Contigo... → category=177006 condition=USED_VERY_GOOD`. Listing should publish without 25021.
 
 **S461 Follow-up queued for next session:**
-1. **Condition-per-category validation** — different eBay categories accept different condition values. Call `getItemConditionPolicies` per category and validate/remap item condition before push. Currently a guess.
+1. ~~Condition-per-category validation~~ — **DONE this session (Fix 4).** Verify working against real push logs in next session.
 2. **Replace static `EbayCategoryPicker.tsx` with live Taxonomy API** — frontend picker should call `getCategorySuggestions` as user types title, show real leaf categories, store `categoryId` (not just name) on Item creation. Retires `public/ebay-categories.json` (341 lines of hardcoded categories).
 3. **Retire `ebayCategoryMap.ts`** — once Taxonomy is wired into creation + push, the hardcoded name→ID map is dead code. Delete the file and the `getEbayCategoryId()` fallback path.
+4. **Persist category condition policies in DB (optional optimization)** — current implementation uses in-memory cache per process. Could move to a `EbayCategoryConditionPolicy` table refreshed weekly to survive restarts.
 
 **S461 Decisions / findings:**
 - Previous "eBay integration" implementation documented as shallow — picker + push use different maps, neither uses live eBay data

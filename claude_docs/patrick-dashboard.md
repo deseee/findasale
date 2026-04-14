@@ -2,20 +2,23 @@
 
 ## What Happened This Week
 
-**S461** (2026-04-14) — eBay push 25021 fixes + Taxonomy API wired in:
-- **Root cause:** The name→ID category map was resolving to *branch* categories (like Kitchenware → Kitchen Dining & Bar). eBay Inventory API rejects every listing under a branch. Plus the default fallback was `'1'` (Collectibles — also a branch).
+**S461** (2026-04-14) — eBay push 25021 fixes (4 rounds) + Taxonomy + condition remapping:
+- **Why this kept breaking:** Each fix revealed the next layer. (1) Static map returned branch categories. (2) No API call for FindA.Sale-created items. (3) Taxonomy API returned 403 on user token. (4) Condition `LIKE_NEW` is media-only and was being sent for a travel mug.
 - **Honest note you asked for:** the prior "eBay categories implemented sitewide" claim was shallow. The picker uses a static JSON of ~120 categories (with some wrong IDs). The push used a different hardcoded map. Neither ever talked to eBay's live Taxonomy API.
-- **Fix 1 ✅ pushed:** Capture eBay's numeric CategoryID on import and store it on the Item. Prefer it on push. Migration applied.
-- **Fix 2 ✅ pushed:** For items YOU create in FindA.Sale (not imported), call eBay's Taxonomy API to get a real leaf category from the title.
-- **Fix 3 ⏳ ready to push:** Taxonomy was returning 403 — user token doesn't carry the right scope. Swapped to app token (same one we use for OAuth). Push block below.
-- **What to do:** Run the push block, wait for Railway deploy, push the travel mug to eBay again. Should work.
-- **Queued for next session:** Condition-per-category validation, replace static picker with live Taxonomy, retire the hardcoded category map.
+- **Fix 1 ✅ pushed:** Capture eBay's numeric CategoryID on import and store it on the Item. Prefer it on push.
+- **Fix 2 ✅ pushed:** For items YOU create in FindA.Sale, call eBay's Taxonomy API to get a real leaf category from the title.
+- **Fix 3 ⏳ ready to push:** Swapped Taxonomy call from user token to app token (user token lacks `commerce.taxonomy` scope).
+- **Fix 4 ⏳ ready to push:** Category returned `177006` (Vacuum Flasks & Mugs) ✅ but condition was `LIKE_NEW` ❌. Now: (a) grade "Like New" (A) maps to `USED_VERY_GOOD` instead of `LIKE_NEW`, and (b) before every push, we call eBay's item condition policies API for the target category and auto-remap to an accepted condition if needed. Cached in memory so it's a one-time call per category.
+- **What to do:** Run the push block, wait for Railway deploy, push the travel mug to eBay again. Watch Railway logs for `[eBay ConditionPolicies]` and `[eBay Push]` lines showing the category and final condition. Listing should publish.
+- **Queued for next session:** Replace static picker with live Taxonomy, retire the hardcoded category map, optionally persist condition policies to DB.
 
 **Push block:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/ebayController.ts
-git commit -m "fix(ebay): use app token for Taxonomy API (fixes 403 on getCategorySuggestions)"
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(ebay): app token for Taxonomy + category-aware condition remapping (fixes 25021)"
 .\push.ps1
 ```
 
