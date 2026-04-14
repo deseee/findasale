@@ -7,19 +7,23 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S458 COMPLETE (2026-04-14) — Pull to Sale UX + eBay category/tags extraction**
+**S458 COMPLETE (2026-04-14) — Pull to Sale UX + eBay field extraction + GetItem enrichment**
 
 **S458 What happened:**
-- **Toast on pull:** `useInventory.ts` — `pullFromInventory` now accepts optional `{ onSuccess, onError }` callbacks threaded through to `mutate`. `inventory.tsx` — imports `useToast`, passes `onSuccess: () => showToast('Item added to ${saleTitle}', 'success')` on confirm pull.
-- **Sale title in Add Items header:** `add-items/[saleId].tsx` — `sale?.name` → `sale?.title` in 3 places (title tag, conditional, rendered text). Sale model uses `title`, not `name`.
-- **eBay category extraction:** `ebayController.ts` Trading API loop — extracts `PrimaryCategory.CategoryName` from XML and stores in `category` field. Matches existing `EbayCategoryPicker` storage pattern (eBay category names stored as-is). Backfill on re-sync if `existing.category` is empty.
-- **eBay ItemSpecifics → tags:** `ebayController.ts` Trading API loop — extracts all `NameValueList/Value` entries from `ItemSpecifics` block, stores as `tags[]` (up to 10). Brand, Type, Color, Material etc. from seller-entered eBay specifics. Backfill on re-sync if `existing.tags` is empty.
+- **Toast on pull:** `useInventory.ts` — `pullFromInventory` now accepts optional `{ onSuccess, onError }` callbacks. `inventory.tsx` — showToast("Item added to [sale name]") on confirm.
+- **Sale title in Add Items header:** `add-items/[saleId].tsx` — `sale?.name` → `sale?.title` in 3 places. Sale model uses `title`, not `name`.
+- **eBay category + tags attempt:** `ebayController.ts` Trading API loop — added extraction of `PrimaryCategory.CategoryName` and `ItemSpecifics` values. These were empty because `GetMyeBaySelling` with `GranularityLevel=Fine` does NOT return Description, PrimaryCategory, or ItemSpecifics — confirmed by zero backfill on re-sync.
+- **GetItem enrichment pass:** `ebayController.ts` — after Trading API loop, queries items with missing description/category/tags and calls `GetItem` with `DetailLevel=ReturnAll` per item to get full details. 100ms delay between calls. Backfills description, category, tags, conditionGrade, condition.
+- **Photo fallback in edit form:** `ItemPhotoManager.tsx` — added `crossOrigin="anonymous"` + `onError` handler that retries with raw URL if transformed URL fails (eBay CORS).
+
+**S458 Architecture flag (Patrick's concern):** Multiple API passes (GetMyeBaySelling → then GetItem per item) is the wrong long-term direction. Next session: architect research the correct eBay API approach for full bidirectional sync in a single efficient pass. See `## Next Session` below.
 
 **S458 Files changed:**
-- `packages/frontend/hooks/useInventory.ts` — callback threading for pullFromInventory
-- `packages/frontend/pages/organizer/inventory.tsx` — useToast + showToast on pull confirm
-- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — sale?.name → sale?.title (3 places)
-- `packages/backend/src/controllers/ebayController.ts` — category + tags extraction + backfill
+- `packages/frontend/hooks/useInventory.ts`
+- `packages/frontend/pages/organizer/inventory.tsx`
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx`
+- `packages/backend/src/controllers/ebayController.ts`
+- `packages/frontend/components/ItemPhotoManager.tsx`
 
 **S458 Push block:**
 ```powershell
@@ -28,13 +32,14 @@ git add packages/frontend/hooks/useInventory.ts
 git add packages/frontend/pages/organizer/inventory.tsx
 git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
 git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/components/ItemPhotoManager.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: pull-to-sale toast, sale title header, eBay category+tags extraction"
+git commit -m "fix: pull-to-sale toast, sale title, eBay GetItem enrichment, photo fallback"
 .\push.ps1
 ```
 
-**After deploy:** Go to Settings → Sync eBay Inventory to backfill existing 86 items with category + tags.
+**After deploy:** Sync eBay Inventory — will run GetItem enrichment on existing items (~9s for 86 items). Then next session re-architects the sync properly.
 
 ---
 
@@ -1157,13 +1162,48 @@ npx prisma generate
 
 ## Next Session Priority
 
-### Outstanding Actions (as of S457, 2026-04-14)
-
-**DIRECTIVE FROM PATRICK (S454 wrap):** Audit all work since the last roadmap session. Document Patrick's human QA passes into shipped & verified section of roadmap. Survivor accounts: `survivor-seed.ts` already exists (see Standing Notes).
+### Outstanding Actions (as of S458, 2026-04-14)
 
 ---
 
-**STEP 1 — Roadmap audit (findasale-records):**
+**STEP 0 — eBay sync architecture audit (START HERE — Patrick's S458 directive):**
+
+Patrick flagged that the current eBay sync approach (GetMyeBaySelling → separate GetItem enrichment pass per item) is architecturally wrong. Before any more eBay dev work, dispatch `findasale-architect` + research to answer:
+
+1. **What does eBay actually expose for full item data retrieval?**
+   - Trading API `GetItem` with `DetailLevel=ReturnAll` — full data, but 1 call/item
+   - Trading API `GetItems` — batch up to 20 items per call (much better than 1/item)
+   - REST Sell Inventory API (`sell/inventory/v1/inventory_item`) — returns full product data including aspects (= ItemSpecifics) but only covers items created via Inventory API
+   - REST Browse API (`buy/browse`) — shopper-facing, not seller
+   - REST Fulfillment API — order/transaction data only
+
+2. **What is the correct single-pass architecture for eBay → FindA.Sale sync?**
+   - Option A: `GetMyeBaySelling` (all active listing IDs) → `GetItems` in batches of 20 (full data, 5 calls for 86 items vs 86 calls) — likely the right answer
+   - Option B: Switch to Notifications/Platform Notifications API for real-time sync (webhook-based, eliminates polling)
+   - Option C: eBay Marketplace Account Deletion webhook (already implemented for compliance) — extend pattern to item events?
+
+3. **What does true bidirectional sync require?**
+   - FindA.Sale → eBay: already partially implemented (offer push, sold withdrawal)
+   - eBay → FindA.Sale: currently poll-based (15-min cron). What events does eBay send via Platform Notifications that would let us eliminate the cron?
+   - Sold sync: eBay sells something → FindA.Sale marks SOLD. Currently polling. Better: eBay Platform Notification for `ItemSold` event.
+
+4. **Recommended architecture:** Architect to produce a one-page spec:
+   - How to do the initial bulk import (which API, what call pattern)
+   - How to keep data in sync ongoing (webhooks vs polling, what events)
+   - What data is available from eBay and what must be user-entered
+   - Current code in `ebayController.ts` to review: GetMyeBaySelling loop (~line 1643+), the GetItem enrichment pass (~line 1795+), the 15-min sold sync cron
+
+5. **S458 code to potentially replace/refactor:** The GetItem enrichment pass (lines 1795–1909 of ebayController.ts) is a stopgap. Once the right architecture is clear, replace the multi-pass approach with a proper batch call (GetItems x20) and eliminate the separate enrichment loop.
+
+**STEP 1 — S458 audit first:** Before architect work, verify S458 push deployed correctly and the GetItem enrichment actually populated fields for the 86 eBay items. Check Railway logs for `[eBay Enrich]` log lines after next sync. If enrichment worked, the eBay architecture question becomes about efficiency, not correctness.
+
+---
+
+**STEP 2 — Roadmap audit (findasale-records):**
+
+**DIRECTIVE FROM PATRICK (S454 wrap):** Audit all work since the last roadmap session. Document Patrick's human QA passes into shipped & verified section of roadmap. Survivor accounts: `survivor-seed.ts` already exists (see Standing Notes).
+
+Dispatch `findasale-records` to:
 
 Dispatch `findasale-records` to:
 1. Read `claude_docs/strategy/roadmap.md` — identify last session with a roadmap update
@@ -1174,9 +1214,9 @@ Dispatch `findasale-records` to:
    - Known human QA passes this cycle: dashboard layout (S451), rank display, action buttons, QR inline panel, dashboard character sheet, eBay sync, Stripe go-live fixes
 4. Update the roadmap file and include it in the wrap push block
 
-**STEP 2 — Survivor accounts:** ✅ `packages/database/prisma/survivor-seed.ts` already created. See Standing Notes for survivor account emails (`deseee@gmail.com`, `artifactmi@gmail.com`).
+**STEP 3 — Survivor accounts:** ✅ `packages/database/prisma/survivor-seed.ts` already created. See Standing Notes for survivor account emails (`deseee@gmail.com`, `artifactmi@gmail.com`).
 
-**STEP 3 — Live Stripe webhook setup:**
+**STEP 4 — Live Stripe webhook setup:**
 
 Complete the webhook registration Patrick deferred. Two endpoints to register in LIVE Stripe:
 - `/api/billing/webhook` — events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`, `checkout.session.completed`
@@ -1184,7 +1224,7 @@ Complete the webhook registration Patrick deferred. Two endpoints to register in
 
 Each gets its own signing secret from Stripe → add as env vars in Railway.
 
-**STEP 4 — Archive junk Stripe sandbox products:**
+**STEP 5 — Archive junk Stripe sandbox products:**
 
 Patrick still has ~14 junk products in sandbox catalog. He should archive all except: Hunt Pass, FindA.Sale Teams, FindA.Sale Pro, FindA.Sale — Item Sale.
 

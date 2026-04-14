@@ -2,12 +2,12 @@
 
 ## What Happened This Week
 
-**S458** (2026-04-14) — Pull to Sale UX + eBay field extraction:
-- **Toast on pull** ✅ — pulling an item to a sale now shows "Item added to [sale name]" success toast
-- **Sale title in Add Items header** ✅ — header now shows actual sale name (was blank due to `sale.name` → fixed to `sale.title`)
-- **eBay category extracted** — `PrimaryCategory.CategoryName` from Trading API now stored in `category` field (e.g. "Electric Guitars"). Re-sync backfills existing items.
-- **eBay ItemSpecifics → tags** — Brand, Type, Color, Material etc. extracted from eBay seller specifics and stored as `tags[]`. Re-sync backfills. Pulled items will now have category + tags populated.
-- **After deploy:** Run Settings → Sync eBay Inventory to backfill all 86 existing items.
+**S458** (2026-04-14) — Pull to Sale UX + eBay GetItem enrichment:
+- **Toast on pull** ✅ — "Item added to [sale name]" on pull confirm
+- **Sale title in Add Items header** ✅ — was using `sale.name` (wrong), fixed to `sale.title`
+- **GetItem enrichment pass** — after sync, calls eBay `GetItem` with `DetailLevel=ReturnAll` for each item missing description/category/tags. Backfills from full eBay item data. (GetMyeBaySelling doesn't return these fields — this was the root cause of empty item cards.)
+- **Photo fallback** — `ItemPhotoManager.tsx` now has `onError` retry with raw URL for eBay CORS edge cases
+- **⚠️ Architecture concern:** GetItem 1-per-item is a stopgap. Next session: architect designs proper batch sync using `GetItems` (20/call) + eBay Platform Notifications for real-time sold events.
 
 **S457** (2026-04-14) — Pull to Sale P2011 crash fixed + inventory filter:
 - `embedding: []` added to `pullFromInventory` create — was causing Prisma P2011 null constraint crash on every pull attempt
@@ -106,13 +106,15 @@ git add packages/frontend/hooks/useInventory.ts
 git add packages/frontend/pages/organizer/inventory.tsx
 git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
 git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/components/ItemPhotoManager.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: pull-to-sale toast, sale title header, eBay category+tags extraction"
+git commit -m "fix: pull-to-sale toast, sale title, eBay GetItem enrichment, photo fallback"
 .\push.ps1
 ```
 
-- [ ] **After deploy:** Settings → Sync eBay Inventory → backfills category + tags on existing 86 items
+- [ ] **After deploy:** Settings → Sync eBay Inventory — enrichment pass runs (~9s for 86 items), check that description/category/tags populate on items
+- [ ] **Check Railway logs** after sync for `[eBay Enrich]` lines — confirms enrichment ran and how many items updated
 - [ ] **Artifact MI: disconnect + reconnect eBay** — gets new token with `sell.fulfillment` scope (stops 403 cron errors)
 - [ ] **Run S455 migration** (still pending — `inInventory` rename + `isInventoryContainer` + `lastEbayInventorySyncAt`):
 ```powershell
@@ -163,15 +165,19 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 ---
 
-## What's Next (S458+)
+## What's Next (S459+)
 
-**P0 — Run S455 migration on Railway** (still pending — `inInventory` rename, `isInventoryContainer`, `lastEbayInventorySyncAt`). eBay inventory sync won't be fully live until this runs.
+**P0 — eBay sync architecture audit (Patrick flagged S458):** The current multi-pass approach (GetMyeBaySelling → separate GetItem per item) is wrong. Next session opens with `findasale-architect` researching the correct bidirectional sync design. Key questions: use `GetItems` batch calls (20/call) instead of 1/item? Switch to eBay Platform Notifications for real-time sold sync? What data is actually available from which API? Goal: single-pass import + webhook-based ongoing sync, replacing the polling cron.
 
-**P1 — Add Railway env vars:** `STRIPE_HUNT_PASS_PRICE_ID` + `STRIPE_GENERIC_ITEM_PRODUCT_ID` (live values, see Action Items).
+**P1 — Verify S458 enrichment worked:** Check Railway logs after syncing for `[eBay Enrich]` lines. If description/category/tags aren't populating, the GetItem call may need auth debugging.
 
-**P1 — Live Stripe webhooks:** Register both webhook endpoints in LIVE Stripe Dashboard with correct event sets.
+**P1 — Run S455 migration on Railway** (still pending — `inInventory` rename, `isInventoryContainer`, `lastEbayInventorySyncAt`). eBay inventory sync won't be fully live until this runs.
 
-**P2 — Roadmap audit:** Dispatch `findasale-records` to update roadmap with all sessions since last roadmap update. Mark Patrick's human QA passes as verified.
+**P2 — Add Railway env vars:** `STRIPE_HUNT_PASS_PRICE_ID` + `STRIPE_GENERIC_ITEM_PRODUCT_ID` (live values, see Action Items).
+
+**P2 — Live Stripe webhooks:** Register both webhook endpoints in LIVE Stripe Dashboard with correct event sets.
+
+**P3 — Roadmap audit:** Dispatch `findasale-records` to update roadmap with all sessions since last roadmap update. Mark Patrick's human QA passes as verified.
 
 **Carry-forward:**
 - QA queue (S436/S430/S431/S427/S433) — still postponed

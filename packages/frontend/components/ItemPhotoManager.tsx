@@ -158,6 +158,14 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                 className="w-full aspect-square object-cover"
                 loading="lazy"
                 referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
+                onError={(e) => {
+                  // Fallback: if image fails to load, try without transformation
+                  const img = e.target as HTMLImageElement;
+                  if (img.src !== url && !img.src.includes('ebayimg')) {
+                    img.src = url;
+                  }
+                }}
               />
 
               {/* Cover badge on first photo */}
