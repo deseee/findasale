@@ -1631,78 +1631,106 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       });
     }
 
-    // If Inventory API returned 0 items, fall back to eBay Browse API seller search.
-    // Browse API returns ALL public active listings for a seller regardless of how they were created.
-    // Requires the app-level Client Credentials token (not user token) and the seller's display username.
-    if (totalFetched === 0 && ebayConn.ebayUserId && ebayConn.ebayUserId !== 'unknown') {
-      const appToken = await getEbayAccessToken();
-      if (appToken) {
-        let browseOffset = 0;
-        const browseLimit = 200;
-        let browseHasMore = true;
+    // If Inventory API returned 0 items, fall back to eBay Trading API GetMyeBaySelling.
+    // This is the only eBay endpoint that returns ALL active listings regardless of how they were created.
+    if (totalFetched === 0) {
+      console.log('[eBay Import] Inventory API returned 0. Trying Trading API GetMyeBaySelling...');
 
-        while (browseHasMore) {
-          const browseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?filter=sellers%3A%7B${encodeURIComponent(ebayConn.ebayUserId)}%7D&limit=${browseLimit}&offset=${browseOffset}`;
-          const browseResp = await fetch(browseUrl, {
-            headers: {
-              'Authorization': `Bearer ${appToken}`,
-              'Accept-Language': 'en-US',
-            },
-          });
+      // Simple XML field extractor
+      const xmlVal = (block: string, tag: string): string | null => {
+        const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\s\S]*?)<\\/${tag}>`));
+        return m ? m[1].trim() : null;
+      };
+      const xmlAll = (block: string, tag: string): string[] => {
+        const results: string[] = [];
+        const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\s\S]*?)<\\/${tag}>`, 'g');
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(block)) !== null) results.push(m[1]);
+        return results;
+      };
 
-          if (!browseResp.ok) {
-            const errText = await browseResp.text();
-            console.error('[eBay Import] Browse API fallback error:', browseResp.status, errText);
-            break;
-          }
+      const tradingConditionMap: Record<string, string> = {
+        '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A',
+        '3000': 'A', '4000': 'B', '5000': 'C', '6000': 'D', '7000': 'D',
+      };
 
-          const browseData = (await browseResp.json()) as any;
-          const summaries: any[] = browseData.itemSummaries || [];
-          console.log(`[eBay Import] Browse API returned ${summaries.length} listings for seller ${ebayConn.ebayUserId}`);
+      let tradingPage = 1;
+      let tradingTotalPages = 1;
 
-          for (const listing of summaries) {
-            const ebayItemId = listing.itemId as string;
-            if (!ebayItemId) { skipped++; continue; }
+      while (tradingPage <= tradingTotalPages) {
+        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${accessToken}</eBayAuthToken></RequesterCredentials><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
 
-            const existing = await prisma.item.findFirst({
-              where: { organizerId: organizer.id, ebayListingId: ebayItemId }
-            });
-            if (existing) { skipped++; continue; }
+        const tradingResp = await fetch('https://api.ebay.com/ws/api.dll', {
+          method: 'POST',
+          headers: {
+            'X-EBAY-API-CALL-NAME': 'GetMyeBaySelling',
+            'X-EBAY-API-SITEID': '0',
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+            'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+            'Content-Type': 'text/xml',
+          },
+          body: tradingXml,
+        });
 
-            const imageUrl = listing.image?.imageUrl || null;
-            const price = listing.price?.value ? parseFloat(listing.price.value) : null;
+        const tradingText = await tradingResp.text();
 
-            // Map eBay condition to conditionGrade
-            const browseConditionMap: Record<string, string> = {
-              'NEW': 'S', 'LIKE_NEW': 'A', 'EXCELLENT_REFURBISHED': 'A',
-              'VERY_GOOD_REFURBISHED': 'B', 'GOOD_REFURBISHED': 'B',
-              'USED_EXCELLENT': 'B', 'USED_VERY_GOOD': 'B',
-              'USED_GOOD': 'C', 'USED_ACCEPTABLE': 'D',
-              'FOR_PARTS_OR_NOT_WORKING': 'D',
-            };
-            const conditionGrade = listing.condition ? (browseConditionMap[listing.condition.toUpperCase().replace(/ /g, '_')] || null) : null;
-
-            await prisma.item.create({
-              data: {
-                title: (listing.title || ebayItemId).slice(0, 255),
-                description: '',
-                photoUrls: imageUrl ? [imageUrl] : [],
-                price,
-                status: 'AVAILABLE',
-                inInventory: true,
-                organizerId: organizer.id,
-                saleId: containerSale!.id,
-                ebayListingId: ebayItemId,
-                conditionGrade,
-              }
-            });
-            imported++;
-            totalFetched++;
-          }
-
-          browseHasMore = summaries.length === browseLimit;
-          browseOffset += browseLimit;
+        if (!tradingResp.ok) {
+          console.error('[eBay Import] Trading API error:', tradingResp.status, tradingText.slice(0, 500));
+          break;
         }
+
+        const ack = xmlVal(tradingText, 'Ack');
+        if (ack !== 'Success' && ack !== 'Warning') {
+          const errMsg = xmlVal(tradingText, 'LongMessage') || xmlVal(tradingText, 'ShortMessage') || 'Unknown error';
+          console.error('[eBay Import] Trading API failure:', errMsg);
+          break;
+        }
+
+        // Parse pagination
+        const totalPages = xmlVal(tradingText, 'TotalNumberOfPages');
+        if (totalPages) tradingTotalPages = parseInt(totalPages, 10);
+
+        // Parse each Item block
+        const activeListBlock = tradingText.match(/<ActiveList>([\s\S]*?)<\/ActiveList>/)?.[1] || '';
+        const itemBlocks = xmlAll(activeListBlock, 'Item');
+        console.log(`[eBay Import] Trading API page ${tradingPage}/${tradingTotalPages}: ${itemBlocks.length} items`);
+
+        for (const itemBlock of itemBlocks) {
+          const ebayItemId = xmlVal(itemBlock, 'ItemID');
+          if (!ebayItemId) { skipped++; continue; }
+
+          const existing = await prisma.item.findFirst({
+            where: { organizerId: organizer.id, ebayListingId: ebayItemId }
+          });
+          if (existing) { skipped++; continue; }
+
+          const titleRaw = xmlVal(itemBlock, 'Title') || ebayItemId;
+          const priceRaw = xmlVal(itemBlock, 'CurrentPrice') || xmlVal(itemBlock, 'BuyItNowPrice');
+          const price = priceRaw ? parseFloat(priceRaw) : null;
+          const pictureUrl = xmlVal(itemBlock, 'PictureURL');
+          const sku = xmlVal(itemBlock, 'SKU');
+          const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
+          const conditionGrade = tradingConditionMap[conditionId] || null;
+
+          await prisma.item.create({
+            data: {
+              title: titleRaw.slice(0, 255),
+              description: '',
+              photoUrls: pictureUrl ? [pictureUrl] : [],
+              price,
+              status: 'AVAILABLE',
+              inInventory: true,
+              organizerId: organizer.id,
+              saleId: containerSale!.id,
+              ebayListingId: sku || ebayItemId,  // prefer SKU if seller assigned one
+              conditionGrade,
+            }
+          });
+          imported++;
+          totalFetched++;
+        }
+
+        tradingPage++;
       }
     }
 
