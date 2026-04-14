@@ -66,7 +66,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
   const decodedCategory = category ? decodeHtmlEntities(category) : undefined;
 
   const handleCardClick = () => {
-    router.push(`/organizer/inventory/${id}`);
+    router.push(`/organizer/edit-item/${id}`);
   };
 
   return (
