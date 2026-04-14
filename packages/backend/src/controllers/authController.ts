@@ -294,14 +294,16 @@ export const oauthLogin = async (req: Request, res: Response) => {
       where: { oauthProvider: provider, oauthId: providerId },
     });
 
-    // 2. SECURITY FIX P0: Reject auto-link — existing non-OAuth accounts cannot be silently linked
-    // If email exists and has a password (non-OAuth account), reject the login to prevent account takeover
+    // 2. Auto-link: if no OAuth match found, look up by email and link the Google account.
+    // Rationale: if you own the Gmail address, you own the account. Blocking this just
+    // confuses users who registered with email and later try Google login.
     if (!user && email) {
       const emailUser = await prisma.user.findUnique({ where: { email } });
       if (emailUser) {
-        // Existing account with this email — do not auto-link. User must sign in with password.
-        return res.status(400).json({
-          message: 'An account with this email already exists. Please sign in with your email and password.'
+        // Link the OAuth identity to the existing account and continue
+        user = await prisma.user.update({
+          where: { id: emailUser.id },
+          data: { oauthProvider: provider, oauthId: providerId },
         });
       }
     }
