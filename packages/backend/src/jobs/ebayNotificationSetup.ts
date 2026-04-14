@@ -51,7 +51,8 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
     });
 
     if (destListResp.ok) {
-      const destListData = (await destListResp.json()) as any;
+      const destListText = await destListResp.text();
+      const destListData = destListText ? JSON.parse(destListText) : {};
       const destinations: any[] = destListData.destinations || [];
       const existing = destinations.find(
         (d: any) => d.deliveryConfig?.endpoint === endpointUrl
@@ -61,7 +62,8 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
         console.log(`[eBay Notify Setup] Destination already exists (id: ${destinationId})`);
       }
     } else {
-      console.warn(`[eBay Notify Setup] Could not list destinations: HTTP ${destListResp.status}`);
+      const errText = await destListResp.text();
+      console.warn(`[eBay Notify Setup] Could not list destinations: HTTP ${destListResp.status} — ${errText.slice(0, 200)}`);
     }
 
     if (!destinationId) {
@@ -84,8 +86,10 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
         return;
       }
 
-      const destData = (await destCreateResp.json()) as any;
+      const destText = await destCreateResp.text();
+      const destData = destText ? JSON.parse(destText) : {};
       destinationId = destData.destinationId;
+      console.log(`[eBay Notify Setup] Destination create response: ${destText.slice(0, 300)}`);
       console.log(`[eBay Notify Setup] Destination created (id: ${destinationId})`);
     }
 
@@ -101,7 +105,8 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
     });
 
     if (subListResp.ok) {
-      const subListData = (await subListResp.json()) as any;
+      const subListText = await subListResp.text();
+      const subListData = subListText ? JSON.parse(subListText) : {};
       const subscriptions: any[] = subListData.subscriptions || [];
       const existingSub = subscriptions.find(
         (s: any) => s.topicId === EBAY_NOTIFICATION_TOPIC && s.destinationId === destinationId
