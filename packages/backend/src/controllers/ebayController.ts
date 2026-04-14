@@ -1845,6 +1845,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             if (conditionGrade && !existing.conditionGrade) backfill.conditionGrade = conditionGrade;
             if (ebayCategory && !existing.category) backfill.category = ebayCategory;
             if (ebayCategoryTags.length > 0 && (!existing.tags || existing.tags.length === 0)) backfill.tags = ebayCategoryTags;
+            // Migrate SKU-stored ebayListingId to numeric eBay ItemID so GetItem enrichment works
+            if (existing.ebayListingId !== ebayItemId) backfill.ebayListingId = ebayItemId;
             if (Object.keys(backfill).length > 0) {
               await prisma.item.update({ where: { id: existing.id }, data: backfill });
             }
@@ -1862,7 +1864,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               inInventory: true,
               organizerId: organizer.id,
               saleId: containerSale!.id,
-              ebayListingId: storedId,
+              ebayListingId: ebayItemId,  // always store numeric eBay ItemID, not SKU
               conditionGrade,
               condition,
               category: ebayCategory || undefined,
