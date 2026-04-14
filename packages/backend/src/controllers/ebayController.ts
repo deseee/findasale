@@ -24,6 +24,19 @@ interface CachedToken {
 
 let ebayTokenCache: CachedToken | null = null;
 
+// Module-scope XML helpers (used in Trading API + Shopping API parsing)
+function xmlVal(block: string, tag: string): string | null {
+  const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`));
+  return m ? m[1].trim() : null;
+}
+function xmlAll(block: string, tag: string): string[] {
+  const results: string[] = [];
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block)) !== null) results.push(m[1]);
+  return results;
+}
+
 // Condition mapping: FindA.Sale grade to eBay condition ID
 const CONDITION_ID_MAP: Record<string, string> = {
   'S': '1000', // New
@@ -36,7 +49,7 @@ const CONDITION_ID_MAP: Record<string, string> = {
 /**
  * Get or refresh eBay OAuth access token using Client Credentials flow
  */
-async function getEbayAccessToken(): Promise<string | null> {
+export async function getEbayAccessToken(): Promise<string | null> {
   try {
     const clientId = process.env.EBAY_CLIENT_ID;
     const clientSecret = process.env.EBAY_CLIENT_SECRET;
@@ -1643,19 +1656,6 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
     if (totalFetched === 0) {
       console.log('[eBay Import] Inventory API returned 0. Trying Trading API GetMyeBaySelling...');
 
-      // Simple XML field extractor
-      const xmlVal = (block: string, tag: string): string | null => {
-        const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`));
-        return m ? m[1].trim() : null;
-      };
-      const xmlAll = (block: string, tag: string): string[] => {
-        const results: string[] = [];
-        const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'g');
-        let m: RegExpExecArray | null;
-        while ((m = re.exec(block)) !== null) results.push(m[1]);
-        return results;
-      };
-
       const tradingConditionMap: Record<string, string> = {
         '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A',
         '3000': 'A', '4000': 'B', '5000': 'C', '6000': 'D', '7000': 'D',
@@ -1727,9 +1727,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const titleRaw = xmlVal(itemBlock, 'Title') || ebayItemId;
           const priceRaw = xmlVal(itemBlock, 'CurrentPrice') || xmlVal(itemBlock, 'BuyItNowPrice');
           const price = priceRaw ? parseFloat(priceRaw) : null;
-          // GranularityLevel=Fine includes PictureDetails; GalleryURL is fallback
-          const pictureUrl = xmlVal(itemBlock, 'PictureURL') || xmlVal(itemBlock, 'GalleryURL');
-          const photoUrls = pictureUrl ? [pictureUrl] : [];
+          // GranularityLevel=Fine includes PictureDetails with multiple PictureURL tags; GalleryURL is fallback
+          const pictureUrls = xmlAll(itemBlock, 'PictureURL');
+          const photoUrls = pictureUrls.length > 0 ? pictureUrls : (xmlVal(itemBlock, 'GalleryURL') ? [xmlVal(itemBlock, 'GalleryURL')!] : []);
           // Extract description — strip HTML tags from eBay's CDATA description
           const descriptionRaw = xmlVal(itemBlock, 'Description') || '';
           const description = descriptionRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
@@ -1749,12 +1749,12 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             .map(nvBlock => xmlVal(nvBlock, 'Value'))
             .filter((v): v is string => !!v && v.length > 0)
             .slice(0, 10);
-          console.log(`[eBay Import] Item ${ebayItemId}: photo=${pictureUrl || 'none'}, condition=${conditionGrade || 'none'}, category=${ebayCategory || 'none'}, tags=${ebayCategoryTags.length}`);
+          console.log(`[eBay Import] Item ${ebayItemId}: photos=${photoUrls.length}, condition=${conditionGrade || 'none'}, category=${ebayCategory || 'none'}, tags=${ebayCategoryTags.length}`);
 
           // If item already exists, backfill any empty fields on re-sync
           if (existing) {
             const backfill: Record<string, any> = {};
-            if (photoUrls.length > 0 && existing.photoUrls.length === 0) backfill.photoUrls = photoUrls;
+            if (photoUrls.length > existing.photoUrls.length) backfill.photoUrls = photoUrls;
             if (description && !existing.description) backfill.description = description;
             if (condition && !existing.condition) backfill.condition = condition;
             if (conditionGrade && !existing.conditionGrade) backfill.conditionGrade = conditionGrade;
@@ -1792,10 +1792,10 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         tradingPage++;
       }
 
-      // GetItem enrichment pass: fetch full details for items with missing fields
-      // GetMyeBaySelling with GranularityLevel=Fine does NOT include Description, PrimaryCategory, or ItemSpecifics
-      // A separate GetItem call with DetailLevel=ReturnAll is required
-      console.log('[eBay Enrich] Starting GetItem enrichment pass...');
+      // GetMultipleItems enrichment pass (Shopping API — 20 items per call, replaces sequential GetItem)
+      // GetMyeBaySelling with GranularityLevel=Fine does NOT return Description, PrimaryCategory, or ItemSpecifics.
+      // Shopping API GetMultipleItems batches 20 ItemIDs per call: 86 items = 5 calls vs 86 sequential.
+      console.log('[eBay Enrich] Starting GetMultipleItems enrichment pass...');
       const itemsNeedingEnrichment = await prisma.item.findMany({
         where: {
           organizerId: organizer.id,
@@ -1806,106 +1806,115 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             { category: null },
             { category: '' },
             { tags: { isEmpty: true } },
+            { photoUrls: { isEmpty: true } },
           ],
         },
-        select: { id: true, ebayListingId: true, description: true, category: true, tags: true, conditionGrade: true },
+        select: { id: true, ebayListingId: true, description: true, category: true, tags: true, conditionGrade: true, photoUrls: true },
       });
 
       console.log(`[eBay Enrich] Found ${itemsNeedingEnrichment.length} items to enrich`);
       let enrichedCount = 0;
 
-      for (const item of itemsNeedingEnrichment) {
-        if (!item.ebayListingId) continue;
+      // Chunk into batches of 20 (Shopping API limit per call)
+      const enrichBatches: typeof itemsNeedingEnrichment[] = [];
+      for (let i = 0; i < itemsNeedingEnrichment.length; i += 20) {
+        enrichBatches.push(itemsNeedingEnrichment.slice(i, i + 20));
+      }
+
+      for (let batchIdx = 0; batchIdx < enrichBatches.length; batchIdx++) {
+        const batch = enrichBatches[batchIdx];
+        const batchItemIds = batch.map((i: { ebayListingId: string | null }) => i.ebayListingId!).filter(Boolean);
+        if (batchItemIds.length === 0) continue;
 
         try {
-          // 100ms delay between GetItem calls to avoid API rate limiting
-          await new Promise(r => setTimeout(r, 100));
+          // Build GetMultipleItems XML — one <ItemID> per item in batch
+          const itemIdTags = batchItemIds.map((id: string) => `<ItemID>${id}</ItemID>`).join('');
+          const shoppingXml = `<?xml version="1.0" encoding="utf-8"?><GetMultipleItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials>${itemIdTags}<IncludeSelector>TextDescription,ItemSpecifics</IncludeSelector></GetMultipleItemsRequest>`;
 
-          const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><ItemID>${item.ebayListingId}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`;
-
-          const getItemResp = await fetch('https://api.ebay.com/ws/api.dll', {
+          const shoppingResp = await fetch('https://open.api.ebay.com/shopping', {
             method: 'POST',
             headers: {
-              'X-EBAY-API-CALL-NAME': 'GetItem',
+              'X-EBAY-API-CALL-NAME': 'GetMultipleItems',
               'X-EBAY-API-SITEID': '0',
               'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
               'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
               'X-EBAY-API-IAF-TOKEN': accessToken,
               'Content-Type': 'text/xml',
             },
-            body: getItemXml,
+            body: shoppingXml,
           });
 
-          const getItemText = await getItemResp.text();
-
-          if (!getItemResp.ok) {
-            console.warn(`[eBay Enrich] GetItem request failed for ${item.ebayListingId}: HTTP ${getItemResp.status}`);
+          if (!shoppingResp.ok) {
+            console.warn(`[eBay Enrich] Batch ${batchIdx + 1}/${enrichBatches.length}: HTTP ${shoppingResp.status}`);
             continue;
           }
 
-          const ack = xmlVal(getItemText, 'Ack');
+          const shoppingText = await shoppingResp.text();
+          const ack = xmlVal(shoppingText, 'Ack');
           if (ack !== 'Success' && ack !== 'Warning') {
-            console.warn(`[eBay Enrich] GetItem returned ${ack} for ${item.ebayListingId}`);
+            const errMsg = xmlVal(shoppingText, 'LongMessage') || xmlVal(shoppingText, 'ShortMessage') || 'Unknown';
+            console.warn(`[eBay Enrich] Batch ${batchIdx + 1}/${enrichBatches.length}: ${ack} — ${errMsg}`);
             continue;
           }
 
-          // Parse response
-          const backfill: Record<string, any> = {};
+          // Parse each <Item> in the response
+          const itemBlocks = xmlAll(shoppingText, 'Item');
+          console.log(`[eBay Enrich] Batch ${batchIdx + 1}/${enrichBatches.length}: got ${itemBlocks.length} items back`);
 
-          // Description: strip HTML tags
-          const descRaw = xmlVal(getItemText, 'Description') || '';
-          const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
-          if (descClean && !item.description) {
-            backfill.description = descClean;
-          }
+          for (const itemBlock of itemBlocks) {
+            const returnedItemId = xmlVal(itemBlock, 'ItemID');
+            if (!returnedItemId) continue;
 
-          // PrimaryCategory/CategoryName
-          const categoryBlock = getItemText.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
-          const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
-          if (categoryName && !item.category) {
-            backfill.category = categoryName;
-          }
+            // Match back to our local record
+            const localItem = batch.find((i: { ebayListingId: string | null }) => i.ebayListingId === returnedItemId);
+            if (!localItem) continue;
 
-          // ItemSpecifics/NameValueList
-          const specificsBlock = getItemText.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
-          const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
-          const tags: string[] = nameValueBlocks
-            .map(nvBlock => xmlVal(nvBlock, 'Value'))
-            .filter((v): v is string => !!v && v.length > 0)
-            .slice(0, 10);
-          if (tags.length > 0 && (!item.tags || item.tags.length === 0)) {
-            backfill.tags = tags;
-          }
+            const backfill: Record<string, any> = {};
 
-          // ConditionID → condition mapping
-          const condId = xmlVal(getItemText, 'ConditionID') || '';
-          if (condId && !item.conditionGrade) {
-            const condGrade = tradingConditionMap[condId] || null;
-            if (condGrade) {
-              backfill.conditionGrade = condGrade;
-              backfill.condition = condGrade === 'S' ? 'NEW'
-                : condGrade === 'D' ? 'PARTS_OR_REPAIR'
-                : 'USED';
+            // Description (TextDescription selector strips HTML)
+            const descRaw = xmlVal(itemBlock, 'Description') || '';
+            const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+            if (descClean && !localItem.description) backfill.description = descClean;
+
+            // PrimaryCategory/CategoryName
+            const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
+            const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
+            if (categoryName && !localItem.category) backfill.category = categoryName;
+
+            // ItemSpecifics → tags
+            const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
+            const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
+            const tags: string[] = nameValueBlocks
+              .map(nvBlock => xmlVal(nvBlock, 'Value'))
+              .filter((v): v is string => !!v && v.length > 0)
+              .slice(0, 10);
+            if (tags.length > 0 && (!localItem.tags || localItem.tags.length === 0)) backfill.tags = tags;
+
+            // ConditionID → conditionGrade
+            const condId = xmlVal(itemBlock, 'ConditionID') || '';
+            if (condId && !localItem.conditionGrade) {
+              const condGrade = tradingConditionMap[condId] || null;
+              if (condGrade) {
+                backfill.conditionGrade = condGrade;
+                backfill.condition = condGrade === 'S' ? 'NEW' : condGrade === 'D' ? 'PARTS_OR_REPAIR' : 'USED';
+              }
+            }
+
+            // Photos — all PictureURL tags in response
+            const enrichPhotos = xmlAll(itemBlock, 'PictureURL');
+            if (enrichPhotos.length > (localItem.photoUrls?.length ?? 0)) backfill.photoUrls = enrichPhotos;
+
+            if (Object.keys(backfill).length > 0) {
+              await prisma.item.update({ where: { id: localItem.id }, data: backfill });
+              console.log(`[eBay Enrich] ItemID ${returnedItemId}: desc=${backfill.description?.length ?? 0}ch, cat=${backfill.category || '-'}, tags=${backfill.tags?.length ?? 0}, photos=${backfill.photoUrls?.length ?? 0}`);
+              enrichedCount++;
             }
           }
-
-          // Update DB if we have data to backfill
-          if (Object.keys(backfill).length > 0) {
-            await prisma.item.update({
-              where: { id: item.id },
-              data: backfill,
-            });
-            const descLen = backfill.description ? backfill.description.length : 0;
-            const cat = backfill.category || '';
-            const tagCount = backfill.tags ? backfill.tags.length : 0;
-            console.log(`[eBay Enrich] ItemID ${item.ebayListingId}: desc=${descLen} chars, category=${cat || 'none'}, tags=${tagCount}`);
-            enrichedCount++;
-          }
         } catch (err: any) {
-          console.warn(`[eBay Enrich] Exception enriching ${item.ebayListingId}:`, err.message);
+          console.warn(`[eBay Enrich] Exception in batch ${batchIdx + 1}:`, err.message);
         }
       }
-      console.log(`[eBay Enrich] Enrichment pass complete. Updated ${enrichedCount} items.`);
+      console.log(`[eBay Enrich] Enrichment complete. Updated ${enrichedCount}/${itemsNeedingEnrichment.length} items in ${enrichBatches.length} batch call(s).`);
     }
 
     // Update sync timestamp
@@ -1978,4 +1987,110 @@ export const handleEbayAccountDeletionVerification = (req: express.Request, res:
  */
 export const handleEbayAccountDeletion = (_req: express.Request, res: Response): void => {
   res.status(200).json({});
+};
+
+/**
+ * GET /api/ebay/notifications
+ * eBay Commerce Notification API — endpoint challenge verification
+ * Same SHA256(challengeCode + verificationToken + endpointUrl) scheme as account-deletion
+ */
+export const handleEbayNotificationVerification = (req: express.Request, res: Response): void => {
+  const challengeCode = req.query.challenge_code as string;
+  if (!challengeCode) {
+    res.status(400).json({ error: 'challenge_code required' });
+    return;
+  }
+
+  const verificationToken = process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN;
+  const endpointUrl = process.env.EBAY_NOTIFICATION_ENDPOINT_URL;
+
+  if (!verificationToken || !endpointUrl) {
+    console.error('[eBay Notify] EBAY_NOTIFICATION_VERIFICATION_TOKEN or EBAY_NOTIFICATION_ENDPOINT_URL not configured');
+    res.status(500).json({ error: 'Notification endpoint not configured' });
+    return;
+  }
+
+  const hash = crypto
+    .createHash('sha256')
+    .update(challengeCode + verificationToken + endpointUrl)
+    .digest('hex');
+
+  res.json({ challengeResponse: hash });
+};
+
+/**
+ * POST /api/ebay/notifications
+ * eBay Commerce Notification API — receive marketplace.order.paid events
+ * When an item sells on eBay, mark it SOLD in FindA.Sale and withdraw the offer.
+ */
+export const handleEbayNotification = async (req: express.Request, res: Response): Promise<void> => {
+  // Acknowledge immediately — eBay retries if we don't respond within 3s
+  res.status(200).json({});
+
+  try {
+    const body = req.body as any;
+    const topic = body?.metadata?.topic;
+
+    if (topic !== 'marketplace.order.paid') {
+      // We only handle order.paid — silently accept other events
+      return;
+    }
+
+    const lineItems: Array<{ sku?: string; legacyItemId?: string; title?: string }> = body?.data?.lineItems || [];
+    if (lineItems.length === 0) return;
+
+    console.log(`[eBay Notify] Received marketplace.order.paid — ${lineItems.length} line item(s)`);
+
+    for (const lineItem of lineItems) {
+      const sku = lineItem.sku || '';
+      const legacyItemId = lineItem.legacyItemId || '';
+
+      // Match FindA.Sale item by SKU (FAS-{itemId}) or by legacyItemId (eBay listing ID)
+      let matchedItem: { id: string; title: string; saleId: string; ebayOfferId: string | null; sale: { organizerId: string; organizer: { userId: string } } } | null = null;
+
+      if (sku.startsWith('FAS-')) {
+        const itemId = sku.substring(4);
+        matchedItem = await prisma.item.findUnique({
+          where: { id: itemId },
+          select: { id: true, title: true, saleId: true, ebayOfferId: true, sale: { select: { organizerId: true, organizer: { select: { userId: true } } } } },
+        });
+      }
+
+      if (!matchedItem && legacyItemId) {
+        matchedItem = await prisma.item.findFirst({
+          where: { ebayListingId: legacyItemId, status: 'AVAILABLE' },
+          select: { id: true, title: true, saleId: true, ebayOfferId: true, sale: { select: { organizerId: true, organizer: { select: { userId: true } } } } },
+        });
+      }
+
+      if (!matchedItem) {
+        console.log(`[eBay Notify] No matching item for SKU="${sku}" legacyItemId="${legacyItemId}"`);
+        continue;
+      }
+
+      // Mark SOLD
+      await prisma.item.update({ where: { id: matchedItem.id }, data: { status: 'SOLD' } });
+      console.log(`[eBay Notify] Item ${matchedItem.id} ("${matchedItem.title}") marked SOLD via webhook`);
+
+      // Withdraw eBay listing (fire-and-forget — item is already sold, prevent double-sale)
+      endEbayListingIfExists(matchedItem.id).catch(err =>
+        console.warn(`[eBay Notify] withdraw failed for item ${matchedItem!.id}:`, err.message)
+      );
+
+      // Notify organizer
+      await prisma.notification.create({
+        data: {
+          userId: matchedItem.sale.organizer.userId,
+          type: 'SALE_UPDATE',
+          title: 'Item sold on eBay',
+          body: `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
+          link: `/organizer/sales/${matchedItem.saleId}`,
+          notificationChannel: 'IN_APP',
+        },
+      });
+    }
+  } catch (err: any) {
+    console.error('[eBay Notify] Error processing notification:', err.message);
+    // Response already sent — just log
+  }
 };

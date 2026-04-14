@@ -27,7 +27,7 @@ import {
   applyOrganizerDiscount,
   removeOrganizerDiscount,
 } from '../controllers/itemController';
-import { getComps } from '../controllers/ebayController'; // Feature #229: eBay price comps
+import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
@@ -135,6 +135,8 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), async (req, res) => {
         price: true,
         tags: true,
         photoUrls: true,
+        ebayOfferId: true,
+        saleId: true,
         sale: { select: { organizer: { select: { userId: true } } } },
       },
     });
@@ -398,6 +400,18 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), async (req, res) => {
           where: { id: { in: confirmedIds } },
           data: { status: value as string },
         });
+
+        // Withdraw from eBay for any items that were AVAILABLE → SOLD and have an eBay offer (fire-and-forget)
+        if (value === 'SOLD') {
+          for (const item of confirmedItems) {
+            if ((item as any).ebayOfferId) {
+              endEbayListingIfExists(item.id).catch(err =>
+                console.warn(`[eBay] bulk SOLD withdraw failed for item ${item.id}:`, err.message)
+              );
+            }
+          }
+        }
+
         const statusCode = failed.length > 0 ? 207 : 200;
         return res.status(statusCode).json({
           message: `Updated status to ${value} for ${confirmedIds.length} item(s).`,

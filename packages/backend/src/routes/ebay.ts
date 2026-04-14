@@ -10,6 +10,8 @@ import {
   importInventoryFromEbay,
   handleEbayAccountDeletionVerification,
   handleEbayAccountDeletion,
+  handleEbayNotificationVerification,
+  handleEbayNotification,
 } from '../controllers/ebayController';
 import { syncSoldItemsForOrganizer } from '../jobs/ebaySoldSyncCron';
 
@@ -38,6 +40,12 @@ router.post('/import-inventory', authenticate, importInventoryFromEbay);
 router.get('/account-deletion', handleEbayAccountDeletionVerification);
 // POST: deletion notification (ACK only — no eBay data stored)
 router.post('/account-deletion', handleEbayAccountDeletion);
+
+// eBay Commerce Notification API — real-time sold sync (marketplace.order.paid)
+// GET: challenge verification (same SHA256 scheme as account-deletion)
+router.get('/notifications', handleEbayNotificationVerification);
+// POST: receive order events; marks items SOLD + withdraws eBay listing
+router.post('/notifications', handleEbayNotification);
 
 // Feature #244 Phase 3: Manual trigger for eBay sold sync (testing only)
 router.get('/sync-sold', authenticate, async (req: AuthRequest, res: Response) => {

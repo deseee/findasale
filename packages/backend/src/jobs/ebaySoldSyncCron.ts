@@ -16,7 +16,7 @@
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
-import { refreshEbayAccessToken } from '../controllers/ebayController';
+import { refreshEbayAccessToken, endEbayListingIfExists } from '../controllers/ebayController';
 
 interface EbayItem {
   id: string;
@@ -169,6 +169,11 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           where: { id: matchedItem.id },
           data: { status: 'SOLD' },
         });
+
+        // Withdraw eBay listing so item can't be purchased again on eBay (fire-and-forget)
+        endEbayListingIfExists(matchedItem.id).catch(err =>
+          console.warn(`[eBay Sync] withdraw failed for item ${matchedItem!.id}:`, err.message)
+        );
 
         // Notify organizer
         await prisma.notification.create({
