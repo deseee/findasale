@@ -1364,6 +1364,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         const offerUrl = 'https://api.ebay.com/sell/inventory/v1/offer';
         const offerPayload = {
           sku,
+          marketplaceId: 'EBAY_US',
           listingDescription: item.description || '',
           pricingSummary: {
             price: {
