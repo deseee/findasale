@@ -7,6 +7,37 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S458 COMPLETE (2026-04-14) — Pull to Sale UX + eBay category/tags extraction**
+
+**S458 What happened:**
+- **Toast on pull:** `useInventory.ts` — `pullFromInventory` now accepts optional `{ onSuccess, onError }` callbacks threaded through to `mutate`. `inventory.tsx` — imports `useToast`, passes `onSuccess: () => showToast('Item added to ${saleTitle}', 'success')` on confirm pull.
+- **Sale title in Add Items header:** `add-items/[saleId].tsx` — `sale?.name` → `sale?.title` in 3 places (title tag, conditional, rendered text). Sale model uses `title`, not `name`.
+- **eBay category extraction:** `ebayController.ts` Trading API loop — extracts `PrimaryCategory.CategoryName` from XML and stores in `category` field. Matches existing `EbayCategoryPicker` storage pattern (eBay category names stored as-is). Backfill on re-sync if `existing.category` is empty.
+- **eBay ItemSpecifics → tags:** `ebayController.ts` Trading API loop — extracts all `NameValueList/Value` entries from `ItemSpecifics` block, stores as `tags[]` (up to 10). Brand, Type, Color, Material etc. from seller-entered eBay specifics. Backfill on re-sync if `existing.tags` is empty.
+
+**S458 Files changed:**
+- `packages/frontend/hooks/useInventory.ts` — callback threading for pullFromInventory
+- `packages/frontend/pages/organizer/inventory.tsx` — useToast + showToast on pull confirm
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — sale?.name → sale?.title (3 places)
+- `packages/backend/src/controllers/ebayController.ts` — category + tags extraction + backfill
+
+**S458 Push block:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/hooks/useInventory.ts
+git add packages/frontend/pages/organizer/inventory.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/backend/src/controllers/ebayController.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: pull-to-sale toast, sale title header, eBay category+tags extraction"
+.\push.ps1
+```
+
+**After deploy:** Go to Settings → Sync eBay Inventory to backfill existing 86 items with category + tags.
+
+---
+
 **S457 COMPLETE (2026-04-13) — Pull to Sale fixed for eBay inventory items**
 
 **S457 What happened:**
@@ -1126,9 +1157,9 @@ npx prisma generate
 
 ## Next Session Priority
 
-### S455 — Roadmap Audit + Human QA Documentation + Survivor Accounts
+### Outstanding Actions (as of S457, 2026-04-14)
 
-**DIRECTIVE FROM PATRICK (S454 wrap):** Audit all work since the last roadmap session. Document Patrick's human QA passes into shipped & verified section of roadmap. Prepare 1-2 real accounts that will survive the database nuke when test data is cleared and real shoppers start.
+**DIRECTIVE FROM PATRICK (S454 wrap):** Audit all work since the last roadmap session. Document Patrick's human QA passes into shipped & verified section of roadmap. Survivor accounts: `survivor-seed.ts` already exists (see Standing Notes).
 
 ---
 
@@ -1143,17 +1174,7 @@ Dispatch `findasale-records` to:
    - Known human QA passes this cycle: dashboard layout (S451), rank display, action buttons, QR inline panel, dashboard character sheet, eBay sync, Stripe go-live fixes
 4. Update the roadmap file and include it in the wrap push block
 
-**STEP 2 — Survivor accounts (findasale-dev):**
-
-Patrick is planning to nuke all test data when real shoppers onboard. Two accounts must survive:
-- **Patrick's organizer account** — his real login, real org profile, real Stripe Connect ID
-- **One admin/test shopper account** — for ongoing QA after the nuke
-
-Dev must:
-1. Read current seed data to find Patrick's real account (check `packages/database/prisma/seed.ts` for any `@patrickd` or real email entries)
-2. Create `packages/database/prisma/survivor-seed.ts` — a minimal seed that creates ONLY the survivor accounts with known passwords, skipping all fake test organizers/shoppers
-3. Document in the file: "Run this AFTER nuking test data to restore real accounts"
-4. The survivor accounts should use real email addresses Patrick provides — if not already in seed, prompt Patrick for his real organizer email
+**STEP 2 — Survivor accounts:** ✅ `packages/database/prisma/survivor-seed.ts` already created. See Standing Notes for survivor account emails (`deseee@gmail.com`, `artifactmi@gmail.com`).
 
 **STEP 3 — Live Stripe webhook setup:**
 
@@ -1166,74 +1187,6 @@ Each gets its own signing secret from Stripe → add as env vars in Railway.
 **STEP 4 — Archive junk Stripe sandbox products:**
 
 Patrick still has ~14 junk products in sandbox catalog. He should archive all except: Hunt Pass, FindA.Sale Teams, FindA.Sale Pro, FindA.Sale — Item Sale.
-
----
-
-**DIRECTIVE FROM PATRICK (S450 wrap):** "Wrap and prepare the next session to study loyalty programs and character sheets and how to make our dashboard not look like shit. You need to take a fucking lead and make these lazy ass agents do more than the bare minimum."
-
----
-
-**STEP 1 — Research phase (NO CODE until this is done):**
-
-Dispatch `findasale-ux` + `findasale-innovation` in parallel to study real loyalty/progression UX patterns. Agents must review:
-- **Duolingo** — streak prominently above fold, XP progress ring, rank shield always visible, one primary action per screen
-- **Strava** — athlete stats as identity, weekly summary as first visible element, social proof inline
-- **Nike Run Club** — tier badges as identity markers, locked features shown as aspirational (grayed with unlock hint), progress arc top-center
-- **RPG character screens** — stat layout, badge/achievement grid, progression bar always present
-- **What they have in common:** Identity first (who am I in this system), progress second (how far to next thing), action third (what should I do now). Never stacked cards.
-
-Agents must return a concrete **visual directive**, not just principles. "The dashboard should look like X with Y and Z" — specific enough to brief a dev agent.
-
-**STEP 2 — Fix QR code position (P0):**
-
-QR code is the POS payment mechanism. Patrick confirmed: shoppers use this to pay at checkout. It must be visible without deep scrolling.
-
-Current state: QR is at position 7 in `packages/frontend/pages/shopper/dashboard.tsx`. This is wrong.
-
-**Fix: Move QR to position 3 or 4** — after RankHeroSection and ActionBar, before secondary content. Collapsible accordion is acceptable (default collapsed is fine). Never hidden behind a rank gate. Never at the bottom of the page.
-
-File to edit: `packages/frontend/pages/shopper/dashboard.tsx`. The QR section is the `qrOpen` / `setQrOpen` block with the `<QRCodeCanvas>` component. Move it above the conditional rank-tiered content sections.
-
-This is a single targeted edit (~20 lines repositioned) — acceptable inline. Dispatch if touching more.
-
-**STEP 3 — Dashboard rebuild with creative leadership:**
-
-After research returns a visual directive, dispatch `findasale-dev` with:
-1. The UX spec from `claude_docs/UX/SHOPPER_DASHBOARD_RETHINK_UX_SPEC.md` (or `claude_docs/design/` if Records moved it)
-2. The visual directive from Step 1
-3. Explicit constraint: **QR stays near top. No card stacks. Identity → progress → action hierarchy.**
-4. Constraint: `rankDashboardConfig.ts` already exists — dev must use it for rank-tiered visibility
-5. Constraint: `useXpProfile()` is the canonical rank/XP source — no JWT values
-6. Post-build: full dark mode + mobile check (375px width) before returning
-
-**STEP 4 — S450 wrap push block (push before S451 dev starts):**
-
-All S450 files need to ship first. Push block:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/authController.ts
-git add packages/backend/src/controllers/saleController.ts
-git add packages/frontend/components/AuthContext.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/SaleCard.tsx
-git add packages/frontend/components/RankHeroSection.tsx
-git add packages/frontend/components/ActionBar.tsx
-git add packages/frontend/components/RankLevelingHint.tsx
-git add packages/frontend/hooks/useXpSink.ts
-git add packages/frontend/pages/shopper/dashboard.tsx
-git add packages/frontend/pages/shopper/ranks.tsx
-git add packages/frontend/pages/shopper/loyalty.tsx
-git add packages/frontend/pages/items/[id].tsx
-git add packages/frontend/pages/sales/[id].tsx
-git add packages/frontend/pages/shopper/haul-posts.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/design/RANK_PERKS_DISPLAY_SPEC.md
-git commit -m "feat: rank staleness P0, dashboard character sheet, organizer badge, /shopper/ranks page"
-.\push.ps1
-```
-
-Note: `claude_docs/UX/SHOPPER_DASHBOARD_RETHINK_UX_SPEC.md` — Records needs to move this to `claude_docs/design/`. Add to the push block after Records moves it.
 
 ---
 

@@ -1,6 +1,18 @@
-# Patrick's Dashboard — Week of April 13, 2026
+# Patrick's Dashboard — Week of April 14, 2026
 
 ## What Happened This Week
+
+**S458** (2026-04-14) — Pull to Sale UX + eBay field extraction:
+- **Toast on pull** ✅ — pulling an item to a sale now shows "Item added to [sale name]" success toast
+- **Sale title in Add Items header** ✅ — header now shows actual sale name (was blank due to `sale.name` → fixed to `sale.title`)
+- **eBay category extracted** — `PrimaryCategory.CategoryName` from Trading API now stored in `category` field (e.g. "Electric Guitars"). Re-sync backfills existing items.
+- **eBay ItemSpecifics → tags** — Brand, Type, Color, Material etc. extracted from eBay seller specifics and stored as `tags[]`. Re-sync backfills. Pulled items will now have category + tags populated.
+- **After deploy:** Run Settings → Sync eBay Inventory to backfill all 86 existing items.
+
+**S457** (2026-04-14) — Pull to Sale P2011 crash fixed + inventory filter:
+- `embedding: []` added to `pullFromInventory` create — was causing Prisma P2011 null constraint crash on every pull attempt
+- `inInventory: true` filter added to `getInventoryItems` — was returning entire sale history instead of only inventory items
+- `conditionGrade` now copied when pulling an item to a sale
 
 **S456** (2026-04-14) — eBay inventory import fully operational:
 - **86 eBay listings imported with photos** ✅ — Trading API (GetMyeBaySelling) working. Photos from eBay show correctly on `/organizer/inventory`.
@@ -87,8 +99,20 @@
 
 ## Action Items for Patrick
 
-**NEW — S456:**
-- [ ] **Push S456 changes** (see push block below)
+**NEW — S458 Push block (do this now):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/hooks/useInventory.ts
+git add packages/frontend/pages/organizer/inventory.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/backend/src/controllers/ebayController.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: pull-to-sale toast, sale title header, eBay category+tags extraction"
+.\push.ps1
+```
+
+- [ ] **After deploy:** Settings → Sync eBay Inventory → backfills category + tags on existing 86 items
 - [ ] **Artifact MI: disconnect + reconnect eBay** — gets new token with `sell.fulfillment` scope (stops 403 cron errors)
 - [ ] **Run S455 migration** (still pending — `inInventory` rename + `isInventoryContainer` + `lastEbayInventorySyncAt`):
 ```powershell
@@ -106,20 +130,12 @@ git rm packages/frontend/hooks/useItemLibrary.ts
 git rm packages/frontend/components/LibraryItemCard.tsx
 ```
 
-**S456 Push block:**
-```powershell
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/frontend/next.config.js
-git commit -m "fix: eBay inventory import fully operational — photos, dedup, CSP, OAuth scopes"
-.\push.ps1
-```
-
 **NEW — S454:**
 - [ ] **Add to Railway env vars:** `STRIPE_HUNT_PASS_PRICE_ID=price_1TLtY1LIWHQCHu75W9F23hVJ` (live)
 - [ ] **Add to Railway env vars:** `STRIPE_GENERIC_ITEM_PRODUCT_ID=prod_UKZ2G21VhLJ3CE` (live)
 - [ ] **Archive junk Stripe sandbox products** — keep only: Hunt Pass, FindA.Sale Teams, FindA.Sale Pro, FindA.Sale — Item Sale
 - [ ] **Set up live Stripe webhooks** — live account has no webhooks yet (see S455 next session)
-- [ ] **Tell Claude your real organizer email** — needed for survivor accounts before database nuke
+- [ ] ~~**Tell Claude your real organizer email**~~ — `survivor-seed.ts` already created (see Standing Notes)
 
 **Carry-forward:**
 - [ ] **Add `STRIPE_CONNECT_WEBHOOK_SECRET`** in Railway — Stripe Dashboard → Webhooks → Connected accounts endpoint
@@ -147,13 +163,15 @@ git commit -m "fix: eBay inventory import fully operational — photos, dedup, C
 
 ---
 
-## What's Next (S457)
+## What's Next (S458+)
 
-**P0 — "Pull to Sale" broken for eBay inventory items.** Patrick confirmed after photos started showing. The "Pull to Sale" button on InventoryItemCard is not working. Investigate and fix first thing next session before any other work.
+**P0 — Run S455 migration on Railway** (still pending — `inInventory` rename, `isInventoryContainer`, `lastEbayInventorySyncAt`). eBay inventory sync won't be fully live until this runs.
 
-**P1 — Survivor accounts:** Dev creates `survivor-seed.ts` with Patrick's real organizer account + 1 QA shopper. These survive the database nuke when real users onboard.
+**P1 — Add Railway env vars:** `STRIPE_HUNT_PASS_PRICE_ID` + `STRIPE_GENERIC_ITEM_PRODUCT_ID` (live values, see Action Items).
 
-**P2 — Live Stripe webhooks:** Register both webhook endpoints in LIVE Stripe Dashboard with correct event sets.
+**P1 — Live Stripe webhooks:** Register both webhook endpoints in LIVE Stripe Dashboard with correct event sets.
+
+**P2 — Roadmap audit:** Dispatch `findasale-records` to update roadmap with all sessions since last roadmap update. Mark Patrick's human QA passes as verified.
 
 **Carry-forward:**
 - QA queue (S436/S430/S431/S427/S433) — still postponed
@@ -167,7 +185,8 @@ git commit -m "fix: eBay inventory import fully operational — photos, dedup, C
 
 | Session | Date | Summary |
 |---------|------|---------|
-| S456 | 2026-04-14 | eBay import fully working: Trading API auth, xmlVal regex fix, photos via GranularityLevel=Fine, CSP fix, 81 dupes removed. "Pull to Sale" broken — P0 next session. |
+| S457 | 2026-04-14 | Pull to Sale fixed: embedding[] in create, inInventory=true filter in list query. |
+| S456 | 2026-04-14 | eBay import fully working: Trading API auth, xmlVal regex fix, photos via GranularityLevel=Fine, CSP fix, 81 dupes removed. |
 | S455 | 2026-04-13 | eBay sync button, library→inventory rename, Google OAuth auto-link, cart isolation fix. |
 | S454 | 2026-04-13 | Hunt Pass → Stripe Subscription. Pricing page P0. POS catalog guard. |
 | S452 | 2026-04-13 | eBay bidirectional sync: policy fetch, offer withdrawal, Phase 3 cron. Stripe env audit. Hunt Pass subscription gap flagged. |
@@ -181,10 +200,19 @@ git commit -m "fix: eBay inventory import fully operational — photos, dedup, C
 
 ---
 
-## Brand Audit (still open)
+## Brand Audit (still open) — Updated 2026-04-14
 
-- SharePromoteModal generates "estate sale" copy for ALL sale types
-- Homepage meta/SEO omits flea markets and consignment
-- Organizer profile meta says "Estate sales by [name]" regardless of sale type
+⚠️ **P0 SharePromoteModal has now been flagged 3 consecutive weeks** — still unresolved. Garage/auction/flea market organizers sharing via Nextdoor/Threads get "estate sale" copy. 1 existing function (`saleTypeLabel()`) already exists in that file — fix is ~10 lines.
 
-All dispatch-ready, no decisions needed.
+**Current violation count: ~22 active** (was ~20 last week, +3 new, -1 fixed)
+
+**New since last audit:**
+- `subscription.tsx:205/517` — PRO upgrade copy says "large estate sale or auction" — ignores garage/flea market organizers
+- `condition-guide.tsx:56` — Condition FAQ says "The estate sale organizer" — applies to all organizer types
+- `organizers/[id].tsx` — 4 dark mode violations (missing `dark:` variants on header card and empty state) + 1 D-003 violation (empty state has no CTA)
+
+**Fixed this cycle:** `typology.tsx` — 2 violations resolved ✅
+
+Full audit: `claude_docs/audits/brand-drift-2026-04-14.md`
+
+All ~25 fix items are dispatch-ready to `findasale-dev` — no decisions needed. Batches grouped in the audit file.
