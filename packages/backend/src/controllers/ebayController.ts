@@ -519,6 +519,7 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
             price: true,
             category: true,
             conditionGrade: true,
+            ebayCategoryId: true,
             photoUrls: true,
             estimatedValue: true,
             aiSuggestedPrice: true,
