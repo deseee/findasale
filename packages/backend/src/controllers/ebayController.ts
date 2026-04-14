@@ -1751,8 +1751,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
       while (tradingPage <= tradingTotalPages) {
         // OAuth tokens use X-EBAY-API-IAF-TOKEN header — NOT <eBayAuthToken> (that's legacy Auth'n'Auth only)
-        // GranularityLevel=Fine is required to get PictureDetails in GetMyeBaySelling responses
-        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><GranularityLevel>Fine</GranularityLevel><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
+        // OutputSelector replaces GranularityLevel (mutually exclusive); use OutputSelector to get specific fields
+        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><OutputSelector>ActiveList.ItemArray.Item.ItemID</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.SKU</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.Title</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.SellingStatus</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.BuyItNowPrice</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.PictureDetails</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.ConditionID</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.PrimaryCategory</OutputSelector><OutputSelector>ActiveList.PaginationResult</OutputSelector><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
 
         const tradingResp = await fetch('https://api.ebay.com/ws/api.dll', {
           method: 'POST',
@@ -1812,7 +1812,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const titleRaw = xmlVal(itemBlock, 'Title') || ebayItemId;
           const priceRaw = xmlVal(itemBlock, 'CurrentPrice') || xmlVal(itemBlock, 'BuyItNowPrice');
           const price = priceRaw ? parseFloat(priceRaw) : null;
-          // GranularityLevel=Fine includes PictureDetails with multiple PictureURL tags; GalleryURL is fallback
+          // OutputSelector includes PictureDetails with multiple PictureURL tags; GalleryURL is fallback
           const pictureUrls = xmlAll(itemBlock, 'PictureURL');
           const photoUrls = pictureUrls.length > 0 ? pictureUrls : (xmlVal(itemBlock, 'GalleryURL') ? [xmlVal(itemBlock, 'GalleryURL')!] : []);
           // Extract description — strip HTML tags from eBay's CDATA description
@@ -1877,10 +1877,11 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         tradingPage++;
       }
 
-      // GetMultipleItems enrichment pass (Shopping API — 20 items per call, replaces sequential GetItem)
-      // GetMyeBaySelling with GranularityLevel=Fine does NOT return Description, PrimaryCategory, or ItemSpecifics.
-      // Shopping API GetMultipleItems batches 20 ItemIDs per call: 86 items = 5 calls vs 86 sequential.
-      console.log('[eBay Enrich] Starting GetMultipleItems enrichment pass...');
+      // GetItem enrichment pass — replaces defunct Shopping API (GetMultipleItems returned empty 200s)
+      // Trading API GetItem returns Description, ItemSpecifics, PictureDetails via user token.
+      // PictureDetails/ConditionID/PrimaryCategory are now also fetched in GetMyeBaySelling above,
+      // but GetItem adds ItemSpecifics (tags) and Description which GetMyeBaySelling cannot return.
+      console.log('[eBay Enrich] Starting GetItem enrichment pass...');
       const itemsNeedingEnrichment = await prisma.item.findMany({
         where: {
           organizerId: organizer.id,
@@ -1899,109 +1900,90 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
       console.log(`[eBay Enrich] Found ${itemsNeedingEnrichment.length} items to enrich`);
       let enrichedCount = 0;
+      const ENRICH_CONCURRENCY = 5;
 
-      // Chunk into batches of 20 (Shopping API limit per call)
-      const enrichBatches: typeof itemsNeedingEnrichment[] = [];
-      for (let i = 0; i < itemsNeedingEnrichment.length; i += 20) {
-        enrichBatches.push(itemsNeedingEnrichment.slice(i, i + 20));
-      }
-
-      for (let batchIdx = 0; batchIdx < enrichBatches.length; batchIdx++) {
-        const batch = enrichBatches[batchIdx];
-        const batchItemIds = batch.map((i: { ebayListingId: string | null }) => i.ebayListingId!).filter(Boolean);
-        if (batchItemIds.length === 0) continue;
+      async function enrichSingleItem(item: typeof itemsNeedingEnrichment[0]): Promise<void> {
+        const itemId = item.ebayListingId!;
+        const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${itemId}</ItemID><OutputSelector>Description</OutputSelector><OutputSelector>ItemSpecifics</OutputSelector><OutputSelector>PictureDetails</OutputSelector><OutputSelector>ConditionID</OutputSelector><OutputSelector>PrimaryCategory</OutputSelector></GetItemRequest>`;
 
         try {
-          // Build GetMultipleItems XML — one <ItemID> per item in batch
-          const itemIdTags = batchItemIds.map((id: string) => `<ItemID>${id}</ItemID>`).join('');
-          // GetMultipleItems is a public API — no auth token needed. IAF-TOKEN caused silent empty responses.
-          // PictureDetails added to IncludeSelector to retrieve all listing photos (not just cover).
-          const shoppingXml = `<?xml version="1.0" encoding="utf-8"?><GetMultipleItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents">${itemIdTags}<IncludeSelector>TextDescription,ItemSpecifics,PictureDetails</IncludeSelector></GetMultipleItemsRequest>`;
-
-          const shoppingResp = await fetch('https://open.api.ebay.com/shopping', {
+          const resp = await fetch('https://api.ebay.com/ws/api.dll', {
             method: 'POST',
             headers: {
-              'X-EBAY-API-CALL-NAME': 'GetMultipleItems',
+              'X-EBAY-API-CALL-NAME': 'GetItem',
               'X-EBAY-API-SITEID': '0',
               'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
               'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+              'X-EBAY-API-IAF-TOKEN': accessToken,
               'Content-Type': 'text/xml',
             },
-            body: shoppingXml,
+            body: getItemXml,
           });
 
-          if (!shoppingResp.ok) {
-            console.warn(`[eBay Enrich] Batch ${batchIdx + 1}/${enrichBatches.length}: HTTP ${shoppingResp.status}`);
-            continue;
-          }
-
-          const shoppingText = await shoppingResp.text();
-          const ack = xmlVal(shoppingText, 'Ack');
+          const text = await resp.text();
+          const ack = xmlVal(text, 'Ack');
           if (ack !== 'Success' && ack !== 'Warning') {
-            const errMsg = xmlVal(shoppingText, 'LongMessage') || xmlVal(shoppingText, 'ShortMessage') || 'Unknown';
-            console.warn(`[eBay Enrich] Batch ${batchIdx + 1}/${enrichBatches.length}: ${ack} — ${errMsg}`);
-            console.warn(`[eBay Enrich] Raw response (first 300): ${shoppingText.slice(0, 300)}`);
-            continue;
+            console.warn(`[eBay Enrich] GetItem ${itemId}: ${ack} — ${xmlVal(text, 'ShortMessage') || 'Unknown'}`);
+            return;
           }
 
-          // Parse each <Item> in the response
-          const itemBlocks = xmlAll(shoppingText, 'Item');
-          console.log(`[eBay Enrich] Batch ${batchIdx + 1}/${enrichBatches.length}: got ${itemBlocks.length} items back`);
+          const itemBlock = text.match(/<Item>([\s\S]*?)<\/Item>/)?.[1] || '';
+          const backfill: Record<string, any> = {};
 
-          for (const itemBlock of itemBlocks) {
-            const returnedItemId = xmlVal(itemBlock, 'ItemID');
-            if (!returnedItemId) continue;
+          // Description
+          const descRaw = xmlVal(itemBlock, 'Description') || '';
+          const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+          if (descClean && !item.description) backfill.description = descClean;
 
-            // Match back to our local record
-            const localItem = batch.find((i: { ebayListingId: string | null }) => i.ebayListingId === returnedItemId);
-            if (!localItem) continue;
+          // PictureDetails — all photo URLs
+          const pictureUrls = xmlAll(itemBlock, 'PictureURL');
+          if (pictureUrls.length > (item.photoUrls?.length ?? 0)) backfill.photoUrls = pictureUrls;
 
-            const backfill: Record<string, any> = {};
-
-            // Description (TextDescription selector strips HTML)
-            const descRaw = xmlVal(itemBlock, 'Description') || '';
-            const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
-            if (descClean && !localItem.description) backfill.description = descClean;
-
-            // PrimaryCategory/CategoryName
-            const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
-            const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
-            if (categoryName && !localItem.category) backfill.category = categoryName;
-
-            // ItemSpecifics → tags
-            const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
-            const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
-            const tags: string[] = nameValueBlocks
-              .map(nvBlock => xmlVal(nvBlock, 'Value'))
-              .filter((v): v is string => !!v && v.length > 0)
-              .slice(0, 10);
-            if (tags.length > 0 && (!localItem.tags || localItem.tags.length === 0)) backfill.tags = tags;
-
-            // ConditionID → conditionGrade
-            const condId = xmlVal(itemBlock, 'ConditionID') || '';
-            if (condId && !localItem.conditionGrade) {
-              const condGrade = tradingConditionMap[condId] || null;
-              if (condGrade) {
-                backfill.conditionGrade = condGrade;
-                backfill.condition = condGrade === 'S' ? 'NEW' : condGrade === 'D' ? 'PARTS_OR_REPAIR' : 'USED';
-              }
+          // ConditionID → conditionGrade
+          if (!item.conditionGrade) {
+            const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
+            const conditionMap: Record<string, string> = {
+              '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A',
+              '3000': 'A', '4000': 'B', '5000': 'C', '6000': 'D', '7000': 'D',
+            };
+            const condGrade = conditionMap[conditionId] || null;
+            if (condGrade) {
+              backfill.conditionGrade = condGrade;
+              backfill.condition = condGrade === 'S' ? 'NEW' : condGrade === 'D' ? 'PARTS_OR_REPAIR' : 'USED';
             }
+          }
 
-            // Photos — all PictureURL tags in response
-            const enrichPhotos = xmlAll(itemBlock, 'PictureURL');
-            if (enrichPhotos.length > (localItem.photoUrls?.length ?? 0)) backfill.photoUrls = enrichPhotos;
+          // PrimaryCategory
+          const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
+          const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
+          if (categoryName && !item.category) backfill.category = categoryName;
 
-            if (Object.keys(backfill).length > 0) {
-              await prisma.item.update({ where: { id: localItem.id }, data: backfill });
-              console.log(`[eBay Enrich] ItemID ${returnedItemId}: desc=${backfill.description?.length ?? 0}ch, cat=${backfill.category || '-'}, tags=${backfill.tags?.length ?? 0}, photos=${backfill.photoUrls?.length ?? 0}`);
-              enrichedCount++;
-            }
+          // ItemSpecifics → tags
+          const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
+          const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
+          const tags: string[] = nameValueBlocks
+            .map(nvBlock => xmlVal(nvBlock, 'Value'))
+            .filter((v): v is string => !!v && v.length > 0)
+            .slice(0, 10);
+          if (tags.length > 0 && (!item.tags || item.tags.length === 0)) backfill.tags = tags;
+
+          if (Object.keys(backfill).length > 0) {
+            await prisma.item.update({ where: { id: item.id }, data: backfill });
+            enrichedCount++;
+            console.log(`[eBay Enrich] ${itemId}: updated photos=${backfill.photoUrls?.length ?? item.photoUrls?.length}, category=${backfill.category ?? item.category}, tags=${backfill.tags?.length ?? item.tags?.length}`);
           }
         } catch (err: any) {
-          console.warn(`[eBay Enrich] Exception in batch ${batchIdx + 1}:`, err.message);
+          console.warn(`[eBay Enrich] GetItem ${itemId} exception: ${err.message}`);
         }
       }
-      console.log(`[eBay Enrich] Enrichment complete. Updated ${enrichedCount}/${itemsNeedingEnrichment.length} items in ${enrichBatches.length} batch call(s).`);
+
+      // Process in concurrent batches of ENRICH_CONCURRENCY
+      for (let i = 0; i < itemsNeedingEnrichment.length; i += ENRICH_CONCURRENCY) {
+        const batch = itemsNeedingEnrichment.slice(i, i + ENRICH_CONCURRENCY);
+        await Promise.allSettled(batch.map(enrichSingleItem));
+      }
+
+      console.log(`[eBay Enrich] Enrichment complete. Updated ${enrichedCount}/${itemsNeedingEnrichment.length} items.`);
     }
 
     // Update sync timestamp
