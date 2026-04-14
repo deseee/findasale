@@ -1,12 +1,10 @@
 /**
- * ebayNotificationSetup.ts — Register eBay Commerce Notification subscription on startup
+ * ebayNotificationSetup.ts — Register eBay Commerce Notification destination on startup
  *
- * eBay Notification API requires a two-step flow:
- *   1. POST /commerce/notification/v1/destination — register the endpoint URL + verificationToken
- *      Returns a destinationId.
- *   2. POST /commerce/notification/v1/subscription — subscribe a topic to that destinationId.
+ * Registers the shared webhook destination endpoint with eBay at server startup.
+ * ORDER_CONFIRMATION subscriptions are user-based (per-organizer) and are created
+ * in ebayOAuthCallback when an organizer connects their eBay account.
  *
- * Both steps are idempotent: we check for existing destination/subscription before creating.
  * Uses application-level OAuth (client credentials) — NOT a user token.
  *
  * ADR: adr-ebay-sync-architecture.md (2026-04-14)
@@ -14,11 +12,11 @@
 
 import { getEbayAccessToken } from '../controllers/ebayController';
 
-const EBAY_NOTIFICATION_TOPIC = 'ORDER_CONFIRMATION';
 const EBAY_NOTIFY_BASE = 'https://api.ebay.com/commerce/notification/v1';
 
 /**
- * Register or verify the eBay Notification destination + subscription for order.paid events.
+ * Register or verify the eBay Notification destination on startup.
+ * The destination is the shared webhook endpoint used by all per-organizer subscriptions.
  * Called once at server startup (see index.ts).
  */
 export async function registerEbayNotificationSubscription(): Promise<void> {
@@ -42,7 +40,7 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       'Content-Type': 'application/json',
     };
 
-    // ── Step 1: Find or create destination ──────────────────────────────────
+    // ── Find or create destination ───────────────────────────────────────────
     let destinationId: string | null = null;
 
     const destListResp = await fetch(`${EBAY_NOTIFY_BASE}/destination`, {
@@ -89,7 +87,6 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       const destText = await destCreateResp.text();
       const destData = destText ? JSON.parse(destText) : {};
       destinationId = destData.destinationId;
-      console.log(`[eBay Notify Setup] Destination create response: ${destText.slice(0, 300)}`);
       console.log(`[eBay Notify Setup] Destination created (id: ${destinationId})`);
     }
 
@@ -102,6 +99,7 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
     // They are created in ebayOAuthCallback when an organizer connects their eBay account.
     // The destination registered above is shared across all organizer subscriptions.
     console.log(`[eBay Notify Setup] Destination ready (id: ${destinationId}) — ORDER_CONFIRMATION subscriptions are created per-organizer at OAuth connect time`);
+
   } catch (err: any) {
     console.error('[eBay Notify Setup] Exception:', err.message);
     // Non-fatal — polling cron continues as fallback
