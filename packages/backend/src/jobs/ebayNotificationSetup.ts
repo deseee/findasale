@@ -108,6 +108,7 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
     });
     if (topicResp.ok) {
       const topicText = await topicResp.text();
+      console.log(`[eBay Notify Setup] Topic raw response: ${topicText.slice(0, 500)}`);
       const topicData = topicText ? JSON.parse(topicText) : {};
       const versions: string[] = topicData.supportedSchemaVersions || [];
       if (versions.length > 0) {
