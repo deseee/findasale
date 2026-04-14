@@ -26,6 +26,18 @@ interface CachedToken {
 
 let ebayTokenCache: CachedToken | null = null;
 
+// Decode common HTML entities (eBay Description arrives entity-encoded inside XML)
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
 // Module-scope XML helpers (used in Trading API + Shopping API parsing)
 function xmlVal(block: string, tag: string): string | null {
   const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`));
@@ -1819,7 +1831,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const photoUrls = pictureUrls.length > 0 ? pictureUrls : (xmlVal(itemBlock, 'GalleryURL') ? [xmlVal(itemBlock, 'GalleryURL')!] : []);
           // Extract description — strip HTML tags from eBay's CDATA description
           const descriptionRaw = xmlVal(itemBlock, 'Description') || '';
-          const description = descriptionRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+          const description = decodeHtmlEntities(descriptionRaw).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
           const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
           const conditionGrade = tradingConditionMap[conditionId] || null;
           const condition = conditionGrade === 'S' ? 'NEW'
@@ -1952,7 +1964,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const itemBlock = text.match(/<Item>([\s\S]*?)<\/Item>/)?.[1] || '';
           const backfill: Record<string, any> = {};
           const descRaw = xmlVal(itemBlock, 'Description') || '';
-          const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+          const descClean = decodeHtmlEntities(descRaw).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
           if (descClean) backfill.description = descClean;
           const pictureUrls = xmlAll(itemBlock, 'PictureURL');
           if (pictureUrls.length > 0) backfill.photoUrls = pictureUrls;

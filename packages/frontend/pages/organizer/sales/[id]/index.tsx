@@ -260,7 +260,7 @@ const SaleDetailPage = () => {
 
                     {item.price && (
                       <p className="text-lg font-bold text-amber-700 dark:text-amber-400 mb-3">
-                        ${(item.price / 100).toFixed(2)}
+                        ${Number(item.price).toFixed(2)}
                       </p>
                     )}
 
