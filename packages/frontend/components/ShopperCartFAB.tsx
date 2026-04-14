@@ -6,13 +6,15 @@
 
 import React from 'react';
 import { useShopperCart } from '../hooks/useShopperCart';
+import { useAuth } from './AuthContext';
 
 interface ShopperCartFABProps {
   onClick: () => void;
 }
 
 const ShopperCartFAB: React.FC<ShopperCartFABProps> = ({ onClick }) => {
-  const cart = useShopperCart();
+  const { user } = useAuth();
+  const cart = useShopperCart(user?.id);
 
   // Don't show if cart is empty
   if (!cart.isHydrated || cart.cartCount === 0) {

@@ -26,9 +26,12 @@ interface CartState {
   saleId: string | null;
 }
 
-const STORAGE_KEY = 'fas_shopper_cart';
+const BASE_STORAGE_KEY = 'fas_shopper_cart';
+const getStorageKey = (userId?: string) =>
+  userId ? `${BASE_STORAGE_KEY}_${userId}` : BASE_STORAGE_KEY;
 
-export const useShopperCart = () => {
+export const useShopperCart = (userId?: string) => {
+  const STORAGE_KEY = getStorageKey(userId);
   const [cart, setCart] = useState<CartState>({ items: [], saleId: null });
   const [isHydrated, setIsHydrated] = useState(false);
 

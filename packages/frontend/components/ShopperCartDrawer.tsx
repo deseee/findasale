@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useShopperCart } from '../hooks/useShopperCart';
+import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import api from '../lib/api';
 import { getThumbnailUrl } from '../lib/imageUtils';
@@ -18,7 +19,8 @@ interface ShopperCartDrawerProps {
 }
 
 const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, saleName = 'Sale' }) => {
-  const cart = useShopperCart();
+  const { user } = useAuth();
+  const cart = useShopperCart(user?.id);
   const { showToast } = useToast();
   const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'shared' | 'error'>('idle');
 

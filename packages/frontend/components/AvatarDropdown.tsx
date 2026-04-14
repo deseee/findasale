@@ -159,7 +159,7 @@ const AvatarDropdown: React.FC = () => {
   const isUser = user.roles?.includes('USER');
   const isAdmin = user.roles?.includes('ADMIN');
   const isTeams = canAccess('TEAMS');
-  const { items: cartItems } = useShopperCart();
+  const { items: cartItems } = useShopperCart(user?.id);
 
   // Fetch fresh explorer rank (not from stale JWT)
   const { data: xpProfile } = useXpProfile(!!user);

@@ -116,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
+    localStorage.removeItem('fas_shopper_cart');
     delete api.defaults.headers.Authorization;
     setUser(null);
   }, []);
