@@ -1614,6 +1614,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             saleId: containerSale!.id,
             ebayListingId: sku,
             conditionGrade,
+            embedding: [],  // populated later when item is indexed for search
           }
         });
         imported++;
@@ -1727,6 +1728,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               saleId: containerSale!.id,
               ebayListingId: sku || ebayItemId,  // prefer SKU if seller assigned one
               conditionGrade,
+              embedding: [],  // populated later when item is indexed for search
             }
           });
           imported++;
