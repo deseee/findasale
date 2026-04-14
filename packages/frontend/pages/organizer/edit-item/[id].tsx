@@ -85,7 +85,7 @@ const EditItemPage = () => {
   const ebayPushMutation = useMutation({
     mutationFn: async (itemId: string) => {
       if (!item?.saleId) throw new Error('Sale ID not found');
-      return api.post(`/organizer/sales/${item.saleId}/ebay-push`, {
+      return api.post(`/ebay/organizer/sales/${item.saleId}/ebay-push`, {
         itemIds: [itemId],
       });
     },
