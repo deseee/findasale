@@ -1660,7 +1660,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
       while (tradingPage <= tradingTotalPages) {
         // OAuth tokens use X-EBAY-API-IAF-TOKEN header — NOT <eBayAuthToken> (that's legacy Auth'n'Auth only)
-        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
+        // DetailLevel=ReturnAll is required to get PictureDetails in the response
+        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><DetailLevel>ReturnAll</DetailLevel><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
 
         const tradingResp = await fetch('https://api.ebay.com/ws/api.dll', {
           method: 'POST',
@@ -1706,12 +1707,22 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const existing = await prisma.item.findFirst({
             where: { organizerId: organizer.id, ebayListingId: ebayItemId }
           });
-          if (existing) { skipped++; continue; }
 
           const titleRaw = xmlVal(itemBlock, 'Title') || ebayItemId;
           const priceRaw = xmlVal(itemBlock, 'CurrentPrice') || xmlVal(itemBlock, 'BuyItNowPrice');
           const price = priceRaw ? parseFloat(priceRaw) : null;
-          const pictureUrl = xmlVal(itemBlock, 'PictureURL');
+          // PictureDetails contains PictureURL; GalleryURL is a fallback thumbnail
+          const pictureUrl = xmlVal(itemBlock, 'PictureURL') || xmlVal(itemBlock, 'GalleryURL');
+          const photoUrls = pictureUrl ? [pictureUrl] : [];
+
+          // If item already exists, backfill photos if it has none
+          if (existing) {
+            if (photoUrls.length > 0 && existing.photoUrls.length === 0) {
+              await prisma.item.update({ where: { id: existing.id }, data: { photoUrls } });
+            }
+            skipped++;
+            continue;
+          }
           const sku = xmlVal(itemBlock, 'SKU');
           const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
           const conditionGrade = tradingConditionMap[conditionId] || null;
@@ -1720,7 +1731,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             data: {
               title: titleRaw.slice(0, 255),
               description: '',
-              photoUrls: pictureUrl ? [pictureUrl] : [],
+              photoUrls,
               price,
               status: 'AVAILABLE',
               inInventory: true,
