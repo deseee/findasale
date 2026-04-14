@@ -88,10 +88,10 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
 export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
   try {
     const sig = req.headers['stripe-signature'] as string;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const webhookSecret = process.env.STRIPE_BILLING_WEBHOOK_SECRET;
 
     if (!webhookSecret) {
-      console.error('STRIPE_WEBHOOK_SECRET not set');
+      console.error('STRIPE_BILLING_WEBHOOK_SECRET not set');
       return res.status(500).json({ message: 'Webhook secret not configured' });
     }
 
