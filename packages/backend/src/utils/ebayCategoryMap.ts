@@ -266,14 +266,17 @@ export const EBAY_CATEGORY_ID_MAP: Record<string, string> = {
   'Other': '99',
 
   // Default fallback
-  '': '1', // Collectibles as default
+  '': '99', // Everything Else > Other — valid leaf category, accepts broad conditions
 };
 
 /**
- * Get eBay category ID for a given category name
- * Returns Collectibles (1) as default fallback
+ * Get eBay category ID for a given category name.
+ * Returns '99' (Everything Else > Other) as default fallback — a valid LEAF
+ * category. Never return a branch/top-level category like '1' (Collectibles),
+ * because eBay rejects listings in branch categories with errorId 25021
+ * ("condition is invalid for the selected primary category").
  */
 export function getEbayCategoryId(categoryName: string | null | undefined): string {
-  if (!categoryName) return '1'; // Collectibles
-  return EBAY_CATEGORY_ID_MAP[categoryName] || '1';
+  if (!categoryName) return '99';
+  return EBAY_CATEGORY_ID_MAP[categoryName] || '99';
 }

@@ -1122,6 +1122,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
         price: true,
         tags: true,
         ebayListingId: true,
+        ebayCategoryId: true,
         sale: {
           select: {
             organizerId: true,
@@ -1146,7 +1147,8 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
     // Build preview payload
     const sku = `FAS-${item.id}`;
     const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
-    const categoryId = getEbayCategoryId(item.category);
+    // Prefer imported numeric CategoryID over name lookup (see pushSaleToEbay comment)
+    const categoryId = item.ebayCategoryId || getEbayCategoryId(item.category);
 
     // Determine price
     let price = 0.99;
@@ -1280,6 +1282,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             tags: true,
             ebayOfferId: true,
             ebayListingId: true,
+            ebayCategoryId: true,
           },
         },
       },
@@ -1307,7 +1310,10 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       try {
         const sku = `FAS-${item.id}`;
         const ebayCondition = mapGradeToInventoryCondition(item.conditionGrade);
-        const categoryId = getEbayCategoryId(item.category);
+        // Prefer the numeric CategoryID captured during eBay import (leaf category from eBay itself).
+        // Only fall back to the name→ID map for items that were NOT imported from eBay
+        // (e.g. items the organizer created directly in FindA.Sale).
+        const categoryId = item.ebayCategoryId || getEbayCategoryId(item.category);
 
         // Determine price
         let price = 0.99;
@@ -2002,9 +2008,12 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             : conditionGrade === 'D' ? 'PARTS_OR_REPAIR'
             : conditionGrade ? 'USED'
             : null;
-          // Extract PrimaryCategory name (eBay category names stored directly, e.g. "Electric Guitars")
+          // Extract PrimaryCategory name AND numeric CategoryID.
+          // Storing both — name drives human-readable UI + shipping classifier;
+          // ID is used directly on push-back to avoid 25021 category errors.
           const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
           const ebayCategory = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
+          const ebayCategoryIdFromImport = categoryBlock ? xmlVal(categoryBlock, 'CategoryID') : null;
           // Extract ItemSpecifics values as tags (Brand, Type, Color, Material, etc.)
           const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
           const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
@@ -2023,6 +2032,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             if (conditionGrade && !existing.conditionGrade) backfill.conditionGrade = conditionGrade;
             if (ebayCategory && !existing.category) backfill.category = ebayCategory;
             if (ebayCategoryTags.length > 0 && (!existing.tags || existing.tags.length === 0)) backfill.tags = ebayCategoryTags;
+            // Backfill eBay numeric CategoryID for push-back (always overwrite — import is source of truth)
+            if (ebayCategoryIdFromImport && existing.ebayCategoryId !== ebayCategoryIdFromImport) backfill.ebayCategoryId = ebayCategoryIdFromImport;
             // Migrate SKU-stored ebayListingId to numeric eBay ItemID so GetItem enrichment works
             if (existing.ebayListingId !== ebayItemId) backfill.ebayListingId = ebayItemId;
             if (Object.keys(backfill).length > 0) {
@@ -2046,6 +2057,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               conditionGrade,
               condition,
               category: ebayCategory || undefined,
+              ebayCategoryId: ebayCategoryIdFromImport || undefined,
               tags: ebayCategoryTags,
               embedding: [],  // populated later when item is indexed for search
             }
