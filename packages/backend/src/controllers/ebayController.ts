@@ -735,7 +735,12 @@ export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account');
+    authUrl.searchParams.set('scope', [
+      'https://api.ebay.com/oauth/api_scope/sell.inventory',
+      'https://api.ebay.com/oauth/api_scope/sell.account',
+      'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
+      'openid',
+    ].join(' '));
     authUrl.searchParams.set('state', stateToken);
     authUrl.searchParams.set('prompt', 'login');
 
@@ -828,18 +833,28 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
     const expiresIn = tokenData.expires_in || 7200;
     const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    // Decode JWT to get eBay user ID (optional, but recommended)
-    // For now, extract from token response if present
+    // Fetch real eBay display username via Identity API
+    // Requires commerce.identity.readonly scope
     let ebayUserId = 'unknown';
     try {
-      // Basic JWT decode (without verification) — in production, verify signature
-      const parts = accessToken.split('.');
-      if (parts.length === 3) {
-        const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-        ebayUserId = decoded.iss || decoded.user_id || 'unknown';
+      const identityRes = await fetch('https://apiz.ebay.com/commerce/identity/v1/user/', {
+        headers: ebayUserHeaders(accessToken),
+      });
+      if (identityRes.ok) {
+        const identityData = (await identityRes.json()) as any;
+        ebayUserId = identityData.username || identityData.userId || 'unknown';
+        console.log('[eBay] Identity resolved:', ebayUserId);
+      } else {
+        // Fallback: decode JWT sub claim (internal eBay user ID, not display name)
+        const parts = accessToken.split('.');
+        if (parts.length === 3) {
+          const decoded = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+          // sub is the eBay internal user ID; iss is the issuer URL — never use iss
+          ebayUserId = decoded.sub || decoded.user_id || 'unknown';
+        }
       }
     } catch (e) {
-      console.warn('[eBay] Could not decode eBay user ID from JWT', e);
+      console.warn('[eBay] Could not resolve eBay user identity', e);
     }
 
     // Upsert EbayConnection
@@ -1616,49 +1631,78 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       });
     }
 
-    // If Inventory API returned 0 items, also check the Offers endpoint —
-    // items created via regular eBay Sell UI appear as offers but not inventory items
-    if (totalFetched === 0) {
-      const offersUrl = `https://api.ebay.com/sell/inventory/v1/offer?limit=200`;
-      const offersResp = await fetch(offersUrl, {
-        headers: ebayUserHeaders(accessToken),
-      });
-      if (offersResp.ok) {
-        const offersData = (await offersResp.json()) as any;
-        const offers: any[] = offersData.offers || [];
-        console.log(`[eBay Import] Inventory API returned 0 items. Offers endpoint returned ${offers.length} offers.`);
-        if (offers.length > 0) {
-          // Found offers — these are real eBay listings but not Inventory API items
-          // Import them using offer data
-          for (const offer of offers) {
-            const sku = offer.sku as string;
-            if (!sku) { skipped++; continue; }
+    // If Inventory API returned 0 items, fall back to eBay Browse API seller search.
+    // Browse API returns ALL public active listings for a seller regardless of how they were created.
+    // Requires the app-level Client Credentials token (not user token) and the seller's display username.
+    if (totalFetched === 0 && ebayConn.ebayUserId && ebayConn.ebayUserId !== 'unknown') {
+      const appToken = await getEbayAccessToken();
+      if (appToken) {
+        let browseOffset = 0;
+        const browseLimit = 200;
+        let browseHasMore = true;
+
+        while (browseHasMore) {
+          const browseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?filter=sellers%3A%7B${encodeURIComponent(ebayConn.ebayUserId)}%7D&limit=${browseLimit}&offset=${browseOffset}`;
+          const browseResp = await fetch(browseUrl, {
+            headers: {
+              'Authorization': `Bearer ${appToken}`,
+              'Accept-Language': 'en-US',
+            },
+          });
+
+          if (!browseResp.ok) {
+            const errText = await browseResp.text();
+            console.error('[eBay Import] Browse API fallback error:', browseResp.status, errText);
+            break;
+          }
+
+          const browseData = (await browseResp.json()) as any;
+          const summaries: any[] = browseData.itemSummaries || [];
+          console.log(`[eBay Import] Browse API returned ${summaries.length} listings for seller ${ebayConn.ebayUserId}`);
+
+          for (const listing of summaries) {
+            const ebayItemId = listing.itemId as string;
+            if (!ebayItemId) { skipped++; continue; }
+
             const existing = await prisma.item.findFirst({
-              where: { organizerId: organizer.id, ebayListingId: sku }
+              where: { organizerId: organizer.id, ebayListingId: ebayItemId }
             });
             if (existing) { skipped++; continue; }
+
+            const imageUrl = listing.image?.imageUrl || null;
+            const price = listing.price?.value ? parseFloat(listing.price.value) : null;
+
+            // Map eBay condition to conditionGrade
+            const browseConditionMap: Record<string, string> = {
+              'NEW': 'S', 'LIKE_NEW': 'A', 'EXCELLENT_REFURBISHED': 'A',
+              'VERY_GOOD_REFURBISHED': 'B', 'GOOD_REFURBISHED': 'B',
+              'USED_EXCELLENT': 'B', 'USED_VERY_GOOD': 'B',
+              'USED_GOOD': 'C', 'USED_ACCEPTABLE': 'D',
+              'FOR_PARTS_OR_NOT_WORKING': 'D',
+            };
+            const conditionGrade = listing.condition ? (browseConditionMap[listing.condition.toUpperCase().replace(/ /g, '_')] || null) : null;
+
             await prisma.item.create({
               data: {
-                title: (offer.listing?.listingDescription || sku).slice(0, 255),
+                title: (listing.title || ebayItemId).slice(0, 255),
                 description: '',
-                photoUrls: [],
-                price: offer.pricingSummary?.price?.value ? parseFloat(offer.pricingSummary.price.value) : null,
+                photoUrls: imageUrl ? [imageUrl] : [],
+                price,
                 status: 'AVAILABLE',
                 inInventory: true,
                 organizerId: organizer.id,
                 saleId: containerSale!.id,
-                ebayListingId: sku,
-                ebayOfferId: offer.offerId || null,
-                conditionGrade: null,
+                ebayListingId: ebayItemId,
+                conditionGrade,
               }
             });
             imported++;
             totalFetched++;
           }
+
+          browseHasMore = summaries.length === browseLimit;
+          browseOffset += browseLimit;
         }
-      } else {
-        const offersErrText = await offersResp.text();
-        console.error('[eBay Import] Offers fallback error:', offersResp.status, offersErrText);
       }
     }
 
@@ -1668,14 +1712,17 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       data: { lastEbayInventorySyncAt: new Date() }
     });
 
-    // If still 0 items after both API attempts, give an informative message
+    // If still 0 items after both API attempts
     if (totalFetched === 0) {
+      const username = ebayConn.ebayUserId && ebayConn.ebayUserId !== 'unknown' ? ebayConn.ebayUserId : null;
       return res.json({
         success: true,
         imported: 0,
         skipped: 0,
         total: 0,
-        message: 'No items found in your eBay account via the Inventory API or Offers endpoint. Items created through eBay\'s standard Sell interface may not be accessible. Try listing items via eBay\'s Inventory API, or contact support.'
+        message: username
+          ? `No active listings found for eBay seller "${username}". If you have listings, they may be in a different seller account or all items are already imported.`
+          : 'No items found. eBay account username could not be resolved — try disconnecting and reconnecting your eBay account, then sync again.'
       });
     }
 
