@@ -3,8 +3,8 @@
  *
  * Tabs:
  * - Manual Entry: standard form + photo upload
- * - Camera (AI — one item): capture → AI pre-fill → review or auto-create
- * - Batch (AI — multiple): SmartInventoryUpload for bulk photo processing
+ * - Camera (auto-tag — one item): capture → auto-fill → review or auto-create
+ * - Batch (auto-tag — multiple): SmartInventoryUpload for bulk photo processing
  * - CSV: modal trigger
  *
  * Phase 3 additions (Camera Workflow v2):
@@ -21,8 +21,8 @@
  * - Removed Qty column from item list (quantity not in Prisma schema)
  * - Removed Quantity input from manual entry form
  * - Fixed bulk update URL: /items/bulk (was /items/bulk-update — silent 404)
- * - Restored Camera tab: wired RapidCapture with AI analysis flow
- * - Camera: capture → upload → AI analyze → pre-fill manual form → review
+ * - Restored Camera tab: wired RapidCapture with auto-analysis flow
+ * - Camera: capture → upload → auto-analyze → pre-fill manual form → review
  * - maxPhotos=5 per camera session (one-item-at-a-time flow)
  */
 
@@ -941,14 +941,14 @@ const AddItemsDetailPage = () => {
         if (addingToItemIdRef.current === tempId) {
           addingToItemIdRef.current = itemId;
           setAddingToItemId(itemId);
-          // Hold the backend 4.5s AI debounce — user is adding more photos
+          // Hold the backend 4.5s auto-analysis debounce — user is adding more photos
           api.post(`/items/${itemId}/hold-analysis`).catch(() => {}); // fire-and-forget
         }
 
         // Invalidate caches for item lists
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
 
-        // Poll for AI completion
+        // Poll for auto-analysis completion
         pollForAI(itemId);
 
         // Upload additional photos (regular mode multi-photo items)
@@ -1000,7 +1000,7 @@ const AddItemsDetailPage = () => {
   // Background uploads now happen in onPhotoCapture as photos are captured
   // This handler just closes the camera when user taps "Done"
   const handleRapidCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
-    // Release AI hold for the current item if we're in add-mode when camera closes
+    // Release auto-analysis hold for the current item if we're in add-mode when camera closes
     if (addingToItemIdRef.current && !addingToItemIdRef.current.startsWith('temp-')) {
       api.post(`/items/${addingToItemIdRef.current}/release-analysis`).catch(() => {});
     }
@@ -1181,7 +1181,7 @@ const AddItemsDetailPage = () => {
     }
   };
 
-  // Poll for AI draft analysis completion (draftStatus: DRAFT → PENDING_REVIEW)
+  // Poll for auto-analysis draft completion (draftStatus: DRAFT → PENDING_REVIEW)
   const pollForAI = (itemId: string) => {
     let attempts = 0;
     const maxAttempts = 10; // 30 seconds (3s * 10)
@@ -1192,7 +1192,7 @@ const AddItemsDetailPage = () => {
         const res = await api.get(`/items/${itemId}`);
         const item = res.data;
 
-        // Success: AI identified the item
+        // Success: auto-analysis identified the item
         if (item.draftStatus === 'PENDING_REVIEW' && item.title) {
           clearInterval(poll);
           setRapidItems((prev) =>
@@ -1206,12 +1206,12 @@ const AddItemsDetailPage = () => {
           return;
         }
 
-        // Error: AI failed (aiErrorLog is set)
+        // Error: auto-analysis failed (aiErrorLog is set)
         if (item.aiErrorLog && Array.isArray(item.aiErrorLog) && item.aiErrorLog.length > 0) {
           clearInterval(poll);
           setRapidItems((prev) =>
             prev.map((i) =>
-              i.id === itemId ? { ...i, aiError: 'AI analysis failed — fill in manually' } : i
+              i.id === itemId ? { ...i, aiError: 'Auto-tagging failed — fill in manually' } : i
             )
           );
           return;
@@ -1832,7 +1832,7 @@ const AddItemsDetailPage = () => {
             <RapidCapture
               onComplete={handleRapidCameraComplete}
               onCancel={() => {
-                // If user closes camera while in add-mode, release the hold so AI can run
+                // If user closes camera while in add-mode, release the hold so auto-analysis can run
                 if (addingToItemIdRef.current && !addingToItemIdRef.current.startsWith('temp-')) {
                   api.post(`/items/${addingToItemIdRef.current}/release-analysis`).catch(() => {});
                 }
@@ -1847,14 +1847,14 @@ const AddItemsDetailPage = () => {
               addingToItemId={addingToItemId}
               onAddToItem={(id) => {
                 if (addingToItemId === id) {
-                  // Exiting add-mode — release the AI hold so backend restarts 4.5s debounce
+                  // Exiting add-mode — release the auto-analysis hold so backend restarts 4.5s debounce
                   if (!id.startsWith('temp-')) {
                     api.post(`/items/${id}/release-analysis`).catch(() => {});
                   }
                   setAddingToItemId(null);
                   addingToItemIdRef.current = null;
                 } else {
-                  // Entering add-mode — hold AI if we already have a real ID
+                  // Entering add-mode — hold auto-analysis if we already have a real ID
                   if (!id.startsWith('temp-')) {
                     api.post(`/items/${id}/hold-analysis`).catch(() => {});
                   }
@@ -1880,7 +1880,7 @@ const AddItemsDetailPage = () => {
                   { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
                 ]);
                 // Start background upload pipeline (non-blocking)
-                // Read from ref instead of state to avoid stale closure after AI analysis completes
+                // Read from ref instead of state to avoid stale closure after auto-analysis completes
                 processAndUploadRapidPhoto(photo, tempId, addingToItemIdRef.current);
               }}
               onEnhanceAll={() => {
@@ -2521,7 +2521,7 @@ const AddItemsDetailPage = () => {
                   <div>
                     <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Regular Mode</p>
                     <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
-                      Take up to 5 photos of one item, then tap <strong>Analyze</strong>. Good for items that need multiple angles before AI runs.
+                      Take up to 5 photos of one item, then tap <strong>Analyze</strong>. Good for items that need multiple angles before auto-analysis runs.
                     </p>
                   </div>
                 </div>
