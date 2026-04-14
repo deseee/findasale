@@ -7,6 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S457 COMPLETE (2026-04-13) — Pull to Sale fixed for eBay inventory items**
+
+**S457 What happened:**
+- **Bug 1 — `embedding: []` missing from `pullFromInventory`:** `prisma.item.create` in `itemInventoryService.ts` was missing the required `embedding: []` field. Caused Prisma P2011 null constraint violation on every pull attempt. Same root cause as S456 eBay import crash. Also added `conditionGrade` to copied fields (was silently dropped on pull).
+- **Bug 2 — `getInventoryItems` missing `inInventory: true` filter:** Inventory page was returning ALL organizer items (entire sale history) instead of only items marked as inventory. Fixed by adding `inInventory: true` to the where clause.
+
+**S457 Files changed (1):**
+- `packages/backend/src/services/itemInventoryService.ts` — `embedding: []` in create + `inInventory: true` in list query
+
+**S457 Push block:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/services/itemInventoryService.ts
+git commit -m "fix: Pull to Sale — add embedding[] to create, filter inInventory=true in list query"
+.\push.ps1
+```
+
+---
+
 **S456 COMPLETE (2026-04-14) — eBay inventory import fully operational: Trading API, photos, dedup cleanup**
 
 **S456 What happened:**
@@ -22,7 +41,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 **S456 Result:** ✅ 86 eBay listings imported with photos, prices, conditions. Sync is idempotent (re-sync shows 0 new). Photos backfill on re-sync for items that had empty photoUrls.
 
 **S456 Still open:**
-- **"Pull to Sale" broken** for eBay-imported inventory items — Patrick confirmed this after photo fix. Priority for next session.
+- ~~"Pull to Sale" broken~~ → **Fixed in S457** (see S457 block below)
 - S455 migration still needs to be run on Railway (see S455 block below for block)
 - `git rm` old library files still needed (see S455 block)
 
