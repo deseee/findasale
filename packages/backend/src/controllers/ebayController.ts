@@ -1914,7 +1914,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               'X-EBAY-API-SITEID': '0',
               'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
               'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
-              'X-EBAY-API-IAF-TOKEN': accessToken,
+              'X-EBAY-API-IAF-TOKEN': accessToken ?? undefined,
               'Content-Type': 'text/xml',
             },
             body: getItemXml,
