@@ -842,6 +842,14 @@ const OrganizerSettingsPage = () => {
                         Last synced: {new Date(ebayStatus.lastEbayInventorySyncAt).toLocaleString()}
                       </p>
                     )}
+                    {ebayStatus?.ebaySaleId && (
+                      <a
+                        href={`/organizer/sales/${ebayStatus.ebaySaleId}`}
+                        className="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 underline"
+                      >
+                        View eBay Inventory →
+                      </a>
+                    )}
                   </div>
                 ) : (
                   <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
