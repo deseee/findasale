@@ -167,6 +167,10 @@ export default function WorkspaceSettingsPage() {
     return null;
   }
 
+  if (workspaceLoading) {
+    return null;
+  }
+
   if (!workspace) {
     return (
       <TierGate requiredTier="TEAMS" featureName="Workspace Settings" description="Configure team workspace settings, permissions, and cost breakdown.">

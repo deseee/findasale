@@ -117,6 +117,10 @@ const apiOrigin = (() => {
   }
 })();
 
+// Derive WebSocket origin from API origin for CSP connect-src.
+// Converts https:// → wss:// and http:// → ws://.
+const wsOrigin = apiOrigin.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -182,7 +186,7 @@ const nextConfig = {
               // api.qrserver.com: SaleQRCode component fetches QR images and downloads via fetch().
               // Missing from img-src → blank QR on dashboard. Missing from connect-src → download fails.
               "img-src 'self' data: blob: https://res.cloudinary.com https://picsum.photos https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://unpkg.com https://raw.githubusercontent.com https://api.qrserver.com",
-              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://terminal-simulator.stripe.com wss://terminal-simulator.stripe.com wss://ws.stripe.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://raw.githubusercontent.com https://res.cloudinary.com http://localhost:5000 ${apiOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com`,
+              `connect-src 'self' https://api.stripe.com https://m.stripe.network https://terminal-simulator.stripe.com wss://terminal-simulator.stripe.com wss://ws.stripe.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://raw.githubusercontent.com https://res.cloudinary.com http://localhost:5000 ${apiOrigin} ${wsOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com`,
               "frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network",
               "worker-src 'self' blob:",
               "manifest-src 'self'",
