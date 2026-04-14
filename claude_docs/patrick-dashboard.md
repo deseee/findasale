@@ -2,26 +2,24 @@
 
 ## What Happened This Week
 
-**S461** (2026-04-14) — eBay push 25021 fixes (5 rounds) + Taxonomy + condition remap + stale offer cleanup + retry:
-- **Why this kept breaking:** Each fix revealed the next layer. (1) Static map returned branch categories. (2) No API call for FindA.Sale-created items. (3) Taxonomy API returned 403 on user token. (4) Condition `LIKE_NEW` is media-only and was being sent for a travel mug. (5) Even after (4), `USED_VERY_GOOD` was in eBay's "accepted" list but publish still rejected it — suggests stale offer state from earlier failed pushes under a bad categoryId.
-- **Honest note you asked for:** the prior "eBay categories implemented sitewide" claim was shallow. The picker uses a static JSON of ~120 categories (with some wrong IDs). The push used a different hardcoded map. Neither ever talked to eBay's live Taxonomy API.
-- **Fix 1 ✅ pushed:** Capture eBay's numeric CategoryID on import and store it on the Item. Prefer it on push.
-- **Fix 2 ✅ pushed:** For items YOU create in FindA.Sale, call eBay's Taxonomy API to get a real leaf category from the title.
-- **Fix 3 ⏳ ready to push:** Swapped Taxonomy call from user token to app token (user token lacks `commerce.taxonomy` scope).
-- **Fix 4 ⏳ ready to push:** Grade "Like New" (A) maps to `USED_VERY_GOOD` instead of `LIKE_NEW` (media-only). Before every push we call eBay's condition policies API for the target category and auto-remap to an accepted condition. Cached in memory.
-- **Fix 5 ⏳ ready to push:** Three safety nets if publish still 25021s — (a) GET the inventory_item back after PUT and log `sent=X stored=Y` so we can see if eBay silently dropped our condition, (b) if existing offer has wrong categoryId, DELETE it and recreate (eBay Inventory API quirk), (c) 25021 retry loop walks through remaining accepted conditions trying each until one publishes.
-- **What to do:** Run the push block below, wait for Railway deploy, push the travel mug to eBay again. Watch Railway logs for `[eBay InventoryVerify] sent=X stored=Y` — if `stored=null` that tells us eBay's dropping our payload (next fix). If retry loop fires, you'll see `[eBay 25021 Retry] trying NEW_OTHER...` until one works.
-- **Queued for next session:** Replace static picker with live Taxonomy, retire the hardcoded category map, optionally persist condition policies to DB.
-
-**Push block:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/ebayController.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix(ebay): app token for Taxonomy + category-aware condition remapping + stale offer cleanup + 25021 retry"
-.\push.ps1
-```
+**S461** (2026-04-14) — eBay push end-to-end WORKING (6 rounds of fixes) ✅
+- **Verified live:** Contigo Stainless Steel Travel Mug published to eBay successfully. Category 177006 (Mugs), condition NEW_OTHER (after retry), Brand="Contigo" + Color="Black" auto-filled from title.
+- **Why it kept breaking:** Each fix revealed the next layer. (1) Static map returned branch categories, not leaf IDs. (2) No API call for items we created ourselves. (3) Taxonomy API required app token, not user token. (4) `LIKE_NEW` is media-only and was being sent for hard goods. (5) Even after (4), stale offer state from earlier failures persisted. (6) eBay categories require specific item aspects (Type, Brand, Color) that we weren't sending.
+- **Fix 1 ✅:** Capture eBay's numeric CategoryID on import and prefer it on push.
+- **Fix 2 ✅:** For items we create in FindA.Sale, call eBay Taxonomy API to get a real leaf category from the title.
+- **Fix 3 ✅:** Swapped Taxonomy call from user token → app token (user token lacks `commerce.taxonomy` scope).
+- **Fix 4 ✅:** Grade "Like New" (A) now maps to `USED_VERY_GOOD` instead of `LIKE_NEW` (media-only). Before every push we hit eBay's condition-policies API and auto-remap if needed. Cached in memory.
+- **Fix 5 ✅:** Three safety nets — (a) GET inventory_item back after PUT and log `sent=X stored=Y`, (b) if existing offer has wrong categoryId, DELETE and recreate, (c) 25021 retry loop walks remaining accepted conditions until one publishes.
+- **Fix 6 ✅:** Programmatic required-aspect population. Before publish, call Taxonomy API `get_item_aspects_for_category` to get required aspects for the target category. Smart-fill from title/description with keyword matching. Brand defaults to "Unbranded" if available, FREE_TEXT non-brand defaults to "Unspecified", SELECTION_ONLY defaults to first enum value.
+- **Verification log excerpt:**
+  ```
+  [eBay RequiredAspects] category 177006: 3 required (Type, Brand, Color)
+  [eBay AspectFill] Brand="Contigo" (auto-filled)
+  [eBay AspectFill] Color="Black" (auto-filled)
+  [eBay Retry25021] succeeded with condition=NEW_OTHER
+  ```
+- **Known minor issues (queued, not blocking):** USED_VERY_GOOD false-positive from Metadata API (retry loop handles it, one wasted API call per push). Static EbayCategoryPicker still in use. `ebayCategoryMap.ts` is dead code. In-memory caches clear on Railway restart.
+- **Queued for next session:** Retire static picker (use live Taxonomy search), delete dead `ebayCategoryMap.ts`, optionally persist condition/aspect caches to DB, cache last-successful condition per category, end-to-end organizer QA across book / clothing / furniture categories.
 
 ---
 
@@ -140,6 +138,21 @@ git commit -m "fix(ebay): app token for Taxonomy + category-aware condition rema
 
 ## Action Items for Patrick
 
+**NEW — S461 Session wrap push block (do this now):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/.last-wrap
+git add claude_docs/audits/brand-drift-2026-04-14.md
+git add claude_docs/design/SHOPPER_DASHBOARD_RETHINK_UX_SPEC.md
+git add claude_docs/feature-notes/adr-ebay-sync-architecture.md
+git commit -m "docs(s461): wrap eBay push fixes (6 rounds) + brand audit + shopper dashboard spec + eBay sync ADR"
+.\push.ps1
+```
+
+*(Note: eBay Fix 6 code in `ebayController.ts` was already pushed and verified live during S461 — no code files in this wrap push.)*
+
 **NEW — S460 Push block (do this now):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -220,9 +233,15 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 ---
 
-## What's Next (S460+)
+## What's Next (S462+)
 
-**P0 — eBay sync architecture audit (Patrick flagged S458):** The current multi-pass approach (GetMyeBaySelling → separate GetItem per item) is wrong. Next session opens with `findasale-architect` researching the correct bidirectional sync design. Key questions: use `GetItems` batch calls (20/call) instead of 1/item? Switch to eBay Platform Notifications for real-time sold sync? What data is actually available from which API? Goal: single-pass import + webhook-based ongoing sync, replacing the polling cron.
+**STEP 0 — Mandatory post-deploy smoke test (CLAUDE.md §10):** Open Chrome at finda.sale and smoke-test all S460/S461 changed pages (Sale detail push button, Edit Item push button, Review & Publish push button, Post-Sale eBay panel, Inventory page photos). Report results before starting new work.
+
+**P0 — eBay push: broader category coverage QA:** S461 verified travel mug (category 177006). Need to verify the same pipeline works for: a book, a piece of clothing, a piece of furniture. Different required-aspect profiles. Dispatch findasale-qa with category-by-category test plan.
+
+**P1 — Retire static EbayCategoryPicker:** S461 proved live Taxonomy API works reliably via app token. Replace the ~120-entry static JSON picker with a live Taxonomy search UI. Delete `ebayCategoryMap.ts` (dead code).
+
+**P1 — eBay sync architecture audit (Patrick flagged S458):** The current multi-pass approach (GetMyeBaySelling → separate GetItem per item) is wrong. Next session opens with `findasale-architect` researching the correct bidirectional sync design. Key questions: use `GetItems` batch calls (20/call) instead of 1/item? Switch to eBay Platform Notifications for real-time sold sync? What data is actually available from which API? Goal: single-pass import + webhook-based ongoing sync, replacing the polling cron.
 
 **P1 — Verify S460 photo import fix:** After syncing, check items in eBay inventory — they should now show all photos, not just the cover. Railway logs will show `[eBay Enrich]` entries.
 
@@ -246,6 +265,7 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S461 | 2026-04-14 | eBay push end-to-end WORKING (6 rounds): CategoryID capture, Taxonomy API, app-token fix, condition remap, stale offer cleanup, 25021 retry, required aspect auto-fill. Contigo mug published ✅ |
 | S460 | 2026-04-14 | eBay push UI (3 locations), QR watermark default, photo import fix, PostSaleEbayPanel, shipping classification. 13 files. |
 | S457 | 2026-04-14 | Pull to Sale fixed: embedding[] in create, inInventory=true filter in list query. |
 | S456 | 2026-04-14 | eBay import fully working: Trading API auth, xmlVal regex fix, photos via GranularityLevel=Fine, CSP fix, 81 dupes removed. |

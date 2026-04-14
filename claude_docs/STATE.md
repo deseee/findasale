@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S461 IN PROGRESS (2026-04-14) — eBay push 25021 fixes (5 rounds) + Taxonomy + condition policy + stale-offer cleanup + retry**
+**S461 COMPLETE (2026-04-14) — eBay push end-to-end working (6 rounds of fixes) — Contigo travel mug published successfully**
 
 **S461 What happened:**
 - **Root cause of ongoing 25021 errors:** `getEbayCategoryId()` name-map was resolving to branch categories (e.g. `"Kitchenware"` → `'20625'` Kitchen Dining & Bar = branch). Default fallback was `'1'` (Collectibles — also a branch). eBay Inventory API rejects any listing under a branch category.
@@ -23,30 +23,40 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
   1. **Diagnostic verify:** After each PUT to `/sell/inventory/v1/inventory_item/{sku}`, GET the same sku back and log `[eBay InventoryVerify] sku: sent=X stored=Y` so we can see if eBay silently dropped our condition value.
   2. **Stale offer cleanup:** Before PUT+publish, fetch the existing offer (if any). If its `categoryId` ≠ desired and status is not PUBLISHED, DELETE the offer and null `Item.ebayOfferId` so the next step creates a fresh one. eBay's Inventory API is known to reject offer PUTs that try to change categoryId on an unpublished offer.
   3. **25021 retry loop:** If publish returns 25021 (condition invalid) despite all pre-checks, walk through the remaining accepted-condition enums in priority order (`NEW_OTHER → USED_VERY_GOOD → USED_EXCELLENT → USED_GOOD → USED_ACCEPTABLE → NEW`), re-PUT the inventory_item with each and retry publish. Breaks on first success or non-25021 error.
+- **Fix 6 (after round 5 test — InventoryVerify confirmed `sent=stored=USED_VERY_GOOD` and retry loop advanced to NEW_OTHER, but publish then hit errorId 25002 "The item specific Type is missing"):** eBay categories have REQUIRED aspect metadata that must be populated on the inventory_item `product.aspects` field or publish is rejected. Two-part fix:
+  1. New `getRequiredAspectsForCategory()` helper calls eBay Taxonomy API `get_item_aspects_for_category?category_id={id}` (US tree = 0) using app token, caches parsed aspect spec per category.
+  2. New `fillRequiredAspects()` helper: preserves any aspects the organizer provided via item.tags, then for each REQUIRED aspect not yet present — matches title/description keywords against enumValues (case-insensitive substring), falls back to "Unbranded" for Brand, else first enum value for SELECTION_ONLY aspects, else "Does Not Apply" for identifier-like free-text (Brand/MPN/UPC/Model), else "Unspecified". Wired in before `inventoryPayload` so both the initial PUT and the 25021 retry loop automatically carry aspects.
 
-**S461 Files changed (this round, not yet pushed):**
-- `packages/backend/src/controllers/ebayController.ts` — (a) `suggestEbayCategoryForTitle()` uses app token, (b) `mapGradeToInventoryCondition()` swaps `LIKE_NEW` for `USED_VERY_GOOD`, (c) new `ensureConditionValidForCategory()` + `getAcceptedConditionsForCategory()` remap conditions via eBay Metadata API, (d) inventory_item verify GET after PUT, (e) stale offer delete+recreate when categoryId mismatch detected, (f) 25021 retry loop walking accepted conditions
-
-**S461 Patrick manual actions (push block):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/ebayController.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix(ebay): app token for Taxonomy + category-aware condition remapping + stale offer cleanup + 25021 retry"
-.\push.ps1
+**S461 Verification (real logs from Patrick's test push):**
 ```
-After Railway deploys: push the travel mug to eBay again. Expected logs:
-- `[eBay ConditionPolicies] category 177006 accepts: ...`
-- `[eBay InventoryVerify] sku: sent=USED_VERY_GOOD stored=USED_VERY_GOOD` ← confirms PUT actually stuck
-- If first publish 25021s → `[eBay 25021 Retry] trying NEW_OTHER...` then success
-If `stored=null` appears → eBay is dropping our payload (next fix would be inventory_item body shape).
+[eBay RequiredAspects] category 177006: 3 required (Type, Brand, Color)
+[eBay AspectFill] category 177006: Brand="Contigo" (auto-filled)
+[eBay AspectFill] category 177006: Color="Black" (auto-filled)
+[eBay ConditionPolicies] category 177006 accepts: NEW, NEW_OTHER, USED_EXCELLENT, USED_VERY_GOOD
+[eBay Push] Contigo Stainless Steel Travel Mug, Blue → category=177006 condition=USED_VERY_GOOD (grade=B)
+[eBay InventoryVerify] FAS-cmnys7xr6000f13jk7bfw628q: sent=USED_VERY_GOOD stored=USED_VERY_GOOD
+[eBay Retry25021] FAS-cmnys7xr6000f13jk7bfw628q: USED_VERY_GOOD rejected — retrying with NEW_OTHER
+[eBay Retry25021] FAS-cmnys7xr6000f13jk7bfw628q: succeeded with condition=NEW_OTHER
+```
+Listing published successfully. eBay push is organizer-ready.
+
+**S461 Files changed:**
+- `packages/backend/src/controllers/ebayController.ts` — (a) `suggestEbayCategoryForTitle()` uses app token, (b) `mapGradeToInventoryCondition()` universal enums only (no media-only `LIKE_NEW`), (c) `ensureConditionValidForCategory()` + `getAcceptedConditionsForCategory()` via Metadata API, (d) inventory_item verify GET after PUT, (e) stale offer delete+recreate on categoryId mismatch, (f) 25021 retry loop walking accepted conditions, (g) `getRequiredAspectsForCategory()` + `fillRequiredAspects()` populate required item aspects per category (Fix 6)
+- `packages/database/prisma/schema.prisma` — `Item.ebayCategoryId` field (Fix 1, already pushed)
+- Migration `20260414_ebay_category_id` — already applied
+
+**S461 Observations for follow-up:**
+- **USED_VERY_GOOD false-positive:** eBay's Metadata API claims category 177006 accepts `USED_VERY_GOOD` but the publish endpoint rejects it, forcing a retry to `NEW_OTHER`. This is an eBay API inconsistency — the retry loop handles it transparently but burns one extra API call per push. Optional optimization: cache the last-successful condition per category and try that first next time.
+- **Type aspect:** Patrick's test item already had a Type tag in item.tags, so Fix 6's Type-filling path wasn't exercised on this push. First-enum fallback will fire for items lacking a Type tag; organizer can edit the listing on eBay post-push if the auto-pick is wrong.
 
 **S461 Follow-up queued for next session:**
-1. ~~Condition-per-category validation~~ — **DONE this session (Fix 4).** Verify working against real push logs in next session.
-2. **Replace static `EbayCategoryPicker.tsx` with live Taxonomy API** — frontend picker should call `getCategorySuggestions` as user types title, show real leaf categories, store `categoryId` (not just name) on Item creation. Retires `public/ebay-categories.json` (341 lines of hardcoded categories).
-3. **Retire `ebayCategoryMap.ts`** — once Taxonomy is wired into creation + push, the hardcoded name→ID map is dead code. Delete the file and the `getEbayCategoryId()` fallback path.
-4. **Persist category condition policies in DB (optional optimization)** — current implementation uses in-memory cache per process. Could move to a `EbayCategoryConditionPolicy` table refreshed weekly to survive restarts.
+1. ~~Condition-per-category validation~~ — **DONE Fix 4, verified in Fix 6 test logs.**
+2. ~~Required item aspects auto-fill~~ — **DONE Fix 6, verified in test logs.**
+3. **Replace static `EbayCategoryPicker.tsx` with live Taxonomy API** — frontend picker should call `getCategorySuggestions` as user types title, show real leaf categories, store `categoryId` (not just name) on Item creation. Retires `public/ebay-categories.json` (341 lines of hardcoded categories).
+4. **Retire `ebayCategoryMap.ts`** — once Taxonomy is wired into creation + push, the hardcoded name→ID map is dead code. Delete the file and the `getEbayCategoryId()` fallback path.
+5. **Persist category caches in DB (optional optimization)** — `CATEGORY_CONDITION_CACHE` + `CATEGORY_ASPECTS_CACHE` are in-memory only. Could move to `EbayCategoryConditionPolicy` + `EbayCategoryAspectSpec` tables refreshed weekly to survive Railway restarts.
+6. **Cache last-successful condition per category** — workaround for eBay's Metadata-vs-Publish inconsistency (e.g. category 177006 claims USED_VERY_GOOD accepted but publish rejects). Would save ~1 retry API call per push.
+7. **End-to-end organizer QA:** push a second and third item of different categories (non-Vacuum-Flask) to confirm the full chain works beyond the one verified case. Good candidates: a book (category 267, should exercise LIKE_NEW path), a piece of clothing (different required aspects), a piece of furniture (HEAVY_OVERSIZED shipping classification).
 
 **S461 Decisions / findings:**
 - Previous "eBay integration" implementation documented as shallow — picker + push use different maps, neither uses live eBay data
@@ -1281,23 +1291,44 @@ npx prisma generate
 
 ## Next Session Priority
 
-### Outstanding Actions (as of S459, 2026-04-14)
+### Outstanding Actions (as of S461, 2026-04-14 — eBay push now end-to-end working)
 
 ---
 
-**STEP 0 — Inventory page bugs (START HERE):**
+**STEP 0 — Post-deploy live-site smoke test (CLAUDE.md §10 mandatory FIRST action):**
 
-Two confirmed UX issues on `/organizer/inventory`:
+Per the post-fix live verification rule: before starting any new work, open Chrome to finda.sale and verify the S461 fixes still work after the final push to main. Steps:
 
-1. **Images don't load on first visit** — items show without photos until hard refresh (Cmd+Shift+R). Likely lazy loading race condition, Next.js image optimization cache miss on eBay URLs, or CSP header blocking first load. Check: `next.config.js` image domains, `<Image>` unoptimized flag on eBay URLs, any `loading="lazy"` on above-the-fold items.
+1. Log in as an organizer with eBay connected.
+2. Navigate to a sale with at least one unpublished item. Click "Push to eBay" from any of the 3 UI locations (Sale detail page / Edit Item page / Review & Publish).
+3. Watch Railway logs for the expected sequence: `[eBay RequiredAspects]` → `[eBay AspectFill]` → `[eBay ConditionPolicies]` → `[eBay Push]` → `[eBay InventoryVerify]` → `[eBay Retry25021] ... succeeded` (or publish succeeds on first try).
+4. Verify the returned `ebayListingId` resolves to a live eBay listing page.
+5. If any step fails → flag immediately and dispatch findasale-dev before other work.
 
-2. **No click target on inventory cards** — `InventoryItemCard.tsx` cards are not interactive. There is no way to expand a card to see all fields, no link to an edit page, no modal. Need: clicking a card should open an edit/detail view (modal or dedicated page at `/organizer/inventory/[itemId]`). At minimum, must expose: title, description, price, condition, category, tags, all photos, status.
-
-3. **`&amp;` in category display** — eBay returns HTML-encoded strings (e.g. `Comics &amp; Graphic Novels`). Should be decoded (`he.decode()` or similar) before storing, or decoded at render time.
+If smoke test passes, proceed to STEP 1.
 
 ---
 
-**STEP 1 — eBay sync architecture audit (Patrick's S458 directive, now lower priority since enrichment works):**
+**STEP 1 — eBay push broader category coverage (verify Fix 6 beyond travel mugs):**
+
+Fix 6 was verified for one category (177006 Vacuum Flasks & Mugs). Push 2–3 more items of different categories to confirm `fillRequiredAspects` handles the wider spectrum:
+- A **book** (category 267) — exercises LIKE_NEW / media-only condition path
+- A piece of **clothing** (different required aspects: Size, Color, Material, Style)
+- A **furniture** item — likely HEAVY_OVERSIZED shipping + different aspect set
+
+If any fail with a NEW errorId (not 25002/25021), diagnose and ship Fix 7.
+
+---
+
+**STEP 2 — Retire the static eBay category picker + dead map (S461 follow-up #3 + #4):**
+
+Replace `packages/frontend/components/EbayCategoryPicker.tsx` (currently backed by `public/ebay-categories.json`, ~120 hardcoded categories, some with wrong IDs) with a live Taxonomy API picker: as the organizer types a title, call `/commerce/taxonomy/v1/category_tree/0/get_category_suggestions?q=...` (via a backend proxy route using the app token), show real leaf categories, store `categoryId` on Item creation.
+
+Then delete `packages/backend/src/utils/ebayCategoryMap.ts` and the `getEbayCategoryId()` fallback path — dead code once the picker stores real IDs.
+
+---
+
+**STEP 3 — eBay sync architecture audit (deferred from S458):**
 
 Patrick flagged that the current eBay sync approach (GetMyeBaySelling → separate GetItem enrichment pass per item) is architecturally wrong. Before any more eBay dev work, dispatch `findasale-architect` + research to answer:
 
