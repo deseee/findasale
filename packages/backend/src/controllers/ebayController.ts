@@ -2040,15 +2040,15 @@ export const handleEbayNotification = async (req: express.Request, res: Response
     const body = req.body as any;
     const topic = body?.metadata?.topic;
 
-    if (topic !== 'marketplace.order.paid') {
-      // We only handle order.paid — silently accept other events
+    if (topic !== 'ORDER_CONFIRMATION') {
+      // We only handle ORDER_CONFIRMATION — silently accept other events
       return;
     }
 
     const lineItems: Array<{ sku?: string; legacyItemId?: string; title?: string }> = body?.data?.lineItems || [];
     if (lineItems.length === 0) return;
 
-    console.log(`[eBay Notify] Received marketplace.order.paid — ${lineItems.length} line item(s)`);
+    console.log(`[eBay Notify] Received ORDER_CONFIRMATION — ${lineItems.length} line item(s)`);
 
     for (const lineItem of lineItems) {
       const sku = lineItem.sku || '';
