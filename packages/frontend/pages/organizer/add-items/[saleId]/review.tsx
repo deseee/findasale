@@ -271,7 +271,7 @@ const ReviewPage = () => {
   const ebayPushMutation = useMutation({
     mutationFn: async (itemIds: string[]) => {
       if (!saleId) throw new Error('Sale ID not found');
-      return api.post(`/organizer/sales/${saleId}/ebay-push`, {
+      return api.post(`/ebay/organizer/sales/${saleId}/ebay-push`, {
         itemIds,
       });
     },

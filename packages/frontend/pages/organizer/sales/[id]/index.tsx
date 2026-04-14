@@ -82,7 +82,7 @@ const SaleDetailPage = () => {
   // eBay push mutation
   const ebayPushMutation = useMutation({
     mutationFn: async (itemIds: string[]) => {
-      return api.post(`/organizer/sales/${id}/ebay-push`, {
+      return api.post(`/ebay/organizer/sales/${id}/ebay-push`, {
         itemIds,
       });
     },
