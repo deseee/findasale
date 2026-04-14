@@ -763,7 +763,7 @@ const OrganizerSettingsPage = () => {
                   <Tooltip content="Connect your eBay account to list items on eBay directly from FindA.Sale." position="right" />
                 </div>
                 <p className="text-warm-600 dark:text-gray-400 mb-6">
-                  Connect your eBay account to expand your sales channels. You'll be able to push inventory to eBay with a single click.
+                  Connect your eBay account to sync inventory in both directions — import your eBay listings into FindA.Sale, and push FindA.Sale items to eBay. Items sold on either platform are automatically marked sold on the other.
                 </p>
 
                 {ebayStatusLoading ? (
