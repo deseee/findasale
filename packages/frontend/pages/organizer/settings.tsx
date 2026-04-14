@@ -25,6 +25,7 @@ import FeedbackMenu from '../../components/FeedbackMenu';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { io as socketIO } from 'socket.io-client';
 
 const OrganizerSettingsPage = () => {
   const router = useRouter();
@@ -156,6 +157,23 @@ const OrganizerSettingsPage = () => {
       router.replace('/organizer/settings?tab=ebay', undefined, { shallow: true });
     }
   }, [router.query.ebay_connected, showToast, refetchEbayStatus, router]);
+
+  // Listen for background eBay enrichment completion — shows toast when GetItem pass finishes
+  useEffect(() => {
+    if (activeTab !== 'ebay' || typeof window === 'undefined') return;
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
+      (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/^http/, 'ws');
+    const token = localStorage.getItem('token');
+    const socket = socketIO(socketUrl, {
+      auth: { token: token || undefined },
+      transports: ['websocket'],
+      upgrade: false,
+    });
+    socket.on('EBAY_ENRICH_COMPLETE', (data: { message: string }) => {
+      showToast(data.message, 'success');
+    });
+    return () => { socket.disconnect(); };
+  }, [activeTab, showToast]);
 
   const handleStripeConnect = async () => {
     setIsConnectingStripe(true);

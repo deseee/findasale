@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
 import { getEbayCategoryId } from '../utils/ebayCategoryMap';
+import { getIO } from '../lib/socket';
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -1879,114 +1880,6 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         tradingPage++;
       }
 
-      // GetItem enrichment pass — replaces defunct Shopping API (GetMultipleItems returned empty 200s)
-      // Trading API GetItem returns Description, ItemSpecifics, PictureDetails via user token.
-      // PictureDetails/ConditionID/PrimaryCategory are now also fetched in GetMyeBaySelling above,
-      // but GetItem adds ItemSpecifics (tags) and Description which GetMyeBaySelling cannot return.
-      console.log('[eBay Enrich] Starting GetItem enrichment pass...');
-      const itemsNeedingEnrichment = await prisma.item.findMany({
-        where: {
-          organizerId: organizer.id,
-          ebayListingId: { not: null },
-          OR: [
-            { description: null },
-            { description: '' },
-            { category: null },
-            { category: '' },
-            { tags: { isEmpty: true } },
-            { photoUrls: { isEmpty: true } },
-          ],
-        },
-        select: { id: true, ebayListingId: true, description: true, category: true, tags: true, conditionGrade: true, photoUrls: true },
-      });
-
-      console.log(`[eBay Enrich] Found ${itemsNeedingEnrichment.length} items to enrich`);
-      let enrichedCount = 0;
-      const ENRICH_CONCURRENCY = 5;
-
-      async function enrichSingleItem(item: typeof itemsNeedingEnrichment[0]): Promise<void> {
-        const itemId = item.ebayListingId!;
-        const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${itemId}</ItemID><OutputSelector>Description</OutputSelector><OutputSelector>ItemSpecifics</OutputSelector><OutputSelector>PictureDetails</OutputSelector><OutputSelector>ConditionID</OutputSelector><OutputSelector>PrimaryCategory</OutputSelector></GetItemRequest>`;
-
-        try {
-          const getItemHeaders: Record<string, string> = {
-            'X-EBAY-API-CALL-NAME': 'GetItem',
-            'X-EBAY-API-SITEID': '0',
-            'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-            'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
-            'Content-Type': 'text/xml',
-          };
-          if (accessToken) getItemHeaders['X-EBAY-API-IAF-TOKEN'] = accessToken;
-          const resp = await fetch('https://api.ebay.com/ws/api.dll', {
-            method: 'POST',
-            headers: getItemHeaders,
-            body: getItemXml,
-          });
-
-          const text = await resp.text();
-          const ack = xmlVal(text, 'Ack');
-          if (ack !== 'Success' && ack !== 'Warning') {
-            console.warn(`[eBay Enrich] GetItem ${itemId}: ${ack} — ${xmlVal(text, 'ShortMessage') || 'Unknown'}`);
-            return;
-          }
-
-          const itemBlock = text.match(/<Item>([\s\S]*?)<\/Item>/)?.[1] || '';
-          const backfill: Record<string, any> = {};
-
-          // Description
-          const descRaw = xmlVal(itemBlock, 'Description') || '';
-          const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
-          if (descClean && !item.description) backfill.description = descClean;
-
-          // PictureDetails — all photo URLs
-          const pictureUrls = xmlAll(itemBlock, 'PictureURL');
-          if (pictureUrls.length > (item.photoUrls?.length ?? 0)) backfill.photoUrls = pictureUrls;
-
-          // ConditionID → conditionGrade
-          if (!item.conditionGrade) {
-            const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
-            const conditionMap: Record<string, string> = {
-              '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A',
-              '3000': 'A', '4000': 'B', '5000': 'C', '6000': 'D', '7000': 'D',
-            };
-            const condGrade = conditionMap[conditionId] || null;
-            if (condGrade) {
-              backfill.conditionGrade = condGrade;
-              backfill.condition = condGrade === 'S' ? 'NEW' : condGrade === 'D' ? 'PARTS_OR_REPAIR' : 'USED';
-            }
-          }
-
-          // PrimaryCategory
-          const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
-          const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
-          if (categoryName && !item.category) backfill.category = categoryName;
-
-          // ItemSpecifics → tags
-          const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
-          const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
-          const tags: string[] = nameValueBlocks
-            .map(nvBlock => xmlVal(nvBlock, 'Value'))
-            .filter((v): v is string => !!v && v.length > 0)
-            .slice(0, 10);
-          if (tags.length > 0 && (!item.tags || item.tags.length === 0)) backfill.tags = tags;
-
-          if (Object.keys(backfill).length > 0) {
-            await prisma.item.update({ where: { id: item.id }, data: backfill });
-            enrichedCount++;
-            console.log(`[eBay Enrich] ${itemId}: updated photos=${backfill.photoUrls?.length ?? item.photoUrls?.length}, category=${backfill.category ?? item.category}, tags=${backfill.tags?.length ?? item.tags?.length}`);
-          }
-        } catch (err: any) {
-          console.warn(`[eBay Enrich] GetItem ${itemId} exception: ${err.message}`);
-        }
-      }
-
-      // Process in concurrent batches of ENRICH_CONCURRENCY
-      for (let i = 0; i < itemsNeedingEnrichment.length; i += ENRICH_CONCURRENCY) {
-        const batch = itemsNeedingEnrichment.slice(i, i + ENRICH_CONCURRENCY);
-        await Promise.allSettled(batch.map(enrichSingleItem));
-      }
-
-      console.log(`[eBay Enrich] Enrichment complete. Updated ${enrichedCount}/${itemsNeedingEnrichment.length} items.`);
     }
 
     // Update sync timestamp
@@ -2009,13 +1902,105 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       });
     }
 
-    return res.json({
+    // Respond immediately — enrichment runs in background to avoid HTTP timeout on large catalogs
+    res.json({
       success: true,
       imported,
       skipped,
       total: totalFetched,
-      message: `Imported ${imported} item${imported !== 1 ? 's' : ''} from eBay${skipped > 0 ? ` (${skipped} already existed)` : ''}`
+      message: `Imported ${imported} item${imported !== 1 ? 's' : ''} from eBay${skipped > 0 ? ` (${skipped} already existed)` : ''}. Syncing photos and details in the background…`
     });
+
+    // Fire-and-forget: GetItem enrichment for photos, categories, descriptions, tags
+    ;(async () => {
+      const itemsToEnrich = await prisma.item.findMany({
+        where: {
+          organizerId: organizer.id,
+          ebayListingId: { not: null },
+          OR: [
+            { description: null },
+            { description: '' },
+            { category: null },
+            { category: '' },
+            { tags: { isEmpty: true } },
+            { photoUrls: { isEmpty: true } },
+          ],
+        },
+        select: { id: true, ebayListingId: true, description: true, category: true, tags: true, conditionGrade: true, photoUrls: true },
+      });
+
+      if (itemsToEnrich.length === 0) return;
+      console.log(`[eBay Enrich] Starting GetItem enrichment for ${itemsToEnrich.length} items...`);
+      let enrichedCount = 0;
+      const ENRICH_CONCURRENCY = 5;
+
+      const enrichSingleItem = async (item: typeof itemsToEnrich[0]): Promise<void> => {
+        const itemId = item.ebayListingId!;
+        const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${itemId}</ItemID><OutputSelector>Description</OutputSelector><OutputSelector>ItemSpecifics</OutputSelector><OutputSelector>PictureDetails</OutputSelector><OutputSelector>ConditionID</OutputSelector><OutputSelector>PrimaryCategory</OutputSelector></GetItemRequest>`;
+        try {
+          const getItemHeaders: Record<string, string> = {
+            'X-EBAY-API-CALL-NAME': 'GetItem',
+            'X-EBAY-API-SITEID': '0',
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+            'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+            'Content-Type': 'text/xml',
+          };
+          if (accessToken) getItemHeaders['X-EBAY-API-IAF-TOKEN'] = accessToken;
+          const resp = await fetch('https://api.ebay.com/ws/api.dll', { method: 'POST', headers: getItemHeaders, body: getItemXml });
+          const text = await resp.text();
+          const ack = xmlVal(text, 'Ack');
+          if (ack !== 'Success' && ack !== 'Warning') {
+            console.warn(`[eBay Enrich] GetItem ${itemId}: ${ack} — ${xmlVal(text, 'ShortMessage') || 'Unknown'}`);
+            return;
+          }
+          const itemBlock = text.match(/<Item>([\s\S]*?)<\/Item>/)?.[1] || '';
+          const backfill: Record<string, any> = {};
+          const descRaw = xmlVal(itemBlock, 'Description') || '';
+          const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+          if (descClean && !item.description) backfill.description = descClean;
+          const pictureUrls = xmlAll(itemBlock, 'PictureURL');
+          if (pictureUrls.length > (item.photoUrls?.length ?? 0)) backfill.photoUrls = pictureUrls;
+          if (!item.conditionGrade) {
+            const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
+            const condMapEnrich: Record<string, string> = { '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A', '3000': 'A', '4000': 'B', '5000': 'C', '6000': 'D', '7000': 'D' };
+            const condGrade = condMapEnrich[conditionId] || null;
+            if (condGrade) { backfill.conditionGrade = condGrade; backfill.condition = condGrade === 'S' ? 'NEW' : condGrade === 'D' ? 'PARTS_OR_REPAIR' : 'USED'; }
+          }
+          const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
+          const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
+          if (categoryName && !item.category) backfill.category = categoryName;
+          const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
+          const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
+          const tags: string[] = nameValueBlocks.map(b => xmlVal(b, 'Value')).filter((v): v is string => !!v && v.length > 0).slice(0, 10);
+          if (tags.length > 0 && (!item.tags || item.tags.length === 0)) backfill.tags = tags;
+          if (Object.keys(backfill).length > 0) {
+            await prisma.item.update({ where: { id: item.id }, data: backfill });
+            enrichedCount++;
+          }
+        } catch (err: any) {
+          console.warn(`[eBay Enrich] GetItem ${itemId} exception: ${err.message}`);
+        }
+      };
+
+      for (let i = 0; i < itemsToEnrich.length; i += ENRICH_CONCURRENCY) {
+        await Promise.allSettled(itemsToEnrich.slice(i, i + ENRICH_CONCURRENCY).map(enrichSingleItem));
+      }
+      console.log(`[eBay Enrich] Complete. Updated ${enrichedCount}/${itemsToEnrich.length} items.`);
+
+      // Notify organizer via Socket.io
+      try {
+        const io = getIO();
+        io.to(`user:${userId}`).emit('EBAY_ENRICH_COMPLETE', {
+          enriched: enrichedCount,
+          total: itemsToEnrich.length,
+          message: enrichedCount > 0
+            ? `Photos and details synced for ${enrichedCount} eBay item${enrichedCount !== 1 ? 's' : ''}`
+            : 'eBay item details already up to date',
+        });
+      } catch (socketErr: any) {
+        console.warn('[eBay Enrich] Socket notification failed:', socketErr.message);
+      }
+    })().catch((err: any) => console.error('[eBay Enrich] Background enrichment failed:', err.message));
 
   } catch (err: any) {
     console.error('[eBay Import] Error:', err);
