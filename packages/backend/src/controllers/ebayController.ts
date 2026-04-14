@@ -639,6 +639,48 @@ function ebayUserHeaders(accessToken: string): Record<string, string> {
 }
 
 /**
+ * Call eBay Taxonomy API getCategorySuggestions to resolve a real LEAF
+ * categoryId for an item based on its title. eBay's suggestions are always
+ * leaves (which is what Inventory API requires) so this eliminates the
+ * 25021 "condition is invalid for primary category" errors caused by the
+ * hardcoded name→ID map resolving to branch categories.
+ *
+ * Returns null on any failure so caller can fall back to the static map.
+ * US marketplace tree id is '0'.
+ */
+async function suggestEbayCategoryForTitle(
+  title: string,
+  accessToken: string
+): Promise<string | null> {
+  try {
+    const treeId = '0'; // EBAY_US
+    const q = encodeURIComponent(title.slice(0, 100));
+    const url = `https://api.ebay.com/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${q}`;
+    const res = await fetch(url, { headers: ebayUserHeaders(accessToken) });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`[eBay Taxonomy] getCategorySuggestions ${res.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
+    const data = (await res.json()) as {
+      categorySuggestions?: Array<{ category: { categoryId: string; categoryName: string } }>;
+    };
+    const first = data.categorySuggestions?.[0];
+    if (!first) {
+      console.warn(`[eBay Taxonomy] No suggestions for "${title.slice(0, 60)}"`);
+      return null;
+    }
+    console.log(
+      `[eBay Taxonomy] "${title.slice(0, 40)}" → ${first.category.categoryId} (${first.category.categoryName})`
+    );
+    return first.category.categoryId;
+  } catch (err) {
+    console.error('[eBay Taxonomy] Error:', err);
+    return null;
+  }
+}
+
+/**
  * Fetch organizer's real business policies from eBay and store them
  * Called after OAuth connect completes. Fire-and-forget on error.
  * marketplace_id=EBAY_US is required by the Account API.
@@ -1147,8 +1189,32 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
     // Build preview payload
     const sku = `FAS-${item.id}`;
     const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
-    // Prefer imported numeric CategoryID over name lookup (see pushSaleToEbay comment)
-    const categoryId = item.ebayCategoryId || getEbayCategoryId(item.category);
+    // Resolve categoryId: stored → Taxonomy API suggestion → static map fallback
+    // (same cascade as pushSaleToEbay). Requires an active user access token
+    // for the Taxonomy API call; refresh lazily only when we need to suggest.
+    let categoryId: string | null = item.ebayCategoryId || null;
+    if (!categoryId) {
+      const organizerForToken = await prisma.organizer.findUnique({
+        where: { userId: userId! },
+        select: { id: true },
+      });
+      if (organizerForToken) {
+        const token = await refreshEbayAccessToken(organizerForToken.id);
+        if (token) {
+          const suggested = await suggestEbayCategoryForTitle(item.title, token);
+          if (suggested) {
+            categoryId = suggested;
+            await prisma.item.update({
+              where: { id: item.id },
+              data: { ebayCategoryId: suggested },
+            });
+          }
+        }
+      }
+    }
+    if (!categoryId) {
+      categoryId = getEbayCategoryId(item.category);
+    }
 
     // Determine price
     let price = 0.99;
@@ -1310,10 +1376,25 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       try {
         const sku = `FAS-${item.id}`;
         const ebayCondition = mapGradeToInventoryCondition(item.conditionGrade);
-        // Prefer the numeric CategoryID captured during eBay import (leaf category from eBay itself).
-        // Only fall back to the name→ID map for items that were NOT imported from eBay
-        // (e.g. items the organizer created directly in FindA.Sale).
-        const categoryId = item.ebayCategoryId || getEbayCategoryId(item.category);
+        // Resolve categoryId in this order:
+        // 1. Stored ebayCategoryId (from eBay import — always a valid leaf)
+        // 2. eBay Taxonomy API getCategorySuggestions by title — returns a leaf,
+        //    cache it back to the item so future pushes skip the API call
+        // 3. Static name→ID map (last resort; may land on a branch → 25021)
+        let categoryId: string | null = item.ebayCategoryId || null;
+        if (!categoryId) {
+          categoryId = await suggestEbayCategoryForTitle(item.title, accessToken);
+          if (categoryId) {
+            // Cache — idempotent, cheap, avoids repeated API calls on re-push
+            await prisma.item.update({
+              where: { id: item.id },
+              data: { ebayCategoryId: categoryId },
+            });
+          }
+        }
+        if (!categoryId) {
+          categoryId = getEbayCategoryId(item.category);
+        }
 
         // Determine price
         let price = 0.99;
