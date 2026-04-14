@@ -738,6 +738,7 @@ model Item {
   // Feature #244 Phase 2: eBay listing tracking
   ebayListingId         String? // eBay listing ID after successful publish; used for Phase 3 sync
   ebayOfferId           String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
+  ebayCategoryId        String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
   listedOnEbayAt        DateTime? // Timestamp when item was pushed to eBay
   // Feature #244 Phase 3: Post-sale eBay push — shipping classification
   ebayShippingClassification String @default("UNKNOWN") // SHIPPABLE | HEAVY_OVERSIZED | FRAGILE | UNKNOWN — auto-classified from category + tags
