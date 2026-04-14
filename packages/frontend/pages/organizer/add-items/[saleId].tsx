@@ -1377,7 +1377,7 @@ const AddItemsDetailPage = () => {
   return (
     <>
       <Head>
-        <title>{sale?.name ? `Add Items to ${sale.name}` : 'Add Items'} - FindA.Sale</title>
+        <title>{sale?.title ? `Add Items to ${sale.title}` : 'Add Items'} - FindA.Sale</title>
       </Head>
 
       <main className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
@@ -1395,9 +1395,9 @@ const AddItemsDetailPage = () => {
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-1">
               Add Items
             </h1>
-            {sale?.name && (
+            {sale?.title && (
               <p className="text-amber-700 dark:text-amber-400 font-medium text-base mb-1">
-                {sale.name}
+                {sale.title}
               </p>
             )}
             <p className="text-warm-600 dark:text-warm-400 mb-1">

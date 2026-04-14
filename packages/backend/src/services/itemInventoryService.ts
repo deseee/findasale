@@ -92,7 +92,13 @@ export const pullFromInventory = async (
       title: inventoryItem.title,
       description: inventoryItem.description,
       category: inventoryItem.category,
-      condition: inventoryItem.condition,
+      // Infer condition from conditionGrade if not explicitly set (eBay-imported items)
+      condition: inventoryItem.condition ?? (
+        inventoryItem.conditionGrade === 'S' ? 'NEW' :
+        inventoryItem.conditionGrade === 'D' ? 'PARTS_OR_REPAIR' :
+        inventoryItem.conditionGrade ? 'USED' :
+        null
+      ),
       conditionGrade: inventoryItem.conditionGrade,
       photoUrls: inventoryItem.photoUrls,
       tags: inventoryItem.tags,
