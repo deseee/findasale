@@ -16,6 +16,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
+import { useEbayConnection } from '../../../../lib/useEbayConnection';
+import { useOrganizerTier } from '../../../../hooks/useOrganizerTier';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../../components/Skeleton';
@@ -89,6 +91,13 @@ interface Item {
   priceBeforeMarkdown?: number; // Feature #91: Auto-Markdown
   markdownApplied?: boolean; // Feature #91: Auto-Markdown
   createdAt?: string;
+  ebayListingId?: string; // eBay listing ID if pushed
+  saleId?: string; // Sale ID for eBay push
+}
+
+// Track which items should be pushed to eBay
+interface ItemEbayPushState {
+  [itemId: string]: boolean;
 }
 
 
@@ -146,6 +155,8 @@ const ReviewPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const { isConnected: ebayConnected } = useEbayConnection();
+  const { tier } = useOrganizerTier();
 
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -160,6 +171,7 @@ const ReviewPage = () => {
   const [inlineCaptureItemId, setInlineCaptureItemId] = useState<string | null>(null);
   const [inlineCaptureItem, setInlineCaptureItem] = useState<Item | null>(null);
   const [inlineRapidItems, setInlineRapidItems] = useState<RapidItem[]>([]);
+  const [ebayPushItems, setEbayPushItems] = useState<ItemEbayPushState>({});
 
   // Auto-enable buyer preview on mount if preview=true in query
   useEffect(() => {
@@ -253,6 +265,42 @@ const ReviewPage = () => {
       showToast(`${itemIds.length} item${itemIds.length !== 1 ? 's' : ''} deleted`, 'success');
     },
     onError: () => showToast('Failed to delete item(s)', 'error'),
+  });
+
+  // eBay push mutation
+  const ebayPushMutation = useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      if (!saleId) throw new Error('Sale ID not found');
+      return api.post(`/api/organizer/sales/${saleId}/ebay-push`, {
+        itemIds,
+        photoMode: 'clean',
+      });
+    },
+    onSuccess: (response) => {
+      const results = response.data.results || [];
+      let successCount = 0;
+      results.forEach((result: any) => {
+        if (result.success) {
+          successCount++;
+        } else {
+          const errorMsg = result.error?.includes('NOT_CONNECTED')
+            ? 'eBay not connected'
+            : result.error?.includes('POLICIES')
+            ? 'eBay policies not configured'
+            : result.error || 'Failed to push item';
+          showToast(`Item ${result.itemId}: ${errorMsg}`, 'error');
+        }
+      });
+      if (successCount > 0) {
+        showToast(`${successCount} item${successCount !== 1 ? 's' : ''} pushed to eBay`, 'success');
+      }
+      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+      setEbayPushItems({});
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to push items to eBay';
+      showToast(msg, 'error');
+    },
   });
 
   // Item card refs for scroll-to-top on expand
@@ -483,6 +531,11 @@ const ReviewPage = () => {
         await api.post(`/items/${item.id}/publish`);
         queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
         showToast('Item published!', 'success');
+
+        // If eBay push is enabled for this item, push it to eBay
+        if (ebayPushItems[item.id] && ebayConnected && tier !== 'SIMPLE') {
+          ebayPushMutation.mutate([item.id]);
+        }
       }
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to update item';
@@ -1360,6 +1413,30 @@ const ReviewPage = () => {
                                     className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                   />
                                 </div>
+
+                                {/* eBay Push Toggle — only show if eBay connected and not SIMPLE tier */}
+                                {ebayConnected && tier !== 'SIMPLE' && (
+                                  <div className="flex items-center gap-2 py-2 px-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                                    <input
+                                      type="checkbox"
+                                      id={`ebay-push-${item.id}`}
+                                      checked={ebayPushItems[item.id] ?? false}
+                                      onChange={(e) => {
+                                        setEbayPushItems((prev) => ({
+                                          ...prev,
+                                          [item.id]: e.target.checked,
+                                        }));
+                                      }}
+                                      className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                                    />
+                                    <label
+                                      htmlFor={`ebay-push-${item.id}`}
+                                      className="text-sm font-medium text-blue-700 dark:text-blue-300 cursor-pointer"
+                                    >
+                                      Also push to eBay
+                                    </label>
+                                  </div>
+                                )}
 
                                 {/* Actions */}
                                 <div className="flex items-center justify-between pt-1 border-t border-warm-200 dark:border-gray-700">

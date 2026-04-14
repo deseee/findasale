@@ -13,6 +13,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import { useEbayConnection } from '../../../lib/useEbayConnection';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 3
 import PriceResearchPanel from '../../../components/PriceResearchPanel';
@@ -30,6 +32,8 @@ const EditItemPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const { isConnected: ebayConnected } = useEbayConnection();
+  const { tier } = useOrganizerTier();
 
   const [formData, setFormData] = useState({
     title: '',
@@ -72,6 +76,54 @@ const EditItemPage = () => {
   const openDiscountModal = (xpToSpend: number) => {
     setPendingXpToSpend(xpToSpend);
     setDiscountModalOpen(true);
+  };
+
+  // eBay push state
+  const [ebayPushPending, setEbayPushPending] = useState(false);
+
+  // eBay push mutation
+  const ebayPushMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      if (!item?.saleId) throw new Error('Sale ID not found');
+      return api.post(`/api/organizer/sales/${item.saleId}/ebay-push`, {
+        itemIds: [itemId],
+        photoMode: 'clean',
+      });
+    },
+    onSuccess: (response) => {
+      const results = response.data.results || [];
+      const result = results[0];
+      if (result?.success) {
+        showToast('Item listed on eBay', 'success');
+        queryClient.invalidateQueries({ queryKey: ['item', id] });
+      } else {
+        const errorMsg = result?.error?.includes('NOT_CONNECTED')
+          ? 'eBay not connected'
+          : result?.error?.includes('POLICIES')
+          ? 'eBay policies not configured'
+          : result?.error || 'Failed to push item';
+        showToast(errorMsg, 'error');
+      }
+      setEbayPushPending(false);
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to push item to eBay';
+      showToast(msg, 'error');
+      setEbayPushPending(false);
+    },
+  });
+
+  const handlePushToEbay = () => {
+    if (!ebayConnected) {
+      showToast('Connect eBay in Settings first', 'error');
+      return;
+    }
+    if (tier === 'SIMPLE') {
+      showToast('eBay selling requires PRO or TEAMS tier', 'error');
+      return;
+    }
+    setEbayPushPending(true);
+    ebayPushMutation.mutate(String(id));
   };
 
   const handlePhotoUpload = async (files: FileList | null, mode: 'upload' | 'camera') => {
@@ -795,6 +847,36 @@ const EditItemPage = () => {
                     : 'Publish'}
               </button>
             </div>
+
+            {/* eBay Push Section */}
+            {tier !== 'SIMPLE' && (
+              <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                {item?.ebayListingId ? (
+                  <a
+                    href={`https://www.ebay.com/itm/${item.ebayListingId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-block text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                  >
+                    View on eBay
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handlePushToEbay}
+                    disabled={ebayPushPending || !ebayConnected}
+                    title={!ebayConnected ? 'Connect eBay in Settings first' : ''}
+                    className={`w-full font-bold py-2 px-4 rounded-lg transition-colors ${
+                      ebayConnected
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    } disabled:opacity-50`}
+                  >
+                    {ebayPushPending ? 'Pushing to eBay...' : '📤 Push to eBay'}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Danger zone */}
             <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
