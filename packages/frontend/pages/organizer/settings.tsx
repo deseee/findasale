@@ -79,6 +79,19 @@ const OrganizerSettingsPage = () => {
     }
   });
 
+  // Sync eBay inventory mutation
+  const syncEbayInventoryMutation = useMutation({
+    mutationFn: () => api.post('/ebay/import-inventory'),
+    onSuccess: (res: any) => {
+      refetchEbayStatus();
+      const { imported, skipped } = res.data;
+      showToast(`Synced ${imported} item${imported !== 1 ? 's' : ''} to your inventory${skipped > 0 ? ` (${skipped} already existed)` : ''}`, 'success');
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.error || 'Failed to sync eBay inventory', 'error');
+    },
+  });
+
   // Disconnect eBay mutation
   const disconnectEbayMutation = useMutation({
     mutationFn: () => api.delete('/ebay/connection'),
@@ -785,13 +798,32 @@ const OrganizerSettingsPage = () => {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => disconnectEbayMutation.mutate()}
-                      disabled={disconnectEbayMutation.isPending}
-                      className="text-sm bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
-                    >
-                      {disconnectEbayMutation.isPending ? 'Disconnecting...' : 'Disconnect eBay Account'}
-                    </button>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={() => syncEbayInventoryMutation.mutate()}
+                        disabled={syncEbayInventoryMutation.isPending}
+                        className="text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition flex items-center gap-2"
+                      >
+                        {syncEbayInventoryMutation.isPending ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Syncing...
+                          </>
+                        ) : 'Sync eBay Inventory'}
+                      </button>
+                      <button
+                        onClick={() => disconnectEbayMutation.mutate()}
+                        disabled={disconnectEbayMutation.isPending}
+                        className="text-sm bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
+                      >
+                        {disconnectEbayMutation.isPending ? 'Disconnecting...' : 'Disconnect eBay Account'}
+                      </button>
+                    </div>
+                    {ebayStatus?.lastEbayInventorySyncAt && (
+                      <p className="text-xs text-warm-500 dark:text-gray-500">
+                        Last synced: {new Date(ebayStatus.lastEbayInventorySyncAt).toLocaleString()}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">

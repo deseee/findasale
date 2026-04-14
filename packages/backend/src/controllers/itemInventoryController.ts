@@ -1,21 +1,21 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import {
-  addToLibrary,
-  removeFromLibrary,
-  pullFromLibrary,
-  getLibraryItems,
+  addToInventory,
+  removeFromInventory,
+  pullFromInventory,
+  getInventoryItems,
   getPriceHistory,
   getPricingSuggestion,
-  LibraryFilters,
-} from '../services/itemLibraryService';
+  InventoryFilters,
+} from '../services/itemInventoryService';
 
 /**
- * POST /api/item-library/add
- * Add an item to the organizer's library.
+ * POST /api/item-inventory/add
+ * Add an item to the organizer's inventory.
  * Body: { itemId: string }
  */
-export const addItemToLibrary = async (req: AuthRequest, res: Response): Promise<void> => {
+export const addItemToInventory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user?.organizerProfile?.id) {
       res.status(401).json({ message: 'Authentication required' });
@@ -28,19 +28,19 @@ export const addItemToLibrary = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const item = await addToLibrary(itemId, req.user.organizerProfile.id);
+    const item = await addToInventory(itemId, req.user.organizerProfile.id);
     res.json({ item });
   } catch (error: any) {
-    console.error('Error adding item to library:', error);
+    console.error('Error adding item to inventory:', error);
     res.status(error.message.includes('not found') ? 404 : 400).json({ message: error.message });
   }
 };
 
 /**
- * DELETE /api/item-library/:itemId
- * Remove an item from the organizer's library.
+ * DELETE /api/item-inventory/:itemId
+ * Remove an item from the organizer's inventory.
  */
-export const removeItemFromLibrary = async (req: AuthRequest, res: Response): Promise<void> => {
+export const removeItemFromInventory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user?.organizerProfile?.id) {
       res.status(401).json({ message: 'Authentication required' });
@@ -53,20 +53,20 @@ export const removeItemFromLibrary = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const item = await removeFromLibrary(itemId);
+    const item = await removeFromInventory(itemId);
     res.json({ item });
   } catch (error: any) {
-    console.error('Error removing item from library:', error);
+    console.error('Error removing item from inventory:', error);
     res.status(400).json({ message: error.message });
   }
 };
 
 /**
- * POST /api/item-library/:itemId/pull
- * Pull an item from library into a sale.
+ * POST /api/item-inventory/:itemId/pull
+ * Pull an item from inventory into a sale.
  * Body: { saleId: string, priceOverride?: number }
  */
-export const pullItemFromLibrary = async (req: AuthRequest, res: Response): Promise<void> => {
+export const pullItemFromInventory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user?.organizerProfile?.id) {
       res.status(401).json({ message: 'Authentication required' });
@@ -81,27 +81,27 @@ export const pullItemFromLibrary = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    const newItem = await pullFromLibrary(itemId, saleId, req.user.organizerProfile.id, priceOverride);
+    const newItem = await pullFromInventory(itemId, saleId, req.user.organizerProfile.id, priceOverride);
     res.json({ item: newItem });
   } catch (error: any) {
-    console.error('Error pulling item from library:', error);
+    console.error('Error pulling item from inventory:', error);
     res.status(error.message.includes('Unauthorized') ? 403 : 400).json({ message: error.message });
   }
 };
 
 /**
- * GET /api/item-library
- * List all library items for the authenticated organizer.
+ * GET /api/item-inventory
+ * List all inventory items for the authenticated organizer.
  * Query params: search, category, condition, minPrice, maxPrice, status
  */
-export const listLibraryItems = async (req: AuthRequest, res: Response): Promise<void> => {
+export const listInventoryItems = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user?.organizerProfile?.id) {
       res.status(401).json({ message: 'Authentication required' });
       return;
     }
 
-    const filters: LibraryFilters = {
+    const filters: InventoryFilters = {
       search: req.query.search as string | undefined,
       category: req.query.category as string | undefined,
       condition: req.query.condition as string | undefined,
@@ -110,17 +110,17 @@ export const listLibraryItems = async (req: AuthRequest, res: Response): Promise
       status: req.query.status as string | undefined,
     };
 
-    const items = await getLibraryItems(req.user.organizerProfile.id, filters);
+    const items = await getInventoryItems(req.user.organizerProfile.id, filters);
     res.json({ items, total: items.length });
   } catch (error: any) {
-    console.error('Error listing library items:', error);
+    console.error('Error listing inventory items:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
 /**
- * GET /api/item-library/:itemId/price-history
- * Get price history for a library item.
+ * GET /api/item-inventory/:itemId/price-history
+ * Get price history for an inventory item.
  */
 export const getItemPriceHistory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -144,8 +144,8 @@ export const getItemPriceHistory = async (req: AuthRequest, res: Response): Prom
 };
 
 /**
- * GET /api/item-library/:itemId/pricing-advice
- * Get pricing suggestion for a library item.
+ * GET /api/item-inventory/:itemId/pricing-advice
+ * Get pricing suggestion for an inventory item.
  * Query param: saleId (required)
  */
 export const getItemPricingAdvice = async (req: AuthRequest, res: Response): Promise<void> => {

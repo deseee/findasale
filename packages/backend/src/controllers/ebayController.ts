@@ -910,6 +910,7 @@ export const checkEbayConnection = async (req: AuthRequest, res: Response) => {
       ebayUserId: connection.ebayUserId,
       connectedAt: connection.connectedAt,
       lastRefreshedAt: connection.lastRefreshedAt,
+      lastEbayInventorySyncAt: connection.lastEbayInventorySyncAt,
       error: connection.lastErrorMessage ? 'TOKEN_REFRESH_FAILED' : null,
       errorMessage: connection.lastErrorMessage,
     });
@@ -1486,6 +1487,151 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
     // Fire-and-forget: don't throw
   }
 }
+
+/**
+ * POST /api/ebay/import-inventory
+ * Import organizer's eBay inventory into FindA.Sale.
+ * Creates or finds inventory container sale, fetches items from eBay Inventory API, deduplicates by SKU.
+ */
+export const importInventoryFromEbay = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Get organizer
+    const organizer = await prisma.organizer.findUnique({ where: { userId } });
+    if (!organizer) return res.status(403).json({ error: 'Not an organizer' });
+
+    // Get eBay connection
+    const ebayConn = await prisma.ebayConnection.findUnique({
+      where: { organizerId: organizer.id }
+    });
+    if (!ebayConn) return res.status(400).json({ error: 'No eBay account connected' });
+
+    // Refresh token if needed
+    const accessToken = await refreshEbayAccessToken(organizer.id);
+    if (!accessToken) return res.status(400).json({ error: 'Unable to get eBay access token. Please reconnect your eBay account.' });
+
+    // Find or create inventory container sale
+    let containerSale = await prisma.sale.findFirst({
+      where: { organizerId: organizer.id, isInventoryContainer: true }
+    });
+    if (!containerSale) {
+      containerSale = await prisma.sale.create({
+        data: {
+          title: 'eBay Inventory',
+          description: 'Auto-generated container for eBay inventory items',
+          status: 'DRAFT',
+          isInventoryContainer: true,
+          organizerId: organizer.id,
+          // Required fields with placeholder values for container sale
+          address: '',
+          city: '',
+          state: '',
+          zip: '',
+          startDate: new Date('2099-01-01'),
+          endDate: new Date('2099-12-31'),
+        }
+      });
+    }
+
+    // Paginate eBay inventory API
+    let offset = 0;
+    const limit = 200;
+    let totalFetched = 0;
+    let imported = 0;
+    let skipped = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const url = `https://api.ebay.com/sell/inventory/v1/inventory_item?limit=${limit}&offset=${offset}`;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[eBay Import] API error:', response.status, errText);
+        break;
+      }
+
+      const data = (await response.json()) as any;
+      const items: any[] = data.inventoryItems || [];
+      totalFetched += items.length;
+
+      for (const ebayItem of items) {
+        const sku = ebayItem.sku as string;
+        if (!sku) { skipped++; continue; }
+
+        // Dedup: skip if already imported
+        const existing = await prisma.item.findFirst({
+          where: { organizerId: organizer.id, ebayListingId: sku }
+        });
+        if (existing) { skipped++; continue; }
+
+        // Map eBay fields → Item
+        const product = ebayItem.product || {};
+        const title: string = product.title || sku;
+        const description: string = product.description || '';
+        const imageUrls: string[] = product.imageUrls || [];
+
+        // Map eBay condition to conditionGrade
+        const conditionMap: Record<string, string> = {
+          'NEW': 'S',
+          'LIKE_NEW': 'A',
+          'EXCELLENT_REFURBISHED': 'A',
+          'VERY_GOOD_REFURBISHED': 'B',
+          'GOOD_REFURBISHED': 'B',
+          'SELLER_REFURBISHED': 'B',
+          'USED_EXCELLENT': 'B',
+          'USED_VERY_GOOD': 'B',
+          'USED_GOOD': 'C',
+          'USED_ACCEPTABLE': 'D',
+          'FOR_PARTS_OR_NOT_WORKING': 'D',
+        };
+        const conditionGrade = conditionMap[ebayItem.condition] || null;
+
+        await prisma.item.create({
+          data: {
+            title: title.slice(0, 255),
+            description: description.slice(0, 2000),
+            photoUrls: imageUrls.slice(0, 5),
+            price: null,           // Price is on eBay offer, not inventory item — organizer sets manually
+            status: 'AVAILABLE',
+            inInventory: true,
+            organizerId: organizer.id,
+            saleId: containerSale!.id,
+            ebayListingId: sku,
+            conditionGrade,
+          }
+        });
+        imported++;
+      }
+
+      // Check pagination
+      hasMore = items.length === limit;
+      offset += limit;
+    }
+
+    // Update sync timestamp
+    await prisma.ebayConnection.update({
+      where: { organizerId: organizer.id },
+      data: { lastEbayInventorySyncAt: new Date() }
+    });
+
+    return res.json({
+      success: true,
+      imported,
+      skipped,
+      total: totalFetched,
+      message: `Imported ${imported} item${imported !== 1 ? 's' : ''} from eBay${skipped > 0 ? ` (${skipped} already existed)` : ''}`
+    });
+
+  } catch (err: any) {
+    console.error('[eBay Import] Error:', err);
+    return res.status(500).json({ error: 'Failed to import eBay inventory' });
+  }
+};
 
 /**
  * GET /api/ebay/account-deletion

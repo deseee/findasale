@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import LibraryItemCard from '../../components/LibraryItemCard';
-import useItemLibrary from '../../hooks/useItemLibrary';
+import InventoryItemCard from '../../components/InventoryItemCard';
+import useInventory from '../../hooks/useInventory';
 import { useAuth } from '../../components/AuthContext';
 import { SkeletonCard } from '../../components/SkeletonCards';
 import { Search, Filter } from 'lucide-react';
@@ -11,7 +11,7 @@ import api from '../../lib/api';
 
 interface PullModalState {
   isOpen: boolean;
-  libraryItemId?: string;
+  inventoryItemId?: string;
   itemTitle?: string;
 }
 
@@ -42,12 +42,12 @@ const InventoryPage: React.FC = () => {
   const [priceOverride, setPriceOverride] = useState('');
   const [sales, setSales] = useState<Array<{ id: string; title: string }>>([]);
 
-  const { libraryItems, loading, isRemovingFromLibrary, isPullingFromLibrary, removeFromLibrary, pullFromLibrary, getPriceHistory } =
-    useItemLibrary(user?.role === 'ORGANIZER' ? user?.id : undefined);
+  const { inventoryItems, loading, isRemovingFromInventory, isPullingFromInventory, removeFromInventory, pullFromInventory, getPriceHistory } =
+    useInventory(user?.role === 'ORGANIZER' ? user?.id : undefined);
 
   // Filter items
   const filteredItems = useMemo(() => {
-    return libraryItems.filter((item) => {
+    return inventoryItems.filter((item) => {
       const matchesSearch = !searchQuery || item.title.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = !categoryFilter || item.category === categoryFilter;
       const matchesCondition = !conditionFilter || item.condition === conditionFilter;
@@ -64,10 +64,10 @@ const InventoryPage: React.FC = () => {
         matchesStatus
       );
     });
-  }, [libraryItems, searchQuery, categoryFilter, conditionFilter, minPrice, maxPrice, statusFilter]);
+  }, [inventoryItems, searchQuery, categoryFilter, conditionFilter, minPrice, maxPrice, statusFilter]);
 
   const handlePullClick = (itemId: string, itemTitle: string) => {
-    setPullModal({ isOpen: true, libraryItemId: itemId, itemTitle });
+    setPullModal({ isOpen: true, inventoryItemId: itemId, itemTitle });
     fetchUserSales();
   };
 
@@ -83,12 +83,12 @@ const InventoryPage: React.FC = () => {
   };
 
   const handleConfirmPull = () => {
-    if (!pullModal.libraryItemId || !selectedSaleId) {
+    if (!pullModal.inventoryItemId || !selectedSaleId) {
       alert('Please select a sale');
       return;
     }
     const price = priceOverride ? parseFloat(priceOverride) : undefined;
-    pullFromLibrary(pullModal.libraryItemId, selectedSaleId, price);
+    pullFromInventory(pullModal.inventoryItemId, selectedSaleId, price);
     setPullModal({ isOpen: false });
     setSelectedSaleId('');
     setPriceOverride('');
@@ -194,13 +194,13 @@ const InventoryPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {filteredItems.map((item) => (
-                  <LibraryItemCard
+                  <InventoryItemCard
                     key={item.id}
                     {...item}
                     onPull={() => handlePullClick(item.id, item.title)}
-                    onDelete={() => removeFromLibrary(item.id)}
+                    onDelete={() => removeFromInventory(item.id)}
                     onViewHistory={() => handleViewHistory(item.id, item.title)}
-                    isLoading={isRemovingFromLibrary || isPullingFromLibrary}
+                    isLoading={isRemovingFromInventory || isPullingFromInventory}
                   />
                 ))}
               </div>
@@ -224,7 +224,7 @@ const InventoryPage: React.FC = () => {
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setPullModal({ isOpen: false })} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 font-semibold hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
-                  <button onClick={handleConfirmPull} disabled={!selectedSaleId || isPullingFromLibrary} className="flex-1 px-4 py-2 bg-[#8FB897] hover:bg-[#7BA380] text-white font-semibold rounded-lg disabled:opacity-50">Pull Item</button>
+                  <button onClick={handleConfirmPull} disabled={!selectedSaleId || isPullingFromInventory} className="flex-1 px-4 py-2 bg-[#8FB897] hover:bg-[#7BA380] text-white font-semibold rounded-lg disabled:opacity-50">Pull Item</button>
                 </div>
               </div>
             </div>

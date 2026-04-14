@@ -125,6 +125,7 @@ export const listSales = async (req: Request, res: Response) => {
     
     const where: any = {
       status: 'PUBLISHED',
+      isInventoryContainer: false,
     };
 
     if (query.city) {
@@ -214,7 +215,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
     if (!organizer) return res.json({ sales: [] });
 
     const sales = await prisma.sale.findMany({
-      where: { organizerId: organizer.id },
+      where: { organizerId: organizer.id, isInventoryContainer: false },
       orderBy: { startDate: 'asc' },
       select: {
         id: true,

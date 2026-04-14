@@ -7,6 +7,47 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S455 COMPLETE (2026-04-13) — eBay inventory import, terminology cleanup (library→inventory), OAuth/cart fixes**
+
+**S455 What happened:**
+- **Walkthrough modal (add-items page):** First-time modal explaining Rapidfire vs Regular camera modes. Sale name shown in header. All "AI" branding references purged from copy AND code comments → "auto-analysis", "auto-tag", etc. (Decision D-006).
+- **Google/Facebook OAuth auto-link:** `authController.ts` — changed rejection of "email already exists" to auto-link the OAuth provider to the existing email/password account. Users can now log in with Google on accounts that were created with email/password.
+- **OAuth race condition fix:** `_app.tsx` OAuthBridge — removed `!authLoading` guard that was blocking OAuth login on mobile after page refresh.
+- **Cart data leak fix:** `useShopperCart.ts` — cart localStorage key now scoped per user (`fas_shopper_cart_{userId}`). `AuthContext.tsx` — `logout()` clears cart key. All 6 call sites updated to pass `user?.id`.
+- **eBay fixes:**
+  - `ebayController.ts` redirect fixed (was going to Railway backend URL, not Vercel frontend)
+  - OAuth scope fixed: `sell.account` added alongside `sell.inventory` (required for fetching payment/fulfillment/return policies)
+  - `lastEbaySoldSyncAt` column applied directly to Railway DB via SQL (migration had been run before line was added)
+- **Terminology cleanup (library → inventory):**
+  - `Item.inLibrary` renamed to `Item.inInventory` in schema + migration
+  - All renamed files: `itemInventoryService.ts`, `itemInventoryController.ts`, `itemInventory.ts` (routes), `useInventory.ts`, `InventoryItemCard.tsx`
+  - `index.ts` updated to mount new route names. `inventory.tsx` updated to import new files.
+  - Old library files (`itemLibraryService.ts`, `itemLibraryController.ts`, `itemLibrary.ts`, `useItemLibrary.ts`, `LibraryItemCard.tsx`) need `git rm` by Patrick.
+- **eBay inventory import feature:**
+  - Schema: `Sale.isInventoryContainer Boolean @default(false)` + `EbayConnection.lastEbayInventorySyncAt DateTime?`
+  - `importInventoryFromEbay` handler in `ebayController.ts` — finds/creates hidden DRAFT container sale, paginates eBay Inventory API (200/page), deduplicates by `ebayListingId`, maps condition codes to `conditionGrade`, stores items as `inInventory=true`
+  - `saleController.ts` — `getMySales()` and `listSales()` filter `isInventoryContainer: false` (container sale never appears in sale lists)
+  - `settings.tsx` eBay tab — "Sync eBay Inventory" button with loading state + toast result. "Last synced" timestamp shown if previously synced.
+  - `checkEbayConnection` endpoint now returns `lastEbayInventorySyncAt`
+
+**S455 Patrick manual actions REQUIRED:**
+1. Run migration:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+2. Artifact MI must **disconnect and reconnect eBay** after deploy (existing token was issued without `sell.account` scope — policies sync won't work until re-auth)
+
+**S455 Post-push QA targets:**
+- Google OAuth login for existing email/password accounts (Artifact MI: artifactmi@gmail.com)
+- Cart isolation: login as user A → add items → logout → login as user B → confirm empty cart
+- eBay settings tab → "Sync eBay Inventory" button (after Artifact MI reconnects eBay)
+- `/organizer/inventory` — confirm items imported from eBay appear correctly
+
+---
+
 **S454 COMPLETE (2026-04-13) — Hunt Pass → recurring Stripe Subscription, go-live audit fixes**
 
 **S454 What happened:**
