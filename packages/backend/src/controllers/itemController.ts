@@ -617,7 +617,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -728,6 +728,25 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         updateData.highValueFlaggedAt = new Date();
       }
     }
+
+    // Phase B: eBay Listing Parity fields
+    if (packageWeightOz !== undefined) updateData.packageWeightOz = packageWeightOz === null ? null : Number(packageWeightOz);
+    if (packageLengthIn !== undefined) updateData.packageLengthIn = packageLengthIn === null ? null : Number(packageLengthIn);
+    if (packageWidthIn !== undefined) updateData.packageWidthIn = packageWidthIn === null ? null : Number(packageWidthIn);
+    if (packageHeightIn !== undefined) updateData.packageHeightIn = packageHeightIn === null ? null : Number(packageHeightIn);
+    if (packageType !== undefined) updateData.packageType = packageType || null;
+    if (upc !== undefined) updateData.upc = upc || null;
+    if (ean !== undefined) updateData.ean = ean || null;
+    if (isbn !== undefined) updateData.isbn = isbn || null;
+    if (mpn !== undefined) updateData.mpn = mpn || null;
+    if (brand !== undefined) updateData.brand = brand || null;
+    if (ebayEpid !== undefined) updateData.ebayEpid = ebayEpid || null;
+    if (conditionNotes !== undefined) updateData.conditionNotes = conditionNotes || null;
+    if (allowBestOffer !== undefined) updateData.allowBestOffer = allowBestOffer === true || allowBestOffer === 'true';
+    if (bestOfferAutoAcceptAmt !== undefined) updateData.bestOfferAutoAcceptAmt = bestOfferAutoAcceptAmt === null ? null : Number(bestOfferAutoAcceptAmt);
+    if (bestOfferMinimumAmt !== undefined) updateData.bestOfferMinimumAmt = bestOfferMinimumAmt === null ? null : Number(bestOfferMinimumAmt);
+    if (ebaySecondaryCategoryId !== undefined) updateData.ebaySecondaryCategoryId = ebaySecondaryCategoryId || null;
+    if (ebaySubtitle !== undefined) updateData.ebaySubtitle = ebaySubtitle ? String(ebaySubtitle).substring(0, 55) : null;
 
     const updatedItem = await prisma.item.update({
       where: { id },

@@ -163,18 +163,18 @@ model User {
   posPaymentRequestsAsReceiver POSPaymentRequest[]    @relation("ShopperPaymentRequests")
 
   // Phase 2a: Explorer's Guild — XP Economy
-  guildXp                 Int           @default(0) // Phase 2a: Cumulative XP, never resets, used for rank calculation
-  explorerRank            ExplorerRank  @default(INITIATE) // Phase 2a: Current explorer rank (derived from guildXp, denormalized for fast lookup)
-  seasonalResetAt         DateTime? // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
-  rankUpHistory           Json          @default("[]") // Phase 2a: Array of { rank, timestamp, xpAtTime } for Hall of Fame + seasonal tracking
+  guildXp           Int           @default(0) // Phase 2a: Cumulative XP, never resets, used for rank calculation
+  explorerRank      ExplorerRank  @default(INITIATE) // Phase 2a: Current explorer rank (derived from guildXp, denormalized for fast lookup)
+  seasonalResetAt   DateTime? // Phase 2a: Most recent Jan 1 UTC seasonal reset timestamp
+  rankUpHistory     Json          @default("[]") // Phase 2a: Array of { rank, timestamp, xpAtTime } for Hall of Fame + seasonal tracking
   // D-XP-002: XP Expiry System
-  lifetimeXpEarned        Int           @default(0) // Total XP ever earned (never decremented) — used for Grandmaster+ (5000+) expiry exemption
-  lastXpActivityAt        DateTime? // Last time XP-earning activity occurred (purchase, haul post, referral) — basis for expiry calculation
-  xpExpiresAt             DateTime? // When remaining XP balance expires (computed: lastXpActivityAt + 365 days)
-  xpExpiryWarned300       Boolean       @default(false) // Flag: 300-day warning (65 days remaining) notification sent
-  xpExpiryWarned350       Boolean       @default(false) // Flag: 350-day warning (15 days remaining) notification sent
-  rarityBoosts            RarityBoost[] @relation("RarityBoosts") // Phase 2a: Active rarity boosts for upcoming sales
-  passportCompleted       Boolean       @default(false) // Phase 2a: Collector Passport completed (earned COLLECTOR_PASSPORT_COMPLETE 50 XP)
+  lifetimeXpEarned  Int           @default(0) // Total XP ever earned (never decremented) — used for Grandmaster+ (5000+) expiry exemption
+  lastXpActivityAt  DateTime? // Last time XP-earning activity occurred (purchase, haul post, referral) — basis for expiry calculation
+  xpExpiresAt       DateTime? // When remaining XP balance expires (computed: lastXpActivityAt + 365 days)
+  xpExpiryWarned300 Boolean       @default(false) // Flag: 300-day warning (65 days remaining) notification sent
+  xpExpiryWarned350 Boolean       @default(false) // Flag: 350-day warning (15 days remaining) notification sent
+  rarityBoosts      RarityBoost[] @relation("RarityBoosts") // Phase 2a: Active rarity boosts for upcoming sales
+  passportCompleted Boolean       @default(false) // Phase 2a: Collector Passport completed (earned COLLECTOR_PASSPORT_COMPLETE 50 XP)
   foundedCrews      Crew[]        @relation("CrewFounder")
   crewMemberships   CrewMember[]  @relation("CrewMemberships")
 
@@ -319,7 +319,7 @@ model Organizer {
   trails                  TreasureTrail[]        @relation("OrganizerTrails")
   // Feature #244 Phase 2: eBay OAuth connection
   ebayConnection          EbayConnection?        @relation("OrganizerEbayConnection")
-  ebaySubscriptionId      String?                // ORDER_CONFIRMATION subscription ID from eBay Notification API
+  ebaySubscriptionId      String? // ORDER_CONFIRMATION subscription ID from eBay Notification API
   workspaceChatMessages   WorkspaceChatMessage[] @relation("WorkspaceChatMessages")
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
@@ -349,16 +349,20 @@ model EbayConnection {
   lastErrorMessage String?
 
   // Feature #244 Phase 2b: eBay business policy IDs (fetched from eBay Account API after OAuth)
-  paymentPolicyId      String?   // eBay payment policy ID (required for offer publishing)
-  fulfillmentPolicyId  String?   // eBay fulfillment policy ID (required for offer publishing)
-  returnPolicyId       String?   // eBay return policy ID (required for offer publishing)
-  policiesFetchedAt    DateTime? // When policies were last synced from eBay Account API
+  paymentPolicyId     String? // eBay payment policy ID (required for offer publishing)
+  fulfillmentPolicyId String? // eBay fulfillment policy ID (required for offer publishing)
+  returnPolicyId      String? // eBay return policy ID (required for offer publishing)
+  policiesFetchedAt   DateTime? // When policies were last synced from eBay Account API
 
   // Feature #244 Phase 3: eBay sold sync deduplication
-  lastEbaySoldSyncAt   DateTime? // Last time this connection's sold orders were synced from eBay
+  lastEbaySoldSyncAt DateTime? // Last time this connection's sold orders were synced from eBay
 
   // eBay inventory import: when eBay inventory was last pulled into FindA.Sale
   lastEbayInventorySyncAt DateTime?
+
+  // ADR eBay Parity Phase A: Real merchant location tracking
+  merchantLocationKey    String?
+  merchantLocationSource String? // EXISTING | SALE_ADDRESS | ORGANIZER_ADDRESS
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -621,137 +625,159 @@ model SourcebookEntry {
 }
 
 model Item {
-  id                    String                 @id @default(cuid())
-  title                 String
-  sku                   String?
-  description           String?
-  price                 Float?
-  auctionStartPrice     Float?
-  auctionReservePrice   Float?
-  currentBid            Float?
-  bidIncrement          Float?                 @default(1)
-  auctionEndTime        DateTime?
-  auctionClosed         Boolean                @default(false)
-  status                String                 @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED, DONATED
-  category              String? // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
-  condition             String? // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
-  conditionGrade        String? // S | A | B | C | D — null for items not yet graded
-  rarity                ItemRarity             @default(COMMON) // Feature #57: Shiny/Rare badges
-  photoUrls             String[]
+  id                         String                 @id @default(cuid())
+  title                      String
+  sku                        String?
+  description                String?
+  price                      Float?
+  auctionStartPrice          Float?
+  auctionReservePrice        Float?
+  currentBid                 Float?
+  bidIncrement               Float?                 @default(1)
+  auctionEndTime             DateTime?
+  auctionClosed              Boolean                @default(false)
+  status                     String                 @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED, DONATED
+  category                   String? // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
+  condition                  String? // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
+  conditionGrade             String? // S | A | B | C | D — null for items not yet graded
+  rarity                     ItemRarity             @default(COMMON) // Feature #57: Shiny/Rare badges
+  photoUrls                  String[]
   // U1: Ollama nomic-embed-text 768-dim vector for semantic search
-  embedding             Float[]
+  embedding                  Float[]
   // W1: Shipping
-  shippingAvailable     Boolean                @default(false)
-  shippingPrice         Float?
+  shippingAvailable          Boolean                @default(false)
+  shippingPrice              Float?
   // B1: Item listing/transaction type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
-  listingType           String                 @default("FIXED")
+  listingType                String                 @default("FIXED")
   // CD2: Live Drop — item hidden until liveDropAt time
-  isLiveDrop            Boolean                @default(false) // Deprecated: use listingType instead
-  liveDropAt            DateTime?
+  isLiveDrop                 Boolean                @default(false) // Deprecated: use listingType instead
+  liveDropAt                 DateTime?
   // B2: AI tagging disclosure — true when AI (Vision + Haiku) generated this item's fields
-  isAiTagged            Boolean                @default(false)
+  isAiTagged                 Boolean                @default(false)
   // CB5: AI-generated search tags from batchAnalyzeController
-  tags                  String[]               @default([])
+  tags                       String[]               @default([])
   // CD2 Phase 4: Reverse Auction — daily price decline until sold or floor hit
-  reverseAuction        Boolean                @default(false) // Deprecated: use listingType instead
-  reverseDailyDrop      Int? // cents per day
-  reverseFloorPrice     Int? // minimum price in cents
-  reverseStartDate      DateTime?
+  reverseAuction             Boolean                @default(false) // Deprecated: use listingType instead
+  reverseDailyDrop           Int? // cents per day
+  reverseFloorPrice          Int? // minimum price in cents
+  reverseStartDate           DateTime?
   // Bulk operations: hide/show item from sale listing
-  isActive              Boolean                @default(true)
-  saleId                String
-  sale                  Sale                   @relation(fields: [saleId], references: [id])
-  bids                  Bid[]
-  maxBids               MaxBidByUser[] // ADR-013 Phase 2: Proxy bidding
-  purchases             Purchase[]
-  favorites             Favorite[]
-  reservation           ItemReservation?
-  bountyFulfillments    MissingListingBounty[]
-  bountySubmissions     BountySubmission[]     @relation("BountySubmissions")
-  treasureHuntFinds     TreasureHuntFind[]
-  treasureHuntQRScans   TreasureHuntQRScan[]   @relation("TreasureHuntQRScans")
-  flashDeals            FlashDeal[]
-  wishlistItems         WishlistItem[]
-  buyingPools           BuyingPool[]
-  checkoutAttempts      CheckoutAttempt[]
-  waitlist              ItemWaitlist[]
-  currency              String                 @default("USD") // Batch 17: multi-currency groundwork
-  priceHistory          ItemPriceHistory[]
-  draftStatus           String                 @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED — Rapidfire Mode item draft status
-  aiErrorLog            Json? // Rapidfire Mode AI error logging (JSON array of errors)
-  optimisticLockVersion Int                    @default(0) // Rapidfire Mode optimistic concurrency control
+  isActive                   Boolean                @default(true)
+  saleId                     String
+  sale                       Sale                   @relation(fields: [saleId], references: [id])
+  bids                       Bid[]
+  maxBids                    MaxBidByUser[] // ADR-013 Phase 2: Proxy bidding
+  purchases                  Purchase[]
+  favorites                  Favorite[]
+  reservation                ItemReservation?
+  bountyFulfillments         MissingListingBounty[]
+  bountySubmissions          BountySubmission[]     @relation("BountySubmissions")
+  treasureHuntFinds          TreasureHuntFind[]
+  treasureHuntQRScans        TreasureHuntQRScan[]   @relation("TreasureHuntQRScans")
+  flashDeals                 FlashDeal[]
+  wishlistItems              WishlistItem[]
+  buyingPools                BuyingPool[]
+  checkoutAttempts           CheckoutAttempt[]
+  waitlist                   ItemWaitlist[]
+  currency                   String                 @default("USD") // Batch 17: multi-currency groundwork
+  priceHistory               ItemPriceHistory[]
+  draftStatus                String                 @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED — Rapidfire Mode item draft status
+  aiErrorLog                 Json? // Rapidfire Mode AI error logging (JSON array of errors)
+  optimisticLockVersion      Int                    @default(0) // Rapidfire Mode optimistic concurrency control
   // Camera Workflow v2 fields
-  aiConfidence          Float                  @default(0.5) // AI confidence score (0.0–1.0)
-  backgroundRemoved     Boolean                @default(false) // Background removal applied
-  faceDetected          Boolean                @default(false) // Face detected in image
-  autoEnhanced          Boolean                @default(false) // Auto-enhancement applied
-  photos                Photo[] // Multi-photo support (forward-looking)
+  aiConfidence               Float                  @default(0.5) // AI confidence score (0.0–1.0)
+  backgroundRemoved          Boolean                @default(false) // Background removal applied
+  faceDetected               Boolean                @default(false) // Face detected in image
+  autoEnhanced               Boolean                @default(false) // Auto-enhancement applied
+  photos                     Photo[] // Multi-photo support (forward-looking)
   // Feature #25: Item Library — organizer-owned items across sales
-  libraryId             String? // Links to future LibraryItem table; for now just namespace
-  inInventory           Boolean                @default(false) // Cached: is this item in organizer's inventory?
-  priceVariants         Json? // { saleId: price } for per-sale pricing (Phase 5)
-  organizerId           String? // Denormalized from sale.organizerId for library queries
+  libraryId                  String? // Links to future LibraryItem table; for now just namespace
+  inInventory                Boolean                @default(false) // Cached: is this item in organizer's inventory?
+  priceVariants              Json? // { saleId: price } for per-sale pricing (Phase 5)
+  organizerId                String? // Denormalized from sale.organizerId for library queries
   // Feature #29: Loyalty Passport — Hunt Pass early access embargo
-  earlyAccessUntil      DateTime? // Items hidden from non-Hunt-Pass shoppers until this time
+  earlyAccessUntil           DateTime? // Items hidden from non-Hunt-Pass shoppers until this time
   // Feature #47: UGC Photo Tags — user-generated content linked to items
-  ugcPhotos             UGCPhoto[]
+  ugcPhotos                  UGCPhoto[]
   // Feature #17: Bid Bot Detector — fraud signals for this item
-  fraudSignals          FraudSignal[]
+  fraudSignals               FraudSignal[]
   // Feature #48: Treasure Trail Route Builder — items highlighted on trails
-  trailHighlights       TrailHighlight[]
+  trailHighlights            TrailHighlight[]
   // Feature #30: AI Item Valuation — comparable sales valuation
-  valuation             ItemValuation?
+  valuation                  ItemValuation?
   // Feature #235: Charity Close + Tax Receipt PDF
-  donatedItems          DonatedItem[]
+  donatedItems               DonatedItem[]
   // Feature #46: Treasure Typology Classifier — collector category classification
-  typology              ItemTypology?
+  typology                   ItemTypology?
   // Feature #70: Consignment — operator-consigned items with split payout
-  consignorId           String? // Optional: consignor user ID (nullable for future Consignor table)
-  consignmentSplitPct   Decimal? // Optional: percentage split for consignor (e.g., 0.70 = 70%)
-  consignor             User?                  @relation("ConsignedItems", fields: [consignorId], references: [id])
+  consignorId                String? // Optional: consignor user ID (nullable for future Consignor table)
+  consignmentSplitPct        Decimal? // Optional: percentage split for consignor (e.g., 0.70 = 70%)
+  consignor                  User?                  @relation("ConsignedItems", fields: [consignorId], references: [id])
   // Feature #81: Persistent Inventory — items that recur across sales
-  persistentInventory   Boolean                @default(false) // Pre-wire: persistent inventory feature activation
-  isPersistent          Boolean                @default(false)
+  persistentInventory        Boolean                @default(false) // Pre-wire: persistent inventory feature activation
+  isPersistent               Boolean                @default(false)
   // Feature #84: Master Item Library — canonical item definitions
-  masterItemLibraryId   String? // Pre-wire: FK to future MasterItemLibrary model
+  masterItemLibraryId        String? // Pre-wire: FK to future MasterItemLibrary model
   // Feature #136: QR Code Auto-Embedding in Photo Exports
-  qrEmbedEnabled        Boolean                @default(true) // Embed QR code linking to item in exported photos
+  qrEmbedEnabled             Boolean                @default(true) // Embed QR code linking to item in exported photos
   // Feature #103: Photo Retention — archive old photos, delete very old ones
-  archivedAt            DateTime? // When photos were archived (90+ days after sale end)
-  deletedFromCloudinary Boolean                @default(false) // Whether original photo was deleted from Cloudinary (365+ days)
+  archivedAt                 DateTime? // When photos were archived (90+ days after sale end)
+  deletedFromCloudinary      Boolean                @default(false) // Whether original photo was deleted from Cloudinary (365+ days)
   // #112 Soft-Delete Archival + #121 Tiered Storage pre-wire
-  deletedAt             DateTime?
-  storageArchive        Boolean                @default(false) // #121: Pre-wire for cold storage tier
+  deletedAt                  DateTime?
+  storageArchive             Boolean                @default(false) // #121: Pre-wire for cold storage tier
   // Feature #91: Auto-Markdown (Smart Clearance)
-  priceBeforeMarkdown   Float? // Original price before markdown applied
-  markdownApplied       Boolean                @default(false) // Whether auto-markdown has been applied
+  priceBeforeMarkdown        Float? // Original price before markdown applied
+  markdownApplied            Boolean                @default(false) // Whether auto-markdown has been applied
   // Feature #228: Settlement Hub — high-value item tracking + AI comp
-  isHighValue           Boolean                @default(false)
-  highValueThreshold    Decimal?
-  estimatedValue        Decimal?
-  aiSuggestedPrice      Decimal?
+  isHighValue                Boolean                @default(false)
+  highValueThreshold         Decimal?
+  estimatedValue             Decimal?
+  aiSuggestedPrice           Decimal?
   // Feature #371: Auto High-Value Item Flagging
-  highValueSource       String?                @default("MANUAL") // "AUTO" | "MANUAL"
-  highValueFlaggedAt    DateTime?
-  isHighValueLocked     Boolean                @default(false) // Organizer locked decision, respect it
-  saleTransactions      SaleTransaction[]
+  highValueSource            String?                @default("MANUAL") // "AUTO" | "MANUAL"
+  highValueFlaggedAt         DateTime?
+  isHighValueLocked          Boolean                @default(false) // Organizer locked decision, respect it
+  saleTransactions           SaleTransaction[]
   // Feature #244 Phase 2: eBay listing tracking
-  ebayListingId         String? // eBay listing ID after successful publish; used for Phase 3 sync
-  ebayOfferId           String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
-  ebayCategoryId        String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
-  listedOnEbayAt        DateTime? // Timestamp when item was pushed to eBay
+  ebayListingId              String? // eBay listing ID after successful publish; used for Phase 3 sync
+  ebayOfferId                String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
+  ebayCategoryId             String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
+  listedOnEbayAt             DateTime? // Timestamp when item was pushed to eBay
   // Feature #244 Phase 3: Post-sale eBay push — shipping classification
-  ebayShippingClassification String @default("UNKNOWN") // SHIPPABLE | HEAVY_OVERSIZED | FRAGILE | UNKNOWN — auto-classified from category + tags
-  ebayShippingOverride  String? // SHIPPABLE | LOCAL_PICKUP_ONLY | DONT_LIST — organizer override (null = use classification)
+  ebayShippingClassification String                 @default("UNKNOWN") // SHIPPABLE | HEAVY_OVERSIZED | FRAGILE | UNKNOWN — auto-classified from category + tags
+  ebayShippingOverride       String? // SHIPPABLE | LOCAL_PICKUP_ONLY | DONT_LIST — organizer override (null = use classification)
   // D-XP-003: Organizer-funded item discounts
-  organizerDiscountXp   Int?                   @default(0) // XP spent to create discount (0 = no discount)
-  organizerDiscountAmount Decimal?             @db.Decimal(10,2) // Dollar amount of discount ($2, $4, or $5 max)
+  organizerDiscountXp        Int?                   @default(0) // XP spent to create discount (0 = no discount)
+  organizerDiscountAmount    Decimal?               @db.Decimal(10, 2) // Dollar amount of discount ($2, $4, or $5 max)
   // Phase 2b: Legendary Early Access — Explorer's Guild rank perks
-  isLegendary           Boolean                @default(false) // Organizer marks item as Legendary (exclusive early access)
-  legendaryVisibleAt    DateTime? // When item becomes visible to all ranks (Sage+ see 4-6 hours earlier)
-  legendaryPublishedAt  DateTime? // When organizer published this item as Legendary (audit trail)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  isLegendary                Boolean                @default(false) // Organizer marks item as Legendary (exclusive early access)
+  legendaryVisibleAt         DateTime? // When item becomes visible to all ranks (Sage+ see 4-6 hours earlier)
+  legendaryPublishedAt       DateTime? // When organizer published this item as Legendary (audit trail)
+  // ADR eBay Parity Phase B: Package dimensions for calculated shipping
+  packageWeightOz            Int?
+  packageLengthIn            Decimal?               @db.Decimal(6, 2)
+  packageWidthIn             Decimal?               @db.Decimal(6, 2)
+  packageHeightIn            Decimal?               @db.Decimal(6, 2)
+  packageType                String? // BOX | LETTER | MAILING_TUBE | PACKAGE_THICK_ENVELOPE
+  // ADR eBay Parity Phase B: Product identifiers for catalog match
+  upc                        String?
+  ean                        String?
+  isbn                       String?
+  mpn                        String?
+  brand                      String?
+  ebayEpid                   String?
+  // ADR eBay Parity Phase B: Rich condition
+  conditionNotes             String?
+  // ADR eBay Parity Phase B: Pricing flexibility
+  allowBestOffer             Boolean                @default(false)
+  bestOfferAutoAcceptAmt     Decimal?               @db.Decimal(10, 2)
+  bestOfferMinimumAmt        Decimal?               @db.Decimal(10, 2)
+  // ADR eBay Parity Phase B: Listing extras
+  ebaySecondaryCategoryId    String?
+  ebaySubtitle               String?
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
 
   @@unique([saleId, sku])
   @@index([draftStatus])
@@ -1045,26 +1071,26 @@ model Follow {
 
 // Phase 21: Item reservation/hold system
 model ItemReservation {
-  id           String       @id @default(cuid())
-  itemId       String       @unique // one active hold per item
-  item         Item         @relation(fields: [itemId], references: [id])
-  userId       String
-  user         User         @relation(fields: [userId], references: [id])
-  status       String       @default("PENDING") // PENDING, CONFIRMED, HOLD_IN_CART, CANCELLED, EXPIRED, INVOICE_ISSUED
-  expiresAt    DateTime
-  holdDurationMinutes Int    @default(30) // Snapshot of user's rank-based duration at hold creation time
-  note         String?
+  id                  String       @id @default(cuid())
+  itemId              String       @unique // one active hold per item
+  item                Item         @relation(fields: [itemId], references: [id])
+  userId              String
+  user                User         @relation(fields: [userId], references: [id])
+  status              String       @default("PENDING") // PENDING, CONFIRMED, HOLD_IN_CART, CANCELLED, EXPIRED, INVOICE_ISSUED
+  expiresAt           DateTime
+  holdDurationMinutes Int          @default(30) // Snapshot of user's rank-based duration at hold creation time
+  note                String?
   // Hold-specific enhancements (Feature #121)
-  gpsLatitude  Float? // GPS location at hold creation
-  gpsLongitude Float? // GPS location at hold creation
-  qrScanId     String? // Fraud detection: which QR scan validated this hold
-  fraudScore   Float        @default(0.0) // Fraud detection score (0.0-1.0)
-  fraudFlags   String[]     @default([]) // Fraud red flags: HIGH_VELOCITY, SUSPICIOUS_PATTERN, etc.
-  enRoute      Boolean      @default(false) // Feature #121: shopper was outside geofence but within 10mi (en route grace)
-  invoiceId    String?      @unique // FK to HoldInvoice (optional, set when invoice created)
-  invoice      HoldInvoice? // relation
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  gpsLatitude         Float? // GPS location at hold creation
+  gpsLongitude        Float? // GPS location at hold creation
+  qrScanId            String? // Fraud detection: which QR scan validated this hold
+  fraudScore          Float        @default(0.0) // Fraud detection score (0.0-1.0)
+  fraudFlags          String[]     @default([]) // Fraud red flags: HIGH_VELOCITY, SUSPICIOUS_PATTERN, etc.
+  enRoute             Boolean      @default(false) // Feature #121: shopper was outside geofence but within 10mi (en route grace)
+  invoiceId           String?      @unique // FK to HoldInvoice (optional, set when invoice created)
+  invoice             HoldInvoice? // relation
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 }
 
 // Hold-to-Pay feature: Payment invoice for held items
@@ -1982,31 +2008,31 @@ model CollectorPassport {
 
 // Feature #47: UGC Photo Tags — user-generated content with tagging and moderation
 model UGCPhoto {
-  id            Int                @id @default(autoincrement())
-  userId        String
-  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  itemId        String?
-  item          Item?              @relation(fields: [itemId], references: [id], onDelete: SetNull)
-  saleId        String?
-  sale          Sale?              @relation(fields: [saleId], references: [id], onDelete: SetNull)
-  photoUrl      String
-  caption       String?
-  tags          String[]           @default([])
-  status        String             @default("PENDING") // PENDING | APPROVED | REJECTED
-  reviewedAt    DateTime?
-  reviewedBy    String?
-  likesCount    Int                @default(0)
-  likes         UGCPhotoLike[]
-  isHaulPost    Boolean            @default(false) // Feature #88: Haul Posts
-  linkedItemIds String[]           @default([]) // Feature #88: Items tagged in haul
-  reactions     UGCPhotoReaction[] // Feature #88: Photo reactions (likes)
-  showcaseSlots UserShowcase[] // Phase 2c: Profile showcase pinned hauls
+  id                        Int                @id @default(autoincrement())
+  userId                    String
+  user                      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId                    String?
+  item                      Item?              @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  saleId                    String?
+  sale                      Sale?              @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  photoUrl                  String
+  caption                   String?
+  tags                      String[]           @default([])
+  status                    String             @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewedAt                DateTime?
+  reviewedBy                String?
+  likesCount                Int                @default(0)
+  likes                     UGCPhotoLike[]
+  isHaulPost                Boolean            @default(false) // Feature #88: Haul Posts
+  linkedItemIds             String[]           @default([]) // Feature #88: Items tagged in haul
+  reactions                 UGCPhotoReaction[] // Feature #88: Photo reactions (likes)
+  showcaseSlots             UserShowcase[] // Phase 2c: Profile showcase pinned hauls
   // D-XP-006: Micro-sink XP flows
-  scoutReveals            String[]       @default([]) // Array of user IDs who paid 5 XP to reveal scout info
-  unboxingAnimationUnlocked Boolean       @default(false) // User paid 2 XP to unlock celebration animation
-  bumpedUntil             DateTime? // Bumped post visible at feed top until this time (10 XP cost)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  scoutReveals              String[]           @default([]) // Array of user IDs who paid 5 XP to reveal scout info
+  unboxingAnimationUnlocked Boolean            @default(false) // User paid 2 XP to unlock celebration animation
+  bumpedUntil               DateTime? // Bumped post visible at feed top until this time (10 XP cost)
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
 
   @@index([userId])
   @@index([itemId])
@@ -3206,26 +3232,26 @@ model TeamMember {
 
 // TeamMemberAvailability — one-to-one link to TeamMember
 model TeamMemberAvailability {
-  id            String     @id @default(cuid())
-  teamMemberId  String     @unique
-  teamMember    TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
-  monStartTime  String? // "08:00"
-  monEndTime    String? // "17:00"
-  tueStartTime  String?
-  tueEndTime    String?
-  wedStartTime  String?
-  wedEndTime    String?
-  thuStartTime  String?
-  thuEndTime    String?
-  friStartTime  String?
-  friEndTime    String?
-  satStartTime  String?
-  satEndTime    String?
-  sunStartTime  String?
-  sunEndTime    String?
-  notes         String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id           String     @id @default(cuid())
+  teamMemberId String     @unique
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  monStartTime String? // "08:00"
+  monEndTime   String? // "17:00"
+  tueStartTime String?
+  tueEndTime   String?
+  wedStartTime String?
+  wedEndTime   String?
+  thuStartTime String?
+  thuEndTime   String?
+  friStartTime String?
+  friEndTime   String?
+  satStartTime String?
+  satEndTime   String?
+  sunStartTime String?
+  sunEndTime   String?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   @@index([teamMemberId])
 }
@@ -3236,12 +3262,12 @@ model TeamMemberPerformance {
   teamMemberId   String
   teamMember     TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
   period         String // "WEEKLY" | "MONTHLY"
-  itemsSold      Int         @default(0)
-  revenue        Decimal     @default(0)
-  avgItemPrice   Decimal     @default(0)
-  tasksCompleted Int         @default(0)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  itemsSold      Int        @default(0)
+  revenue        Decimal    @default(0)
+  avgItemPrice   Decimal    @default(0)
+  tasksCompleted Int        @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   @@unique([teamMemberId, period])
   @@index([teamMemberId, period])
