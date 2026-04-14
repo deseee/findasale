@@ -41,14 +41,14 @@ const PasskeyManager: React.FC = () => {
   // Fetch user's passkeys
   const { data: passkeyData, isLoading } = useQuery({
     queryKey: ['passkeys'],
-    queryFn: () => api.get('/api/auth/passkey/list').then(r => r.data),
+    queryFn: () => api.get('/auth/passkey/list').then(r => r.data),
     enabled: !!user && isSupported,
   });
 
   // Delete passkey mutation
   const deleteMutation = useMutation({
     mutationFn: (credentialId: string) =>
-      api.delete(`/api/auth/passkey/${credentialId}`),
+      api.delete(`/auth/passkey/${credentialId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['passkeys'] });
       showToast('Passkey deleted successfully', 'success');
@@ -69,7 +69,7 @@ const PasskeyManager: React.FC = () => {
     setIsRegistering(true);
     try {
       // Step 1: Get registration options from server
-      const beginResponse = await api.post('/api/auth/passkey/register/begin');
+      const beginResponse = await api.post('/auth/passkey/register/begin');
       const options = beginResponse.data.publicKeyOptions;
 
       // Step 2: Use browser API to create credential

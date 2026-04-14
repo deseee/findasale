@@ -56,7 +56,7 @@ const OrganizerSettingsPage = () => {
   // Verification status query
   const { data: verStatus, isLoading: verStatusLoading } = useQuery({
     queryKey: ['verification-status'],
-    queryFn: () => api.get('/api/verification/status').then(r => r.data),
+    queryFn: () => api.get('/verification/status').then(r => r.data),
     enabled: !!user
   });
 
@@ -69,7 +69,7 @@ const OrganizerSettingsPage = () => {
 
   // Request verification mutation
   const requestMutation = useMutation({
-    mutationFn: () => api.post('/api/verification/request'),
+    mutationFn: () => api.post('/verification/request'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['verification-status'] });
       showToast('Verification request submitted', 'success');
