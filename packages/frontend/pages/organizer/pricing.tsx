@@ -58,7 +58,7 @@ const TIERS: PricingTier[] = [
     period: 'per month',
     description: 'For organizers running multiple sales who want to save hours of manual work.',
     featured: true,
-    stripePrice: 'price_1TDUQsLTUdEUnHOTzG6cVDwu',
+    stripePrice: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || 'price_1TDUQsLTUdEUnHOTzG6cVDwu',
     features: [
       'Everything in Simple, plus:',
       '3 concurrent sales, 500 items each',
@@ -80,7 +80,7 @@ const TIERS: PricingTier[] = [
     period: 'per month',
     description: 'For organizers who need unlimited items and teams running sales at multiple locations.',
     featured: false,
-    stripePrice: 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
+    stripePrice: process.env.NEXT_PUBLIC_STRIPE_TEAMS_PRICE_ID || 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
       'Everything in Pro, plus:',
       'Unlimited sales*, Unlimited Items*',
