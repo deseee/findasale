@@ -2508,7 +2508,7 @@ const AddItemsDetailPage = () => {
                   <div>
                     <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Rapidfire Mode <span className="text-xs font-normal text-amber-600 dark:text-amber-400 ml-1">— recommended</span></p>
                     <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
-                      Snap, snap, snap. <strong>1 photo = 1 item.</strong> AI tags title, category, and price in the background while you keep shooting. Tap any thumbnail to add more photos to that item.
+                      Snap, snap, snap. <strong>1 photo = 1 item.</strong> Title, category, and price are filled in automatically while you keep shooting. Tap any thumbnail to add more photos to that item.
                     </p>
                   </div>
                 </div>
