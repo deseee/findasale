@@ -122,6 +122,7 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       headers,
       body: JSON.stringify({
         topicId: EBAY_NOTIFICATION_TOPIC,
+        schemaVersion: '1.0',
         status: 'ENABLED',
         destinationId,
       }),
