@@ -738,6 +738,7 @@ export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
     authUrl.searchParams.set('scope', [
       'https://api.ebay.com/oauth/api_scope/sell.inventory',
       'https://api.ebay.com/oauth/api_scope/sell.account',
+      'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
       'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
       'openid',
     ].join(' '));
@@ -1660,8 +1661,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
       while (tradingPage <= tradingTotalPages) {
         // OAuth tokens use X-EBAY-API-IAF-TOKEN header — NOT <eBayAuthToken> (that's legacy Auth'n'Auth only)
-        // DetailLevel=ReturnAll is required to get PictureDetails in the response
-        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><DetailLevel>ReturnAll</DetailLevel><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
+        // GranularityLevel=Fine is required to get PictureDetails in GetMyeBaySelling responses
+        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><GranularityLevel>Fine</GranularityLevel><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
 
         const tradingResp = await fetch('https://api.ebay.com/ws/api.dll', {
           method: 'POST',
@@ -1704,16 +1705,27 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const ebayItemId = xmlVal(itemBlock, 'ItemID');
           if (!ebayItemId) { skipped++; continue; }
 
+          const sku = xmlVal(itemBlock, 'SKU');
+          const storedId = sku || ebayItemId;  // matches how we stored it
+
+          // Check by both stored ID and raw ItemID to catch items saved either way
           const existing = await prisma.item.findFirst({
-            where: { organizerId: organizer.id, ebayListingId: ebayItemId }
+            where: {
+              organizerId: organizer.id,
+              OR: [
+                { ebayListingId: storedId },
+                { ebayListingId: ebayItemId },
+              ],
+            }
           });
 
           const titleRaw = xmlVal(itemBlock, 'Title') || ebayItemId;
           const priceRaw = xmlVal(itemBlock, 'CurrentPrice') || xmlVal(itemBlock, 'BuyItNowPrice');
           const price = priceRaw ? parseFloat(priceRaw) : null;
-          // PictureDetails contains PictureURL; GalleryURL is a fallback thumbnail
+          // GranularityLevel=Fine includes PictureDetails; GalleryURL is fallback
           const pictureUrl = xmlVal(itemBlock, 'PictureURL') || xmlVal(itemBlock, 'GalleryURL');
           const photoUrls = pictureUrl ? [pictureUrl] : [];
+          console.log(`[eBay Import] Item ${ebayItemId}: photo=${pictureUrl || 'none'}`);
 
           // If item already exists, backfill photos if it has none
           if (existing) {
@@ -1723,7 +1735,6 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             skipped++;
             continue;
           }
-          const sku = xmlVal(itemBlock, 'SKU');
           const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
           const conditionGrade = tradingConditionMap[conditionId] || null;
 
@@ -1737,7 +1748,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               inInventory: true,
               organizerId: organizer.id,
               saleId: containerSale!.id,
-              ebayListingId: sku || ebayItemId,  // prefer SKU if seller assigned one
+              ebayListingId: storedId,
               conditionGrade,
               embedding: [],  // populated later when item is indexed for search
             }
