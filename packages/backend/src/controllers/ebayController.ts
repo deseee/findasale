@@ -1464,6 +1464,23 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           continue;
         }
 
+        // Verify the condition actually stuck on the inventory_item (diagnostic —
+        // PUT can return 204 but eBay may silently reject condition changes on
+        // pre-existing SKUs from prior failed pushes).
+        try {
+          const verifyRes = await fetch(inventoryUrl, {
+            headers: ebayUserHeaders(accessToken),
+          });
+          if (verifyRes.ok) {
+            const verifyData = (await verifyRes.json()) as { condition?: string };
+            console.log(
+              `[eBay InventoryVerify] ${sku}: sent=${ebayCondition} stored=${verifyData.condition || 'null'}`
+            );
+          }
+        } catch (err) {
+          console.warn('[eBay InventoryVerify] error:', err);
+        }
+
         // Step 2: Upsert offer — find existing or create new, then update price/policies
         const cleanDescription = (item.description || '').replace(/<[^>]*>/g, '').trim();
         const offerPayload: Record<string, unknown> = {
@@ -1489,6 +1506,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         // Resolve existing offerId: use stored value or look up by SKU on eBay
         let offerId: string | null = item.ebayOfferId || null;
+        let existingOfferCategoryId: string | null = null;
+        let existingOfferStatus: string | null = null;
 
         if (!offerId) {
           const getOfferRes = await fetch(
@@ -1500,8 +1519,45 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             const existing = getOfferData.offers?.[0];
             if (existing) {
               offerId = existing.offerId;
+              existingOfferCategoryId = existing.categoryId || null;
+              existingOfferStatus = existing.status || null;
             }
           }
+        } else {
+          // Fetch current state of the stored offer so we can compare categoryId
+          const getOfferRes = await fetch(
+            `https://api.ebay.com/sell/inventory/v1/offer/${offerId}`,
+            { headers: ebayUserHeaders(accessToken) }
+          );
+          if (getOfferRes.ok) {
+            const getOfferData = (await getOfferRes.json()) as any;
+            existingOfferCategoryId = getOfferData.categoryId || null;
+            existingOfferStatus = getOfferData.status || null;
+          }
+        }
+
+        // If an existing UNPUBLISHED offer has a different categoryId than what we
+        // want now (e.g. was created under an old bad branch category), eBay's
+        // offer PUT may not cleanly swap it — delete and recreate to avoid 25021.
+        if (
+          offerId &&
+          existingOfferStatus &&
+          existingOfferStatus.toUpperCase() !== 'PUBLISHED' &&
+          existingOfferCategoryId &&
+          existingOfferCategoryId !== categoryId
+        ) {
+          console.log(
+            `[eBay Offer] stale category detected: offer=${offerId} had=${existingOfferCategoryId} want=${categoryId} — deleting + recreating`
+          );
+          await fetch(`https://api.ebay.com/sell/inventory/v1/offer/${offerId}`, {
+            method: 'DELETE',
+            headers: ebayUserHeaders(accessToken),
+          });
+          offerId = null;
+          await prisma.item.update({
+            where: { id: item.id },
+            data: { ebayOfferId: null },
+          });
         }
 
         if (offerId) {
@@ -1551,13 +1607,68 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         // Step 3: Publish offer
         const publishUrl = `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`;
-        const publishResponse = await fetch(publishUrl, {
+        let publishResponse = await fetch(publishUrl, {
           method: 'POST',
           headers: ebayUserHeaders(accessToken),
         });
 
         // Resolve listing ID — either from publish response or from existing offer
         let ebayListingId: string | null = null;
+
+        // 25021 retry: eBay sometimes rejects a condition even when the metadata
+        // API says it's accepted (stale inventory state, category transition edge
+        // cases). If we see 25021, walk the accepted-conditions list and retry
+        // the inventory PUT + publish with each candidate until one works or we
+        // exhaust the list.
+        if (!publishResponse.ok) {
+          const publishErrorText = await publishResponse.clone().text();
+          if (publishErrorText.includes('25021')) {
+            const accepted = await getAcceptedConditionsForCategory(categoryId);
+            // Preference order for retry: NEW_OTHER, USED_VERY_GOOD, USED_EXCELLENT,
+            // NEW, USED_GOOD, USED_ACCEPTABLE — excluding whichever we already tried.
+            const retryOrder = [
+              'NEW_OTHER',
+              'USED_VERY_GOOD',
+              'USED_EXCELLENT',
+              'USED_GOOD',
+              'USED_ACCEPTABLE',
+              'NEW',
+            ].filter((c) => c !== ebayCondition && (!accepted || accepted.has(c)));
+
+            for (const retryCondition of retryOrder) {
+              console.log(
+                `[eBay Retry25021] ${sku}: ${ebayCondition} rejected — retrying with ${retryCondition}`
+              );
+              // Re-PUT inventory item with new condition
+              const retryInvPayload = { ...inventoryPayload, condition: retryCondition };
+              const retryInvRes = await fetch(inventoryUrl, {
+                method: 'PUT',
+                headers: ebayUserHeaders(accessToken),
+                body: JSON.stringify(retryInvPayload),
+              });
+              if (!retryInvRes.ok && retryInvRes.status !== 204) {
+                const t = await retryInvRes.text();
+                console.warn(`[eBay Retry25021] inventory PUT failed: ${retryInvRes.status} ${t.slice(0, 200)}`);
+                continue;
+              }
+              // Re-publish
+              publishResponse = await fetch(publishUrl, {
+                method: 'POST',
+                headers: ebayUserHeaders(accessToken),
+              });
+              if (publishResponse.ok) {
+                console.log(`[eBay Retry25021] ${sku}: succeeded with condition=${retryCondition}`);
+                break;
+              }
+              const retryErr = await publishResponse.clone().text();
+              if (!retryErr.includes('25021')) {
+                // Different error — stop retrying conditions
+                console.warn(`[eBay Retry25021] ${sku}: non-25021 error, stopping: ${retryErr.slice(0, 200)}`);
+                break;
+              }
+            }
+          }
+        }
 
         if (publishResponse.ok) {
           const publishData = (await publishResponse.json()) as any;
