@@ -28,14 +28,6 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // eBay images — NetworkOnly so SW never caches them.
-    // eBay CDN does not send CORS headers; any SW-internal fetch() fails.
-    // By using NetworkOnly the SW forwards the request without caching,
-    // letting the browser load the image in its native no-cors mode.
-    {
-      urlPattern: /^https:\/\/i\.ebayimg\.com\/.*/i,
-      handler: 'NetworkOnly',
-    },
     // OSM map tiles — cache first (subdomain tiles: a/b/c.tile.openstreetmap.org)
     {
       urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/i,
@@ -101,9 +93,11 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // HTML pages — network first (Stripe domains excluded so SW never intercepts them)
+    // HTML pages — network first (Stripe + eBay CDN excluded so SW never intercepts them)
+    // i.ebayimg.com excluded: eBay CDN has no CORS headers; any SW fetch() fails.
+    // Unmatched URLs bypass SW entirely and load natively in browser no-cors mode.
     {
-      urlPattern: /^https?:\/\/(?!(?:js|hooks|m|api)\.stripe\.com)[^/]+\/(?!api\/).*/i,
+      urlPattern: /^https?:\/\/(?!(?:js|hooks|m|api)\.stripe\.com|i\.ebayimg\.com)[^/]+\/(?!api\/).*/i,
       handler: 'NetworkFirst',
       options: {
         cacheName: 'pages',
