@@ -1020,12 +1020,18 @@ export const checkEbayConnection = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    const inventorySale = await prisma.sale.findFirst({
+      where: { organizerId: organizer.id, title: 'eBay Inventory' },
+      select: { id: true },
+    });
+
     res.json({
       connected: true,
       ebayUserId: connection.ebayUserId,
       connectedAt: connection.connectedAt,
       lastRefreshedAt: connection.lastRefreshedAt,
       lastEbayInventorySyncAt: connection.lastEbayInventorySyncAt,
+      ebaySaleId: inventorySale?.id ?? null,
       error: connection.lastErrorMessage ? 'TOKEN_REFRESH_FAILED' : null,
       errorMessage: connection.lastErrorMessage,
     });

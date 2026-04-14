@@ -28,15 +28,13 @@ const withPWA = require('next-pwa')({
         cacheableResponse: { statuses: [0, 200] },
       },
     },
-    // eBay images — stale-while-revalidate (synced inventory photos)
+    // eBay images — NetworkOnly so SW never caches them.
+    // eBay CDN does not send CORS headers; any SW-internal fetch() fails.
+    // By using NetworkOnly the SW forwards the request without caching,
+    // letting the browser load the image in its native no-cors mode.
     {
       urlPattern: /^https:\/\/i\.ebayimg\.com\/.*/i,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'ebay-images',
-        expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
-        cacheableResponse: { statuses: [0, 200] },
-      },
+      handler: 'NetworkOnly',
     },
     // OSM map tiles — cache first (subdomain tiles: a/b/c.tile.openstreetmap.org)
     {
@@ -158,6 +156,8 @@ const nextConfig = {
       // S237: /auth/* used to be valid routes — redirect to /login to prevent 404s from old bookmarks/emails
       { source: '/auth/login', destination: '/login', permanent: true },
       { source: '/auth/:path*', destination: '/login', permanent: true },
+      // /organizer/inventory/[id] never existed as a page — redirect to edit-item
+      { source: '/organizer/inventory/:id', destination: '/organizer/edit-item/:id', permanent: false },
     ];
   },
 
