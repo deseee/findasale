@@ -1,20 +1,17 @@
 /**
  * eBay Category Picker Component
  *
- * Searchable select dropdown for choosing eBay categories.
- * Displays top-level categories with immediate children.
- * Returns selected category name for database storage.
+ * Live-searching category picker that calls eBay's Taxonomy API
+ * to suggest categories based on item title.
+ * Returns selected category name (backward compatible).
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 
-interface EbayCategory {
-  id: string;
-  name: string;
-  children: Array<{
-    id: string;
-    name: string;
-  }>;
+interface CategorySuggestion {
+  categoryId: string;
+  categoryName: string;
+  categoryTreeNodeLevel: number;
 }
 
 interface EbayCategoryPickerProps {
@@ -30,24 +27,57 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
   label = 'eBay Category',
   placeholder = 'Search and select an eBay category...',
 }) => {
-  const [categories, setCategories] = useState<EbayCategory[]>([]);
+  const [input, setInput] = useState('');
+  const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Load categories from static JSON
+  // Debounced category search
   useEffect(() => {
-    const loadCategories = async () => {
+    if (!input.trim()) {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
+
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+    setIsLoading(true);
+    setError('');
+
+    const timer = setTimeout(async () => {
       try {
-        const response = await fetch('/ebay-categories.json');
+        const response = await fetch(
+          `/api/ebay/taxonomy/suggest?q=${encodeURIComponent(input)}`,
+          { signal: abortControllerRef.current!.signal }
+        );
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.statusText}`);
+        }
+
         const data = await response.json();
-        setCategories(data);
-      } catch (error) {
-        console.error('Failed to load eBay categories:', error);
+        setSuggestions(data.suggestions || []);
+        setIsOpen(true);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Failed to fetch category suggestions:', err);
+          setError('Failed to fetch categories');
+        }
+      } finally {
+        setIsLoading(false);
       }
-    };
-    loadCategories();
-  }, []);
+    }, 400); // Debounce 400ms
+
+    return () => clearTimeout(timer);
+  }, [input]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -60,24 +90,12 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filter categories based on search term
-  const filteredCategories = categories.filter(cat => {
-    const catMatch = cat.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const childMatch = cat.children.some(child =>
-      child.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    return catMatch || childMatch;
-  });
-
   const handleSelect = (categoryName: string) => {
     onChange(categoryName);
+    setInput('');
     setIsOpen(false);
-    setSearchTerm('');
+    setSuggestions([]);
   };
-
-  const selectedCategory = categories.find(cat =>
-    cat.children.some(child => child.name === value) || cat.name === value
-  );
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -87,82 +105,59 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
         </label>
       )}
 
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-left flex justify-between items-center hover:border-warm-400 dark:hover:border-gray-500 transition-colors"
-      >
-        <span className={value ? 'text-warm-900 dark:text-warm-100' : 'text-warm-500 dark:text-warm-400'}>
-          {value || placeholder}
-        </span>
-        <svg
-          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-        </svg>
-      </button>
+      {/* Text input field */}
+      <div className="relative">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onFocus={() => input.trim() && setIsOpen(true)}
+          placeholder={value || placeholder}
+          className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+        />
 
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg shadow-lg">
-          {/* Search Input */}
-          <input
-            type="text"
-            placeholder="Search categories..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 border-b border-warm-200 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 focus:outline-none focus:ring-0 rounded-t-lg"
-          />
-
-          {/* Category List */}
-          <div className="max-h-96 overflow-y-auto">
-            {filteredCategories.length === 0 ? (
-              <div className="px-4 py-3 text-center text-warm-500 dark:text-warm-400 text-sm">
-                No categories found
-              </div>
-            ) : (
-              filteredCategories.map((category) => (
-                <div key={category.id}>
-                  {/* Main Category (parent level) */}
-                  <button
-                    type="button"
-                    onClick={() => handleSelect(category.name)}
-                    className={`w-full text-left px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-gray-600 font-semibold transition-colors ${
-                      value === category.name
-                        ? 'bg-amber-100 dark:bg-amber-900 text-warm-900 dark:text-amber-100'
-                        : 'text-warm-900 dark:text-warm-100'
-                    }`}
-                  >
-                    {category.name}
-                  </button>
-
-                  {/* Child Categories (indent and gray) */}
-                  {category.children
-                    .filter(child =>
-                      searchTerm === '' || child.name.toLowerCase().includes(searchTerm.toLowerCase())
-                    )
-                    .map((child) => (
-                      <button
-                        key={child.id}
-                        type="button"
-                        onClick={() => handleSelect(child.name)}
-                        className={`w-full text-left px-8 py-2 hover:bg-amber-50 dark:hover:bg-gray-600 transition-colors text-sm ${
-                          value === child.name
-                            ? 'bg-amber-100 dark:bg-amber-900 text-warm-900 dark:text-amber-100'
-                            : 'text-warm-700 dark:text-warm-300'
-                        }`}
-                      >
-                        {child.name}
-                      </button>
-                    ))}
-                </div>
-              ))
-            )}
+        {/* Loading spinner */}
+        {isLoading && (
+          <div className="absolute right-4 top-2.5">
+            <div className="animate-spin h-5 w-5 border border-amber-500 border-t-transparent rounded-full" />
           </div>
+        )}
+      </div>
+
+      {/* Error message */}
+      {error && (
+        <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
+
+      {/* Dropdown suggestions */}
+      {isOpen && !isLoading && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg shadow-lg">
+          {suggestions.length === 0 ? (
+            <div className="px-4 py-3 text-center text-warm-500 dark:text-warm-400 text-sm">
+              {input.trim() ? 'No categories found' : 'Start typing to search'}
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.categoryId}
+                  type="button"
+                  onClick={() => handleSelect(suggestion.categoryName)}
+                  className="w-full text-left px-4 py-2.5 hover:bg-amber-50 dark:hover:bg-gray-600 transition-colors border-b border-warm-100 dark:border-gray-600 last:border-b-0"
+                >
+                  <div className="text-warm-900 dark:text-warm-100 font-medium">
+                    {suggestion.categoryName}
+                  </div>
+                  <div className="text-xs text-warm-600 dark:text-warm-400">
+                    ID: {suggestion.categoryId}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
+
     </div>
   );
 };

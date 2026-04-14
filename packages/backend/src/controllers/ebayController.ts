@@ -4,7 +4,6 @@ import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
-import { getEbayCategoryId } from '../utils/ebayCategoryMap';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { getIO } from '../lib/socket';
 
@@ -459,14 +458,14 @@ function generateEbayCsv(
     // Get condition ID mapping
     const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
 
-    // Get eBay category ID from category name
-    const ebayCategoryId = getEbayCategoryId(item.category);
+    // Use stored ebayCategoryId if available; otherwise use '99' (fallback)
+    const ebayCategoryId = item.ebayCategoryId || '99';
 
     // Build data row in correct column order
     const row = [
       escapeCsvValue('Draft'), // Action
       escapeCsvValue(item.id.substring(0, 12)), // Custom label (SKU) — use truncated ID
-      escapeCsvValue(ebayCategoryId), // Category ID (mapped from FindA.Sale category name)
+      escapeCsvValue(ebayCategoryId), // Category ID (stored or fallback)
       escapeCsvValue(truncatedTitle), // Title
       escapeCsvValue(''), // UPC
       escapeCsvValue(price.toFixed(2)), // Price
@@ -1273,9 +1272,6 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
         });
       }
     }
-    if (!categoryId) {
-      categoryId = getEbayCategoryId(item.category);
-    }
 
     // Determine price
     let price = 0.99;
@@ -1486,9 +1482,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               data: { ebayCategoryId: categoryId },
             });
           }
-        }
-        if (!categoryId) {
-          categoryId = getEbayCategoryId(item.category);
         }
 
         // Resolve condition: grade → inventory enum → remap to category-accepted value
