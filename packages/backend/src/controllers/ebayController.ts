@@ -1324,12 +1324,13 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         // Step 1: Create or replace inventory item
         const inventoryUrl = `https://api.ebay.com/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-        const inventoryPayload = {
+        const aspects = buildAspects(item.tags);
+        const inventoryPayload: Record<string, unknown> = {
           product: {
             title: item.title.substring(0, 80),
             description: (item.description || '').replace(/<[^>]*>/g, '').substring(0, 4000),
             imageUrls: photos,
-            aspects: buildAspects(item.tags),
+            ...(aspects ? { aspects } : {}),
           },
           condition: mapConditionIdToEbayCondition(conditionId),
           availability: {
@@ -1482,15 +1483,23 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 /**
  * Helper: Build aspects object from tags
  */
-function buildAspects(tags: string[]): Record<string, string> {
-  const aspects: Record<string, string> = {};
-  tags.forEach(tag => {
-    const [key, value] = tag.split(':');
-    if (key && value) {
-      aspects[key] = value;
+function buildAspects(tags: string[]): Record<string, string[]> | undefined {
+  const aspects: Record<string, string[]> = {};
+  (tags || []).forEach(tag => {
+    const colonIdx = tag.indexOf(':');
+    if (colonIdx > 0) {
+      const key = tag.substring(0, colonIdx).trim();
+      const value = tag.substring(colonIdx + 1).trim();
+      if (key && value) {
+        if (aspects[key]) {
+          aspects[key].push(value);
+        } else {
+          aspects[key] = [value];
+        }
+      }
     }
   });
-  return aspects;
+  return Object.keys(aspects).length > 0 ? aspects : undefined;
 }
 
 /**
@@ -1505,7 +1514,7 @@ function mapConditionIdToEbayCondition(conditionId: string): string {
     '6000': 'ACCEPTABLE',
     '7000': 'FOR_PARTS_OR_NOT_WORKING',
   };
-  return conditionMap[conditionId] || 'USED';
+  return conditionMap[conditionId] || 'GOOD';
 }
 
 /**
