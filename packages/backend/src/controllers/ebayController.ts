@@ -2004,6 +2004,14 @@ export const handleEbayNotificationVerification = (req: express.Request, res: Re
   const verificationToken = process.env.EBAY_NOTIFICATION_VERIFICATION_TOKEN;
   const endpointUrl = process.env.EBAY_NOTIFICATION_ENDPOINT_URL;
 
+  // Debug: log env var state and exact values used in hash (token masked)
+  console.log('[eBay Notify] Challenge received:', {
+    challengeCode,
+    endpointUrl: endpointUrl || 'NOT SET',
+    tokenSet: !!verificationToken,
+    tokenLength: verificationToken?.length ?? 0,
+  });
+
   if (!verificationToken || !endpointUrl) {
     console.error('[eBay Notify] EBAY_NOTIFICATION_VERIFICATION_TOKEN or EBAY_NOTIFICATION_ENDPOINT_URL not configured');
     res.status(500).json({ error: 'Notification endpoint not configured' });
@@ -2015,6 +2023,7 @@ export const handleEbayNotificationVerification = (req: express.Request, res: Re
     .update(challengeCode + verificationToken + endpointUrl)
     .digest('hex');
 
+  console.log('[eBay Notify] Challenge response hash:', hash);
   res.json({ challengeResponse: hash });
 };
 
