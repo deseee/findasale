@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 
-export interface LibraryFilters {
+export interface InventoryFilters {
   search?: string;
   category?: string;
   condition?: string;
@@ -10,10 +10,10 @@ export interface LibraryFilters {
 }
 
 /**
- * Add an item to the organizer's library.
- * Sets inLibrary=true and captures current values.
+ * Add an item to the organizer's inventory.
+ * Sets inInventory=true and captures current values.
  */
-export const addToLibrary = async (itemId: string, organizerId: string) => {
+export const addToInventory = async (itemId: string, organizerId: string) => {
   const item = await prisma.item.findUnique({ where: { id: itemId } });
   if (!item) throw new Error('Item not found');
 
@@ -30,50 +30,50 @@ export const addToLibrary = async (itemId: string, organizerId: string) => {
   return prisma.item.update({
     where: { id: itemId },
     data: {
-      inLibrary: true,
+      inInventory: true,
       libraryId: itemId, // Use item ID as library reference (can be normalized later)
     },
   });
 };
 
 /**
- * Remove an item from the organizer's library.
- * Sets inLibrary=false.
+ * Remove an item from the organizer's inventory.
+ * Sets inInventory=false.
  */
-export const removeFromLibrary = async (itemId: string) => {
+export const removeFromInventory = async (itemId: string) => {
   return prisma.item.update({
     where: { id: itemId },
     data: {
-      inLibrary: false,
+      inInventory: false,
       libraryId: null,
     },
   });
 };
 
 /**
- * Pull an item from the library into a new sale.
- * Creates a copy of the library item with new saleId and optional price override.
- * Sets libraryId on the new item to link back to the library item.
- * Records price in ItemPriceHistory with changedBy='library_pulled'.
+ * Pull an item from the inventory into a new sale.
+ * Creates a copy of the inventory item with new saleId and optional price override.
+ * Sets libraryId on the new item to link back to the inventory item.
+ * Records price in ItemPriceHistory with changedBy='inventory_pulled'.
  */
-export const pullFromLibrary = async (
-  libraryItemId: string,
+export const pullFromInventory = async (
+  inventoryItemId: string,
   saleId: string,
   organizerId: string,
   priceOverride?: number
 ) => {
-  // Verify library item exists and is in library
-  const libraryItem = await prisma.item.findUnique({
-    where: { id: libraryItemId },
+  // Verify inventory item exists and is in inventory
+  const inventoryItem = await prisma.item.findUnique({
+    where: { id: inventoryItemId },
   });
 
-  if (!libraryItem || !libraryItem.inLibrary) {
-    throw new Error('Library item not found or not in library');
+  if (!inventoryItem || !inventoryItem.inInventory) {
+    throw new Error('Inventory item not found or not in inventory');
   }
 
   // Verify ownership
-  if (libraryItem.organizerId !== organizerId) {
-    throw new Error('Unauthorized: library item does not belong to this organizer');
+  if (inventoryItem.organizerId !== organizerId) {
+    throw new Error('Unauthorized: inventory item does not belong to this organizer');
   }
 
   // Verify sale exists and belongs to organizer
@@ -86,40 +86,40 @@ export const pullFromLibrary = async (
     throw new Error('Unauthorized: sale does not belong to this organizer');
   }
 
-  // Create new item in the sale (copy from library item)
+  // Create new item in the sale (copy from inventory item)
   const newItem = await prisma.item.create({
     data: {
-      title: libraryItem.title,
-      description: libraryItem.description,
-      category: libraryItem.category,
-      condition: libraryItem.condition,
-      photoUrls: libraryItem.photoUrls,
-      tags: libraryItem.tags,
+      title: inventoryItem.title,
+      description: inventoryItem.description,
+      category: inventoryItem.category,
+      condition: inventoryItem.condition,
+      photoUrls: inventoryItem.photoUrls,
+      tags: inventoryItem.tags,
       saleId,
       organizerId,
-      libraryId: libraryItemId, // Link back to library item
-      inLibrary: false, // New item is not in library, it's in a sale
-      price: priceOverride ?? libraryItem.price,
+      libraryId: inventoryItemId, // Link back to inventory item
+      inInventory: false, // New item is not in inventory, it's in a sale
+      price: priceOverride ?? inventoryItem.price,
       status: 'AVAILABLE',
       isActive: true,
     },
   });
 
-  // Record price in history with library_pulled reason
+  // Record price in history with inventory_pulled reason
   if (newItem.price) {
     await prisma.itemPriceHistory.create({
       data: {
         itemId: newItem.id,
         price: newItem.price,
-        changedBy: 'library_pulled',
-        note: `Pulled from library item ${libraryItemId}`,
+        changedBy: 'inventory_pulled',
+        note: `Pulled from inventory item ${inventoryItemId}`,
       },
     });
   }
 
-  // Update library item to mark it as in a sale
+  // Update inventory item to mark it as in a sale
   await prisma.item.update({
-    where: { id: libraryItemId },
+    where: { id: inventoryItemId },
     data: {
       // libraryId remains the same, but status can be updated if needed
     },
@@ -129,9 +129,9 @@ export const pullFromLibrary = async (
 };
 
 /**
- * Get all library items for an organizer with optional filters.
+ * Get all inventory items for an organizer with optional filters.
  */
-export const getLibraryItems = async (organizerId: string, filters: LibraryFilters = {}) => {
+export const getInventoryItems = async (organizerId: string, filters: InventoryFilters = {}) => {
   const where: any = {
     OR: [
       { organizerId },

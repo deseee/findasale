@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Trash2, Copy, Clock } from 'lucide-react';
 import { getThumbnailUrl } from '../lib/imageUtils';
 
-interface LibraryItemCardProps {
+interface InventoryItemCardProps {
   id: string;
   title: string;
   category?: string;
@@ -25,10 +25,10 @@ const statusColors: Record<string, { bg: string; text: string }> = {
 };
 
 /**
- * LibraryItemCard — Display a library item with actions
- * Feature #25: Item Library (Consignment Rack)
+ * InventoryItemCard — Display an inventory item with actions
+ * Feature #25: Item Inventory (Consignment Rack)
  */
-const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
+const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
   id,
   title,
   category,
@@ -132,7 +132,7 @@ const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
             onClick={onDelete}
             disabled={isLoading}
             className="p-2 hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 rounded transition-colors disabled:opacity-50"
-            title="Remove from library"
+            title="Remove from inventory"
           >
             <Trash2 size={16} />
           </button>
@@ -142,4 +142,4 @@ const LibraryItemCard: React.FC<LibraryItemCardProps> = ({
   );
 };
 
-export default LibraryItemCard;
+export default InventoryItemCard;

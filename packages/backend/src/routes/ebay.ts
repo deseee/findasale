@@ -7,6 +7,7 @@ import {
   disconnectEbay,
   getEbayPreview,
   pushSaleToEbay,
+  importInventoryFromEbay,
   handleEbayAccountDeletionVerification,
   handleEbayAccountDeletion,
 } from '../controllers/ebayController';
@@ -27,6 +28,10 @@ router.delete('/connection', authenticate, disconnectEbay);
 // Preview and push endpoints
 router.get('/organizer/items/:itemId/ebay-preview', authenticate, getEbayPreview);
 router.post('/organizer/sales/:saleId/ebay-push', authenticate, pushSaleToEbay);
+
+// Feature #244 Phase 2b: eBay Inventory Import
+// Import eBay inventory items into FindA.Sale
+router.post('/import-inventory', authenticate, importInventoryFromEbay);
 
 // eBay Marketplace Account Deletion — required for production keyset
 // GET: challenge verification handshake

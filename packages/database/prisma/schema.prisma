@@ -356,6 +356,9 @@ model EbayConnection {
   // Feature #244 Phase 3: eBay sold sync deduplication
   lastEbaySoldSyncAt   DateTime? // Last time this connection's sold orders were synced from eBay
 
+  // eBay inventory import: when eBay inventory was last pulled into FindA.Sale
+  lastEbayInventorySyncAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -583,6 +586,8 @@ model Sale {
   workspaceSaleChats          WorkspaceSaleChat[]      @relation("WorkspaceSaleChats")
   workspaceTasks              WorkspaceTask[]          @relation("WorkspaceTasks")
   workspaceAlerts             WorkspaceAlert[]         @relation("WorkspaceAlerts")
+  // eBay inventory import: hidden DRAFT container sale for organizer's inventory items
+  isInventoryContainer        Boolean                  @default(false)
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -682,7 +687,7 @@ model Item {
   photos                Photo[] // Multi-photo support (forward-looking)
   // Feature #25: Item Library — organizer-owned items across sales
   libraryId             String? // Links to future LibraryItem table; for now just namespace
-  inLibrary             Boolean                @default(false) // Cached: is this item in organizer's library?
+  inInventory           Boolean                @default(false) // Cached: is this item in organizer's inventory?
   priceVariants         Json? // { saleId: price } for per-sale pricing (Phase 5)
   organizerId           String? // Denormalized from sale.organizerId for library queries
   // Feature #29: Loyalty Passport — Hunt Pass early access embargo
@@ -747,7 +752,7 @@ model Item {
   @@index([draftStatus])
   @@index([saleId, draftStatus])
   @@index([libraryId])
-  @@index([organizerId, inLibrary])
+  @@index([organizerId, inInventory])
   @@index([isHighValue])
   @@index([ebayListingId])
   @@index([isLegendary, legendaryVisibleAt]) // Phase 2b: Legendary early access query optimization

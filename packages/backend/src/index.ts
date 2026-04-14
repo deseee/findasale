@@ -120,7 +120,7 @@ import earlyAccessRoutes from './routes/early-access';           // Early Access
 import guildRoutes from './routes/guild';                    // Phase 2b: Explorer's Guild Hall of Fame
 import receiptRoutes from './routes/receipts';               // #62: Digital Receipts
 import returnRoutes from './routes/returns';                 // #62: Return Requests
-import itemLibraryRoutes from './routes/itemLibrary';         // Feature #25: Item Library (Consignment Rack)
+import itemInventoryRoutes from './routes/itemInventory';     // Feature #25: Item Inventory (Consignment Rack)
 import brandKitRoutes from './routes/brandKit';               // #31 Brand Kit expansion
 import wishlistAlertRoutes from './routes/wishlistAlerts';     // Feature #32: Wishlist Alerts
 import smartFollowRoutes from './routes/smartFollows';         // Feature #32: Smart Follow
@@ -459,7 +459,7 @@ app.use('/api/city-heat', cityHeatRoutes);                         // Phase 5: #
 app.use('/api/link-clicks', linkClickRoutes);                      // #18: Post Performance Analytics
 app.use('/api/receipts', receiptRoutes);                             // #62: Digital Receipts
 app.use('/api/returns', returnRoutes);                               // #62: Return Requests
-app.use('/api/item-library', itemLibraryRoutes);                     // Feature #25: Item Library
+app.use('/api/item-inventory', itemInventoryRoutes);                // Feature #25: Item Inventory
 app.use('/api/brand-kit', brandKitRoutes);                           // #31 Brand Kit expansion
 app.use('/api/wishlist-alerts', wishlistAlertRoutes);                // Feature #32: Wishlist Alerts
 app.use('/api/smart-follows', smartFollowRoutes);                    // Feature #32: Smart Follow
