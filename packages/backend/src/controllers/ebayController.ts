@@ -1306,7 +1306,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     for (const item of sale.items) {
       try {
         const sku = `FAS-${item.id}`;
-        const conditionId = mapConditionGradeToEbayId(item.conditionGrade);
+        const ebayCondition = mapGradeToInventoryCondition(item.conditionGrade);
         const categoryId = getEbayCategoryId(item.category);
 
         // Determine price
@@ -1337,7 +1337,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             imageUrls: photos,
             ...(aspects ? { aspects } : {}),
           },
-          condition: mapConditionIdToEbayCondition(conditionId),
+          condition: ebayCondition,
           availability: {
             shipToLocationAvailability: {
               quantity: 1,
@@ -1635,18 +1635,37 @@ function buildAspects(tags: string[]): Record<string, string[]> | undefined {
 }
 
 /**
- * Helper: Map condition ID to eBay condition string
+ * Helper: Map condition ID to eBay Inventory API condition enum.
+ * Trading API IDs → Inventory API string enums (NOT the same scale).
  */
 function mapConditionIdToEbayCondition(conditionId: string): string {
   const conditionMap: Record<string, string> = {
     '1000': 'NEW',
-    '3000': 'LIKE_NEW',
-    '4000': 'VERY_GOOD',
-    '5000': 'GOOD',
-    '6000': 'ACCEPTABLE',
+    '1500': 'NEW_OTHER',
+    '1750': 'NEW_WITH_DEFECTS',
+    '2500': 'SELLER_REFURBISHED',
+    '3000': 'USED_GOOD',        // Trading API 3000 = "Used" → USED_GOOD
+    '4000': 'USED_VERY_GOOD',   // Trading API 4000 = "Very Good"
+    '5000': 'USED_GOOD',        // Trading API 5000 = "Good"
+    '6000': 'USED_ACCEPTABLE',  // Trading API 6000 = "Acceptable"
     '7000': 'FOR_PARTS_OR_NOT_WORKING',
   };
-  return conditionMap[conditionId] || 'GOOD';
+  return conditionMap[conditionId] || 'USED_GOOD';
+}
+
+/**
+ * Helper: Map FindA.Sale condition grade directly to eBay Inventory API enum.
+ * Bypasses the two-step Trading API conversion for the push flow.
+ */
+function mapGradeToInventoryCondition(grade: string | null | undefined): string {
+  switch ((grade || '').toUpperCase()) {
+    case 'S': return 'NEW';
+    case 'A': return 'LIKE_NEW';
+    case 'B': return 'USED_VERY_GOOD';
+    case 'C': return 'USED_GOOD';
+    case 'D': return 'FOR_PARTS_OR_NOT_WORKING';
+    default:  return 'USED_GOOD';
+  }
 }
 
 /**
