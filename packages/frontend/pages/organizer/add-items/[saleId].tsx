@@ -295,6 +295,8 @@ const AddItemsDetailPage = () => {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('camera');
   const [formData, setFormData] = useState(emptyForm);
+  // First-time walkthrough
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -474,6 +476,24 @@ const AddItemsDetailPage = () => {
       setCameraOpen(true);
     }
   }, [router.isReady, router.query.openCamera, router.query.captureMode, router.query.appendToItemId]);
+
+  // First-time walkthrough: show once per browser (not per-sale)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const seen = localStorage.getItem('addItemsWalkthroughSeen');
+    if (!seen) {
+      setShowWalkthrough(true);
+    }
+  }, []);
+
+  const handleWalkthroughDismiss = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('addItemsWalkthroughSeen', '1');
+    }
+    setShowWalkthrough(false);
+    // Auto-open the camera so the user's first action is a capture
+    setCameraOpen(true);
+  };
 
   // OG-2: Fire survey when 10th item is added
   const itemCountRef = useRef<number>(0);
@@ -2455,6 +2475,82 @@ const AddItemsDetailPage = () => {
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
                 {ebayExporting ? 'Generating...' : 'Download CSV'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* First-Time Add-Items Walkthrough */}
+      {showWalkthrough && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-amber-600 px-6 py-5">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-3xl">📷</span>
+                <h2 className="text-xl font-bold text-white font-serif">Welcome to Add Items</h2>
+              </div>
+              <p className="text-amber-100 text-sm">Your camera is your fastest tool. Here's how it works.</p>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Rapidfire */}
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl mt-0.5">⚡</span>
+                  <div>
+                    <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Rapidfire Mode <span className="text-xs font-normal text-amber-600 dark:text-amber-400 ml-1">— recommended</span></p>
+                    <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
+                      Snap, snap, snap. <strong>1 photo = 1 item.</strong> AI tags title, category, and price in the background while you keep shooting. Tap any thumbnail to add more photos to that item.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Regular */}
+              <div className="bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl mt-0.5">🔍</span>
+                  <div>
+                    <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Regular Mode</p>
+                    <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
+                      Take up to 5 photos of one item, then tap <strong>Analyze</strong>. Good for items that need multiple angles before AI runs.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* After-capture tip */}
+              <div className="flex items-start gap-2 text-sm text-warm-500 dark:text-warm-400 px-1">
+                <span className="text-base mt-0.5">💡</span>
+                <p>After capturing, tap <strong>Review & Publish</strong> to set final prices and go live.</p>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="px-6 pb-6">
+              <button
+                onClick={handleWalkthroughDismiss}
+                className="w-full bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-bold py-3.5 px-6 rounded-xl transition-colors text-base flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Got it — Open Camera
+              </button>
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('addItemsWalkthroughSeen', '1');
+                  }
+                  setShowWalkthrough(false);
+                }}
+                className="w-full mt-2 text-sm text-warm-400 dark:text-warm-500 hover:text-warm-600 dark:hover:text-warm-300 py-1 transition-colors"
+              >
+                Skip for now
               </button>
             </div>
           </div>
