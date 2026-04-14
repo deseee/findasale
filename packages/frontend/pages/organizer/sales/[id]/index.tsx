@@ -100,10 +100,10 @@ const SaleDetailPage = () => {
       });
       refetchItems();
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: string[]) => {
       const msg = error.response?.data?.message || 'Failed to push item to eBay';
       showToast(msg, 'error');
-      itemIds.forEach((id) => {
+      variables.forEach((id) => {
         setEbayPushStatus((prev) => ({ ...prev, [id]: 'error' }));
       });
     },
