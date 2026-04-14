@@ -1658,7 +1658,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       let tradingTotalPages = 1;
 
       while (tradingPage <= tradingTotalPages) {
-        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials><eBayAuthToken>${accessToken}</eBayAuthToken></RequesterCredentials><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
+        // OAuth tokens use X-EBAY-API-IAF-TOKEN header — NOT <eBayAuthToken> (that's legacy Auth'n'Auth only)
+        const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
 
         const tradingResp = await fetch('https://api.ebay.com/ws/api.dll', {
           method: 'POST',
@@ -1667,6 +1668,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             'X-EBAY-API-SITEID': '0',
             'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
             'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+            'X-EBAY-API-IAF-TOKEN': accessToken,
             'Content-Type': 'text/xml',
           },
           body: tradingXml,
@@ -1683,6 +1685,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         if (ack !== 'Success' && ack !== 'Warning') {
           const errMsg = xmlVal(tradingText, 'LongMessage') || xmlVal(tradingText, 'ShortMessage') || 'Unknown error';
           console.error('[eBay Import] Trading API failure:', errMsg);
+          console.error('[eBay Import] Trading API raw response (first 800 chars):', tradingText.slice(0, 800));
           break;
         }
 
