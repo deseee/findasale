@@ -1409,7 +1409,7 @@ const AddItemsDetailPage = () => {
                 </>
               )}
               {items.length === 0 && (
-                'Add items to your sale using manual entry, camera capture, batch upload, or CSV import.'
+                'Add items to your sale using camera capture, batch upload, manual entry, or CSV import.'
               )}
             </p>
           </div>
