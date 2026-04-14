@@ -98,22 +98,28 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       return;
     }
 
-    // ── Step 1b: Get supported schema version for the topic ─────────────────
+    // ── Step 1b: Discover correct topic name and schema version ─────────────
     let schemaVersion = '1.0'; // fallback
-    const topicResp = await fetch(`${EBAY_NOTIFY_BASE}/topic/${EBAY_NOTIFICATION_TOPIC}`, {
+    const topicsResp = await fetch(`${EBAY_NOTIFY_BASE}/topic`, {
       method: 'GET',
       headers,
     });
-    if (topicResp.ok) {
-      const topicText = await topicResp.text();
-      const topicData = topicText ? JSON.parse(topicText) : {};
-      const versions: string[] = topicData.supportedSchemaVersions || [];
-      if (versions.length > 0) {
-        schemaVersion = versions[versions.length - 1]; // use latest
-        console.log(`[eBay Notify Setup] Topic schema versions: ${versions.join(', ')} — using ${schemaVersion}`);
+    if (topicsResp.ok) {
+      const topicsText = await topicsResp.text();
+      const topicsData = topicsText ? JSON.parse(topicsText) : {};
+      const topics: any[] = topicsData.topics || [];
+      console.log(`[eBay Notify Setup] Available topics (${topics.length}):`, topics.map((t: any) => `${t.topicId} [${(t.supportedSchemaVersions || []).join(',')}]`).join(' | '));
+      const match = topics.find((t: any) => t.topicId === EBAY_NOTIFICATION_TOPIC);
+      if (match) {
+        const versions: string[] = match.supportedSchemaVersions || [];
+        if (versions.length > 0) schemaVersion = versions[versions.length - 1];
+        console.log(`[eBay Notify Setup] Matched topic ${EBAY_NOTIFICATION_TOPIC} — schemaVersion=${schemaVersion}`);
+      } else {
+        console.warn(`[eBay Notify Setup] Topic "${EBAY_NOTIFICATION_TOPIC}" not found in available topics — using fallback schemaVersion ${schemaVersion}`);
       }
     } else {
-      console.warn(`[eBay Notify Setup] Could not fetch topic info: HTTP ${topicResp.status} — using schemaVersion fallback ${schemaVersion}`);
+      const errText = await topicsResp.text();
+      console.warn(`[eBay Notify Setup] Could not list topics: HTTP ${topicsResp.status} — ${errText.slice(0, 200)}`);
     }
 
     // ── Step 2: Find or create subscription ─────────────────────────────────
