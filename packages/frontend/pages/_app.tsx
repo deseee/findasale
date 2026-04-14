@@ -104,7 +104,10 @@ function OAuthBridge() {
 
   useEffect(() => {
     const backendJwt = (session as any)?.backendJwt;
-    if (status === 'authenticated' && backendJwt && !authLoading && !user) {
+    // Drop !authLoading guard — it caused a race on mobile where authLoading was
+    // true when NextAuth fired, so login() never ran and the session was lost.
+    // !user still prevents double-login if a stored token already exists.
+    if (status === 'authenticated' && backendJwt && !user) {
       login(backendJwt);
       signOut({ redirect: false });
     }
