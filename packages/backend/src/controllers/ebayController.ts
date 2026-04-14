@@ -1295,6 +1295,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No available items to push' });
     }
 
+    // Resolve or create a merchant location key (required by eBay for Item.Country)
+    const merchantLocationKey = await getOrCreateMerchantLocation(accessToken);
+
     // Push each item to eBay
     const results: any[] = [];
 
@@ -1375,6 +1378,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           },
           categoryId,
           listingDuration: 'GTC',
+          merchantLocationKey,
           listingPolicies: {
             paymentPolicyId: conn.paymentPolicyId,
             fulfillmentPolicyId: conn.fulfillmentPolicyId,
@@ -1484,6 +1488,58 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 /**
  * Helper: Build aspects object from tags
  */
+/**
+ * Fetch the first existing merchant location key, or create a default US one.
+ * Required by eBay Inventory API to satisfy Item.Country on offer publishing.
+ */
+async function getOrCreateMerchantLocation(accessToken: string): Promise<string> {
+  const DEFAULT_KEY = 'findasale-default';
+  const listUrl = 'https://api.ebay.com/sell/inventory/v1/location';
+
+  try {
+    const listRes = await fetch(listUrl, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    });
+    if (listRes.ok) {
+      const data = (await listRes.json()) as any;
+      const locations = data.locations || [];
+      if (locations.length > 0) {
+        return locations[0].merchantLocationKey;
+      }
+    }
+  } catch (err) {
+    console.error('[eBay] Failed to list merchant locations:', err);
+  }
+
+  // No location found — create a minimal US location
+  const createUrl = `https://api.ebay.com/sell/inventory/v1/location/${DEFAULT_KEY}`;
+  try {
+    const createRes = await fetch(createUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Content-Language': 'en-US' },
+      body: JSON.stringify({
+        location: {
+          address: {
+            country: 'US',
+          },
+        },
+        locationInstructions: 'Items ship from this location',
+        name: 'FindA.Sale Default Location',
+        merchantLocationStatus: 'ENABLED',
+        locationTypes: ['WAREHOUSE'],
+      }),
+    });
+    if (!createRes.ok) {
+      const err = await createRes.text();
+      console.error('[eBay] Failed to create merchant location:', err);
+    }
+  } catch (err) {
+    console.error('[eBay] Exception creating merchant location:', err);
+  }
+
+  return DEFAULT_KEY;
+}
+
 function buildAspects(tags: string[]): Record<string, string[]> | undefined {
   const aspects: Record<string, string[]> = {};
   (tags || []).forEach(tag => {
