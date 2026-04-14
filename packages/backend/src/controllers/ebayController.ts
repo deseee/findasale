@@ -731,7 +731,7 @@ export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'https://api.ebay.com/oauth/api_scope/sell.inventory');
+    authUrl.searchParams.set('scope', 'https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account');
     authUrl.searchParams.set('state', stateToken);
     authUrl.searchParams.set('prompt', 'login');
 
@@ -866,7 +866,8 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
       console.error('[eBay] Failed to fetch policies after OAuth:', err)
     );
 
-    res.redirect(`/organizer/settings?ebay_connected=true`);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+    res.redirect(`${frontendUrl}/organizer/settings?ebay_connected=true`);
   } catch (error) {
     console.error('[eBay] OAuth callback error:', error);
     res.status(500).json({ message: 'Failed to process OAuth callback' });
