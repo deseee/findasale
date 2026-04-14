@@ -7,7 +7,7 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S461 IN PROGRESS (2026-04-14) — eBay push 25021 fixes (4 rounds) + Taxonomy + condition policy remapping**
+**S461 IN PROGRESS (2026-04-14) — eBay push 25021 fixes (5 rounds) + Taxonomy + condition policy + stale-offer cleanup + retry**
 
 **S461 What happened:**
 - **Root cause of ongoing 25021 errors:** `getEbayCategoryId()` name-map was resolving to branch categories (e.g. `"Kitchenware"` → `'20625'` Kitchen Dining & Bar = branch). Default fallback was `'1'` (Collectibles — also a branch). eBay Inventory API rejects any listing under a branch category.
@@ -19,9 +19,13 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Fix 4 (after round 3 test — Taxonomy returned leaf `177006` Vacuum Flasks & Mugs, but 25021 still fired on condition):** Root cause = `LIKE_NEW` enum is media-only (Books/DVDs/CDs/Video Games). Grade A was mapping to `LIKE_NEW` which is rejected for every non-media category. Two-part fix:
   1. `mapGradeToInventoryCondition` now returns universal values only (grade A → `USED_VERY_GOOD`, no more `LIKE_NEW`).
   2. New `ensureConditionValidForCategory()` helper calls eBay Metadata API `get_item_condition_policies` per category, caches accepted condition enums in-memory, and remaps any unsupported condition to the closest accepted substitute via an ordered fallback chain. Logs remap decisions for diagnosis.
+- **Fix 5 (after round 4 test — Metadata API confirmed `USED_VERY_GOOD` was in accepted list for 177006, but publish still returned 25021):** The accepted-conditions list says YES but eBay's publish endpoint says NO — indicates either the inventory_item PUT didn't persist the condition we sent, or the existing offer is holding stale state from an earlier failed push under a bad categoryId. Three-part mitigation:
+  1. **Diagnostic verify:** After each PUT to `/sell/inventory/v1/inventory_item/{sku}`, GET the same sku back and log `[eBay InventoryVerify] sku: sent=X stored=Y` so we can see if eBay silently dropped our condition value.
+  2. **Stale offer cleanup:** Before PUT+publish, fetch the existing offer (if any). If its `categoryId` ≠ desired and status is not PUBLISHED, DELETE the offer and null `Item.ebayOfferId` so the next step creates a fresh one. eBay's Inventory API is known to reject offer PUTs that try to change categoryId on an unpublished offer.
+  3. **25021 retry loop:** If publish returns 25021 (condition invalid) despite all pre-checks, walk through the remaining accepted-condition enums in priority order (`NEW_OTHER → USED_VERY_GOOD → USED_EXCELLENT → USED_GOOD → USED_ACCEPTABLE → NEW`), re-PUT the inventory_item with each and retry publish. Breaks on first success or non-25021 error.
 
 **S461 Files changed (this round, not yet pushed):**
-- `packages/backend/src/controllers/ebayController.ts` — (a) `suggestEbayCategoryForTitle()` uses app token, (b) `mapGradeToInventoryCondition()` swaps `LIKE_NEW` for `USED_VERY_GOOD`, (c) new `ensureConditionValidForCategory()` + `getAcceptedConditionsForCategory()` remap conditions via eBay Metadata API
+- `packages/backend/src/controllers/ebayController.ts` — (a) `suggestEbayCategoryForTitle()` uses app token, (b) `mapGradeToInventoryCondition()` swaps `LIKE_NEW` for `USED_VERY_GOOD`, (c) new `ensureConditionValidForCategory()` + `getAcceptedConditionsForCategory()` remap conditions via eBay Metadata API, (d) inventory_item verify GET after PUT, (e) stale offer delete+recreate when categoryId mismatch detected, (f) 25021 retry loop walking accepted conditions
 
 **S461 Patrick manual actions (push block):**
 ```powershell
@@ -29,10 +33,14 @@ cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/ebayController.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(ebay): app token for Taxonomy + category-aware condition remapping (fixes 25021)"
+git commit -m "fix(ebay): app token for Taxonomy + category-aware condition remapping + stale offer cleanup + 25021 retry"
 .\push.ps1
 ```
-After Railway deploys: push the travel mug to eBay again. Expected logs: `[eBay ConditionPolicies] category 177006 accepts: ...` then `[eBay Push] Contigo... → category=177006 condition=USED_VERY_GOOD`. Listing should publish without 25021.
+After Railway deploys: push the travel mug to eBay again. Expected logs:
+- `[eBay ConditionPolicies] category 177006 accepts: ...`
+- `[eBay InventoryVerify] sku: sent=USED_VERY_GOOD stored=USED_VERY_GOOD` ← confirms PUT actually stuck
+- If first publish 25021s → `[eBay 25021 Retry] trying NEW_OTHER...` then success
+If `stored=null` appears → eBay is dropping our payload (next fix would be inventory_item body shape).
 
 **S461 Follow-up queued for next session:**
 1. ~~Condition-per-category validation~~ — **DONE this session (Fix 4).** Verify working against real push logs in next session.

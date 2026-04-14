@@ -2,14 +2,15 @@
 
 ## What Happened This Week
 
-**S461** (2026-04-14) — eBay push 25021 fixes (4 rounds) + Taxonomy + condition remapping:
-- **Why this kept breaking:** Each fix revealed the next layer. (1) Static map returned branch categories. (2) No API call for FindA.Sale-created items. (3) Taxonomy API returned 403 on user token. (4) Condition `LIKE_NEW` is media-only and was being sent for a travel mug.
+**S461** (2026-04-14) — eBay push 25021 fixes (5 rounds) + Taxonomy + condition remap + stale offer cleanup + retry:
+- **Why this kept breaking:** Each fix revealed the next layer. (1) Static map returned branch categories. (2) No API call for FindA.Sale-created items. (3) Taxonomy API returned 403 on user token. (4) Condition `LIKE_NEW` is media-only and was being sent for a travel mug. (5) Even after (4), `USED_VERY_GOOD` was in eBay's "accepted" list but publish still rejected it — suggests stale offer state from earlier failed pushes under a bad categoryId.
 - **Honest note you asked for:** the prior "eBay categories implemented sitewide" claim was shallow. The picker uses a static JSON of ~120 categories (with some wrong IDs). The push used a different hardcoded map. Neither ever talked to eBay's live Taxonomy API.
 - **Fix 1 ✅ pushed:** Capture eBay's numeric CategoryID on import and store it on the Item. Prefer it on push.
 - **Fix 2 ✅ pushed:** For items YOU create in FindA.Sale, call eBay's Taxonomy API to get a real leaf category from the title.
 - **Fix 3 ⏳ ready to push:** Swapped Taxonomy call from user token to app token (user token lacks `commerce.taxonomy` scope).
-- **Fix 4 ⏳ ready to push:** Category returned `177006` (Vacuum Flasks & Mugs) ✅ but condition was `LIKE_NEW` ❌. Now: (a) grade "Like New" (A) maps to `USED_VERY_GOOD` instead of `LIKE_NEW`, and (b) before every push, we call eBay's item condition policies API for the target category and auto-remap to an accepted condition if needed. Cached in memory so it's a one-time call per category.
-- **What to do:** Run the push block, wait for Railway deploy, push the travel mug to eBay again. Watch Railway logs for `[eBay ConditionPolicies]` and `[eBay Push]` lines showing the category and final condition. Listing should publish.
+- **Fix 4 ⏳ ready to push:** Grade "Like New" (A) maps to `USED_VERY_GOOD` instead of `LIKE_NEW` (media-only). Before every push we call eBay's condition policies API for the target category and auto-remap to an accepted condition. Cached in memory.
+- **Fix 5 ⏳ ready to push:** Three safety nets if publish still 25021s — (a) GET the inventory_item back after PUT and log `sent=X stored=Y` so we can see if eBay silently dropped our condition, (b) if existing offer has wrong categoryId, DELETE it and recreate (eBay Inventory API quirk), (c) 25021 retry loop walks through remaining accepted conditions trying each until one publishes.
+- **What to do:** Run the push block below, wait for Railway deploy, push the travel mug to eBay again. Watch Railway logs for `[eBay InventoryVerify] sent=X stored=Y` — if `stored=null` that tells us eBay's dropping our payload (next fix). If retry loop fires, you'll see `[eBay 25021 Retry] trying NEW_OTHER...` until one works.
 - **Queued for next session:** Replace static picker with live Taxonomy, retire the hardcoded category map, optionally persist condition policies to DB.
 
 **Push block:**
@@ -18,7 +19,7 @@ cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/ebayController.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix(ebay): app token for Taxonomy + category-aware condition remapping (fixes 25021)"
+git commit -m "fix(ebay): app token for Taxonomy + category-aware condition remapping + stale offer cleanup + 25021 retry"
 .\push.ps1
 ```
 
