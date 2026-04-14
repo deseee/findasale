@@ -1362,10 +1362,11 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         // Step 2: Create offer
         const offerUrl = 'https://api.ebay.com/sell/inventory/v1/offer';
-        const offerPayload = {
+        const cleanDescription = (item.description || '').replace(/<[^>]*>/g, '').trim();
+        const offerPayload: Record<string, unknown> = {
           sku,
           marketplaceId: 'EBAY_US',
-          listingDescription: item.description || '',
+          format: 'FIXED_PRICE',
           pricingSummary: {
             price: {
               currency: 'USD',
@@ -1373,14 +1374,13 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             },
           },
           categoryId,
-          condition: mapConditionIdToEbayCondition(conditionId),
           listingDuration: 'GTC',
           listingPolicies: {
             paymentPolicyId: conn.paymentPolicyId,
             fulfillmentPolicyId: conn.fulfillmentPolicyId,
             returnPolicyId: conn.returnPolicyId,
           },
-          referralUrl: `https://www.ebay.com/?campid=${EBAY_EPN_CAMPID}`,
+          ...(cleanDescription ? { listingDescription: cleanDescription } : {}),
         };
 
         const offerResponse = await fetch(offerUrl, {
