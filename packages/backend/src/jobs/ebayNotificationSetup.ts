@@ -98,6 +98,24 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       return;
     }
 
+    // ── Step 1b: Get supported schema version for the topic ─────────────────
+    let schemaVersion = '1.0'; // fallback
+    const topicResp = await fetch(`${EBAY_NOTIFY_BASE}/topic/${EBAY_NOTIFICATION_TOPIC}`, {
+      method: 'GET',
+      headers,
+    });
+    if (topicResp.ok) {
+      const topicText = await topicResp.text();
+      const topicData = topicText ? JSON.parse(topicText) : {};
+      const versions: string[] = topicData.supportedSchemaVersions || [];
+      if (versions.length > 0) {
+        schemaVersion = versions[versions.length - 1]; // use latest
+        console.log(`[eBay Notify Setup] Topic schema versions: ${versions.join(', ')} — using ${schemaVersion}`);
+      }
+    } else {
+      console.warn(`[eBay Notify Setup] Could not fetch topic info: HTTP ${topicResp.status} — using schemaVersion fallback ${schemaVersion}`);
+    }
+
     // ── Step 2: Find or create subscription ─────────────────────────────────
     const subListResp = await fetch(`${EBAY_NOTIFY_BASE}/subscription`, {
       method: 'GET',
@@ -122,7 +140,7 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       headers,
       body: JSON.stringify({
         topicId: EBAY_NOTIFICATION_TOPIC,
-        schemaVersion: '1.0',
+        schemaVersion,
         status: 'ENABLED',
         destinationId,
       }),
