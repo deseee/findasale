@@ -634,6 +634,7 @@ function ebayUserHeaders(accessToken: string): Record<string, string> {
     'Authorization': `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
     'Accept-Language': 'en-US',
+    'Content-Language': 'en-US',
   };
 }
 
