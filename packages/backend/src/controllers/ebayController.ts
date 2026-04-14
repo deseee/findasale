@@ -1541,47 +1541,72 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 /**
  * Fetch the first existing merchant location key, or create a default US one.
  * Required by eBay Inventory API to satisfy Item.Country on offer publishing.
+ * eBay requires city + stateOrProvince + postalCode + country for US locations.
+ * Status cannot be set at creation — must call /enable separately.
  */
 async function getOrCreateMerchantLocation(accessToken: string): Promise<string> {
   const DEFAULT_KEY = 'findasale-default';
-  const listUrl = 'https://api.ebay.com/sell/inventory/v1/location';
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    'Content-Language': 'en-US',
+  };
 
+  // Try to find an existing enabled location
   try {
-    const listRes = await fetch(listUrl, {
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-    });
+    const listRes = await fetch('https://api.ebay.com/sell/inventory/v1/location', { headers });
     if (listRes.ok) {
       const data = (await listRes.json()) as any;
-      const locations = data.locations || [];
-      if (locations.length > 0) {
-        return locations[0].merchantLocationKey;
+      const locations: any[] = data.locations || [];
+      // Prefer ENABLED locations; fall back to first available
+      const enabled = locations.find((l: any) => l.merchantLocationStatus === 'ENABLED');
+      const chosen = enabled || locations[0];
+      if (chosen) {
+        console.log(`[eBay] Using existing merchant location: ${chosen.merchantLocationKey}`);
+        return chosen.merchantLocationKey;
       }
     }
   } catch (err) {
     console.error('[eBay] Failed to list merchant locations:', err);
   }
 
-  // No location found — create a minimal US location
-  const createUrl = `https://api.ebay.com/sell/inventory/v1/location/${DEFAULT_KEY}`;
+  // Create a US location with the minimum required address fields
+  console.log('[eBay] No merchant location found — creating default US location');
   try {
-    const createRes = await fetch(createUrl, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Content-Language': 'en-US' },
-      body: JSON.stringify({
-        location: {
-          address: {
-            country: 'US',
+    const createRes = await fetch(
+      `https://api.ebay.com/sell/inventory/v1/location/${DEFAULT_KEY}`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          location: {
+            address: {
+              addressLine1: '1 Commerce Ave SW',
+              city: 'Grand Rapids',
+              stateOrProvince: 'MI',
+              postalCode: '49503',
+              country: 'US',
+            },
           },
-        },
-        locationInstructions: 'Items ship from this location',
-        name: 'FindA.Sale Default Location',
-        merchantLocationStatus: 'ENABLED',
-        locationTypes: ['WAREHOUSE'],
-      }),
-    });
+          locationInstructions: 'Items ship from this location',
+          name: 'FindA.Sale Default',
+          locationTypes: ['WAREHOUSE'],
+        }),
+      }
+    );
     if (!createRes.ok) {
       const err = await createRes.text();
       console.error('[eBay] Failed to create merchant location:', err);
+    } else {
+      // Enable the newly created location
+      const enableRes = await fetch(
+        `https://api.ebay.com/sell/inventory/v1/location/${DEFAULT_KEY}/enable`,
+        { method: 'POST', headers }
+      );
+      if (!enableRes.ok) {
+        const err = await enableRes.text();
+        console.warn('[eBay] Failed to enable merchant location (may already be enabled):', err);
+      }
     }
   } catch (err) {
     console.error('[eBay] Exception creating merchant location:', err);
