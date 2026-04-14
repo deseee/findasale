@@ -715,10 +715,15 @@ async function createEbayOrderSubscription(organizerId: string, userAccessToken:
   const EBAY_NOTIFY_BASE = 'https://api.ebay.com/commerce/notification/v1';
 
   try {
-    // Find the existing destination (created at startup by ebayNotificationSetup)
+    // Destinations are app-scoped — must look them up with the app token, not the user token
+    const appToken = await getEbayAccessToken();
+    if (!appToken) {
+      console.warn(`[eBay Notify] Could not get app token for destination lookup (organizer ${organizerId})`);
+      return;
+    }
     const destListResp = await fetch(`${EBAY_NOTIFY_BASE}/destination`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${userAccessToken}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${appToken}`, 'Content-Type': 'application/json' },
     });
     if (!destListResp.ok) {
       console.warn(`[eBay Notify] Could not list destinations for organizer ${organizerId}`);
@@ -731,7 +736,7 @@ async function createEbayOrderSubscription(organizerId: string, userAccessToken:
       return;
     }
 
-    // Create subscription
+    // Create subscription using the organizer's user token (ORDER_CONFIRMATION is user-scoped)
     const subResp = await fetch(`${EBAY_NOTIFY_BASE}/subscription`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${userAccessToken}`, 'Content-Type': 'application/json' },
