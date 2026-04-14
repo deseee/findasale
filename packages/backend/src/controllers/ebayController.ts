@@ -599,36 +599,40 @@ export async function refreshEbayAccessToken(organizerId: string): Promise<strin
 }
 
 /**
+ * Standard headers for all eBay REST API calls that require a user access token.
+ * Accept-Language is required by eBay — omitting it or sending an invalid locale causes 400.
+ */
+function ebayUserHeaders(accessToken: string): Record<string, string> {
+  return {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    'Accept-Language': 'en-US',
+  };
+}
+
+/**
  * Fetch organizer's real business policies from eBay and store them
  * Called after OAuth connect completes. Fire-and-forget on error.
+ * marketplace_id=EBAY_US is required by the Account API.
  */
 async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: string): Promise<void> {
   try {
     // Fetch payment policies
-    const paymentRes = await fetch('https://api.ebay.com/sell/account/v1/payment_policy', {
+    const paymentRes = await fetch('https://api.ebay.com/sell/account/v1/payment_policy?marketplace_id=EBAY_US', {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: ebayUserHeaders(accessToken),
     });
 
     // Fetch fulfillment policies
-    const fulfillmentRes = await fetch('https://api.ebay.com/sell/account/v1/fulfillment_policy', {
+    const fulfillmentRes = await fetch('https://api.ebay.com/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US', {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: ebayUserHeaders(accessToken),
     });
 
     // Fetch return policies
-    const returnRes = await fetch('https://api.ebay.com/sell/account/v1/return_policy', {
+    const returnRes = await fetch('https://api.ebay.com/sell/account/v1/return_policy?marketplace_id=EBAY_US', {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: ebayUserHeaders(accessToken),
     });
 
     let paymentPolicyId: string | null = null;
@@ -1205,10 +1209,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         const inventoryResponse = await fetch(inventoryUrl, {
           method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+          headers: ebayUserHeaders(accessToken),
           body: JSON.stringify(inventoryPayload),
         });
 
@@ -1250,10 +1251,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         const offerResponse = await fetch(offerUrl, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+          headers: ebayUserHeaders(accessToken),
           body: JSON.stringify(offerPayload),
         });
 
@@ -1284,10 +1282,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         const publishUrl = `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`;
         const publishResponse = await fetch(publishUrl, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+          headers: ebayUserHeaders(accessToken),
           body: '{}',
         });
 
@@ -1464,10 +1459,7 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
     const withdrawUrl = `https://api.ebay.com/sell/inventory/v1/offer/${item.ebayOfferId}/withdraw`;
     const response = await fetch(withdrawUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: ebayUserHeaders(accessToken),
       body: '{}',
     });
 
@@ -1535,23 +1527,27 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       });
     }
 
-    // Paginate eBay inventory API
+    // Paginate eBay Inventory API (covers items created via eBay Inventory API)
+    // Note: items created via eBay's regular Sell/Seller Hub interface do NOT appear here.
+    // They appear in the Offers endpoint instead — we check both below.
     let offset = 0;
     const limit = 200;
     let totalFetched = 0;
     let imported = 0;
     let skipped = 0;
     let hasMore = true;
+    let ebayApiError: string | null = null;
 
     while (hasMore) {
       const url = `https://api.ebay.com/sell/inventory/v1/inventory_item?limit=${limit}&offset=${offset}`;
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: ebayUserHeaders(accessToken),
       });
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error('[eBay Import] API error:', response.status, errText);
+        console.error('[eBay Import] Inventory API error:', response.status, errText);
+        ebayApiError = `eBay Inventory API returned ${response.status}. ${errText.slice(0, 300)}`;
         break;
       }
 
@@ -1613,11 +1609,75 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       offset += limit;
     }
 
+    // If Inventory API returned an error, surface it instead of silently returning 0
+    if (ebayApiError) {
+      return res.status(502).json({
+        error: `eBay API error: ${ebayApiError}. If your listings were created through eBay's regular Sell interface (not Inventory API), they won't appear here. Try reconnecting your eBay account.`
+      });
+    }
+
+    // If Inventory API returned 0 items, also check the Offers endpoint —
+    // items created via regular eBay Sell UI appear as offers but not inventory items
+    if (totalFetched === 0) {
+      const offersUrl = `https://api.ebay.com/sell/inventory/v1/offer?limit=200`;
+      const offersResp = await fetch(offersUrl, {
+        headers: ebayUserHeaders(accessToken),
+      });
+      if (offersResp.ok) {
+        const offersData = (await offersResp.json()) as any;
+        const offers: any[] = offersData.offers || [];
+        console.log(`[eBay Import] Inventory API returned 0 items. Offers endpoint returned ${offers.length} offers.`);
+        if (offers.length > 0) {
+          // Found offers — these are real eBay listings but not Inventory API items
+          // Import them using offer data
+          for (const offer of offers) {
+            const sku = offer.sku as string;
+            if (!sku) { skipped++; continue; }
+            const existing = await prisma.item.findFirst({
+              where: { organizerId: organizer.id, ebayListingId: sku }
+            });
+            if (existing) { skipped++; continue; }
+            await prisma.item.create({
+              data: {
+                title: (offer.listing?.listingDescription || sku).slice(0, 255),
+                description: '',
+                photoUrls: [],
+                price: offer.pricingSummary?.price?.value ? parseFloat(offer.pricingSummary.price.value) : null,
+                status: 'AVAILABLE',
+                inInventory: true,
+                organizerId: organizer.id,
+                saleId: containerSale!.id,
+                ebayListingId: sku,
+                ebayOfferId: offer.offerId || null,
+                conditionGrade: null,
+              }
+            });
+            imported++;
+            totalFetched++;
+          }
+        }
+      } else {
+        const offersErrText = await offersResp.text();
+        console.error('[eBay Import] Offers fallback error:', offersResp.status, offersErrText);
+      }
+    }
+
     // Update sync timestamp
     await prisma.ebayConnection.update({
       where: { organizerId: organizer.id },
       data: { lastEbayInventorySyncAt: new Date() }
     });
+
+    // If still 0 items after both API attempts, give an informative message
+    if (totalFetched === 0) {
+      return res.json({
+        success: true,
+        imported: 0,
+        skipped: 0,
+        total: 0,
+        message: 'No items found in your eBay account via the Inventory API or Offers endpoint. Items created through eBay\'s standard Sell interface may not be accessible. Try listing items via eBay\'s Inventory API, or contact support.'
+      });
+    }
 
     return res.json({
       success: true,
