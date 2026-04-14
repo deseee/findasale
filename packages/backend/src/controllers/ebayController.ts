@@ -1378,7 +1378,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     for (const item of sale.items) {
       try {
         const sku = `FAS-${item.id}`;
-        const ebayCondition = mapGradeToInventoryCondition(item.conditionGrade);
         // Resolve categoryId in this order:
         // 1. Stored ebayCategoryId (from eBay import — always a valid leaf)
         // 2. eBay Taxonomy API getCategorySuggestions by title — returns a leaf,
@@ -1398,6 +1397,16 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         if (!categoryId) {
           categoryId = getEbayCategoryId(item.category);
         }
+
+        // Resolve condition: grade → inventory enum → remap to category-accepted value
+        const desiredCondition = mapGradeToInventoryCondition(item.conditionGrade);
+        const ebayCondition = await ensureConditionValidForCategory(
+          desiredCondition,
+          categoryId
+        );
+        console.log(
+          `[eBay Push] ${item.title.slice(0, 40)} → category=${categoryId} condition=${ebayCondition} (grade=${item.conditionGrade || 'none'})`
+        );
 
         // Determine price
         let price = 0.99;
@@ -1746,16 +1755,148 @@ function mapConditionIdToEbayCondition(conditionId: string): string {
 /**
  * Helper: Map FindA.Sale condition grade directly to eBay Inventory API enum.
  * Bypasses the two-step Trading API conversion for the push flow.
+ *
+ * IMPORTANT — condition enums are category-restricted:
+ *   - LIKE_NEW       → media only (Books, DVDs, CDs, Video Games)
+ *   - USED_EXCELLENT → Vehicles + select Collectibles only
+ *   - NEW_OTHER      → some new-goods categories only
+ * We therefore default to the most universal enum values. Any category that
+ * doesn't accept the default gets remapped by ensureConditionValidForCategory()
+ * via eBay's getItemConditionPolicies.
  */
 function mapGradeToInventoryCondition(grade: string | null | undefined): string {
   switch ((grade || '').toUpperCase()) {
-    case 'S': return 'NEW';
-    case 'A': return 'LIKE_NEW';
-    case 'B': return 'USED_VERY_GOOD';
-    case 'C': return 'USED_GOOD';
-    case 'D': return 'FOR_PARTS_OR_NOT_WORKING';
-    default:  return 'USED_GOOD';
+    case 'S': return 'NEW';               // universal
+    case 'A': return 'USED_VERY_GOOD';    // was LIKE_NEW (media-only — rejected everywhere else)
+    case 'B': return 'USED_VERY_GOOD';    // universal
+    case 'C': return 'USED_GOOD';         // universal
+    case 'D': return 'FOR_PARTS_OR_NOT_WORKING'; // universal
+    default:  return 'USED_GOOD';         // universal
   }
+}
+
+/**
+ * Cache of per-category accepted condition enums (eBay getItemConditionPolicies).
+ * Key = categoryId, value = Set of valid condition enum strings for that category.
+ * Cleared implicitly on server restart; eBay policies change rarely.
+ */
+const CATEGORY_CONDITION_CACHE = new Map<string, Set<string>>();
+
+/**
+ * Fetch accepted conditions for a given eBay category via the Metadata API.
+ * Uses the app token (client credentials) — the sell.metadata scope is app-level.
+ * Returns a Set of valid enum strings, or null if the call fails (caller falls
+ * back to sending the default and letting eBay reject if wrong).
+ */
+async function getAcceptedConditionsForCategory(categoryId: string): Promise<Set<string> | null> {
+  const cached = CATEGORY_CONDITION_CACHE.get(categoryId);
+  if (cached) return cached;
+
+  try {
+    const appToken = await getEbayAccessToken();
+    if (!appToken) return null;
+    // Metadata API: item condition policies per marketplace, filtered by categoryId
+    const url =
+      `https://api.ebay.com/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies` +
+      `?filter=categoryIds:%7B${categoryId}%7D`;
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${appToken}`,
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US',
+      },
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[eBay ConditionPolicies] ${res.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
+    const data = (await res.json()) as {
+      itemConditionPolicies?: Array<{
+        categoryId: string;
+        itemConditions?: Array<{ conditionId: string; conditionDescription?: string }>;
+      }>;
+    };
+    const policy = data.itemConditionPolicies?.[0];
+    if (!policy?.itemConditions?.length) return null;
+    // Map numeric conditionId → Inventory API enum (same map as mapConditionIdToEbayCondition)
+    const idToEnum: Record<string, string> = {
+      '1000': 'NEW',
+      '1500': 'NEW_OTHER',
+      '1750': 'NEW_WITH_DEFECTS',
+      '2000': 'CERTIFIED_REFURBISHED',
+      '2010': 'EXCELLENT_REFURBISHED',
+      '2020': 'VERY_GOOD_REFURBISHED',
+      '2030': 'GOOD_REFURBISHED',
+      '2500': 'SELLER_REFURBISHED',
+      '2750': 'LIKE_NEW',
+      '3000': 'USED_EXCELLENT',
+      '4000': 'USED_VERY_GOOD',
+      '5000': 'USED_GOOD',
+      '6000': 'USED_ACCEPTABLE',
+      '7000': 'FOR_PARTS_OR_NOT_WORKING',
+    };
+    const accepted = new Set<string>();
+    for (const c of policy.itemConditions) {
+      const enumName = idToEnum[c.conditionId];
+      if (enumName) accepted.add(enumName);
+    }
+    // Also accept the alternate "USED_GOOD"↔"3000" naming eBay uses in some responses
+    if (accepted.has('USED_EXCELLENT')) accepted.add('USED_VERY_GOOD');
+    CATEGORY_CONDITION_CACHE.set(categoryId, accepted);
+    console.log(
+      `[eBay ConditionPolicies] category ${categoryId} accepts: ${Array.from(accepted).join(', ')}`
+    );
+    return accepted;
+  } catch (err) {
+    console.error('[eBay ConditionPolicies] Error:', err);
+    return null;
+  }
+}
+
+/**
+ * Remap a condition enum to one accepted by the target category.
+ * If the desired condition is accepted, return it unchanged.
+ * Otherwise pick the best-available substitute using a quality-ordered fallback.
+ * If the policy call fails, returns desired unchanged (eBay will reject at publish
+ * if invalid — logged for diagnosis).
+ */
+async function ensureConditionValidForCategory(
+  desired: string,
+  categoryId: string
+): Promise<string> {
+  const accepted = await getAcceptedConditionsForCategory(categoryId);
+  if (!accepted) return desired;
+  if (accepted.has(desired)) return desired;
+
+  // Ordered fallback — pick the closest accepted enum for the desired condition.
+  const fallbacksByDesired: Record<string, string[]> = {
+    'NEW':                      ['NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_VERY_GOOD', 'USED_GOOD'],
+    'LIKE_NEW':                 ['USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_GOOD', 'NEW_OTHER'],
+    'USED_VERY_GOOD':           ['USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE', 'NEW_OTHER'],
+    'USED_EXCELLENT':           ['USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE'],
+    'USED_GOOD':                ['USED_VERY_GOOD', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING'],
+    'USED_ACCEPTABLE':          ['USED_GOOD', 'FOR_PARTS_OR_NOT_WORKING'],
+    'FOR_PARTS_OR_NOT_WORKING': ['USED_ACCEPTABLE', 'USED_GOOD'],
+  };
+  const chain = fallbacksByDesired[desired] || ['USED_GOOD', 'USED_VERY_GOOD', 'NEW'];
+  for (const candidate of chain) {
+    if (accepted.has(candidate)) {
+      console.log(
+        `[eBay ConditionRemap] category ${categoryId}: ${desired} not accepted, using ${candidate}`
+      );
+      return candidate;
+    }
+  }
+  // Nothing matched — return the first accepted enum as a last resort.
+  const firstAccepted = Array.from(accepted)[0];
+  if (firstAccepted) {
+    console.log(
+      `[eBay ConditionRemap] category ${categoryId}: no chain match for ${desired}, using ${firstAccepted}`
+    );
+    return firstAccepted;
+  }
+  return desired;
 }
 
 /**
