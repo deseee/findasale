@@ -2,6 +2,25 @@
 
 ## What Happened This Week
 
+**S461** (2026-04-14) — eBay push 25021 fixes + Taxonomy API wired in:
+- **Root cause:** The name→ID category map was resolving to *branch* categories (like Kitchenware → Kitchen Dining & Bar). eBay Inventory API rejects every listing under a branch. Plus the default fallback was `'1'` (Collectibles — also a branch).
+- **Honest note you asked for:** the prior "eBay categories implemented sitewide" claim was shallow. The picker uses a static JSON of ~120 categories (with some wrong IDs). The push used a different hardcoded map. Neither ever talked to eBay's live Taxonomy API.
+- **Fix 1 ✅ pushed:** Capture eBay's numeric CategoryID on import and store it on the Item. Prefer it on push. Migration applied.
+- **Fix 2 ✅ pushed:** For items YOU create in FindA.Sale (not imported), call eBay's Taxonomy API to get a real leaf category from the title.
+- **Fix 3 ⏳ ready to push:** Taxonomy was returning 403 — user token doesn't carry the right scope. Swapped to app token (same one we use for OAuth). Push block below.
+- **What to do:** Run the push block, wait for Railway deploy, push the travel mug to eBay again. Should work.
+- **Queued for next session:** Condition-per-category validation, replace static picker with live Taxonomy, retire the hardcoded category map.
+
+**Push block:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/ebayController.ts
+git commit -m "fix(ebay): use app token for Taxonomy API (fixes 403 on getCategorySuggestions)"
+.\push.ps1
+```
+
+---
+
 **S460** (2026-04-14) — eBay push UI everywhere, QR watermark default, photo import fix, post-sale workflow:
 - **eBay push button now in 3 places:** Sale detail page (new), Edit Item page, Review & Publish page. Before today, the only way to push to eBay was via a hidden API call — no UI existed.
 - **QR watermark is now the default for all eBay photos** — every photo pushed to eBay has a QR code pointing back to `finda.sale/items/{itemId}` + your organizer name. Works for both push and CSV export.

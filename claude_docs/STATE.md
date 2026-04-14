@@ -7,6 +7,40 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S461 IN PROGRESS (2026-04-14) — eBay push 25021 fixes (3 rounds) + Taxonomy API integrated**
+
+**S461 What happened:**
+- **Root cause of ongoing 25021 errors:** `getEbayCategoryId()` name-map was resolving to branch categories (e.g. `"Kitchenware"` → `'20625'` Kitchen Dining & Bar = branch). Default fallback was `'1'` (Collectibles — also a branch). eBay Inventory API rejects any listing under a branch category.
+- **Honest assessment Patrick requested:** prior devs' "eBay categories implemented sitewide" claim was shallow — a static `EbayCategoryPicker.tsx` fed by `public/ebay-categories.json` (~120 categories), stores NAME only, never calls eBay's Taxonomy API. Picker and push use DIFFERENT category maps entirely.
+- **Fix 1 (commit a0b33fec):** Capture eBay numeric `CategoryID` from `<PrimaryCategory><CategoryID>` during import and cache on `Item.ebayCategoryId`. On push, prefer cached ID over name-map lookup. Schema migration `20260414_ebay_category_id` applied.
+- **Fix 2 (commit 17bb42b4):** For FindA.Sale-created items (no imported ID), call eBay Taxonomy API `getCategorySuggestions` using item title → returns leaf `categoryId`. Cache back to `Item.ebayCategoryId`. Cascade: cached ID → Taxonomy API → static map fallback (now `'99'` Everything Else > Other, a valid LEAF).
+- **Fix 3 (local, not yet pushed):** Taxonomy 403 errorId 1100 "Insufficient permissions" — user OAuth token doesn't carry `commerce.taxonomy` scope. Swapped to **app token** via `getEbayAccessToken()` (client credentials flow) which has broader scopes.
+- **Default fallback changed:** `getEbayCategoryId()` now defaults to `'99'` (valid leaf) instead of `'1'` (branch).
+
+**S461 Files changed (this round, not yet pushed):**
+- `packages/backend/src/controllers/ebayController.ts` — `suggestEbayCategoryForTitle()` now uses app token instead of user token
+
+**S461 Patrick manual actions (push block):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/ebayController.ts
+git commit -m "fix(ebay): use app token for Taxonomy API (fixes 403 on getCategorySuggestions)"
+.\push.ps1
+```
+After Railway deploys: push the same travel mug item to eBay. Expected result: Taxonomy API returns a leaf categoryId, cached to Item, listing publishes without 25021.
+
+**S461 Follow-up queued for next session:**
+1. **Condition-per-category validation** — different eBay categories accept different condition values. Call `getItemConditionPolicies` per category and validate/remap item condition before push. Currently a guess.
+2. **Replace static `EbayCategoryPicker.tsx` with live Taxonomy API** — frontend picker should call `getCategorySuggestions` as user types title, show real leaf categories, store `categoryId` (not just name) on Item creation. Retires `public/ebay-categories.json` (341 lines of hardcoded categories).
+3. **Retire `ebayCategoryMap.ts`** — once Taxonomy is wired into creation + push, the hardcoded name→ID map is dead code. Delete the file and the `getEbayCategoryId()` fallback path.
+
+**S461 Decisions / findings:**
+- Previous "eBay integration" implementation documented as shallow — picker + push use different maps, neither uses live eBay data
+- Static category JSON has mis-mapped IDs (e.g. Home & Garden listed as `'15687'` = Cell Phones & Smartphones) — another reason to retire it
+- App token is required for `commerce.taxonomy.readonly` scope; user token cannot be trusted for any Commerce/Taxonomy endpoints
+
+---
+
 **S460 COMPLETE (2026-04-14) — eBay push UI, QR watermark default, photo import fix, post-sale workflow, shipping classification**
 
 **S460 What happened:**
