@@ -1914,7 +1914,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         try {
           // Build GetMultipleItems XML — one <ItemID> per item in batch
           const itemIdTags = batchItemIds.map((id: string) => `<ItemID>${id}</ItemID>`).join('');
-          const shoppingXml = `<?xml version="1.0" encoding="utf-8"?><GetMultipleItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials>${itemIdTags}<IncludeSelector>TextDescription,ItemSpecifics</IncludeSelector></GetMultipleItemsRequest>`;
+          // GetMultipleItems is a public API — no auth token needed. IAF-TOKEN caused silent empty responses.
+          // PictureDetails added to IncludeSelector to retrieve all listing photos (not just cover).
+          const shoppingXml = `<?xml version="1.0" encoding="utf-8"?><GetMultipleItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents">${itemIdTags}<IncludeSelector>TextDescription,ItemSpecifics,PictureDetails</IncludeSelector></GetMultipleItemsRequest>`;
 
           const shoppingResp = await fetch('https://open.api.ebay.com/shopping', {
             method: 'POST',
@@ -1923,7 +1925,6 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               'X-EBAY-API-SITEID': '0',
               'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
               'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
-              'X-EBAY-API-IAF-TOKEN': accessToken,
               'Content-Type': 'text/xml',
             },
             body: shoppingXml,
