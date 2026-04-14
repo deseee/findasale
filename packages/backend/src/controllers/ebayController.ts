@@ -1939,6 +1939,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           if (ack !== 'Success' && ack !== 'Warning') {
             const errMsg = xmlVal(shoppingText, 'LongMessage') || xmlVal(shoppingText, 'ShortMessage') || 'Unknown';
             console.warn(`[eBay Enrich] Batch ${batchIdx + 1}/${enrichBatches.length}: ${ack} — ${errMsg}`);
+            console.warn(`[eBay Enrich] Raw response (first 300): ${shoppingText.slice(0, 300)}`);
             continue;
           }
 
