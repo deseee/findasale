@@ -1791,6 +1791,121 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
         tradingPage++;
       }
+
+      // GetItem enrichment pass: fetch full details for items with missing fields
+      // GetMyeBaySelling with GranularityLevel=Fine does NOT include Description, PrimaryCategory, or ItemSpecifics
+      // A separate GetItem call with DetailLevel=ReturnAll is required
+      console.log('[eBay Enrich] Starting GetItem enrichment pass...');
+      const itemsNeedingEnrichment = await prisma.item.findMany({
+        where: {
+          organizerId: organizer.id,
+          ebayListingId: { not: null },
+          OR: [
+            { description: null },
+            { description: '' },
+            { category: null },
+            { category: '' },
+            { tags: { isEmpty: true } },
+          ],
+        },
+        select: { id: true, ebayListingId: true, description: true, category: true, tags: true, conditionGrade: true },
+      });
+
+      console.log(`[eBay Enrich] Found ${itemsNeedingEnrichment.length} items to enrich`);
+      let enrichedCount = 0;
+
+      for (const item of itemsNeedingEnrichment) {
+        if (!item.ebayListingId) continue;
+
+        try {
+          // 100ms delay between GetItem calls to avoid API rate limiting
+          await new Promise(r => setTimeout(r, 100));
+
+          const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><ItemID>${item.ebayListingId}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`;
+
+          const getItemResp = await fetch('https://api.ebay.com/ws/api.dll', {
+            method: 'POST',
+            headers: {
+              'X-EBAY-API-CALL-NAME': 'GetItem',
+              'X-EBAY-API-SITEID': '0',
+              'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+              'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+              'X-EBAY-API-IAF-TOKEN': accessToken,
+              'Content-Type': 'text/xml',
+            },
+            body: getItemXml,
+          });
+
+          const getItemText = await getItemResp.text();
+
+          if (!getItemResp.ok) {
+            console.warn(`[eBay Enrich] GetItem request failed for ${item.ebayListingId}: HTTP ${getItemResp.status}`);
+            continue;
+          }
+
+          const ack = xmlVal(getItemText, 'Ack');
+          if (ack !== 'Success' && ack !== 'Warning') {
+            console.warn(`[eBay Enrich] GetItem returned ${ack} for ${item.ebayListingId}`);
+            continue;
+          }
+
+          // Parse response
+          const backfill: Record<string, any> = {};
+
+          // Description: strip HTML tags
+          const descRaw = xmlVal(getItemText, 'Description') || '';
+          const descClean = descRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+          if (descClean && !item.description) {
+            backfill.description = descClean;
+          }
+
+          // PrimaryCategory/CategoryName
+          const categoryBlock = getItemText.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
+          const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
+          if (categoryName && !item.category) {
+            backfill.category = categoryName;
+          }
+
+          // ItemSpecifics/NameValueList
+          const specificsBlock = getItemText.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
+          const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
+          const tags: string[] = nameValueBlocks
+            .map(nvBlock => xmlVal(nvBlock, 'Value'))
+            .filter((v): v is string => !!v && v.length > 0)
+            .slice(0, 10);
+          if (tags.length > 0 && (!item.tags || item.tags.length === 0)) {
+            backfill.tags = tags;
+          }
+
+          // ConditionID → condition mapping
+          const condId = xmlVal(getItemText, 'ConditionID') || '';
+          if (condId && !item.conditionGrade) {
+            const condGrade = tradingConditionMap[condId] || null;
+            if (condGrade) {
+              backfill.conditionGrade = condGrade;
+              backfill.condition = condGrade === 'S' ? 'NEW'
+                : condGrade === 'D' ? 'PARTS_OR_REPAIR'
+                : 'USED';
+            }
+          }
+
+          // Update DB if we have data to backfill
+          if (Object.keys(backfill).length > 0) {
+            await prisma.item.update({
+              where: { id: item.id },
+              data: backfill,
+            });
+            const descLen = backfill.description ? backfill.description.length : 0;
+            const cat = backfill.category || '';
+            const tagCount = backfill.tags ? backfill.tags.length : 0;
+            console.log(`[eBay Enrich] ItemID ${item.ebayListingId}: desc=${descLen} chars, category=${cat || 'none'}, tags=${tagCount}`);
+            enrichedCount++;
+          }
+        } catch (err: any) {
+          console.warn(`[eBay Enrich] Exception enriching ${item.ebayListingId}:`, err.message);
+        }
+      }
+      console.log(`[eBay Enrich] Enrichment pass complete. Updated ${enrichedCount} items.`);
     }
 
     // Update sync timestamp
