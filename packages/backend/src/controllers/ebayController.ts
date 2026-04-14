@@ -1428,7 +1428,15 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         // Step 1: Create or replace inventory item
         const inventoryUrl = `https://api.ebay.com/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
-        const aspects = buildAspects(item.tags);
+        // Build aspects: start with user-provided tags, then auto-fill any
+        // REQUIRED aspects the category demands (prevents errorId 25002
+        // "The item specific X is missing").
+        const userAspects = buildAspects(item.tags);
+        const aspects = await fillRequiredAspects(userAspects, categoryId, {
+          title: item.title,
+          tags: item.tags,
+          description: item.description,
+        });
         const inventoryPayload: Record<string, unknown> = {
           product: {
             title: item.title.substring(0, 80),
@@ -2008,6 +2016,153 @@ async function ensureConditionValidForCategory(
     return firstAccepted;
   }
   return desired;
+}
+
+/**
+ * Per-category required-aspect metadata (eBay Taxonomy getItemAspectsForCategory).
+ *   name        - aspect name as eBay returns it (e.g. "Type", "Brand", "Color")
+ *   required    - true if eBay will reject the listing when this aspect is missing
+ *   enumValues  - constrained picklist; empty array when the aspect is free-text
+ *   mode        - SELECTION_ONLY means the value MUST come from enumValues
+ *   cardinality - SINGLE or MULTI (how many values the aspect accepts)
+ */
+interface RequiredAspect {
+  name: string;
+  required: boolean;
+  enumValues: string[];
+  cardinality: 'SINGLE' | 'MULTI';
+  mode: 'SELECTION_ONLY' | 'FREE_TEXT';
+}
+
+/**
+ * Cache of per-category aspect definitions. Key = categoryId.
+ * Cleared implicitly on server restart; eBay aspect specs change rarely.
+ */
+const CATEGORY_ASPECTS_CACHE = new Map<string, RequiredAspect[]>();
+
+/**
+ * Fetch required + recommended aspects for a given eBay category via the
+ * Taxonomy API. Uses the app token (commerce.taxonomy.readonly is app-level).
+ * Returns the parsed aspect list or null on failure.
+ */
+async function getRequiredAspectsForCategory(categoryId: string): Promise<RequiredAspect[] | null> {
+  const cached = CATEGORY_ASPECTS_CACHE.get(categoryId);
+  if (cached) return cached;
+
+  try {
+    const appToken = await getEbayAccessToken();
+    if (!appToken) return null;
+    const treeId = '0'; // EBAY_US
+    const url =
+      `https://api.ebay.com/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category` +
+      `?category_id=${categoryId}`;
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${appToken}`,
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US',
+      },
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(`[eBay RequiredAspects] ${res.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
+    const data = (await res.json()) as {
+      aspects?: Array<{
+        localizedAspectName: string;
+        aspectConstraint?: {
+          aspectRequired?: boolean;
+          aspectMode?: string;
+          itemToAspectCardinality?: string;
+        };
+        aspectValues?: Array<{ localizedValue: string }>;
+      }>;
+    };
+    const parsed: RequiredAspect[] = (data.aspects || []).map((a) => ({
+      name: a.localizedAspectName,
+      required: a.aspectConstraint?.aspectRequired === true,
+      enumValues: (a.aspectValues || []).map((v) => v.localizedValue),
+      cardinality: a.aspectConstraint?.itemToAspectCardinality === 'MULTI' ? 'MULTI' : 'SINGLE',
+      mode: a.aspectConstraint?.aspectMode === 'SELECTION_ONLY' ? 'SELECTION_ONLY' : 'FREE_TEXT',
+    }));
+    CATEGORY_ASPECTS_CACHE.set(categoryId, parsed);
+    const requiredNames = parsed.filter((a) => a.required).map((a) => a.name);
+    console.log(
+      `[eBay RequiredAspects] category ${categoryId}: ${requiredNames.length} required (${requiredNames.join(', ') || 'none'})`
+    );
+    return parsed;
+  } catch (err) {
+    console.error('[eBay RequiredAspects] Error:', err);
+    return null;
+  }
+}
+
+/**
+ * Merge item.tags-derived aspects with auto-filled defaults for any REQUIRED
+ * aspect the user didn't provide. Strategy:
+ *   1. Keep all aspects the user supplied via tags.
+ *   2. For each required aspect not yet present:
+ *      a. If SELECTION_ONLY / has enumValues — match title + description against
+ *         the enum list (case-insensitive substring), else prefer "Unbranded"
+ *         for Brand aspects, else fall back to enumValues[0].
+ *      b. If FREE_TEXT — use "Does Not Apply" for identifier-like aspects
+ *         (Brand / MPN / UPC / Model / Manufacturer), "Unspecified" otherwise.
+ * Prevents errorId 25002 "The item specific X is missing".
+ */
+async function fillRequiredAspects(
+  existing: Record<string, string[]> | undefined,
+  categoryId: string,
+  item: { title: string; tags: string[]; description?: string | null }
+): Promise<Record<string, string[]> | undefined> {
+  const spec = await getRequiredAspectsForCategory(categoryId);
+  if (!spec || spec.length === 0) return existing;
+
+  const result: Record<string, string[]> = { ...(existing || {}) };
+  const titleLower = item.title.toLowerCase();
+  const descLower = (item.description || '').toLowerCase();
+
+  for (const aspect of spec) {
+    if (!aspect.required) continue;
+    // User already provided this aspect via tags — keep their value.
+    if (result[aspect.name] && result[aspect.name].length > 0) continue;
+
+    let picked: string | null = null;
+
+    if (aspect.enumValues.length > 0) {
+      // Try keyword match against enum values
+      for (const val of aspect.enumValues) {
+        const vLower = val.toLowerCase();
+        if (vLower && (titleLower.includes(vLower) || descLower.includes(vLower))) {
+          picked = val;
+          break;
+        }
+      }
+      // Brand fallback — prefer "Unbranded" when available and nothing matched
+      if (!picked && /^brand$/i.test(aspect.name)) {
+        const unbranded = aspect.enumValues.find((v) => /unbranded/i.test(v));
+        if (unbranded) picked = unbranded;
+      }
+      // Last resort — first enum value (safe default; organizer can edit on eBay)
+      if (!picked) picked = aspect.enumValues[0];
+    } else {
+      // Free-text aspect
+      if (/^(brand|manufacturer|mpn|upc|ean|model|gtin|isbn)$/i.test(aspect.name)) {
+        picked = 'Does Not Apply';
+      } else {
+        picked = 'Unspecified';
+      }
+    }
+
+    if (picked) {
+      result[aspect.name] = [picked];
+      console.log(
+        `[eBay AspectFill] category ${categoryId}: ${aspect.name}="${picked}" (auto-filled)`
+      );
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /**
