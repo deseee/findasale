@@ -7,6 +7,55 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S460 COMPLETE (2026-04-14) — eBay push UI, QR watermark default, photo import fix, post-sale workflow, shipping classification**
+
+**S460 What happened:**
+- **eBay push UI — 3 locations built:** `sales/[id]/index.tsx` (NEW page), `edit-item/[id].tsx` (Edit Item page), `add-items/[saleId]/review.tsx` (Review & Publish). Previously the eBay push backend existed but had zero frontend discoverability — organizers only saw CSV exports.
+- **QR watermark set as global default:** All eBay photo exports (push + CSV) now use `getWatermarkedUrlWithQR(url, itemId)` — QR links to `finda.sale/items/{itemId}` + organizer name. Was previously text-only or clean. Decision locked: watermark = brand spreading = ungated (D-407).
+- **eBay photo import fix:** GetMyeBaySelling enrichment filter was skipping items with `photoUrls.length <= 1`. Fixed to always include these items so all eBay photos get pulled via GetItem pass.
+- **eBay tier gate confirmed removed:** Backend route `POST /api/organizer/sales/:saleId/ebay-push` already only uses `authenticate` — no `requireTier(PRO)` was present. Feature is fully ungated.
+- **Post-sale eBay push workflow:** `PostSaleEbayPanel.tsx` (NEW) — shown only when sale status = ENDED. Soft dismissible toast on first load (sessionStorage key prevents re-showing). Checklist with shipping badges (green/amber/grey), "Too heavy to ship?" dropdown for HEAVY/FRAGILE/UNKNOWN items, bulk "Push Selected to eBay" button.
+- **Shipping classification:** `ebayShippingClassifier.ts` (NEW) — `classifyEbayShipping(category, tags)` → SHIPPABLE | HEAVY_OVERSIZED | FRAGILE | UNKNOWN. Auto from item metadata; organizer overrides via dropdown.
+- **Schema:** `ebayShippingClassification String @default("UNKNOWN")` + `ebayShippingOverride String?` added to Item model. Migration: `20260414_ebay_shipping_classification`.
+- **`useEbayConnection` hook (NEW):** `lib/useEbayConnection.ts` — returns `{ isConnected, ebayStatus, isLoading, refetch }` via `/ebay/connection`. Used across all 3 push UI locations.
+- **InventoryItemCard.tsx:** `loading="eager"` for images, click navigates to `/organizer/inventory/{id}`, `decodeHtmlEntities()` helper for `&amp;` display fix.
+- **TS fix:** `sales/[id]/index.tsx` line 257 — removed unreachable `tier === 'SIMPLE'` from button `title` prop (TypeScript correctly flagged as impossible comparison given render condition).
+
+**S460 Decisions locked:**
+- **D-407:** eBay push is permanently UNGATED — watermark on photos covers brand spreading concern
+- Post-sale workflow: soft toast trigger (not forced), dismissible panel, never required
+- Shipping: "Too heavy to ship?" toggle (not a weight field), one fulfillment policy for now
+
+**S460 Files changed (13):**
+- `packages/frontend/components/InventoryItemCard.tsx`
+- `packages/frontend/lib/useEbayConnection.ts` — NEW
+- `packages/frontend/pages/organizer/sales/[id]/index.tsx` — NEW page
+- `packages/frontend/pages/organizer/edit-item/[id].tsx`
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx`
+- `packages/frontend/components/PostSaleEbayPanel.tsx` — NEW
+- `packages/backend/src/controllers/ebayController.ts`
+- `packages/backend/src/services/exportService.ts`
+- `packages/backend/src/utils/ebayShippingClassifier.ts` — NEW
+- `packages/backend/src/routes/ebay.ts`
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260414_ebay_shipping_classification/migration.sql` — NEW
+- `claude_docs/strategy/roadmap.md`
+
+**S460 Patrick manual actions REQUIRED:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+After Railway deploys: Settings → Sync eBay Inventory (triggers enrichment pass, pulls all photos for items with ≤1 photo).
+
+**S460 Blocked/Unverified:**
+- Post-sale panel: built but unverified in browser (needs a sale in ENDED status with items)
+- Shipping classification: logic built, unverified against real item data
+
+---
+
 **S459 COMPLETE (2026-04-14) — eBay webhook + enrichment fully operational**
 
 **S459 What happened:**

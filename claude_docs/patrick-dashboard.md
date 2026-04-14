@@ -2,6 +2,16 @@
 
 ## What Happened This Week
 
+**S460** (2026-04-14) — eBay push UI everywhere, QR watermark default, photo import fix, post-sale workflow:
+- **eBay push button now in 3 places:** Sale detail page (new), Edit Item page, Review & Publish page. Before today, the only way to push to eBay was via a hidden API call — no UI existed.
+- **QR watermark is now the default for all eBay photos** — every photo pushed to eBay has a QR code pointing back to `finda.sale/items/{itemId}` + your organizer name. Works for both push and CSV export.
+- **Photo import bug fixed** — sync was skipping items that already had 1 photo. Now enrichment always fetches all photos for partially-synced items.
+- **Post-sale eBay panel built** — when a sale ends, you'll get a soft toast: "X items didn't sell — ready to list on eBay?" The panel shows each unsold item with a shipping badge (shippable/heavy/fragile), lets you check items to push, and has a "Too heavy to ship?" toggle to flag items you don't want to ship.
+- **Shipping classification:** Items are automatically tagged SHIPPABLE/HEAVY/FRAGILE/UNKNOWN from their category and tags. You can override per item.
+- **eBay push: no tier gate** — confirmed ungated. Any organizer with eBay connected can push.
+- **TS build error fixed** (line 257 in sales/[id]/index.tsx) — bad comparison removed.
+- **⚠️ Run migration below before testing the post-sale panel.**
+
 **S459** (2026-04-14) — eBay webhook confirmed + enrichment fully operational:
 - **ORDER_CONFIRMATION webhook** ✅ — Per-organizer subscription working. The 409 in logs = correct (subscription already exists from first connect). No action needed.
 - **eBay photos now syncing** ✅ — Items showing 4–22 photos each. Categories populated (Comics, Golf, Magazines, Tobacciana, etc.)
@@ -107,22 +117,36 @@
 
 ## Action Items for Patrick
 
-**NEW — S458 Push block (do this now):**
+**NEW — S460 Push block (do this now):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/hooks/useInventory.ts
-git add packages/frontend/pages/organizer/inventory.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/frontend/components/InventoryItemCard.tsx
+git add packages/frontend/lib/useEbayConnection.ts
+git add "packages/frontend/pages/organizer/sales/[id]/index.tsx"
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add packages/frontend/components/PostSaleEbayPanel.tsx
 git add packages/backend/src/controllers/ebayController.ts
-git add packages/frontend/components/ItemPhotoManager.tsx
+git add packages/backend/src/services/exportService.ts
+git add packages/backend/src/utils/ebayShippingClassifier.ts
+git add packages/backend/src/routes/ebay.ts
+git add packages/database/prisma/schema.prisma
+git add "packages/database/prisma/migrations/20260414_ebay_shipping_classification/migration.sql"
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: pull-to-sale toast, sale title, eBay GetItem enrichment, photo fallback"
+git commit -m "feat: eBay push UI, QR watermark default, photo import fix, post-sale workflow, shipping classification"
 .\push.ps1
 ```
 
-- [ ] **After deploy:** Settings → Sync eBay Inventory — enrichment pass runs (~9s for 86 items), check that description/category/tags populate on items
-- [ ] **Check Railway logs** after sync for `[eBay Enrich]` lines — confirms enrichment ran and how many items updated
+- [ ] **Run S460 migration:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+- [ ] **After deploy:** Settings → Sync eBay Inventory — enrichment pass now includes items with ≤1 photo, pulls all eBay photos
 - [ ] **Artifact MI: disconnect + reconnect eBay** — gets new token with `sell.fulfillment` scope (stops 403 cron errors)
 - [ ] **Run S455 migration** (still pending — `inInventory` rename + `isInventoryContainer` + `lastEbayInventorySyncAt`):
 ```powershell
@@ -173,11 +197,11 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 ---
 
-## What's Next (S459+)
+## What's Next (S460+)
 
 **P0 — eBay sync architecture audit (Patrick flagged S458):** The current multi-pass approach (GetMyeBaySelling → separate GetItem per item) is wrong. Next session opens with `findasale-architect` researching the correct bidirectional sync design. Key questions: use `GetItems` batch calls (20/call) instead of 1/item? Switch to eBay Platform Notifications for real-time sold sync? What data is actually available from which API? Goal: single-pass import + webhook-based ongoing sync, replacing the polling cron.
 
-**P1 — Verify S458 enrichment worked:** Check Railway logs after syncing for `[eBay Enrich]` lines. If description/category/tags aren't populating, the GetItem call may need auth debugging.
+**P1 — Verify S460 photo import fix:** After syncing, check items in eBay inventory — they should now show all photos, not just the cover. Railway logs will show `[eBay Enrich]` entries.
 
 **P1 — Run S455 migration on Railway** (still pending — `inInventory` rename, `isInventoryContainer`, `lastEbayInventorySyncAt`). eBay inventory sync won't be fully live until this runs.
 
@@ -199,6 +223,7 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S460 | 2026-04-14 | eBay push UI (3 locations), QR watermark default, photo import fix, PostSaleEbayPanel, shipping classification. 13 files. |
 | S457 | 2026-04-14 | Pull to Sale fixed: embedding[] in create, inInventory=true filter in list query. |
 | S456 | 2026-04-14 | eBay import fully working: Trading API auth, xmlVal regex fix, photos via GranularityLevel=Fine, CSP fix, 81 dupes removed. |
 | S455 | 2026-04-13 | eBay sync button, library→inventory rename, Google OAuth auto-link, cart isolation fix. |
