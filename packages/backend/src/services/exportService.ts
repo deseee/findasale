@@ -1,5 +1,5 @@
 import { Item } from '@prisma/client';
-import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 
 type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
 
@@ -72,9 +72,9 @@ function formatEbayCsv(items: Item[], includeWatermark: boolean = false): string
     let photoUrl = '';
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
-      // Apply Cloudinary watermark overlay if requested
+      // Apply QR+name watermark by default for eBay exports
       if (includeWatermark && photoUrl) {
-        photoUrl = getWatermarkedUrl(photoUrl);
+        photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
       }
     }
 
@@ -176,11 +176,11 @@ function formatFacebookCsv(items: Item[]): string {
   items.forEach((item) => {
     const availability = item.status === 'AVAILABLE' ? 'In Stock' : 'Out of Stock';
 
-    // Get watermarked photo URL
+    // Get photo URL with QR+name watermark by default
     let photoUrl = '';
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
-      photoUrl = getWatermarkedUrl(photoUrl);
+      photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
     }
 
     const row = [

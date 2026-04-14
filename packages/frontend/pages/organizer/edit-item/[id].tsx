@@ -87,7 +87,6 @@ const EditItemPage = () => {
       if (!item?.saleId) throw new Error('Sale ID not found');
       return api.post(`/api/organizer/sales/${item.saleId}/ebay-push`, {
         itemIds: [itemId],
-        photoMode: 'clean',
       });
     },
     onSuccess: (response) => {

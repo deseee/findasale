@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { getEbayCategoryId } from '../utils/ebayCategoryMap';
 import { getIO } from '../lib/socket';
 
@@ -1299,7 +1299,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           if (photoMode === 'clean') {
             return url;
           }
-          return getWatermarkedUrl(url);
+          return getWatermarkedUrlWithQR(url, item.id); // QR+name watermark default
         });
 
         // Step 1: Create or replace inventory item
