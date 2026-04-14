@@ -287,13 +287,7 @@ const SaleDetailPage = () => {
                         <button
                           onClick={() => handlePushToEbay(item.id)}
                           disabled={ebayPushStatus[item.id] === 'pushing'}
-                          title={
-                            !ebayConnected
-                              ? 'Connect eBay in Settings'
-                              : tier === 'SIMPLE'
-                              ? 'Upgrade to PRO to use eBay'
-                              : ''
-                          }
+                          title=""
                           className="flex-1 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-2 rounded transition-colors"
                         >
                           {ebayPushStatus[item.id] === 'pushing' ? 'Pushing...' : 'Push to eBay'}
