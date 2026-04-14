@@ -157,14 +157,10 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                 alt={`Item photo ${i + 1}`}
                 className="w-full aspect-square object-cover"
                 loading="lazy"
-                referrerPolicy="no-referrer"
-                crossOrigin="anonymous"
                 onError={(e) => {
-                  // Fallback: if image fails to load, try without transformation
+                  // Fallback to raw URL if transform failed (Cloudinary only)
                   const img = e.target as HTMLImageElement;
-                  if (img.src !== url && !img.src.includes('ebayimg')) {
-                    img.src = url;
-                  }
+                  if (img.src !== url) img.src = url;
                 }}
               />
 
