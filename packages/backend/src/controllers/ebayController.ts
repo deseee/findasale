@@ -1278,6 +1278,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             estimatedValue: true,
             aiSuggestedPrice: true,
             tags: true,
+            ebayOfferId: true,
+            ebayListingId: true,
           },
         },
       },
@@ -1363,8 +1365,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           continue;
         }
 
-        // Step 2: Create offer
-        const offerUrl = 'https://api.ebay.com/sell/inventory/v1/offer';
+        // Step 2: Upsert offer — find existing or create new, then update price/policies
         const cleanDescription = (item.description || '').replace(/<[^>]*>/g, '').trim();
         const offerPayload: Record<string, unknown> = {
           sku,
@@ -1387,30 +1388,63 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           ...(cleanDescription ? { listingDescription: cleanDescription } : {}),
         };
 
-        const offerResponse = await fetch(offerUrl, {
-          method: 'POST',
-          headers: ebayUserHeaders(accessToken),
-          body: JSON.stringify(offerPayload),
-        });
+        // Resolve existing offerId: use stored value or look up by SKU on eBay
+        let offerId: string | null = item.ebayOfferId || null;
 
-        if (!offerResponse.ok) {
-          const errorData = await offerResponse.text();
-          console.error(`[eBay] Offer creation failed: ${offerResponse.status} ${errorData}`);
-          results.push({
-            itemId: item.id,
-            sku,
-            ebayListingId: null,
-            status: 'error',
-            error: 'OFFER_CREATION_FAILED',
-            message: `Failed to create offer: ${offerResponse.status}`,
-          });
-          continue;
+        if (!offerId) {
+          const getOfferRes = await fetch(
+            `https://api.ebay.com/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`,
+            { headers: ebayUserHeaders(accessToken) }
+          );
+          if (getOfferRes.ok) {
+            const getOfferData = (await getOfferRes.json()) as any;
+            const existing = getOfferData.offers?.[0];
+            if (existing) {
+              offerId = existing.offerId;
+            }
+          }
         }
 
-        const offerData = (await offerResponse.json()) as any;
-        const offerId = offerData.offerId;
+        if (offerId) {
+          // Update existing offer (PUT replaces the offer body)
+          const updateRes = await fetch(
+            `https://api.ebay.com/sell/inventory/v1/offer/${offerId}`,
+            {
+              method: 'PUT',
+              headers: ebayUserHeaders(accessToken),
+              body: JSON.stringify(offerPayload),
+            }
+          );
+          if (!updateRes.ok && updateRes.status !== 204) {
+            const errText = await updateRes.text();
+            console.warn(`[eBay] Offer update failed (non-fatal): ${updateRes.status} ${errText}`);
+            // Proceed anyway — existing offer may still be publishable
+          }
+        } else {
+          // Create new offer
+          const createRes = await fetch('https://api.ebay.com/sell/inventory/v1/offer', {
+            method: 'POST',
+            headers: ebayUserHeaders(accessToken),
+            body: JSON.stringify(offerPayload),
+          });
+          if (!createRes.ok) {
+            const errText = await createRes.text();
+            console.error(`[eBay] Offer creation failed: ${createRes.status} ${errText}`);
+            results.push({
+              itemId: item.id,
+              sku,
+              ebayListingId: null,
+              status: 'error',
+              error: 'OFFER_CREATION_FAILED',
+              message: `Failed to create offer: ${createRes.status}`,
+            });
+            continue;
+          }
+          const createData = (await createRes.json()) as any;
+          offerId = createData.offerId;
+        }
 
-        // Store ebayOfferId for later withdrawal if item sells
+        // Store offerId
         await prisma.item.update({
           where: { id: item.id },
           data: { ebayOfferId: offerId },
@@ -1421,25 +1455,41 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         const publishResponse = await fetch(publishUrl, {
           method: 'POST',
           headers: ebayUserHeaders(accessToken),
-          body: '{}',
         });
 
-        if (!publishResponse.ok) {
-          const errorData = await publishResponse.text();
-          console.error(`[eBay] Publish failed: ${publishResponse.status} ${errorData}`);
-          results.push({
-            itemId: item.id,
-            sku,
-            ebayListingId: null,
-            status: 'error',
-            error: 'PUBLISH_FAILED',
-            message: `Failed to publish offer: ${publishResponse.status}`,
-          });
-          continue;
-        }
+        // Resolve listing ID — either from publish response or from existing offer
+        let ebayListingId: string | null = null;
 
-        const publishData = (await publishResponse.json()) as any;
-        const ebayListingId = publishData.listingId;
+        if (publishResponse.ok) {
+          const publishData = (await publishResponse.json()) as any;
+          ebayListingId = publishData.listingId;
+        } else {
+          const publishError = await publishResponse.text();
+          console.warn(`[eBay] Publish returned ${publishResponse.status}: ${publishError}`);
+
+          // If already published, fetch listingId from the existing offer
+          const offerDetailRes = await fetch(
+            `https://api.ebay.com/sell/inventory/v1/offer/${offerId}`,
+            { headers: ebayUserHeaders(accessToken) }
+          );
+          if (offerDetailRes.ok) {
+            const offerDetail = (await offerDetailRes.json()) as any;
+            ebayListingId = offerDetail.listing?.listingId || null;
+          }
+
+          if (!ebayListingId) {
+            console.error(`[eBay] Publish failed and no listingId found: ${publishResponse.status} ${publishError}`);
+            results.push({
+              itemId: item.id,
+              sku,
+              ebayListingId: null,
+              status: 'error',
+              error: 'PUBLISH_FAILED',
+              message: `Failed to publish offer: ${publishResponse.status}`,
+            });
+            continue;
+          }
+        }
 
         // Update item with eBay listing ID
         await prisma.item.update({
