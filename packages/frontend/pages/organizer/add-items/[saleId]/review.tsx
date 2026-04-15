@@ -37,6 +37,8 @@ interface ItemEditState {
   description: string;
   price: number;
   category: string;
+  ebayCategoryId?: string;
+  ebayCategoryName?: string;
   condition: string;
   conditionGrade?: string; // #64: S | A | B | C | D
   quantity: number;
@@ -73,6 +75,8 @@ interface Item {
   description: string | null;
   price: number | null;
   category: string | null;
+  ebayCategoryId?: string | null;
+  ebayCategoryName?: string | null;
   condition: string | null;
   conditionGrade?: string | null; // #64: S | A | B | C | D
   quantity: number;
@@ -548,11 +552,22 @@ const ReviewPage = () => {
     });
   };
 
-  const handleBulkCategory = (category: string) => {
+  const handleBulkCategory = (payload: { l1CategoryName: string; leafCategoryId: string; leafCategoryName: string }) => {
     bulkUpdateMutation.mutate({
       itemIds: Array.from(selectedItems),
       operation: 'category',
-      value: category,
+      value: payload.l1CategoryName,
+    });
+    // Also update ebayCategoryId and ebayCategoryName for all selected items
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'ebayCategoryId',
+      value: payload.leafCategoryId,
+    });
+    bulkUpdateMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      operation: 'ebayCategoryName',
+      value: payload.leafCategoryName,
     });
   };
 
@@ -814,7 +829,7 @@ const ReviewPage = () => {
                         <div className="flex-1">
                           <EbayCategoryPicker
                             value={bulkCategory}
-                            onChange={(cat) => { setBulkCategory(cat); handleBulkCategory(cat); }}
+                            onChange={(payload) => { setBulkCategory(payload.l1CategoryName); handleBulkCategory(payload); }}
                             label=""
                             placeholder="Bulk category..."
                           />
@@ -1224,7 +1239,11 @@ const ReviewPage = () => {
                                   <div className="flex-1">
                                     <EbayCategoryPicker
                                       value={editState.category}
-                                      onChange={(cat) => handleEditChange(item.id, 'category', cat)}
+                                      onChange={({ leafCategoryName, leafCategoryId, l1CategoryName }) => {
+                                        handleEditChange(item.id, 'category', l1CategoryName);
+                                        handleEditChange(item.id, 'ebayCategoryId', leafCategoryId);
+                                        handleEditChange(item.id, 'ebayCategoryName', leafCategoryName);
+                                      }}
                                       label="Category"
                                       placeholder="Select category..."
                                     />
