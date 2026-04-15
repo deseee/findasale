@@ -124,6 +124,13 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const zoomHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusRingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPinchDistance = useRef<number | null>(null);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [showCornerGuides, setShowCornerGuides] = useState(true);
+  const [showLevelIndicator, setShowLevelIndicator] = useState(true);
+  const [exposureCompensation, setExposureCompensation] = useState(0);
+  const [whiteBalance, setWhiteBalance] = useState('auto');
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isRapidfire = mode === 'rapidfire';
   const inAddMode = addingToItemId !== null;
@@ -383,41 +390,22 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black md:bg-black/70 md:p-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black lg:bg-black/70 lg:p-8">
       {/* Inner container: fullscreen mobile, modal desktop */}
-      <div className="w-full h-full md:max-w-2xl md:max-h-[85vh] md:rounded-2xl md:overflow-hidden md:shadow-2xl bg-black flex flex-col relative">
+      <div className="w-full h-full lg:max-w-2xl lg:max-h-[85vh] lg:rounded-2xl lg:overflow-hidden lg:shadow-2xl bg-black flex flex-col relative">
         {/* Hidden canvas for frame capture */}
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* Top bar */}
-        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 gap-2 bg-gradient-to-b from-black/60 to-transparent min-h-16">
-          {/* Left: Torch (if supported) or close button */}
-          {torchSupported ? (
-            <button
-              onClick={toggleTorch}
-              className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
-                torchOn ? 'bg-amber-500 text-white' : 'bg-white/20 text-white'
-              }`}
-              aria-label={torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </button>
-          ) : (
-            <button
-              onClick={handleCancel}
-              className="flex-shrink-0 text-white text-lg w-10 h-10 flex items-center justify-center"
-              aria-label="Cancel capture"
-            >
-              ✕
-            </button>
-          )}
+        {/* Top bar: X left (always visible), Settings right, Mode toggle at top */}
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 gap-2 bg-gradient-to-b from-black/60 to-transparent min-h-16">
+          {/* Left: Close button (always visible, z-20 to never be covered) */}
+          <button
+            onClick={handleCancel}
+            className="flex-shrink-0 text-white text-lg w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+            aria-label="Cancel capture"
+          >
+            ✕
+          </button>
 
           {/* Center: Mode toggle */}
           <div className="flex items-center bg-black/70 border border-white/15 rounded-full gap-0.5 px-1 py-1">
@@ -441,22 +429,188 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             ))}
           </div>
 
-          {/* Right: Camera switch (moved from bottom bar) */}
+          {/* Right: Settings button */}
           <button
-            onClick={switchCamera}
+            onClick={() => setSettingsPanelOpen(!settingsPanelOpen)}
             className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center"
-            aria-label="Switch camera"
+            aria-label="Settings"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
               />
             </svg>
           </button>
         </div>
+
+        {/* Settings panel — expands below top bar */}
+        {settingsPanelOpen && (
+          <div className="absolute top-16 left-0 right-0 z-19 bg-black/80 backdrop-blur-md rounded-b-2xl border-b border-white/10 max-h-[70vh] overflow-y-auto">
+            <div className="px-4 py-4 space-y-5">
+
+              {/* Lighting section */}
+              <div>
+                <div className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Lighting</div>
+                <div className="space-y-3">
+
+                  {/* Torch toggle */}
+                  {torchSupported && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white">Torch</span>
+                      <button
+                        onClick={toggleTorch}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          torchOn ? 'bg-amber-500 text-white' : 'bg-white/10 text-white/60'
+                        }`}
+                      >
+                        {torchOn ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Exposure compensation slider */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-white">Exposure</span>
+                      <span className="text-xs text-white/60">{exposureCompensation.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-2"
+                      max="2"
+                      step="0.1"
+                      value={exposureCompensation}
+                      onChange={(e) => setExposureCompensation(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                    />
+                  </div>
+
+                  {/* White balance segmented */}
+                  <div>
+                    <div className="text-xs text-white/60 mb-2">White Balance</div>
+                    <div className="flex gap-2">
+                      {['auto', 'daylight', 'incandescent', 'fluorescent'].map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setWhiteBalance(mode)}
+                          className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${
+                            whiteBalance === mode
+                              ? 'bg-white text-black'
+                              : 'bg-white/10 text-white/60 hover:bg-white/20'
+                          }`}
+                        >
+                          {mode === 'auto' ? 'Auto' : mode === 'daylight' ? 'Day' : mode === 'incandescent' ? 'Warm' : 'Fluor'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="border-b border-white/10 mt-4" />
+              </div>
+
+              {/* Camera section */}
+              <div>
+                <div className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Camera</div>
+                <div className="space-y-3">
+
+                  {/* Switch camera */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white">Camera</span>
+                    <button
+                      onClick={switchCamera}
+                      className="px-3 py-1 rounded-full text-xs font-medium bg-white/10 text-white/60 hover:bg-white/20 transition-colors"
+                    >
+                      {facingMode === 'environment' ? 'Rear' : 'Front'}
+                    </button>
+                  </div>
+
+                  {/* Zoom slider */}
+                  {zoomSupported && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-white">Zoom</span>
+                        <span className="text-xs text-white/60">{zoomLevel.toFixed(1)}×</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={zoomRange.min}
+                        max={zoomRange.max}
+                        step="0.1"
+                        value={zoomLevel}
+                        onChange={(e) => applyZoom(parseFloat(e.target.value))}
+                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="border-b border-white/10 mt-4" />
+              </div>
+
+              {/* Capture section */}
+              <div>
+                <div className="text-xs uppercase tracking-wider text-white/40 font-semibold mb-3">Capture</div>
+                <div className="space-y-3">
+
+                  {/* Timer segmented */}
+                  <div>
+                    <div className="text-xs text-white/60 mb-2">Timer</div>
+                    <div className="flex gap-2">
+                      {[0, 2, 5].map((seconds) => (
+                        <button
+                          key={seconds}
+                          onClick={() => setTimerSeconds(seconds)}
+                          className={`px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${
+                            timerSeconds === seconds
+                              ? 'bg-white text-black'
+                              : 'bg-white/10 text-white/60 hover:bg-white/20'
+                          }`}
+                        >
+                          {seconds === 0 ? 'Off' : `${seconds}s`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Corner guides toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white">Corner Guides</span>
+                    <button
+                      onClick={() => setShowCornerGuides(!showCornerGuides)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        showCornerGuides ? 'bg-amber-500 text-white' : 'bg-white/10 text-white/60'
+                      }`}
+                    >
+                      {showCornerGuides ? 'On' : 'Off'}
+                    </button>
+                  </div>
+
+                  {/* Level indicator toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white">Level Indicator</span>
+                    <button
+                      onClick={() => setShowLevelIndicator(!showLevelIndicator)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        showLevelIndicator ? 'bg-amber-500 text-white' : 'bg-white/10 text-white/60'
+                      }`}
+                    >
+                      {showLevelIndicator ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
 
         {/* Mode hint text */}
         <div className="absolute left-0 right-0 z-10 flex justify-center pointer-events-none" style={{ top: '54px' }}>
@@ -554,17 +708,26 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               />
 
               {/* 4:3 Framing Guide with faint white corner brackets */}
-              <div className="absolute inset-0 pointer-events-none">
-                {/* Corner brackets — faint white, not blue */}
-                <div className="absolute top-4 left-4 w-10 h-10 border-t-2 border-l-2 border-white/50" />
-                <div className="absolute top-4 right-4 w-10 h-10 border-t-2 border-r-2 border-white/50" />
-                <div className="absolute bottom-4 left-4 w-10 h-10 border-b-2 border-l-2 border-white/50" />
-                <div className="absolute bottom-4 right-4 w-10 h-10 border-b-2 border-r-2 border-white/50" />
-                {/* Label */}
-                <div className="absolute top-2 left-1/2 -translate-x-1/2 text-white/35 text-xs">
-                  4:3
+              {showCornerGuides && (
+                <div className="absolute inset-0 pointer-events-none">
+                  {/* Corner brackets — faint white, not blue */}
+                  <div className="absolute top-4 left-4 w-10 h-10 border-t-2 border-l-2 border-white/50" />
+                  <div className="absolute top-4 right-4 w-10 h-10 border-t-2 border-r-2 border-white/50" />
+                  <div className="absolute bottom-4 left-4 w-10 h-10 border-b-2 border-l-2 border-white/50" />
+                  <div className="absolute bottom-4 right-4 w-10 h-10 border-b-2 border-r-2 border-white/50" />
+                  {/* Label */}
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 text-white/35 text-xs">
+                    4:3
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Level indicator line */}
+              {showLevelIndicator && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="w-3/4 h-0.5 bg-white/40 rounded-full" />
+                </div>
+              )}
 
               {/* Feature 2: Zoom level indicator */}
               {showZoomHint && zoomLevel !== 1 && (
