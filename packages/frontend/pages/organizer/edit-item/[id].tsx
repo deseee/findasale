@@ -41,6 +41,8 @@ const EditItemPage = () => {
     price: '',
     quantity: 1,
     category: '',
+    ebayCategoryId: '',
+    ebayCategoryName: '',
     condition: '',
     conditionGrade: '',
     tags: [] as string[],
@@ -478,8 +480,13 @@ const EditItemPage = () => {
 
             <EbayCategoryPicker
               value={formData.category}
-              onChange={(categoryName) =>
-                setFormData({ ...formData, category: categoryName })
+              onChange={({ leafCategoryName, leafCategoryId, l1CategoryName }) =>
+                setFormData({
+                  ...formData,
+                  category: l1CategoryName,
+                  ebayCategoryId: leafCategoryId,
+                  ebayCategoryName: leafCategoryName,
+                })
               }
               label="Category"
               placeholder="Search and select an eBay category..."

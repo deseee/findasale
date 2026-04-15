@@ -637,7 +637,7 @@ model Item {
   auctionEndTime             DateTime?
   auctionClosed              Boolean                @default(false)
   status                     String                 @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED, DONATED
-  category                   String? // furniture, decor, vintage, textiles, collectibles, art, antiques, jewelry, books, tools, electronics, clothing, home, other
+  category                   String? // eBay L1 category name (e.g. "Home & Garden") — used for shopper browse and wishlist matching
   condition                  String? // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
   conditionGrade             String? // S | A | B | C | D — null for items not yet graded
   rarity                     ItemRarity             @default(COMMON) // Feature #57: Shiny/Rare badges
@@ -743,6 +743,7 @@ model Item {
   ebayListingId              String? // eBay listing ID after successful publish; used for Phase 3 sync
   ebayOfferId                String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
   ebayCategoryId             String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
+  ebayCategoryName           String? // eBay leaf category name (e.g. "Guitar Amplifiers") — user-friendly display name for eBay category selected
   ebayNeedsReview            Boolean               @default(false) // Set true when all category suggestions fail 25005 — organizer must set category manually
   listedOnEbayAt             DateTime? // Timestamp when item was pushed to eBay
   // Feature #244 Phase 3: Post-sale eBay push — shipping classification

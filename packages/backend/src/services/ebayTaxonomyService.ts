@@ -270,9 +270,37 @@ interface CategorySuggestion {
   categoryId: string;
   categoryName: string;
   categoryTreeNodeLevel: number;
+  l1CategoryName?: string; // eBay L1 (top-level) category name
 }
 
 const categorySuggestionCache = new Map<string, CachedCategorySuggestion>();
+
+// ── Helper: Map leaf category names to eBay L1 category names ──────────────────
+
+/**
+ * Map a leaf category name to its eBay L1 (top-level) category.
+ * Uses pattern matching on common product keywords.
+ * Fallback: "Everything Else" if no pattern matches.
+ */
+function getL1CategoryName(leafCategoryName: string): string {
+  const L1_PATTERNS: Array<{ pattern: RegExp; l1: string }> = [
+    { pattern: /guitar|amp|drum|keyboard|piano|violin|instrument|music gear|microphone|mixing|dj/i, l1: 'Musical Instruments & Gear' },
+    { pattern: /furniture|chair|table|sofa|dresser|cabinet|shelf|desk|couch|ottoman/i, l1: 'Home & Garden' },
+    { pattern: /jewelry|watch|ring|necklace|bracelet|earring|pendant|brooch/i, l1: 'Jewelry & Watches' },
+    { pattern: /clothing|shirt|dress|pants|shoes|jacket|coat|sweater|blouse|shorts/i, l1: 'Clothing, Shoes & Accessories' },
+    { pattern: /book|magazine|novel|textbook|comic|poetry/i, l1: 'Books & Magazines' },
+    { pattern: /electronics|tv|stereo|radio|camera|phone|laptop|computer|tablet|headphone/i, l1: 'Consumer Electronics' },
+    { pattern: /antique|vintage|collectible|coin|stamp|memorabilia|rare|old|retro/i, l1: 'Collectibles' },
+    { pattern: /art|painting|print|sculpture|photograph|drawing|watercolor|canvas/i, l1: 'Art' },
+    { pattern: /tool|hardware|power tool|hand tool|drill|saw|wrench|hammer/i, l1: 'Tools & Hardware' },
+    { pattern: /toy|game|puzzle|doll|lego|action figure|board game/i, l1: 'Toys & Hobbies' },
+    { pattern: /sport|bike|bicycle|fitness|golf|fishing|camping|outdoor|bicycle|skate/i, l1: 'Sporting Goods' },
+  ];
+  for (const { pattern, l1 } of L1_PATTERNS) {
+    if (pattern.test(leafCategoryName)) return l1;
+  }
+  return 'Everything Else';
+}
 
 function getCachedSuggestions(query: string): CategorySuggestion[] | null {
   const cached = categorySuggestionCache.get(query);
@@ -336,6 +364,7 @@ export async function suggestCategories(
       categoryId: s.categoryId,
       categoryName: s.categoryName,
       categoryTreeNodeLevel: s.categoryTreeNodeLevel,
+      l1CategoryName: getL1CategoryName(s.categoryName), // Enrich with L1 category
     }));
 
     // Cache the result
