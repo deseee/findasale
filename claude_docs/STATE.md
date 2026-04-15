@@ -7,17 +7,36 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S466 (2026-04-14) — Post-push triage: Add Items filter + eBay price priority; 6-item queue for next session**
+**S467 (2026-04-15) — eBay listing quality batch (6-item queue) + sitewide organizer rarity filter fix**
 
-**S466 What happened:**
-- Patrick published a Celestion guitar speaker to eBay and discovered multiple listing-quality problems, plus "can't find the item in the app" after ending the listing on eBay.
-- **Root cause #1 (surgical fix shipped):** `getDraftItemsBySaleId` filtered to `draftStatus IN ('DRAFT','PENDING_REVIEW')` — published items disappeared from Add Items (the organizer's mental home base for sale inventory). Filter removed; added `status`/`ebayListingId`/`listedOnEbayAt` to select so the existing "Live" chip renders for published items.
-- **Root cause #2 (surgical fix shipped):** eBay push price priority was `aiSuggestedPrice → estimatedValue → item.price`. Patrick's explicit $285 was overridden by AI's $169.09. Inverted: `item.price` now wins when set and > 0; AI fields are fallbacks only for unpriced items.
-- **6 items queued for next session — see Next Session Priority.**
+**S467 What happened:**
+- **P0 sitewide bug found & fixed:** All 7 organizer-facing pages called public `/items?saleId=` endpoint which runs Hunt Pass rarity filter. ULTRA_RARE/RARE items created within 6h were invisible to the organizer on their own management pages (Celestion $285, ULTRA_RARE, 1.8h old — disappeared). Fixed by switching all organizer management pages to `/items/drafts` (authenticated, no rarity filter). Public browsing and Buyer Preview remain unaffected.
+- **S466 6-item queue completed:** Items 1–4 and 6 shipped. Item 5 (reconciliation) has Architect spec ready, dev dispatch next session.
+- **Item 1** (category honor): No bug — current code already respects DB value.
+- **Item 2** (condition → eBay enum): Grade S + condition=USED now sends USED_EXCELLENT not NEW.
+- **Item 3** (aspect auto-fill): Brand checks item.brand first; MPN checks item.mpn; tags matched against enum. No more Brand="RIC" on speakers.
+- **Item 4** (toast on success): Fixed 3 files — was checking `result.success` instead of `result.status === 'success'`.
+- **Item 5** (reconciliation spec): Architect spec written — `claude_docs/specs/ebay-listing-reconciliation-spec.md`. Hybrid cron+on-demand. No schema changes needed. ~150 lines. Dispatch dev next session.
+- **Item 6** (watermark QR): Resized 130→85px, moved g_south→g_south_east (bottom-right corner).
 - **No migrations this session. No schema change.**
 
-**S466 Files changed (2):**
-- `packages/backend/src/controllers/itemController.ts` — `getDraftItemsBySaleId` filter removed + 3 select fields added
+**S467 Files changed (19 + 2 new):**
+- `packages/backend/src/controllers/ebayController.ts` — condition fix + aspect auto-fill + reconciliation function
+- `packages/backend/src/utils/cloudinaryWatermark.ts` — QR 130→85px, g_south→g_south_east
+- `packages/backend/src/routes/ebay.ts` — GET /sync-ended-listings route
+- `packages/backend/src/index.ts` — cron startup wiring
+- `packages/backend/src/jobs/ebayEndedListingsSyncCron.ts` — NEW 4h cron
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — /items → /items/drafts
+- `packages/frontend/pages/organizer/sales/[id]/index.tsx` — /items → /items/drafts
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — /items → /items/drafts
+- `packages/frontend/pages/organizer/promote/[saleId].tsx` — /items → /items/drafts
+- `packages/frontend/pages/organizer/print-inventory.tsx` — /items → /items/drafts
+- `packages/frontend/pages/organizer/bounties.tsx` — /items → /items/drafts
+- `packages/frontend/pages/organizer/dashboard.tsx` — /items → /items/drafts
+- `packages/frontend/components/PostSaleEbayPanel.tsx` — toast result.status fix
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — toast result.status fix
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — toast result.status fix
+- `claude_docs/specs/ebay-listing-reconciliation-spec.md` — NEW Architect spec
 - `packages/backend/src/controllers/ebayController.ts` — push price priority inverted (organizer price wins over AI)
 
 ---
@@ -47,6 +66,8 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
+- **S467 (2026-04-15):** eBay listing quality batch (6/6 items done) + P0 sitewide organizer rarity filter fix (7 pages). Condition/aspect/toast/watermark fixes. Reconciliation spec ready. 13 files changed. No migrations.
+- **S466 (2026-04-14):** Add Items filter fix (getDraftItemsBySaleId) + eBay price priority inversion (organizer price wins). 2 files.
 - **S465 (2026-04-14):** Roadmap graduation pass (v106 → v107) — 31 features moved to SHIPPED & VERIFIED. #245 Feedback Widget deprecated → Rejected. STATE.md compacted from 1603 → ~250 lines (S428–S449 archived to COMPLETED_PHASES.md). All go-live env blockers cleared.
 - **S464 (2026-04-14):** ebayNeedsReview full implementation (amber badge on sale detail when all 5 category suggestions fail). Billing webhook secret fix (P0). Stripe env cleanup. eBay two-pass retry (25021 + 25005 independent passes). Migration needed: `20260414_ebay_needs_review`.
 - **S463 (2026-04-14):** Static eBay category picker retired. Live Taxonomy API picker shipped. ebayCategoryMap.ts deleted. eBay sync architecture spec produced (GetMultipleItems batch replacement for GetItem loop recommended).
@@ -90,42 +111,26 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP OF SESSION — parallel dev dispatch for 6 eBay listing-quality items (S466 queue)**
+**TOP OF SESSION — Chrome QA + Item 5 reconciliation dev dispatch**
 
-Goal: run up to 4 dev agents in parallel where file ownership allows, sequential where they overlap. Per CLAUDE.md §7 Batch Dispatch Protocol, group by file ownership before dispatching.
+**1. Chrome QA (do first — verify S467 fixes landed):**
+- Reload Add Items for Artifact April 26 — confirm Celestion appears (rarity filter fix)
+- Confirm push toast shows success on a test push (toast fix)
+- Confirm watermark QR is smaller and bottom-right (watermark fix)
+- Push a USED item with grade S — confirm eBay gets USED_EXCELLENT not NEW (condition fix)
 
-**Pre-work (main session, before dispatch):**
-1. Smoke test finda.sale in Chrome — confirm S466 fixes landed: Add Items shows published items with "Live" chip, and a re-pushed priced item hits eBay at the organizer-set price (not AI).
-2. Read `packages/backend/src/controllers/ebayController.ts` lines 1490–1570 (push flow) and 2119–2250 (condition mapping) and 2346–2398 (aspect auto-fill) before writing dispatch specs. Grep for `getWatermarkedUrlWithQR` to find the watermark utility before writing Item 6.
+**2. Item 5 dev dispatch — eBay listing reconciliation:**
+- Spec ready: `claude_docs/specs/ebay-listing-reconciliation-spec.md`
+- Hybrid: 4h cron + on-demand sync button
+- No schema changes needed, ~150 lines
+- Dispatch `findasale-dev` with spec as context
 
-**Dispatch groupings (4 parallel agents, 1 sequential group):**
+**3. eBay sync batch refactor (after Item 5):**
+- Replace sequential GetItem loop (ebayController.ts ~2746–2895) with GetMultipleItems Shopping API batches of 20/call
 
-**Agent A — ebayController.ts push-flow trio (SEQUENTIAL, single agent — all three items touch the same file):**
-- **Item 1: Honor manual `ebayCategoryId`.** Current code at `ebayController.ts:1500-1510` uses stored ebayCategoryId first, then falls back to title-based auto-detection and caches the result. Problem: if a cached auto-detect was wrong and the organizer then picks a category via the new EbayCategoryPicker, the cached value can still win on re-push. Need to differentiate "picker-selected" (locked — never override) from "auto-detected-cached" (replaceable). Add a boolean like `ebayCategorySource: 'MANUAL' | 'AUTO'` (schema change — flag to architect before dispatch) OR simpler approach: always respect the DB value if set, and never auto-overwrite in the push path — only write on initial push when DB value is null.
-- **Item 2: Condition grade → eBay enum respects `item.condition`.** `mapGradeToInventoryCondition` at line 2119 ignores `item.condition`. Grade S on a USED item currently ships as NEW. Fix: signature becomes `mapGradeToInventoryCondition(grade, condition)`. USED + S → USED_EXCELLENT (fallback chain). NEW + S → NEW. Update caller at line 1513.
-- **Item 3: Aspect auto-fill quality.** `fillRequiredAspects` at line 2346 ships `enumValues[0]` as last resort → nonsense like Brand="RIC" / Type="Control Knob" on a speaker. Fix priority: (a) `item.brand`, `item.mpn`, `item.tags` values first (string-match against enum), (b) "Unbranded" / "Does Not Apply" for identifier-like aspects, (c) "Unspecified" for free-text, (d) enum[0] only for SELECTION_ONLY required aspects where eBay would otherwise reject. Log each auto-fill with source ("from tags" / "from brand field" / "from enum[0] fallback").
-
-**Agent B — frontend push-flow toast (PARALLEL — touches frontend only):**
-- **Item 4: "Failed to push" toast on success.** Grep frontend for the eBay push button/handler (likely in `components/PostSaleEbayPanel.tsx`, `pages/organizer/sales/[id]/index.tsx`, `pages/organizer/edit-item/[id].tsx`, and wherever the bulk push is called from review.tsx). Check the response handling. Backend returns `{ status: 'success' | 'error', ... }` per item in `results[]`. Frontend is misreading success as failure somewhere. Fix the conditional.
-
-**Agent C — backend watermark utility (PARALLEL — touches util only):**
-- **Item 6: Watermark QR sizing/position.** Grep for `getWatermarkedUrlWithQR` in `packages/backend/src/`. Shrink QR code width by ~30–40%; reposition so the QR sits under the ENDED banner in the bottom corner without overlapping. "FindA.Sale" text position unchanged. Test by pushing one watermarked URL through Cloudinary transformation and eyeballing the result. Coordinate with Patrick's reference image saved in S466 wrap notes.
-
-**Needs Architect first — do NOT dispatch dev until architect returns:**
-- **Item 5: eBay listing reconciliation.** No mechanism to detect when a seller ends a listing on eBay directly (eBay only pings checkout_complete). Patrick ended a test listing on eBay and the app still thought it was live. Architect spec needed for: polling cadence (cron? on-demand button? webhook alternative?), use of `GetMultipleItems` to batch-check stored ebayListingIds, state transitions (clear `ebayListingId` + `listedOnEbayAt`, do/don't flip `draftStatus` back, do/don't restore item to the sale feed, do/don't re-enable re-push). This touches sync logic — flag the red-flag veto gate (CLAUDE.md §10).
-
-**Orchestrator handoff loop:**
-- Dispatch A + B + C in parallel (single message, 3 Agent blocks).
-- While they work, dispatch findasale-architect in parallel for Item 5 spec.
-- When all four return, process per §7 Step 4 (roadmap rows, STATE.md Current Work, inline-fixes if <20 lines, compile changed-files list).
-- Provide Patrick one consolidated push block covering all four agents' output.
-- Item 5 dev dispatch happens AFTER architect returns, ideally in the same session if context allows.
-
-**After the S466 queue is done:**
-- Chrome QA: full "push a real item" flow across book (267), clothing, furniture categories — verify condition/aspect/price all land correctly.
-- Chrome QA: watermark layout confirm (QR smaller, under ENDED banner, FindA.Sale text unchanged).
-- eBay sync batch refactor: replace sequential GetItem loop (ebayController.ts ~2746–2895) with `GetMultipleItems` Shopping API batches of 20/call.
-- Chrome QA clearing the Blocked/Unverified Queue (none require Patrick intervention).
+**4. Chrome QA queue:**
+- Full "push a real item" flow — book (category 267), clothing, furniture — verify condition/aspect/price land correctly
+- PostSaleEbayPanel end-to-end (ENDED sale)
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)

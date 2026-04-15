@@ -14,6 +14,7 @@ import {
   handleEbayNotification,
   getUnsoldItems,
   setEbayShippingOverride,
+  syncEndedListingsForOrganizer,
 } from '../controllers/ebayController';
 import { syncSoldItemsForOrganizer } from '../jobs/ebaySoldSyncCron';
 
@@ -76,6 +77,36 @@ router.get('/sync-sold', authenticate, async (req: AuthRequest, res: Response) =
     res.json(result);
   } catch (error) {
     console.error('[eBay Sync] Manual trigger error:', error);
+    res.status(500).json({
+      message: 'Sync failed',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// Feature #244 Phase 3: Manual trigger for eBay ended listings sync (organizer-initiated)
+router.get('/sync-ended-listings', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Get organizer ID from user
+    const { prisma } = await import('../lib/prisma');
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // Trigger sync for this organizer
+    const result = await syncEndedListingsForOrganizer(organizer.id);
+    res.json(result);
+  } catch (error) {
+    console.error('[eBay EndedSync] Manual trigger error:', error);
     res.status(500).json({
       message: 'Sync failed',
       error: error instanceof Error ? error.message : 'Unknown error',

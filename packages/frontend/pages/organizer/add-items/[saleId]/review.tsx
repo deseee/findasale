@@ -284,7 +284,7 @@ const ReviewPage = () => {
       const results = response.data.results || [];
       let successCount = 0;
       results.forEach((result: any) => {
-        if (result.success) {
+        if (result.status === 'success') {
           successCount++;
         } else {
           const errorMsg = result.error?.includes('NOT_CONNECTED')

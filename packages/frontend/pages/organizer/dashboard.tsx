@@ -86,7 +86,7 @@ const OrganizerDashboard = () => {
   const { data: flashDealItems = [] } = useQuery<Array<{ id: string; title: string; price: number }>>({
     queryKey: ['flash-deal-items', flashDealSaleId],
     queryFn: async () => {
-      const res = await api.get(`/items?saleId=${flashDealSaleId}&limit=200`);
+      const res = await api.get(`/items/drafts?saleId=${flashDealSaleId}&limit=200`);
       return (res.data.items ?? res.data).map((item: { id: string; title: string; price?: number }) => ({
         id: item.id,
         title: item.title,

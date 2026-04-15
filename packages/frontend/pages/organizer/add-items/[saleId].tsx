@@ -437,7 +437,9 @@ const AddItemsDetailPage = () => {
     queryKey: ['items', saleId],
     queryFn: async () => {
       if (!saleId) return [];
-      const response = await api.get(`/items?saleId=${saleId}`);
+      // Use organizer-authenticated drafts endpoint — avoids Hunt Pass rarity
+      // filter that hides RARE/ULTRA_RARE items owned by the organizer within 6h.
+      const response = await api.get(`/items/drafts?saleId=${saleId}`);
       return response.data || [];
     },
     enabled: !!saleId && !inMutationFlight.current,

@@ -1510,7 +1510,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         }
 
         // Resolve condition: grade → inventory enum → remap to category-accepted value
-        const desiredCondition = mapGradeToInventoryCondition(item.conditionGrade);
+        // Pass item.condition so organizer-set USED/REFURBISHED override S→NEW mapping
+        const desiredCondition = mapGradeToInventoryCondition(item.conditionGrade, item.condition);
         const ebayCondition = await ensureConditionValidForCategory(
           desiredCondition,
           categoryId ?? '99'
@@ -1551,6 +1552,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           title: item.title,
           tags: item.tags,
           description: item.description,
+          brand: item.brand,
+          mpn: item.mpn,
         });
         const sanitizedDescription = sanitizeDescriptionForEbay(item.description);
         const inventoryPayload: Record<string, unknown> = {
@@ -2119,9 +2122,20 @@ function mapConditionIdToEbayCondition(conditionId: string): string {
  * We therefore default to the most universal enum values. Any category that
  * doesn't accept the default gets remapped by ensureConditionValidForCategory()
  * via eBay's getItemConditionPolicies.
+ *
+ * Fix: If organizer explicitly set condition to 'USED' or 'REFURBISHED' and
+ * grade is 'S', return 'USED_EXCELLENT' (honors explicit condition over grade).
  */
-function mapGradeToInventoryCondition(grade: string | null | undefined): string {
-  switch ((grade || '').toUpperCase()) {
+function mapGradeToInventoryCondition(grade: string | null | undefined, condition?: string | null): string {
+  const gradeUpper = (grade || '').toUpperCase();
+
+  // If organizer explicitly set condition to USED/REFURBISHED and grade is S,
+  // respect the explicit condition instead of mapping S → NEW
+  if (gradeUpper === 'S' && (condition === 'USED' || condition === 'REFURBISHED')) {
+    return 'USED_EXCELLENT';
+  }
+
+  switch (gradeUpper) {
     case 'S': return 'NEW';               // universal
     case 'A': return 'USED_VERY_GOOD';    // was LIKE_NEW (media-only — rejected everywhere else)
     case 'B': return 'USED_VERY_GOOD';    // universal
@@ -2340,17 +2354,19 @@ async function getRequiredAspectsForCategory(categoryId: string): Promise<Requir
  * aspect the user didn't provide. Strategy:
  *   1. Keep all aspects the user supplied via tags.
  *   2. For each required aspect not yet present:
- *      a. If SELECTION_ONLY / has enumValues — match title + description against
- *         the enum list (case-insensitive substring), else prefer "Unbranded"
- *         for Brand aspects, else fall back to enumValues[0].
- *      b. If FREE_TEXT — use "Does Not Apply" for identifier-like aspects
- *         (Brand / MPN / UPC / Model / Manufacturer), "Unspecified" otherwise.
+ *      a. For Brand: check item.brand directly (organizer-set) → keyword match
+ *         → "Unbranded" from enum → do NOT fall to enumValues[0].
+ *      b. For MPN/Model/Manufacturer: check item.mpn directly → "Does Not Apply".
+ *      c. For Type/Style/Material (enum): check item.tags[] against enum values
+ *         → keyword match in title/description → enumValues[0] last resort.
+ *      d. If FREE_TEXT — use "Does Not Apply" for identifier-like aspects,
+ *         "Unspecified" otherwise.
  * Prevents errorId 25002 "The item specific X is missing".
  */
 async function fillRequiredAspects(
   existing: Record<string, string[]> | undefined,
   categoryId: string,
-  item: { title: string; tags: string[]; description?: string | null }
+  item: { title: string; tags: string[]; description?: string | null; brand?: string | null; mpn?: string | null }
 ): Promise<Record<string, string[]> | undefined> {
   const spec = await getRequiredAspectsForCategory(categoryId);
   if (!spec || spec.length === 0) return existing;
@@ -2365,36 +2381,105 @@ async function fillRequiredAspects(
     if (result[aspect.name] && result[aspect.name].length > 0) continue;
 
     let picked: string | null = null;
+    let source: string = 'enum-fallback';
 
-    if (aspect.enumValues.length > 0) {
-      // Try keyword match against enum values
-      for (const val of aspect.enumValues) {
-        const vLower = val.toLowerCase();
-        if (vLower && (titleLower.includes(vLower) || descLower.includes(vLower))) {
-          picked = val;
-          break;
+    // Special handling for Brand: check organizer-set value first
+    if (/^brand$/i.test(aspect.name)) {
+      if (item.brand && item.brand.trim()) {
+        picked = item.brand;
+        source = 'item.brand';
+      } else if (aspect.enumValues.length > 0) {
+        // Keyword match in title/description
+        for (const val of aspect.enumValues) {
+          const vLower = val.toLowerCase();
+          if (vLower && (titleLower.includes(vLower) || descLower.includes(vLower))) {
+            picked = val;
+            source = 'keyword-match';
+            break;
+          }
+        }
+        // Prefer "Unbranded" when available — do NOT fall to enumValues[0] for Brand
+        if (!picked) {
+          const unbranded = aspect.enumValues.find((v) => /unbranded/i.test(v));
+          if (unbranded) {
+            picked = unbranded;
+            source = 'unbranded-default';
+          }
         }
       }
-      // Brand fallback — prefer "Unbranded" when available and nothing matched
-      if (!picked && /^brand$/i.test(aspect.name)) {
-        const unbranded = aspect.enumValues.find((v) => /unbranded/i.test(v));
-        if (unbranded) picked = unbranded;
+    }
+    // Special handling for MPN/Model/Manufacturer identifiers: check item.mpn first
+    else if (/^(mpn|model|manufacturer)$/i.test(aspect.name)) {
+      if (item.mpn && item.mpn.trim()) {
+        picked = item.mpn;
+        source = 'item.mpn';
+      } else if (aspect.enumValues.length > 0) {
+        // Try keyword match
+        for (const val of aspect.enumValues) {
+          const vLower = val.toLowerCase();
+          if (vLower && (titleLower.includes(vLower) || descLower.includes(vLower))) {
+            picked = val;
+            source = 'keyword-match';
+            break;
+          }
+        }
+        // Enum fallback
+        if (!picked) {
+          picked = aspect.enumValues[0];
+          source = 'enum-first';
+        }
+      } else {
+        // Free-text aspect
+        picked = 'Does Not Apply';
+        source = 'identifier-default';
       }
-      // Last resort — first enum value (safe default; organizer can edit on eBay)
-      if (!picked) picked = aspect.enumValues[0];
+    }
+    // Standard handling for other aspects (Type, Style, Material, etc.)
+    else if (aspect.enumValues.length > 0) {
+      // Check item.tags[] for direct enum value matches
+      for (const tag of item.tags) {
+        const tagLower = tag.toLowerCase();
+        for (const val of aspect.enumValues) {
+          const vLower = val.toLowerCase();
+          if (tagLower === vLower || vLower.includes(tagLower) || tagLower.includes(vLower)) {
+            picked = val;
+            source = 'tag-match';
+            break;
+          }
+        }
+        if (picked) break;
+      }
+      // Try keyword match in title/description
+      if (!picked) {
+        for (const val of aspect.enumValues) {
+          const vLower = val.toLowerCase();
+          if (vLower && (titleLower.includes(vLower) || descLower.includes(vLower))) {
+            picked = val;
+            source = 'keyword-match';
+            break;
+          }
+        }
+      }
+      // Enum fallback
+      if (!picked) {
+        picked = aspect.enumValues[0];
+        source = 'enum-first';
+      }
     } else {
       // Free-text aspect
       if (/^(brand|manufacturer|mpn|upc|ean|model|gtin|isbn)$/i.test(aspect.name)) {
         picked = 'Does Not Apply';
+        source = 'identifier-default';
       } else {
         picked = 'Unspecified';
+        source = 'generic-default';
       }
     }
 
     if (picked) {
       result[aspect.name] = [picked];
       console.log(
-        `[eBay AspectFill] category ${categoryId}: ${aspect.name}="${picked}" (auto-filled)`
+        `[eBay AspectFill] category ${categoryId}: ${aspect.name}="${picked}" (${source})`
       );
     }
   }
@@ -3227,3 +3312,175 @@ export const setEbayShippingOverride = async (req: AuthRequest, res: Response) =
     res.status(500).json({ message: 'Failed to update shipping override' });
   }
 };
+
+/**
+ * Checks all active eBay listings for a given organizer and clears
+ * ebayListingId/listedOnEbayAt/ebayOfferId for any listings that have ENDED on eBay.
+ * Uses Trading API GetMultipleItems (batches of 20, no OAuth required).
+ *
+ * Returns: { checked: number, ended: number, itemsEnded: Array<{id, title, ebayListingId}> }
+ */
+export async function syncEndedListingsForOrganizer(organizerId: string): Promise<{
+  checked: number;
+  ended: number;
+  itemsEnded: Array<{ id: string; title: string; ebayListingId: string }>;
+}> {
+  const result = { checked: 0, ended: 0, itemsEnded: [] as Array<{ id: string; title: string; ebayListingId: string }> };
+
+  try {
+    // Get organizer's eBay connection
+    const connection = await prisma.ebayConnection.findUnique({
+      where: { organizerId },
+    });
+
+    if (!connection) {
+      console.log(`[eBay EndedSync] Organizer ${organizerId}: no eBay connection found`);
+      return result;
+    }
+
+    // Get organizer's userId for notifications
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { userId: true },
+    });
+
+    if (!organizer) {
+      console.log(`[eBay EndedSync] Organizer ${organizerId}: not found`);
+      return result;
+    }
+
+    // Fetch all AVAILABLE items with ebayListingId for this organizer
+    const activeListings = await prisma.item.findMany({
+      where: {
+        ebayListingId: { not: null },
+        status: 'AVAILABLE',
+        sale: { organizerId },
+      },
+      select: {
+        id: true,
+        title: true,
+        ebayListingId: true,
+        saleId: true,
+      },
+    });
+
+    if (!activeListings.length) {
+      console.log(`[eBay EndedSync] Organizer ${organizerId}: no AVAILABLE items with ebayListingId`);
+      return result;
+    }
+
+    console.log(
+      `[eBay EndedSync] Organizer ${organizerId}: checking ${activeListings.length} active listings`
+    );
+
+    // Get app token (no OAuth needed for Trading API)
+    const appToken = await getEbayAccessToken();
+    if (!appToken) {
+      console.error(`[eBay EndedSync] Failed to get app token for organizer ${organizerId}`);
+      return result;
+    }
+
+    // Batch listings in groups of 20 (Trading API limit)
+    const batchSize = 20;
+    for (let i = 0; i < activeListings.length; i += batchSize) {
+      const batch = activeListings.slice(i, i + batchSize);
+      const itemIds = batch.map((item) => item.ebayListingId).join('</itemId><itemId>');
+
+      // Build Trading API XML request
+      const requestXml = `<?xml version="1.0" encoding="UTF-8"?>
+<GetMultipleItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>${appToken}</eBayAuthToken>
+  </RequesterCredentials>
+  <ItemID>${itemIds}</ItemID>
+  <IncludeSelector>Details</IncludeSelector>
+</GetMultipleItemsRequest>`;
+
+      try {
+        const ebayResponse = await fetch('https://api.ebay.com/ws/api.dll', {
+          method: 'POST',
+          headers: {
+            'X-EBAY-API-CALL-NAME': 'GetMultipleItems',
+            'X-EBAY-API-APP-NAME': process.env.EBAY_APP_ID || '',
+            'X-EBAY-API-SITEID': '0',
+            'X-EBAY-API-REQUEST-ENCODING': 'XML',
+            'X-EBAY-API-RESPONSE-ENCODING': 'JSON',
+            'X-EBAY-API-VERSION': '1155',
+            'Content-Type': 'application/xml',
+          },
+          body: requestXml,
+        });
+
+        if (!ebayResponse.ok) {
+          console.error(
+            `[eBay EndedSync] Trading API error ${ebayResponse.status} for organizer ${organizerId}`
+          );
+          continue; // Skip this batch, proceed to next
+        }
+
+        const ebayData = (await ebayResponse.json()) as {
+          Item?: Array<{ ItemID: string; ListingStatus: string }>;
+        };
+        const items = ebayData.Item || [];
+
+        console.log(`[eBay EndedSync] Batch response: ${items.length} items`);
+
+        // Process each item and check status
+        for (const ebayItem of items) {
+          const status = ebayItem.ListingStatus || '';
+          result.checked++;
+
+          // If listing is ENDED or COMPLETED, clear the eBay fields
+          if (status === 'Ended' || status === 'Completed') {
+            const matchedLocal = batch.find((item) => item.ebayListingId === ebayItem.ItemID);
+            if (matchedLocal) {
+              console.log(
+                `[eBay EndedSync] Item ${matchedLocal.id} ("${matchedLocal.title}"): listing status = ${status}`
+              );
+
+              // Clear eBay fields
+              await prisma.item.update({
+                where: { id: matchedLocal.id },
+                data: {
+                  ebayListingId: null,
+                  listedOnEbayAt: null,
+                  ebayOfferId: null,
+                },
+              });
+
+              // Create notification
+              await prisma.notification.create({
+                data: {
+                  userId: organizer.userId,
+                  type: 'SALE_UPDATE',
+                  title: 'eBay listing ended',
+                  body: `"${matchedLocal.title}" listing ended on eBay. You can re-push this item.`,
+                  link: `/organizer/sales/${matchedLocal.saleId}`,
+                  notificationChannel: 'IN_APP',
+                },
+              });
+
+              result.ended++;
+              result.itemsEnded.push({
+                id: matchedLocal.id,
+                title: matchedLocal.title,
+                ebayListingId: matchedLocal.ebayListingId || '',
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[eBay EndedSync] Batch processing error for organizer ${organizerId}:`, error);
+        // Continue to next batch
+      }
+    }
+
+    console.log(
+      `[eBay EndedSync] Organizer ${organizerId}: checked ${result.checked} listings, found ${result.ended} ended`
+    );
+  } catch (error) {
+    console.error(`[eBay EndedSync ERROR] organizerId ${organizerId}:`, error);
+  }
+
+  return result;
+}

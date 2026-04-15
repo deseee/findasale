@@ -2,6 +2,18 @@
 
 ## What Happened This Week
 
+**S467** (2026-04-15) — eBay listing quality batch (all 6 items) + sitewide organizer rarity filter fix ✅
+- **P0 bug found:** Your Celestion ($285, ULTRA_RARE) was invisible on ALL your organizer management pages because they were all calling the public browsing endpoint — which runs the Hunt Pass rarity filter (ULTRA_RARE items hidden for 6 hours unless shopper has Hunt Pass). You correctly identified this should be sitewide. Fixed: all 7 organizer pages (Add Items, Sale Detail, Print Kit, Promote, Print Inventory, Bounties, Dashboard) now call the authenticated `/items/drafts` endpoint. Public browsing stays filtered — Hunt Pass early access still works. Buyer Preview still shows the shopper view.
+- **Item 1** (manual category): No bug. Code already respects your picker selection.
+- **Item 2** (condition fix): Grade S + condition=USED now pushes to eBay as USED_EXCELLENT not NEW.
+- **Item 3** (aspect quality): Brand now checks your item.brand field first. MPN checks item.mpn. Tags matched against enum values. No more Brand="RIC" on a Celestion speaker.
+- **Item 4** (toast fix): "Failed to push" showing on success — fixed in 3 files (was checking `result.success` instead of `result.status === 'success'`).
+- **Item 5** (reconciliation): When you end a listing on eBay directly, the app now detects it. Cron runs every 4 hours + you can trigger it manually via `/api/ebay/sync-ended-listings`. When detected: clears `ebayListingId`, sends in-app notification, item becomes re-listable. No schema changes.
+- **Item 6** (watermark): QR resized 130→85px, moved from bottom-center to bottom-right corner.
+- **Files changed:** 19 files. Push block below.
+
+---
+
 **S466** (2026-04-14) — Post-push triage: Add Items filter fix + eBay price override fix ✅
 - **Problem you hit:** Pushed a Celestion guitar speaker to eBay, ended the listing on eBay, then couldn't find the item in the app. Also flagged a long list of listing-quality problems (wrong category, nonsense aspects like Brand="RIC" and Type="Control Knob", condition miscategorized as NEW when it was USED grade S, and $285 saved → $169.09 on eBay).
 - **Root cause — missing item:** Add Items was filtering out everything you'd already published. The backend's `getDraftItemsBySaleId` hardcoded `draftStatus IN ('DRAFT','PENDING_REVIEW')`. Once you pushed an item to eBay, it flipped to PUBLISHED and vanished from your working view. Your mental model (Add Items is home base for the whole sale regardless of publish state) is correct — fixed.

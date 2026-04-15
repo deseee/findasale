@@ -85,7 +85,7 @@ const PrintInventoryPage = () => {
 
       // Fetch items for each sale in parallel
       const itemsPromises = salesData.map((sale: Sale) =>
-        api.get('/items', { params: { saleId: sale.id } })
+        api.get('/items/drafts', { params: { saleId: sale.id } })
           .then((res) => ({ saleId: sale.id, saleTitle: sale.title, items: res.data as Item[] }))
           .catch(() => ({ saleId: sale.id, saleTitle: sale.title, items: [] as Item[] }))
       );

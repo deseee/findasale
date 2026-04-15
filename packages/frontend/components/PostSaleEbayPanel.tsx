@@ -488,8 +488,8 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
     },
     onSuccess: (response) => {
       const results = response.data.results || [];
-      const successCount = results.filter((r: any) => r.success).length;
-      const failureCount = results.length - successCount;
+      const successCount = results.filter((r: any) => r.status === 'success').length;
+      const failureCount = results.filter((r: any) => r.status === 'error').length;
 
       if (successCount > 0) {
         showToast(`${successCount} item(s) pushed to eBay`, 'success');

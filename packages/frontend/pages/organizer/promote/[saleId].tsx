@@ -138,7 +138,7 @@ export default function PromotePage(): JSX.Element {
     queryKey: ['sale-items', saleId],
     queryFn: async () => {
       if (!saleId) return [];
-      const response = await api.get(`/items?saleId=${saleId}`);
+      const response = await api.get(`/items/drafts?saleId=${saleId}`);
       return response.data as Item[];
     },
     enabled: !!saleId && !!user,
