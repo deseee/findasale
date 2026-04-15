@@ -1089,9 +1089,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     <Link href="/organizer/fraud-signals" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <ShieldAlert size={14} className="inline mr-2 text-purple-400" /> Fraud Signals
                     </Link>
-                    <Link href="/organizer/hubs" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Store size={14} className="inline mr-2 text-purple-400" /> Market Hubs
-                    </Link>
                     <Link href="/organizer/line-queue" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Users size={14} className="inline mr-2 text-purple-400" /> Line Queue
                     </Link>
@@ -1127,6 +1124,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         </Link>
                         <Link href="/organizer/workspace" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Network size={14} className="inline mr-2 text-gray-500" /> Workspace
+                        </Link>
+                        <Link href="/organizer/hubs" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Store size={14} className="inline mr-2 text-gray-400" /> Market Hubs
                         </Link>
                       </>
                     )}

@@ -171,6 +171,37 @@ export const listTrails = async (req: Request, res: Response) => {
 };
 
 /**
+ * GET /api/trails/mine
+ * Get the authenticated user's own trails (shopper-created or organizer-created, by userId)
+ */
+export const getMyTrails = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user.id;
+    const page = parseInt((req.query.page as string) || '1');
+    const limit = parseInt((req.query.limit as string) || '20');
+    const skip = (page - 1) * limit;
+
+    const [trails, total] = await Promise.all([
+      prisma.treasureTrail.findMany({
+        where: { userId },
+        include: {
+          stops: { orderBy: { order: 'asc' } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.treasureTrail.count({ where: { userId } }),
+    ]);
+
+    return res.json({ trails, total });
+  } catch (error) {
+    console.error('getMyTrails error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
  * POST /api/trails/:trailId/stops
  * Organizer adds a stop to a trail
  */

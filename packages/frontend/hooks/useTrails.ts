@@ -26,13 +26,13 @@ interface Trail {
 }
 
 /**
- * Fetch user's trails
+ * Fetch the authenticated user's own trails
  */
 export const useMyTrails = (page = 1, limit = 20) => {
   return useQuery({
     queryKey: ['trails', 'my', page, limit],
     queryFn: async () => {
-      const { data } = await api.get(`/trails`, { params: { page, limit } });
+      const { data } = await api.get(`/trails/mine`, { params: { page, limit } });
       return data;
     },
   });

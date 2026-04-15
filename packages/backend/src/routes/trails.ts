@@ -1,15 +1,16 @@
 import { Router } from 'express';
-import { 
-  createTrail, 
-  getTrail, 
-  listTrails, 
-  addStop, 
-  searchNearby, 
-  checkInAtStop, 
-  postStopPhoto, 
-  rateTrail, 
-  updateTrail, 
-  deleteTrail 
+import {
+  createTrail,
+  getTrail,
+  listTrails,
+  getMyTrails,
+  addStop,
+  searchNearby,
+  checkInAtStop,
+  postStopPhoto,
+  rateTrail,
+  updateTrail,
+  deleteTrail,
 } from '../controllers/trailController';
 import { authenticate } from '../middleware/auth';
 
@@ -17,6 +18,7 @@ const router = Router();
 
 // Trail CRUD
 router.post('/', authenticate, createTrail);                            // POST   /api/trails
+router.get('/mine', authenticate, getMyTrails);                         // GET    /api/trails/mine (authenticated — own trails only)
 router.get('/:trailId', getTrail);                                      // GET    /api/trails/:trailId (public or auth)
 router.get('/', listTrails);                                            // GET    /api/trails (public)
 router.patch('/:trailId', authenticate, updateTrail);                   // PATCH  /api/trails/:trailId (organizer)
