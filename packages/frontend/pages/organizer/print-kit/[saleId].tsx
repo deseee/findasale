@@ -103,7 +103,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
   const { data: items, isLoading: itemsLoading, error: itemsError } = useQuery<Item[]>({
     queryKey: ['print-kit-items', saleId],
     queryFn: async () => {
-      const response = await api.get('/items', { params: { saleId } });
+      const response = await api.get('/items/drafts', { params: { saleId } });
       return response.data as Item[];
     },
     enabled: !!saleId && typeof saleId === 'string',

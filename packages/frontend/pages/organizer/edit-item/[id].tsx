@@ -94,7 +94,7 @@ const EditItemPage = () => {
     onSuccess: (response) => {
       const results = response.data.results || [];
       const result = results[0];
-      if (result?.success) {
+      if (result?.status === 'success') {
         showToast('Item listed on eBay', 'success');
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       } else {

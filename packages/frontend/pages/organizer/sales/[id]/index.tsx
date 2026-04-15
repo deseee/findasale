@@ -74,7 +74,9 @@ const SaleDetailPage = () => {
   const { data: items = [], isLoading: itemsLoading, refetch: refetchItems } = useQuery({
     queryKey: ['items', id, 'by-sale'],
     queryFn: async () => {
-      const response = await api.get(`/items?saleId=${id}&limit=1000`);
+      // Use organizer-authenticated drafts endpoint — bypasses Hunt Pass rarity
+      // filter that hides RARE/ULTRA_RARE items the organizer owns within 6h.
+      const response = await api.get(`/items/drafts?saleId=${id}&limit=1000`);
       return (response.data.items || response.data) as Item[];
     },
     enabled: !!id,

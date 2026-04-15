@@ -136,7 +136,7 @@ const OrganizerBountiesPage = () => {
   const { data: itemsForSale = [] } = useQuery<Item[]>({
     queryKey: ['items-for-sale', submissionSaleId],
     queryFn: async () => {
-      const res = await api.get(`/items?saleId=${submissionSaleId}`);
+      const res = await api.get(`/items/drafts?saleId=${submissionSaleId}`);
       return res.data.items || res.data;
     },
     enabled: !!submissionSaleId && submissionModalOpen,

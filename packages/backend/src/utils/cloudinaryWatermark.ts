@@ -99,10 +99,9 @@ export function getWatermarkedUrlWithQR(
     const versionSegment = versionMatch[0];
     const versionIndex = watermarkedUrl.indexOf(versionSegment);
 
-    // QR overlay: centered on south edge, stacked ABOVE the "FindA.Sale" text.
-    // Text sits at y_25 (height ~50px → top at ~75px). QR bottom starts at y_95
-    // giving a ~20px gap between QR and text. QR 130×130 so top is at ~225px.
-    const qrTransformation = `l_fetch:${qrCodeUrlBase64},g_south,w_130,h_130,y_95`;
+    // QR overlay: positioned bottom-right corner, sized 85×85, with small margins from edges.
+    // Positioned under where ENDED sale banner would appear. Text overlay remains centered at g_south,y_25.
+    const qrTransformation = `l_fetch:${qrCodeUrlBase64},g_south_east,w_85,h_85,x_15,y_20`;
 
     // Insert QR transformation before the version segment
     const urlWithQR =
