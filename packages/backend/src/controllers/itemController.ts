@@ -413,6 +413,8 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         organizerDiscountXp: true,
         isLegendary: true, // Phase 2b: Legendary early access
         legendaryVisibleAt: true, // Phase 2b: Legendary early access (internal only)
+        ebayListingId: true,
+        ebayNeedsReview: true,
         createdAt: true,
         updatedAt: true,
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
