@@ -27,11 +27,20 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
 }) => {
   const [photos, setPhotos] = useState<string[]>(initialPhotos);
   const [uploading, setUploading] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   // Sync local photos state when parent updates initialPhotos (e.g. after inline camera save + query refetch)
   const initialPhotosKey = initialPhotos.join(',');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setPhotos(initialPhotos); }, [initialPhotosKey]);
+
+  // Close lightbox on Escape
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxUrl(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxUrl]);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -155,8 +164,9 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
               <img
                 src={getThumbnailUrl(url) || url}
                 alt={`Item photo ${i + 1}`}
-                className="w-full aspect-square object-cover"
+                className="w-full aspect-square object-cover cursor-zoom-in"
                 loading="lazy"
+                onClick={() => setLightboxUrl(url)}
                 onError={(e) => {
                   // Fallback to raw URL if transform failed (Cloudinary only)
                   const img = e.target as HTMLImageElement;
@@ -212,6 +222,29 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
       <p className="text-xs text-warm-400 mt-2">
         First photo is the cover shown on item cards. Tap × to delete, ← → to reorder.
       </p>
+
+      {/* Lightbox overlay */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/80 rounded-full w-9 h-9 flex items-center justify-center text-xl font-bold transition-colors"
+            aria-label="Close photo"
+          >
+            ×
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Full size photo"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 };
