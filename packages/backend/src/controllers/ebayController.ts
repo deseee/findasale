@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { getIO } from '../lib/socket';
+import { isEbayRateLimited, trackEbayCall, getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import {
   parseWeightTiers,
   classifyPolicy,
@@ -885,6 +886,7 @@ export async function fetchAllEbayPolicies(organizerId: string, accessToken: str
         console.error(`[eBay] ${endpoint} fetch failed: ${res.status}`);
         return [];
       }
+      trackEbayCall();
       const data = await res.json();
       return data[resultKey] || [];
     } catch (err) {
@@ -919,6 +921,7 @@ export async function fetchEbayMerchantLocations(organizerId: string, accessToke
       console.error(`[eBay] fetch locations failed: ${res.status}`);
       return [];
     }
+    trackEbayCall();
     const data = await res.json();
     return (data.locations || []).map((loc: any) => ({
       merchantLocationKey: loc.merchantLocationKey,
@@ -1571,6 +1574,17 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Check eBay daily rate limit (soft cap at 4,500 of 5,000 daily calls)
+    if (isEbayRateLimited()) {
+      const rateLimitStatus = getEbayRateLimitStatus();
+      return res.status(429).json({
+        code: 'EBAY_RATE_LIMITED',
+        message: 'Daily eBay API limit reached. Push will be available again tomorrow.',
+        callCount: rateLimitStatus.callCount,
+        limit: rateLimitStatus.limit,
+      });
+    }
+
     // Fetch items with Phase B fields and sale address
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
@@ -1802,6 +1816,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           continue;
         }
 
+        // Track successful API call toward daily limit
+        trackEbayCall();
+
         // Verify the condition actually stuck on the inventory_item (diagnostic —
         // PUT can return 204 but eBay may silently reject condition changes on
         // pre-existing SKUs from prior failed pushes).
@@ -1810,6 +1827,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             headers: ebayUserHeaders(accessToken),
           });
           if (verifyRes.ok) {
+            trackEbayCall();
             const verifyData = (await verifyRes.json()) as { condition?: string };
             console.log(
               `[eBay InventoryVerify] ${sku}: sent=${ebayCondition} stored=${verifyData.condition || 'null'}`
@@ -1933,6 +1951,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             const errText = await updateRes.text();
             console.warn(`[eBay] Offer update failed (non-fatal): ${updateRes.status} ${errText}`);
             // Proceed anyway — existing offer may still be publishable
+          } else {
+            trackEbayCall();
           }
         } else {
           // Create new offer
@@ -1954,6 +1974,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             });
             continue;
           }
+          trackEbayCall();
           const createData = (await createRes.json()) as any;
           offerId = createData.offerId;
         }
@@ -2108,6 +2129,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         }
 
         if (publishResponse.ok) {
+          trackEbayCall();
           const publishData = (await publishResponse.json()) as any;
           ebayListingId = publishData.listingId;
         } else {

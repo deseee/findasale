@@ -16,12 +16,21 @@ import {
   resetCloudinaryUsage,
   getBidReviewQueue,
   adminBidAction,
+  getAdminItems,
 } from '../controllers/adminController';
 import {
   createInvite,
   listInvites,
   deleteInvite,
 } from '../controllers/betaInviteController';
+import {
+  getOrganizerPerformance,
+  getRevenueReport,
+} from '../controllers/adminReportsController';
+import {
+  sendBroadcast,
+  getRecipientsPreview,
+} from '../controllers/adminBroadcastController';
 
 const router = express.Router();
 
@@ -53,5 +62,16 @@ router.post('/cloudinary-usage/reset', resetCloudinaryUsage);
 // #94 Admin Bid Review Queue — fraud detection
 router.get('/bid-review', getBidReviewQueue);
 router.patch('/bids/:bidId/action', adminBidAction);
+
+// Reports endpoints
+router.get('/reports/organizers', getOrganizerPerformance);
+router.get('/reports/revenue', getRevenueReport);
+
+// Broadcast endpoints
+router.post('/broadcast', sendBroadcast);
+router.get('/broadcast/preview', getRecipientsPreview);
+
+// Global items search
+router.get('/items', getAdminItems);
 
 export default router;
