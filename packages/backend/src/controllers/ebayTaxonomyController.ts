@@ -90,11 +90,12 @@ export async function getAspectsHandler(req: AuthRequest, res: Response): Promis
       return;
     }
 
-    const organizerId = (req.user as any).organizerId || (req.user as any).organizer?.id;
-    if (!organizerId) {
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) {
       res.status(403).json({ error: 'Organizer profile not found' });
       return;
     }
+    const organizerId = organizer.id;
 
     const { categoryId } = req.params;
     if (!categoryId) {
@@ -132,11 +133,12 @@ export async function catalogSearchHandler(req: AuthRequest, res: Response): Pro
       return;
     }
 
-    const organizerId = (req.user as any).organizerId || (req.user as any).organizer?.id;
-    if (!organizerId) {
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) {
       res.status(403).json({ error: 'Organizer profile not found' });
       return;
     }
+    const organizerId = organizer.id;
 
     // Extract query params
     const { upc, isbn, ean, mpn, brand } = req.query;
@@ -202,8 +204,8 @@ export async function suggestIdentifiersHandler(req: AuthRequest, res: Response)
     }
 
     // Verify organizer ownership
-    const organizerId = (req.user as any).organizerId || (req.user as any).organizer?.id;
-    if (item.sale?.organizerId !== organizerId) {
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer || item.sale?.organizerId !== organizer.id) {
       res.status(403).json({ error: 'Not authorized to suggest identifiers for this item' });
       return;
     }
@@ -237,11 +239,12 @@ export async function suggestCategoriesHandler(req: AuthRequest, res: Response):
       return;
     }
 
-    const organizerId = (req.user as any).organizerId || (req.user as any).organizer?.id;
-    if (!organizerId) {
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) {
       res.status(403).json({ error: 'Organizer profile not found' });
       return;
     }
+    const organizerId = organizer.id;
 
     const { q } = req.query;
     if (!q || typeof q !== 'string') {
