@@ -2,6 +2,15 @@
 
 ## What Happened This Week
 
+**S466** (2026-04-14) — Post-push triage: Add Items filter fix + eBay price override fix ✅
+- **Problem you hit:** Pushed a Celestion guitar speaker to eBay, ended the listing on eBay, then couldn't find the item in the app. Also flagged a long list of listing-quality problems (wrong category, nonsense aspects like Brand="RIC" and Type="Control Knob", condition miscategorized as NEW when it was USED grade S, and $285 saved → $169.09 on eBay).
+- **Root cause — missing item:** Add Items was filtering out everything you'd already published. The backend's `getDraftItemsBySaleId` hardcoded `draftStatus IN ('DRAFT','PENDING_REVIEW')`. Once you pushed an item to eBay, it flipped to PUBLISHED and vanished from your working view. Your mental model (Add Items is home base for the whole sale regardless of publish state) is correct — fixed.
+- **Root cause — price override:** eBay push was resolving price as `aiSuggestedPrice → estimatedValue → item.price`. Your explicit $285 got overridden by an earlier AI guess of $169.09. Inverted: your price now wins when set; AI fields are fallbacks only for items you never priced.
+- **What did NOT ship this session:** The other 5 listing-quality issues (manual category override, condition mapping, aspect auto-fill, "Failed to push" toast on success, reconciliation) plus the watermark QR resize (6th item). All queued for next session as a parallel dev dispatch — plan in STATE.md "Next Session Priority."
+- **Files pushed:** 2 (itemController.ts, ebayController.ts).
+
+---
+
 **S465** (2026-04-14) — Roadmap graduation audit + STATE.md compaction ✅
 - **31 features graduated to SHIPPED & VERIFIED:** Audited the roadmap (v106 → v107) for features with both ✅ Claude QA and ✅ Human QA marks. Moved 10 more items from the Building/UNTESTED sections plus 21 already-graduated items from "Only Human Left" into the SHIPPED & VERIFIED table. Newly graduated this pass: #222 Dashboard Redesign, #225 Revenue/Metrics API, #229 AI Comp Tool, #236 Weather Strip, #246 Camera Coaching Banner, #247 AI Branding Purge, #248 FAQ Expansion, #250 Price Research Panel, #262 Tier Restructure, #149 Email Reminders.
 - **#245 Feedback Widget deprecated:** Moved from Building to Rejected section. Decision: replaced with planned micro-surveys approach (less intrusive, contextual).
