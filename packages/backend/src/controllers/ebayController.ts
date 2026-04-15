@@ -1770,12 +1770,11 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // cases). If we see 25021, walk the accepted-conditions list and retry
         // the inventory PUT + publish with each candidate until one works or we
         // exhaust the list.
+        // Pass 1: 25021 condition retry
         if (!publishResponse.ok) {
           const publishErrorText = await publishResponse.clone().text();
           if (publishErrorText.includes('25021')) {
             const accepted = await getAcceptedConditionsForCategory(categoryId ?? '99');
-            // Preference order for retry: NEW_OTHER, USED_VERY_GOOD, USED_EXCELLENT,
-            // NEW, USED_GOOD, USED_ACCEPTABLE — excluding whichever we already tried.
             const retryOrder = [
               'NEW_OTHER',
               'USED_VERY_GOOD',
@@ -1789,7 +1788,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               console.log(
                 `[eBay Retry25021] ${sku}: ${ebayCondition} rejected — retrying with ${retryCondition}`
               );
-              // Re-PUT inventory item with new condition
               const retryInvPayload = { ...inventoryPayload, condition: retryCondition };
               const retryInvRes = await fetch(inventoryUrl, {
                 method: 'PUT',
@@ -1801,7 +1799,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
                 console.warn(`[eBay Retry25021] inventory PUT failed: ${retryInvRes.status} ${t.slice(0, 200)}`);
                 continue;
               }
-              // Re-publish
               publishResponse = await fetch(publishUrl, {
                 method: 'POST',
                 headers: ebayUserHeaders(accessToken),
@@ -1812,13 +1809,22 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               }
               const retryErr = await publishResponse.clone().text();
               if (!retryErr.includes('25021')) {
-                // Different error — stop retrying conditions
                 console.warn(`[eBay Retry25021] ${sku}: non-25021 error, stopping: ${retryErr.slice(0, 200)}`);
                 break;
               }
             }
-          } else if (publishErrorText.includes('25005')) {
-            // 25005: category is not a leaf node — walk remaining candidates
+          }
+        }
+
+        // Pass 2: 25005 category-not-a-leaf retry (runs after 25021 pass or on initial 25005)
+        if (!publishResponse.ok) {
+          const currentErrorText = await publishResponse.clone().text();
+          if (currentErrorText.includes('25005')) {
+            // Clear the bad cached category so future pushes re-query
+            await prisma.item.update({
+              where: { id: item.id },
+              data: { ebayCategoryId: null },
+            });
             const candidates = await getEbayCategoryCandidates(item.title);
             const alreadyTried = new Set([categoryId ?? '']);
             for (const candidate of candidates) {
@@ -1827,7 +1833,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               console.log(
                 `[eBay Retry25005] ${sku}: category ${categoryId} not a leaf — retrying with ${candidate.categoryId} (${candidate.categoryName})`
               );
-              // Update the offer with the new category
               const patchOfferRes = await fetch(
                 `https://api.ebay.com/sell/inventory/v1/offer/${offerId}`,
                 {
