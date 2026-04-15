@@ -1519,14 +1519,18 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           `[eBay Push] ${item.title.slice(0, 40)} → category=${categoryId} condition=${ebayCondition} (grade=${item.conditionGrade || 'none'})`
         );
 
-        // Determine price
+        // Determine price — organizer-set price always wins.
+        // AI suggestions (aiSuggestedPrice, estimatedValue) are fallbacks only
+        // for items the organizer never priced. Fixed 2026-04-14: prior ordering
+        // sent AI guess to eBay even when organizer had set an explicit price
+        // (Patrick: $285 saved, $169.09 on eBay from aiSuggestedPrice override).
         let price = 0.99;
-        if (item.aiSuggestedPrice) {
+        if (item.price && Number(item.price) > 0) {
+          price = Number(item.price);
+        } else if (item.aiSuggestedPrice) {
           price = Number(item.aiSuggestedPrice);
         } else if (item.estimatedValue) {
           price = Number(item.estimatedValue);
-        } else if (item.price) {
-          price = item.price;
         }
 
         // Prepare photo URLs
