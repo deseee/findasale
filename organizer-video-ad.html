@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FindA.Sale — Marketing Video (25s)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0D0D0D;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  padding: 20px;
+}
+
+/* ── 9:16 Player ── */
+#player {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: #0A0A0A;
+  overflow: hidden;
+  border-radius: 44px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 100px rgba(0,0,0,0.8);
+  flex-shrink: 0;
+}
+
+/* ── Scenes ── */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  padding: 40px 36px;
+}
+.scene.active { opacity: 1; }
+
+/* ── Progress Bar ── */
+#progress-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: #D97706;
+  width: 0%;
+  z-index: 200;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Replay ── */
+#replay-btn {
+  position: absolute;
+  bottom: 36px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 10px 28px;
+  border-radius: 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  display: none;
+  z-index: 300;
+  transition: background 0.2s;
+}
+#replay-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── Play overlay (click to start) ── */
+#play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  cursor: pointer;
+  border-radius: 44px;
+  transition: opacity 0.3s;
+}
+#play-overlay.hidden { opacity: 0; pointer-events: none; }
+.play-icon {
+  width: 72px; height: 72px;
+  background: rgba(217,119,6,0.9);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
+}
+.play-icon svg { margin-left: 5px; }
+
+/* ────────────────────────────────
+   SCENE 1 — HOOK
+──────────────────────────────── */
+#s1 { background: #0A0A0A; gap: 0; }
+
+.s1-eyebrow {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #D97706;
+  margin-bottom: 24px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s1-eyebrow.in { opacity: 1; transform: translateY(0); }
+
+.s1-number {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 120px;
+  font-weight: 900;
+  color: #D97706;
+  line-height: 1;
+  letter-spacing: -5px;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.s1-number.in { opacity: 1; transform: scale(1); }
+
+.s1-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: -0.5px;
+  margin-top: 8px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s ease;
+}
+.s1-label.in { opacity: 1; transform: translateY(0); }
+
+.s1-pain {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.42);
+  text-align: center;
+  margin-top: 28px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.s1-pain.in { opacity: 1; transform: translateY(0); }
+
+.s1-reveal {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 36px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  margin-top: 16px;
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.s1-reveal.in { opacity: 1; transform: translateY(0) scale(1); }
+
+/* ────────────────────────────────
+   SCENE 2 — PRODUCT DEMO
+──────────────────────────────── */
+#s2 { background: #111118; padding: 40px 28px; justify-content: flex-start; padding-top: 60px; }
+
+.s2-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 28px;
+}
+.s2-headline.in { opacity: 1; transform: translateY(0); }
+
+/* Phone mockup */
+.phone-wrap {
+  position: relative;
+  width: 220px;
+  height: 440px;
+  flex-shrink: 0;
+}
+.phone-shell {
+  width: 100%;
+  height: 100%;
+  background: #1C1C2E;
+  border-radius: 28px;
+  border: 2px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+/* Dynamic island */
+.phone-island {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  width: 88px; height: 26px;
+  background: #000;
+  border-radius: 14px;
+  z-index: 10;
+}
+/* Phone screen */
+.phone-screen {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.35s ease;
+}
+.phone-screen.hidden { opacity: 0; pointer-events: none; }
+
+/* Camera screen */
+.cam-screen {
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 40px;
+}
+.cam-viewfinder {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cam-subject {
+  width: 120px; height: 90px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #8B7355 0%, #6B5B3E 100%);
+  opacity: 0.7;
+  position: relative;
+}
+.cam-subject::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 14px;
+  animation: camPulse 1.5s ease-in-out infinite;
+}
+@keyframes camPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.03); }
+}
+.cam-shutter {
+  position: relative; z-index: 5;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  border: 4px solid rgba(255,255,255,0.4);
+  cursor: pointer;
+  margin-top: 140px;
+  box-shadow: 0 0 0 0 rgba(255,255,255,0.5);
+  animation: shutterReady 2s ease-in-out infinite;
+}
+@keyframes shutterReady {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.0); }
+  50% { box-shadow: 0 0 0 8px rgba(255,255,255,0.15); }
+}
+.cam-shutter.tapped {
+  animation: shutterTap 0.3s ease forwards;
+}
+@keyframes shutterTap {
+  0% { transform: scale(1); background: rgba(255,255,255,0.9); }
+  50% { transform: scale(0.85); background: rgba(217,119,6,0.9); }
+  100% { transform: scale(1); background: rgba(255,255,255,0.9); }
+}
+.cam-label {
+  position: absolute;
+  top: 46px; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+  z-index: 5;
+  white-space: nowrap;
+}
+
+/* Flash overlay */
+.flash-overlay {
+  position: absolute;
+  inset: 0; z-index: 50;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+.flash-overlay.flash { animation: flashAnim 0.5s ease forwards; }
+@keyframes flashAnim {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Review/form screen */
+.review-screen {
+  background: #F9F7F4;
+  padding: 48px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.review-photo {
+  width: 100%;
+  height: 100px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #8B7355 0%, #6B5B3E 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.review-photo-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.auto-badge {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: #D97706;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 6px;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.auto-badge.in { opacity: 1; transform: scale(1); }
+
+.form-field {
+  background: white;
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid rgba(0,0,0,0.06);
+}
+.field-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #8B7355;
+  margin-bottom: 3px;
+}
+.field-value {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1A1A1A;
+  min-height: 18px;
+}
+.field-value.typing::after {
+  content: '|';
+  animation: blink 0.7s step-end infinite;
+  color: #D97706;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+.publish-btn {
+  margin-top: 6px;
+  background: #D97706;
+  color: white;
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.publish-btn.in { opacity: 1; transform: translateY(0); }
+.publish-btn.tapped {
+  animation: btnTap 0.3s ease forwards;
+}
+@keyframes btnTap {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); background: #B45309; }
+  100% { transform: scale(1); }
+}
+
+/* Success screen */
+.success-screen {
+  background: #0A0A0A;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+}
+.success-ring {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.12);
+  border: 2px solid #10B981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.success-ring.in { opacity: 1; transform: scale(1); }
+.success-ring-pulse {
+  position: absolute;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  border: 2px solid #10B981;
+  opacity: 0;
+}
+.success-ring-pulse.pulse {
+  animation: ringPulse 0.8s ease forwards 0.3s;
+}
+@keyframes ringPulse {
+  0% { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+.success-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: #10B981;
+  opacity: 0;
+  transition: opacity 0.4s 0.2s ease;
+}
+.success-title.in { opacity: 1; }
+.success-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+  opacity: 0;
+  transition: opacity 0.4s 0.4s ease;
+  text-align: center;
+}
+.success-sub.in { opacity: 1; }
+
+/* Counter */
+.counter-wrap {
+  position: relative;
+  width: 100%;
+  padding: 0 4px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.counter-wrap.in { opacity: 1; transform: translateY(0); }
+.counter-bar-bg {
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.counter-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #D97706, #F59E0B);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 2.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.counter-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  text-align: center;
+  margin-bottom: 4px;
+}
+.counter-num {
+  color: #D97706;
+  font-weight: 800;
+}
+
+.s2-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  margin-top: 4px;
+}
+.s2-subline.in { opacity: 1; transform: translateY(0); }
+.s2-subline span { color: #D97706; }
+
+/* ────────────────────────────────
+   SCENE 3 — POS / PAYMENTS
+──────────────────────────────── */
+#s3 { background: #0D0D15; gap: 0; padding: 48px 28px; justify-content: flex-start; padding-top: 72px; }
+
+.s3-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 36px;
+}
+.s3-headline.in { opacity: 1; transform: translateY(0); }
+.s3-headline span { color: #D97706; }
+
+.phones-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.mini-phone {
+  width: 128px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  background: #1A1A2E;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.mini-phone.in { opacity: 1; transform: translateY(0); }
+.mini-phone-header {
+  background: rgba(255,255,255,0.04);
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.mini-phone-role {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+}
+.mini-phone-body { padding: 10px; }
+
+/* Organizer phone */
+.pos-total {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+.pos-item {
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 10px;
+}
+.pos-charge-btn {
+  background: #D97706;
+  color: white;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.pos-charge-btn.tapped { animation: posTap 0.3s ease; }
+@keyframes posTap {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.93); background: #B45309; }
+  100% { transform: scale(1); background: #D97706; }
+}
+.pos-charge-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0);
+  transition: background 0.2s;
+}
+
+/* Payment beam */
+.payment-beam {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  align-self: center;
+  padding-top: 30px;
+}
+.payment-beam.in { opacity: 1; }
+.beam-dots {
+  display: flex;
+  gap: 4px;
+}
+.beam-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #D97706;
+  opacity: 0;
+}
+.beam-dot:nth-child(1) { animation: dotPulse 1.2s 0s ease-in-out infinite; }
+.beam-dot:nth-child(2) { animation: dotPulse 1.2s 0.2s ease-in-out infinite; }
+.beam-dot:nth-child(3) { animation: dotPulse 1.2s 0.4s ease-in-out infinite; }
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+.beam-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+}
+
+/* Shopper phone */
+.shopper-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 8px;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+.shopper-pending.hidden { opacity: 0; display: none; }
+.shopper-amount {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.2);
+  letter-spacing: -0.5px;
+}
+.shopper-waiting {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  color: rgba(255,255,255,0.2);
+  letter-spacing: 0.5px;
+}
+.shopper-success {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 8px;
+}
+.shopper-success.in { display: flex; }
+.shopper-check {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.15);
+  border: 1.5px solid #10B981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.shopper-check.in { opacity: 1; transform: scale(1); }
+.shopper-paid-amount {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: #10B981;
+  letter-spacing: -0.5px;
+  opacity: 0;
+  transition: opacity 0.4s 0.2s ease;
+}
+.shopper-paid-amount.in { opacity: 1; }
+.shopper-paid-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  color: rgba(255,255,255,0.4);
+  opacity: 0;
+  transition: opacity 0.4s 0.3s ease;
+}
+.shopper-paid-label.in { opacity: 1; }
+
+.s3-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.45);
+  text-align: center;
+  margin-top: 32px;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.s3-sub.in { opacity: 1; }
+.s3-sub strong { color: rgba(255,255,255,0.8); font-weight: 600; }
+
+/* ────────────────────────────────
+   SCENE 4 — FEATURE CHIPS
+──────────────────────────────── */
+#s4 { background: #0A0A0A; gap: 0; padding: 48px 32px; }
+
+.s4-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  margin-bottom: 36px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s4-headline.in { opacity: 1; transform: translateY(0); }
+.s4-headline em { font-style: normal; color: #D97706; }
+
+.feature-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+.f-chip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  opacity: 0;
+  transform: translateX(-18px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.f-chip.in { opacity: 1; transform: translateX(0); }
+.f-chip-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.f-chip-icon.amber { background: rgba(217,119,6,0.15); }
+.f-chip-icon.green { background: rgba(16,185,129,0.12); }
+.f-chip-icon.blue  { background: rgba(99,102,241,0.12); }
+.f-chip-icon.sage  { background: rgba(107,158,127,0.15); }
+.f-chip-icon.purple { background: rgba(167,139,250,0.12); }
+.f-chip-text { flex: 1; }
+.f-chip-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: -0.2px;
+}
+.f-chip-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 1px;
+}
+.f-chip-tier {
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(217,119,6,0.15);
+  color: #D97706;
+}
+.f-chip-tier.free { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.35); }
+
+/* ────────────────────────────────
+   SCENE 5 — CTA
+──────────────────────────────── */
+#s5 { background: #050505; gap: 0; }
+
+.cta-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  margin-bottom: 32px;
+}
+.cta-logo-wrap.in { opacity: 1; transform: translateY(0); }
+.cta-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.cta-logo .a-dot { color: #D97706; }
+.cta-tagline {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  margin-top: 10px;
+}
+
+.cta-main {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 52px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -2px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s cubic-bezier(0.34,1.3,0.64,1);
+}
+.cta-main.in { opacity: 1; transform: scale(1); }
+.cta-main em { font-style: normal; color: #D97706; }
+
+.cta-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  margin-top: 14px;
+  opacity: 0;
+  transition: opacity 0.5s 0.4s ease;
+}
+.cta-sub.in { opacity: 1; }
+
+.cta-url {
+  display: inline-block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #D97706;
+  margin-top: 36px;
+  opacity: 0;
+  transition: opacity 0.5s 0.6s ease;
+  letter-spacing: -0.3px;
+}
+.cta-url.in { opacity: 1; }
+
+/* Animated amber glow bg for CTA */
+.cta-glow {
+  position: absolute;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(217,119,6,0.12) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 3s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+/* ── Info panel below player ── */
+#info {
+  margin-top: 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.7;
+}
+#info strong { color: rgba(255,255,255,0.5); }
+
+/* ── Timer display ── */
+#timer {
+  position: absolute;
+  top: 16px; right: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  z-index: 150;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<div id="player">
+
+  <!-- Timer -->
+  <div id="timer">0:00</div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar"></div>
+
+  <!-- Play overlay -->
+  <div id="play-overlay">
+    <div class="play-icon">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M8 5L23 14L8 23V5Z" fill="white"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ── Scene 1: Hook ── -->
+  <div class="scene" id="s1">
+    <div class="s1-eyebrow" id="s1-eyebrow">Estate Sale Organizers</div>
+    <div class="s1-number" id="s1-number">200</div>
+    <div class="s1-label" id="s1-label">items to set up.</div>
+    <div class="s1-pain" id="s1-pain">Used to take all day.</div>
+    <div class="s1-reveal" id="s1-reveal">Not anymore.</div>
+  </div>
+
+  <!-- ── Scene 2: Product Demo ── -->
+  <div class="scene" id="s2">
+    <div class="s2-headline" id="s2-headline">Snap a photo. You're done.</div>
+
+    <div class="phone-wrap">
+      <div class="phone-shell">
+        <div class="phone-island"></div>
+
+        <!-- Camera screen -->
+        <div class="phone-screen" id="cam-screen">
+          <div class="cam-screen">
+            <div class="cam-viewfinder">
+              <div class="cam-subject"></div>
+            </div>
+            <div class="cam-label">Point &amp; Snap</div>
+            <div class="cam-shutter" id="cam-shutter"></div>
+          </div>
+        </div>
+
+        <!-- Review screen -->
+        <div class="phone-screen hidden" id="review-screen">
+          <div class="review-screen">
+            <div class="review-photo">
+              <span class="review-photo-label">Item photo</span>
+              <div class="auto-badge" id="auto-badge">✦ Auto-tagged</div>
+            </div>
+            <div class="form-field">
+              <div class="field-label">Title</div>
+              <div class="field-value" id="field-title"></div>
+            </div>
+            <div class="form-field">
+              <div class="field-label">Price</div>
+              <div class="field-value" id="field-price"></div>
+            </div>
+            <div class="form-field">
+              <div class="field-label">Category</div>
+              <div class="field-value" id="field-cat"></div>
+            </div>
+            <div class="publish-btn" id="publish-btn">Publish Item →</div>
+          </div>
+        </div>
+
+        <!-- Success screen -->
+        <div class="phone-screen hidden" id="success-screen">
+          <div class="success-screen">
+            <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+              <div class="success-ring-pulse" id="ring-pulse"></div>
+              <div class="success-ring" id="success-ring">✓</div>
+            </div>
+            <div class="success-title" id="success-title">Published!</div>
+            <div class="success-sub" id="success-sub">Live on FindA.Sale<br>QR code generated</div>
+            <div class="counter-wrap" id="counter-wrap" style="margin-top:20px;">
+              <div class="counter-text">Items listed: <span class="counter-num" id="counter-num">0</span></div>
+              <div class="counter-bar-bg"><div class="counter-bar-fill" id="counter-fill"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flash overlay -->
+        <div class="flash-overlay" id="flash-overlay"></div>
+      </div>
+    </div>
+
+    <div class="s2-subline" id="s2-subline">47 items. <span>23 minutes.</span></div>
+  </div>
+
+  <!-- ── Scene 3: POS / Payments ── -->
+  <div class="scene" id="s3">
+    <div class="s3-headline" id="s3-headline">Shoppers pay <span>on their phone.</span></div>
+
+    <div class="phones-row">
+      <!-- Organizer phone -->
+      <div class="mini-phone" id="org-phone">
+        <div class="mini-phone-header">
+          <div class="mini-phone-role">Organizer</div>
+        </div>
+        <div class="mini-phone-body">
+          <div class="pos-total">$45.00</div>
+          <div class="pos-item">Vintage Brass Lamp</div>
+          <div class="pos-charge-btn" id="pos-btn">Charge →</div>
+        </div>
+      </div>
+
+      <!-- Beam -->
+      <div class="payment-beam" id="pay-beam">
+        <div class="beam-dots">
+          <div class="beam-dot"></div>
+          <div class="beam-dot"></div>
+          <div class="beam-dot"></div>
+        </div>
+        <div class="beam-label">Sending</div>
+      </div>
+
+      <!-- Shopper phone -->
+      <div class="mini-phone" id="shop-phone" style="transition-delay:0.1s;">
+        <div class="mini-phone-header">
+          <div class="mini-phone-role">Shopper</div>
+        </div>
+        <div class="mini-phone-body" style="padding:8px;">
+          <div class="shopper-pending" id="shopper-pending">
+            <div class="shopper-amount">$45.00</div>
+            <div class="shopper-waiting">Waiting...</div>
+          </div>
+          <div class="shopper-success" id="shopper-success">
+            <div class="shopper-check" id="shopper-check">✓</div>
+            <div class="shopper-paid-amount" id="paid-amount">$45.00</div>
+            <div class="shopper-paid-label" id="paid-label">Payment received</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="s3-sub" id="s3-sub">
+      <strong>No card reader.</strong> No cash. No hassle.<br>Built-in payments, every tier.
+    </div>
+  </div>
+
+  <!-- ── Scene 4: Feature Chips ── -->
+  <div class="scene" id="s4">
+    <div class="s4-headline" id="s4-headline">Everything you need.<br><em>All in one place.</em></div>
+    <div class="feature-chips">
+      <div class="f-chip" id="fc1">
+        <div class="f-chip-icon amber">📷</div>
+        <div class="f-chip-text">
+          <div class="f-chip-name">Snap to Publish</div>
+          <div class="f-chip-desc">Photo → auto-tag → live in seconds</div>
+        </div>
+        <div class="f-chip-tier free">Free</div>
+      </div>
+      <div class="f-chip" id="fc2">
+        <div class="f-chip-icon green">💳</div>
+        <div class="f-chip-text">
+          <div class="f-chip-name">Built-in Payments</div>
+          <div class="f-chip-desc">Shoppers pay on their phone</div>
+        </div>
+        <div class="f-chip-tier free">Free</div>
+      </div>
+      <div class="f-chip" id="fc3">
+        <div class="f-chip-icon blue">🏷️</div>
+        <div class="f-chip-text">
+          <div class="f-chip-name">QR Codes</div>
+          <div class="f-chip-desc">Per item and per sale, instant</div>
+        </div>
+        <div class="f-chip-tier free">Free</div>
+      </div>
+      <div class="f-chip" id="fc4">
+        <div class="f-chip-icon sage">📊</div>
+        <div class="f-chip-text">
+          <div class="f-chip-name">Smart Pricing</div>
+          <div class="f-chip-desc">Market value estimates, built in</div>
+        </div>
+        <div class="f-chip-tier">PRO</div>
+      </div>
+      <div class="f-chip" id="fc5">
+        <div class="f-chip-icon purple">🎫</div>
+        <div class="f-chip-text">
+          <div class="f-chip-name">Virtual Queue</div>
+          <div class="f-chip-desc">Manage crowds without the chaos</div>
+        </div>
+        <div class="f-chip-tier">PRO</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scene 5: CTA ── -->
+  <div class="scene" id="s5">
+    <div class="cta-glow"></div>
+    <div class="cta-logo-wrap" id="cta-logo">
+      <div class="cta-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="cta-tagline">Sell smarter.</div>
+    </div>
+    <div class="cta-main" id="cta-main">Try it<br><em>free.</em></div>
+    <div class="cta-sub" id="cta-sub">No credit card. No commitment.</div>
+    <div class="cta-url" id="cta-url">finda.sale</div>
+  </div>
+
+  <!-- Replay button -->
+  <button id="replay-btn">↺ &nbsp;Play again</button>
+
+</div>
+
+<div id="info">
+  <strong>FindA.Sale — 25-second Marketing Video</strong><br>
+  9:16 vertical · TikTok / YouTube Shorts format<br>
+  Click the player to start · Screen-record to capture
+</div>
+
+<script>
+// ── State ──
+let startTime = null;
+let rafId = null;
+let running = false;
+const DURATION = 25000;
+
+// ── DOM refs ──
+const player       = document.getElementById('player');
+const playOverlay  = document.getElementById('play-overlay');
+const progressBar  = document.getElementById('progress-bar');
+const replayBtn    = document.getElementById('replay-btn');
+const timerEl      = document.getElementById('timer');
+const counterNum   = document.getElementById('counter-num');
+const counterFill  = document.getElementById('counter-fill');
+
+// Scene els
+const scenes = ['s1','s2','s3','s4','s5'].map(id => document.getElementById(id));
+
+// ── Helper: add class after delay ──
+function addAt(el, cls, delay) {
+  if (!el) return;
+  return setTimeout(() => el.classList.add(cls), delay);
+}
+
+// ── Helper: animate counter ──
+function animateCounter(from, to, duration, onTick) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+    onTick(Math.round(from + (to - from) * ease));
+    if (t < 1) requestAnimationFrame(step);
+    else onTick(to);
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Typewriter effect ──
+function typeIn(el, text, delay, speed) {
+  setTimeout(() => {
+    el.textContent = '';
+    el.classList.add('typing');
+    let i = 0;
+    const iv = setInterval(() => {
+      el.textContent += text[i++];
+      if (i >= text.length) { clearInterval(iv); el.classList.remove('typing'); }
+    }, speed || 50);
+  }, delay);
+}
+
+// ── Show/hide scene ──
+function showScene(id) {
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
+
+// ── Reset all ──
+function resetAll() {
+  // Scene 1
+  ['s1-eyebrow','s1-number','s1-label','s1-pain','s1-reveal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  // Scene 2
+  document.getElementById('s2-headline').classList.remove('in');
+  document.getElementById('cam-screen').classList.remove('hidden');
+  document.getElementById('review-screen').classList.add('hidden');
+  document.getElementById('success-screen').classList.add('hidden');
+  document.getElementById('cam-shutter').classList.remove('tapped');
+  document.getElementById('flash-overlay').classList.remove('flash');
+  document.getElementById('auto-badge').classList.remove('in');
+  ['field-title','field-price','field-cat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '';
+  });
+  document.getElementById('publish-btn').classList.remove('in','tapped');
+  document.getElementById('success-ring').classList.remove('in');
+  document.getElementById('ring-pulse').classList.remove('pulse');
+  document.getElementById('success-title').classList.remove('in');
+  document.getElementById('success-sub').classList.remove('in');
+  document.getElementById('counter-wrap').classList.remove('in');
+  document.getElementById('counter-fill').style.width = '0%';
+  document.getElementById('counter-fill').style.transition = 'none';
+  counterNum.textContent = '0';
+  document.getElementById('s2-subline').classList.remove('in');
+  // Scene 3
+  document.getElementById('s3-headline').classList.remove('in');
+  document.getElementById('org-phone').classList.remove('in');
+  document.getElementById('shop-phone').classList.remove('in');
+  document.getElementById('pay-beam').classList.remove('in');
+  document.getElementById('pos-btn').classList.remove('tapped');
+  document.getElementById('shopper-pending').classList.remove('hidden');
+  document.getElementById('shopper-pending').style.display = '';
+  document.getElementById('shopper-success').classList.remove('in');
+  document.getElementById('shopper-check').classList.remove('in');
+  document.getElementById('paid-amount').classList.remove('in');
+  document.getElementById('paid-label').classList.remove('in');
+  document.getElementById('s3-sub').classList.remove('in');
+  // Scene 4
+  document.getElementById('s4-headline').classList.remove('in');
+  ['fc1','fc2','fc3','fc4','fc5'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  // Scene 5
+  document.getElementById('cta-logo').classList.remove('in');
+  document.getElementById('cta-main').classList.remove('in');
+  document.getElementById('cta-sub').classList.remove('in');
+  document.getElementById('cta-url').classList.remove('in');
+  // UI
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  progressBar.style.width = '0%';
+  progressBar.style.transition = 'none';
+  timerEl.textContent = '0:00';
+  replayBtn.style.display = 'none';
+}
+
+// ── Timeline events ── (ms offset)
+const events = [
+  // SCENE 1 — Hook (0–4000ms)
+  { at: 0,    fn: () => { showScene('s1'); addAt(document.getElementById('s1-eyebrow'),'in',0); addAt(document.getElementById('s1-number'),'in',50); addAt(document.getElementById('s1-label'),'in',150); } },
+  { at: 1400, fn: () => { addAt(document.getElementById('s1-pain'),'in',0); } },
+  { at: 2700, fn: () => { addAt(document.getElementById('s1-reveal'),'in',0); } },
+
+  // SCENE 2 — Product (3800ms–13000ms)
+  { at: 3800, fn: () => { showScene('s2'); addAt(document.getElementById('s2-headline'),'in',0); } },
+  // Shutter tap at 5200ms
+  { at: 5200, fn: () => {
+    document.getElementById('cam-shutter').classList.add('tapped');
+    setTimeout(() => {
+      const flash = document.getElementById('flash-overlay');
+      flash.classList.add('flash');
+    }, 150);
+    setTimeout(() => {
+      // Switch to review screen
+      document.getElementById('cam-screen').classList.add('hidden');
+      document.getElementById('review-screen').classList.remove('hidden');
+      setTimeout(() => { addAt(document.getElementById('auto-badge'),'in',200); }, 300);
+      // Type in fields
+      typeIn(document.getElementById('field-title'), 'Vintage Brass Lamp', 400, 40);
+      typeIn(document.getElementById('field-price'), '$45.00', 900, 60);
+      typeIn(document.getElementById('field-cat'), 'Lighting & Fixtures', 1400, 35);
+      addAt(document.getElementById('publish-btn'), 'in', 2200);
+    }, 500);
+  }},
+  // Publish tap at 8200ms
+  { at: 8200, fn: () => {
+    document.getElementById('publish-btn').classList.add('tapped');
+    setTimeout(() => {
+      document.getElementById('review-screen').classList.add('hidden');
+      document.getElementById('success-screen').classList.remove('hidden');
+      addAt(document.getElementById('success-ring'), 'in', 100);
+      addAt(document.getElementById('ring-pulse'), 'pulse', 100);
+      addAt(document.getElementById('success-title'), 'in', 200);
+      addAt(document.getElementById('success-sub'), 'in', 300);
+    }, 300);
+  }},
+  // Counter at 9400ms
+  { at: 9400, fn: () => {
+    addAt(document.getElementById('counter-wrap'),'in',0);
+    setTimeout(() => {
+      document.getElementById('counter-fill').style.transition = 'width 2.8s cubic-bezier(0.25,0.46,0.45,0.94)';
+      document.getElementById('counter-fill').style.width = '100%';
+      animateCounter(0, 47, 2800, (v) => { counterNum.textContent = v; });
+    }, 200);
+  }},
+  // Sub line at 12200ms
+  { at: 12200, fn: () => { addAt(document.getElementById('s2-subline'),'in',0); } },
+
+  // SCENE 3 — POS (13200ms–20500ms)
+  { at: 13200, fn: () => {
+    showScene('s3');
+    addAt(document.getElementById('s3-headline'),'in',0);
+    addAt(document.getElementById('org-phone'),'in',200);
+    addAt(document.getElementById('shop-phone'),'in',400);
+  }},
+  // Tap at 15200ms
+  { at: 15200, fn: () => {
+    document.getElementById('pos-btn').classList.add('tapped');
+    addAt(document.getElementById('pay-beam'),'in',300);
+  }},
+  // Shopper receives at 16500ms
+  { at: 16500, fn: () => {
+    const pending = document.getElementById('shopper-pending');
+    const success = document.getElementById('shopper-success');
+    pending.style.display = 'none';
+    success.classList.add('in');
+    addAt(document.getElementById('shopper-check'),'in',100);
+    addAt(document.getElementById('paid-amount'),'in',200);
+    addAt(document.getElementById('paid-label'),'in',350);
+  }},
+  { at: 18500, fn: () => { addAt(document.getElementById('s3-sub'),'in',0); } },
+
+  // SCENE 4 — Features (20600ms–23500ms)
+  { at: 20600, fn: () => {
+    showScene('s4');
+    addAt(document.getElementById('s4-headline'),'in',0);
+    addAt(document.getElementById('fc1'),'in',200);
+    addAt(document.getElementById('fc2'),'in',380);
+    addAt(document.getElementById('fc3'),'in',560);
+    addAt(document.getElementById('fc4'),'in',740);
+    addAt(document.getElementById('fc5'),'in',920);
+  }},
+
+  // SCENE 5 — CTA (23600ms–25000ms)
+  { at: 23600, fn: () => {
+    showScene('s5');
+    addAt(document.getElementById('cta-logo'),'in',0);
+    addAt(document.getElementById('cta-main'),'in',200);
+    addAt(document.getElementById('cta-sub'),'in',500);
+    addAt(document.getElementById('cta-url'),'in',700);
+  }},
+  // End at 25000ms
+  { at: 25000, fn: () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+    replayBtn.style.display = 'block';
+  }}
+];
+
+// ── RAF loop ──
+let nextEvent = 0;
+function tick(now) {
+  if (!running) return;
+  const elapsed = now - startTime;
+
+  // Fire timeline events
+  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
+    events[nextEvent].fn();
+    nextEvent++;
+  }
+
+  // Update progress bar
+  const pct = Math.min((elapsed / DURATION) * 100, 100);
+  progressBar.style.width = pct + '%';
+
+  // Update timer
+  const secs = Math.min(Math.floor(elapsed / 1000), 25);
+  const ss = String(secs % 60).padStart(2,'0');
+  timerEl.textContent = `0:${ss}`;
+
+  if (elapsed < DURATION) {
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function start() {
+  resetAll();
+  nextEvent = 0;
+  running = true;
+  startTime = performance.now();
+  // Kick off progress bar animation
+  requestAnimationFrame(tick);
+}
+
+// ── Play overlay ──
+playOverlay.addEventListener('click', () => {
+  playOverlay.classList.add('hidden');
+  start();
+});
+
+// ── Replay ──
+replayBtn.addEventListener('click', () => {
+  replayBtn.style.display = 'none';
+  start();
+});
+</script>
+</body>
+</html>
