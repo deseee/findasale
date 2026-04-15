@@ -237,7 +237,7 @@ const AdminDashboard = () => {
                   <div className="flex items-end gap-1 h-16 mb-4">
                     {stats.sparklines.signups.length > 0 ? (
                       stats.sparklines.signups.map((value, idx) => {
-                        const maxVal = Math.max(...stats.sparklines.signups, 1);
+                        const maxVal = Math.max(...(stats.sparklines?.signups ?? [0]), 1);
                         const heightPercent = (value / maxVal) * 100;
                         return (
                           <div
@@ -259,7 +259,7 @@ const AdminDashboard = () => {
                   <div className="flex items-end gap-1 h-16 mb-4">
                     {stats.sparklines.transactionRevenue.length > 0 ? (
                       stats.sparklines.transactionRevenue.map((value, idx) => {
-                        const maxVal = Math.max(...stats.sparklines.transactionRevenue, 1);
+                        const maxVal = Math.max(...(stats.sparklines?.transactionRevenue ?? [0]), 1);
                         const heightPercent = (value / maxVal) * 100;
                         return (
                           <div
@@ -281,7 +281,7 @@ const AdminDashboard = () => {
                   <div className="flex items-end gap-1 h-16 mb-4">
                     {stats.sparklines.newSales.length > 0 ? (
                       stats.sparklines.newSales.map((value, idx) => {
-                        const maxVal = Math.max(...stats.sparklines.newSales, 1);
+                        const maxVal = Math.max(...(stats.sparklines?.newSales ?? [0]), 1);
                         const heightPercent = (value / maxVal) * 100;
                         return (
                           <div
