@@ -56,7 +56,7 @@ These tables are required before: feature flags backend CRUD, PWA event tracking
 - `packages/backend/src/controllers/ebayController.ts` — rate limit gate + trackEbayCall instrumentation
 
 *Admin frontend (5):*
-- `packages/frontend/pages/admin/index.tsx` — rebuilt KPI dashboard
+- `packages/frontend/pages/admin/index.tsx` — rebuilt KPI dashboard; TS fix: sparklines map callbacks use `stats.sparklines?.signups ?? [0]` (control-flow narrowing lost in callbacks)
 - `packages/frontend/pages/admin/reports.tsx` — implemented from Coming Soon
 - `packages/frontend/pages/admin/items.tsx` — implemented from Coming Soon
 - `packages/frontend/pages/admin/broadcast.tsx` — implemented from Coming Soon
@@ -376,6 +376,9 @@ Tables needed: FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog. Dispatch Arch
 - Vercel: enable usage alerts
 - eBay: check daily call count, apply for Certified App status (1–2 week process)
 - Stripe: enable Radar rules + dispute notifications
+
+**8. Sales outreach brainstorm (next session priority):**
+Patrick wants to explore tactics for getting warm intros and early organizer sales. Research is preloaded — cover: ringless voicemail drops, warm intro engineering, Loom video outreach, cold email frameworks (Koerner's "qualifying question first" approach), local network tactics (estate sale trade associations, Facebook groups, Craigslist organizer lists), and referral systems. Goal: build a playbook for the first 20–50 organizer signups without a sales team. No dev work — pure strategy session.
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)
