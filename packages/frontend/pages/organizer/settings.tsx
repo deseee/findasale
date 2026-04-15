@@ -46,6 +46,7 @@ const OrganizerSettingsPage = () => {
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [isConnectingEbay, setIsConnectingEbay] = useState(false);
+  const [syncingEbayPolicies, setSyncingEbayPolicies] = useState(false);
   const [fontSize, setFontSize] = useState(16);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
@@ -203,6 +204,23 @@ const OrganizerSettingsPage = () => {
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to start eBay connection', 'error');
       setIsConnectingEbay(false);
+    }
+  };
+
+  const handleSyncEbayPolicies = async () => {
+    setSyncingEbayPolicies(true);
+    try {
+      const res = await api.post('/ebay/sync-policies');
+      if (res.data?.success) {
+        refetchEbayStatus();
+        showToast('Policies synced', 'success');
+      } else {
+        showToast(res.data?.error || 'Could not sync policies from eBay.', 'error');
+      }
+    } catch (error: any) {
+      showToast(error.response?.data?.error || error.response?.data?.message || 'Network error. Try again.', 'error');
+    } finally {
+      setSyncingEbayPolicies(false);
     }
   };
 
@@ -816,6 +834,53 @@ const OrganizerSettingsPage = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* eBay Business Policies */}
+                    <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Business Policies</span>
+                        <button
+                          onClick={handleSyncEbayPolicies}
+                          disabled={syncingEbayPolicies}
+                          className="text-xs text-sage-600 hover:text-sage-700 dark:text-sage-400 dark:hover:text-sage-500 disabled:opacity-50 font-medium"
+                        >
+                          {syncingEbayPolicies ? 'Syncing...' : 'Sync from eBay'}
+                        </button>
+                      </div>
+
+                      {ebayStatus?.fulfillmentPolicyId && ebayStatus?.returnPolicyId && ebayStatus?.paymentPolicyId ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                            <span className="text-green-500">✓</span>
+                            <span>Fulfillment, Return & Payment policies synced</span>
+                            {ebayStatus.policiesFetchedAt && (
+                              <span className="text-gray-400">· {new Date(ebayStatus.policiesFetchedAt).toLocaleDateString()}</span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-amber-600 dark:text-amber-400">
+                          <span>⚠ No policies synced. </span>
+                          <a
+                            href="https://www.bizpolicies.ebay.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:text-amber-700 dark:hover:text-amber-300"
+                          >
+                            Set up business policies in eBay
+                          </a>
+                          <span>, then click "Sync from eBay".</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <Link
+                      href="/organizer/settings/ebay"
+                      className="inline-flex items-center gap-1 text-sm text-sage-600 hover:text-sage-700 dark:text-sage-400 dark:hover:text-sage-500 mt-3"
+                    >
+                      Advanced eBay Setup →
+                    </Link>
+
                     <div className="flex flex-wrap gap-3">
                       <button
                         onClick={() => syncEbayInventoryMutation.mutate()}

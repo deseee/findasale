@@ -2,6 +2,26 @@
 
 ## What Happened This Week
 
+**S469** (2026-04-15) — eBay Phase 1-3 Foundation: Policy Routing + Weight Tiers + Draft Mode + Setup UI ✅
+- **The problem you flagged:** I picked the "first payment policy" as a shortcut. Your real-world account has 22 shipping policies named by weight tier ("8oz Ground Advantage", "1+ lb Ground Advantage", "6+ lb Ground Advantage", "Freight 150+ lb Freight"). eBay also supports 10 description templates per seller. One-policy-wins is not automation — it's a guess.
+- **The architecture shipped:** New `EbayPolicyMapping` model (separate from EbayConnection) lets you configure: default fulfillment/return/payment policies, weight-tier routing table, shipping classification overrides (HEAVY_OVERSIZED / FRAGILE / UNKNOWN), category-specific overrides, description template (with `{{DESCRIPTION}}` placeholder), draft-mode toggle, merchant location source (Sale Address / Organizer Address / Existing eBay location).
+- **Per-item policy resolution priority:** category override → HEAVY_OVERSIZED override → FRAGILE override → weight-tier match → UNKNOWN override → default fulfillment → EbayConnection fallback. Every push now picks the right policy based on the actual item's weight and classification.
+- **Weight-tier parser:** Automatically parses your policy names ("8oz", "1+ lb", "6+ lb") into ranges and matches item `packageWeightOz` to the correct tier. Last "N+ lb" tier is promoted to Infinity (catches everything heavier).
+- **New setup page:** `/organizer/settings/ebay` — 8 sections covering defaults, weight tiers (with "Use suggested defaults" button that auto-matches your policies), classification overrides, category overrides, description template, draft mode, merchant location, sticky save bar. Linked from your main Settings page as "Advanced eBay Setup →".
+- **Draft mode:** Toggle "Push as Draft" to create unpublished Offers on eBay — you can review/edit in Seller Hub before publishing. Unchecked = auto-publish (current behavior).
+- **3 parallel dev agents shipped this session:** non-overlapping file ownership, all returned zero TypeScript errors. Main session verified schema fields, new exports, route registration.
+- **Migration required** before testing — block below.
+- **Files changed:** 7 (2 new frontend files, 1 new backend util, 1 new migration). Push block below.
+
+---
+
+**S468** (2026-04-15) — eBay policy sync UI + /sync-policies route ✅
+- **Confirmed push flow was already correct:** `conn.paymentPolicyId/fulfillmentPolicyId/returnPolicyId` are used in the push call at lines 1648–1650 of ebayController.ts, with a hard validation gate at line 1392. Schema already had all fields. The "Free Standard Shipping" issue on the Celestion listing was because the policy fields were never populated on your EbayConnection row.
+- **What shipped:** `POST /api/ebay/sync-policies` route (authenticated) + "Business Policies" block on settings page with green ✓ when synced, amber warning with eBay link when missing, "Sync from eBay" button. `fetchAndStoreEbayPolicies()` was already implemented — just needed `export`.
+- **No schema changes. 3 files.**
+
+---
+
 **S467** (2026-04-15) — eBay listing quality batch (all 6 items) + sitewide organizer rarity filter fix ✅
 - **P0 bug found:** Your Celestion ($285, ULTRA_RARE) was invisible on ALL your organizer management pages because they were all calling the public browsing endpoint — which runs the Hunt Pass rarity filter (ULTRA_RARE items hidden for 6 hours unless shopper has Hunt Pass). You correctly identified this should be sitewide. Fixed: all 7 organizer pages (Add Items, Sale Detail, Print Kit, Promote, Print Inventory, Bounties, Dashboard) now call the authenticated `/items/drafts` endpoint. Public browsing stays filtered — Hunt Pass early access still works. Buyer Preview still shows the shopper view.
 - **Item 1** (manual category): No bug. Code already respects your picker selection.

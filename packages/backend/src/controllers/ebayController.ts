@@ -6,6 +6,15 @@ import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { getIO } from '../lib/socket';
+import {
+  parseWeightTiers,
+  classifyPolicy,
+  matchWeightTier,
+  toOunces,
+  ParsedWeightTier,
+  EbayFulfillmentPolicySummary,
+  WeightTierMapping,
+} from '../utils/ebayPolicyParser';
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -760,7 +769,7 @@ async function suggestEbayCategoryForTitle(title: string): Promise<string | null
  * Called after OAuth connect completes. Fire-and-forget on error.
  * marketplace_id=EBAY_US is required by the Account API.
  */
-async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: string): Promise<void> {
+export async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: string): Promise<void> {
   try {
     // Fetch payment policies
     const paymentRes = await fetch('https://api.ebay.com/sell/account/v1/payment_policy?marketplace_id=EBAY_US', {
@@ -852,6 +861,158 @@ async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: strin
   } catch (error) {
     console.error('[eBay] Error fetching and storing policies:', error);
     // Don't throw — policy fetch failure should not break OAuth callback
+  }
+}
+
+/**
+ * Fetch ALL eBay policies (fulfillment, return, payment) for the organizer.
+ * Returns structured arrays of policies for UI consumption + setup.
+ */
+export async function fetchAllEbayPolicies(organizerId: string, accessToken: string): Promise<{
+  fulfillmentPolicies: Array<{ fulfillmentPolicyId: string; name: string; description?: string }>;
+  returnPolicies: Array<{ returnPolicyId: string; name: string; description?: string }>;
+  paymentPolicies: Array<{ paymentPolicyId: string; name: string; description?: string }>;
+}> {
+  const headers = ebayUserHeaders(accessToken);
+
+  async function fetchAll(endpoint: string, resultKey: string): Promise<any[]> {
+    try {
+      const res = await fetch(
+        `https://api.ebay.com/sell/account/v1/${endpoint}?marketplace_id=EBAY_US&limit=100`,
+        { headers }
+      );
+      if (!res.ok) {
+        console.error(`[eBay] ${endpoint} fetch failed: ${res.status}`);
+        return [];
+      }
+      const data = await res.json();
+      return data[resultKey] || [];
+    } catch (err) {
+      console.error(`[eBay] ${endpoint} error:`, err);
+      return [];
+    }
+  }
+
+  const [fulfillmentPolicies, returnPolicies, paymentPolicies] = await Promise.all([
+    fetchAll('fulfillment_policy', 'fulfillmentPolicies'),
+    fetchAll('return_policy', 'returnPolicies'),
+    fetchAll('payment_policy', 'paymentPolicies'),
+  ]);
+
+  return { fulfillmentPolicies, returnPolicies, paymentPolicies };
+}
+
+/**
+ * Fetch eBay merchant locations for the organizer.
+ * Used to populate location selector and merchantLocationSource options.
+ */
+export async function fetchEbayMerchantLocations(organizerId: string, accessToken: string): Promise<Array<{
+  merchantLocationKey: string;
+  name: string;
+  locationTypes?: string[];
+  address?: any;
+}>> {
+  const headers = ebayUserHeaders(accessToken);
+  try {
+    const res = await fetch('https://api.ebay.com/sell/inventory/v1/location?limit=100', { headers });
+    if (!res.ok) {
+      console.error(`[eBay] fetch locations failed: ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    return (data.locations || []).map((loc: any) => ({
+      merchantLocationKey: loc.merchantLocationKey,
+      name: loc.name || loc.merchantLocationKey,
+      locationTypes: loc.locationTypes,
+      address: loc.location?.address,
+    }));
+  } catch (err) {
+    console.error('[eBay] fetchEbayMerchantLocations error:', err);
+    return [];
+  }
+}
+
+/**
+ * Handler: GET /api/ebay/setup-data
+ * Returns current policies, locations, and existing policy mapping for UI configuration.
+ * Used to populate the eBay Policy Routing Settings page.
+ */
+export async function getEbaySetupData(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const organizer = await prisma.organizer.findFirst({
+      where: { userId: req.user!.id },
+      include: { ebayConnection: true, ebayPolicyMapping: true },
+    });
+    if (!organizer) return res.status(404).json({ error: 'Organizer not found' });
+    if (!organizer.ebayConnection) return res.status(400).json({ error: 'eBay not connected' });
+
+    const accessToken = await refreshEbayAccessToken(organizer.id);
+    if (!accessToken) return res.status(500).json({ error: 'Failed to refresh eBay token' });
+
+    const [allPolicies, locations] = await Promise.all([
+      fetchAllEbayPolicies(organizer.id, accessToken),
+      fetchEbayMerchantLocations(organizer.id, accessToken),
+    ]);
+
+    const suggestedWeightTiers = parseWeightTiers(
+      allPolicies.fulfillmentPolicies as EbayFulfillmentPolicySummary[]
+    );
+
+    const classifiedFulfillment = allPolicies.fulfillmentPolicies.map((p) => ({
+      ...p,
+      classification: classifyPolicy(p.name),
+    }));
+
+    return res.json({
+      fulfillmentPolicies: classifiedFulfillment,
+      returnPolicies: allPolicies.returnPolicies,
+      paymentPolicies: allPolicies.paymentPolicies,
+      merchantLocations: locations,
+      currentMapping: organizer.ebayPolicyMapping,
+      suggestedWeightTiers,
+    });
+  } catch (err: any) {
+    console.error('[eBay] getEbaySetupData error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to load setup data' });
+  }
+}
+
+/**
+ * Handler: POST /api/ebay/policy-mapping
+ * Saves organizer's policy routing configuration (weight tiers, category overrides, defaults, etc).
+ */
+export async function saveEbayPolicyMapping(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const organizer = await prisma.organizer.findFirst({
+      where: { userId: req.user!.id },
+    });
+    if (!organizer) return res.status(404).json({ error: 'Organizer not found' });
+
+    const body = req.body || {};
+    const data = {
+      defaultFulfillmentPolicyId: body.defaultFulfillmentPolicyId ?? null,
+      defaultReturnPolicyId: body.defaultReturnPolicyId ?? null,
+      defaultPaymentPolicyId: body.defaultPaymentPolicyId ?? null,
+      defaultDescriptionHtml: body.defaultDescriptionHtml ?? null,
+      weightTierMappings: body.weightTierMappings ?? [],
+      categoryOverrides: body.categoryOverrides ?? [],
+      heavyOversizedPolicyId: body.heavyOversizedPolicyId ?? null,
+      fragilePolicyId: body.fragilePolicyId ?? null,
+      unknownPolicyId: body.unknownPolicyId ?? null,
+      pushAsDraft: body.pushAsDraft ?? false,
+      merchantLocationSource: body.merchantLocationSource || 'SALE_ADDRESS',
+    };
+
+    const mapping = await prisma.ebayPolicyMapping.upsert({
+      where: { organizerId: organizer.id },
+      create: { organizerId: organizer.id, ...data },
+      update: data,
+    });
+
+    return res.json({ success: true, mapping });
+  } catch (err: any) {
+    console.error('[eBay] saveEbayPolicyMapping error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to save mapping' });
   }
 }
 
@@ -1387,13 +1548,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Check if policies are configured
+    // Verify eBay connection has at least minimal policy configuration
+    // If organizer has not set up EbayPolicyMapping, we will fall back to EbayConnection defaults
     const conn = organizer.ebayConnection;
-    if (!conn.paymentPolicyId || !conn.fulfillmentPolicyId || !conn.returnPolicyId) {
+    const hasEbayConnection = !!conn;
+    if (!hasEbayConnection) {
       return res.status(400).json({
-        error: 'POLICIES_NOT_CONFIGURED',
-        message:
-          'Please connect your eBay account again to configure business policies, or set up business policies in eBay Seller Hub first.',
+        error: 'EBAY_NOT_CONNECTED',
+        message: 'Please connect your eBay account first.',
       });
     }
 
@@ -1437,6 +1599,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayListingId: true,
             ebayCategoryId: true,
             ebayNeedsReview: true,
+            ebayShippingClassification: true,
             packageWeightOz: true,
             packageLengthIn: true,
             packageWidthIn: true,
@@ -1492,6 +1655,28 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     for (const item of sale.items) {
       try {
         const sku = `FAS-${item.id}`;
+
+        // Resolve policies for this item based on organizer's routing configuration
+        const routing = await resolvePoliciesForItem(organizer.id, {
+          id: item.id,
+          packageWeightOz: item.packageWeightOz,
+          ebayShippingClassification: item.ebayShippingClassification,
+          ebayCategoryId: item.ebayCategoryId,
+          category: item.category,
+        });
+
+        if ('error' in routing) {
+          // Record per-item error, skip this item, continue with next
+          results.push({
+            itemId: item.id,
+            sku,
+            status: 'error',
+            code: routing.code,
+            message: routing.message,
+          });
+          continue;
+        }
+
         // Resolve categoryId in this order:
         // 1. Stored ebayCategoryId (from eBay import — always a valid leaf)
         // 2. eBay Taxonomy API getCategorySuggestions by title — returns a leaf,
@@ -1631,6 +1816,18 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         }
 
         // Step 2: Upsert offer — find existing or create new, then update price/policies
+        // Inject description template if configured and item has no custom description HTML
+        let finalDescription = sanitizedDescription;
+        if (routing.descriptionHtml && !sanitizedDescription) {
+          finalDescription = routing.descriptionHtml;
+        } else if (routing.descriptionHtml && sanitizedDescription) {
+          if (routing.descriptionHtml.includes('{{DESCRIPTION}}')) {
+            finalDescription = routing.descriptionHtml.replace('{{DESCRIPTION}}', sanitizedDescription);
+          } else {
+            finalDescription = `${routing.descriptionHtml}\n\n${sanitizedDescription}`;
+          }
+        }
+
         const offerPayload: Record<string, unknown> = {
           sku,
           marketplaceId: 'EBAY_US',
@@ -1645,11 +1842,11 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           listingDuration: 'GTC',
           merchantLocationKey,
           listingPolicies: {
-            paymentPolicyId: conn.paymentPolicyId,
-            fulfillmentPolicyId: conn.fulfillmentPolicyId,
-            returnPolicyId: conn.returnPolicyId,
+            paymentPolicyId: routing.paymentPolicyId,
+            fulfillmentPolicyId: routing.fulfillmentPolicyId,
+            returnPolicyId: routing.returnPolicyId,
           },
-          ...(sanitizedDescription ? { listingDescription: sanitizedDescription } : {}),
+          ...(finalDescription ? { listingDescription: finalDescription } : {}),
           ...(item.allowBestOffer ? {
             bestOfferTerms: {
               bestOfferEnabled: true,
@@ -1763,9 +1960,25 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           data: { ebayOfferId: offerId },
         });
 
-        // Step 3: Publish offer
+        // Step 3: Publish offer (or skip if pushAsDraft is true)
         const publishUrl = `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`;
-        let publishResponse = await fetch(publishUrl, {
+        let publishResponse: Response | undefined;
+
+        if (routing.pushAsDraft) {
+          // Draft mode — skip publish, offer stays unpublished in seller's account
+          console.log(`[eBay] Item ${item.id} pushed as DRAFT (offerId=${offerId}) — finalize in eBay Seller Hub`);
+          results.push({
+            itemId: item.id,
+            sku,
+            ebayOfferId: offerId,
+            ebayListingId: null,
+            status: 'draft',
+            message: 'Pushed as draft — finalize in eBay Seller Hub',
+          });
+          continue;
+        }
+
+        publishResponse = await fetch(publishUrl, {
           method: 'POST',
           headers: ebayUserHeaders(accessToken),
         });
@@ -2090,6 +2303,154 @@ function buildAspects(tags: string[]): Record<string, string[]> | undefined {
     }
   });
   return Object.keys(aspects).length > 0 ? aspects : undefined;
+}
+
+/**
+ * Resolve policies for a single item based on organizer's policy mapping.
+ * Priority: category override → shipping classification → weight tier → default.
+ * Falls back to EbayConnection defaults if no mapping exists.
+ *
+ * Returns policy IDs, draft mode flag, merchant location source, and routing reason for logging.
+ */
+interface PolicyRoutingResult {
+  fulfillmentPolicyId: string;
+  returnPolicyId: string;
+  paymentPolicyId: string;
+  descriptionHtml: string | null;
+  pushAsDraft: boolean;
+  merchantLocationSource: string;
+  routingReason: string;
+}
+
+async function resolvePoliciesForItem(
+  organizerId: string,
+  item: {
+    id: string;
+    packageWeightOz?: number | null;
+    ebayShippingClassification?: string | null;
+    ebayCategoryId?: string | null;
+    category?: string | null;
+  }
+): Promise<PolicyRoutingResult | { error: string; code: string; message: string }> {
+  const organizer = await prisma.organizer.findUnique({
+    where: { id: organizerId },
+    include: { ebayConnection: true, ebayPolicyMapping: true },
+  });
+
+  if (!organizer?.ebayConnection) {
+    return {
+      error: 'EBAY_NOT_CONNECTED',
+      code: 'EBAY_NOT_CONNECTED',
+      message: 'eBay account not connected',
+    };
+  }
+
+  const mapping = organizer.ebayPolicyMapping;
+  const conn = organizer.ebayConnection;
+
+  // If mapping doesn't exist, fall back to EbayConnection default policies
+  if (!mapping) {
+    if (!conn.fulfillmentPolicyId || !conn.returnPolicyId || !conn.paymentPolicyId) {
+      return {
+        error: 'POLICIES_NOT_CONFIGURED',
+        code: 'POLICIES_NOT_CONFIGURED',
+        message: 'Please complete eBay setup in Settings — pick your default policies before pushing.',
+      };
+    }
+    return {
+      fulfillmentPolicyId: conn.fulfillmentPolicyId,
+      returnPolicyId: conn.returnPolicyId,
+      paymentPolicyId: conn.paymentPolicyId,
+      descriptionHtml: null,
+      pushAsDraft: false,
+      merchantLocationSource: conn.merchantLocationSource || 'SALE_ADDRESS',
+      routingReason: 'fallback-to-connection-defaults',
+    };
+  }
+
+  // Policy resolution priority:
+  //   1. Category override (exact ebayCategoryId match)
+  //   2. Shipping classification override (HEAVY_OVERSIZED, FRAGILE, UNKNOWN)
+  //   3. Weight-tier match
+  //   4. Default fulfillment policy
+
+  let fulfillmentPolicyId: string | null = null;
+  let routingReason = '';
+
+  // 1. Category override
+  const categoryOverrides = (mapping.categoryOverrides as any[]) || [];
+  if (item.ebayCategoryId) {
+    const match = categoryOverrides.find((c: any) => c.categoryId === item.ebayCategoryId);
+    if (match) {
+      fulfillmentPolicyId = match.policyId;
+      routingReason = `category-override:${item.ebayCategoryId}`;
+    }
+  }
+
+  // 2. Shipping classification override
+  if (!fulfillmentPolicyId) {
+    if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping.heavyOversizedPolicyId) {
+      fulfillmentPolicyId = mapping.heavyOversizedPolicyId;
+      routingReason = 'classification:HEAVY_OVERSIZED';
+    } else if (item.ebayShippingClassification === 'FRAGILE' && mapping.fragilePolicyId) {
+      fulfillmentPolicyId = mapping.fragilePolicyId;
+      routingReason = 'classification:FRAGILE';
+    }
+  }
+
+  // 3. Weight-tier match
+  if (!fulfillmentPolicyId) {
+    const tiers = (mapping.weightTierMappings as unknown as WeightTierMapping[]) || [];
+    if (tiers.length > 0 && item.packageWeightOz != null) {
+      const weightOz = item.packageWeightOz;
+      const tier = matchWeightTier(weightOz, tiers);
+      if (tier) {
+        fulfillmentPolicyId = tier.policyId;
+        routingReason = `weight-tier:${tier.maxOz}oz`;
+      }
+    }
+  }
+
+  // 4. UNKNOWN classification fallback
+  if (!fulfillmentPolicyId && (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) && mapping.unknownPolicyId) {
+    fulfillmentPolicyId = mapping.unknownPolicyId;
+    routingReason = 'classification:UNKNOWN';
+  }
+
+  // 5. Default
+  if (!fulfillmentPolicyId && mapping.defaultFulfillmentPolicyId) {
+    fulfillmentPolicyId = mapping.defaultFulfillmentPolicyId;
+    routingReason = 'default-fulfillment';
+  }
+
+  if (!fulfillmentPolicyId) {
+    return {
+      error: 'NO_FULFILLMENT_POLICY_MATCH',
+      code: 'NO_FULFILLMENT_POLICY_MATCH',
+      message: `No eBay fulfillment policy matched for this item (weight=${item.packageWeightOz}, classification=${item.ebayShippingClassification}, category=${item.ebayCategoryId}). Add a matching tier in Settings or set a default fulfillment policy.`,
+    };
+  }
+
+  const returnPolicyId = mapping.defaultReturnPolicyId || conn.returnPolicyId;
+  const paymentPolicyId = mapping.defaultPaymentPolicyId || conn.paymentPolicyId;
+
+  if (!returnPolicyId || !paymentPolicyId) {
+    return {
+      error: 'POLICIES_NOT_CONFIGURED',
+      code: 'POLICIES_NOT_CONFIGURED',
+      message: 'Please set default return and payment policies in eBay Settings.',
+    };
+  }
+
+  return {
+    fulfillmentPolicyId,
+    returnPolicyId,
+    paymentPolicyId,
+    descriptionHtml: mapping.defaultDescriptionHtml,
+    pushAsDraft: mapping.pushAsDraft,
+    merchantLocationSource: mapping.merchantLocationSource,
+    routingReason,
+  };
 }
 
 /**

@@ -7,6 +7,54 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S469 (2026-04-15) — eBay Phase 1-3 Foundation: Policy Mapping + Weight-Tier Routing + Draft Mode + Setup UI**
+
+**S469 What happened:**
+- Patrick flagged the push-first-policy approach as a shortcut. Real-world organizer (Patrick himself) has 22 shipping policies named by weight tier ("8oz Ground Advantage", "1+ lb Ground Advantage", "6+ lb Ground Advantage", "Freight 150+ lb Freight", etc.). eBay also supports 10 description templates per seller.
+- Laid out 3-layer architecture: (1) EbayPolicyMapping model with default + weight-tier + shipping-class + category overrides, (2) merchant location routing (sale address / organizer address / existing eBay location), (3) description template injection + draft mode toggle.
+- Dispatched three parallel agents (non-overlapping file ownership):
+  - **Agent A** (schema + parser): New `EbayPolicyMapping` model, migration `20260415_ebay_policy_mapping`, `ebayPolicyParser.ts` utility (classifyPolicy, parseWeightTiers, matchWeightTier, toOunces). Weight-tier parser handles "8oz", "1+ lb", "N+ lb" — last "N+ lb" promoted to Infinity.
+  - **Agent B** (backend): Added `fetchAllEbayPolicies`, `fetchEbayMerchantLocations`, `getEbaySetupData`, `saveEbayPolicyMapping`, `resolvePoliciesForItem`. Modified push flow to per-item routing with priority: category override → HEAVY_OVERSIZED → FRAGILE → weight tier → UNKNOWN → default → EbayConnection fallback. Description template `{{DESCRIPTION}}` placeholder injection. Draft mode wraps publishOffer call.
+  - **Agent C** (frontend): New `/organizer/settings/ebay.tsx` (729 lines) — 8 sections: page shell, default policies, weight-tier matrix (editable with "Use suggested defaults"), shipping classification overrides, category overrides, description template, draft mode + merchant location radio, sticky save bar. Added "Advanced eBay Setup →" link in settings.tsx.
+- All three agents returned zero TypeScript errors. Main session verified schema fields + new exports + route registration.
+- Agent A flagged: pnpm workspace symlink issue prevented `prisma generate` in VM — Patrick must run manually after migrate deploy.
+
+**S469 Files changed (7):**
+- `packages/database/prisma/schema.prisma` — added `EbayPolicyMapping` model + `ebayPolicyMapping` relation on Organizer
+- `packages/database/prisma/migrations/20260415_ebay_policy_mapping/migration.sql` (NEW)
+- `packages/backend/src/utils/ebayPolicyParser.ts` (NEW, 172 lines)
+- `packages/backend/src/controllers/ebayController.ts` — policy routing, template injection, draft mode, new endpoints
+- `packages/backend/src/routes/ebay.ts` — `GET /setup-data`, `POST /policy-mapping`
+- `packages/frontend/pages/organizer/settings/ebay.tsx` (NEW, 729 lines)
+- `packages/frontend/pages/organizer/settings.tsx` — "Advanced eBay Setup" link
+
+**S469 Patrick manual actions REQUIRED (schema change):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+---
+
+**S468 (2026-04-15) — eBay policy sync UI + /sync-policies route**
+
+**S468 What happened:**
+- Audited Patrick's Celestion listing showing "Free Standard Shipping" — confirmed the push flow was ALREADY correct: lines 1648–1650 of ebayController.ts use `conn.paymentPolicyId/fulfillmentPolicyId/returnPolicyId` from DB, with a hard validation gate at line 1392.
+- Schema already had all policy fields: `paymentPolicyId`, `fulfillmentPolicyId`, `returnPolicyId`, `policiesFetchedAt`, `merchantLocationKey`. No migration needed.
+- `fetchAndStoreEbayPolicies()` was already implemented — just needed `export` keyword added.
+- Added `POST /api/ebay/sync-policies` route — authenticated organizer endpoint to manually re-fetch policies from eBay Account API.
+- Added policy sync status UI to organizer settings page: green ✓ when all 3 policies synced, amber warning with eBay link when missing, "Sync from eBay" button.
+- Both packages: zero TypeScript errors verified by main session.
+
+**S468 Files changed (3):**
+- `packages/backend/src/controllers/ebayController.ts` — added `export` to `fetchAndStoreEbayPolicies`
+- `packages/backend/src/routes/ebay.ts` — added import + `POST /sync-policies` route
+- `packages/frontend/pages/organizer/settings.tsx` — policy status card + sync button
+
+---
+
 **S467 (2026-04-15) — eBay listing quality batch (6-item queue) + sitewide organizer rarity filter fix**
 
 **S467 What happened:**
@@ -66,6 +114,8 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
+- **S469 (2026-04-15):** eBay Phase 1-3 foundation — 3 parallel agents shipped EbayPolicyMapping model + weight-tier parser + per-item policy routing + draft mode + full setup page (8 sections). Handles 22+ shipping policies via weight-tier matching. Migration needed: `20260415_ebay_policy_mapping`. 7 files. Zero TS errors.
+- **S468 (2026-04-15):** eBay policy sync: confirmed push flow already uses DB policy IDs. Added export + POST /sync-policies route + settings UI (policy status card + sync button). No schema changes. Zero TS errors. 3 files.
 - **S467 (2026-04-15):** eBay listing quality batch (6/6 items done) + P0 sitewide organizer rarity filter fix (7 pages). Condition/aspect/toast/watermark fixes. Reconciliation spec ready. 13 files changed. No migrations.
 - **S466 (2026-04-14):** Add Items filter fix (getDraftItemsBySaleId) + eBay price priority inversion (organizer price wins). 2 files.
 - **S465 (2026-04-14):** Roadmap graduation pass (v106 → v107) — 31 features moved to SHIPPED & VERIFIED. #245 Feedback Widget deprecated → Rejected. STATE.md compacted from 1603 → ~250 lines (S428–S449 archived to COMPLETED_PHASES.md). All go-live env blockers cleared.
@@ -111,15 +161,29 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP OF SESSION — Chrome QA + Item 5 reconciliation dev dispatch**
+**TOP OF SESSION — Run S469 migration FIRST, then Chrome QA**
 
-**1. Chrome QA (do first — verify S467 fixes landed):**
-- Reload Add Items for Artifact April 26 — confirm Celestion appears (rarity filter fix)
-- Confirm push toast shows success on a test push (toast fix)
-- Confirm watermark QR is smaller and bottom-right (watermark fix)
-- Push a USED item with grade S — confirm eBay gets USED_EXCELLENT not NEW (condition fix)
+**1. Patrick manual actions (MUST run before any Chrome testing):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-**2. Item 5 dev dispatch — eBay listing reconciliation:**
+**2. Chrome QA (verify S467+S468+S469 fixes landed):**
+- Reload Add Items for Artifact April 26 — confirm Celestion appears (rarity filter fix S467)
+- Confirm push toast shows success on a test push (toast fix S467)
+- Confirm watermark QR is smaller and bottom-right (watermark fix S467)
+- Push a USED item with grade S — confirm eBay gets USED_EXCELLENT not NEW (condition fix S467)
+- Settings → eBay section — confirm "Business Policies" block shows + sync button works (S468)
+- Click "Advanced eBay Setup →" link — new page loads with 8 sections (S469)
+- Sync policies → Advanced Setup page populates with 22 policies → click "Use suggested defaults" → weight tiers auto-match → save → verify push picks correct policy per item weight
+- Toggle "Push as Draft" → push an item → confirm eBay creates unpublished offer
+- Select merchant location source (Sale Address / Organizer Address / Existing eBay location) → verify push uses correct location
+- Description template with `{{DESCRIPTION}}` placeholder → push → verify eBay listing renders template wrapped around item description
+
+**3. Item 5 dev dispatch — eBay listing reconciliation:**
 - Spec ready: `claude_docs/specs/ebay-listing-reconciliation-spec.md`
 - Hybrid: 4h cron + on-demand sync button
 - No schema changes needed, ~150 lines

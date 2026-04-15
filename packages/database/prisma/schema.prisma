@@ -319,6 +319,8 @@ model Organizer {
   trails                  TreasureTrail[]        @relation("OrganizerTrails")
   // Feature #244 Phase 2: eBay OAuth connection
   ebayConnection          EbayConnection?        @relation("OrganizerEbayConnection")
+  // Feature #244 Phase 2c: eBay Policy Routing — per-organizer weight-tier policy mappings
+  ebayPolicyMapping       EbayPolicyMapping?     @relation("OrganizerEbayPolicyMapping")
   ebaySubscriptionId      String? // ORDER_CONFIRMATION subscription ID from eBay Notification API
   workspaceChatMessages   WorkspaceChatMessage[] @relation("WorkspaceChatMessages")
   createdAt               DateTime               @default(now())
@@ -369,6 +371,41 @@ model EbayConnection {
 
   @@index([organizerId])
   @@index([lastRefreshedAt])
+}
+
+// Feature #244 Phase 2c: eBay Policy Routing — per-organizer mapping of item attributes → eBay policies
+model EbayPolicyMapping {
+  id          String    @id @default(cuid())
+  organizerId String    @unique
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade, name: "OrganizerEbayPolicyMapping")
+
+  // Fallback default policies (used when no mapping rule matches)
+  defaultFulfillmentPolicyId String?
+  defaultReturnPolicyId      String?
+  defaultPaymentPolicyId     String?
+  defaultDescriptionHtml     String? @db.Text // HTML template used when item has no custom description template
+
+  // Weight-tier mappings — JSON array of { maxOz: number, policyId: string, policyName: string }
+  // Sorted by maxOz ascending. At push time, find first tier where item.weightOz <= tier.maxOz.
+  weightTierMappings Json @default("[]")
+
+  // Category overrides — JSON array of { categoryId: string, policyId: string, policyName: string }
+  // Checked BEFORE weight tiers. If item.ebayCategoryId matches, use this policy regardless of weight.
+  categoryOverrides Json @default("[]")
+
+  // Shipping classification overrides (item.shippingClassification-based routing)
+  heavyOversizedPolicyId String? // e.g. "Local Pickup ONLY"
+  fragilePolicyId        String?
+  unknownPolicyId        String? // used when classification is UNKNOWN or missing
+
+  // Push preferences
+  pushAsDraft            Boolean @default(false) // if true, create Offer but don't call publish endpoint
+  merchantLocationSource String  @default("SALE_ADDRESS") // EXISTING | SALE_ADDRESS | ORGANIZER_ADDRESS
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizerId])
 }
 
 // Phase 2c: Profile Showcase Slots — user-pinned haul posts on profile
