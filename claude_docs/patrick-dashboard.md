@@ -2,6 +2,14 @@
 
 ## What Happened This Week
 
+**S480** (2026-04-15) — S468 status card fix + photo lightbox + Item 5 confirmed done ✅
+- **S468 status card — ✅ fixed.** The "Business Policies" card on Settings → eBay now shows green ✓ when you've synced policies. Root cause: `/api/ebay/connection` was stripping 4 policy fields from its JSON response — they existed in the DB but never made it to the frontend. Added the 4 missing fields, simplified the display condition to `policiesFetchedAt`. 2 files.
+- **Photo lightbox — ✅ shipped.** Clicking any photo in the item editor photo grid now opens a full-screen overlay with a close button and Escape-to-dismiss. `cursor-zoom-in` visual hint added. Patrick verified it works. 1 file.
+- **Item 5 reconciliation — ✅ already done.** STATE.md said "dispatch dev next session" for this. Verified the full implementation was already shipped in S467: `syncEndedListingsForOrganizer` (lines 3687–3850 in ebayController.ts, GetMultipleItems batch of 20) + a 4-hour cron in `ebayEndedListingsSyncCron.ts`. No new code needed.
+- **S469 sticky save bar — ⚠️ P2 noted.** The "Save setup" bar on the Advanced Setup page gets visually hidden behind the footer when you scroll to the very bottom. Save still works — confirmed via DOM interaction + green toast. Will fix next session with a z-index adjustment (<5 lines).
+
+---
+
 **S479** (2026-04-15) — Chrome QA of S467/S468/S469 ✅ mostly, ⚠️ one bug found
 - **S467 rarity filter fix — ✅ verified.** Celestion Vintage 30 G12 (ULTRA_RARE) now visible on Add Items page as Artifact MI. Organizer no longer loses sight of their own ULTRA_RARE items during the 6h Hunt Pass window.
 - **S469 Advanced Setup page — ✅ verified.** All 8 sections render on `/organizer/settings/ebay`: default policies dropdown (22 real policies populated), weight-tier matrix, shipping classification overrides, category overrides, description template, draft-mode checkbox, merchant location radio (3 options, Sale Address pre-selected), sticky "Save setup" bar. No app-level console errors.
