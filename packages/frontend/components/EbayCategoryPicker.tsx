@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import api from '../lib/api';
 
 interface CategorySuggestion {
   categoryId: string;
@@ -61,17 +62,12 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
 
     const timer = setTimeout(async () => {
       try {
-        const response = await fetch(
-          `/api/ebay/taxonomy/suggest?q=${encodeURIComponent(input)}`,
+        const response = await api.get(
+          `/ebay/taxonomy/suggest?q=${encodeURIComponent(input)}`,
           { signal: abortControllerRef.current!.signal }
         );
 
-        if (!response.ok) {
-          throw new Error(`API error: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        setSuggestions(data.suggestions || []);
+        setSuggestions(response.data.suggestions || []);
         setIsOpen(true);
       } catch (err: any) {
         if (err.name !== 'AbortError') {
