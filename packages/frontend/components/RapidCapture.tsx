@@ -130,7 +130,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [showLevelIndicator, setShowLevelIndicator] = useState(true);
   const [exposureCompensation, setExposureCompensation] = useState(0);
   const [whiteBalance, setWhiteBalance] = useState('auto');
-  const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto'>('off');
+  const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto' | 'torch'>('off');
   const [wbSubOpen, setWbSubOpen] = useState(false);
   const [levelAngle, setLevelAngle] = useState(0);
   const [deviceSupportsOrientation, setDeviceSupportsOrientation] = useState(false);
@@ -348,16 +348,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   }, []);
 
   // Toggle torch (phone LED flash)
-  const toggleTorch = useCallback(async () => {
+  const toggleTorch = useCallback(async (forceState?: boolean) => {
     if (!streamRef.current) return;
     const videoTrack = streamRef.current.getVideoTracks()[0];
     if (!videoTrack) return;
-    const newTorch = !torchOn;
+    const newTorch = forceState !== undefined ? forceState : !torchOn;
     try {
       await videoTrack.applyConstraints({ advanced: [{ torch: newTorch } as any] });
       setTorchOn(newTorch);
     } catch {
-      // Torch not supported on this track — silently fail
+      // Silently fail
     }
   }, [torchOn]);
 
@@ -494,7 +494,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </button>
         </div>
 
-        {/* Settings pill — expands horizontally below top bar */}
+        {/* Settings pill — drops vertically from gear button */}
         {settingsPanelOpen && (
           <>
             {/* Backdrop for tap-outside */}
@@ -507,77 +507,81 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               }}
             />
 
-            {/* White balance sub-chip row (appears above main pill when open) */}
-            {wbSubOpen && (
-              <div
-                className="absolute left-1/2 -translate-x-1/2 z-30 bg-black/80 backdrop-blur-md rounded-full flex items-center gap-1 px-2 py-1.5 shadow-lg"
-                style={{ bottom: 'calc(100% + 8px)', width: 'fit-content' }}
-              >
-                {['auto', 'daylight', 'incandescent', 'fluorescent'].map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => {
-                      setWhiteBalance(mode);
-                      setWbSubOpen(false);
-                    }}
-                    className={`px-2.5 py-1 text-xs rounded-full font-medium transition-colors ${
-                      whiteBalance === mode
-                        ? 'bg-white text-black'
-                        : 'bg-white/10 text-white/60'
-                    }`}
-                  >
-                    {mode === 'auto' ? 'Auto' : mode === 'daylight' ? 'Day' : mode === 'incandescent' ? 'Warm' : 'Fluor'}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Main settings pill */}
+            {/* Main settings pill (vertical column) */}
             <div
-              className="absolute left-1/2 -translate-x-1/2 z-30 bg-black/75 backdrop-blur-md rounded-full flex items-center gap-1 px-2 py-2 shadow-lg transition-all duration-150"
-              style={{ top: '68px', width: 'fit-content' }}
+              className="absolute right-4 z-30 bg-black/75 backdrop-blur-md rounded-2xl flex flex-col items-center gap-1 px-2 py-2 shadow-lg transition-all duration-150"
+              style={{ top: '68px' }}
             >
-              {/* Torch button (if supported) */}
-              {torchSupported && (
-                <button
-                  onClick={toggleTorch}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-base flex-shrink-0 ${
-                    torchOn ? 'bg-amber-500 text-white' : 'bg-white/10 text-white/60'
-                  }`}
-                  aria-label="Torch"
-                  title={torchOn ? 'Torch on' : 'Torch off'}
-                >
-                  ⚡
-                </button>
-              )}
-
-              {/* Flash button */}
+              {/* Flash/Torch button — cycles: Off → On → Auto → Torch */}
               <button
                 onClick={() => {
-                  const modes: Array<'off' | 'on' | 'auto'> = ['off', 'on', 'auto'];
+                  let modes: Array<'off' | 'on' | 'auto' | 'torch'>;
+                  if (torchSupported) {
+                    modes = ['off', 'on', 'auto', 'torch'];
+                  } else {
+                    modes = ['off', 'on', 'auto'];
+                  }
                   const idx = modes.indexOf(flashMode);
-                  setFlashMode(modes[(idx + 1) % modes.length]);
+                  const nextMode = modes[(idx + 1) % modes.length];
+                  setFlashMode(nextMode);
+                  // If transitioning to torch, turn it on
+                  if (nextMode === 'torch') {
+                    toggleTorch(true);
+                  }
+                  // If leaving torch, turn it off
+                  if (flashMode === 'torch' && nextMode !== 'torch') {
+                    toggleTorch(false);
+                  }
                 }}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-base flex-shrink-0 ${
+                className={`w-10 h-10 rounded-full flex flex-col items-center justify-center transition-all text-base flex-shrink-0 relative ${
                   flashMode !== 'off' ? 'bg-white text-black' : 'bg-white/10 text-white/60'
-                }`}
+                } ${flashMode === 'torch' ? 'bg-amber-500 text-white' : ''}`}
                 aria-label="Flash"
-                title={flashMode === 'off' ? 'Flash off' : flashMode === 'on' ? 'Flash on' : 'Flash auto'}
+                title={flashMode === 'off' ? 'Flash off' : flashMode === 'on' ? 'Flash on' : flashMode === 'auto' ? 'Flash auto' : 'Torch on'}
               >
-                {flashMode === 'off' ? '⚡̶' : flashMode === 'on' ? '⚡' : '⚡A'}
+                <span className="text-sm">⚡</span>
+                {flashMode === 'on' && <span className="text-xs -mt-1">ON</span>}
+                {flashMode === 'auto' && <span className="text-xs -mt-1">A</span>}
+                {flashMode === 'torch' && <span className="text-xs -mt-1">🔦</span>}
               </button>
 
-              {/* White balance button */}
-              <button
-                onClick={() => setWbSubOpen(!wbSubOpen)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-base flex-shrink-0 ${
-                  whiteBalance !== 'auto' ? 'bg-white text-black' : 'bg-white/10 text-white/60'
-                }`}
-                aria-label="White balance"
-                title="White balance"
-              >
-                ☀
-              </button>
+              {/* White balance button with sub-chips to the left */}
+              <div className="relative w-10">
+                <button
+                  onClick={() => setWbSubOpen(!wbSubOpen)}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-base flex-shrink-0 ${
+                    whiteBalance !== 'auto' ? 'bg-white text-black' : 'bg-white/10 text-white/60'
+                  }`}
+                  aria-label="White balance"
+                  title="White balance"
+                >
+                  ☀
+                </button>
+
+                {/* White balance sub-chip row (extends left from WB button) */}
+                {wbSubOpen && (
+                  <div
+                    className="absolute right-full mr-2 top-1/2 -translate-y-1/2 z-40 bg-black/80 backdrop-blur-md rounded-full flex items-center gap-1 px-2 py-1.5 shadow-lg whitespace-nowrap pointer-events-auto"
+                  >
+                    {['auto', 'daylight', 'incandescent', 'fluorescent'].map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => {
+                          setWhiteBalance(mode);
+                          setWbSubOpen(false);
+                        }}
+                        className={`px-2.5 py-1 text-xs rounded-full font-medium transition-colors cursor-pointer ${
+                          whiteBalance === mode
+                            ? 'bg-white text-black'
+                            : 'bg-white/10 text-white/60'
+                        }`}
+                      >
+                        {mode === 'auto' ? 'Auto' : mode === 'daylight' ? 'Day' : mode === 'incandescent' ? 'Warm' : 'Fluor'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Timer button */}
               <button
@@ -651,7 +655,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
         {/* Camera viewfinder */}
         <div
-          className="flex-1 relative overflow-hidden z-0"
+          className="flex-1 relative overflow-hidden z-0 touch-none"
           onTouchStart={(e) => {
             if (e.touches.length === 2) {
               const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -784,7 +788,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
               {/* Zoom pill — horizontal tappable levels */}
               {zoomSupported && (
-                <div className="absolute left-1/2 -translate-x-1/2 z-20 bg-black/40 backdrop-blur-sm rounded-full flex items-center gap-0 p-1" style={{ bottom: '80px' }}>
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 bg-black/40 backdrop-blur-sm rounded-full flex items-center gap-0 p-1">
                   {/* Always show 1× */}
                   <button
                     onClick={() => applyZoom(1)}
