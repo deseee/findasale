@@ -1331,6 +1331,10 @@ export const checkEbayConnection = async (req: AuthRequest, res: Response) => {
       ebaySaleId: inventorySale?.id ?? null,
       error: connection.lastErrorMessage ? 'TOKEN_REFRESH_FAILED' : null,
       errorMessage: connection.lastErrorMessage,
+      fulfillmentPolicyId: connection.fulfillmentPolicyId ?? null,
+      returnPolicyId: connection.returnPolicyId ?? null,
+      paymentPolicyId: connection.paymentPolicyId ?? null,
+      policiesFetchedAt: connection.policiesFetchedAt ?? null,
     });
   } catch (error) {
     console.error('[eBay] Connection status error:', error);

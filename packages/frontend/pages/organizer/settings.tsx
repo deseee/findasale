@@ -848,7 +848,7 @@ const OrganizerSettingsPage = () => {
                         </button>
                       </div>
 
-                      {ebayStatus?.fulfillmentPolicyId && ebayStatus?.returnPolicyId && ebayStatus?.paymentPolicyId ? (
+                      {ebayStatus?.policiesFetchedAt ? (
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                             <span className="text-green-500">✓</span>
