@@ -237,22 +237,16 @@ export async function suggestCategoriesHandler(req: AuthRequest, res: Response):
       return;
     }
 
-    const organizerId = (req.user as any).organizer?.id;
-    if (!organizerId) {
-      res.status(403).json({ error: 'Organizer profile not found' });
-      return;
-    }
-
     const { q } = req.query;
     if (!q || typeof q !== 'string') {
       res.status(400).json({ error: 'q (query) parameter required' });
       return;
     }
 
-    // Get eBay access token (app token)
-    const token = await getOrganizerEbayToken(organizerId);
+    // Taxonomy suggest only needs an app token (public catalog API — no user OAuth required)
+    const token = await getEbayAccessToken();
     if (!token) {
-      res.status(401).json({ error: 'eBay connection not authorized' });
+      res.status(503).json({ error: 'eBay app token unavailable' });
       return;
     }
 
