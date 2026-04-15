@@ -1962,7 +1962,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 
         // Step 3: Publish offer (or skip if pushAsDraft is true)
         const publishUrl = `https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`;
-        let publishResponse: Response | undefined;
 
         if (routing.pushAsDraft) {
           // Draft mode — skip publish, offer stays unpublished in seller's account
@@ -1978,7 +1977,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           continue;
         }
 
-        publishResponse = await fetch(publishUrl, {
+        let publishResponse = await fetch(publishUrl, {
           method: 'POST',
           headers: ebayUserHeaders(accessToken),
         });
