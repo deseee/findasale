@@ -2,6 +2,29 @@
 
 ## What Happened This Week
 
+**S482** (2026-04-15) — Camera UI overhaul: settings pill, toast fix, pinch zoom, iPad fullscreen ✅
+- **Toast fix — ✅ done.** Toasts were firing inside the header zone (top-4 = 16px, header is 48–64px tall), covering the notification bell and hamburger. Now clears the header: `top-14` mobile / `top-20` desktop.
+- **Camera settings redesigned — ✅ done.** The old torch-button-in-top-bar approach caused X button to be covered on devices with torch. Full redesign:
+  - X button always top-left, never covered.
+  - Gear icon top-right opens a **vertical pill** that drops down from the gear.
+  - Pill contains: Flash/Torch cycle, White balance (with sub-chips extending left), Timer, Corner guides toggle, Level indicator toggle, Switch camera.
+  - **Torch merged into flash cycle:** Off → On → Auto → Torch (4-step cycle, one button). Torch step hidden on devices that don't support it.
+  - White balance sub-chips now correctly clickable (were broken due to wrong positioning context — fixed by moving inside pill as child).
+  - Tap outside or re-tap gear to close.
+- **iPad now fullscreen — ✅.** Camera was switching to modal at 768px (iPad portrait). Bumped modal treatment from `md:` to `lg:` breakpoints.
+- **Settings button was unclickable — ✅ fixed.** Two separate bugs: (1) viewfinder had no z-index and was stacking above top bar in DOM paint order — fixed with `z-0`; (2) settings panel had `z-19` which isn't a valid Tailwind class (compiled to nothing) — fixed to `z-30`.
+- **Level indicator is now live — ✅.** Was a static line. Now reads device gyroscope, rotates an 80px bar: amber within ±2°, white ±2–10°, red beyond. Cleans up on unmount, handles iOS 13+ permission.
+- **Pinch-to-zoom fixed — ✅.** Browser was claiming the pinch gesture as a page zoom. Added `touch-action: none` to the viewfinder — all pinch events now handled by the camera's custom zoom logic.
+- **Zoom pill added — ✅.** `0.5×/1×/2×/3×` tap targets centered between the bottom corner brackets. Shows only levels the device actually supports. Hidden entirely if zoom not supported.
+- **2 files changed (RapidCapture.tsx, ToastContext.tsx). Zero TypeScript errors.**
+
+**Next session — push S482 first, then fix 3 eBay settings bugs:**
+- Bug A: oz inputs show as number spinners (up/down arrows) — should be plain text inputs
+- Bug B: Policy dropdowns open but can't select — stays at "-- Select policy --"
+- Bug C: "Use suggested defaults" not matching lb-weighted policies to correct oz ranges (1+ lb = 16–31oz, 2+ lb = 32–47oz, etc.)
+
+---
+
 **S481** (2026-04-15) — AI camera improvements batch + trails security + Hubs nav ✅
 - **Trails security — ✅ fixed.** Anyone could see, edit, and delete other people's Treasure Trails at `/shopper/trails`. The public endpoint returned all trails with no ownership check. Fixed: new authenticated `/trails/mine` endpoint filters by your user ID. Edit/Delete buttons now check `trail.userId === user.id` — other people's trails are read-only.
 - **Hubs nav move — ✅ done.** Market Hubs removed from the general organizer nav section and moved into the TEAMS block in both the avatar dropdown and mobile nav. Icons changed from purple to grey to match the TEAMS section style.

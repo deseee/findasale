@@ -7,6 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S482 (2026-04-15) — Camera UI overhaul: settings pill, toast fix, pinch zoom, fullscreen iPad**
+
+**S482 What happened:**
+- **Toast positioning fix ✅:** Standard toasts were `top-4 right-4` — inside the header zone. Changed to `top-14 md:top-20` to clear header on all screen sizes.
+- **Camera settings panel built ✅:** Full collapsible settings system in RapidCapture.tsx:
+  - X button always top-left (never covered)
+  - Gear button top-right opens vertical pill dropping down from gear
+  - Pill contains: Flash/Torch cycle (Off→On→Auto→Torch), White balance (sub-chips extend left), Timer (Off/2s/5s), Corner guides toggle, Level indicator toggle, Switch camera
+  - Flash and torch combined into single button cycling Off→On→Auto→Torch (torch step skipped if unsupported)
+  - Tap-outside backdrop closes pill
+  - White balance sub-chips positioned as child of pill, extend left from WB button
+- **Camera fullscreen on iPad ✅:** Changed `md:` breakpoints to `lg:` on outer container modal treatment — iPads (768px) now stay fullscreen.
+- **Settings button z-index fix ✅:** Two bugs found and fixed:
+  1. Viewfinder (`flex-1 relative overflow-hidden`) had no z-index, painting over top bar in DOM order → added `z-0`
+  2. Settings panel had `z-19` (invalid Tailwind class, compiled to nothing) → changed to `z-30`
+- **Level indicator fixed ✅:** Was a static line. Now reads `deviceorientation` gamma, rotates 80px bar, amber ≤±2°, white ±2–10°, red >±10°. iOS 13+ permission request. Cleanup on unmount.
+- **Pinch-to-zoom fixed ✅:** Browser was claiming pinch gesture as page zoom. Added `touch-none` (touch-action: none) to viewfinder div.
+- **Zoom pill added ✅:** Always-visible `0.5×/1×/2×/3×` pill centered at bottom corner bracket level (`bottom-6 left-1/2`). Only levels device supports are shown. Hidden if zoom not supported.
+- **Hunt Pass modal + unlock flow:** Discussed but not dispatched — Patrick noted it fires too much, needs session-level throttle matching other modals.
+
+**S482 Files changed (2):**
+- `packages/frontend/components/RapidCapture.tsx` — full camera settings overhaul (multiple passes)
+- `packages/frontend/components/ToastContext.tsx` — toast position top-4 → top-14 md:top-20
+
+---
+
 **S481 (2026-04-15) — AI camera improvements + trails security + Hubs nav move**
 
 **S481 What happened:**
@@ -213,21 +239,24 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP OF SESSION — Push S481 block first, then Chrome QA**
+**TOP OF SESSION — Push S482 block first, then eBay settings bugs**
 
-**0. Push S481 changes** (see push block in session wrap).
+**0. Push S482 changes:**
+```powershell
+git add packages/frontend/components/RapidCapture.tsx
+git add packages/frontend/components/ToastContext.tsx
+git commit -m "Camera settings pill, toast fix, pinch zoom, iPad fullscreen, level indicator"
+.\push.ps1
+```
 
-**TOP OF SESSION — Chrome QA S469 functional flow + S467 remaining verifications**
+**1. eBay settings page bugs — `/organizer/settings/ebay` (3 bugs, same file):**
 
-**1. Chrome QA — remaining S469 functional flow:**
-- Advanced Setup → click "Use suggested defaults" → weight tiers auto-match → Save setup → verify persistence on reload.
-- Toggle "Push as Draft" → push an item → confirm eBay creates unpublished offer (Seller Hub check).
-- Select each merchant location source (Sale Address / Organizer / Existing) → push → verify correct location in payload.
-- Description template with `{{DESCRIPTION}}` placeholder → push → verify eBay listing renders template wrapped around item description.
-- Minor: investigate whether `1+ lb` through `5+ lb` policies classifying as `unknown` (only last `N+ lb` promoted to Infinity) is correct UX — check weight-tier parser behavior against Patrick's full policy list.
+- **Bug A — oz inputs:** Weight tier oz entries render as number spinners (up/down arrows). Should be plain text inputs. Fix: find the oz input fields in `settings/ebay.tsx` and add `type="text"` or remove spinner arrows via CSS (`[appearance:textfield]` / `[&::-webkit-inner-spin-button]:appearance-none`).
+- **Bug B — Policy dropdown can't select:** Dropdowns open but selection doesn't stick — stays at "-- Select policy --". Likely a controlled/uncontrolled input issue or the `onChange` handler isn't updating the right state key. Read the dropdown and state handler carefully.
+- **Bug C — "Use suggested defaults" ignores lb-weighted policies:** The button isn't matching organizer's lb-named policies to weight tiers. Correct ranges: 1+ lb = 16–31oz, 2+ lb = 32–47oz, 3+ lb = 48–63oz, 4+ lb = 64–79oz, 5+ lb = 80–95oz, 6+ lb = 96oz+. Check `ebayPolicyParser.ts` `parseWeightTiers` and the frontend "Use suggested defaults" handler — weight tier matching logic likely has an off-by-one or range boundary bug.
 
 **2. S469 P2 bug — sticky save bar hidden behind footer:**
-- `packages/frontend/pages/organizer/settings/ebay.tsx` — sticky bar container needs `z-50` so it renders above footer when at page bottom. <5 lines.
+- `packages/frontend/pages/organizer/settings/ebay.tsx` — sticky bar needs `z-50`. <5 lines.
 
 **3. Remaining S467 QA (carry over):**
 - Push USED grade-S item → confirm eBay gets USED_EXCELLENT not NEW — needs item with weight set + policies configured (code-verified S480, live UNVERIFIED).
