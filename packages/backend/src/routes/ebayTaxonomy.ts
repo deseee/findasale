@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import { requireOrganizer } from '../middleware/auth';
+import { authenticate, requireOrganizer } from '../middleware/auth';
 import {
   getAspectsHandler,
   catalogSearchHandler,
@@ -14,9 +14,9 @@ import {
 const router = Router();
 
 // All endpoints require organizer auth
-router.get('/taxonomy/aspects/:categoryId', requireOrganizer, getAspectsHandler);
-router.get('/taxonomy/suggest', requireOrganizer, suggestCategoriesHandler);
-router.get('/catalog/search', requireOrganizer, catalogSearchHandler);
-router.post('/suggest/identifiers', requireOrganizer, suggestIdentifiersHandler);
+router.get('/taxonomy/aspects/:categoryId', authenticate, requireOrganizer, getAspectsHandler);
+router.get('/taxonomy/suggest', authenticate, requireOrganizer, suggestCategoriesHandler);
+router.get('/catalog/search', authenticate, requireOrganizer, catalogSearchHandler);
+router.post('/suggest/identifiers', authenticate, requireOrganizer, suggestIdentifiersHandler);
 
 export default router;
