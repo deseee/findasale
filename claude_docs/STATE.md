@@ -7,6 +7,20 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S483 (2026-04-15) — eBay settings page bugs (3 fixes + sticky bar)**
+
+**S483 What happened:**
+- **Bug A — oz input spinners ✅:** Weight tier oz inputs changed from `type="number"` to `type="text"` in settings/ebay.tsx (lines 398, 544). Removes browser spin buttons.
+- **Bug B — Policy dropdown not persisting ✅:** Dropdown onChange refactored to atomic `setMapping` with inline policy lookup + `value={tier.policyId || ''}` controlled binding. Selection now sticks.
+- **Bug C — "Use suggested defaults" range fix ✅:** `ebayPolicyParser.ts` line 83 changed from `(lb + 1) * 16` to `(lb + 1) * 16 - 1`. Now: 1+ lb → 16–31 oz, 2+ lb → 32–47 oz, 3+ lb → 48–63 oz, 4+ lb → 64–79 oz, 5+ lb → 80–95 oz, 6+ lb → 96+.
+- **Bug D — Sticky save bar z-index:** Already `z-50` from S469. No change needed.
+
+**S483 Files changed (2):**
+- `packages/frontend/pages/organizer/settings/ebay.tsx` — oz inputs type="text", dropdown atomic state fix
+- `packages/backend/src/utils/ebayPolicyParser.ts` — weight tier range boundary fix
+
+---
+
 **S482 (2026-04-15) — Camera UI overhaul: settings pill, toast fix, pinch zoom, fullscreen iPad**
 
 **S482 What happened:**
@@ -189,6 +203,7 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
+- **S483 (2026-04-15):** eBay settings bugs: oz inputs → type="text" (no spinners), policy dropdown atomic state fix (selection persists), weight-tier range boundary fix `(lb+1)*16-1` (1+ lb = 16–31 oz correct). Sticky bar z-50 already present. 2 files. Zero TS errors.
 - **S481 (2026-04-15):** Trails security fix (public endpoint → authenticated /mine + ownership guard). Hubs nav moved to TEAMS block (grey icons). AI camera batch: TEXT_DETECTION for dark/glass, sparse-label fallback, comp-grounded pricing (anti-anchor), conditionGrade visual checklist, tag grouping by type, within-session suppression, condition-adjusted pricing. 9 files. Zero TS errors.
 - **S480 (2026-04-15):** S468 status card fix ✅ (4 fields added to /api/ebay/connection). Photo lightbox ✅ (ItemPhotoManager). Item 5 reconciliation verified already done in S467. NudgeBar organizer suppression ✅. eBay save bar browser-confirmed ✅ (hot-pink injection). eBay push error toast P2 fixed (result.code/message not result.error). USED_EXCELLENT code-verified, live UNVERIFIED (weight=null). 4 files.
 - **S479 (2026-04-15):** Chrome QA of S467/S468/S469. S467 rarity filter ✅, S469 Advanced Setup page ✅ (all 8 sections render), S468 ⚠️ PARTIAL — sync works, status card broken (settings.tsx reads fields missing from /api/ebay/connection payload). Fix routed next session. 0 code changes.
@@ -239,26 +254,17 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP OF SESSION — Push S482 block first, then eBay settings bugs**
+**TOP OF SESSION — Push S483 block first**
 
-**0. Push S482 changes:**
+**0. Push S483 changes:**
 ```powershell
-git add packages/frontend/components/RapidCapture.tsx
-git add packages/frontend/components/ToastContext.tsx
-git commit -m "Camera settings pill, toast fix, pinch zoom, iPad fullscreen, level indicator"
+git add packages/frontend/pages/organizer/settings/ebay.tsx
+git add packages/backend/src/utils/ebayPolicyParser.ts
+git commit -m "eBay settings: oz input spinners, dropdown state fix, weight-tier range boundary"
 .\push.ps1
 ```
 
-**1. eBay settings page bugs — `/organizer/settings/ebay` (3 bugs, same file):**
-
-- **Bug A — oz inputs:** Weight tier oz entries render as number spinners (up/down arrows). Should be plain text inputs. Fix: find the oz input fields in `settings/ebay.tsx` and add `type="text"` or remove spinner arrows via CSS (`[appearance:textfield]` / `[&::-webkit-inner-spin-button]:appearance-none`).
-- **Bug B — Policy dropdown can't select:** Dropdowns open but selection doesn't stick — stays at "-- Select policy --". Likely a controlled/uncontrolled input issue or the `onChange` handler isn't updating the right state key. Read the dropdown and state handler carefully.
-- **Bug C — "Use suggested defaults" ignores lb-weighted policies:** The button isn't matching organizer's lb-named policies to weight tiers. Correct ranges: 1+ lb = 16–31oz, 2+ lb = 32–47oz, 3+ lb = 48–63oz, 4+ lb = 64–79oz, 5+ lb = 80–95oz, 6+ lb = 96oz+. Check `ebayPolicyParser.ts` `parseWeightTiers` and the frontend "Use suggested defaults" handler — weight tier matching logic likely has an off-by-one or range boundary bug.
-
-**2. S469 P2 bug — sticky save bar hidden behind footer:**
-- `packages/frontend/pages/organizer/settings/ebay.tsx` — sticky bar needs `z-50`. <5 lines.
-
-**3. Remaining S467 QA (carry over):**
+**1. Remaining S467 QA (carry over):**
 - Push USED grade-S item → confirm eBay gets USED_EXCELLENT not NEW — needs item with weight set + policies configured (code-verified S480, live UNVERIFIED).
 - Confirm watermark QR is smaller (85px) and bottom-right — needs successful push to verify on eBay listing photos (UNVERIFIED).
 
