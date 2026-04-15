@@ -57,8 +57,8 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     <ToastContext.Provider value={{ showToast }}>
       {children}
 
-      {/* Standard toasts — top-right */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      {/* Standard toasts — top-right, cleared above header */}
+      <div className="fixed top-14 md:top-20 right-4 z-50 space-y-2">
         {standardToasts.map((toast) => (
           <div
             key={toast.id}
