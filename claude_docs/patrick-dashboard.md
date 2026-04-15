@@ -2,11 +2,16 @@
 
 ## What Happened This Week
 
-**S480** (2026-04-15) — S468 status card fix + photo lightbox + Item 5 confirmed done ✅
-- **S468 status card — ✅ fixed.** The "Business Policies" card on Settings → eBay now shows green ✓ when you've synced policies. Root cause: `/api/ebay/connection` was stripping 4 policy fields from its JSON response — they existed in the DB but never made it to the frontend. Added the 4 missing fields, simplified the display condition to `policiesFetchedAt`. 2 files.
-- **Photo lightbox — ✅ shipped.** Clicking any photo in the item editor photo grid now opens a full-screen overlay with a close button and Escape-to-dismiss. `cursor-zoom-in` visual hint added. Patrick verified it works. 1 file.
-- **Item 5 reconciliation — ✅ already done.** STATE.md said "dispatch dev next session" for this. Verified the full implementation was already shipped in S467: `syncEndedListingsForOrganizer` (lines 3687–3850 in ebayController.ts, GetMultipleItems batch of 20) + a 4-hour cron in `ebayEndedListingsSyncCron.ts`. No new code needed.
-- **S469 sticky save bar — ⚠️ P2 noted.** The "Save setup" bar on the Advanced Setup page gets visually hidden behind the footer when you scroll to the very bottom. Save still works — confirmed via DOM interaction + green toast. Will fix next session with a z-index adjustment (<5 lines).
+**S480** (2026-04-15) — S468 status card fix + photo lightbox + Item 5 confirmed done + eBay push error toast fix ✅
+- **S468 status card — ✅ fixed.** The "Business Policies" card on Settings → eBay now shows green ✓ when you've synced policies. Root cause: `/api/ebay/connection` was stripping 4 policy fields from its JSON response. Added them, simplified display condition to `policiesFetchedAt`. 2 files.
+- **Photo lightbox — ✅ shipped.** Clicking any photo in the item editor now opens a full-screen overlay. Escape-to-dismiss, close button, `cursor-zoom-in` hint. You verified it works. 1 file.
+- **Item 5 reconciliation — ✅ already done.** Verified the full implementation was already in S467. No new code needed.
+- **NudgeBar — ✅ confirmed.** Organizer suppression working. Nudge bar does not show for organizer accounts.
+- **eBay Advanced Setup save bar — ✅ browser-confirmed.** The bar renders at the bottom of the browser — confirmed by setting it to hot-pink and you said "it's pink." The screenshot tool has a blind spot at the viewport bottom (browser chrome offset). Bar is real and functional.
+- **eBay push error toast — ✅ P2 fixed.** The item editor's "Push to eBay" button was always showing a generic "Failed to push item" error even when the backend sent a specific error code. Root cause: frontend checked `result.error` but backend sends `result.code` + `result.message` — `error` field never exists. Fixed in `edit-item/[id].tsx`. Now correctly shows "eBay not connected" or "eBay policies not configured" for the right error codes, with `result.message` as fallback. Also fired a live push to confirm the fix — backend returned `NO_FULFILLMENT_POLICY_MATCH` (test item has no weight set), which the fix now surfaces correctly instead of falling through to generic.
+- **USED_EXCELLENT condition — ✅ code-verified, ⚠️ live unverified.** `mapGradeToInventoryCondition` correctly returns `USED_EXCELLENT` for grade S + condition=USED. Can't verify on eBay yet because the test item has no weight set — the push fails before reaching condition logic.
+- **S469 sticky save bar — ⚠️ P2 noted.** Bar hides behind footer when scrolled to very bottom. Save still works. Fix next session (z-index, <5 lines).
+- **4 files total this session.**
 
 ---
 

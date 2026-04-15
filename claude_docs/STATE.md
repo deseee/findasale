@@ -7,19 +7,23 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S480 (2026-04-15) — S468 status card fix + photo lightbox + Item 5 reconciliation verified**
+**S480 (2026-04-15) — S468 status card fix + photo lightbox + Item 5 verified + eBay toast fix**
 
 **S480 What happened:**
 - **S468 status card fix ✅:** `GET /api/ebay/connection` (ebayController.ts L1325–1338) now returns `fulfillmentPolicyId`, `returnPolicyId`, `paymentPolicyId`, `policiesFetchedAt`. Frontend condition (settings.tsx L851) changed from gating on all 3 policy ID fields to `ebayStatus?.policiesFetchedAt`. Business Policies card now shows green ✓ when policies have been synced.
 - **Photo lightbox ✅:** `ItemPhotoManager.tsx` — added `lightboxUrl` state, Escape key handler, `cursor-zoom-in` + `onClick` on photo thumbnails, full-screen overlay with close button and stopPropagation. Patrick verified: "lightbox works."
 - **Item 5 reconciliation ✅ (already done in S467):** STATE.md said "dispatch dev next session" — verified full implementation exists in ebayController.ts (L3687–3850: `syncEndedListingsForOrganizer` with GetMultipleItems batches of 20) and `ebayEndedListingsSyncCron.ts` (4h cron). No dispatch needed.
-- **Chrome QA S468 ✅, S469 ✅ (P2 sticky bar), S467 partial (condition ✅, watermark/toast UNVERIFIED)**
-- **S469 P2 bug noted:** Sticky "Save setup" bar visually hidden behind footer when scrolled to page bottom (z-index issue). Save still works (confirmed via DOM ref click + green toast). P2, not blocking.
+- **NudgeBar organizer suppression ✅:** `NudgeBar.tsx` already had `user?.role === 'ORGANIZER'` guard — confirmed rendering suppressed for organizers via Chrome (screenshot ss_2621nxuyu).
+- **eBay save bar browser-confirmed ✅:** `/organizer/settings/ebay` sticky save bar confirmed rendering in actual browser via JS hot-pink injection (Patrick: "it's pink"). Screenshot tool has ~115px blind spot at viewport bottom due to browser chrome offset — bar exists and is functional despite being off-screen in tool captures.
+- **eBay push error toast fix (P2) ✅:** `edit-item/[id].tsx` `onSuccess` handler was checking `result?.error` but backend sends `result.code` + `result.message` — `error` field never exists. Fixed to check `result?.code?.includes('NOT_CONNECTED')`, `result?.code?.includes('POLICIES')`, fallback to `result?.message`. Live push fired and confirmed `NO_FULFILLMENT_POLICY_MATCH` response correctly parsed.
+- **USED grade-S → USED_EXCELLENT code-verified:** `mapGradeToInventoryCondition` (ebayController.ts L2493–2510) confirmed: grade S + condition=USED returns `USED_EXCELLENT`. Live verification UNVERIFIED (test item has weight=null, triggering `NO_FULFILLMENT_POLICY_MATCH` before condition logic runs).
+- **S469 P2 bug noted:** Sticky "Save setup" bar visually hidden behind footer when scrolled to page bottom (z-index issue). Save still works. P2, not blocking.
 
-**S480 Files changed (3):**
+**S480 Files changed (4):**
 - `packages/backend/src/controllers/ebayController.ts` — added 4 policy fields to /api/ebay/connection response
 - `packages/frontend/pages/organizer/settings.tsx` — changed Business Policies condition to `policiesFetchedAt`
 - `packages/frontend/components/ItemPhotoManager.tsx` — lightbox implementation
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — eBay push error toast: result.error → result.code/message
 
 ---
 
@@ -130,7 +134,7 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
-- **S480 (2026-04-15):** S468 status card fix ✅ (4 fields added to /api/ebay/connection + condition changed to `policiesFetchedAt`). Photo lightbox ✅ (ItemPhotoManager — state + overlay + Escape key). Item 5 reconciliation verified already done in S467 (no dispatch needed). 3 files.
+- **S480 (2026-04-15):** S468 status card fix ✅ (4 fields added to /api/ebay/connection). Photo lightbox ✅ (ItemPhotoManager). Item 5 reconciliation verified already done in S467. NudgeBar organizer suppression ✅. eBay save bar browser-confirmed ✅ (hot-pink injection). eBay push error toast P2 fixed (result.code/message not result.error). USED_EXCELLENT code-verified, live UNVERIFIED (weight=null). 4 files.
 - **S479 (2026-04-15):** Chrome QA of S467/S468/S469. S467 rarity filter ✅, S469 Advanced Setup page ✅ (all 8 sections render), S468 ⚠️ PARTIAL — sync works, status card broken (settings.tsx reads fields missing from /api/ebay/connection payload). Fix routed next session. 0 code changes.
 - **S469 (2026-04-15):** eBay Phase 1-3 foundation — 3 parallel agents shipped EbayPolicyMapping model + weight-tier parser + per-item policy routing + draft mode + full setup page (8 sections). Handles 22+ shipping policies via weight-tier matching. Migration applied. 7 files. Zero TS errors.
 - **S468 (2026-04-15):** eBay policy sync: confirmed push flow already uses DB policy IDs. Added export + POST /sync-policies route + settings UI (policy status card + sync button). No schema changes. Zero TS errors. 3 files.
@@ -192,9 +196,8 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 - `packages/frontend/pages/organizer/settings/ebay.tsx` — sticky bar container needs `z-50` so it renders above footer when at page bottom. <5 lines.
 
 **3. Remaining S467 QA (carry over):**
-- Push USED grade-S item → confirm eBay gets USED_EXCELLENT not NEW (condition fix).
-- Confirm push toast shows success copy (toast fix).
-- Confirm watermark QR is smaller (85px) and bottom-right (watermark fix).
+- Push USED grade-S item → confirm eBay gets USED_EXCELLENT not NEW — needs item with weight set + policies configured (code-verified S480, live UNVERIFIED).
+- Confirm watermark QR is smaller (85px) and bottom-right — needs successful push to verify on eBay listing photos (UNVERIFIED).
 
 **4. eBay sync batch refactor:**
 - Replace sequential GetItem loop (ebayController.ts ~2746–2895) with GetMultipleItems Shopping API batches of 20/call
@@ -240,6 +243,8 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 | Camera thumbnail refresh (S400/S401) | Requires real camera hardware in Chrome MCP. | Capture in rapidfire → confirm thumbnail strip live-updates. | S406 |
 | POS camera/QR scan (S405) | Camera hardware required. | Organizer POS → QR tile → scan sticker → confirm added to cart. | S406 |
 | ebayNeedsReview amber badge (S464) | Needs migration run + push attempt that exhausts all 5 category suggestions with 25005. | Run migration → push "Whip-It butane" item → confirm badge. | S464 |
+| eBay push USED_EXCELLENT condition | Test item has weight=null → NO_FULFILLMENT_POLICY_MATCH before condition logic runs. | Set weight on test item, configure default policy → push → confirm eBay gets USED_EXCELLENT. | S480 |
+| eBay push watermark QR (S467) | Needs a successful eBay push to verify photo watermark placement. | Successful push → check eBay listing photos → confirm QR is 85px bottom-right. | S480 |
 | Post-Sale eBay Panel (S460/#292) | Needs sale in ENDED status with unsold items. | End test sale → sale detail → verify PostSaleEbayPanel renders, toast, shipping badges. | S460 |
 | eBay Listing Data Parity (S462/#293) | 17 new fields built but not Chrome-QA'd. Patrick planned self-QA. | Edit eBay → fill UPC/weight/dims → save → push → verify on eBay. | S462 |
 | Live category picker (S463/#294) | Built but not Chrome-QA'd. | Item editor → category search → verify Taxonomy API results + depth levels. | S463 |
