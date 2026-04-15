@@ -666,7 +666,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
         {/* Camera viewfinder */}
         <div
-          className="flex-1 relative overflow-hidden"
+          className="flex-1 relative overflow-hidden z-0"
           onTouchStart={(e) => {
             if (e.touches.length === 2) {
               const dx = e.touches[0].clientX - e.touches[1].clientX;
