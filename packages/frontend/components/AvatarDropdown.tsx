@@ -710,14 +710,6 @@ const AvatarDropdown: React.FC = () => {
                     <span>Email Digest</span>
                   </Link>
                   <Link
-                    href="/organizer/hubs"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Store size={16} className="text-purple-400" />
-                    <span>Market Hubs</span>
-                  </Link>
-                  <Link
                     href="/organizer/line-queue"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
@@ -788,6 +780,15 @@ const AvatarDropdown: React.FC = () => {
                       >
                         <Network size={16} className="text-gray-500" />
                         <span>Workspace</span>
+                      </Link>
+                      <Link
+                        href="/organizer/hubs"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Flea market events — TEAMS"
+                      >
+                        <Store size={16} className="text-gray-400" />
+                        <span>Market Hubs</span>
                       </Link>
                     </>
                   )}

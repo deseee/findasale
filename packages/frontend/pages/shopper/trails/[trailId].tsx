@@ -27,12 +27,11 @@ export default function TrailDetailPage() {
 
     const loadTrail = async () => {
       try {
-        const { data } = await api.get(`/trails`);
-        const found = data.trails.find((t: any) => t.id === trailId);
-        if (found) {
-          setTrail(found);
-          setEditName(found.name);
-          setEditDescription(found.description || '');
+        const { data } = await api.get(`/trails/${trailId}`);
+        if (data) {
+          setTrail(data);
+          setEditName(data.name);
+          setEditDescription(data.description || '');
         }
       } catch (error) {
         console.error('Failed to load trail:', error);
@@ -151,21 +150,23 @@ export default function TrailDetailPage() {
                   <p className="text-slate-600 dark:text-slate-400 mt-2">{trail.description}</p>
                 )}
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setEditMode(true)}
-                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 font-semibold transition"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleteMutation.isPending}
-                  className="px-4 py-2 bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50 font-semibold transition"
-                >
-                  Delete
-                </button>
-              </div>
+              {user?.id && trail.userId === user.id && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditMode(true)}
+                    className="px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 font-semibold transition"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                    className="px-4 py-2 bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50 font-semibold transition"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 dark:bg-slate-700 rounded-lg">
