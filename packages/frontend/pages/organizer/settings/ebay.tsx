@@ -696,21 +696,21 @@ const EbayPolicySetupPage = () => {
             )}
           </div>
 
-          {/* Section H: Save bar (sticky footer) */}
-          {mapping && (
-            <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
+          {/* Section H: Save bar (sticky footer — only shown when unsaved changes exist) */}
+          {mapping && hasChanges && (
+            <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-700 border-t-2 border-gray-300 dark:border-gray-500 p-4">
               <div className="max-w-4xl mx-auto flex items-center justify-end gap-3">
                 <button
                   onClick={handleDiscardChanges}
-                  disabled={!hasChanges || saving}
-                  className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition"
+                  disabled={saving}
+                  className="px-4 py-2 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-500 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition"
                 >
                   Discard changes
                 </button>
                 <button
                   onClick={handleSaveMapping}
-                  disabled={!hasChanges || saving}
-                  className="px-4 py-2 bg-sage-600 hover:bg-sage-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition"
+                  disabled={saving}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm transition"
                 >
                   {saving ? 'Saving...' : 'Save setup'}
                 </button>
