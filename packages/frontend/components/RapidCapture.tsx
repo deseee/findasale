@@ -494,7 +494,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
         {/* Settings panel — expands below top bar */}
         {settingsPanelOpen && (
-          <div className="absolute top-16 left-0 right-0 z-19 bg-black/80 backdrop-blur-md rounded-b-2xl border-b border-white/10 max-h-[70vh] overflow-y-auto">
+          <div className="absolute top-16 left-0 right-0 z-30 bg-black/80 backdrop-blur-md rounded-b-2xl border-b border-white/10 max-h-[70vh] overflow-y-auto">
             <div className="px-4 py-4 space-y-5">
 
               {/* Lighting section */}
