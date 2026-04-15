@@ -130,6 +130,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [showLevelIndicator, setShowLevelIndicator] = useState(true);
   const [exposureCompensation, setExposureCompensation] = useState(0);
   const [whiteBalance, setWhiteBalance] = useState('auto');
+  const [levelAngle, setLevelAngle] = useState(0);
+  const [deviceSupportsOrientation, setDeviceSupportsOrientation] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isRapidfire = mode === 'rapidfire';
@@ -154,6 +156,44 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       carouselRef.current.scrollLeft = carouselRef.current.scrollWidth;
     }
   }, [rapidItems.length]);
+
+  // Subscribe to device orientation for live level indicator
+  useEffect(() => {
+    let mounted = true;
+
+    const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+      if (!mounted) return;
+      // gamma is left/right tilt (-90 to +90)
+      // For a camera pointing at a subject, gamma is the primary tilt axis
+      const gamma = event.gamma ?? 0;
+      setLevelAngle(-gamma); // Negate so bar rotates opposite to device tilt
+      setDeviceSupportsOrientation(true);
+    };
+
+    // Request permission on iOS 13+
+    if (typeof (DeviceOrientationEvent as any)?.requestPermission === 'function') {
+      (DeviceOrientationEvent as any)
+        .requestPermission()
+        .then((permission: string) => {
+          if (permission === 'granted') {
+            window.addEventListener('deviceorientation', handleDeviceOrientation);
+          }
+        })
+        .catch(() => {
+          // Permission denied or not available — show static fallback
+          setDeviceSupportsOrientation(false);
+        });
+    } else {
+      // Android and older iOS
+      window.addEventListener('deviceorientation', handleDeviceOrientation);
+      setDeviceSupportsOrientation(true);
+    }
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -432,7 +472,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           {/* Right: Settings button */}
           <button
             onClick={() => setSettingsPanelOpen(!settingsPanelOpen)}
-            className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center"
+            className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors flex items-center justify-center relative z-30 cursor-pointer"
             aria-label="Settings"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -722,10 +762,38 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 </div>
               )}
 
-              {/* Level indicator line */}
+              {/* Level indicator — rotates with device tilt */}
               {showLevelIndicator && (
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="w-3/4 h-0.5 bg-white/40 rounded-full" />
+                  <div className="relative w-20 h-0.5">
+                    {deviceSupportsOrientation ? (
+                      <>
+                        {/* Rotating bar */}
+                        <div
+                          className={`absolute inset-0 rounded-full transition-transform transition-colors duration-100 ease-out flex items-center justify-center ${
+                            Math.abs(levelAngle) <= 2
+                              ? 'bg-amber-400 shadow-lg shadow-amber-400/50'
+                              : Math.abs(levelAngle) <= 10
+                              ? 'bg-white/70'
+                              : 'bg-red-500/70'
+                          }`}
+                          style={{
+                            transform: `rotate(${levelAngle}deg)`,
+                          }}
+                        >
+                          {/* Center dot indicator for level */}
+                          {Math.abs(levelAngle) <= 2 && (
+                            <div className="absolute left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-white" />
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      /* Static fallback for devices without orientation support */
+                      <div className="absolute inset-0 rounded-full bg-white/50 flex items-center justify-center animate-pulse">
+                        <span className="text-white text-xs font-semibold">–</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
