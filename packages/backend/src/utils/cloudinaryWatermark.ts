@@ -11,7 +11,7 @@
  * @returns Watermarked URL with transformation chain appended
  *
  * Example input:  https://res.cloudinary.com/abc/image/upload/v1/findasale/item123.jpg
- * Example output: https://res.cloudinary.com/abc/image/upload/l_text:Montserrat_bold_18:FindA.Sale,g_south_east,x_20,y_20,o_60/v1/findasale/item123.jpg
+ * Example output: https://res.cloudinary.com/abc/image/upload/l_text:Arial_44_bold:FindA.Sale,co_white,g_south,y_25,o_90/v1/findasale/item123.jpg
  */
 export function getWatermarkedUrl(originalUrl: string): string {
   // Validate URL is a Cloudinary URL (contains `res.cloudinary.com`)
@@ -34,8 +34,10 @@ export function getWatermarkedUrl(originalUrl: string): string {
     const versionIndex = originalUrl.indexOf(versionSegment);
 
     // Build watermark transformation
+    // Text centered on south edge (bottom-center), sized for legibility.
+    // QR overlay (when applied by getWatermarkedUrlWithQR) is stacked ABOVE this text.
     const watermarkTransformation =
-      'l_text:Arial_30:FindA.Sale,co_white,g_south_east,x_20,y_20,o_80';
+      'l_text:Arial_44_bold:FindA.Sale,co_white,g_south,y_25,o_90';
 
     // Insert transformation before the version segment
     const watermarkedUrl =
@@ -82,8 +84,8 @@ export function getWatermarkedUrlWithQR(
   }
 
   try {
-    // Build QR code URL
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https://finda.sale/items/${itemId}`;
+    // Build QR code URL — request a larger source so the scaled overlay stays crisp
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=4&data=https://finda.sale/items/${itemId}`;
 
     // Base64 encode the QR code URL for Cloudinary fetch overlay
     const qrCodeUrlBase64 = Buffer.from(qrCodeUrl).toString('base64');
@@ -97,8 +99,10 @@ export function getWatermarkedUrlWithQR(
     const versionSegment = versionMatch[0];
     const versionIndex = watermarkedUrl.indexOf(versionSegment);
 
-    // Build QR overlay transformation: fetch base64-encoded URL and place in south_east corner
-    const qrTransformation = `l_fetch:${qrCodeUrlBase64},g_south_east,w_80,h_80,x_10,y_10`;
+    // QR overlay: centered on south edge, stacked ABOVE the "FindA.Sale" text.
+    // Text sits at y_25 (height ~50px → top at ~75px). QR bottom starts at y_95
+    // giving a ~20px gap between QR and text. QR 130×130 so top is at ~225px.
+    const qrTransformation = `l_fetch:${qrCodeUrlBase64},g_south,w_130,h_130,y_95`;
 
     // Insert QR transformation before the version segment
     const urlWithQR =

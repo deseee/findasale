@@ -67,21 +67,23 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Go-Live Blockers
 
+**All P0/P1 env blockers cleared S465.** Remaining items are polish and QA.
+
 | Priority | Item | Owner | Notes |
 |----------|------|-------|-------|
-| P0 | Run S464 ebayNeedsReview migration | Patrick | Push fails silently without it |
-| P0 | Register live Stripe webhooks (both billing + charge endpoints) | Patrick | Zero live payments work without this |
-| P1 | Vercel: confirm `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is live key | Patrick | Pricing page uses test key otherwise |
-| P1 | Railway: confirm `STRIPE_HUNT_PASS_PRICE_ID` = live value | Patrick | Hunt Pass purchase broken on live |
-| P1 | Railway: confirm `STRIPE_GENERIC_ITEM_PRODUCT_ID` = live value | Patrick | POS payment link broken on live |
-| P2 | MailerLite + Resend env vars confirmed on Railway | Patrick | Checklist still shows unchecked |
+| ✅ | ~~Run S464 ebayNeedsReview migration~~ | Patrick | DONE S465 |
+| ✅ | ~~Register live Stripe webhooks~~ | Patrick | DONE S465 — both endpoints live, correct event sets, screenshot-verified |
+| ✅ | ~~Confirm webhook signing secrets match Railway~~ | Patrick | DONE S465 — Patrick confirmed |
+| ✅ | ~~Vercel: `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` live~~ | Patrick | DONE S465 — `pk_live_51T3kXh...` verified |
+| ✅ | ~~Railway: `STRIPE_HUNT_PASS_PRICE_ID` live~~ | Patrick | DONE S465 — `price_1TLtY1...` verified |
+| ✅ | ~~Railway: `STRIPE_GENERIC_ITEM_PRODUCT_ID` live~~ | Patrick | DONE S465 — `prod_UKZ2G21VhLJ3CE` verified |
+| ✅ | ~~MailerLite + Resend env vars on Railway~~ | Patrick | DONE S465 — `RESEND_API_KEY`, `MAILERLITE_API_KEY`, `MAILERLITE_SHOPPERS_GROUP_ID` all present |
 | P2 | Chrome QA: eBay push with book/clothing/furniture categories | Claude/Patrick | Verifies S461–S464 hold beyond Contigo |
 | P2 | Chrome QA: PostSaleEbayPanel end-to-end (ENDED sale) | Claude | |
+| P2 | Chrome QA: watermark layout after S465 fix | Patrick/Claude | Confirm QR stacks above text, both bigger, no overlap |
 | P3 | Archive ~14 junk Stripe test products | Patrick | Catalog cleanup |
 
-**Live Stripe webhook setup (Patrick action):** Register in live Stripe Dashboard → Webhooks:
-- `https://backend-production-153c9.up.railway.app/api/billing/webhook` — events: `customer.subscription.created/updated/deleted`, `invoice.payment_succeeded/failed`, `checkout.session.completed` → signing secret → Railway `STRIPE_BILLING_WEBHOOK_SECRET`
-- `https://backend-production-153c9.up.railway.app/api/stripe/webhook` — events: `payment_intent.succeeded`, `charge.dispute.created`, `charge.succeeded/failed` → signing secret → Railway `STRIPE_WEBHOOK_SECRET`
+**Go-Live env gate is CLOSED.** The platform can accept live payments end-to-end. Remaining blockers are behavioral verification (Chrome QA) and cleanup, not prerequisites.
 
 ---
 

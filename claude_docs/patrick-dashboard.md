@@ -193,42 +193,13 @@
 
 ## Action Items for Patrick
 
-**NEW — S464 Push block (do this now):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260414_ebay_needs_review/migration.sql
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/controllers/billingController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/organizer/pricing.tsx
-git add "packages/frontend/pages/organizer/sales/[id]/index.tsx"
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "ebayNeedsReview: schema flag, push logic, amber badge + category review UX; billing webhook secret fix; Stripe price IDs from env vars; two-pass 25005/25021 retry with offer merge"
-.\push.ps1
-```
+**✅ All S464 manual actions COMPLETE (verified S465).** Migration run, Vercel + Railway env clean, all live Stripe keys/IDs confirmed by screenshot.
 
-**NEW — S464 Patrick manual actions:**
-- [ ] **Run S464 migration on Railway:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-- [ ] **Vercel cleanup:** Delete `NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID` + `NEXT_PUBLIC_STRIPE_PRO_ANNUAL_PRICE_ID`. Confirm `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is the live key.
-- [ ] **Railway:** Confirm `STRIPE_TEAMS_MONTHLY_PRICE_ID` = `price_1TLTvDLIWHQCHu75zB6zxTOA` (live value).
+**✅ All Go-Live env blockers CLOSED (S465).** Live webhooks registered, signing secrets match, publishable key is `pk_live_...`, `STRIPE_HUNT_PASS_PRICE_ID` and `STRIPE_GENERIC_ITEM_PRODUCT_ID` are live values, Resend + MailerLite keys present on Railway.
 
-**⚠️ GO-LIVE BLOCKERS (before you take real money):**
-- [ ] **Register live Stripe webhooks** (P0 — zero payments work without this):
-  - `https://backend-production-153c9.up.railway.app/api/billing/webhook` → events: `customer.subscription.created/updated/deleted`, `invoice.payment_succeeded/failed`, `checkout.session.completed` → secret → Railway `STRIPE_BILLING_WEBHOOK_SECRET`
-  - `https://backend-production-153c9.up.railway.app/api/stripe/webhook` → events: `payment_intent.succeeded`, `charge.dispute.created`, `charge.succeeded/failed` → secret → Railway `STRIPE_WEBHOOK_SECRET`
-- [ ] **Railway:** `STRIPE_HUNT_PASS_PRICE_ID` = `price_1TLtY1LIWHQCHu75W9F23hVJ` (live Hunt Pass price)
-- [ ] **Railway:** `STRIPE_GENERIC_ITEM_PRODUCT_ID` = `prod_UKZ2G21VhLJ3CE` (live generic product)
-- [ ] **Railway:** Confirm MailerLite + Resend env vars set (`MAILERLITE_SHOPPERS_GROUP_ID`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`)
-- [ ] **Archive junk Stripe test products** — keep: Hunt Pass, Teams, Pro, Item Sale
+**Remaining open checklist items (non-blocking):**
+- [ ] **Archive junk Stripe test products** (P3) — keep: Hunt Pass, Teams, Pro, Item Sale. Delete the rest.
+- [ ] **Chrome QA walkthrough:** eBay push with book/clothing/furniture items (beyond Contigo), PostSaleEbayPanel on an ENDED sale, watermark layout after S465 fix (QR above text, no overlap).
 
 **Carry-forward from S463:**
 - [ ] **STEP 2 Broader category test:** Push a book, clothing item, and furniture item to verify Phase A/B/C holds
@@ -331,9 +302,15 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 ## What's Next (S466+)
 
-**P0 — Register live Stripe webhooks** (see Action Items — zero subscriptions work until done).
+**✅ Go-Live env gate CLOSED (S465).** All P0 and P1 environment blockers cleared:
+- S464 migration applied
+- Live Stripe webhooks registered (both endpoints, correct events)
+- Signing secrets match Railway env
+- `pk_live_...` publishable key on Vercel
+- Live `STRIPE_HUNT_PASS_PRICE_ID` + `STRIPE_GENERIC_ITEM_PRODUCT_ID` on Railway
+- Resend + MailerLite keys present on Railway
 
-**P0 — Run S464 migration** (ebayNeedsReview on Railway — see Action Items).
+Live payments can now transact end-to-end. Remaining work is behavioral QA (Chrome walkthroughs) and a Stripe catalog cleanup — not blockers.
 
 **P1 — Patrick Chrome QA:** Walk S462/S463/S464 eBay flow (PostSaleEbayPanel → Edit eBay → Auto-fill → Push). Also test: push an item with no good eBay leaf category → verify amber badge.
 
