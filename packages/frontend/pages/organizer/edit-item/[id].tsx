@@ -98,11 +98,11 @@ const EditItemPage = () => {
         showToast('Item listed on eBay', 'success');
         queryClient.invalidateQueries({ queryKey: ['item', id] });
       } else {
-        const errorMsg = result?.error?.includes('NOT_CONNECTED')
+        const errorMsg = result?.code?.includes('NOT_CONNECTED')
           ? 'eBay not connected'
-          : result?.error?.includes('POLICIES')
+          : (result?.code?.includes('POLICIES') || result?.code?.includes('POLICY'))
           ? 'eBay policies not configured'
-          : result?.error || 'Failed to push item';
+          : result?.message || 'Failed to push item';
         showToast(errorMsg, 'error');
       }
       setEbayPushPending(false);
