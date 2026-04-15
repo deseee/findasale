@@ -72,7 +72,7 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
         setIsOpen(true);
       } catch (err: any) {
         // Suppress abort/cancel errors from debounce — not real failures
-        const isCancelled = err.name === 'AbortError' || err.name === 'CanceledError' || err.name === 'CancelledError' || api.isCancel?.(err);
+        const isCancelled = err.name === 'AbortError' || err.name === 'CanceledError' || err.name === 'CancelledError';
         if (!isCancelled) {
           console.error('Failed to fetch category suggestions:', err);
           setError('Failed to fetch categories');
