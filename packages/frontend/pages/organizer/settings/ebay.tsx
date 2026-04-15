@@ -395,7 +395,7 @@ const EbayPolicySetupPage = () => {
                           <tr key={index} className="border-b border-gray-200 dark:border-gray-700">
                             <td className="py-3 px-3">
                               <input
-                                type="number"
+                                type="text"
                                 value={tier.maxOz === Infinity ? '' : tier.maxOz}
                                 onChange={(e) => {
                                   const val = e.target.value === '' ? Infinity : parseFloat(e.target.value);
@@ -410,12 +410,15 @@ const EbayPolicySetupPage = () => {
                             </td>
                             <td className="py-3 px-3">
                               <select
-                                value={tier.policyId}
+                                value={tier.policyId || ''}
                                 onChange={(e) => {
-                                  const policy = setupData.fulfillmentPolicies.find(p => p.fulfillmentPolicyId === e.target.value);
-                                  if (policy) {
-                                    updateWeightTier(index, 'policyId', e.target.value);
-                                    updateWeightTier(index, 'policyName', policy.name);
+                                  const selectedId = e.target.value;
+                                  const policy = setupData.fulfillmentPolicies.find(p => p.fulfillmentPolicyId === selectedId);
+                                  if (selectedId && policy) {
+                                    if (!mapping) return;
+                                    const newTiers = [...mapping.weightTierMappings];
+                                    newTiers[index] = { ...newTiers[index], policyId: selectedId, policyName: policy.name };
+                                    setMapping({ ...mapping, weightTierMappings: newTiers });
                                   }
                                 }}
                                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
@@ -550,12 +553,15 @@ const EbayPolicySetupPage = () => {
                             </td>
                             <td className="py-3 px-3">
                               <select
-                                value={override.policyId}
+                                value={override.policyId || ''}
                                 onChange={(e) => {
-                                  const policy = setupData.fulfillmentPolicies.find(p => p.fulfillmentPolicyId === e.target.value);
-                                  if (policy) {
-                                    updateCategoryOverride(index, 'policyId', e.target.value);
-                                    updateCategoryOverride(index, 'policyName', policy.name);
+                                  const selectedId = e.target.value;
+                                  const policy = setupData.fulfillmentPolicies.find(p => p.fulfillmentPolicyId === selectedId);
+                                  if (selectedId && policy) {
+                                    if (!mapping) return;
+                                    const newOverrides = [...mapping.categoryOverrides];
+                                    newOverrides[index] = { ...newOverrides[index], policyId: selectedId, policyName: policy.name };
+                                    setMapping({ ...mapping, categoryOverrides: newOverrides });
                                   }
                                 }}
                                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
