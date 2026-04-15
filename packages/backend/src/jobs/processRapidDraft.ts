@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { analyzeItemImage, analyzeItemImages } from '../services/cloudAIService';
+import { analyzeItemImage, analyzeItemImages, suggestPrice } from '../services/cloudAIService';
 import { checkAITagLimit } from '../lib/tierEnforcement';
 
 /**
@@ -118,6 +118,42 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         return;
       }
 
+      // Comp-based price refinement: use detected category to fetch recent sold comps
+      // and override the raw AI price with a market-grounded suggestion
+      let refinedPrice = aiResult.suggestedPrice;
+      if (aiResult.category) {
+        try {
+          const recentComps = await prisma.item.findMany({
+            where: {
+              category: { equals: aiResult.category, mode: 'insensitive' },
+              status: 'SOLD',
+              price: { not: null, gt: 0 },
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: 5,
+            select: { title: true, price: true, updatedAt: true },
+          });
+
+          if (recentComps.length >= 2) {
+            const compData = recentComps.map((c: { title: string; price: number | null; updatedAt: Date }) => ({
+              title: c.title,
+              price: c.price!,
+              soldAt: c.updatedAt.toISOString().split('T')[0],
+            }));
+            const priceSuggestion = await suggestPrice(
+              aiResult.title,
+              aiResult.category,
+              aiResult.condition,
+              compData
+            );
+            refinedPrice = priceSuggestion.suggested;
+          }
+        } catch (priceErr) {
+          // Price refinement is best-effort — fall back to raw AI price on error
+          console.warn(`[rapidfire] Price refinement failed for item ${itemId}:`, priceErr);
+        }
+      }
+
       // Success: Update item with AI tags and set to PENDING_REVIEW
       await prisma.item.update({
         where: { id: itemId },
@@ -127,7 +163,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
           category: aiResult.category || item.category,
           condition: aiResult.condition || item.condition,
           conditionGrade: aiResult.suggestedConditionGrade || item.conditionGrade,
-          price: aiResult.suggestedPrice ?? item.price,
+          price: refinedPrice ?? item.price,
           tags: aiResult.tags || [],
           isAiTagged: true,
           aiConfidence: aiResult.confidence ?? 0.5,

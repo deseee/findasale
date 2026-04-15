@@ -140,6 +140,35 @@ function buildCloudinaryUrl(
   return url.replace('/upload/', `/upload/${transforms.join(',')}/`);
 }
 
+// Tag grouping — classify tags into display buckets for the review UI
+const TAG_GROUP_KEYWORDS: Record<string, string[]> = {
+  Material: ['brass', 'cast iron', 'iron', 'oak', 'walnut', 'silver', 'gold', 'copper', 'bronze', 'glass', 'ceramic', 'porcelain', 'leather', 'wool', 'linen', 'cotton', 'chrome', 'aluminum', 'wood', 'stone', 'marble', 'velvet', 'enamel', 'tin', 'pewter'],
+  Era: ['mid-century', 'victorian', 'art deco', 'art nouveau', '1940s', '1950s', '1960s', '1970s', '1980s', 'antique', 'vintage', 'retro', 'edwardian', 'georgian', 'colonial', 'craftsman'],
+  Brand: ['mccoy', 'pyrex', 'fiestaware', 'depression glass', 'wedgwood', 'royal doulton', 'hummel', 'occupied japan', 'corning', 'fostoria', 'hall china', 'universal', 'anchor hocking'],
+  Style: ['farmhouse', 'industrial', 'bohemian', 'minimalist', 'rustic', 'arts and crafts', 'art craft', 'hand-painted', 'hand painted', 'hand made', 'handmade', 'homemade', 'set of'],
+};
+
+function groupTagsByType(tags: string[]): { group: string; tags: string[] }[] {
+  const groups: Record<string, string[]> = {};
+  const ungrouped: string[] = [];
+  for (const tag of tags) {
+    const lower = tag.toLowerCase();
+    let placed = false;
+    for (const [group, keywords] of Object.entries(TAG_GROUP_KEYWORDS)) {
+      if (keywords.some(kw => lower.includes(kw))) {
+        if (!groups[group]) groups[group] = [];
+        groups[group].push(tag);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) ungrouped.push(tag);
+  }
+  const result = Object.entries(groups).map(([group, tags]) => ({ group, tags }));
+  if (ungrouped.length > 0) result.push({ group: 'Other', tags: ungrouped });
+  return result;
+}
+
 function confidenceBorderClass(score: number | null | undefined, isAiTagged?: boolean): string {
   if (!isAiTagged || score == null) return 'border-l-4 border-warm-200';
   if (score >= 0.8) return 'border-l-4 border-green-500';
@@ -177,6 +206,10 @@ const ReviewPage = () => {
   const [inlineCaptureItem, setInlineCaptureItem] = useState<Item | null>(null);
   const [inlineRapidItems, setInlineRapidItems] = useState<RapidItem[]>([]);
   const [ebayPushItems, setEbayPushItems] = useState<ItemEbayPushState>({});
+  // Within-session tag suppression: track how many times a suggested tag has been removed
+  const [removedTagCounts, setRemovedTagCounts] = useState<Map<string, number>>(new Map());
+  // Condition-adjusted pricing: track which item is currently refreshing its price
+  const [refreshingPriceItemId, setRefreshingPriceItemId] = useState<string | null>(null);
 
   // Auto-enable buyer preview on mount if preview=true in query
   useEffect(() => {
@@ -609,6 +642,46 @@ const ReviewPage = () => {
     const state = getEditState(item);
     const current = state.tags || [];
     handleEditChange(itemId, 'tags', current.filter((t) => t !== tag));
+
+    // Within-session learning: track how many times this tag has been removed from suggested list
+    const isSuggested = (item.suggestedTags || []).includes(tag);
+    if (isSuggested) {
+      setRemovedTagCounts(prev => {
+        const next = new Map(prev);
+        next.set(tag, (next.get(tag) ?? 0) + 1);
+        return next;
+      });
+    }
+  };
+
+  // Condition-adjusted pricing: when grade changes, re-fetch a price suggestion silently
+  const handleConditionGradeChange = async (item: Item, grade: string) => {
+    handleEditChange(item.id, 'conditionGrade', grade);
+
+    const editState = getEditState(item);
+    const title = editState.title || item.title;
+    const category = editState.category || item.category || '';
+    const condition = editState.condition || item.condition || '';
+    if (!title || !category) return; // need at minimum title + category
+
+    try {
+      setRefreshingPriceItemId(item.id);
+      // Map grade to human-readable condition for the prompt context
+      const gradeLabels: Record<string, string> = { S: 'like new', A: 'excellent', B: 'good', C: 'fair', D: 'poor' };
+      const gradeCondition = gradeLabels[grade] || condition;
+      const response = await api.post('/items/ai/price-suggest', {
+        title,
+        category,
+        condition: gradeCondition,
+      });
+      if (response.data?.suggested) {
+        handleEditChange(item.id, 'price', response.data.suggested);
+      }
+    } catch {
+      // Best-effort — silent failure, keep existing price
+    } finally {
+      setRefreshingPriceItemId(null);
+    }
   };
 
   const handleAddCustomTag = (itemId: string, tag: string) => {
@@ -1276,12 +1349,14 @@ const ReviewPage = () => {
                                     {(['S','A','B','C','D'] as const).map(grade => {
                                       const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
                                       const current = editState.conditionGrade ?? item.conditionGrade;
+                                      const isRefreshing = refreshingPriceItemId === item.id;
                                       return (
                                         <button
                                           key={grade}
-                                          onClick={() => handleEditChange(item.id, 'conditionGrade', grade)}
-                                          className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${current === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-indigo-400'}`}
-                                          title={labels[grade]}
+                                          onClick={() => handleConditionGradeChange(item, grade)}
+                                          disabled={isRefreshing}
+                                          className={`flex-1 py-1.5 text-xs font-bold rounded border transition-colors ${current === grade ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-indigo-400'} ${isRefreshing ? 'opacity-50 cursor-wait' : ''}`}
+                                          title={isRefreshing ? 'Refreshing price...' : labels[grade]}
                                         >
                                           {grade}
                                         </button>
@@ -1356,25 +1431,42 @@ const ReviewPage = () => {
                                 <div className="mt-3">
                                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">Tags</label>
 
-                                  {/* AI suggested chips */}
-                                  {item.suggestedTags && item.suggestedTags.length > 0 && (
-                                    <div className="mb-2">
-                                      <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Suggested:</span>
-                                      {item.suggestedTags.map(tag => (
-                                        <button
-                                          key={tag}
-                                          onClick={() => handleAddTag(item.id, tag)}
-                                          className={`inline-flex items-center mr-1 mb-1 px-2 py-0.5 rounded-full text-xs border transition-colors
-                                            ${(getEditState(item).tags || item.tags || []).includes(tag)
-                                              ? 'bg-indigo-100 border-indigo-400 text-indigo-700'
-                                              : 'bg-gray-50 dark:bg-gray-900 border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 text-gray-600 dark:text-gray-400 hover:border-indigo-300'
-                                            }`}
-                                        >
-                                          <span className="mr-1 text-indigo-500 font-bold">AI</span>{tag}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
+                                  {/* Suggested tag chips — suppressed tags (removed ≥2 times) are hidden; grouped by type */}
+                                  {item.suggestedTags && item.suggestedTags.length > 0 && (() => {
+                                    const visibleTags = item.suggestedTags.filter(tag => (removedTagCounts.get(tag) ?? 0) < 2);
+                                    if (visibleTags.length === 0) return null;
+                                    const grouped = groupTagsByType(visibleTags);
+                                    const currentTags = getEditState(item).tags || item.tags || [];
+                                    return (
+                                      <div className="mb-2 space-y-1">
+                                        {grouped.map(({ group, tags: groupTags }) => (
+                                          <div key={group} className="flex flex-wrap items-center gap-1">
+                                            {group !== 'Other' && (
+                                              <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-14 shrink-0">{group}:</span>
+                                            )}
+                                            {group === 'Other' && (
+                                              <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-14 shrink-0">Tags:</span>
+                                            )}
+                                            <div className="flex flex-wrap gap-1">
+                                              {groupTags.map(tag => (
+                                                <button
+                                                  key={tag}
+                                                  onClick={() => handleAddTag(item.id, tag)}
+                                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border transition-colors
+                                                    ${currentTags.includes(tag)
+                                                      ? 'bg-indigo-100 border-indigo-400 text-indigo-700'
+                                                      : 'bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-indigo-300'
+                                                    }`}
+                                                >
+                                                  {tag}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
 
                                   {/* BUG 4 FIX: Removed curated tag list (AI already suggests tags) */}
                                   {/* Custom tag input */}

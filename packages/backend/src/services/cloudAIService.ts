@@ -82,6 +82,7 @@ export async function getVisionLabels(imageBase64: string): Promise<string[]> {
             features: [
               { type: 'LABEL_DETECTION', maxResults: 15 },
               { type: 'OBJECT_LOCALIZATION', maxResults: 10 },
+              { type: 'TEXT_DETECTION', maxResults: 10 }, // Catches brand marks, embossed text, etched labels on glass/dark items
             ],
           },
         ],
@@ -92,10 +93,16 @@ export async function getVisionLabels(imageBase64: string): Promise<string[]> {
     const annotations = response.data.responses?.[0];
     const labels: string[] = (annotations?.labelAnnotations ?? []).map((l: any) => l.description);
     const objects: string[] = (annotations?.localizedObjectAnnotations ?? []).map((o: any) => o.name);
+    // TEXT_DETECTION returns a single block with all text, plus individual word annotations
+    const textAnnotations: any[] = annotations?.textAnnotations ?? [];
+    const detectedTexts: string[] = textAnnotations
+      .slice(0, 5) // first entry is the full combined text block — skip it, use individual words
+      .map((t: any) => t.description?.trim())
+      .filter((t: string) => t && t.length > 1 && t.length < 40); // skip single chars and long strings
 
-    // Objects first (more specific), then labels — deduplicated
-    const combined = [...new Set([...objects, ...labels])];
-    return combined.slice(0, 15);
+    // Objects first (more specific), then labels, then detected text — deduplicated
+    const combined = [...new Set([...objects, ...labels, ...detectedTexts])];
+    return combined.slice(0, 18);
   } catch (error: any) {
     // Feature #109: Graceful degradation — return empty labels on Vision API failure
     console.warn('[cloudAIService] Google Vision API error:', error.message || error);
@@ -108,16 +115,28 @@ export async function getVisionLabels(imageBase64: string): Promise<string[]> {
 async function getHaikuAnalysis(
   imageBase64: string,
   mimeType: string,
-  visionLabels: string[]
+  visionLabels: string[],
+  comps?: ComparableSale[]
 ): Promise<AITagResult> {
   const labelContext =
     visionLabels.length > 0
       ? `\n\nVision API detected these objects/labels: ${visionLabels.join(', ')}.`
       : '';
 
+  // Sparse-label fallback: if Vision returned very few/generic results, help Haiku reason visually
+  const GENERIC_LABELS = new Set(['glass', 'black', 'darkness', 'white', 'transparent', 'product', 'still life', 'object']);
+  const specificLabels = visionLabels.filter(l => !GENERIC_LABELS.has(l.toLowerCase()));
+  const sparseImageNote = specificLabels.length < 3
+    ? '\n\nNote: The image may contain a dark-colored or transparent/reflective item. Identify the object by its silhouette, shape, proportions, and any visible text, markings, or contextual clues rather than surface color or material appearance.'
+    : '';
+
+  const compsContext = comps && comps.length > 0
+    ? `\n\nRecent comparable sales for this category: ${comps.map(c => `"${c.title}" sold for $${c.price}`).join('; ')}. Use these as your primary pricing reference.`
+    : '';
+
   try {
     // Estimate tokens for cost tracking (#104)
-    const systemPrompt = `You are an expert estate sale cataloger for a ${regionConfig.city}, ${regionConfig.state} marketplace.${labelContext}
+    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).`;
     const estimatedTokens = estimateTokensForRequest(systemPrompt, true);
@@ -141,7 +160,7 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
               },
               {
                 type: 'text',
-                text: `You are an expert estate sale cataloger for a ${regionConfig.city}, ${regionConfig.state} marketplace.${labelContext}
+                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${sparseImageNote}${compsContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
@@ -149,7 +168,7 @@ Title guidelines: Start with the most recognizable/searchable keyword. Format: "
 Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other.
 Condition: NEW = unused with tags. USED = minimal to normal wear. REFURBISHED = restored/refurbished by seller. PARTS_OR_REPAIR = damaged, functional only for parts/repair.
-Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
+Price: Suggest a realistic secondary market price for this item. Do not use retail pricing as a baseline — derive the price from what similar items actually sell for. If comparable sales are provided above, anchor to those. Do not default to round numbers like $5, $10, $20, $25, $50 — derive a specific price from the item's actual characteristics.
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 
@@ -330,14 +349,23 @@ async function suggestConditionGrade(imageBase64: string, mimeType: string): Pro
               },
               {
                 type: 'text',
-                text: `Assess the condition of the item in this photo and suggest a single grade:
-S = Like new / pristine, no visible wear
-A = Excellent, minor traces of use
-B = Good, some wear but fully functional
-C = Fair, visible wear or minor damage
-D = Poor, significant damage or for parts
+                text: `Assess the physical condition of this item from the photo. Look specifically for:
+- Scratches, scuffs, or surface marks
+- Chips, cracks, or breaks (especially on ceramics, glass, edges)
+- Fading, discoloration, or staining
+- Rust, tarnish, or oxidation
+- Missing parts, broken hardware, or structural damage
+- Signs of repair or restoration
+- Original finish vs. worn/patinated surface
 
-If uncertain, suggest B. Return ONLY the single letter (S, A, B, C, or D), no explanation.`,
+Grade using this scale:
+S = Like new / pristine — no visible wear, as if unused
+A = Excellent — minor traces of use, no damage, fully functional
+B = Good — some visible wear (light scratches, minor patina), fully functional
+C = Fair — visible wear, minor chips/cracks/stains, functional but imperfect
+D = Poor — significant damage, heavy wear, broken parts, or for parts only
+
+If the image is unclear or the item is partially obscured, default to B. Return ONLY the single letter (S, A, B, C, or D), no explanation.`,
               },
             ],
           },
@@ -387,7 +415,8 @@ If uncertain, suggest B. Return ONLY the single letter (S, A, B, C, or D), no ex
  */
 export async function analyzeItemImage(
   buffer: Buffer,
-  mimeType = 'image/jpeg'
+  mimeType = 'image/jpeg',
+  comps?: ComparableSale[]
 ): Promise<AITagResult | null> {
   if (!isCloudAIAvailable()) return null;
 
@@ -407,7 +436,7 @@ export async function analyzeItemImage(
     // Vision API unavailable or quota exceeded — Haiku will analyse image alone
   }
 
-  const result = await getHaikuAnalysis(imageBase64, mimeType, visionLabels);
+  const result = await getHaikuAnalysis(imageBase64, mimeType, visionLabels, comps);
 
   // Sprint 1: Add curated tag suggestions (non-blocking)
   try {
@@ -445,7 +474,8 @@ export async function analyzeItemImage(
  */
 export async function analyzeItemImages(
   buffers: Buffer[],
-  mimeTypes: string[] = []
+  mimeTypes: string[] = [],
+  comps?: ComparableSale[]
 ): Promise<AITagResult | null> {
   if (!isCloudAIAvailable()) return null;
 
@@ -475,7 +505,7 @@ export async function analyzeItemImages(
   }
 
   // Multi-image Haiku analysis
-  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, visionLabels);
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, visionLabels, comps);
 
   // Sprint 1: Add curated tag suggestions (non-blocking)
   try {
@@ -501,12 +531,23 @@ export async function analyzeItemImages(
 async function getHaikuAnalysisMultiImage(
   imageBase64Array: string[],
   mimeTypes: string[],
-  visionLabels: string[]
+  visionLabels: string[],
+  comps?: ComparableSale[]
 ): Promise<AITagResult> {
   const labelContext =
     visionLabels.length > 0
       ? `\n\nVision API detected these objects/labels: ${visionLabels.join(', ')}.`
       : '';
+
+  const GENERIC_LABELS = new Set(['glass', 'black', 'darkness', 'white', 'transparent', 'product', 'still life', 'object']);
+  const specificLabels = visionLabels.filter(l => !GENERIC_LABELS.has(l.toLowerCase()));
+  const sparseImageNote = specificLabels.length < 3
+    ? '\n\nNote: The image may contain a dark-colored or transparent/reflective item. Identify the object by its silhouette, shape, proportions, and any visible text, markings, or contextual clues rather than surface color or material appearance.'
+    : '';
+
+  const compsContext = comps && comps.length > 0
+    ? `\n\nRecent comparable sales for this category: ${comps.map(c => `"${c.title}" sold for $${c.price}`).join('; ')}. Use these as your primary pricing reference.`
+    : '';
 
   const imageCount = imageBase64Array.length;
   const multiImagePrompt = imageCount > 1
@@ -514,7 +555,7 @@ async function getHaikuAnalysisMultiImage(
     : 'You are analyzing a photo of an item.';
 
   try {
-    const systemPrompt = `You are an expert estate sale cataloger for a ${regionConfig.city}, ${regionConfig.state} marketplace.${labelContext}
+    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}
 
 ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`;
     const estimatedTokens = estimateTokensForRequest(systemPrompt, true);
@@ -537,7 +578,7 @@ ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`
     // Add text prompt at the end
     contentArray.push({
       type: 'text',
-      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}
+      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${sparseImageNote}${compsContext}
 
 Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 
@@ -545,7 +586,7 @@ Title guidelines: Start with the most recognizable/searchable keyword. Format: "
 Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit from: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Glassware, Linens, Other.
 Condition: NEW = unused with tags. USED = minimal to normal wear. REFURBISHED = restored/refurbished by seller. PARTS_OR_REPAIR = damaged, functional only for parts/repair.
-Price: Realistic ${regionConfig.city} estate sale price (typically 20–50% of retail). Consider condition heavily.
+Price: Suggest a realistic secondary market price for this item. Do not use retail pricing as a baseline — derive the price from what similar items actually sell for. If comparable sales are provided above, anchor to those. Do not default to round numbers like $5, $10, $20, $25, $50 — derive a specific price from the item's actual characteristics.
 Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: material (Cast Iron, Solid Oak, Sterling Silver, Brass, Copper), era (Mid-Century Modern, Victorian, Art Deco, 1950s, 1960s, Antique, Vintage), maker/brand (McCoy, Pyrex, Fiestaware, Depression Glass) if identifiable, and style (Farmhouse, Industrial, Bohemian). Always include "Vintage" or "Antique" when applicable. Examples: "Mid-Century Modern", "Solid Oak", "Cast Iron", "Hand-painted", "Art Deco", "1960s", "McCoy Pottery", "Set of 4".
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 
@@ -770,16 +811,16 @@ export async function suggestPrice(
         ? `Comparable sales from our platform:\n${comps.map(c => `- "${c.title}": sold for $${c.price} (${c.soldAt})`).join('\n')}\n\n`
         : '';
 
-    const prompt = `You are an estate sale pricing expert. Based on typical ${regionConfig.city}, ${regionConfig.state} estate sale prices, suggest a fair price for this item.
+    const prompt = `You are a secondary market pricing expert. Suggest a realistic price for this item based on what it actually sells for in the secondary market.
 
 Item: ${title}
 Category: ${category}
 Condition: ${condition}
 
 ${compsContext}Respond with ONLY valid JSON in this exact format:
-{"low": 5, "high": 25, "suggested": 15, "reasoning": "Similar vintage items sell for $10-25 at local estate sales"}
+{"low": 7, "high": 23, "suggested": 14, "reasoning": "Similar items in this condition sell for $12-18 based on recent comparable sales"}
 
-Be realistic and conservative — estate sale prices are typically 20-50% of retail. Condition heavily affects value.`;
+Base your price on actual secondary market demand, not retail pricing. Do not anchor to common round numbers like $5, $10, $15, $20, $25, $50 — derive specific values from the item characteristics and any comparables provided. Condition affects value significantly.`;
 
     // Estimate tokens for cost tracking (#104)
     const estimatedTokens = estimateTokensForRequest(prompt, false);
