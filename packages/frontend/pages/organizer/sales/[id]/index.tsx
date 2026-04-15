@@ -26,6 +26,7 @@ interface Item {
   draftStatus?: string;
   photoUrls: string[];
   ebayListingId?: string;
+  ebayNeedsReview?: boolean;
   saleId: string;
 }
 
@@ -49,7 +50,7 @@ const SaleDetailPage = () => {
   const { tier } = useOrganizerTier();
 
   // State tracking eBay push status per item
-  const [ebayPushStatus, setEbayPushStatus] = useState<Record<string, 'idle' | 'pushing' | 'listed' | 'error'>>({});
+  const [ebayPushStatus, setEbayPushStatus] = useState<Record<string, 'idle' | 'pushing' | 'listed' | 'error' | 'category_review_needed'>>({});
   // State for post-sale toast
   const [showedPostSaleToast, setShowedPostSaleToast] = useState(false);
   const [postSaleToastDismissed, setPostSaleToastDismissed] = useState(false);
@@ -89,9 +90,12 @@ const SaleDetailPage = () => {
     onSuccess: (response) => {
       const results = response.data.results || [];
       results.forEach((result: any) => {
-        if (result.success) {
+        if (result.status === 'success') {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'listed' }));
           showToast(`Item listed on eBay`, 'success');
+        } else if (result.status === 'category_review_needed') {
+          setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'category_review_needed' }));
+          showToast('eBay category needs review — open item editor to set manually', 'error');
         } else {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'error' }));
           const errorMsg = result.error?.includes('NOT_CONNECTED')
@@ -270,6 +274,11 @@ const SaleDetailPage = () => {
                         ✓ Listed on eBay
                       </div>
                     )}
+                    {!item.ebayListingId && (item.ebayNeedsReview || ebayPushStatus[item.id] === 'category_review_needed') && (
+                      <div className="mb-3 inline-block bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200 text-xs font-semibold px-2 py-1 rounded">
+                        ⚠ eBay Category Needed
+                      </div>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="flex gap-2 mt-4">
@@ -287,10 +296,20 @@ const SaleDetailPage = () => {
                         <button
                           onClick={() => handlePushToEbay(item.id)}
                           disabled={ebayPushStatus[item.id] === 'pushing'}
-                          title=""
-                          className="flex-1 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 px-2 rounded transition-colors"
+                          title={ebayPushStatus[item.id] === 'category_review_needed' || item.ebayNeedsReview ? 'Set eBay category in item editor first' : ''}
+                          className={`flex-1 text-sm font-semibold py-2 px-2 rounded transition-colors text-white ${
+                            ebayPushStatus[item.id] === 'pushing'
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : ebayPushStatus[item.id] === 'category_review_needed' || item.ebayNeedsReview
+                              ? 'bg-amber-500 hover:bg-amber-600'
+                              : 'bg-blue-600 hover:bg-blue-700'
+                          }`}
                         >
-                          {ebayPushStatus[item.id] === 'pushing' ? 'Pushing...' : 'Push to eBay'}
+                          {ebayPushStatus[item.id] === 'pushing'
+                            ? 'Pushing...'
+                            : ebayPushStatus[item.id] === 'category_review_needed' || item.ebayNeedsReview
+                            ? 'Set Category'
+                            : 'Push to eBay'}
                         </button>
                       )}
 

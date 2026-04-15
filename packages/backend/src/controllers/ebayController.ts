@@ -1436,6 +1436,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayOfferId: true,
             ebayListingId: true,
             ebayCategoryId: true,
+            ebayNeedsReview: true,
             packageWeightOz: true,
             packageLengthIn: true,
             packageWidthIn: true,
@@ -1901,25 +1902,43 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           }
 
           if (!ebayListingId) {
-            console.error(`[eBay] Publish failed and no listingId found: ${publishResponse.status} ${publishError}`);
-            results.push({
-              itemId: item.id,
-              sku,
-              ebayListingId: null,
-              status: 'error',
-              error: 'PUBLISH_FAILED',
-              message: `Failed to publish offer: ${publishResponse.status}`,
-            });
+            const is25005 = publishError.includes('25005');
+            if (is25005) {
+              await prisma.item.update({
+                where: { id: item.id },
+                data: { ebayNeedsReview: true },
+              });
+              console.warn(`[eBay] Category review needed for ${sku} — organizer must set eBay category manually`);
+              results.push({
+                itemId: item.id,
+                sku,
+                ebayListingId: null,
+                status: 'category_review_needed',
+                error: 'CATEGORY_REVIEW_NEEDED',
+                message: 'eBay could not find a valid category for this item. Open the item editor, set the eBay Category, and push again.',
+              });
+            } else {
+              console.error(`[eBay] Publish failed and no listingId found: ${publishResponse.status} ${publishError}`);
+              results.push({
+                itemId: item.id,
+                sku,
+                ebayListingId: null,
+                status: 'error',
+                error: 'PUBLISH_FAILED',
+                message: `Failed to publish offer: ${publishResponse.status}`,
+              });
+            }
             continue;
           }
         }
 
-        // Update item with eBay listing ID
+        // Update item with eBay listing ID; clear any prior review flag
         await prisma.item.update({
           where: { id: item.id },
           data: {
             ebayListingId,
             listedOnEbayAt: new Date(),
+            ebayNeedsReview: false,
           },
         });
 
