@@ -2,6 +2,15 @@
 
 ## What Happened This Week
 
+**S479** (2026-04-15) — Chrome QA of S467/S468/S469 ✅ mostly, ⚠️ one bug found
+- **S467 rarity filter fix — ✅ verified.** Celestion Vintage 30 G12 (ULTRA_RARE) now visible on Add Items page as Artifact MI. Organizer no longer loses sight of their own ULTRA_RARE items during the 6h Hunt Pass window.
+- **S469 Advanced Setup page — ✅ verified.** All 8 sections render on `/organizer/settings/ebay`: default policies dropdown (22 real policies populated), weight-tier matrix, shipping classification overrides, category overrides, description template, draft-mode checkbox, merchant location radio (3 options, Sale Address pre-selected), sticky "Save setup" bar. No app-level console errors.
+- **S468 policy sync — ⚠️ partial.** The sync endpoint works — 22 real eBay business policies ARE in the DB and populating the Advanced Setup dropdowns (e.g. "No Return Accepted (295102147011)", "1 lb Ground Advantage", "6+ lb Ground Advantage"). But the "Business Policies" status card on the main Settings → eBay tab still shows `⚠ No policies synced` even after a successful sync. **Root cause located:** `GET /api/ebay/connection` response strips `fulfillmentPolicyId`, `returnPolicyId`, `paymentPolicyId`, and `policiesFetchedAt` from its payload — the frontend status card gates its green ✓ on those undefined fields. ~30 line fix across 2 files. Routed to dev next session.
+- **Minor note:** Your `1+ lb` through `5+ lb` Ground Advantage policies are classified as `unknown` by the weight-tier parser — only the highest `N+ lb` tier gets promoted to Infinity per S469 design. May be working as intended, but worth checking when you click "Use suggested defaults" that the auto-match gets every tier covered.
+- **No code changes this session.** Just QA + doc updates.
+
+---
+
 **S469** (2026-04-15) — eBay Phase 1-3 Foundation: Policy Routing + Weight Tiers + Draft Mode + Setup UI ✅
 - **The problem you flagged:** I picked the "first payment policy" as a shortcut. Your real-world account has 22 shipping policies named by weight tier ("8oz Ground Advantage", "1+ lb Ground Advantage", "6+ lb Ground Advantage", "Freight 150+ lb Freight"). eBay also supports 10 description templates per seller. One-policy-wins is not automation — it's a guess.
 - **The architecture shipped:** New `EbayPolicyMapping` model (separate from EbayConnection) lets you configure: default fulfillment/return/payment policies, weight-tier routing table, shipping classification overrides (HEAVY_OVERSIZED / FRAGILE / UNKNOWN), category-specific overrides, description template (with `{{DESCRIPTION}}` placeholder), draft-mode toggle, merchant location source (Sale Address / Organizer Address / Existing eBay location).

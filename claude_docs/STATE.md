@@ -7,6 +7,22 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S479 (2026-04-15) — Chrome QA of S467/S468/S469 (no code changes)**
+
+**S479 What happened:**
+- Patrick confirmed S469 migration already ran, everything green. Session ran Chrome QA as Artifact MI (survivor account).
+- **S467 rarity filter fix ✅ VERIFIED:** Celestion Vintage 30 G12 (ULTRA_RARE) visible on /organizer/add-items/cmnxvyic4001li51qobwidrbl. Organizer can now see their own ULTRA_RARE items within 6h window.
+- **S468 policy sync ⚠️ PARTIAL:** Backend `POST /api/ebay/sync-policies` works — 22 real eBay policies written to DB (dropdowns in Advanced Setup populated with real IDs: "No Return Accepted (295102147011)", "1 lb Ground Advantage", "6+ lb Ground Advantage", etc.). BUT /organizer/settings eBay tab "Business Policies" status card still shows `⚠ No policies synced` even after successful sync. Root cause pinpointed:
+  - `GET /api/ebay/connection` response (ebayController.ts L1325–1334) does NOT include `fulfillmentPolicyId`, `returnPolicyId`, `paymentPolicyId`, or `policiesFetchedAt` — those fields exist on EbayConnection model but are stripped from JSON.
+  - Frontend status card (settings.tsx L851) gates display on those three undefined fields → always shows "No policies synced."
+  - Fix: add 4 missing fields to the connection payload + change status card condition to `ebayStatus?.policiesFetchedAt`. ~2 files, ~30 lines. Routed to findasale-dev next session.
+- **S469 Advanced Setup page ✅ VERIFIED:** All 8 sections render on /organizer/settings/ebay — Default Policies, Shipping Policy by Weight, Special Shipping Rules, Category Overrides, Default Description Template, Push Behavior (draft mode checkbox + merchant location radio w/ 3 options, SALE_ADDRESS pre-selected), sticky Save bar ("Save setup" button). Zero app console errors (only unrelated MetaMask extension noise).
+- **Minor observation:** `1+ lb` through `5+ lb` Ground Advantage policies classify as `unknown` in backend parser — only the highest `N+ lb` tier gets promoted to Infinity per S469 design. May be counterintuitive on auto-match; flag for Patrick review.
+
+**S479 Files changed:** 0 code, STATE.md + patrick-dashboard.md only.
+
+---
+
 **S469 (2026-04-15) — eBay Phase 1-3 Foundation: Policy Mapping + Weight-Tier Routing + Draft Mode + Setup UI**
 
 **S469 What happened:**
@@ -114,7 +130,8 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
-- **S469 (2026-04-15):** eBay Phase 1-3 foundation — 3 parallel agents shipped EbayPolicyMapping model + weight-tier parser + per-item policy routing + draft mode + full setup page (8 sections). Handles 22+ shipping policies via weight-tier matching. Migration needed: `20260415_ebay_policy_mapping`. 7 files. Zero TS errors.
+- **S479 (2026-04-15):** Chrome QA of S467/S468/S469. S467 rarity filter ✅, S469 Advanced Setup page ✅ (all 8 sections render), S468 ⚠️ PARTIAL — sync works, status card broken (settings.tsx reads fields missing from /api/ebay/connection payload). Fix routed next session. 0 code changes.
+- **S469 (2026-04-15):** eBay Phase 1-3 foundation — 3 parallel agents shipped EbayPolicyMapping model + weight-tier parser + per-item policy routing + draft mode + full setup page (8 sections). Handles 22+ shipping policies via weight-tier matching. Migration applied. 7 files. Zero TS errors.
 - **S468 (2026-04-15):** eBay policy sync: confirmed push flow already uses DB policy IDs. Added export + POST /sync-policies route + settings UI (policy status card + sync button). No schema changes. Zero TS errors. 3 files.
 - **S467 (2026-04-15):** eBay listing quality batch (6/6 items done) + P0 sitewide organizer rarity filter fix (7 pages). Condition/aspect/toast/watermark fixes. Reconciliation spec ready. 13 files changed. No migrations.
 - **S466 (2026-04-14):** Add Items filter fix (getDraftItemsBySaleId) + eBay price priority inversion (organizer price wins). 2 files.
@@ -161,38 +178,35 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP OF SESSION — Run S469 migration FIRST, then Chrome QA**
+**TOP OF SESSION — Fix S468 status card (S479 QA finding), then continue Chrome QA**
 
-**1. Patrick manual actions (MUST run before any Chrome testing):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+**1. findasale-dev dispatch — S468 status card bug (P1, ~30 lines, 2 files):**
+- `packages/backend/src/controllers/ebayController.ts` L1325–1334 (`checkEbayConnection`): add `fulfillmentPolicyId`, `returnPolicyId`, `paymentPolicyId`, `policiesFetchedAt` to the response JSON (they exist on EbayConnection model but are stripped).
+- `packages/frontend/pages/organizer/settings.tsx` L851: change condition from `ebayStatus?.fulfillmentPolicyId && ebayStatus?.returnPolicyId && ebayStatus?.paymentPolicyId` to `ebayStatus?.policiesFetchedAt` (the correct "ever-synced" signal).
+- Confirm via Chrome: load /organizer/settings eBay tab → status card shows green ✓ with fetch date.
 
-**2. Chrome QA (verify S467+S468+S469 fixes landed):**
-- Reload Add Items for Artifact April 26 — confirm Celestion appears (rarity filter fix S467)
-- Confirm push toast shows success on a test push (toast fix S467)
-- Confirm watermark QR is smaller and bottom-right (watermark fix S467)
-- Push a USED item with grade S — confirm eBay gets USED_EXCELLENT not NEW (condition fix S467)
-- Settings → eBay section — confirm "Business Policies" block shows + sync button works (S468)
-- Click "Advanced eBay Setup →" link — new page loads with 8 sections (S469)
-- Sync policies → Advanced Setup page populates with 22 policies → click "Use suggested defaults" → weight tiers auto-match → save → verify push picks correct policy per item weight
-- Toggle "Push as Draft" → push an item → confirm eBay creates unpublished offer
-- Select merchant location source (Sale Address / Organizer Address / Existing eBay location) → verify push uses correct location
-- Description template with `{{DESCRIPTION}}` placeholder → push → verify eBay listing renders template wrapped around item description
+**2. Chrome QA — remaining S469 functional flow (post-fix):**
+- Advanced Setup → click "Use suggested defaults" → weight tiers auto-match → Save setup → verify persistence on reload.
+- Toggle "Push as Draft" → push an item → confirm eBay creates unpublished offer (Seller Hub check).
+- Select each merchant location source (Sale Address / Organizer / Existing) → push → verify correct location in payload.
+- Description template with `{{DESCRIPTION}}` placeholder → push → verify eBay listing renders template wrapped around item description.
+- Minor: investigate whether `1+ lb` through `5+ lb` policies classifying as `unknown` (only last `N+ lb` promoted to Infinity) is correct UX — check weight-tier parser behavior against Patrick's full policy list.
 
-**3. Item 5 dev dispatch — eBay listing reconciliation:**
+**3. Remaining S467 QA (carry over):**
+- Push USED grade-S item → confirm eBay gets USED_EXCELLENT not NEW (condition fix).
+- Confirm push toast shows success copy (toast fix).
+- Confirm watermark QR is smaller (85px) and bottom-right (watermark fix).
+
+**4. Item 5 dev dispatch — eBay listing reconciliation:**
 - Spec ready: `claude_docs/specs/ebay-listing-reconciliation-spec.md`
 - Hybrid: 4h cron + on-demand sync button
 - No schema changes needed, ~150 lines
 - Dispatch `findasale-dev` with spec as context
 
-**3. eBay sync batch refactor (after Item 5):**
+**5. eBay sync batch refactor (after Item 5):**
 - Replace sequential GetItem loop (ebayController.ts ~2746–2895) with GetMultipleItems Shopping API batches of 20/call
 
-**4. Chrome QA queue:**
+**6. Chrome QA queue:**
 - Full "push a real item" flow — book (category 267), clothing, furniture — verify condition/aspect/price land correctly
 - PostSaleEbayPanel end-to-end (ENDED sale)
 
