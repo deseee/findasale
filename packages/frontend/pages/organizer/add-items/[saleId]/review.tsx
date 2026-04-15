@@ -27,6 +27,7 @@ import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Pha
 import PriceResearchPanel from '../../../../components/PriceResearchPanel';
 import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 import RapidCapture, { RapidItem } from '../../../../components/RapidCapture';
+import EbayCategoryPicker from '../../../../components/EbayCategoryPicker';
 import { CATEGORIES, CONDITIONS, CONDITION_LABELS, CONDITION_MAP, formatCondition } from '../../../../lib/itemConstants';
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
@@ -440,12 +441,8 @@ const ReviewPage = () => {
 
   const getEditState = (item: Item): ItemEditState => {
     if (!editStates.has(item.id)) {
-      // Normalize category: match against CATEGORIES array case-insensitively
-      let normalizedCategory = item.category ?? '';
-      if (normalizedCategory) {
-        const match = CATEGORIES.find(cat => cat.toLowerCase() === normalizedCategory.toLowerCase());
-        normalizedCategory = match || normalizedCategory; // Use exact match if found, else keep original
-      }
+      // Use category as-is from eBay (already normalized from API)
+      const normalizedCategory = item.category ?? '';
 
       // Normalize condition to match standard values: NEW, USED, REFURBISHED, PARTS_OR_REPAIR
       let normalizedCondition = '';
@@ -814,16 +811,14 @@ const ReviewPage = () => {
                             Set Price
                           </button>
                         </div>
-                        <select
-                          value={bulkCategory}
-                          onChange={(e) => { setBulkCategory(e.target.value); handleBulkCategory(e.target.value); }}
-                          className="border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm"
-                        >
-                          <option value="">Bulk category...</option>
-                          {CATEGORIES.map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
+                        <div className="flex-1">
+                          <EbayCategoryPicker
+                            value={bulkCategory}
+                            onChange={(cat) => { setBulkCategory(cat); handleBulkCategory(cat); }}
+                            label=""
+                            placeholder="Bulk category..."
+                          />
+                        </div>
                         <button
                           onClick={() => {
                             if (window.confirm(`Delete ${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''}? This cannot be undone.`)) {
@@ -1227,20 +1222,12 @@ const ReviewPage = () => {
                                 {/* Category + Condition */}
                                 <div className="flex gap-3">
                                   <div className="flex-1">
-                                    <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Category</label>
-                                    <select
+                                    <EbayCategoryPicker
                                       value={editState.category}
-                                      onChange={(e) => handleEditChange(item.id, 'category', e.target.value)}
-                                      className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                                    >
-                                      <option value="">Select category...</option>
-                                      {CATEGORIES.map((cat) => (
-                                        <option key={cat} value={cat}>{cat}</option>
-                                      ))}
-                                      {editState.category && !(CATEGORIES as readonly string[]).includes(editState.category) && (
-                                        <option key={editState.category} value={editState.category}>{editState.category}</option>
-                                      )}
-                                    </select>
+                                      onChange={(cat) => handleEditChange(item.id, 'category', cat)}
+                                      label="Category"
+                                      placeholder="Select category..."
+                                    />
                                   </div>
                                   <div className="flex-1">
                                     <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>
