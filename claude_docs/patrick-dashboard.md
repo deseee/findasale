@@ -2,6 +2,18 @@
 
 ## What Happened This Week
 
+**S464** (2026-04-14) — ebayNeedsReview, billing webhook fix, Stripe env cleanup, eBay retry hardening ✅
+- **ebayNeedsReview:** When eBay push exhausts all 5 category suggestions with error 25005 (non-leaf category), the item is now flagged in the DB and the sale detail page shows an amber "⚠ eBay Category Needed" badge. The push button switches to "Set Category" with an amber color. When you push successfully later, the flag clears. Migration added: `20260414_ebay_needs_review` — **you must run this before testing.**
+- **Billing webhook secret fixed (P0):** The billing webhook was using the wrong signing secret (`STRIPE_WEBHOOK_SECRET` instead of `STRIPE_BILLING_WEBHOOK_SECRET`). This meant every incoming subscription event (subscribe, cancel, renew) would fail signature verification and be silently dropped. Fixed. Make sure `STRIPE_BILLING_WEBHOOK_SECRET` is set in Railway with the correct signing secret from the `/api/billing/webhook` endpoint in Stripe live dashboard.
+- **Stripe price IDs from env vars:** The pricing page now reads price IDs from `NEXT_PUBLIC_STRIPE_PRO_PRICE_ID` and `NEXT_PUBLIC_STRIPE_TEAMS_PRICE_ID` (you added these to Vercel). Old hardcoded test IDs gone. You can now delete the old Vercel vars: `NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID` and `NEXT_PUBLIC_STRIPE_PRO_ANNUAL_PRICE_ID`.
+- **eBay retry hardening:** Rewrote the 25005/25021 retry as two independent passes instead of a chained `else if` (Pass 1 = 25021 condition retry, Pass 2 = 25005 category candidates — always runs after Pass 1). Offer PUT now fetches the existing offer first before merging changes (fixes a bug where sending only `{ categoryId }` wiped all other offer fields and caused 25002 "currency missing" error).
+- **itemController.ts fix:** The `/items?saleId=` endpoint wasn't returning `ebayListingId` or `ebayNeedsReview` — both were undefined in the frontend. Fixed.
+- **Roadmap updated to v106:** New rows #292–#295 (Post-Sale Panel, Listing Data Parity, Live Category Picker, ebayNeedsReview). Feature #25 and #244 notes updated.
+
+**The Whip-It item:** All 5 eBay category suggestions for "Whip-It butane lighter fuel" come back as branch (non-leaf) categories — there's no good leaf category for this product in eBay's tree. After S464 ships, this item will show the amber "⚠ eBay Category Needed" badge on the sale detail page, which is exactly the right behavior. You'll need to set the category manually in the item editor.
+
+---
+
 **S463** (2026-04-14) — Static eBay category picker retired, eBay sync architecture spec, roadmap audit ✅
 - **Live eBay category picker shipped:** `EbayCategoryPicker.tsx` now calls the Taxonomy API as you type (400ms debounce), shows real leaf categories with IDs from eBay. The old 120-entry static JSON (with wrong IDs on several categories) is gone. `ebayCategoryMap.ts` deleted. `getEbayCategoryId()` and all 3 call sites removed. New `GET /api/ebay/taxonomy/suggest?q=...` endpoint added.
 - **eBay sync architecture spec:** The sequential GetItem enrichment loop (86 API calls, ~9 seconds) should be replaced with `GetMultipleItems` Shopping API (5 calls, ~1-2 seconds). Webhook code to retire the 15-min polling cron already partially exists. Next dev dispatch: implement the batch refactor.
@@ -173,30 +185,46 @@
 
 ## Action Items for Patrick
 
-**NEW — S463 Push block (do this now):**
+**NEW — S464 Push block (do this now):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/services/ebayTaxonomyService.ts
-git add packages/backend/src/controllers/ebayTaxonomyController.ts
-git add packages/backend/src/routes/ebayTaxonomy.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260414_ebay_needs_review/migration.sql
 git add packages/backend/src/controllers/ebayController.ts
-git add packages/frontend/components/EbayCategoryPicker.tsx
-git rm packages/backend/src/utils/ebayCategoryMap.ts
+git add packages/backend/src/controllers/billingController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/pages/organizer/pricing.tsx
+git add "packages/frontend/pages/organizer/sales/[id]/index.tsx"
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: live eBay category picker, retire ebayCategoryMap, roadmap v105"
+git commit -m "ebayNeedsReview: schema flag, push logic, amber badge + category review UX; billing webhook secret fix; Stripe price IDs from env vars; two-pass 25005/25021 retry with offer merge"
 .\push.ps1
 ```
 
-**NEW — S463 Patrick manual actions:**
-- [ ] **STEP 0 Chrome QA:** Walk S462 eBay listing parity flow yourself (PostSaleEbayPanel → Edit eBay → Auto-fill → Push). Any failures = report back as S464 fix items.
-- [ ] **STEP 2 Broader category test:** Push a book, clothing item, and furniture item to eBay to verify Phase A/B/C holds beyond the Contigo case.
-- [ ] **STEP 4 Live Stripe webhooks:** Register in Stripe Live Dashboard:
-  - `https://backend-production-153c9.up.railway.app/api/billing/webhook` (subscription events)
-  - `https://backend-production-153c9.up.railway.app/api/stripe/webhook` (payment + dispute events)
-  - Add signing secrets to Railway as `STRIPE_BILLING_WEBHOOK_SECRET` + `STRIPE_WEBHOOK_SECRET`
-- [ ] **STEP 5 Archive junk Stripe sandbox products** — keep: Hunt Pass, Teams, Pro, Item Sale
+**NEW — S464 Patrick manual actions:**
+- [ ] **Run S464 migration on Railway:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+- [ ] **Vercel cleanup:** Delete `NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID` + `NEXT_PUBLIC_STRIPE_PRO_ANNUAL_PRICE_ID`. Confirm `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is the live key.
+- [ ] **Railway:** Confirm `STRIPE_TEAMS_MONTHLY_PRICE_ID` = `price_1TLTvDLIWHQCHu75zB6zxTOA` (live value).
+
+**⚠️ GO-LIVE BLOCKERS (before you take real money):**
+- [ ] **Register live Stripe webhooks** (P0 — zero payments work without this):
+  - `https://backend-production-153c9.up.railway.app/api/billing/webhook` → events: `customer.subscription.created/updated/deleted`, `invoice.payment_succeeded/failed`, `checkout.session.completed` → secret → Railway `STRIPE_BILLING_WEBHOOK_SECRET`
+  - `https://backend-production-153c9.up.railway.app/api/stripe/webhook` → events: `payment_intent.succeeded`, `charge.dispute.created`, `charge.succeeded/failed` → secret → Railway `STRIPE_WEBHOOK_SECRET`
+- [ ] **Railway:** `STRIPE_HUNT_PASS_PRICE_ID` = `price_1TLtY1LIWHQCHu75W9F23hVJ` (live Hunt Pass price)
+- [ ] **Railway:** `STRIPE_GENERIC_ITEM_PRODUCT_ID` = `prod_UKZ2G21VhLJ3CE` (live generic product)
+- [ ] **Railway:** Confirm MailerLite + Resend env vars set (`MAILERLITE_SHOPPERS_GROUP_ID`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`)
+- [ ] **Archive junk Stripe test products** — keep: Hunt Pass, Teams, Pro, Item Sale
+
+**Carry-forward from S463:**
+- [ ] **STEP 2 Broader category test:** Push a book, clothing item, and furniture item to verify Phase A/B/C holds
+- [ ] **STEP 0 Chrome QA:** Walk S462 eBay listing parity (PostSaleEbayPanel → Edit eBay → Auto-fill → Push)
 
 **NEW — S461 Session wrap push block (do this now):**
 ```powershell
@@ -293,17 +321,19 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 ---
 
-## What's Next (S464+)
+## What's Next (S465+)
 
-**P0 — Patrick Chrome QA of S462 eBay listing parity** (you're driving this — any failures → S464 fix items).
+**P0 — Register live Stripe webhooks** (see Action Items — zero subscriptions work until done).
 
-**P1 — eBay sync batch refactor:** Replace sequential GetItem loop with `GetMultipleItems` batches (20/call). 86 API calls → 5. Dev dispatch ready.
+**P0 — Run S464 migration** (ebayNeedsReview on Railway — see Action Items).
 
-**P1 — Broader category coverage test:** Push a book, clothing item, furniture item via eBay push to verify Phase A/B/C holds up (Patrick drives).
+**P1 — Patrick Chrome QA:** Walk S462/S463/S464 eBay flow (PostSaleEbayPanel → Edit eBay → Auto-fill → Push). Also test: push an item with no good eBay leaf category → verify amber badge.
 
-**P2 — Live Stripe webhook setup** (Patrick action — see Action Items above).
+**P1 — Broader category test:** Push a book, clothing item, furniture item to verify Phase A/B/C holds beyond Contigo.
 
-**P2 — Archive junk Stripe sandbox products** (Patrick action — keep Hunt Pass / Teams / Pro / Item Sale).
+**P2 — eBay sync batch refactor:** Replace sequential GetItem loop with `GetMultipleItems` batches (20/call). 86 API calls → 5. Dev dispatch ready (spec from S463).
+
+**P2 — Vercel/Railway env cleanup** (see Action Items).
 
 **Carry-forward:**
 - QA queue (S436/S430/S431/S427/S433) — still postponed
@@ -317,6 +347,7 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S464 | 2026-04-14 | ebayNeedsReview flag + amber badge, billing webhook secret fix, Stripe price IDs from env vars, two-pass 25005/25021 retry, offer PUT merge fix, roadmap v106 |
 | S463 | 2026-04-14 | Live eBay category picker shipped (Taxonomy API), ebayCategoryMap.ts deleted, eBay sync batch architecture spec (GetMultipleItems), roadmap audit v105 |
 | S462 | 2026-04-14 | eBay Listing Data Parity A+B+C: merchant location fix, policy picker, HTML sanitizer, 17 schema fields, PostSaleEbayPanel, taxonomy service, catalog API, Auto-fill suggest |
 | S461 | 2026-04-14 | eBay push end-to-end WORKING (6 rounds): CategoryID capture, Taxonomy API, app-token fix, condition remap, stale offer cleanup, 25021 retry, required aspect auto-fill. Contigo mug published ✅ |

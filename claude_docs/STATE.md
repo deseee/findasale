@@ -7,6 +7,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S464 COMPLETE (2026-04-14) — ebayNeedsReview full implementation, billing webhook fix, Stripe env cleanup, eBay 25005/25021 two-pass retry**
+
+**S464 What happened:**
+- **ebayNeedsReview schema + migration:** `Item.ebayNeedsReview Boolean @default(false)` added to schema.prisma. Migration `20260414_ebay_needs_review/migration.sql` created. PENDING Railway run.
+- **eBay push logic:** `ebayController.ts` — publish failure split into 25005 branch (sets `ebayNeedsReview: true`, returns `category_review_needed`) vs other errors. Success path clears `ebayNeedsReview: false`. Two-pass retry: Pass 1=25021 condition retry, Pass 2=25005 (runs independently after Pass 1). Offer PUT now fetches existing offer first before merge (fixes 25002 currency wipe on partial PUT).
+- **itemController.ts:** `getItemsBySaleId` select now includes `ebayListingId: true` and `ebayNeedsReview: true` (was missing — caused undefined in frontend).
+- **Frontend sale detail:** `sales/[id]/index.tsx` — Item interface extended (`ebayNeedsReview?: boolean`), state type extended (`category_review_needed`), amber badge "⚠ eBay Category Needed", "Set Category" button state.
+- **Billing webhook fix:** `billingController.ts` line 91 — `STRIPE_WEBHOOK_SECRET` → `STRIPE_BILLING_WEBHOOK_SECRET` (was using wrong secret, would cause all billing webhooks to fail signature verification).
+- **Stripe price IDs from env vars:** `pricing.tsx` lines 61/83 changed from hardcoded test price IDs to `process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID` with fallback. Patrick added correct env vars to Vercel.
+- **Roadmap:** Updated to v106, new rows #292–#295, feature #25 and #244 notes updated.
+- **TS checks:** Backend ✅ zero errors. Frontend ✅ zero errors.
+
+**S464 Patrick manual actions REQUIRED:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S464 Pending Vercel/Railway:**
+- Vercel: delete `NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID` and `NEXT_PUBLIC_STRIPE_PRO_ANNUAL_PRICE_ID` (old names, unused)
+- Vercel: confirm `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is live key (not test)
+- Railway: confirm `STRIPE_TEAMS_MONTHLY_PRICE_ID` = `price_1TLTvDLIWHQCHu75zB6zxTOA`
+
+**S464 Files changed (7):**
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260414_ebay_needs_review/migration.sql` (NEW)
+- `packages/backend/src/controllers/ebayController.ts`
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/backend/src/controllers/billingController.ts`
+- `packages/frontend/pages/organizer/pricing.tsx`
+- `packages/frontend/pages/organizer/sales/[id]/index.tsx`
+- `claude_docs/strategy/roadmap.md`
+
+---
+
 **S463 COMPLETE (2026-04-14) — Static eBay category picker retired, eBay sync architecture spec, roadmap audit v105**
 
 **S463 What happened:**
@@ -1380,11 +1417,42 @@ npx prisma generate
 
 ## Next Session Priority
 
-### Outstanding Actions (as of S463, 2026-04-14)
+### Outstanding Actions (as of S464, 2026-04-14)
 
 ---
 
-**STEP 0 — Patrick-led Chrome QA of S462 eBay Listing Parity (Patrick handles, not Claude):**
+**STEP 0 — Run S464 migration on Railway (Patrick action — REQUIRED before deploy):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**STEP 0b — Vercel env cleanup (Patrick action):**
+- Delete `NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID` and `NEXT_PUBLIC_STRIPE_PRO_ANNUAL_PRICE_ID` (old names replaced by `NEXT_PUBLIC_STRIPE_PRO_PRICE_ID` and `NEXT_PUBLIC_STRIPE_TEAMS_PRICE_ID`)
+- Confirm `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is the live publishable key
+- Confirm Railway `STRIPE_TEAMS_MONTHLY_PRICE_ID` = `price_1TLTvDLIWHQCHu75zB6zxTOA`
+
+---
+
+**⚠️ GO-LIVE BLOCKERS — What's between us and real users:**
+
+| Priority | Item | Owner | Notes |
+|----------|------|-------|-------|
+| P0 | Register live Stripe webhooks (see STEP 4 below) | Patrick | Zero live payments work without this |
+| P0 | Run S464 ebayNeedsReview migration | Patrick | Push fails silently without it |
+| P1 | Confirm Vercel publishable key is live | Patrick | Pricing page uses test key otherwise |
+| P1 | Confirm Railway STRIPE_HUNT_PASS_PRICE_ID = live value | Patrick | Hunt Pass purchase broken on live |
+| P1 | Confirm Railway STRIPE_GENERIC_ITEM_PRODUCT_ID = live value | Patrick | POS payment link broken on live |
+| P2 | MailerLite + Resend env vars confirmed on Railway | Patrick | Checklist still shows unchecked |
+| P2 | Chrome QA: eBay push with book/clothing/furniture | Claude/Patrick | Verifies S461-S464 hold beyond Contigo |
+| P2 | Chrome QA: PostSaleEbayPanel end-to-end | Claude | Sale must be in ENDED status |
+| P3 | Archive ~14 junk Stripe test products | Patrick | Catalog cleanup |
+
+---
+
+**STEP 0c — Patrick-led Chrome QA of S462 eBay Listing Parity (Patrick handles, not Claude):**
 
 Patrick said "skip the qa i'll do that" at S462 wrap. After Railway + Vercel redeploy, Patrick walks the full flow:
 
@@ -1404,28 +1472,24 @@ Patrick said "skip the qa i'll do that" at S462 wrap. After Railway + Vercel red
 
 ---
 
-**STEP 1 — Retire the static eBay category picker (S461 follow-up #3 + #4, still queued):**
-
-Replace `packages/frontend/components/EbayCategoryPicker.tsx` (currently backed by `public/ebay-categories.json`, ~120 hardcoded categories, some with wrong IDs) with a live Taxonomy API picker. **Phase C infrastructure now in place** — `GET /api/ebay/taxonomy/aspects/:categoryId` exists; add a sister endpoint `GET /api/ebay/taxonomy/suggest?q=...` that proxies `get_category_suggestions` using the app token.
-
-Picker: as organizer types item title, call suggest endpoint, show real leaf categories, store `categoryId` (not just name) on Item creation.
-
-Then delete `packages/backend/src/utils/ebayCategoryMap.ts` and the `getEbayCategoryId()` fallback path — dead code once the picker stores real IDs.
+**STEP 1 ✅ DONE (S463) — Static eBay category picker retired.** Live Taxonomy API picker shipped. `ebayCategoryMap.ts` deleted.
 
 ---
 
-**STEP 2 — Broader category coverage (S461 STEP 1 carryforward, now easier with Phase C):**
+**STEP 2 — Broader category coverage (S461 follow-up, still open):**
 
-Push 2–3 more items of different categories to verify Phase A/B/C hold up beyond the Contigo/travel-mug case:
+Push 2–3 more items of different categories to verify S461-S464 hold up beyond the Contigo/travel-mug case:
 - A **book** (category 267) — exercises media-only condition path + ISBN catalog match
 - A piece of **clothing** — different required aspects (Size, Color, Material, Style)
 - A **furniture** item — HEAVY_OVERSIZED shipping + different aspect set
 
-With Phase C taxonomy service live, missing aspects can be auto-suggested via Haiku rather than using static fallback values.
+Also test: push an item where all 5 category suggestions return 25005 → verify amber "⚠ eBay Category Needed" badge appears (S464 ebayNeedsReview).
 
 ---
 
-**STEP 3 — eBay sync architecture audit (deferred from S458):**
+**STEP 3 ✅ DONE (S463) — eBay sync architecture spec produced.** Key finding: replace sequential GetItem loop (~86 calls / ~9s) with `GetMultipleItems` batches (5 calls / ~1-2s). Phase 2: ORDER_CONFIRMATION webhook extension to eliminate 15-min cron. No new OAuth scopes needed.
+
+**Next dispatch (when ready):**
 
 Patrick flagged that the current eBay sync approach (GetMyeBaySelling → separate GetItem enrichment pass per item) is architecturally wrong. Before any more eBay dev work, dispatch `findasale-architect` + research to answer:
 
@@ -1458,7 +1522,7 @@ Patrick flagged that the current eBay sync approach (GetMyeBaySelling → separa
 
 ---
 
-**STEP 2 ✅ DONE (S463) — Roadmap audit complete** — `roadmap.md` updated to v105. Human-verified marks added for S450 rank, S451 dashboard, S454 Hunt Pass Stripe, S456 eBay import, S461 Contigo push.
+**STEP 2b ✅ DONE (S464) — Roadmap audit complete** — `roadmap.md` updated to v106. New rows #292–#295. Feature #25 and #244 updated.
 
 **STEP 3 — Survivor accounts:** ✅ `packages/database/prisma/survivor-seed.ts` already created. See Standing Notes for survivor account emails (`deseee@gmail.com`, `artifactmi@gmail.com`).
 
@@ -1518,6 +1582,10 @@ Dispatch `findasale-dev` to replace sequential GetItem loop (`ebayController.ts`
 | Review card redesign (S399) | No draft items for any test organizer. | Camera-capture an item → go to Review page → confirm new card redesign (Ready/Needs Review/Cannot Publish) renders. | S406 |
 | Camera thumbnail refresh (S400/S401) | Requires real camera hardware in Chrome MCP. | Capture photo in rapidfire → confirm thumbnail strip updates live without page reload. | S406 |
 | POS camera/QR scan (S405) | Camera hardware required for scan flow. | Organizer opens POS → taps QR tile → camera opens → scan item sticker → confirm added to cart. | S406 |
+| ebayNeedsReview amber badge (S464) | Needs migration run first, then a push attempt that exhausts all 5 category suggestions with 25005. | Run S464 migration → push "Whip-It butane lighter fuel" item (all 5 eBay suggestions are branch nodes for this item) → confirm amber badge appears on sale detail page. | S464 |
+| Post-Sale eBay Panel (S460/S292) | Needs sale in ENDED status with unsold items. | End a test sale → navigate to sale detail → verify PostSaleEbayPanel renders below item grid, toast appears once, shipping badges show. | S460 |
+| eBay Listing Data Parity fields (S462/S293) | 17 new fields built but not Chrome QA'd. Patrick planned to self-QA. | Edit eBay expand on PostSaleEbayPanel → fill UPC/weight/dims/conditionNotes → save → push → verify fields appear on eBay listing. | S462 |
+| Live category picker (S463/S294) | Built but not Chrome QA'd. | Item editor → category field → type a search term → verify dropdown shows real eBay categories with depth levels. | S463 |
 
 ---
 
