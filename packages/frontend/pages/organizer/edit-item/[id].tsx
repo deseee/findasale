@@ -260,6 +260,8 @@ const EditItemPage = () => {
         price: item.price ? item.price.toString() : '',
         quantity: item.quantity ?? 1,
         category: normalizedCategory,
+        ebayCategoryId: item.ebayCategoryId || '',
+        ebayCategoryName: item.ebayCategoryName || '',
         condition: normalizedCondition,
         conditionGrade: item.conditionGrade || '',
         tags: item.tags || [],
