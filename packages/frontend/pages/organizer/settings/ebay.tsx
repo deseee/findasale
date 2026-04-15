@@ -698,7 +698,7 @@ const EbayPolicySetupPage = () => {
 
           {/* Section H: Save bar (sticky footer) */}
           {mapping && (
-            <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
+            <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
               <div className="max-w-4xl mx-auto flex items-center justify-end gap-3">
                 <button
                   onClick={handleDiscardChanges}
