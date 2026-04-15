@@ -60,26 +60,32 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
     setIsLoading(true);
     setError('');
 
+    const controller = abortControllerRef.current;
     const timer = setTimeout(async () => {
       try {
         const response = await api.get(
           `/ebay/taxonomy/suggest?q=${encodeURIComponent(input)}`,
-          { signal: abortControllerRef.current!.signal }
+          { signal: controller.signal }
         );
 
         setSuggestions(response.data.suggestions || []);
         setIsOpen(true);
       } catch (err: any) {
-        if (err.name !== 'AbortError') {
+        // Suppress abort/cancel errors from debounce — not real failures
+        const isCancelled = err.name === 'AbortError' || err.name === 'CanceledError' || err.name === 'CancelledError' || api.isCancel?.(err);
+        if (!isCancelled) {
           console.error('Failed to fetch category suggestions:', err);
           setError('Failed to fetch categories');
         }
       } finally {
         setIsLoading(false);
       }
-    }, 400); // Debounce 400ms
+    }, 400);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [input]);
 
   // Close dropdown when clicking outside
