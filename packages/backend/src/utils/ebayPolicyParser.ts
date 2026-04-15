@@ -80,7 +80,7 @@ function parseSinglePolicyWeight(name: string): { minOz?: number; maxOz: number;
   if (plusLbMatch) {
     const lb = parseInt(plusLbMatch[1], 10);
     const minOz = lb * 16;
-    return { minOz, maxOz: (lb + 1) * 16, confidence: 'high' };
+    return { minOz, maxOz: (lb + 1) * 16 - 1, confidence: 'high' };
   }
 
   // Match "N lb" (exact, no plus)
