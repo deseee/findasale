@@ -7,6 +7,35 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S481 (2026-04-15) — AI camera improvements + trails security + Hubs nav move**
+
+**S481 What happened:**
+- **Trails security fix ✅:** `/shopper/trails` public endpoint exposed all trails (anyone could see/edit/delete). Fixed: new authenticated `GET /trails/mine` endpoint (trailController.ts `getMyTrails`) filtering by `userId`. Route registered BEFORE `/:trailId` to prevent Express route conflict. Frontend `useMyTrails` hook updated to `/trails/mine`. `[trailId].tsx` fetch updated to direct lookup. Edit/Delete buttons wrapped in `user?.id === trail.userId` ownership guard.
+- **Hubs nav move ✅:** Market Hubs moved from general organizer section to TEAMS block in both AvatarDropdown.tsx and Layout.tsx. Icon color changed from `text-purple-400` to `text-gray-400` to match TEAMS section style.
+- **AI camera improvements batch (7 items) ✅:** cloudAIService.ts + processRapidDraft.ts + review.tsx:
+  - TEXT_DETECTION added to Vision API (catches brand marks on glass/dark items; combined with LABEL_DETECTION)
+  - Sparse-label fallback: if <3 specific labels detected, Haiku instructed to reason from silhouette/shape
+  - Anti-anchor pricing: removed "estate sale / 20–50% of retail" framing entirely; replaced with secondary market comp-grounded language + non-round example JSON (`{"low":7,"high":23,"suggested":14}`)
+  - Comp-based price refinement in processRapidDraft: fetches 5 recent SOLD items by detected category → `suggestPrice` override; best-effort fallback
+  - Improved conditionGrade visual checklist: scratches, chips, fading, rust, missing parts, repair signs
+  - Tag grouping by type: suggested tags now rendered in Material/Era/Brand/Style/Other groups
+  - Within-session tag suppression: tags removed ≥2 times hidden from suggestions for that session
+  - Condition-adjusted pricing: selecting a condition grade silently calls `/items/ai/price-suggest` and updates price field; grades with disabled cursor while refreshing
+- **TS fix:** processRapidDraft.ts comp map callback explicit type (was implicit `any`)
+
+**S481 Files changed (9):**
+- `packages/backend/src/controllers/trailController.ts` — added `getMyTrails` function
+- `packages/backend/src/routes/trails.ts` — `GET /mine` route registered before `/:trailId`
+- `packages/frontend/hooks/useTrails.ts` — `useMyTrails` → `/trails/mine`
+- `packages/frontend/pages/shopper/trails/[trailId].tsx` — direct fetch + ownership guard on Edit/Delete
+- `packages/frontend/components/AvatarDropdown.tsx` — Hubs moved to TEAMS block, grey icon
+- `packages/frontend/components/Layout.tsx` — Hubs moved to TEAMS block (mobile nav), grey icon
+- `packages/backend/src/services/cloudAIService.ts` — TEXT_DETECTION, sparse-label fallback, anti-anchor pricing, improved conditionGrade prompt, non-round example JSON
+- `packages/backend/src/jobs/processRapidDraft.ts` — comp-based price refinement post-AI, TS explicit type
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — tag grouping, within-session suppression, condition-adjusted pricing handler + grade button wiring
+
+---
+
 **S480 (2026-04-15) — S468 status card fix + photo lightbox + Item 5 verified + eBay toast fix**
 
 **S480 What happened:**
@@ -134,6 +163,7 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
+- **S481 (2026-04-15):** Trails security fix (public endpoint → authenticated /mine + ownership guard). Hubs nav moved to TEAMS block (grey icons). AI camera batch: TEXT_DETECTION for dark/glass, sparse-label fallback, comp-grounded pricing (anti-anchor), conditionGrade visual checklist, tag grouping by type, within-session suppression, condition-adjusted pricing. 9 files. Zero TS errors.
 - **S480 (2026-04-15):** S468 status card fix ✅ (4 fields added to /api/ebay/connection). Photo lightbox ✅ (ItemPhotoManager). Item 5 reconciliation verified already done in S467. NudgeBar organizer suppression ✅. eBay save bar browser-confirmed ✅ (hot-pink injection). eBay push error toast P2 fixed (result.code/message not result.error). USED_EXCELLENT code-verified, live UNVERIFIED (weight=null). 4 files.
 - **S479 (2026-04-15):** Chrome QA of S467/S468/S469. S467 rarity filter ✅, S469 Advanced Setup page ✅ (all 8 sections render), S468 ⚠️ PARTIAL — sync works, status card broken (settings.tsx reads fields missing from /api/ebay/connection payload). Fix routed next session. 0 code changes.
 - **S469 (2026-04-15):** eBay Phase 1-3 foundation — 3 parallel agents shipped EbayPolicyMapping model + weight-tier parser + per-item policy routing + draft mode + full setup page (8 sections). Handles 22+ shipping policies via weight-tier matching. Migration applied. 7 files. Zero TS errors.
@@ -182,6 +212,10 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 ---
 
 ## Next Session Priority
+
+**TOP OF SESSION — Push S481 block first, then Chrome QA**
+
+**0. Push S481 changes** (see push block in session wrap).
 
 **TOP OF SESSION — Chrome QA S469 functional flow + S467 remaining verifications**
 

@@ -2,6 +2,21 @@
 
 ## What Happened This Week
 
+**S481** (2026-04-15) — AI camera improvements batch + trails security + Hubs nav ✅
+- **Trails security — ✅ fixed.** Anyone could see, edit, and delete other people's Treasure Trails at `/shopper/trails`. The public endpoint returned all trails with no ownership check. Fixed: new authenticated `/trails/mine` endpoint filters by your user ID. Edit/Delete buttons now check `trail.userId === user.id` — other people's trails are read-only.
+- **Hubs nav move — ✅ done.** Market Hubs removed from the general organizer nav section and moved into the TEAMS block in both the avatar dropdown and mobile nav. Icons changed from purple to grey to match the TEAMS section style.
+- **AI camera batch (7 improvements) — ✅ all shipped:**
+  - **Dark/glass items:** Google Vision now runs TEXT_DETECTION alongside LABEL_DETECTION — catches brand marks and etched text on glass, dark ceramics, and transparent items. If fewer than 3 usable labels come back, Haiku is told to reason from silhouette and shape instead of guessing blindly.
+  - **Pricing anti-anchor:** Removed the "estate sale / 20–50% of retail" framing that was pulling prices toward round numbers. Prices are now grounded in actual secondary market comps (real sold items from your DB by category). Example JSON in the prompt changed from `$15` to `$14` — breaks the model's round-number bias.
+  - **Comp-based price refinement:** After AI tags an item, the system fetches the 5 most recent sold items in that category and runs a `suggestPrice` call to override the raw AI price with a market-informed one. Requires at least 2 comps to trigger.
+  - **Condition grade visual checklist:** The AI now assesses scratches, chips, color fading, rust, missing parts, and signs of repair — not just "good/fair/poor" intuition.
+  - **Tag grouping:** In the Review page, suggested tags are now displayed in labeled groups — Material, Era, Brand, Style, and Other — instead of a flat unlabeled list.
+  - **Within-session suppression:** If you remove a suggested tag twice, it stops appearing for the rest of that session. The system learns your preferences as you work.
+  - **Condition-adjusted pricing:** Clicking a condition grade (S/A/B/C/D) on the review page now silently re-fetches a price suggestion adjusted for that grade. Price field updates automatically. Grade buttons dim while refreshing.
+- **9 files total. Zero TypeScript errors.**
+
+---
+
 **S480** (2026-04-15) — S468 status card fix + photo lightbox + Item 5 confirmed done + eBay push error toast fix ✅
 - **S468 status card — ✅ fixed.** The "Business Policies" card on Settings → eBay now shows green ✓ when you've synced policies. Root cause: `/api/ebay/connection` was stripping 4 policy fields from its JSON response. Added them, simplified display condition to `policiesFetchedAt`. 2 files.
 - **Photo lightbox — ✅ shipped.** Clicking any photo in the item editor now opens a full-screen overlay. Escape-to-dismiss, close button, `cursor-zoom-in` hint. You verified it works. 1 file.
