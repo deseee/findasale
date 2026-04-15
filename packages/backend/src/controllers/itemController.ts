@@ -1611,7 +1611,10 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     const items = await prisma.item.findMany({
       where: {
         saleId: saleId as string,
-        draftStatus: { in: ['DRAFT', 'PENDING_REVIEW'] },
+        // Show ALL sale items regardless of publish state — Add Items is the
+        // organizer's home base for inventory. Published items remain visible
+        // with a status chip (see draftStatus + ebayListingId fields below).
+        // Filter disabled 2026-04-14 per Patrick UX feedback.
       },
       select: {
         id: true,
@@ -1638,6 +1641,10 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         updatedAt: true,
         // Sprint 1: Listing Health Score + AI tag suggestions
         tags: true,
+        // Status chip data — distinguish Draft / Published / On eBay
+        status: true,
+        ebayListingId: true,
+        listedOnEbayAt: true,
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
