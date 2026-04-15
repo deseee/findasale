@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getMonthlyAICost, resetMonthlyAICost } from '../lib/aiCostTracker';
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
+import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 
 // GET /api/admin/stats — platform overview
 export const getStats = async (req: AuthRequest, res: Response) => {
@@ -38,18 +39,227 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Tier breakdown
+    const tierBreakdown = await prisma.organizer.groupBy({
+      by: ['subscriptionTier'],
+      _count: true,
+    });
+
+    const tierBreakdownMap: Record<string, number> = {
+      SIMPLE: 0,
+      PRO: 0,
+      TEAMS: 0,
+    };
+    tierBreakdown.forEach((t: any) => {
+      tierBreakdownMap[t.subscriptionTier as string] = t._count;
+    });
+
+    // MRR calculation
+    const activePaidOrganizers = await prisma.organizer.findMany({
+      where: {
+        subscriptionStatus: 'active',
+        subscriptionTier: { in: ['PRO', 'TEAMS'] },
+      },
+      select: { subscriptionTier: true },
+    });
+
+    let mrrCents = 0;
+    activePaidOrganizers.forEach((org: any) => {
+      const monthlyPrice = org.subscriptionTier === 'PRO' ? 2900 : 7900;
+      mrrCents += monthlyPrice;
+    });
+
+    // MRR by tier
+    const mrrByTier = {
+      PRO: 0,
+      TEAMS: 0,
+    };
+    activePaidOrganizers.forEach((org: any) => {
+      const monthlyPrice = org.subscriptionTier === 'PRO' ? 2900 : 7900;
+      mrrByTier[org.subscriptionTier as 'PRO' | 'TEAMS'] += monthlyPrice;
+    });
+
+    // Transaction revenue (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const purchasesLast30d = await prisma.purchase.findMany({
+      where: {
+        createdAt: { gte: thirtyDaysAgo },
+        status: 'PAID',
+      },
+      include: {
+        item: {
+          select: {
+            sale: {
+              select: {
+                organizer: {
+                  select: { subscriptionTier: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    let transactionRevenueLast30d = 0;
+    purchasesLast30d.forEach((p: any) => {
+      const tier = p.item?.sale?.organizer?.subscriptionTier || 'SIMPLE';
+      const feeRate = tier === 'SIMPLE' ? 0.1 : 0.08;
+      transactionRevenueLast30d += Math.round(p.amount * feeRate * 100);
+    });
+
+    // Transaction revenue (today)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const purchasestoday = await prisma.purchase.findMany({
+      where: {
+        createdAt: { gte: todayStart },
+        status: 'PAID',
+      },
+      include: {
+        item: {
+          select: {
+            sale: {
+              select: {
+                organizer: {
+                  select: { subscriptionTier: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    let transactionRevenueToday = 0;
+    purchasestoday.forEach((p: any) => {
+      const tier = p.item?.sale?.organizer?.subscriptionTier || 'SIMPLE';
+      const feeRate = tier === 'SIMPLE' ? 0.1 : 0.08;
+      transactionRevenueToday += Math.round(p.amount * feeRate * 100);
+    });
+
+    // Hunt Pass revenue (items with HUNT_PASS type if field exists; for now 0)
+    const huntPassRevenueLast30d = 0;
+
+    // À la carte revenue (items marked as alaCarte with fee paid)
+    const alaCarteRevenueLast30d = 0;
+
+    // Conversion funnel
+    const totalSignups = totalUsers;
+    const haveOrganizer = totalOrganizers;
+
+    const createdOneSale = await prisma.organizer.count({
+      where: {
+        sales: {
+          some: {},
+        },
+      },
+    });
+
+    const publishedOneSale = await prisma.organizer.count({
+      where: {
+        sales: {
+          some: {
+            status: { in: ['PUBLISHED', 'ENDED'] },
+          },
+        },
+      },
+    });
+
+    const paidTier = await prisma.organizer.count({
+      where: {
+        subscriptionTier: { in: ['PRO', 'TEAMS'] },
+      },
+    });
+
+    // 7-day sparklines
+    const sparklines = {
+      signups: [] as number[],
+      transactionRevenue: [] as number[],
+      newSales: [] as number[],
+    };
+
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = new Date();
+      dayStart.setDate(dayStart.getDate() - i);
+      dayStart.setHours(0, 0, 0, 0);
+
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      // New signups
+      const signupCount = await prisma.user.count({
+        where: { createdAt: { gte: dayStart, lt: dayEnd } },
+      });
+      sparklines.signups.push(signupCount);
+
+      // Transaction revenue
+      const dayPurchases = await prisma.purchase.findMany({
+        where: {
+          createdAt: { gte: dayStart, lt: dayEnd },
+          status: 'PAID',
+        },
+        include: {
+          item: {
+            select: {
+              sale: {
+                select: {
+                  organizer: {
+                    select: { subscriptionTier: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      let dayTransactionRevenue = 0;
+      dayPurchases.forEach((p: any) => {
+        const tier = p.item?.sale?.organizer?.subscriptionTier || 'SIMPLE';
+        const feeRate = tier === 'SIMPLE' ? 0.1 : 0.08;
+        dayTransactionRevenue += Math.round(p.amount * feeRate * 100);
+      });
+      sparklines.transactionRevenue.push(dayTransactionRevenue);
+
+      // New sales
+      const saleCount = await prisma.sale.count({
+        where: { createdAt: { gte: dayStart, lt: dayEnd } },
+      });
+      sparklines.newSales.push(saleCount);
+    }
+
     const stats = {
       totalUsers,
       totalOrganizers,
       totalItems,
-      totalSales: salesByStatus.reduce((acc, s) => acc + s._count, 0),
+      totalSales: salesByStatus.reduce((acc: number, s: any) => acc + s._count, 0),
       salesByStatus: Object.fromEntries(
-        salesByStatus.map(s => [s.status, s._count])
+        salesByStatus.map((s: any) => [s.status, s._count])
       ),
       totalRevenue: totalPurchases._sum.amount || 0,
       totalPurchases: totalPurchases._count,
       newUsersLast7d,
       newSalesLast7d,
+      tierBreakdown: tierBreakdownMap,
+      mrr: mrrCents,
+      mrrByTier,
+      transactionRevenueLast30d,
+      transactionRevenueToday,
+      huntPassRevenueLast30d,
+      aLaCarteRevenueLast30d: alaCarteRevenueLast30d,
+      funnel: {
+        totalSignups,
+        haveOrganizer,
+        createdOneSale,
+        publishedOneSale,
+        paidTier,
+      },
+      sparklines,
+      ebayRateLimit: getEbayRateLimitStatus(),
     };
 
     res.json(stats);
@@ -100,7 +310,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       prisma.user.count({ where }),
     ]);
 
-    const formattedUsers = users.map(user => ({
+    const formattedUsers = users.map((user: any) => ({
       id: user.id,
       email: user.email,
       name: user.name,
@@ -223,7 +433,7 @@ export const getSales = async (req: AuthRequest, res: Response) => {
       prisma.sale.count({ where }),
     ]);
 
-    const formattedSales = sales.map(sale => ({
+    const formattedSales = sales.map((sale: any) => ({
       id: sale.id,
       title: sale.title,
       status: sale.status,
@@ -231,7 +441,7 @@ export const getSales = async (req: AuthRequest, res: Response) => {
       endDate: sale.endDate,
       organizerName: sale.organizer.businessName,
       itemCount: sale.items.length,
-      revenue: sale.purchases.reduce((sum, p) => sum + p.amount, 0),
+      revenue: sale.purchases.reduce((sum: number, p: any) => sum + p.amount, 0),
     }));
 
     res.json({
@@ -444,7 +654,7 @@ export const getBidReviewQueue = async (req: AuthRequest, res: Response) => {
       }
     });
 
-    const formatted = records.map(record => ({
+    const formatted = records.map((record: any) => ({
       id: record.id,
       bidId: record.bidId,
       itemId: record.bid?.item?.id,
@@ -489,5 +699,78 @@ export const adminBidAction = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error performing bid action:', error);
     res.status(500).json({ message: 'Failed to perform bid action' });
+  }
+};
+
+// GET /api/admin/items — global items search
+export const getAdminItems = async (req: AuthRequest, res: Response) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit as string) || 20);
+    const skip = (page - 1) * limit;
+    const search = (req.query.search as string) || '';
+    const status = (req.query.status as string) || '';
+
+    const where: any = {};
+
+    if (search) {
+      where.title = { contains: search, mode: 'insensitive' };
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    const [items, total] = await Promise.all([
+      prisma.item.findMany({
+        where,
+        select: {
+          id: true,
+          title: true,
+          price: true,
+          status: true,
+          category: true,
+          photoUrls: true,
+          sale: {
+            select: {
+              title: true,
+              organizer: {
+                select: { businessName: true },
+              },
+            },
+          },
+          createdAt: true,
+        },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.item.count({ where }),
+    ]);
+
+    const formatted = items.map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      price: item.price ? Math.round(item.price * 100) : 0, // cents
+      status: item.status,
+      category: item.category,
+      photoUrl: item.photoUrls && item.photoUrls.length > 0 ? item.photoUrls[0] : null,
+      organizerName: item.sale?.organizer?.businessName || 'Unknown',
+      saleTitle: item.sale?.title || 'Unknown',
+      createdAt: item.createdAt,
+    }));
+
+    res.json({
+      items: formatted,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching admin items:', error);
+    res.status(500).json({ message: 'Failed to fetch items' });
   }
 };

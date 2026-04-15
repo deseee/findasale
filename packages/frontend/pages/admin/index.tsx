@@ -5,6 +5,7 @@ import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
 
 interface Stats {
+  // existing
   totalUsers: number;
   totalOrganizers: number;
   totalItems: number;
@@ -12,6 +13,28 @@ interface Stats {
   totalRevenue: number;
   newUsersLast7d: number;
   newSalesLast7d: number;
+  salesByStatus?: Record<string, number>;
+  totalPurchases?: number;
+  // new
+  tierBreakdown?: { SIMPLE?: number; PRO?: number; TEAMS?: number };
+  mrr?: number;
+  mrrByTier?: { PRO?: number; TEAMS?: number };
+  transactionRevenueLast30d?: number;
+  transactionRevenueToday?: number;
+  huntPassRevenueLast30d?: number;
+  aLaCarteRevenueLast30d?: number;
+  funnel?: {
+    totalSignups: number;
+    haveOrganizer: number;
+    createdOneSale: number;
+    publishedOneSale: number;
+    paidTier: number;
+  };
+  sparklines?: {
+    signups: number[];
+    transactionRevenue: number[];
+    newSales: number[];
+  };
 }
 
 interface RecentActivity {
@@ -85,38 +108,198 @@ const AdminDashboard = () => {
     );
   }
 
+  const formatCurrency = (cents: number | undefined) => {
+    if (cents === undefined) return '—';
+    return (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  };
+
+  const funnelPercent = (current: number | undefined, previous: number | undefined) => {
+    if (!current || !previous || previous === 0) return '—';
+    const pct = ((current / previous) * 100).toFixed(1);
+    return `${pct}%`;
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Admin Dashboard</h1>
         <p className="text-warm-600 dark:text-warm-400 mb-8">Welcome, {user.name}. Manage your platform here.</p>
 
-        {/* Stats Cards */}
+        {/* Row 1: Money KPIs */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
-              <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Users</h3>
-              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.totalUsers}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">{stats.newUsersLast7d} new this week</p>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Today's Revenue</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{formatCurrency(stats.transactionRevenueToday)}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Transaction revenue</p>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">MRR</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{formatCurrency(stats.mrr)}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Monthly recurring</p>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">30d Revenue</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{formatCurrency(stats.transactionRevenueLast30d)}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Transactions last 30 days</p>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Hunt Pass Revenue</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{formatCurrency(stats.huntPassRevenueLast30d)}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Last 30 days</p>
+              </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-500">
-              <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Sales</h3>
-              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.totalSales}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">{stats.newSalesLast7d} new this week</p>
+            {/* Row 2: Platform KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-blue-500">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Users</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.totalUsers}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">{stats.newUsersLast7d} new this week</p>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-green-500">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Organizers</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.totalOrganizers}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                  {stats.tierBreakdown ? `${stats.tierBreakdown.PRO || 0} PRO · ${stats.tierBreakdown.TEAMS || 0} TEAMS` : '—'}
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-purple-500">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Sales</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.totalSales}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                  {stats.salesByStatus ? Object.entries(stats.salesByStatus).map(([status, count]) => `${count} ${status}`).join(' · ') : '—'}
+                </p>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-orange-500">
+                <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Items</h3>
+                <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.totalItems}</p>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Across all sales</p>
+              </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-400">
-              <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Revenue</h3>
-              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">${(stats.totalRevenue / 100).toFixed(2)}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">From {stats.totalSales} sales</p>
-            </div>
+            {/* Row 3: Organizer Funnel */}
+            {stats.funnel && (
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-8 border-l-4 border-indigo-500">
+                <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-6">Organizer Funnel</h3>
+                <div className="flex flex-col md:flex-row items-stretch gap-4">
+                  <div className="flex-1 bg-indigo-50 dark:bg-indigo-900/20 rounded p-4 border border-indigo-200 dark:border-indigo-800">
+                    <p className="text-xs uppercase text-indigo-600 dark:text-indigo-400 font-medium">Sign-ups</p>
+                    <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mt-2">{stats.funnel.totalSignups}</p>
+                  </div>
 
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-300">
-              <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Items</h3>
-              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.totalItems}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Across all sales</p>
-            </div>
-          </div>
+                  <div className="flex items-center justify-center text-indigo-400">→</div>
+
+                  <div className="flex-1 bg-indigo-50 dark:bg-indigo-900/20 rounded p-4 border border-indigo-200 dark:border-indigo-800">
+                    <p className="text-xs uppercase text-indigo-600 dark:text-indigo-400 font-medium">Have Organizer</p>
+                    <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mt-2">{stats.funnel.haveOrganizer}</p>
+                    <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{funnelPercent(stats.funnel.haveOrganizer, stats.funnel.totalSignups)} of signups</p>
+                  </div>
+
+                  <div className="flex items-center justify-center text-indigo-400">→</div>
+
+                  <div className="flex-1 bg-indigo-50 dark:bg-indigo-900/20 rounded p-4 border border-indigo-200 dark:border-indigo-800">
+                    <p className="text-xs uppercase text-indigo-600 dark:text-indigo-400 font-medium">Created Sale</p>
+                    <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mt-2">{stats.funnel.createdOneSale}</p>
+                    <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{funnelPercent(stats.funnel.createdOneSale, stats.funnel.haveOrganizer)} of organizers</p>
+                  </div>
+
+                  <div className="flex items-center justify-center text-indigo-400">→</div>
+
+                  <div className="flex-1 bg-indigo-50 dark:bg-indigo-900/20 rounded p-4 border border-indigo-200 dark:border-indigo-800">
+                    <p className="text-xs uppercase text-indigo-600 dark:text-indigo-400 font-medium">Published Sale</p>
+                    <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mt-2">{stats.funnel.publishedOneSale}</p>
+                    <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{funnelPercent(stats.funnel.publishedOneSale, stats.funnel.createdOneSale)} of created</p>
+                  </div>
+
+                  <div className="flex items-center justify-center text-indigo-400">→</div>
+
+                  <div className="flex-1 bg-indigo-50 dark:bg-indigo-900/20 rounded p-4 border border-indigo-200 dark:border-indigo-800">
+                    <p className="text-xs uppercase text-indigo-600 dark:text-indigo-400 font-medium">Paid Tier</p>
+                    <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100 mt-2">{stats.funnel.paidTier}</p>
+                    <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">{funnelPercent(stats.funnel.paidTier, stats.funnel.publishedOneSale)} converted</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Row 4: Sparkline Trends */}
+            {stats.sparklines && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-cyan-500">
+                  <h3 className="text-sm font-medium uppercase text-warm-600 dark:text-warm-400 mb-4">New Signups (7d)</h3>
+                  <div className="flex items-end gap-1 h-16 mb-4">
+                    {stats.sparklines.signups.length > 0 ? (
+                      stats.sparklines.signups.map((value, idx) => {
+                        const maxVal = Math.max(...stats.sparklines.signups, 1);
+                        const heightPercent = (value / maxVal) * 100;
+                        return (
+                          <div
+                            key={idx}
+                            className="flex-1 bg-cyan-400 dark:bg-cyan-500 rounded-t"
+                            style={{ height: `${heightPercent}%`, minHeight: '4px' }}
+                            title={`Day ${idx + 1}: ${value}`}
+                          />
+                        );
+                      })
+                    ) : null}
+                  </div>
+                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{stats.sparklines.signups.reduce((a, b) => a + b, 0)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Total this week</p>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-green-500">
+                  <h3 className="text-sm font-medium uppercase text-warm-600 dark:text-warm-400 mb-4">Daily Revenue (7d)</h3>
+                  <div className="flex items-end gap-1 h-16 mb-4">
+                    {stats.sparklines.transactionRevenue.length > 0 ? (
+                      stats.sparklines.transactionRevenue.map((value, idx) => {
+                        const maxVal = Math.max(...stats.sparklines.transactionRevenue, 1);
+                        const heightPercent = (value / maxVal) * 100;
+                        return (
+                          <div
+                            key={idx}
+                            className="flex-1 bg-green-400 dark:bg-green-500 rounded-t"
+                            style={{ height: `${heightPercent}%`, minHeight: '4px' }}
+                            title={`Day ${idx + 1}: ${formatCurrency(value)}`}
+                          />
+                        );
+                      })
+                    ) : null}
+                  </div>
+                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{formatCurrency(stats.sparklines.transactionRevenue.reduce((a, b) => a + b, 0))}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Total this week</p>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-pink-500">
+                  <h3 className="text-sm font-medium uppercase text-warm-600 dark:text-warm-400 mb-4">New Sales (7d)</h3>
+                  <div className="flex items-end gap-1 h-16 mb-4">
+                    {stats.sparklines.newSales.length > 0 ? (
+                      stats.sparklines.newSales.map((value, idx) => {
+                        const maxVal = Math.max(...stats.sparklines.newSales, 1);
+                        const heightPercent = (value / maxVal) * 100;
+                        return (
+                          <div
+                            key={idx}
+                            className="flex-1 bg-pink-400 dark:bg-pink-500 rounded-t"
+                            style={{ height: `${heightPercent}%`, minHeight: '4px' }}
+                            title={`Day ${idx + 1}: ${value}`}
+                          />
+                        );
+                      })
+                    ) : null}
+                  </div>
+                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{stats.sparklines.newSales.reduce((a, b) => a + b, 0)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Total this week</p>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Quick Links */}

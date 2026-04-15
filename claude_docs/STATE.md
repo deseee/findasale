@@ -7,17 +7,64 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S483 (2026-04-15) — eBay settings page bugs (3 fixes + sticky bar)**
+**S483 (2026-04-15) — eBay settings bugs + Admin dashboard rebuild + Cost protection docs + Organizer signals spec**
 
-**S483 What happened:**
+**S483 Part 1 — eBay settings page bugs (3 fixes + sticky bar):**
 - **Bug A — oz input spinners ✅:** Weight tier oz inputs changed from `type="number"` to `type="text"` in settings/ebay.tsx (lines 398, 544). Removes browser spin buttons.
 - **Bug B — Policy dropdown not persisting ✅:** Dropdown onChange refactored to atomic `setMapping` with inline policy lookup + `value={tier.policyId || ''}` controlled binding. Selection now sticks.
 - **Bug C — "Use suggested defaults" range fix ✅:** `ebayPolicyParser.ts` line 83 changed from `(lb + 1) * 16` to `(lb + 1) * 16 - 1`. Now: 1+ lb → 16–31 oz, 2+ lb → 32–47 oz, 3+ lb → 48–63 oz, 4+ lb → 64–79 oz, 5+ lb → 80–95 oz, 6+ lb → 96+.
 - **Bug D — Sticky save bar z-index:** Already `z-50` from S469. No change needed.
 
-**S483 Files changed (2):**
+**S483 Part 2 — Admin dashboard rebuild (7 parallel agents):**
+- **Admin dashboard index ✅:** Rebuilt `pages/admin/index.tsx` with 6-row KPI layout: Row 1 money KPIs (Today's Revenue, MRR, 30-day Transaction Revenue, Hunt Pass Revenue), Row 2 platform KPIs (Users, Organizers with tier breakdown, Sales, Items), Row 3 Conversion Funnel (Signups→Have Organizer→Created Sale→Published Sale→Paid Tier with % at each step), Row 4 sparklines (7-day signups/revenue/sales via inline div bars), Row 5+6 Quick Links + Recent Activity unchanged. Graceful fallbacks for undefined fields.
+- **Admin reports page ✅:** Implemented `pages/admin/reports.tsx` from Coming Soon. Tab 1: Organizer Performance table (sortable by revenue/sales/sellThrough/lastActive, tier badges, sell-through color coding, CSV export). Tab 2: Revenue breakdown by period (7d/30d/90d) with summary cards + daily bar chart + detail table.
+- **Admin items page ✅:** Implemented `pages/admin/items.tsx` from Coming Soon. Global item search (300ms debounce) + status filter. Results: photo thumbnail, title, price, status badge, organizer, sale, date. "View" → `/organizer/edit-item/[id]`. Pagination.
+- **Admin broadcast page ✅:** Implemented `pages/admin/broadcast.tsx` from Coming Soon. Audience selector (ALL/ORGANIZERS/SHOPPERS/PRO_ORGANIZERS/TEAMS_ORGANIZERS) with live recipient count preview. Subject + body + character counter. Confirmation dialog before send. Success/error states.
+- **Admin feature flags page ✅:** Implemented `pages/admin/feature-flags.tsx` from Coming Soon. Flags table with toggle (optimistic UI + rollback), tier restricted badge, last updated/by, inline new-flag form with key validation. Empty state shows suggested flags. NOTE: Requires FeatureFlag schema table (see below — schema pending).
+- **Backend admin controller ✅:** Upgraded `adminController.ts` `getStats` to return tierBreakdown, mrr, mrrByTier, transactionRevenueLast30d/Today, huntPassRevenueLast30d, aLaCarteRevenueLast30d, conversion funnel, 7-day sparklines. Added `getAdminItems`. Added `ebayRateLimit` status to stats response.
+- **Backend reports controller ✅:** New `adminReportsController.ts` — `getOrganizerPerformance` (paginated, sortable), `getRevenueReport` (breakdown by 7d/30d/90d).
+- **Backend broadcast controller ✅:** New `adminBroadcastController.ts` — `sendBroadcast` (Resend, audience-filtered), `getRecipientsPreview`.
+- **eBay rate limiter ✅:** New `packages/backend/src/lib/ebayRateLimiter.ts` — in-memory daily counter (same pattern as aiCostTracker.ts), default soft cap 4,500/day (env `EBAY_API_DAILY_LIMIT`), returns 429 + `code: EBAY_RATE_LIMITED` when limited. `ebayController.ts` instrumented: rate limit gate at top of `pushSaleToEbay()`, `trackEbayCall()` after successful API calls in push + policy fetch + merchant location.
+- **Routes updated ✅:** `routes/admin.ts` — added GET /reports/organizers, GET /reports/revenue, POST /broadcast, GET /broadcast/preview, GET /items.
+
+**S483 Part 3 — Cost protection & signals docs:**
+- **Cost protection playbook ✅:** `claude_docs/operations/cost-protection-playbook.md` — 8 services (Cloudinary, Google Vision, Anthropic, Railway, Vercel, eBay API, Stripe, Resend) with risk ratings, exact URLs, step-by-step instructions, quick-action checklist, viral spike response plan.
+- **Organizer signals spec ✅:** `claude_docs/strategy/organizer-signals-spec.md` — 4 proactive expansion signals (fee savings breakeven, capacity trajectory, feature gap, velocity acceleration) + full churn risk scoring (30% activity / 40% engagement / 30% business, seasonal override). Schema for OrganizerScore table included.
+
+**S483 Architect schema designs (PENDING implementation — schema.prisma not yet updated):**
+- **FeatureFlag:** id, key (unique), description, enabled, tierRestricted, updatedAt, updatedBy
+- **PwaEvent:** id, eventType, userId?, sessionId?, createdAt (append-only)
+- **OrganizerScore:** id, organizerId (unique), expansionScore, expansionTier, expansionTopSignal, churnScore, churnBand, churnTopSignal, scoredAt, createdAt, updatedAt
+- **ApiUsageLog:** id, service, dateKey, callCount, estimatedCostCents, unique(service, dateKey)
+
+These tables are required before: feature flags backend CRUD, PWA event tracking, OrganizerScore daily cron, persistent API cost tracking (replace in-memory counters).
+
+**S483 Files changed (15 total):**
+
+*eBay bugs (2):*
 - `packages/frontend/pages/organizer/settings/ebay.tsx` — oz inputs type="text", dropdown atomic state fix
 - `packages/backend/src/utils/ebayPolicyParser.ts` — weight tier range boundary fix
+
+*Admin backend (4, 2 new):*
+- `packages/backend/src/controllers/adminController.ts` — getStats upgrade + getAdminItems + eBay rate limit status
+- `packages/backend/src/controllers/adminReportsController.ts` (NEW) — organizer performance + revenue reports
+- `packages/backend/src/controllers/adminBroadcastController.ts` (NEW) — send broadcast + preview
+- `packages/backend/src/routes/admin.ts` — 5 new routes
+
+*eBay rate limiter (2, 1 new):*
+- `packages/backend/src/lib/ebayRateLimiter.ts` (NEW) — in-memory daily counter
+- `packages/backend/src/controllers/ebayController.ts` — rate limit gate + trackEbayCall instrumentation
+
+*Admin frontend (5):*
+- `packages/frontend/pages/admin/index.tsx` — rebuilt KPI dashboard
+- `packages/frontend/pages/admin/reports.tsx` — implemented from Coming Soon
+- `packages/frontend/pages/admin/items.tsx` — implemented from Coming Soon
+- `packages/frontend/pages/admin/broadcast.tsx` — implemented from Coming Soon
+- `packages/frontend/pages/admin/feature-flags.tsx` — implemented from Coming Soon
+
+*Docs (2 new):*
+- `claude_docs/operations/cost-protection-playbook.md` (NEW)
+- `claude_docs/strategy/organizer-signals-spec.md` (NEW)
 
 ---
 
@@ -203,7 +250,7 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
-- **S483 (2026-04-15):** eBay settings bugs: oz inputs → type="text" (no spinners), policy dropdown atomic state fix (selection persists), weight-tier range boundary fix `(lb+1)*16-1` (1+ lb = 16–31 oz correct). Sticky bar z-50 already present. 2 files. Zero TS errors.
+- **S483 (2026-04-15):** eBay settings bugs (3 fixes). Admin dashboard rebuild — 5 Coming Soon pages delivered (reports, items, broadcast, feature-flags, index KPIs), 3 new backend controllers (adminReports, adminBroadcast, ebayRateLimiter), getStats upgraded with MRR/funnel/sparklines. Cost protection playbook + organizer signals spec written. Architect schema designs for 4 tables (FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) — not yet in schema.prisma. 15 files. Chrome QA pending.
 - **S481 (2026-04-15):** Trails security fix (public endpoint → authenticated /mine + ownership guard). Hubs nav moved to TEAMS block (grey icons). AI camera batch: TEXT_DETECTION for dark/glass, sparse-label fallback, comp-grounded pricing (anti-anchor), conditionGrade visual checklist, tag grouping by type, within-session suppression, condition-adjusted pricing. 9 files. Zero TS errors.
 - **S480 (2026-04-15):** S468 status card fix ✅ (4 fields added to /api/ebay/connection). Photo lightbox ✅ (ItemPhotoManager). Item 5 reconciliation verified already done in S467. NudgeBar organizer suppression ✅. eBay save bar browser-confirmed ✅ (hot-pink injection). eBay push error toast P2 fixed (result.code/message not result.error). USED_EXCELLENT code-verified, live UNVERIFIED (weight=null). 4 files.
 - **S479 (2026-04-15):** Chrome QA of S467/S468/S469. S467 rarity filter ✅, S469 Advanced Setup page ✅ (all 8 sections render), S468 ⚠️ PARTIAL — sync works, status card broken (settings.tsx reads fields missing from /api/ebay/connection payload). Fix routed next session. 0 code changes.
@@ -254,9 +301,17 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP OF SESSION — Push S483 block first**
+**TOP OF SESSION — Push all S482 + S483 blocks**
 
-**0. Push S483 changes:**
+**0a. Push S482 (camera overhaul — 2 files):**
+```powershell
+git add packages/frontend/components/RapidCapture.tsx
+git add packages/frontend/components/ToastContext.tsx
+git commit -m "Camera settings pill, toast fix, pinch zoom, iPad fullscreen, level indicator"
+.\push.ps1
+```
+
+**0b. Push S483 eBay bugs (2 files):**
 ```powershell
 git add packages/frontend/pages/organizer/settings/ebay.tsx
 git add packages/backend/src/utils/ebayPolicyParser.ts
@@ -264,16 +319,63 @@ git commit -m "eBay settings: oz input spinners, dropdown state fix, weight-tier
 .\push.ps1
 ```
 
-**1. Remaining S467 QA (carry over):**
-- Push USED grade-S item → confirm eBay gets USED_EXCELLENT not NEW — needs item with weight set + policies configured (code-verified S480, live UNVERIFIED).
-- Confirm watermark QR is smaller (85px) and bottom-right — needs successful push to verify on eBay listing photos (UNVERIFIED).
+**0c. Push S483 admin batch (11 files — 3 new backend, 5 frontend, 2 docs, 1 STATE):**
+```powershell
+git add packages/backend/src/controllers/adminController.ts
+git add packages/backend/src/controllers/adminReportsController.ts
+git add packages/backend/src/controllers/adminBroadcastController.ts
+git add packages/backend/src/routes/admin.ts
+git add packages/backend/src/lib/ebayRateLimiter.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/pages/admin/index.tsx
+git add packages/frontend/pages/admin/reports.tsx
+git add packages/frontend/pages/admin/items.tsx
+git add packages/frontend/pages/admin/broadcast.tsx
+git add packages/frontend/pages/admin/feature-flags.tsx
+git add claude_docs/operations/cost-protection-playbook.md
+git add claude_docs/strategy/organizer-signals-spec.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "Admin dashboard rebuild: MRR/funnel/sparklines, 5 admin pages shipped, eBay rate limiter, cost protection playbook, organizer signals spec"
+.\push.ps1
+```
 
-**4. eBay sync batch refactor:**
-- Replace sequential GetItem loop (ebayController.ts ~2746–2895) with GetMultipleItems Shopping API batches of 20/call
+**1. Schema migration — 4 new tables (Patrick runs manually):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+Tables needed: FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog. Dispatch Architect+Dev next session to add to schema.prisma + write migration SQL.
 
-**6. Chrome QA queue:**
-- Full "push a real item" flow — book (category 267), clothing, furniture — verify condition/aspect/price land correctly
-- PostSaleEbayPanel end-to-end (ENDED sale)
+**2. Outstanding migrations (still pending from prior sessions):**
+- S469: EbayPolicyMapping — run `npx prisma migrate deploy` + `npx prisma generate` (same commands above)
+- S464: ebayNeedsReview — same
+
+**3. Remaining S467 QA (carry over):**
+- Push USED grade-S item → confirm eBay gets USED_EXCELLENT not NEW (code-verified S480, live UNVERIFIED — needs item with weight set).
+- Confirm watermark QR is 85px bottom-right (UNVERIFIED).
+
+**4. Chrome QA — new admin pages:**
+- All 5 admin pages need browser verification (reports, items, broadcast, feature-flags, index KPIs).
+- Feature flags page needs FeatureFlag schema before backend CRUD works.
+
+**5. eBay sync batch refactor:**
+- Replace sequential GetItem loop (ebayController.ts ~2746–2895) with GetMultipleItems Shopping API batches of 20/call.
+
+**6. eBay Chrome QA queue:**
+- Full "push a real item" flow — book, clothing, furniture — verify condition/aspect/price land correctly.
+- PostSaleEbayPanel end-to-end (ENDED sale).
+
+**7. Cost protection checklist (Patrick manual actions — see `claude_docs/operations/cost-protection-playbook.md`):**
+- Cloudinary: spending cap + 75% email alert
+- Anthropic: $50/month spend limit at console.anthropic.com/settings/limits
+- Google Vision: 2,000/day quota + $25 budget alert in GCP
+- Railway: confirm plan type, set spend limit if on Pro
+- Vercel: enable usage alerts
+- eBay: check daily call count, apply for Certified App status (1–2 week process)
+- Stripe: enable Radar rules + dispute notifications
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)

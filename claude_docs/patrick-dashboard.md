@@ -2,6 +2,38 @@
 
 ## What Happened This Week
 
+**S483** (2026-04-15) — Admin dashboard rebuild + eBay settings bugs + Cost protection docs ✅
+
+**eBay settings bugs — ✅ 3 fixed:**
+- oz inputs no longer show browser spin buttons (changed to text type)
+- Policy dropdowns now stick — selection persists after choosing
+- "Use suggested defaults" weight-tier ranges corrected (1+ lb = 16–31 oz, 2+ lb = 32–47 oz, etc.)
+
+**Admin dashboard — ✅ rebuilt with real business metrics:**
+Your admin dashboard home page now shows: MRR by tier, today's revenue, 30-day transaction revenue, Hunt Pass revenue, organizer tier breakdown (SIMPLE/PRO/TEAMS counts), a full conversion funnel (Signups → Have Organizer → Created Sale → Published Sale → Paid Tier with % at each step), and 7-day sparklines for signups/revenue/new sales.
+
+**4 Coming Soon admin pages — ✅ all implemented:**
+- **Reports:** Organizer performance table (sortable by revenue, sales, sell-through, last active; tier badges; CSV export) + Revenue breakdown by 7d/30d/90d with daily chart
+- **Items:** Global search across all items with photo thumbnail, status, price, organizer, sale info, pagination
+- **Broadcast:** Send emails to specific audiences (All users, Organizers, Shoppers, PRO, TEAMS) with live recipient count preview before sending
+- **Feature Flags:** Toggle product features on/off with optimistic UI — NOTE: needs schema migration before backend works (see below)
+
+**eBay rate limiter — ✅ shipped:**
+eBay API now has an in-memory daily call counter. Soft cap at 4,500/day (eBay's limit is 5,000). If a bug or bulk import hits the cap, pushes return a clean "rate limited" error instead of exhausting your quota and breaking eBay for the rest of the day.
+
+**Cost protection playbook — ✅ written:**
+All 8 services (Cloudinary, Google Vision, Anthropic, Railway, Vercel, eBay API, Stripe, Resend) documented with exact URLs, step-by-step instructions for spending caps and alerts, and a viral spike response plan. See `claude_docs/operations/cost-protection-playbook.md`. 7 quick-action items for you to do manually (links are all in the doc).
+
+**Organizer signals spec — ✅ written:**
+Full spec for expansion readiness scoring (when to nudge SIMPLE → PRO, PRO → TEAMS) and churn risk scoring for the admin dashboard. 4 proactive expansion signals: fee savings breakeven math, capacity trajectory (trending toward limit before hitting it), feature gap (high-GMV organizer never used Smart Pricing), velocity acceleration (doubled sale frequency). Ready for schema + dev dispatch when you want it.
+
+**Schema work pending (Patrick action required):**
+Architect designed 4 new tables: FeatureFlag (needed for feature flags backend), PwaEvent (PWA metrics), OrganizerScore (expansion/churn scoring), ApiUsageLog (replace in-memory AI/Cloudinary cost trackers with DB persistence). These are NOT in schema.prisma yet — dispatch Architect+Dev next session or the session after.
+
+**15 files changed total. Push blocks below.**
+
+---
+
 **S482** (2026-04-15) — Camera UI overhaul: settings pill, toast fix, pinch zoom, iPad fullscreen ✅
 - **Toast fix — ✅ done.** Toasts were firing inside the header zone (top-4 = 16px, header is 48–64px tall), covering the notification bell and hamburger. Now clears the header: `top-14` mobile / `top-20` desktop.
 - **Camera settings redesigned — ✅ done.** The old torch-button-in-top-bar approach caused X button to be covered on devices with torch. Full redesign:
