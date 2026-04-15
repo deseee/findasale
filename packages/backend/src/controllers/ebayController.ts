@@ -693,19 +693,25 @@ function ebayUserHeaders(accessToken: string): Record<string, string> {
  * Returns null on any failure so caller can fall back to the static map.
  * US marketplace tree id is '0'.
  */
-async function suggestEbayCategoryForTitle(title: string): Promise<string | null> {
+/**
+ * Fetch eBay category suggestions for a title, sorted deepest-level first.
+ * Returns up to 5 candidates. Deeper = more likely to be a leaf category.
+ */
+async function getEbayCategoryCandidates(
+  title: string
+): Promise<Array<{ categoryId: string; categoryName: string; level: number }>> {
   try {
     const appToken = await getEbayAccessToken();
     if (!appToken) {
       console.warn('[eBay Taxonomy] App token unavailable — check EBAY_CLIENT_ID/SECRET');
-      return null;
+      return [];
     }
     const treeId = '0'; // EBAY_US
     const q = encodeURIComponent(title.slice(0, 100));
     const url = `https://api.ebay.com/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${q}`;
     const res = await fetch(url, {
       headers: {
-        'Authorization': `Bearer ${appToken}`,
+        Authorization: `Bearer ${appToken}`,
         'Content-Type': 'application/json',
         'Accept-Language': 'en-US',
       },
@@ -713,24 +719,40 @@ async function suggestEbayCategoryForTitle(title: string): Promise<string | null
     if (!res.ok) {
       const body = await res.text();
       console.error(`[eBay Taxonomy] getCategorySuggestions ${res.status}: ${body.slice(0, 200)}`);
-      return null;
+      return [];
     }
     const data = (await res.json()) as {
-      categorySuggestions?: Array<{ category: { categoryId: string; categoryName: string } }>;
+      categorySuggestions?: Array<{
+        category: { categoryId: string; categoryName: string };
+        categoryTreeNodeLevel?: number;
+      }>;
     };
-    const first = data.categorySuggestions?.[0];
-    if (!first) {
-      console.warn(`[eBay Taxonomy] No suggestions for "${title.slice(0, 60)}"`);
-      return null;
-    }
-    console.log(
-      `[eBay Taxonomy] "${title.slice(0, 40)}" → ${first.category.categoryId} (${first.category.categoryName})`
-    );
-    return first.category.categoryId;
+    const suggestions = data.categorySuggestions ?? [];
+    return suggestions
+      .slice(0, 5)
+      .map((s) => ({
+        categoryId: s.category.categoryId,
+        categoryName: s.category.categoryName,
+        level: s.categoryTreeNodeLevel ?? 0,
+      }))
+      .sort((a, b) => b.level - a.level); // deepest first
   } catch (err) {
     console.error('[eBay Taxonomy] Error:', err);
+    return [];
+  }
+}
+
+async function suggestEbayCategoryForTitle(title: string): Promise<string | null> {
+  const candidates = await getEbayCategoryCandidates(title);
+  if (candidates.length === 0) {
+    console.warn(`[eBay Taxonomy] No suggestions for "${title.slice(0, 60)}"`);
     return null;
   }
+  const best = candidates[0];
+  console.log(
+    `[eBay Taxonomy] "${title.slice(0, 40)}" → ${best.categoryId} (${best.categoryName}) level=${best.level}`
+  );
+  return best.categoryId;
 }
 
 /**
@@ -1792,6 +1814,49 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               if (!retryErr.includes('25021')) {
                 // Different error — stop retrying conditions
                 console.warn(`[eBay Retry25021] ${sku}: non-25021 error, stopping: ${retryErr.slice(0, 200)}`);
+                break;
+              }
+            }
+          } else if (publishErrorText.includes('25005')) {
+            // 25005: category is not a leaf node — walk remaining candidates
+            const candidates = await getEbayCategoryCandidates(item.title);
+            const alreadyTried = new Set([categoryId ?? '']);
+            for (const candidate of candidates) {
+              if (alreadyTried.has(candidate.categoryId)) continue;
+              alreadyTried.add(candidate.categoryId);
+              console.log(
+                `[eBay Retry25005] ${sku}: category ${categoryId} not a leaf — retrying with ${candidate.categoryId} (${candidate.categoryName})`
+              );
+              // Update the offer with the new category
+              const patchOfferRes = await fetch(
+                `https://api.ebay.com/sell/inventory/v1/offer/${offerId}`,
+                {
+                  method: 'PUT',
+                  headers: ebayUserHeaders(accessToken),
+                  body: JSON.stringify({ categoryId: candidate.categoryId }),
+                }
+              );
+              if (!patchOfferRes.ok && patchOfferRes.status !== 204) {
+                const t = await patchOfferRes.text();
+                console.warn(`[eBay Retry25005] offer PATCH failed: ${patchOfferRes.status} ${t.slice(0, 200)}`);
+                continue;
+              }
+              publishResponse = await fetch(publishUrl, {
+                method: 'POST',
+                headers: ebayUserHeaders(accessToken),
+              });
+              if (publishResponse.ok) {
+                categoryId = candidate.categoryId;
+                await prisma.item.update({
+                  where: { id: item.id },
+                  data: { ebayCategoryId: candidate.categoryId },
+                });
+                console.log(`[eBay Retry25005] ${sku}: succeeded with category=${candidate.categoryId}`);
+                break;
+              }
+              const retryErr = await publishResponse.clone().text();
+              if (!retryErr.includes('25005')) {
+                console.warn(`[eBay Retry25005] ${sku}: non-25005 error, stopping: ${retryErr.slice(0, 200)}`);
                 break;
               }
             }
