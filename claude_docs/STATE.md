@@ -7,6 +7,37 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S484 (2026-04-15) — Organizer acquisition playbook + animated video brief**
+
+- **Organizer Acquisition Playbook ✅:** Rebuilt twice this session. First pass wrong scope (cold outreach). Second pass correct: demand generation — organizers arrive pre-sold, sales conversation is just a trial offer. Covers community presence, before/after video asset, ringless voicemail (awareness touch not pitch), social proof flywheel, referral mechanics, probate attorney/consultant network. No "AI" language anywhere. Peer-to-peer tone throughout. Saved to `Organizer_Acquisition_Playbook.md` in repo root.
+- **Animated video research ✅:** Tested Runway (paywall), Kling (1 free then paywall), Google Flow/Veo 3.1 (free — 50 credits/day, 20/generation, 9:16 supported). Settled on animated HTML5/React build instead of AI video — more brand-accurate, no watermark, no credits, free.
+- **Video prompts written ✅:** 10 scene prompts for Veo 3.1 (Clip 1 iterated 4x based on feedback). Format locked: 25-second vertical 9:16 TikTok/Shorts, 3 AI clips + real screen recording. Structure: 0–5s chaos → 5–15s screen recording → 15–22s POS → 22–25s CTA.
+- **Brand assets pulled ✅:** Colors, fonts, features extracted from tailwind.config.js + globals.css + finda.sale/organizer/pricing. Ready for next session animated build.
+
+**S484 Brand Assets (for next session animated video):**
+- Background: `#F9F7F4` (warm-100)
+- Primary text: `#1A1A1A` (warm-900)
+- Accent/CTA: `#D97706` (amber-600)
+- Muted/secondary: `#8B7355` (warm-500)
+- Success/sold: `#059669`
+- Sage accent: `#6B9E7F`
+- Dark mode bg: `#1C1C1E` / text: `#F5F5F0`
+- Headings: Montserrat (globals.css) / Fraunces (tailwind config)
+- Body: Inter
+
+**S484 Pricing features to highlight (from finda.sale/organizer/pricing):**
+- Photo-to-listing (auto-tag → publish) — all tiers, core demo moment
+- QR codes + POS + social posts — all tiers
+- Built-in payments (shopper pays on their phone)
+- Virtual Queue — PRO+
+- "Sell smarter." tagline
+- CTA: "Try it free"
+
+**S484 Files changed (1):**
+- `Organizer_Acquisition_Playbook.md` (NEW — repo root)
+
+---
+
 **S483 (2026-04-15) — eBay settings bugs + Admin dashboard rebuild + Cost protection docs + Organizer signals spec**
 
 **S483 Part 1 — eBay settings page bugs (3 fixes + sticky bar):**
@@ -250,6 +281,7 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
+- **S484 (2026-04-15):** Organizer acquisition playbook (demand gen scope, peer tone, no cold outreach, no "AI" language). Animated video research — settled on HTML5 build over AI video tools. Veo 3.1 prompts written + iterated. Brand assets extracted (colors, fonts, features). 1 file.
 - **S483 (2026-04-15):** eBay settings bugs (3 fixes). Admin dashboard rebuild — 5 Coming Soon pages delivered (reports, items, broadcast, feature-flags, index KPIs), 3 new backend controllers (adminReports, adminBroadcast, ebayRateLimiter), getStats upgraded with MRR/funnel/sparklines. Cost protection playbook + organizer signals spec written. Architect schema designs for 4 tables (FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) — not yet in schema.prisma. 15 files. Chrome QA pending.
 - **S481 (2026-04-15):** Trails security fix (public endpoint → authenticated /mine + ownership guard). Hubs nav moved to TEAMS block (grey icons). AI camera batch: TEXT_DETECTION for dark/glass, sparse-label fallback, comp-grounded pricing (anti-anchor), conditionGrade visual checklist, tag grouping by type, within-session suppression, condition-adjusted pricing. 9 files. Zero TS errors.
 - **S480 (2026-04-15):** S468 status card fix ✅ (4 fields added to /api/ebay/connection). Photo lightbox ✅ (ItemPhotoManager). Item 5 reconciliation verified already done in S467. NudgeBar organizer suppression ✅. eBay save bar browser-confirmed ✅ (hot-pink injection). eBay push error toast P2 fixed (result.code/message not result.error). USED_EXCELLENT code-verified, live UNVERIFIED (weight=null). 4 files.
@@ -301,7 +333,7 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP OF SESSION — Push all S482 + S483 blocks**
+**TOP OF SESSION — Push S482 + S483 + S484 blocks**
 
 **0a. Push S482 (camera overhaul — 2 files):**
 ```powershell
@@ -377,8 +409,15 @@ Tables needed: FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog. Dispatch Arch
 - eBay: check daily call count, apply for Certified App status (1–2 week process)
 - Stripe: enable Radar rules + dispute notifications
 
-**8. Sales outreach brainstorm (next session priority):**
-Patrick wants to explore tactics for getting warm intros and early organizer sales. Research is preloaded — cover: ringless voicemail drops, warm intro engineering, Loom video outreach, cold email frameworks (Koerner's "qualifying question first" approach), local network tactics (estate sale trade associations, Facebook groups, Craigslist organizer lists), and referral systems. Goal: build a playbook for the first 20–50 organizer signups without a sales team. No dev work — pure strategy session.
+**0d. Push S484 (playbook — 1 file):**
+```powershell
+git add Organizer_Acquisition_Playbook.md
+git commit -m "Organizer acquisition playbook: demand gen strategy, peer tone, no cold outreach"
+.\push.ps1
+```
+
+**8. Build animated video (TOP PRIORITY next session):**
+Build a 25-second animated HTML5 video (9:16 vertical, TikTok/Shorts format) using FindA.Sale brand assets. All research is done — brand colors, fonts, features, and video structure are locked in STATE.md Current Work above. Dispatch findasale-dev to build as a single self-contained HTML file with CSS animations. Structure: 0–5s chaos text animation → 5–15s [screen recording placeholder frame] → 15–22s POS animated sequence → 22–25s CTA. Pull Google Fonts (Montserrat + Inter) from CDN. After video is approved by Patrick, update Organizer_Acquisition_Playbook.md Asset 1 section with the actual file link.
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)

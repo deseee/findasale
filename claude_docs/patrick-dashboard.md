@@ -2,6 +2,21 @@
 
 ## What Happened This Week
 
+**S484** (2026-04-15) — Organizer acquisition playbook + animated video brief ✅
+
+Rebuilt the organizer acquisition playbook from scratch with the right scope — demand generation, not cold outreach. By the time an organizer talks to anyone, they're already sold. Six assets: before/after video, community presence strategy, ringless voicemail (awareness touch → drives to video), social proof flywheel, referral mechanics, and the probate attorney/consultant referral network. No "AI" language. Peer-to-peer tone throughout.
+
+Researched AI video tools (Runway/Kling both paywall quickly, Veo 3.1 free via Google Flow). Iterated on Veo 3.1 prompts for a 25-second TikTok/Shorts format. Decided to build an animated HTML5 video instead — more brand-accurate, no watermarks. Brand assets pulled from codebase (colors, fonts) and from finda.sale/organizer/pricing (features). Next session builds the video.
+
+**Push block for S484 (1 file):**
+```powershell
+git add Organizer_Acquisition_Playbook.md
+git commit -m "Organizer acquisition playbook: demand gen strategy, peer tone, no cold outreach"
+.\push.ps1
+```
+
+---
+
 **S483** (2026-04-15) — Admin dashboard rebuild + eBay settings bugs + Cost protection docs ✅
 
 **eBay settings bugs — ✅ 3 fixed:**
