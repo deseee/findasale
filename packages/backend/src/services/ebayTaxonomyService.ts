@@ -361,10 +361,10 @@ export async function suggestCategories(
 
     // Extract top 5 results
     const results: CategorySuggestion[] = suggestions.slice(0, 5).map((s: any) => ({
-      categoryId: s.categoryId,
-      categoryName: s.categoryName,
+      categoryId: s.category?.categoryId ?? s.categoryId,
+      categoryName: s.category?.categoryName ?? s.categoryName,
       categoryTreeNodeLevel: s.categoryTreeNodeLevel,
-      l1CategoryName: getL1CategoryName(s.categoryName), // Enrich with L1 category
+      l1CategoryName: getL1CategoryName(s.category?.categoryName ?? s.categoryName ?? ''),
     }));
 
     // Cache the result
