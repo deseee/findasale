@@ -1833,17 +1833,32 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               console.log(
                 `[eBay Retry25005] ${sku}: category ${categoryId} not a leaf — retrying with ${candidate.categoryId} (${candidate.categoryName})`
               );
+              // Fetch current offer to preserve all fields (PUT replaces entire object)
+              const existingOfferRes = await fetch(
+                `https://api.ebay.com/sell/inventory/v1/offer/${offerId}`,
+                { headers: ebayUserHeaders(accessToken) }
+              );
+              if (!existingOfferRes.ok) {
+                console.warn(`[eBay Retry25005] could not fetch offer: ${existingOfferRes.status}`);
+                continue;
+              }
+              const existingOffer = (await existingOfferRes.json()) as any;
+              const updatedOffer = { ...existingOffer, categoryId: candidate.categoryId };
+              // Strip read-only fields eBay rejects on PUT
+              delete updatedOffer.offerId;
+              delete updatedOffer.offerState;
+              delete updatedOffer.listing;
               const patchOfferRes = await fetch(
                 `https://api.ebay.com/sell/inventory/v1/offer/${offerId}`,
                 {
                   method: 'PUT',
                   headers: ebayUserHeaders(accessToken),
-                  body: JSON.stringify({ categoryId: candidate.categoryId }),
+                  body: JSON.stringify(updatedOffer),
                 }
               );
               if (!patchOfferRes.ok && patchOfferRes.status !== 204) {
                 const t = await patchOfferRes.text();
-                console.warn(`[eBay Retry25005] offer PATCH failed: ${patchOfferRes.status} ${t.slice(0, 200)}`);
+                console.warn(`[eBay Retry25005] offer PUT failed: ${patchOfferRes.status} ${t.slice(0, 200)}`);
                 continue;
               }
               publishResponse = await fetch(publishUrl, {
