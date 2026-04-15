@@ -4,6 +4,50 @@ This file stores archived "Next Session" planning blocks and push instructions f
 
 ---
 
+## S428–S449 Sessions Archive (archived S465 during STATE.md compaction)
+
+### S449 (2026-04-13): Rank staleness P0 fix, Scout Reveal P1, Dashboard UX brief + Rank Perks spec, haul post test data, organizer discount badge. JWT rank sync live. 20-file second push block with 3 migrations (rankUpHistory, holdDurationMinutes, legendary_early_access).
+
+### S448 (2026-04-13): QA audit of S446/S447 shipped features. Scout Reveal bug identified. Rank naming locked (Initiate→Scout→Ranger→Sage→Grandmaster).
+
+### S447 (2026-04-13): Explore session — researched shopper/organizer settings/loyalty/dashboard/explorer-passport. Reviewed D-XP-001 through D-XP-006 decisions. Named system locked: Explorer Profile / Explorer's Guild / Hunt Pass.
+
+### S446 (2026-04-13): XP frontend implementation + workspace magic link invite flow + WorkspaceMember schema fixes.
+
+### S444 (2026-04-13): STAFF→MEMBER full rename (schema, DB, models, UI) + workspace permissions fix.
+
+### S443 (2026-04-11): 9 live-site bug fixes from Patrick's walkthrough + command center upgrade + appraisal gating + UX spec.
+
+### S442 (2026-04-11): Team Collaboration Phase 2 schema fix + test data seeding. 18 TS errors fixed in workspaceController.ts.
+
+### S441 (2026-04-11): 8-issue fix batch from Patrick's live site review. 2 dispatch rounds. 15 files changed. 1 DB backfill.
+
+### S440 (2026-04-11): Nav/UX session — 3 push rounds.
+
+### S439 (2026-04-11): 6 live-site issues fixed. Inventory root-cause resolved (447 items backfilled). Shopper bounties model evolved. Market Hubs renamed. Subscription PRO display fixed.
+
+### S438 (2026-04-11): Patrick's 6-issue review. Tier-aware platform fees in 5 backend files. Hubs page rebuilt as Flea Market Events. Checklist merged into /plan. Bounties moved out of PRO Tools. Appraisal PRO gate removed.
+
+### S437 (2026-04-11): Organizer tools session — 6 sale-selector bugs fixed, calendar built, bounty redesign Phase 1 shipped (schema + 6 endpoints + wired frontend), 7 organizer pages improved, typology deprecated.
+
+### S436 (2026-04-10): Three placeholder pages replaced with functional implementations.
+
+### S435 (2026-04-10): S434 audit, nav parity fixed, Hunt Pass section corrected.
+
+### S433 (2026-04-10): Full auction overhaul — Phase 1 P0 fixes + Phase 2 professional features. ADR-013 written. Migration required for Phase 2.
+
+### S432 (2026-04-10): eBay OAuth bug fixes + Stripe Connect status display + auction listing type display.
+
+### S431 (2026-04-09): Treasure Trails map activation mode + 3 trail URL bugs fixed + XP purchase rate bug fixed.
+
+### S430 (2026-04-09): Sale page layout cleanup, email spam fixes, iOS geo UX, organizer photo upload, label redesign, print label auth fix, activity dedup, auction Buy Now gate.
+
+### S429 (2026-04-09): POS socket 502 fixes, payment intent fee bug, Stripe Connect invalid account, expired hold blocking, IDB crash fix, Request Cart Share feature.
+
+### S428 (2026-04-09): 4 POS bug fixes — no migration required.
+
+---
+
 ## Archived Session Wrap: S351 (2026-03-29)
 
 ### S351 Priority 1: Push S350 files (Patrick action first)

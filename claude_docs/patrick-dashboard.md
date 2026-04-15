@@ -2,6 +2,14 @@
 
 ## What Happened This Week
 
+**S465** (2026-04-14) — Roadmap graduation audit + STATE.md compaction ✅
+- **31 features graduated to SHIPPED & VERIFIED:** Audited the roadmap (v106 → v107) for features with both ✅ Claude QA and ✅ Human QA marks. Moved 10 more items from the Building/UNTESTED sections plus 21 already-graduated items from "Only Human Left" into the SHIPPED & VERIFIED table. Newly graduated this pass: #222 Dashboard Redesign, #225 Revenue/Metrics API, #229 AI Comp Tool, #236 Weather Strip, #246 Camera Coaching Banner, #247 AI Branding Purge, #248 FAQ Expansion, #250 Price Research Panel, #262 Tier Restructure, #149 Email Reminders.
+- **#245 Feedback Widget deprecated:** Moved from Building to Rejected section. Decision: replaced with planned micro-surveys approach (less intrusive, contextual).
+- **STATE.md compacted from 1603 → 150 lines:** Sessions S428–S449 (~850 lines of narrative) archived to `COMPLETED_PHASES.md`. STATE.md rewritten to compact structure: Current Work / Recent Sessions one-liners / Go-Live Blockers / Next Session Priority / Blocked-Unverified Queue / Standing Notes. Complies with T5 size rule.
+- **No code changes this session.** Pure documentation pass. S464 code/migration from earlier today still needs your manual actions (below).
+
+---
+
 **S464** (2026-04-14) — ebayNeedsReview, billing webhook fix, Stripe env cleanup, eBay retry hardening ✅
 - **ebayNeedsReview:** When eBay push exhausts all 5 category suggestions with error 25005 (non-leaf category), the item is now flagged in the DB and the sale detail page shows an amber "⚠ eBay Category Needed" badge. The push button switches to "Set Category" with an amber color. When you push successfully later, the flag clears. Migration added: `20260414_ebay_needs_review` — **you must run this before testing.**
 - **Billing webhook secret fixed (P0):** The billing webhook was using the wrong signing secret (`STRIPE_WEBHOOK_SECRET` instead of `STRIPE_BILLING_WEBHOOK_SECRET`). This meant every incoming subscription event (subscribe, cancel, renew) would fail signature verification and be silently dropped. Fixed. Make sure `STRIPE_BILLING_WEBHOOK_SECRET` is set in Railway with the correct signing secret from the `/api/billing/webhook` endpoint in Stripe live dashboard.
@@ -321,7 +329,7 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 ---
 
-## What's Next (S465+)
+## What's Next (S466+)
 
 **P0 — Register live Stripe webhooks** (see Action Items — zero subscriptions work until done).
 
@@ -347,6 +355,7 @@ git rm packages/frontend/components/LibraryItemCard.tsx
 
 | Session | Date | Summary |
 |---------|------|---------|
+| S465 | 2026-04-14 | Roadmap graduation audit (31 features to SHIPPED & VERIFIED, v107). #245 Feedback Widget → Rejected. STATE.md compacted 1603→150 lines. S428–S449 archived to COMPLETED_PHASES.md. |
 | S464 | 2026-04-14 | ebayNeedsReview flag + amber badge, billing webhook secret fix, Stripe price IDs from env vars, two-pass 25005/25021 retry, offer PUT merge fix, roadmap v106 |
 | S463 | 2026-04-14 | Live eBay category picker shipped (Taxonomy API), ebayCategoryMap.ts deleted, eBay sync batch architecture spec (GetMultipleItems), roadmap audit v105 |
 | S462 | 2026-04-14 | eBay Listing Data Parity A+B+C: merchant location fix, policy picker, HTML sanitizer, 17 schema fields, PostSaleEbayPanel, taxonomy service, catalog API, Auto-fill suggest |
