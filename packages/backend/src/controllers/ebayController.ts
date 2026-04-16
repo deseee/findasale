@@ -16,6 +16,7 @@ import {
   EbayFulfillmentPolicySummary,
   WeightTierMapping,
 } from '../utils/ebayPolicyParser';
+import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 
 /**
  * Feature #229: AI Price Comps Tool
@@ -1549,18 +1550,18 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     }
 
     // Feature #75: Quota enforcement — eBay push limit check
-    // TODO: Add ebayPushesThisMonth field to Organizer model (requires migration)
-    // Once added, uncomment the code below:
-    // const tierLimits = getTierLimits(organizer.subscriptionTier || 'SIMPLE');
-    // const ebayPushesThisMonth = await prisma.organizer.findUnique({
-    //   where: { id: organizer.id },
-    //   select: { ebayPushesThisMonth: true },
-    // });
-    // if (ebayPushesThisMonth && ebayPushesThisMonth.ebayPushesThisMonth >= tierLimits.ebayPushesLimit) {
-    //   return res.status(429).json({
-    //     message: `Monthly eBay push limit reached (${tierLimits.ebayPushesLimit}). Upgrade to increase limit.`,
-    //   });
-    // }
+    const tier = (organizer.subscriptionTier || 'SIMPLE') as SubscriptionTier;
+    const ebayPushLimit = getTierLimit(tier, 'ebayPushesPerMonth');
+
+    // Check if monthly quota has been exceeded
+    if (organizer.ebayPushesThisMonth >= ebayPushLimit) {
+      return res.status(429).json({
+        code: 'EBAY_PUSH_QUOTA_EXCEEDED',
+        message: `Monthly eBay push limit reached (${ebayPushLimit} per month for ${tier}). Upgrade to increase limit.`,
+        limit: ebayPushLimit,
+        used: organizer.ebayPushesThisMonth,
+      });
+    }
 
     // Verify eBay connection exists
     if (!organizer.ebayConnection) {
@@ -2228,6 +2229,18 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       success: results.filter((r: any) => r.status === 'success').length,
       failed: results.filter((r: any) => r.status === 'error').length,
     };
+
+    // Increment eBay push counter for successful pushes (includes drafts)
+    const successCount = results.filter((r: any) => r.status === 'success' || r.status === 'draft').length;
+    if (successCount > 0) {
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: {
+          ebayPushesThisMonth: { increment: successCount },
+          ebayPushesResetAt: organizer.ebayPushesResetAt || new Date(), // Initialize if not set
+        },
+      });
+    }
 
     res.json({ results, summary });
   } catch (error) {

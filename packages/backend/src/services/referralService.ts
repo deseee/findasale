@@ -53,14 +53,20 @@ export const generateReferralCode = async (userId: string): Promise<string> => {
  * Process a referral: award points to the referrer.
  * Called when a referred user completes signup or first purchase.
  * Checks for existing reward to prevent duplicates.
+ *
+ * SECURITY: Now accepts optional Prisma transaction client to ensure atomicity
+ * with user creation and prevent race-condition duplicate rewards.
  */
 export const processReferral = async (
   referrerId: string,
   referredUserId: string,
+  txClient: any = null, // Optional Prisma transaction client
 ): Promise<void> => {
   try {
+    const client = txClient || prisma;
+
     // Check if reward already exists
-    const existing = await prisma.referralReward.findUnique({
+    const existing = await client.referralReward.findUnique({
       where: {
         referrerId_referredUserId: {
           referrerId,
@@ -77,7 +83,7 @@ export const processReferral = async (
     }
 
     // Create reward record
-    await prisma.referralReward.create({
+    await client.referralReward.create({
       data: {
         referrerId,
         referredUserId,

@@ -29,14 +29,26 @@ export function requireTier(minTier: SubscriptionTier) {
     }
 
     const tier = (req.user.organizerProfile.subscriptionTier ?? 'SIMPLE') as SubscriptionTier;
+    const organizerProfile = req.user.organizerProfile as any;
+    const inGracePeriod = organizerProfile?.graceEndAt
+      ? new Date() <= new Date(organizerProfile.graceEndAt)
+      : false;
+
+    // During grace period, block access to PRO/TEAMS features (graceful downgrade)
+    if (inGracePeriod && minTier !== 'SIMPLE') {
+      return res.status(403).json({
+        message: 'This feature is not available during your grace period.',
+        code: 'GRACE_PERIOD_RESTRICTION',
+        graceEndAt: organizerProfile?.graceEndAt || null,
+        graceTierBefore: organizerProfile?.graceTierBefore || tier,
+        remainingDays: Math.ceil(
+          (new Date(organizerProfile.graceEndAt).getTime() - new Date().getTime()) /
+          (1000 * 60 * 60 * 24)
+        )
+      });
+    }
 
     if (!hasAccess(tier, minTier)) {
-      // Fetch organizer to check grace status
-      const organizerProfile = req.user.organizerProfile as any;
-      const inGracePeriod = organizerProfile?.graceEndAt
-        ? new Date() <= new Date(organizerProfile.graceEndAt)
-        : false;
-
       return res.status(403).json({
         message: `This feature requires the ${minTier} plan or higher.`,
         code: 'TIER_REQUIRED',

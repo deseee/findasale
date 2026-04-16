@@ -22,7 +22,7 @@ import { createNotification } from '../services/notificationService'; // P0: Bid
 import { closeAuction } from '../services/auctionService'; // Auction close flow
 import { resetRapidDraftDebounce, rapidfireAIDebounce, heldAnalysisItems } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
-import { awardXp, XP_AWARDS, spendXp, getSpendableXp } from '../services/xpService'; // Phase 2a: XP awards
+import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '../services/xpService'; // Phase 2a: XP awards
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
@@ -774,17 +774,22 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
         });
 
         if (!existingConditionXp) {
-          // Award XP to the organizer
-          await awardXp(
-            req.user.id,
-            'CONDITION_RATING',
-            XP_AWARDS.CONDITION_RATING,
-            {
-              itemId: id,
-              saleId: item.saleId,
-              description: `Condition rating S-D for item "${updatedItem.title}"`,
-            }
-          );
+          // Check monthly XP cap for CONDITION_RATING (50 XP/month max)
+          const monthlyRemaining = await checkMonthlyXpCap(req.user.id, 'CONDITION_RATING');
+          if (monthlyRemaining > 0) {
+            // Award XP to the organizer (capped at remaining monthly allowance)
+            const xpToAward = Math.min(XP_AWARDS.CONDITION_RATING, monthlyRemaining);
+            await awardXp(
+              req.user.id,
+              'CONDITION_RATING',
+              xpToAward,
+              {
+                itemId: id,
+                saleId: item.saleId,
+                description: `Condition rating S-D for item "${updatedItem.title}"`,
+              }
+            );
+          }
         }
       } catch (err) {
         console.warn('[xpService] Failed to award condition rating XP:', err);

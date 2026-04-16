@@ -26,6 +26,7 @@ export const getOrganizerPerformance = async (req: AuthRequest, res: Response) =
         businessName: true,
         subscriptionTier: true,
         sales: {
+          where: { deletedAt: null },
           select: {
             id: true,
             items: {

@@ -88,7 +88,7 @@ export const register = async (req: Request, res: Response) => {
     // Invite codes are issued for organizer beta access — always promote to ORGANIZER
     const effectiveRole = validatedInvite ? 'ORGANIZER' : safeRole;
 
-    // DB2: Wrap user + organizer creation atomically — neither is orphaned on failure
+    // DB2: Wrap user + organizer + referral creation atomically — prevents race-condition duplicate rewards
     const user = await prisma.$transaction(async (tx) => {
       // Generate email verification token
       const emailVerificationToken = crypto.randomBytes(32).toString('hex');
@@ -132,6 +132,59 @@ export const register = async (req: Request, res: Response) => {
             address: businessAddress || '',
           }
         });
+      }
+
+      // SECURITY FIX P0: Handle referral INSIDE transaction to prevent race-condition duplicate rewards
+      if (referralCode) {
+        const referrer = await tx.user.findUnique({
+          where: { referralCode },
+          include: { organizer: true }
+        });
+
+        if (referrer) {
+          // Create referral record atomically
+          await tx.referral.create({
+            data: {
+              referrerId: referrer.id,
+              referredUserId: newUser.id
+            }
+          });
+
+          // Process referral reward INSIDE transaction (atomically with user creation)
+          await processReferral(referrer.id, newUser.id, tx);
+
+          // Check for referral badge
+          // Note: handleReferralBadge reads outside the tx — acceptable since it's idempotent
+          // It will be called after transaction commits
+
+          // Feature #11: Organizer Referral Reciprocal (INSIDE transaction)
+          // If both referrer and new user are organizers, grant 3-month fee discount to both
+          if (referrer.organizer && effectiveRole === 'ORGANIZER') {
+            const discountExpiry = new Date();
+            discountExpiry.setMonth(discountExpiry.getMonth() + 3);
+
+            // Create OrganizerReferral record
+            await tx.organizerReferral.create({
+              data: {
+                referrerId: referrer.id,
+                refereeId: newUser.id,
+                status: 'PENDING'
+              }
+            });
+
+            // Grant discount to referee (new organizer)
+            await tx.organizer.update({
+              where: { userId: newUser.id },
+              data: { referralDiscountExpiry: discountExpiry }
+            });
+
+            // Grant reciprocal discount to referrer organizer
+            await tx.organizer.update({
+              where: { id: referrer.organizer.id },
+              data: { referralDiscountExpiry: discountExpiry }
+            });
+          }
+        }
       }
 
       return newUser;
@@ -208,67 +261,22 @@ export const register = async (req: Request, res: Response) => {
       }
     }
 
-    // Handle referral if provided
+    // Referral processing is now INSIDE the transaction (see above)
+    // Post-transaction: award XP and check badges (non-blocking operations)
     if (referralCode) {
       const referrer = await prisma.user.findUnique({
         where: { referralCode },
-        include: { organizer: true }
+        select: { id: true }
       });
 
       if (referrer) {
-        // Create referral record
-        await prisma.referral.create({
-          data: {
-            referrerId: referrer.id,
-            referredUserId: user.id
-          }
-        });
-
-        // Award XP to referrer for signup (non-blocking)
+        // Award XP to referrer for signup (non-blocking, after transaction)
         awardXp(referrer.id, 'REFERRAL_SIGNUP', XP_AWARDS.REFERRAL_SIGNUP).catch((err) =>
           console.error('[referral] Failed to award signup XP to referrer:', err)
         );
 
-        // Process referral reward (creates ReferralReward record)
-        processReferral(referrer.id, user.id).catch((err) =>
-          console.error('[referral] Failed to process referral reward:', err)
-        );
-
-        // Check for referral badge
+        // Check for referral badge (non-blocking, after transaction)
         await handleReferralBadge(referrer.id);
-
-        // Feature #11: Organizer Referral Reciprocal
-        // If both referrer and new user are organizers, grant 3-month fee discount to both
-        if (referrer.organizer && effectiveRole === 'ORGANIZER') {
-          const discountExpiry = new Date();
-          discountExpiry.setMonth(discountExpiry.getMonth() + 3);
-
-          // Look up new user's Organizer record (just created in transaction above)
-          const newOrganizer = await prisma.organizer.findUnique({ where: { userId: user.id } });
-
-          if (newOrganizer) {
-            // Create OrganizerReferral record
-            await prisma.organizerReferral.create({
-              data: {
-                referrerId: referrer.id,
-                refereeId: user.id,
-                status: 'PENDING'
-              }
-            });
-
-            // Grant discount to referee (new organizer)
-            await prisma.organizer.update({
-              where: { id: newOrganizer.id },
-              data: { referralDiscountExpiry: discountExpiry }
-            });
-
-            // Grant reciprocal discount to referrer organizer
-            await prisma.organizer.update({
-              where: { id: referrer.organizer.id },
-              data: { referralDiscountExpiry: discountExpiry }
-            });
-          }
-        }
       }
     }
 

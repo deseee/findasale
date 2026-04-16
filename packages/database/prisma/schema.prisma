@@ -334,6 +334,9 @@ model Organizer {
   firstSaleFreeProUsedAt  DateTime? // When organizer used their first-sale free PRO offer (null = not used yet)
   aiTagsUsedThisMonth     Int       @default(0) // Count of AI tags used this calendar month
   aiTagsResetAt           DateTime? // When the monthly AI tag counter was last reset
+  // Feature #75: eBay Push Quota Tracking — monthly limit enforcement
+  ebayPushesThisMonth     Int       @default(0) // Count of eBay pushes this calendar month
+  ebayPushesResetAt       DateTime? // When the monthly eBay push counter was last reset
   // Feature: Graceful Tier Degradation — grace period fields
   graceEndAt              DateTime? // When grace period expires (7 days from downgrade)
   graceTierBefore         String? // Tier before downgrade (PRO or TEAMS)
