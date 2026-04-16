@@ -323,6 +323,8 @@ model Organizer {
   ebayPolicyMapping       EbayPolicyMapping?     @relation("OrganizerEbayPolicyMapping")
   ebaySubscriptionId      String? // ORDER_CONFIRMATION subscription ID from eBay Notification API
   workspaceChatMessages   WorkspaceChatMessage[] @relation("WorkspaceChatMessages")
+  // Feature #S483: Organizer Signals — expansion + churn scoring
+  organizerScore          OrganizerScore?
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 }
@@ -3470,4 +3472,65 @@ model EarlyAccessCache {
 
   @@index([userId, expiresAt])
   @@index([category, expiresAt])
+}
+
+// FeatureFlag — kill-switch and feature rollout control (S483 Admin Feature Flags page)
+model FeatureFlag {
+  id             String   @id @default(cuid())
+  key            String   @unique // e.g. "hunt_pass_enabled", "ebay_push_enabled"
+  description    String   @default("")
+  enabled        Boolean  @default(false)
+  tierRestricted String?  // null = all tiers; "PRO", "TEAMS", etc. to restrict
+  updatedAt      DateTime @updatedAt
+  updatedBy      String?  // admin user id who last toggled
+}
+
+// PwaEvent — append-only event log for PWA analytics and install tracking (S483)
+model PwaEvent {
+  id        String   @id @default(cuid())
+  eventType String   // "pwa_install_prompt", "pwa_installed", "pwa_opened", etc.
+  userId    String?  // null for anonymous events
+  sessionId String?  // browser session id
+  metadata  String?  // JSON blob for additional context
+  createdAt DateTime @default(now())
+
+  @@index([eventType])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// OrganizerScore — expansion + churn signal scores, updated by daily cron (S483)
+model OrganizerScore {
+  id                  String    @id @default(cuid())
+  organizerId         String    @unique
+  organizer           Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  // Expansion signals (0–100 score, higher = more expansion-ready)
+  expansionScore      Float     @default(0)
+  expansionTier       String    @default("LOW")   // LOW | MEDIUM | HIGH | URGENT
+  expansionTopSignal  String?   // human-readable top trigger, e.g. "fee_savings_breakeven"
+  // Churn risk signals (0–100 score, higher = more at-risk)
+  churnScore          Float     @default(0)
+  churnBand           String    @default("GREEN") // GREEN | YELLOW | ORANGE | RED
+  churnTopSignal      String?   // human-readable top trigger, e.g. "no_login_14d"
+  scoredAt            DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([expansionTier])
+  @@index([churnBand])
+}
+
+// ApiUsageLog — persistent daily API call + cost tracking, replaces in-memory counters (S483)
+model ApiUsageLog {
+  id                  String   @id @default(cuid())
+  service             String   // "cloudinary", "google_vision", "anthropic", "ebay", "stripe", "resend"
+  dateKey             String   // "2026-04-16" ISO date
+  callCount           Int      @default(0)
+  estimatedCostCents  Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([service, dateKey])
+  @@index([service])
+  @@index([dateKey])
 }
