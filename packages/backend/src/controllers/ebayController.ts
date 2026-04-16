@@ -1548,6 +1548,20 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Feature #75: Quota enforcement — eBay push limit check
+    // TODO: Add ebayPushesThisMonth field to Organizer model (requires migration)
+    // Once added, uncomment the code below:
+    // const tierLimits = getTierLimits(organizer.subscriptionTier || 'SIMPLE');
+    // const ebayPushesThisMonth = await prisma.organizer.findUnique({
+    //   where: { id: organizer.id },
+    //   select: { ebayPushesThisMonth: true },
+    // });
+    // if (ebayPushesThisMonth && ebayPushesThisMonth.ebayPushesThisMonth >= tierLimits.ebayPushesLimit) {
+    //   return res.status(429).json({
+    //     message: `Monthly eBay push limit reached (${tierLimits.ebayPushesLimit}). Upgrade to increase limit.`,
+    //   });
+    // }
+
     // Verify eBay connection exists
     if (!organizer.ebayConnection) {
       return res.status(400).json({

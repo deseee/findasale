@@ -197,6 +197,7 @@ import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
+import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -567,6 +568,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   registerEbayNotificationSubscription().catch(err =>
     console.warn('[eBay Notify Setup] Non-fatal startup error:', err.message)
   );
+
+  // Feature #75: Tier grace period finalization cron
+  startTierGraceCron();
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();

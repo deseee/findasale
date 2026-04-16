@@ -451,6 +451,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       subscriptionLapsed,
       stripeConnected: !!(organizer as any).stripeConnectId,
       subscriptionTier: organizer.subscriptionTier ?? 'SIMPLE',
+      graceEndAt: (organizer as any).graceEndAt ? (organizer as any).graceEndAt.toISOString() : null,
+      graceTierBefore: (organizer as any).graceTierBefore || null,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);
