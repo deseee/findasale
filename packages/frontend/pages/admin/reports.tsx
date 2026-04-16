@@ -75,8 +75,8 @@ const AdminReportsPage = () => {
           order: organizersOrder,
         },
       });
-      setOrganizers(res.data.organizers);
-      setOrganizersTotal(res.data.total);
+      setOrganizers(res.data.organizers ?? []);
+      setOrganizersTotal(res.data.total ?? 0);
       setOrganizersPage(page);
     } catch (err) {
       console.error('Error fetching organizers:', err);
