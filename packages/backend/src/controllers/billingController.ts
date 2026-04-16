@@ -249,6 +249,58 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         break;
       }
 
+      case 'checkout.session.completed': {
+        // Security: Card Fingerprint Deduplication (P1)
+        const session: any = event.data.object;
+        const customerId = session.customer;
+
+        if (customerId) {
+          try {
+            // Get customer metadata to find user ID
+            const customer = await stripe.customers.retrieve(customerId);
+            const userId = (customer.metadata?.userId) as string | undefined;
+
+            if (userId && session.payment_method) {
+              // Retrieve payment method to get card fingerprint
+              const paymentMethod = await stripe.paymentMethods.retrieve(session.payment_method);
+              const fingerprint = paymentMethod.card?.fingerprint;
+
+              if (fingerprint) {
+                // Check if 5+ other users have the same fingerprint
+                const otherUsersWithSameFingerprint = await prisma.user.count({
+                  where: {
+                    stripeCardFingerprint: fingerprint,
+                    id: { not: userId },
+                  },
+                });
+
+                if (otherUsersWithSameFingerprint >= 5) {
+                  // Flag user as fraud suspect
+                  await prisma.user.update({
+                    where: { id: userId },
+                    data: { fraudSuspect: true },
+                  });
+
+                  console.warn(
+                    `[FRAUD_DETECTION] User ${userId} flagged. Card fingerprint ${fingerprint} shared by ${otherUsersWithSameFingerprint} other accounts.`
+                  );
+                }
+
+                // Store fingerprint for future checks
+                await prisma.user.update({
+                  where: { id: userId },
+                  data: { stripeCardFingerprint: fingerprint },
+                });
+              }
+            }
+          } catch (err: any) {
+            console.error('[checkout] Failed to check card fingerprint:', err.message);
+            // Non-blocking — don't fail the webhook
+          }
+        }
+        break;
+      }
+
       default:
         break;
     }

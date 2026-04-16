@@ -191,6 +191,11 @@ model User {
   deviceFingerprint String? // Hashed device fingerprint (user agent + screen + timezone + canvas)
   fraudSuspect      Boolean @default(false) // Flag: set true if 2+ accounts share same device fingerprint
 
+  // Feature #XXX: First Sale Free PRO — Email Verification Gate
+  emailVerified           Boolean   @default(false) // Whether user has verified their email address
+  emailVerificationToken  String?   @unique // Random token for email verification link
+  emailVerifiedAt         DateTime? // Timestamp when email was verified
+
   // Platform Safety #107-#114: Organizer Reputation & Suspension Tracking
   chargebackCount      Int               @default(0) // Total chargebacks on user's organizer account
   bidCancellationCount Int               @default(0) // Total bids cancelled by user (as buyer)
@@ -325,6 +330,14 @@ model Organizer {
   workspaceChatMessages   WorkspaceChatMessage[] @relation("WorkspaceChatMessages")
   // Feature #S483: Organizer Signals — expansion + churn scoring
   organizerScore          OrganizerScore?
+  // Feature #XXX: First Sale Free PRO — Security Gates
+  firstSaleFreeProUsedAt  DateTime? // When organizer used their first-sale free PRO offer (null = not used yet)
+  aiTagsUsedThisMonth     Int       @default(0) // Count of AI tags used this calendar month
+  aiTagsResetAt           DateTime? // When the monthly AI tag counter was last reset
+  // Feature: Graceful Tier Degradation — grace period fields
+  graceEndAt              DateTime? // When grace period expires (7 days from downgrade)
+  graceTierBefore         String? // Tier before downgrade (PRO or TEAMS)
+  graceNotificationsCount Int       @default(0) // Count of grace period notifications sent (0-2)
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 }

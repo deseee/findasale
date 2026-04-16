@@ -11,6 +11,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
   itemsPerSale: number;
   photosPerItem: number;
   aiTagsPerMonth: number;
+  ebayPushesPerMonth: number;
   batchOpsAllowed: boolean;
   multiUserAllowed: boolean;
   maxConcurrentSales: number;
@@ -20,6 +21,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     itemsPerSale: 200,
     photosPerItem: 5,
     aiTagsPerMonth: 100,
+    ebayPushesPerMonth: 10,
     batchOpsAllowed: true,
     multiUserAllowed: false,
     maxConcurrentSales: 1,
@@ -29,6 +31,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     itemsPerSale: 500,
     photosPerItem: 10,
     aiTagsPerMonth: 2000,
+    ebayPushesPerMonth: 200,
     batchOpsAllowed: true,
     multiUserAllowed: false,
     maxConcurrentSales: 3,
@@ -38,6 +41,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     itemsPerSale: 2000,
     photosPerItem: Infinity,
     aiTagsPerMonth: Infinity,
+    ebayPushesPerMonth: 999999,
     batchOpsAllowed: true,
     multiUserAllowed: true,
     maxConcurrentSales: Number.MAX_SAFE_INTEGER,
@@ -47,6 +51,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, {
     itemsPerSale: Number.MAX_SAFE_INTEGER,
     photosPerItem: Infinity,
     aiTagsPerMonth: Infinity,
+    ebayPushesPerMonth: 999999,
     batchOpsAllowed: true,
     multiUserAllowed: true,
     maxConcurrentSales: Number.MAX_SAFE_INTEGER,

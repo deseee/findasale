@@ -1,12 +1,15 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { prisma } from '../index';
 import { randomUUID } from 'crypto';
 import { handleReferralBadge } from './userController';
 import { addShopperSubscriber } from '../services/mailerliteService';
 import { processReferral } from '../services/referralService';
 import { awardXp, XP_AWARDS } from '../services/xpService';
+import { checkRegistrationLimit, recordRegistration } from '../lib/registrationRateLimiter';
+import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
 
 // SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
 const ALLOWED_REDIRECT_URIS = () => {
@@ -35,6 +38,17 @@ export const register = async (req: Request, res: Response) => {
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
     const name = rawName?.trim();
+
+    // Security: IP-based rate limiting on registrations
+    const clientIp = req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
+    const rateLimitStatus = checkRegistrationLimit(clientIp);
+    if (rateLimitStatus.limited) {
+      return res.status(429).json({
+        code: 'REGISTRATION_RATE_LIMITED',
+        message: 'Too many accounts created from this IP. Please try again later.',
+        resetAt: rateLimitStatus.resetAt,
+      });
+    }
 
     // Check if user already exists (Platform Safety #101: Email Verification Uniqueness)
     const existingUser = await prisma.user.findUnique({
@@ -76,6 +90,9 @@ export const register = async (req: Request, res: Response) => {
 
     // DB2: Wrap user + organizer creation atomically — neither is orphaned on failure
     const user = await prisma.$transaction(async (tx) => {
+      // Generate email verification token
+      const emailVerificationToken = crypto.randomBytes(32).toString('hex');
+
       const newUser = await tx.user.create({
         data: {
           email,
@@ -84,6 +101,8 @@ export const register = async (req: Request, res: Response) => {
           password: hashedPassword,
           referralCode: userReferralCode,
           deviceFingerprint: deviceFingerprint || null,
+          emailVerified: false, // New accounts must verify email
+          emailVerificationToken, // Store token for verification link
         }
       });
 
@@ -117,6 +136,44 @@ export const register = async (req: Request, res: Response) => {
 
       return newUser;
     });
+
+    // Security: Record registration for fraud detection (temporal velocity check)
+    try {
+      await recordFraudRegistration(clientIp, user.id);
+    } catch (err) {
+      console.error('[fraudDetection] Failed to record registration:', err);
+      // Non-blocking — continue with rest of flow
+    }
+
+    // Record this IP registration for rate limiting
+    recordRegistration(clientIp);
+
+    // Security: Send email verification link (non-blocking)
+    if (user.emailVerificationToken) {
+      try {
+        const { Resend } = await import('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const fromEmail = process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale';
+        const verifyLink = `${process.env.FRONTEND_URL || 'https://finda.sale'}/verify-email?token=${user.emailVerificationToken}`;
+
+        await resend.emails.send({
+          from: fromEmail,
+          to: user.email,
+          subject: 'Verify Your FindA.Sale Email Address',
+          html: `
+            <p>Hi ${user.name || 'there'},</p>
+            <p>Welcome to FindA.Sale! To complete your account setup, please verify your email address by clicking the link below:</p>
+            <p><a href="${verifyLink}" style="display: inline-block; padding: 10px 20px; background-color: #b45309; color: white; text-decoration: none; border-radius: 4px;">Verify Email Address</a></p>
+            <p>This link will expire in 7 days.</p>
+            <p>If you didn't create this account, you can ignore this email.</p>
+            <p>— FindA.Sale Team</p>
+          `,
+        });
+      } catch (emailError) {
+        // Non-blocking: log error but don't fail registration
+        console.error('[emailVerification] Failed to send verification email:', emailError);
+      }
+    }
 
     // Feature #74: Save role-based email consent
     // Create UserRoleSubscription and RoleConsent records for consent tracking
@@ -699,5 +756,51 @@ export const redeemInvite = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Redeem invite error:', error);
     res.status(500).json({ message: 'Server error while redeeming invite code' });
+  }
+};
+
+// Security: Verify email address via token
+export const verifyEmail = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ message: 'Verification token is required' });
+    }
+
+    // Find user by email verification token
+    const user = await prisma.user.findFirst({
+      where: { emailVerificationToken: token }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired verification token' });
+    }
+
+    // Check if email is already verified (idempotent)
+    if (user.emailVerified) {
+      return res.status(200).json({
+        message: 'Email is already verified',
+        verified: true
+      });
+    }
+
+    // Mark email as verified
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+        emailVerificationToken: null, // Clear the token after use
+      }
+    });
+
+    res.status(200).json({
+      message: 'Email verified successfully! You can now create sales.',
+      verified: true
+    });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).json({ message: 'Server error during email verification' });
   }
 };
