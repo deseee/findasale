@@ -19,13 +19,16 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **SEO meta tags added ✅:** Canonical URL, Open Graph (og:title/description/url/image/site_name), Twitter cards, theme-color (#D97706), keywords, author, robots, favicon/apple-touch-icon refs, JSON-LD SoftwareApplication structured data with Offer + Audience.
 
 - **Pipeline wiring ✅:** Landing deployed at `finda.sale/video` via Next.js rewrite (`next.config.js` rewrites: `/video` → `/video.html`). Canonical + og:url + twitter:url + JSON-LD url all updated to `https://finda.sale/video`. Uses existing icon system (`/icons/favicon-32x32.png`, `/icons/apple-touch-icon.png`, `/favicon.ico`). Fixed pre-existing broken `og:image` refs in `trending.tsx` + `map.tsx` by adding `og-default.png` (1200×630).
+- **Post-deploy fixes (Patrick reported blank iframe + width overflow) ✅:**
+  - CSP `frame-src` in `next.config.js` line 203 was missing `'self'` — same-origin iframe was being blocked by CSP, leaving the phone frame empty. Added `'self'` so `/video` can embed `/organizer-video-ad.html`.
+  - `.video-wrapper iframe` scale tightened: `0.821` → `0.82` (desktop: 390×0.82 = 319.8px cleanly fits 320px wrapper); mobile `0.744` → `0.7425` (390×0.7425 = 289.58px fits 290px wrapper).
 - **File hygiene:** Canonical copies now live at `packages/frontend/public/video.html` + `packages/frontend/public/organizer-video-ad.html`. Repo-root copies should be removed to avoid edit-the-wrong-file trap.
 
 **S486 Files changed (6):**
-- `packages/frontend/public/video.html` (NEW — canonical landing)
+- `packages/frontend/public/video.html` (NEW — canonical landing; iframe scale fixed 0.821→0.82 desktop, 0.744→0.7425 mobile)
 - `packages/frontend/public/organizer-video-ad.html` (NEW — 38s demo video embed)
 - `packages/frontend/public/og-default.png` (NEW — 1200×630 social share image, fixes broken refs in trending/map)
-- `packages/frontend/next.config.js` — `/video` → `/video.html` rewrite
+- `packages/frontend/next.config.js` — `/video` → `/video.html` rewrite + CSP `frame-src 'self'` added (unblocks same-origin iframe)
 - `claude_docs/STATE.md` — this wrap
 - `claude_docs/patrick-dashboard.md` — this wrap
 

@@ -1,5 +1,24 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
+## Audit Alerts — 2026-04-16
+
+**3 HIGH findings from weekly automated site audit.** All are DECISIONS.md violations requiring dispatch.
+
+**H-001 — Search page dark mode: Filter labels invisible (D-002).**
+`/search` filter sidebar — Price Range, Condition, Category, Sort By labels and all radio text are white-on-white in dark mode. Completely unreadable. Fix: add `dark:text-gray-200` variants to filter label/option text in the search sidebar component. Dispatch to findasale-dev (~15 lines).
+
+**H-002 — Sale detail section order wrong (D-006).**
+Items for Sale is currently at the bottom of the page — after Reviews and Map. D-006 requires Items to be the FIRST full-width section (before UGC, Map, Reviews). Fix: reorder JSX sections in `pages/sales/[id].tsx`. No logic change. Dispatch to findasale-dev.
+
+**H-003 — Pricing page says "5 team members" for Teams tier (D-007 LOCKED).**
+`/organizer/pricing` Teams card reads "Includes 5 team members." D-007 is locked at 12. This is a copy error. Fix: update copy to "Up to 12 team members." Trivial (<5 lines). Dispatch to findasale-dev.
+
+**Also noted (DECISION NEEDED — Patrick):** "Favorites" nav link → `/shopper/wishlist` URL → "My Collections" page title. Three names for one feature. Pick one — Favorites, Wishlist, or Collections — and findasale-records will lock it in DECISIONS.md.
+
+Full audit: `claude_docs/audits/weekly-audit-2026-04-16.md`
+
+---
+
 ## What Happened This Week
 
 **S486** (2026-04-16) — Video polish pass 2 + landing page strip + SEO meta tags ✅
@@ -8,9 +27,11 @@ Second polish pass on `organizer-video-ad.html`: scene 2 lamp made bigger (it wa
 
 Landing page stripped down to the essentials — removed the hero H1, 3 feature cards, testimonial, and 3 of the 5 FAQ rows. What's left: logo → video → "Built for organizers. Loved by shoppers." split → Free Forever offer → 2 FAQs → CTA → footer. Clean and punchy.
 
-SEO meta tags added to `finda-sale-landing.html`: canonical URL, Open Graph (for Facebook/LinkedIn previews), Twitter cards, theme-color, robots, favicon refs, and JSON-LD SoftwareApplication structured data with pricing and audience. The page is now properly indexed and previews well when shared.
+SEO meta tags added to the landing page: canonical URL, Open Graph (for Facebook/LinkedIn previews), Twitter cards, theme-color, robots, favicon refs, and JSON-LD SoftwareApplication structured data with pricing and audience. The page is now properly indexed and previews well when shared.
 
-**Heads up:** The meta tags reference `/og-image.png` and `/favicon.png` — those files don't exist yet. Need to generate them before the landing page is live-shared anywhere (1200×630 for og-image, 32×32 or 512×512 for favicon).
+Pipeline wired. Landing now serves at `finda.sale/video` via a Next.js rewrite. Canonical copies moved into `packages/frontend/public/` (`video.html` + `organizer-video-ad.html`), uses the existing favicon/apple-touch-icon system, and ships a new `og-default.png` (1200×630) that also fixes broken social preview refs in `trending.tsx` and `map.tsx`.
+
+**Post-deploy fixes:** After deploy Patrick flagged the iframe was blank and slightly wider than its frame. Two fixes shipped: (1) CSP `frame-src` in `next.config.js` was missing `'self'` so the same-origin iframe was silently blocked — now added. (2) Iframe scale tightened from `0.821` to `0.82` (desktop) and `0.744` to `0.7425` (mobile) so the scaled width fits cleanly inside the phone-frame wrapper with no overflow. After redeploy, a hard refresh (Ctrl+Shift+R) clears the old CSP header cached by the service worker.
 
 **Next up:** Audit Organizer Acquisition Playbook — strip all estate sale and AI language, broaden every instance to cover yard sales, auctions, flea markets, consignment. This is a recurring drift issue that needs a hard fix in the doc itself. Also: synthesize all the S484 acquisition research into a single 90-day action plan with no hedging.
 
