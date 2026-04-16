@@ -1,5 +1,31 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
+## S488 Summary (2026-04-16)
+
+**Feature flags backend ✅** — Full CRUD API live. `/admin/feature-flags` Chrome-verified.
+
+**Admin reports ✅** — Both tabs load with real data. Crash fix confirmed.
+
+**Migration history cleaned up ✅** — 4 stuck records audited and resolved. All intended schema changes confirmed present in DB.
+
+**Feature #72 (UserRoleSubscription) finally activated ✅** — This was silently broken since March. The backfill migration failed in March 2026 and was never retried, leaving the table empty despite being wired into auth, billing, POS tier, and tier lapse logic. 13 ORGANIZER rows now inserted. Tier lapse tracking is live.
+
+**Next session is focused on two product safety problems:**
+1. Abuse-proofing the "first sale free PRO" offer — hacker threat model before it ships
+2. Graceful tier degradation — what happens to organizers with 340 items when they drop to the 200-item free tier, and how do you handle it without losing them
+
+**Your only action:**
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S488 wrap: migration audit, Feature #72 backfill, next session priorities"
+.\push.ps1
+```
+
+Delete `The_True_Plan.md` from your workspace folder.
+
+---
+
 ## Audit Alerts — 2026-04-16
 
 **3 HIGH findings from weekly automated site audit.** All are DECISIONS.md violations requiring dispatch.
@@ -21,20 +47,13 @@ Full audit: `claude_docs/audits/weekly-audit-2026-04-16.md`
 
 ## What Happened This Week
 
-**S487** (2026-04-16) — Schema additions + admin nav cleanup + Chrome QA of 5 admin pages
+**S488** (2026-04-16) — Feature flags backend + Chrome QA verification
 
-4 new database tables added to schema.prisma (FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) and migration SQL written. Patrick must run `prisma migrate deploy` before feature flags backend works.
+Feature flags backend API fully implemented and deployed. `/admin/feature-flags` full CRUD (create, toggle, delete) verified in Chrome ✅. `/admin/reports` both tabs verified with real data, no crash ✅. All outstanding migrations confirmed applied via direct Railway DB query — nothing left pending.
 
-`(Soon)` labels removed from admin nav — Items, Reports, Feature Flags, and Broadcast now appear as real links in both the avatar dropdown and mobile nav.
+**S487** (2026-04-16) — Schema additions + admin nav cleanup + Chrome QA
 
-Chrome QA results:
-- **/admin (KPI dashboard) — ✅ PASS** (verified pre-compaction)
-- **/admin/items — ✅ PASS** Search filter works, real thumbnails, no errors.
-- **/admin/broadcast — ✅ PASS** Audience selector (103 users), subject/body/character counter, Send Broadcast button all render correctly.
-- **/admin/feature-flags — ❌ P1 BUG** Red "Failed to load feature flags" error. Backend returns 404 — the backend API for feature flags was never built in S483 (frontend only). Fix: dev dispatch to build GET/POST/PATCH/DELETE endpoints using the new FeatureFlag Prisma model.
-- **/admin/reports — fix applied, UNVERIFIED** The crash (TypeError on initial render) was caused by `revenue?.byDay.length` — added `?.` before `.length`. Fix needs to deploy before re-verify.
-
-Also broadened two instances of estate-sale-specific language in `Organizer_Acquisition_Playbook.md`.
+4 new database tables (FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog). `(Soon)` labels removed from admin nav — all 4 admin pages now live links. Chrome QA: /admin/items ✅, /admin/broadcast ✅. reports.tsx crash fix applied. Acquisition Playbook language broadened.
 
 ---
 
@@ -427,41 +446,16 @@ Architect designed 4 new tables: FeatureFlag (needed for feature flags backend),
 
 ## Action Items for Patrick
 
-**NEW — S487 push blocks (do these now):**
+**S488 wrap push (do this now):**
 
 ```powershell
-git add packages/database/prisma/schema.prisma
-git add "packages/database/prisma/migrations/20260416_admin_tables/migration.sql"
-git commit -m "S487: Add FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog schema + migration"
-.\push.ps1
-```
-```powershell
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/pages/admin/reports.tsx
-git commit -m "S487: Remove (Soon) labels from admin nav, fix reports.tsx crash on null revenue"
-.\push.ps1
-```
-```powershell
-git add Organizer_Acquisition_Playbook.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S487 wrap: playbook language broadened, STATE + dashboard updated"
+git commit -m "S488 wrap: STATE + dashboard updated"
 .\push.ps1
 ```
 
-**NEW — S487 migration (run after pushing schema):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-This creates the FeatureFlag, PwaEvent, OrganizerScore, and ApiUsageLog tables.
-
-**NEW — S487 P1 bug to dispatch next session:** `/admin/feature-flags` needs backend API (GET/POST/PATCH/DELETE). Frontend exists, backend routes don't. Dispatch `findasale-dev` once migration is applied.
-
-**NEW — Delete manually:** `The_True_Plan.md` in your workspace folder — cannot be deleted programmatically. The Organizer_Acquisition_Playbook.md IS the 90-day plan.
+**Delete manually:** `The_True_Plan.md` in your workspace folder — cannot be deleted programmatically.
 
 ---
 

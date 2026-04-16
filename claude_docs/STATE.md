@@ -7,24 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S487 (2026-04-16) — Schema additions + admin page (Soon) removal + Chrome QA of 5 admin pages**
+**S488 (2026-04-16) — Feature flags backend API + Chrome QA + migration audit**
 
-- **Schema additions ✅:** 4 new Prisma models added to schema.prisma (FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog). OrganizerScore back-reference added to Organizer model. Migration SQL written at `packages/database/prisma/migrations/20260416_admin_tables/migration.sql`. **Patrick must run migrate deploy manually.**
-- **(Soon) labels removed ✅:** Removed 4 `(Soon)` span labels from mobile admin nav in `Layout.tsx` and 4 from avatar dropdown in `AvatarDropdown.tsx` — Items, Reports, Feature Flags, Broadcast are now live pages.
-- **Organizer_Acquisition_Playbook.md language fixes ✅:** Two targeted copy fixes — EstateSales.NET callback now includes yard sales/auctions/flea markets/consignment; Thrifting Vegas description broadened.
-- **Chrome QA — /admin/items ✅:** Page renders with real data, search filter works (typed "Guitar" → only guitar items). Real thumbnails. No app errors.
-- **Chrome QA — /admin/broadcast ✅:** Page renders with Audience dropdown (103 users), Subject, Body, character counter, Clear + Send Broadcast buttons. No app errors.
-- **Chrome QA — /admin/feature-flags ❌ P1:** Red "Failed to load feature flags" error. Backend API returns 404 — no backend route was implemented for feature flags in S483 (frontend only). Backend CRUD needed before this page works.
-- **reports.tsx crash fix ✅:** Line 214 `revenue?.byDay.length` → `revenue?.byDay?.length` (added optional chain to `.length`). Fixes TypeError on initial render when revenue is null. NOT YET DEPLOYED — needs push + Vercel build.
-- **Chrome QA — /admin/reports UNVERIFIED:** Crash fix applied but not deployed. Will need re-verify after Vercel deploys. /admin (KPI dashboard) ✅ was verified in session pre-compaction.
+- **Feature flags backend API (P1) ✅:** 4 CRUD handlers added to `adminController.ts` (getFeatureFlags, createFeatureFlag, updateFeatureFlag, deleteFeatureFlag). 4 routes added to `admin.ts`. Pushed commit `6168a477`, Railway auto-deployed.
+- **Chrome QA — /admin/feature-flags ✅:** Flags list loads. Create flag → appears in list. Toggle enabled → updates. Delete → removed. Full CRUD verified with real data.
+- **Chrome QA — /admin/reports ✅:** Vercel `dpl_84K1j5GkkfLS2wSrBJUd3btH2pUY` READY. Both Organizer Performance + Revenue tabs verified as Alice Johnson — no crash, no error banner.
+- **Migration status audit (psycopg2 → Railway DB):** S469 EbayPolicyMapping ✅ (Apr 15 05:10 UTC), S464 ebayNeedsReview ✅ (Apr 15 00:49 UTC), 20260416_admin_tables ✅ (Apr 16 11:55 UTC). All pending migrations confirmed applied — nothing outstanding.
+- **Stuck migrations (historical, not blocking):** `20260325_add_auction_closed`, `20260412000001_rename_staff_to_member` (×3 duplicates), `20260324_dual_role_phase2` — all NULL finished_at. Not blocking current work but worth a cleanup pass.
+- **Memory updated:** `feedback_check_dont_ask.md` now includes migration verification via Railway DB psycopg2. Never ask Patrick — check directly.
 
-**S487 Files changed (6):**
-- `packages/database/prisma/schema.prisma` — 4 new models + OrganizerScore back-ref on Organizer
-- `packages/database/prisma/migrations/20260416_admin_tables/migration.sql` (NEW) — CREATE TABLE for FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog
-- `packages/frontend/components/Layout.tsx` — 4 `(Soon)` spans removed (Items, Reports, Feature Flags, Broadcast)
-- `packages/frontend/components/AvatarDropdown.tsx` — 4 `(Soon)` spans removed
-- `packages/frontend/pages/admin/reports.tsx` — line 214: `revenue?.byDay.length` → `revenue?.byDay?.length`
-- `Organizer_Acquisition_Playbook.md` — EstateSales.NET callback + Thrifting Vegas language broadened
+**S488 Files changed (2 — already pushed):**
+- `packages/backend/src/controllers/adminController.ts` — 4 feature flag CRUD handlers
+- `packages/backend/src/routes/admin.ts` — 4 feature flag routes + imports
+
+**S488 Extended — Migration audit + Feature #72 activation**
+
+- **Stuck migration audit ✅:** 4 NULL `finished_at` records investigated. Root causes found for all. 3 failed records deleted (2 duplicate `rename_staff_to_member` attempts), 2 marked applied (`dual_role_phase2`, `add_auction_closed`). Migration history is clean — 0 NULL records remain.
+- **Schema state verified:** `auctionClosed` ✅ on Item, `notificationChannel` ✅ on Notification, `WorkspaceRole` enum has MEMBER (no STAFF) ✅, tables renamed to TeamMember/* ✅.
+- **Feature #72 (UserRoleSubscription) activated ✅:** Backfill was never run — migration failed in March 2026 on `o."tierLapseWarning"` (column doesn't exist on Organizer). Table had 0 rows despite being wired into auth middleware, billing controller, POS tier controller, and tierLapseService. Ran backfill directly via psycopg2. **13 ORGANIZER rows inserted** — all organizers now have rows. Tier lapse tracking is now live. Both admin users covered (they're also organizers).
+- **Shopper rows:** Not needed. Schema comment confirms "SHOPPER always active" — no tier/lapse tracking for shoppers by design.
 
 ---
 
@@ -375,21 +376,14 @@ Files (7):
 - `packages/frontend/pages/organizer/pricing.tsx` — Stripe price IDs from env
 - `packages/frontend/pages/organizer/sales/[id]/index.tsx` — amber "eBay Category Needed" badge
 
-**S464 Patrick manual actions OUTSTANDING:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_PUBLIC_STRIPE_PRO_ANNUAL_PRICE_ID; confirm live publishable key; confirm Railway STRIPE_TEAMS_MONTHLY_PRICE_ID.
+**S464 migrations confirmed applied S488 (psycopg2 query):** `20260414_ebay_needs_review` ran Apr 15 00:49 UTC ✅. Vercel env cleanup still pending: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_PUBLIC_STRIPE_PRO_ANNUAL_PRICE_ID; confirm live publishable key; confirm Railway STRIPE_TEAMS_MONTHLY_PRICE_ID.
 
 ---
 
 ## Recent Sessions
 
-- **S487 (2026-04-16):** Schema additions (4 tables: FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) ✅. (Soon) nav labels removed from Layout + AvatarDropdown ✅. Chrome QA: /admin/items ✅, /admin/broadcast ✅, /admin/feature-flags ❌ P1 (backend API missing — 404), /admin/reports fix applied (revenue?.byDay?.length) + UNVERIFIED pending deploy. Acquisition Playbook language broadened. 6 files.
+- **S488 (2026-04-16):** Feature flags backend API ✅ (4 CRUD routes). Chrome QA: /admin/feature-flags ✅, /admin/reports ✅. Migration audit: 4 stuck records cleaned up, all intended schema state confirmed present. Feature #72 (UserRoleSubscription) activated — 13 ORGANIZER rows backfilled via psycopg2; tier lapse tracking now live for all organizers. 2 code files pushed.
+- **S487 (2026-04-16):** Schema additions (4 tables: FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) ✅. (Soon) nav labels removed from Layout + AvatarDropdown ✅. Chrome QA: /admin/items ✅, /admin/broadcast ✅. reports.tsx crash fix applied (revenue?.byDay?.length). Acquisition Playbook language broadened. 6 files.
 - **S486 (2026-04-16):** Video polish pass 2 (scene 2 lamp enlarged, review/success `height: 100%` fix, scene 3 payments row sized to fit beam label, font bump across all 5 scenes). Landing page stripped to essentials — logo, video, split, Free Forever offer, 2 FAQs, CTA, footer. SEO meta tags added: canonical, Open Graph, Twitter cards, theme-color, robots, favicon, JSON-LD SoftwareApplication schema. 4 files.
 - **S485 (2026-04-15):** Animated video polished across 2 sessions. Final state: 38-second 9:16 animated HTML5 video, 5 scenes. Phones no longer shift during payment swap (CSS grid stacking), counter starts at 75, bullets appear after shopper phone settles, beam label width stabilized. 1 file.
 - **S484 (2026-04-15):** Organizer acquisition playbook rebuilt v3 (Koerner/Outscraper methodology at scale — 5k+ contacts, $285/mo; + guru framework mapping for 8 gurus; + influencer flywheel strategy with 8 named targets; + ICP definition). 25-second animated HTML5 video built (9:16 vertical, 5 scenes, brand-accurate, self-contained). RVM scale corrected: 5k–20k contacts, not 25. Two-sided flywheel identified: shopper influencers (Gary Vee) pull buyers → buyers pull organizers (Airbnb model). 9 innovation ideas approved with BUILD NOW / DEFER verdicts. 2 files.
@@ -444,71 +438,38 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP PRIORITY — Push S487 files:**
-
-**0a. Push S487 schema + migration (2 files):**
-```powershell
-git add packages/database/prisma/schema.prisma
-git add "packages/database/prisma/migrations/20260416_admin_tables/migration.sql"
-git commit -m "S487: Add FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog schema + migration"
-.\push.ps1
-```
-
-**0b. Push S487 frontend fixes (3 files):**
-```powershell
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/pages/admin/reports.tsx
-git commit -m "S487: Remove (Soon) labels from admin nav, fix reports.tsx crash on null revenue"
-.\push.ps1
-```
-
-**0c. Push S487 playbook (1 file):**
-```powershell
-git add Organizer_Acquisition_Playbook.md
-git commit -m "S487: Broaden acquisition playbook language to include all sale types"
-.\push.ps1
-```
-
-**0d. Push wrap docs:**
+**1. Push S488 wrap docs:**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S487 wrap: STATE + dashboard updated"
+git commit -m "S488 wrap: migration audit, Feature #72 backfill, next session priorities"
 .\push.ps1
 ```
 
-**1. Patrick manual — run migration for 20260416_admin_tables:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-Creates FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog tables in Railway DB.
+**2. Patrick manual — delete The_True_Plan.md from workspace.**
 
-**2. Dev dispatch — feature flags backend API (P1):**
-Chrome QA confirmed `/admin/feature-flags` page exists but backend returns 404. Need backend routes:
-- `GET /api/admin/feature-flags` — list all flags
-- `POST /api/admin/feature-flags` — create new flag
-- `PATCH /api/admin/feature-flags/:id` — toggle enabled + update
-- `DELETE /api/admin/feature-flags/:id` — remove flag
+**3. Hacker audit — "First Sale Free PRO" abuse vectors (P1):**
+The offer: organizer gets PRO-tier features free for their first sale. Dispatch `findasale-hacker` to threat-model this offer before it ships. Key questions:
+- Can someone create infinite "first sales" (new accounts, same person)?
+- Can they extract value (AI tagging, eBay push, QR watermarks) before the gate closes?
+- What's the cheapest abuse path — burner email + new account each time?
+- What signals distinguish a legitimate first-time organizer from a repeat abuser?
+- What enforcement is technically possible at account creation vs. sale creation vs. feature use?
+Output: threat model + recommended gates ranked by implementation cost.
 
-Uses the new `FeatureFlag` Prisma model (migration must be applied first).
+**4. Architect + Dev — Graceful tier degradation UX (P1):**
+When a user downgrades from PRO/TEAMS to SIMPLE (subscription cancels, trial ends, or they manually downgrade), they may have:
+- More than 200 items published
+- Items with more than 5 photos
+- Sales using PRO-only features (Virtual Queue, eBay push, etc.)
+Current behavior: unknown — likely hard-blocks or silent failures. What needs to be designed:
+- **Warning phase:** Before downgrade kicks in, show "you'll lose X on [date]" — not a surprise
+- **Grace period:** Don't delete data immediately. Read-only access to over-limit items for N days
+- **What gets locked vs. deleted vs. kept read-only** — items over 200 become invisible to shoppers but not deleted; extra photos stay in Cloudinary but only first 5 shown; PRO features show upgrade prompt instead of hard error
+- **Copy/UX:** How do you tell someone "you had 340 items, 140 are now hidden" without them rage-quitting?
+Dispatch `findasale-architect` for the system design, then `findasale-ux` for the user-facing flow. Dev dispatch after both return.
 
-**3. Chrome QA — /admin/reports (after Vercel deploy of reports fix):**
-Verify the `revenue?.byDay?.length` fix resolved the TypeError crash. Navigate to https://finda.sale/admin/reports as admin, confirm page loads without error banner.
-
-**4. Chrome QA — /admin/feature-flags (after backend API + migration):**
-Once backend routes exist and migration is applied, verify flags list loads, toggle works, new flag form submits.
-
-**5. Patrick manual — delete The_True_Plan.md from workspace (file cannot be deleted programmatically).**
-
-**6. Outstanding migrations (still pending from prior sessions):**
-- S469: EbayPolicyMapping — same `npx prisma migrate deploy` + `npx prisma generate` block as above
-- S464: ebayNeedsReview — same
-
-**7. Remaining S467 QA (carry over):**
+**5. Remaining S467 QA (carry over):**
 - USED grade-S item push → confirm eBay gets USED_EXCELLENT (needs item with weight set).
 - Watermark QR 85px bottom-right (UNVERIFIED).
 
@@ -550,8 +511,6 @@ Once backend routes exist and migration is applied, verify flags list loads, tog
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|----------------|---------------|
-| /admin/feature-flags | Backend API missing (404). Frontend exists, backend routes were never built. | Dispatch dev: GET/POST/PATCH/DELETE /api/admin/feature-flags using FeatureFlag model. Re-QA after migration + deploy. | S487 |
-| /admin/reports | Crash fix applied (revenue?.byDay?.length), not yet deployed. | Verify after Vercel build: navigate to /admin/reports as admin, confirm no crash. | S487 |
 | #143 PreviewModal onError | Defensive fix only — can't trigger Cloudinary 503 in prod. ACCEPTABLE UNVERIFIED. | N/A | S312 |
 | #143 AI confidence — Camera mode | Requires real camera hardware in Chrome MCP. | Real device camera capture → Review & Publish → confirm "Good (X%)" copy. | S314 |
 | Single-item publish fix | S326 fix deployed; no DRAFT items exist to exercise button (Manual Entry skips draft pipeline). | Camera-capture → Review & Publish → single Publish → confirm SOLD + toast. | S326/S327 |
