@@ -17,6 +17,10 @@ import {
   getBidReviewQueue,
   adminBidAction,
   getAdminItems,
+  getFeatureFlags,
+  createFeatureFlag,
+  updateFeatureFlag,
+  deleteFeatureFlag,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -73,5 +77,11 @@ router.get('/broadcast/preview', getRecipientsPreview);
 
 // Global items search
 router.get('/items', getAdminItems);
+
+// Feature flags CRUD
+router.get('/feature-flags', getFeatureFlags);
+router.post('/feature-flags', createFeatureFlag);
+router.patch('/feature-flags/:id', updateFeatureFlag);
+router.delete('/feature-flags/:id', deleteFeatureFlag);
 
 export default router;
