@@ -830,6 +830,9 @@ model Item {
   // ADR eBay Parity Phase B: Listing extras
   ebaySecondaryCategoryId    String?
   ebaySubtitle               String?
+  // Feature: Graceful Tier Degradation — grace lock status
+  graceLockedAt              DateTime? // When item was locked due to tier downgrade
+  graceLockedReason          String? // Reason for grace lock (e.g., "items_over_limit")
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -1971,6 +1974,10 @@ model WorkspaceMember {
   role        WorkspaceRole      @default(MEMBER)
   invitedAt   DateTime           @default(now())
   acceptedAt  DateTime?
+  // Feature: Graceful Tier Degradation — team member grace period
+  graceRemovedAt      DateTime? // When member access was revoked due to tier downgrade
+  memberGraceEndAt    DateTime? // When grace period expires for this member
+  accessRestored      Boolean   @default(false) // Whether member access was restored after grace period
   workspace   OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   organizer   Organizer?         @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade)
   user        User?              @relation("UserWorkspaceMemberships", fields: [userId], references: [id], onDelete: Cascade)

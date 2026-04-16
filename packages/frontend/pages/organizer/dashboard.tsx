@@ -550,6 +550,23 @@ const OrganizerDashboard = () => {
             </div>
           )}
 
+          {/* Grace Period Banner — active when downgrade grace period is running */}
+          {orgProfile?.graceEndAt && new Date(orgProfile.graceEndAt) > new Date() && (
+            <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  Grace period active — {Math.ceil((new Date(orgProfile.graceEndAt).getTime() - Date.now()) / 86400000)} days remaining
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                  Some items are hidden from shoppers. Upgrade to restore them.
+                </p>
+              </div>
+              <a href="/organizer/upgrade" className="text-xs font-semibold text-amber-800 dark:text-amber-200 underline ml-4 whitespace-nowrap">
+                Upgrade now →
+              </a>
+            </div>
+          )}
+
           {/* Consolidated Action Bar — always visible */}
           <div className="flex flex-wrap gap-2 mb-4 relative">
             <Link href="/organizer/create-sale" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
