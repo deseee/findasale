@@ -19,9 +19,8 @@ interface OrganizerRecord {
 }
 
 interface OrganizerResponse {
-  organizers: OrganizerRecord[];
-  total: number;
-  page: number;
+  items: OrganizerRecord[];
+  pagination: { total: number; page: number; limit: number; pages: number };
 }
 
 interface RevenueData {
@@ -75,8 +74,8 @@ const AdminReportsPage = () => {
           order: organizersOrder,
         },
       });
-      setOrganizers(res.data.organizers ?? []);
-      setOrganizersTotal(res.data.total ?? 0);
+      setOrganizers(res.data.items ?? []);
+      setOrganizersTotal(res.data.pagination?.total ?? 0);
       setOrganizersPage(page);
     } catch (err) {
       console.error('Error fetching organizers:', err);
