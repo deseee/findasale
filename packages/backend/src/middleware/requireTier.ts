@@ -31,11 +31,20 @@ export function requireTier(minTier: SubscriptionTier) {
     const tier = (req.user.organizerProfile.subscriptionTier ?? 'SIMPLE') as SubscriptionTier;
 
     if (!hasAccess(tier, minTier)) {
+      // Fetch organizer to check grace status
+      const organizerProfile = req.user.organizerProfile as any;
+      const inGracePeriod = organizerProfile?.graceEndAt
+        ? new Date() <= new Date(organizerProfile.graceEndAt)
+        : false;
+
       return res.status(403).json({
         message: `This feature requires the ${minTier} plan or higher.`,
+        code: 'TIER_REQUIRED',
         requiredTier: minTier,
         currentTier: tier,
-        upgradeUrl: '/organizer/upgrade',
+        inGracePeriod,
+        graceEndsAt: organizerProfile?.graceEndAt || null,
+        upgradeUrl: '/organizer/upgrade'
       });
     }
 

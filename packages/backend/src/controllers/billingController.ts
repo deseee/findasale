@@ -4,6 +4,11 @@ import { AuthRequest } from '../middleware/auth';
 import { getStripe } from '../utils/stripe';
 import { prisma } from '../lib/prisma';
 import { syncTier } from '../lib/syncTier';
+import {
+  calculateDowngradeDelta,
+  triggerGracePeriod,
+  clearGracePeriod
+} from '../services/tierGraceService';
 
 const stripe = getStripe();
 
@@ -164,6 +169,19 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         const organizerId = await getOrganizerIdFromStripeCustomer(subscription.customer);
         if (organizerId) {
           await syncTier(organizerId, subscription.status, priceId, subscription.id);
+
+          // Grace Period: If organizer re-upgrades during grace, restore all items
+          const organizer = await prisma.organizer.findUnique({
+            where: { id: organizerId }
+          });
+          if (
+            organizer?.graceEndAt &&
+            new Date() <= organizer.graceEndAt &&
+            subscription.status === 'active'
+          ) {
+            await clearGracePeriod(organizerId);
+            console.log(`[billing] Grace period cleared for organizer ${organizerId} after tier restoration`);
+          }
         }
         break;
       }
@@ -244,6 +262,15 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
               }
             });
             console.log(`[billing] Tier resumed for organizer ${organizerId}`);
+          }
+
+          // Grace Period: Clear grace if organizer re-upgrades during grace period
+          const organizer = await prisma.organizer.findUnique({
+            where: { id: organizerId }
+          });
+          if (organizer?.graceEndAt && new Date() <= organizer.graceEndAt) {
+            await clearGracePeriod(organizerId);
+            console.log(`[billing] Grace period cleared for organizer ${organizerId} after re-upgrade`);
           }
         }
         break;
@@ -458,6 +485,86 @@ export const createBillingPortal = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Billing portal session error:', error);
     res.status(500).json({ message: 'Failed to create billing portal session' });
+  }
+};
+
+/**
+ * GET /api/billing/downgrade-preview
+ * Preview what changes when downgrading to SIMPLE
+ */
+export const getDowngradePreview = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const delta = await calculateDowngradeDelta(organizer.id, 'SIMPLE');
+    const graceEndDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    return res.json({
+      currentTier: organizer.subscriptionTier,
+      downgradingTo: 'SIMPLE',
+      ...delta,
+      graceStartDate: new Date().toISOString(),
+      graceEndDate: graceEndDate.toISOString(),
+      canRestoreWithin30Days: true,
+      upgradeUrl: '/organizer/upgrade'
+    });
+  } catch (err) {
+    console.error('Downgrade preview error:', err);
+    return res.status(500).json({ message: 'Failed to calculate downgrade preview' });
+  }
+};
+
+/**
+ * POST /api/billing/downgrade-confirm
+ * Confirm downgrade to SIMPLE — triggers grace period
+ */
+export const confirmDowngrade = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    if (!organizer.stripeSubscriptionId) {
+      return res.status(400).json({ message: 'No active subscription to downgrade' });
+    }
+
+    // Trigger grace period
+    const graceEndAt = await triggerGracePeriod(
+      organizer.id,
+      organizer.subscriptionTier || 'PRO'
+    );
+
+    // Cancel subscription at period end (not immediately)
+    await stripe.subscriptions.update(organizer.stripeSubscriptionId, {
+      cancel_at_period_end: true
+    });
+
+    return res.json({
+      success: true,
+      message: 'Downgrade scheduled. Your 7-day grace period has started.',
+      graceEndAt: graceEndAt.toISOString()
+    });
+  } catch (err) {
+    console.error('Confirm downgrade error:', err);
+    return res.status(500).json({ message: 'Failed to schedule downgrade' });
   }
 };
 
