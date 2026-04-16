@@ -377,6 +377,14 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
 
+    // Security: Email verification gate (P0)
+    if (!isAdmin && !req.user.emailVerified) {
+      return res.status(403).json({
+        code: 'EMAIL_NOT_VERIFIED',
+        message: 'Please verify your email address before creating a sale. Check your inbox for a verification link.',
+      });
+    }
+
     const saleData = saleCreateSchema.parse(req.body);
 
     let organizerId = req.user.organizerProfile?.id;
@@ -402,6 +410,7 @@ export const createSale = async (req: AuthRequest, res: Response) => {
     }
 
     // Feature #249: Check concurrent sales gate before creating draft
+    let isFirstSaleFreePro = false;
     if (organizer) {
       const tier = (organizer.subscriptionTier as string) || 'SIMPLE';
       const limit = TIER_LIMITS[tier as keyof typeof TIER_LIMITS]?.maxConcurrentSales ?? 1;
@@ -423,6 +432,28 @@ export const createSale = async (req: AuthRequest, res: Response) => {
           tier,
           upgradeUrl: '/pricing'
         });
+      }
+
+      // Feature: First Sale Free PRO (P0) — Security gate
+      // Grant free PRO features for first sale if organizer is SIMPLE/FREE and created in last 7 days
+      const organizerCreatedAt = new Date(organizer.createdAt);
+      const legacyCutoff = new Date('2026-04-16');
+      const isLegacyOrganizer = organizerCreatedAt < legacyCutoff;
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const isNewOrganizer = organizerCreatedAt > sevenDaysAgo;
+
+      if (
+        !isLegacyOrganizer &&
+        isNewOrganizer &&
+        organizer.firstSaleFreeProUsedAt === null &&
+        (tier === 'SIMPLE' || tier === 'FREE')
+      ) {
+        // This is their first sale — grant free PRO for this sale
+        await prisma.organizer.update({
+          where: { id: organizerId },
+          data: { firstSaleFreeProUsedAt: new Date() }
+        });
+        isFirstSaleFreePro = true;
       }
     }
 
@@ -447,7 +478,11 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    res.status(201).json({ ...convertDecimalsToNumbers(sale), achievements: newlyUnlockedAchievements });
+    res.status(201).json({
+      ...convertDecimalsToNumbers(sale),
+      achievements: newlyUnlockedAchievements,
+      isFirstSaleFreePro: isFirstSaleFreePro
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: 'Validation error', errors: error.errors });

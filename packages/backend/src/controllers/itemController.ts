@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
+import { checkAiTagQuota, incrementAiTagCount } from '../lib/aiTagsQuotaTracker';
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sale Feed
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
@@ -1160,7 +1161,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+      include: { sale: { include: { organizer: { select: { userId: true, id: true, subscriptionTier: true } } } } }
     });
 
     if (!item) {
@@ -1176,6 +1177,21 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
       return res.json({ suggestedTags: [] });
     }
 
+    // Security: AI Tags Quota Enforcement (P0)
+    const organizerId = item.sale.organizer.id;
+    const tier = item.sale.organizer.subscriptionTier || 'SIMPLE';
+    const quotaStatus = await checkAiTagQuota(organizerId, tier);
+
+    if (quotaStatus.exceeded) {
+      return res.status(429).json({
+        code: 'AI_QUOTA_EXCEEDED',
+        message: `Monthly auto-tag limit reached for ${tier} tier. Upgrade to continue.`,
+        usedThisMonth: quotaStatus.used,
+        limit: quotaStatus.limit,
+        remaining: quotaStatus.remaining,
+      });
+    }
+
     let suggestedTags: string[] = [];
     if (isCloudAIAvailable()) {
       try {
@@ -1187,6 +1203,8 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
         const aiResult = await analyzeItemImage(imageBuffer, 'image/jpeg');
         if (aiResult?.tags) {
           suggestedTags = aiResult.tags;
+          // Increment quota counter after successful analysis
+          await incrementAiTagCount(organizerId, suggestedTags.length);
         }
       } catch (err: any) {
         console.warn(`[cloudAI/analyze] error for item "${id}": ${err.message} — returning empty tags`);
