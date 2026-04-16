@@ -2,18 +2,54 @@
 
 ## What Happened This Week
 
-**S484** (2026-04-15) — Organizer acquisition playbook + animated video brief ✅
+**S485** (2026-04-15) — Animated video polish (organizer-video-ad.html) ✅
 
-Rebuilt the organizer acquisition playbook from scratch with the right scope — demand generation, not cold outreach. By the time an organizer talks to anyone, they're already sold. Six assets: before/after video, community presence strategy, ringless voicemail (awareness touch → drives to video), social proof flywheel, referral mechanics, and the probate attorney/consultant referral network. No "AI" language. Peer-to-peer tone throughout.
+38-second animated video is done. Key changes this session: phones now stay static during payment swap (CSS grid stacking fix), counter starts at 75, bullets appear after shopper phone settles, lamp larger, "Not anymore!" with exclamation, eBay confirm sub-line removed, beam label width stabilized so it doesn't shift on "Request → Paid." Total runtime 38s.
 
-Researched AI video tools (Runway/Kling both paywall quickly, Veo 3.1 free via Google Flow). Iterated on Veo 3.1 prompts for a 25-second TikTok/Shorts format. Decided to build an animated HTML5 video instead — more brand-accurate, no watermarks. Brand assets pulled from codebase (colors, fonts) and from finda.sale/organizer/pricing (features). Next session builds the video.
+**Next up:** Audit Organizer Acquisition Playbook — strip all estate sale and AI language, broaden every instance to cover yard sales, auctions, flea markets, consignment. This is a recurring drift issue that needs a hard fix in the doc itself.
 
-**Push block for S484 (1 file):**
+---
+
+**S484** (2026-04-15) — Acquisition strategy research: Koerner methodology + guru frameworks + influencer intelligence + animated video ✅
+
+**What this session produced:**
+
+**Organizer Acquisition Playbook — rebuilt to v3.** Three major additions beyond the original demand-gen scope:
+
+1. **Koerner methodology at scale** — Chris Koerner scraped 242 US MSAs for 20,000 estate/resale business contacts using Outscraper ($5–15/5k records), validated phone numbers through Searchbug (separates cell from landline), and sent ringless voicemails at $0.004/drop via Drop Cowboy. 5,000 contacts = $20 in RVM. Not 25 contacts — thousands. Full tool stack: Outscraper → Searchbug → RVM → cold text (GoHighLevel $97/mo) → cold email (Instantly.ai $30/mo) → Facebook group email capture (GroupBoss $20/mo) → VA follow-up. Total: $285/month. These organizers arrive pre-warmed from the video — the outreach just delivers traffic.
+
+2. **Guru framework summary** — mapped 8 acquisition gurus to FindA.Sale's exact situation: Hormozi (Core Four + Grand Slam Offer — "first 3 items free, refund month 1 if 2 don't move"), Nick Huber (Sweaty Startup local-first — GMB, Nextdoor, physical presence at estate sale venues), Codie Sanchez (media-first — tributaries strategy, newsletter before product), Noah Kagan (48-hour validation → ProductHunt/AppSumo launch, potential $4,900 burst), Russell Brunson (full funnel RVM→video→trial→month-2 upsell), Justin Welsh (founder as brand, TikTok screen recordings of real sessions), Sam Parr/Shaan Puri (who already has our customers — EstateSales.NET has 50k organizers, partnership play), Paul Yonover (Dream 100 — 100 high-value personal outreach targets), Dan Henry (B2B SaaS cold email).
+
+3. **Two-sided influencer flywheel** — the Airbnb model applied to FindA.Sale: shopper-side influencers drive buyers to browse → organizers see buyer traffic → organizers adopt the platform. Named targets: Gary Vaynerchuk (34M YouTube subs, "Trash Talk" garage sale series, explicitly loves yard/estate sales), Lara Spencer (HGTV Flea Market Flip + "That Thrifting Show"), Mike Wolfe (American Pickers, History Channel antiques audience), Flea Market Flipper (Rob & Melissa, dedicated reseller community), Hairy Tornado (full-time YouTube/Whatnot reseller), Ralli Roots (Ryan & Alli, $200 → 6-figure reselling income), Treasure Hunting with Jebus (727K YouTube), Thrifting Vegas (estate sales + garage sales for profit), Whatnot platform ($6B+ GMV, integration + influencer partnership play).
+
+**ICP locked:** Solo or 2-person team, 6–20 sales/year, currently using spreadsheets + phone photos + Venmo, tech-comfortable, frustrated by setup time. ASEL professional member profile. Not the 1-sale/year hobbyist. Not the national liquidation enterprise.
+
+**9 innovation ideas evaluated with BUILD NOW / DEFER verdicts:**
+- Risk-reversal guarantee ("first 3 items free, refund month 1 if 2 don't move") → BUILD NOW (15 lines)
+- Probate attorney referral loop with tracking links + profile badge → BUILD NOW (~150 lines)
+- ProductHunt + AppSumo launch → BUILD NOW (no code, potential $4,900 immediate)
+- Month-2 upsell email triggered by feature limit behavior → BUILD NOW (30 lines)
+- 48-hour concierge sprint with 5 organizers → case study → BUILD NOW (no code)
+- Copy reframe "Save time" → "Finish. Then go on vacation." → A/B test NOW
+- Estate Sale Insider podcast (bi-weekly, zero competition in this space) → BUILD NOW
+- Justin Welsh 5-part TikTok screen recording series → BUILD NOW
+- EstateSales.NET partnership/migration offer → RESEARCH (ops + legal)
+
+**Animated video built.** 25-second HTML5/CSS animated video, 9:16 vertical (TikTok/Shorts format). 5 scenes: Hook ("200 items. Not anymore."), Product Demo (camera capture → auto-tag → publish → counter animation 0→47 items), POS (two-phone payment sequence with ripple animation), Feature Chips (5 cards with FREE/PRO tier badges), CTA (FindA.Sale wordmark + "Try it free."). Brand-accurate colors, Montserrat + Inter from CDN, JavaScript RAF timeline controller. Self-contained single HTML file, no dependencies, no watermark.
+
+**Files changed (2):**
+- `Organizer_Acquisition_Playbook.md` — rebuilt v3
+- `organizer-video-ad.html` — NEW 25-second animated video
+
+**Push block for S484:**
 ```powershell
 git add Organizer_Acquisition_Playbook.md
-git commit -m "Organizer acquisition playbook: demand gen strategy, peer tone, no cold outreach"
+git add organizer-video-ad.html
+git commit -m "S484: Acquisition playbook v3 (Koerner methodology + guru frameworks + influencer flywheel + ICP) + 25s animated video"
 .\push.ps1
 ```
+
+**Next session: synthesize everything → THE TRUE PLAN.** All research is done. Next session produces a single 90-day action plan: Week 1 / Month 1 / Month 2-3 with owners, tools, budgets, success metrics. No hedging. Commit to the sequence.
 
 ---
 

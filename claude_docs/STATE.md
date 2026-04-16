@@ -7,6 +7,26 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S485 (2026-04-15) — Animated video iteration (organizer-video-ad.html)**
+
+- **Video polished across 2 sessions (S485 + continuation) ✅:** Full iterative refinement of `organizer-video-ad.html`. Final state: 38-second 9:16 animated HTML5 video, 5 scenes.
+- **Visual fixes:** Lamp larger in review card (90×112px), review photo area taller (130px), shutter moved lower (padding-bottom 30px), "Not anymore!" exclamation added, phones equal height (flex:1 on body), bullet font 16px, subline font 24px.
+- **Layout fix:** Phone swap no longer shifts layout — CSS grid stacking (`.phone-states`) keeps both states in same grid cell, opacity transitions instead of display:none toggle.
+- **Timing tuned:** Counter starts at 75 (not 0), 1.3s animation. Checkmarks fire as counter hits 100. Subline at 15900ms. Scene 3 starts at 19500ms (2.5s earlier than before). Bullets appear after shopper phone settles. Total DURATION 38s.
+- **Copy fixes:** "Not anymore!" with !, `https://finda.sale` URL, eBay confirm sub-line removed, beam label "Paid" padded with en-spaces + min-width:48px so beam never shifts.
+- **Grey text standardized:** All grey text rgba(255,255,255,0.60) matching CTA scene.
+
+**S485 Files changed (1):**
+- `organizer-video-ad.html` — polished 38s animated video (multiple rounds of timing/visual iteration)
+
+---
+
+**Next Session — S486:**
+- Go through Organizer Acquisition Playbook and audit for: (1) estate sale / AI specific language, (2) any other narrowing language that excludes yard sales, auctions, flea markets, consignment. Strip and broaden. Patrick is frustrated this language keeps drifting back session after session — treat it as a hard rule not just a preference.
+- See memory: `feedback_no_estate_ai_language.md` for the full rule.
+
+---
+
 **S484 (2026-04-15) — Organizer acquisition playbook + animated video brief**
 
 - **Organizer Acquisition Playbook ✅:** Rebuilt twice this session. First pass wrong scope (cold outreach). Second pass correct: demand generation — organizers arrive pre-sold, sales conversation is just a trial offer. Covers community presence, before/after video asset, ringless voicemail (awareness touch not pitch), social proof flywheel, referral mechanics, probate attorney/consultant network. No "AI" language anywhere. Peer-to-peer tone throughout. Saved to `Organizer_Acquisition_Playbook.md` in repo root.
@@ -33,8 +53,43 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - "Sell smarter." tagline
 - CTA: "Try it free"
 
-**S484 Files changed (1):**
-- `Organizer_Acquisition_Playbook.md` (NEW — repo root)
+**S484 Guru Research — Acquisition Strategy Intelligence:**
+
+**Gurus to study (prioritized):**
+- Tier 1 (now): Alex Hormozi ($100M Leads — Core Four + Lead Getters + Grand Slam Offer/risk reversal), Nick Huber (Sweaty Startup — local-first, GMB, Nextdoor, physical presence)
+- Tier 2 (30 days): Codie Sanchez (audience acquisition, media-first, tributaries), Noah Kagan (48hr validation, AppSumo launch), Russell Brunson (full funnel: RVM→video→trial→month-2 upsell)
+- Tier 3 (90 days): Justin Welsh (founder as brand), Sam Parr/Shaan Puri (who already has my customers — EstateSales.NET has 50k organizers)
+- Also study: Paul Yonover (Dream 100), Dan Henry (B2B SaaS cold email)
+
+**Innovation ideas approved (from S484 agent dispatch):**
+- Risk-reversal guarantee: "first 3 items free, don't move 2 in 30 days = refund month 1" — BUILD NOW (15 lines)
+- Probate attorney referral loop with tracking links + profile badge — BUILD NOW (~150 lines)
+- ProductHunt + AppSumo launch — BUILD NOW (no code, potential $4,900 immediate)
+- Month-2 upsell email triggered by feature limit behavior — BUILD NOW (30 lines)
+- EstateSales.NET partnership/migration offer — RESEARCH (ops + legal, not dev)
+- 48-hour concierge sprint with 5 organizers → case study — BUILD NOW (no code)
+- Copy reframe: "Save time" → "Finish. Then go on vacation." — A/B test NOW
+- Estate Sale Insider podcast (bi-weekly, zero competition in this space) — BUILD NOW
+- Justin Welsh 5-part TikTok screen recording series — BUILD NOW
+
+**Influencer target list (S484):**
+- Gary Vaynerchuk — "Trash Talk" garage sale series, 34M YT subs, explicitly loves yard/estate sales. Shopper-side pitch: "app to find sales near you." 
+- Lara Spencer — HGTV Flea Market Flip + new "That Thrifting Show," massive TV audience
+- Mike Wolfe — American Pickers, History Channel antiques audience
+- Flea Market Flipper (Rob & Melissa Stephenson) — dedicated reseller community, teach flipping as business
+- Hairy Tornado — full-time YouTube/Whatnot reseller
+- Ralli Roots (Ryan & Alli) — $200 → 6-figure reselling income, garage sale hauls
+- Treasure Hunting with Jebus — 727K YouTube subscribers
+- Thrifting Vegas — specifically covers estate sales + garage sales for resale profit
+- Whatnot platform — $6B+ GMV, estate/vintage category, integration + influencer partnership play
+
+**Two-sided influencer strategy:** Shopper-side influencers (Gary Vee, Flea Market Flipper) drive BUYERS to browse FindA.Sale → organizers see traffic → organizers adopt. Same flywheel as Airbnb (travelers pull hosts).
+
+**ICP (ideal first organizer):** Solo or 2-person team, 6-20 sales/year, currently using spreadsheets + phone photos + Venmo, tech-comfortable, frustrated by setup time. ASEL professional member profile. NOT: 1-sale/year hobbyist. NOT: national liquidation enterprise.
+
+**S484 Files changed (2):**
+- `Organizer_Acquisition_Playbook.md` (rebuilt v3 — Koerner/Outscraper methodology + guru framework summary + influencer flywheel + ICP section)
+- `organizer-video-ad.html` (NEW — 25-second animated HTML5 marketing video, 9:16 vertical, 5 scenes, brand-accurate, self-contained)
 
 ---
 
@@ -281,7 +336,7 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
-- **S484 (2026-04-15):** Organizer acquisition playbook (demand gen scope, peer tone, no cold outreach, no "AI" language). Animated video research — settled on HTML5 build over AI video tools. Veo 3.1 prompts written + iterated. Brand assets extracted (colors, fonts, features). 1 file.
+- **S484 (2026-04-15):** Organizer acquisition playbook rebuilt v3 (Koerner/Outscraper methodology at scale — 5k+ contacts, $285/mo; + guru framework mapping for 8 gurus; + influencer flywheel strategy with 8 named targets; + ICP definition). 25-second animated HTML5 video built (9:16 vertical, 5 scenes, brand-accurate, self-contained). RVM scale corrected: 5k–20k contacts, not 25. Two-sided flywheel identified: shopper influencers (Gary Vee) pull buyers → buyers pull organizers (Airbnb model). 9 innovation ideas approved with BUILD NOW / DEFER verdicts. 2 files.
 - **S483 (2026-04-15):** eBay settings bugs (3 fixes). Admin dashboard rebuild — 5 Coming Soon pages delivered (reports, items, broadcast, feature-flags, index KPIs), 3 new backend controllers (adminReports, adminBroadcast, ebayRateLimiter), getStats upgraded with MRR/funnel/sparklines. Cost protection playbook + organizer signals spec written. Architect schema designs for 4 tables (FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) — not yet in schema.prisma. 15 files. Chrome QA pending.
 - **S481 (2026-04-15):** Trails security fix (public endpoint → authenticated /mine + ownership guard). Hubs nav moved to TEAMS block (grey icons). AI camera batch: TEXT_DETECTION for dark/glass, sparse-label fallback, comp-grounded pricing (anti-anchor), conditionGrade visual checklist, tag grouping by type, within-session suppression, condition-adjusted pricing. 9 files. Zero TS errors.
 - **S480 (2026-04-15):** S468 status card fix ✅ (4 fields added to /api/ebay/connection). Photo lightbox ✅ (ItemPhotoManager). Item 5 reconciliation verified already done in S467. NudgeBar organizer suppression ✅. eBay save bar browser-confirmed ✅ (hot-pink injection). eBay push error toast P2 fixed (result.code/message not result.error). USED_EXCELLENT code-verified, live UNVERIFIED (weight=null). 4 files.
@@ -333,7 +388,21 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Next Session Priority
 
-**TOP OF SESSION — Push S482 + S483 + S484 blocks**
+**TOP PRIORITY NEXT SESSION — Synthesis: The True Plan**
+
+All S484 acquisition research is done. Next session's primary job is to analyze everything and produce a single, actionable, prioritized plan with no hedging. Inputs to synthesize:
+- **Koerner methodology:** Outscraper → Searchbug → RVM (5k–20k contacts, $285/mo) → cold text → cold email → GroupBoss → VA follow-up
+- **Guru frameworks:** Hormozi (Core Four + Grand Slam Offer + risk reversal), Nick Huber (local-first, GMB, Nextdoor), Codie Sanchez (media-first, tributaries), Noah Kagan (48hr validation, ProductHunt/AppSumo burst), Russell Brunson (full funnel: RVM→video→trial→month-2 upsell), Justin Welsh (founder as brand, TikTok screen recordings), Sam Parr (who already has our customers — EstateSales.NET 50k organizers), Paul Yonover (Dream 100), Dan Henry (B2B cold email)
+- **Two-sided flywheel:** Shopper influencers (Gary Vee, Flea Market Flipper, Hairy Tornado, Ralli Roots, Thrifting Vegas, Lara Spencer, Mike Wolfe) drive buyers → buyer traffic pulls organizer adoption (Airbnb model)
+- **ICP:** Solo/2-person, 6–20 sales/year, ASEL professional, tech-comfortable, frustrated by setup time
+- **Approved innovation ideas (9):** Risk-reversal guarantee (BUILD NOW), probate attorney referral loop (BUILD NOW), ProductHunt/AppSumo (BUILD NOW), month-2 upsell email (BUILD NOW), 48-hour concierge sprint (BUILD NOW), copy reframe (A/B NOW), podcast (BUILD), TikTok screen recording series (BUILD), EstateSales.NET partnership (RESEARCH)
+- **Assets built:** 25-second animated video (`organizer-video-ad.html`), playbook v3 (`Organizer_Acquisition_Playbook.md`)
+
+Output expected: Single document with sequenced 90-day action plan — Week 1 / Month 1 / Month 2-3 with owners, tools, budgets, success metrics. No "we could do X or Y" — commit to the order. Dispatch findasale-marketing + findasale-innovation together or in sequence for this synthesis.
+
+---
+
+**SECOND — Push S482 + S483 + S484 blocks**
 
 **0a. Push S482 (camera overhaul — 2 files):**
 ```powershell
@@ -409,10 +478,11 @@ Tables needed: FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog. Dispatch Arch
 - eBay: check daily call count, apply for Certified App status (1–2 week process)
 - Stripe: enable Radar rules + dispute notifications
 
-**0d. Push S484 (playbook — 1 file):**
+**0d. Push S484 (playbook v3 + animated video — 2 files):**
 ```powershell
 git add Organizer_Acquisition_Playbook.md
-git commit -m "Organizer acquisition playbook: demand gen strategy, peer tone, no cold outreach"
+git add organizer-video-ad.html
+git commit -m "S484: Acquisition playbook v3 (Koerner methodology + guru frameworks + influencer flywheel + ICP) + 25s animated video"
 .\push.ps1
 ```
 
