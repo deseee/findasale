@@ -1714,8 +1714,7 @@ const events = [
 
   // SCENE 3 — POS / Payments (19500ms–29000ms)
   // Phones appear and settle before any interaction.
-  // Shopper has 2.2s to read the charge before tapping.
-  // s3-sub copy appears immediately after charge tap.
+  // Bullet points appear before charge tap so viewer reads them first.
   { at: 19500, fn: () => {
     showScene('s3');
     addAt(document.getElementById('s3-headline'),'in',0);
@@ -1723,14 +1722,14 @@ const events = [
     addAt(document.getElementById('shop-phone'),'in',1100);
   }},
 
+  // Bullet points appear once phones are settled (before charge tap)
+  { at: 20600, fn: () => { addAt(document.getElementById('s3-sub'),'in',0); } },
+
   // Organizer taps Charge at 22500ms (1.9s after phones settle)
   { at: 22500, fn: () => {
     document.getElementById('pos-btn').classList.add('tapped');
     addAt(document.getElementById('pay-beam'),'in',400);
   }},
-
-  // s3-sub appears after shopper phone settles (~21200ms)
-  { at: 21200, fn: () => { addAt(document.getElementById('s3-sub'),'in',0); } },
 
   // Shopper taps Authorize at 25100ms (2.2s after beam)
   { at: 25100, fn: () => {
