@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FindA.Sale — One Photo. Complete Listing.</title>
+<meta name="description" content="Photograph your items. The app writes the listing. Shoppers find you on the map. Leftovers push to eBay. Free forever.">
+<meta name="keywords" content="estate sale app, yard sale app, auction software, flea market app, consignment software, sale management, QR checkout, eBay sync, secondary sale platform">
+<meta name="author" content="FindA.Sale">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#D97706">
+<link rel="canonical" href="https://finda.sale/">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FindA.Sale">
+<meta property="og:url" content="https://finda.sale/">
+<meta property="og:title" content="FindA.Sale — One Photo. Complete Listing.">
+<meta property="og:description" content="Photograph your items. The app writes the listing. Shoppers find you on the map. Leftovers push to eBay. Free forever.">
+<meta property="og:image" content="https://finda.sale/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="FindA.Sale — the app for estate sales, yard sales, auctions, flea markets, and consignment.">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:url" content="https://finda.sale/">
+<meta name="twitter:title" content="FindA.Sale — One Photo. Complete Listing.">
+<meta name="twitter:description" content="Photograph your items. The app writes the listing. Shoppers find you on the map. Leftovers push to eBay. Free forever.">
+<meta name="twitter:image" content="https://finda.sale/og-image.png">
+
+<!-- Icons -->
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "FindA.Sale",
+  "description": "The app for estate sales, yard sales, auctions, flea markets, and consignment. Photograph your items, the app writes the listing, shoppers find you on the map, and leftovers push to eBay.",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web, iOS, Android",
+  "url": "https://finda.sale/",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD",
+    "description": "Free forever. First sale includes full PRO toolkit. $29/month PRO or $9.99 per sale."
+  },
+  "audience": {
+    "@type": "Audience",
+    "audienceType": "Estate sale organizers, yard sale hosts, auctioneers, flea market operators, consignment shops"
+  }
+}
+</script>
+
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --amber: #D97706;
+  --amber-light: #F59E0B;
+  --bg: #0D0D0D;
+  --surface: #1A1A1A;
+  --surface-hover: #242424;
+  --text: #F5F5F5;
+  --text-muted: #A3A3A3;
+  --text-dim: #737373;
+  --radius: 16px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ── */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+/* ── Logo ── */
+.logo-bar {
+  text-align: center;
+  padding: 24px 0 32px;
+}
+.logo-text {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+.logo-text span {
+  color: var(--amber);
+}
+
+/* ── Video (fits the 390x844 native player) ── */
+.video-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 40px;
+}
+.video-caption {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+.video-wrapper {
+  position: relative;
+  width: 320px;
+  height: 693px;
+  border-radius: 44px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 32px 80px rgba(0,0,0,0.6);
+}
+.video-wrapper iframe {
+  width: 390px;
+  height: 844px;
+  border: none;
+  transform: scale(0.821);
+  transform-origin: top left;
+  display: block;
+}
+
+/* ── Hero ── */
+.hero {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.hero h1 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -1px;
+  margin-bottom: 18px;
+}
+.hero h1 em {
+  font-style: normal;
+  color: var(--amber);
+}
+.hero .subtitle {
+  font-size: 18px;
+  color: var(--text-muted);
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* ── Section Header ── */
+.section-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.section-header .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber-light);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+.section-header h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.5px;
+}
+
+/* ── Feature Cards (supplement) ── */
+.features {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 56px;
+}
+.feature {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius);
+  padding: 28px 28px 26px;
+}
+.feature .icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(217, 119, 6, 0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.feature .icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: var(--amber-light);
+  fill: none;
+  stroke-width: 2;
+}
+.feature h3 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+.feature p {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.feature p strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ── Two Sides (organizer / shopper split) ── */
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 56px;
+}
+.side {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+}
+.side .label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--amber-light);
+  margin-bottom: 10px;
+}
+.side h3 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  margin-bottom: 12px;
+  letter-spacing: -0.2px;
+}
+.side ul {
+  list-style: none;
+  padding: 0;
+}
+.side li {
+  font-size: 14px;
+  color: var(--text-muted);
+  padding: 5px 0;
+  padding-left: 16px;
+  position: relative;
+  line-height: 1.5;
+}
+.side li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+/* ── Offer Block ── */
+.offer {
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.08) 0%, var(--surface) 100%);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  border-radius: var(--radius);
+  padding: 40px 32px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+.offer .badge {
+  display: inline-block;
+  background: rgba(217, 119, 6, 0.15);
+  color: var(--amber-light);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+.offer h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+  margin-bottom: 14px;
+}
+.offer h2 em {
+  font-style: normal;
+  color: var(--amber-light);
+}
+.offer p {
+  color: var(--text-muted);
+  font-size: 16px;
+  max-width: 460px;
+  margin: 0 auto 8px;
+  line-height: 1.55;
+}
+.offer .detail {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-top: 14px;
+}
+
+/* ── Testimonial ── */
+.testimonial {
+  padding: 24px 32px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+.testimonial blockquote {
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--text);
+  margin-bottom: 10px;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.testimonial .attribution {
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 0.3px;
+}
+
+/* ── CTA ── */
+.cta-section {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.cta-btn {
+  display: inline-block;
+  background: var(--amber);
+  color: #000;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  padding: 18px 52px;
+  border-radius: 12px;
+  text-decoration: none;
+  letter-spacing: -0.3px;
+  transition: background 0.2s, transform 0.15s;
+  box-shadow: 0 4px 24px rgba(217, 119, 6, 0.3);
+}
+.cta-btn:hover {
+  background: var(--amber-light);
+  transform: translateY(-1px);
+}
+.cta-note {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+/* ── FAQ mini ── */
+.faq {
+  margin-bottom: 48px;
+}
+.faq-row {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 16px 0;
+}
+.faq-row:last-child { border-bottom: none; }
+.faq-q {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.faq-a {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+/* ── Footer ── */
+.footer {
+  text-align: center;
+  padding: 32px 0 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.footer p {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.footer a {
+  color: var(--amber);
+  text-decoration: none;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .page { padding: 20px 16px 60px; }
+  .video-wrapper {
+    width: 290px;
+    height: 628px;
+    border-radius: 38px;
+  }
+  .video-wrapper iframe {
+    transform: scale(0.744);
+  }
+  .split { grid-template-columns: 1fr; }
+  .offer { padding: 32px 22px; }
+  .cta-btn { font-size: 16px; padding: 16px 40px; }
+  .section-header h2 { font-size: 22px; }
+  .feature { padding: 24px 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <!-- Logo -->
+  <div class="logo-bar">
+    <div class="logo-text">Find<span>A.</span>Sale</div>
+  </div>
+
+  <!-- Video Demo (front and center) -->
+  <div class="video-caption">Watch — 38 seconds</div>
+  <div class="video-section">
+    <div class="video-wrapper">
+      <iframe src="organizer-video-ad.html?embed=1" title="FindA.Sale Demo" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <!-- Two sides of the app -->
+  <div class="section-header">
+    <h2>Built for organizers. Loved by shoppers.</h2>
+  </div>
+
+  <div class="split">
+    <div class="side">
+      <div class="label">Organizer</div>
+      <h3>Run the sale</h3>
+      <ul>
+        <li>Photo-to-listing</li>
+        <li>Smart Pricing</li>
+        <li>In-person POS + QR checkout</li>
+        <li>Virtual Queue</li>
+        <li>Settlement wizard</li>
+        <li>Flip Report + Insights</li>
+        <li>eBay item sync</li>
+        <li>Brand Kit + custom storefront</li>
+      </ul>
+    </div>
+    <div class="side">
+      <div class="label">Shopper</div>
+      <h3>Find the good stuff</h3>
+      <ul>
+        <li>Map-based sale discovery</li>
+        <li>Category + distance filters</li>
+        <li>Saved searches with alerts</li>
+        <li>Wishlists + favorites</li>
+        <li>Treasure Trails (multi-sale routes)</li>
+        <li>Explorer's Guild (XP + ranks)</li>
+        <li>Hunt Pass — rare-item early access</li>
+        <li>Haul Posts (social proof)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- The Offer -->
+  <div class="offer">
+    <div class="badge">No credit card. No trial. No catch.</div>
+    <h2>Free forever.<br>Your first sale gets the <em>full PRO toolkit.</em></h2>
+    <p>Every new organizer's first sale runs with PRO unlocked — Smart Pricing, Virtual Queue, Flip Report, Insights, Brand Kit, and eBay sync included.</p>
+    <p class="detail">After that: stay free, or $29/month. Run just a few sales a year? $9.99 per sale.</p>
+  </div>
+
+  <!-- Two quick answers -->
+  <div class="faq">
+    <div class="faq-row">
+      <div class="faq-q">Who is this for?</div>
+      <div class="faq-a">Estate sale organizers, yard sale hosts, auctioneers, flea market operators, and consignment shops. Anyone running a secondary sale.</div>
+    </div>
+    <div class="faq-row">
+      <div class="faq-q">Do shoppers need the app to pay?</div>
+      <div class="faq-a">No. Shoppers scan a QR code at the sale and check out on there phone — no download required. Optional account gets them wishlists, alerts, and map discovery.</div>
+    </div>
+  </div>
+
+  <!-- The one CTA -->
+  <div class="cta-section">
+    <a href="https://finda.sale/register" class="cta-btn" id="main-cta">Start Your First Sale</a>
+    <p class="cta-note">Takes 60 seconds. Upload your first photo and see it work.</p>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>Built by <a href="https://finda.sale">FindA.Sale</a> — the app for estate sales, yard sales, auctions, flea markets, and consignment.</p>
+  </div>
+</div>
+
+<script>
+// ── Source Attribution ──
+// Captures ?src= param and passes it through to registration link
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const src = params.get('src');
+  if (src) {
+    document.querySelectorAll('a[href*="/register"]').forEach(function(link) {
+      const url = new URL(link.href);
+      url.searchParams.set('src', src);
+      link.href = url.toString();
+    });
+  }
+})();
+</script>
+</body>
+</html>
+     
