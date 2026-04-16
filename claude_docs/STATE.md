@@ -7,6 +7,42 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S489 (2026-04-16) — Security gates (First Sale Free PRO) + Graceful tier degradation**
+
+- **Hacker threat model ✅:** Full abuse analysis for "First Sale Free PRO" offer. 4 P0 gates, 3 P1, 3 P2.
+- **Security gates (8 of 9) ✅:** Email verification, first-sale tracking + age window, IP rate limiting on /register, AI tags quota enforcement (SIMPLE=100/mo, PRO=2000/mo), card fingerprint dedup, eBay push quota constants, temporal fraud detection. Schema migration `20260416_first_sale_security_gates` applied. Task 9 (AI feedback persistence) skipped — AiTagFeedback table doesn't exist yet.
+- **Graceful tier degradation ✅:** Architect spec + full implementation. 7-day grace period, GRACE_LOCKED item status (hidden from shoppers, visible to organizer), DowngradePreviewModal, dashboard grace banner, daily cron to finalize expired grace periods, requireTier returns grace context in 403. Schema migration `20260416_grace_period_fields` applied.
+- **Wiring ✅:** Billing routes (downgrade-preview + downgrade-confirm), tierGraceCron startup in index.ts, organizer profile returns graceEndAt.
+- **TS fixes ✅:** billingController Stripe deleted customer guard, dashboard orgProfile type extended with graceEndAt.
+- **eBay push quota ⚠️:** Constants added to tierLimits.ts, TODO comment in ebayController.ts. Full enforcement requires `ebayPushesThisMonth` field on Organizer (schema + migration pending).
+
+**S489 Files changed (27 total across 4 commits):**
+- `packages/database/prisma/schema.prisma` — 6 security fields (User + Organizer) + 6 grace fields (Organizer + Item + WorkspaceMember)
+- `packages/database/prisma/migrations/20260416_first_sale_security_gates/migration.sql` (NEW)
+- `packages/database/prisma/migrations/20260416_grace_period_fields/migration.sql` (NEW)
+- `packages/backend/src/lib/registrationRateLimiter.ts` (NEW)
+- `packages/backend/src/lib/aiTagsQuotaTracker.ts` (NEW)
+- `packages/backend/src/lib/fraudDetectionService.ts` (NEW)
+- `packages/backend/src/services/tierGraceService.ts` (NEW)
+- `packages/backend/src/jobs/tierGraceCronJob.ts` (NEW)
+- `packages/backend/src/constants/tierLimits.ts` — ebayPushesPerMonth added
+- `packages/backend/src/controllers/authController.ts` — email verify + IP rate limit + fraud detection
+- `packages/backend/src/controllers/saleController.ts` — email verify gate + first-sale free PRO
+- `packages/backend/src/controllers/itemController.ts` — AI tags quota gate
+- `packages/backend/src/controllers/billingController.ts` — card dedup + downgrade preview/confirm + deleted customer guard
+- `packages/backend/src/controllers/ebayController.ts` — eBay quota TODO comment
+- `packages/backend/src/middleware/requireTier.ts` — grace context in 403
+- `packages/backend/src/helpers/itemQueries.ts` — PUBLIC_ITEM_FILTER excludes GRACE_LOCKED
+- `packages/backend/src/routes/auth.ts` — /verify-email endpoint
+- `packages/backend/src/routes/billing.ts` — downgrade-preview + downgrade-confirm routes
+- `packages/backend/src/routes/organizers.ts` — graceEndAt in /me response
+- `packages/backend/src/index.ts` — tierGraceCron startup
+- `packages/frontend/pages/verify-email.tsx` (NEW)
+- `packages/frontend/pages/organizer/dashboard.tsx` — grace banner + type fix
+- `packages/frontend/components/DowngradePreviewModal.tsx` (NEW)
+
+---
+
 **S488 (2026-04-16) — Feature flags backend API + Chrome QA + migration audit**
 
 - **Feature flags backend API (P1) ✅:** 4 CRUD handlers added to `adminController.ts` (getFeatureFlags, createFeatureFlag, updateFeatureFlag, deleteFeatureFlag). 4 routes added to `admin.ts`. Pushed commit `6168a477`, Railway auto-deployed.
@@ -382,6 +418,7 @@ Files (7):
 
 ## Recent Sessions
 
+- **S489 (2026-04-16):** Security gates for "First Sale Free PRO" (8 of 9): email verify, first-sale tracking, IP rate limit, AI quota, card dedup, eBay push quota constants, temporal fraud detection. Graceful tier degradation system: 7-day grace period, GRACE_LOCKED status, DowngradePreviewModal, dashboard banner, daily cron. 2 migrations applied. 27 files across 4 commits. All green.
 - **S488 (2026-04-16):** Feature flags backend API ✅ (4 CRUD routes). Chrome QA: /admin/feature-flags ✅, /admin/reports ✅. Migration audit: 4 stuck records cleaned up, all intended schema state confirmed present. Feature #72 (UserRoleSubscription) activated — 13 ORGANIZER rows backfilled via psycopg2; tier lapse tracking now live for all organizers. 2 code files pushed.
 - **S487 (2026-04-16):** Schema additions (4 tables: FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) ✅. (Soon) nav labels removed from Layout + AvatarDropdown ✅. Chrome QA: /admin/items ✅, /admin/broadcast ✅. reports.tsx crash fix applied (revenue?.byDay?.length). Acquisition Playbook language broadened. 6 files.
 - **S486 (2026-04-16):** Video polish pass 2 (scene 2 lamp enlarged, review/success `height: 100%` fix, scene 3 payments row sized to fit beam label, font bump across all 5 scenes). Landing page stripped to essentials — logo, video, split, Free Forever offer, 2 FAQs, CTA, footer. SEO meta tags added: canonical, Open Graph, Twitter cards, theme-color, robots, favicon, JSON-LD SoftwareApplication schema. 4 files.
@@ -438,50 +475,43 @@ Files (7):
 
 ## Next Session Priority
 
-**1. Push S488 wrap docs:**
+**1. Push S489 wrap docs:**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S488 wrap: migration audit, Feature #72 backfill, next session priorities"
+git commit -m "S489 wrap: security gates, tier degradation system"
 .\push.ps1
 ```
 
-**2. Patrick manual — delete The_True_Plan.md from workspace.**
+**2. Patrick manual — delete The_True_Plan.md from workspace (carry-over).**
 
-**3. Hacker audit — "First Sale Free PRO" abuse vectors (P1):**
-The offer: organizer gets PRO-tier features free for their first sale. Dispatch `findasale-hacker` to threat-model this offer before it ships. Key questions:
-- Can someone create infinite "first sales" (new accounts, same person)?
-- Can they extract value (AI tagging, eBay push, QR watermarks) before the gate closes?
-- What's the cheapest abuse path — burner email + new account each time?
-- What signals distinguish a legitimate first-time organizer from a repeat abuser?
-- What enforcement is technically possible at account creation vs. sale creation vs. feature use?
-Output: threat model + recommended gates ranked by implementation cost.
+**3. Chrome QA — security gates smoke test (P1):**
+Verify the new email verification flow doesn't break existing organizer registration. Navigate to finda.sale, register a new test account, confirm verification email is sent, confirm sale creation is gated. Then verify existing organizers (pre-2026-04-16) are NOT blocked.
 
-**4. Architect + Dev — Graceful tier degradation UX (P1):**
-When a user downgrades from PRO/TEAMS to SIMPLE (subscription cancels, trial ends, or they manually downgrade), they may have:
-- More than 200 items published
-- Items with more than 5 photos
-- Sales using PRO-only features (Virtual Queue, eBay push, etc.)
-Current behavior: unknown — likely hard-blocks or silent failures. What needs to be designed:
-- **Warning phase:** Before downgrade kicks in, show "you'll lose X on [date]" — not a surprise
-- **Grace period:** Don't delete data immediately. Read-only access to over-limit items for N days
-- **What gets locked vs. deleted vs. kept read-only** — items over 200 become invisible to shoppers but not deleted; extra photos stay in Cloudinary but only first 5 shown; PRO features show upgrade prompt instead of hard error
-- **Copy/UX:** How do you tell someone "you had 340 items, 140 are now hidden" without them rage-quitting?
-Dispatch `findasale-architect` for the system design, then `findasale-ux` for the user-facing flow. Dev dispatch after both return.
+**4. Chrome QA — tier degradation smoke test (P1):**
+As an existing organizer (user2 SIMPLE), check dashboard — verify no grace banner appears. Then check `/api/billing/downgrade-preview` response. Confirm DowngradePreviewModal renders correctly from upgrade page.
 
-**5. Remaining S467 QA (carry over):**
+**5. eBay push quota — complete wiring (P1):**
+Add `ebayPushesThisMonth Int @default(0)` to Organizer model + migration. Wire quota check in ebayController.ts using the TODO comment placeholder. Small dispatch — ~15 lines.
+
+**6. Remaining S467 QA (carry over):**
 - USED grade-S item push → confirm eBay gets USED_EXCELLENT (needs item with weight set).
 - Watermark QR 85px bottom-right (UNVERIFIED).
 
-**8. eBay Chrome QA queue:**
+**7. eBay Chrome QA queue:**
 - Full "push a real item" — book, clothing, furniture — verify condition/aspect/price land correctly.
 - PostSaleEbayPanel end-to-end (ENDED sale).
 
-**9. Cost protection checklist (Patrick manual — see `claude_docs/operations/cost-protection-playbook.md`):**
+**8. Cost protection checklist (Patrick manual — see `claude_docs/operations/cost-protection-playbook.md`):**
 - Cloudinary: spending cap + 75% alert
 - Anthropic: $50/month spend limit at console.anthropic.com/settings/limits
 - Google Vision: 2,000/day quota + $25 budget alert in GCP
 - Stripe: enable Radar rules + dispute notifications
+
+**9. Root file cleanup (Patrick manual):**
+Delete from repo root (superseded by public/ copies):
+- `finda-sale-landing.html`
+- `organizer-video-ad.html`
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)

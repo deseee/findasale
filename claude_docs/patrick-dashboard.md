@@ -1,28 +1,30 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
-## S488 Summary (2026-04-16)
+## S489 Summary (2026-04-16)
 
-**Feature flags backend ✅** — Full CRUD API live. `/admin/feature-flags` Chrome-verified.
+**"First Sale Free PRO" offer is now abuse-proof ✅** — Hacker threat model identified 4 P0 + 3 P1 + 3 P2 attack vectors. All 8 code-implementable gates shipped:
+- Email verification required before creating sales (burner emails blocked)
+- First-sale tracking — free PRO only for organizers created <7 days ago, first sale only
+- IP rate limiting — max 5 registrations per IP per hour
+- AI tag quota — SIMPLE gets 100/month, PRO gets 2,000/month, enforced per organizer
+- Card fingerprint dedup — 5+ accounts same card = fraud flag
+- eBay push quota constants (wiring still needed — see next session)
+- Temporal fraud detection — 10+ accounts from same IP in 30 days = fraud flag
 
-**Admin reports ✅** — Both tabs load with real data. Crash fix confirmed.
+**Graceful tier degradation system shipped ✅** — Organizers no longer get hard-blocked or data-wiped when they downgrade from PRO/TEAMS to SIMPLE:
+- 7-day grace period on downgrade
+- Items 201+ enter GRACE_LOCKED: hidden from shoppers, visible to organizer with lock badge
+- Dashboard shows grace period banner with countdown + upgrade link
+- Downgrade preview modal shows exactly what they'll lose before confirming
+- Daily cron finalizes expired grace periods automatically
+- Re-upgrading immediately restores all locked items
 
-**Migration history cleaned up ✅** — 4 stuck records audited and resolved. All intended schema changes confirmed present in DB.
+**2 migrations applied to Railway DB.** 27 files across 4 commits. All green.
 
-**Feature #72 (UserRoleSubscription) finally activated ✅** — This was silently broken since March. The backfill migration failed in March 2026 and was never retried, leaving the table empty despite being wired into auth, billing, POS tier, and tier lapse logic. 13 ORGANIZER rows now inserted. Tier lapse tracking is live.
-
-**Next session is focused on two product safety problems:**
-1. Abuse-proofing the "first sale free PRO" offer — hacker threat model before it ships
-2. Graceful tier degradation — what happens to organizers with 340 items when they drop to the 200-item free tier, and how do you handle it without losing them
-
-**Your only action:**
-```powershell
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S488 wrap: migration audit, Feature #72 backfill, next session priorities"
-.\push.ps1
-```
-
-Delete `The_True_Plan.md` from your workspace folder.
+**Your actions next session:**
+1. Smoke test registration flow — new account → verify email → create sale
+2. Delete `The_True_Plan.md` from workspace
+3. Delete root-level `finda-sale-landing.html` and `organizer-video-ad.html` (superseded by public/ copies)
 
 ---
 
