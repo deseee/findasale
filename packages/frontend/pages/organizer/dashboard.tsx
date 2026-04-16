@@ -188,6 +188,8 @@ const OrganizerDashboard = () => {
         avgRating: number | null;
         onboardingComplete: boolean;
         subscriptionLapsed: boolean;
+        graceEndAt?: string | null;
+        graceTierBefore?: string | null;
       };
     },
     enabled: !!user?.id && isClient,
