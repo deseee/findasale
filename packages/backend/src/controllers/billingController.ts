@@ -285,6 +285,7 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
           try {
             // Get customer metadata to find user ID
             const customer = await stripe.customers.retrieve(customerId);
+            if (customer.deleted) break;
             const userId = (customer.metadata?.userId) as string | undefined;
 
             if (userId && session.payment_method) {
