@@ -2,11 +2,23 @@
 
 ## What Happened This Week
 
+**S486** (2026-04-16) — Video polish pass 2 + landing page strip + SEO meta tags ✅
+
+Second polish pass on `organizer-video-ad.html`: scene 2 lamp made bigger (it was too small inside the new enlarged camera frame), success and review screens fixed so content actually centers vertically (needed `height: 100%` + `box-sizing: border-box` — flex had no space to distribute before), scene 3 payments row sized down to fit the "Request" beam label without squishing the phones, and font sizes bumped across the entire video — especially scene 5 CTA and scene 3 bullet points.
+
+Landing page stripped down to the essentials — removed the hero H1, 3 feature cards, testimonial, and 3 of the 5 FAQ rows. What's left: logo → video → "Built for organizers. Loved by shoppers." split → Free Forever offer → 2 FAQs → CTA → footer. Clean and punchy.
+
+SEO meta tags added to `finda-sale-landing.html`: canonical URL, Open Graph (for Facebook/LinkedIn previews), Twitter cards, theme-color, robots, favicon refs, and JSON-LD SoftwareApplication structured data with pricing and audience. The page is now properly indexed and previews well when shared.
+
+**Heads up:** The meta tags reference `/og-image.png` and `/favicon.png` — those files don't exist yet. Need to generate them before the landing page is live-shared anywhere (1200×630 for og-image, 32×32 or 512×512 for favicon).
+
+**Next up:** Audit Organizer Acquisition Playbook — strip all estate sale and AI language, broaden every instance to cover yard sales, auctions, flea markets, consignment. This is a recurring drift issue that needs a hard fix in the doc itself. Also: synthesize all the S484 acquisition research into a single 90-day action plan with no hedging.
+
+---
+
 **S485** (2026-04-15) — Animated video polish (organizer-video-ad.html) ✅
 
 38-second animated video is done. Key changes this session: phones now stay static during payment swap (CSS grid stacking fix), counter starts at 75, bullets appear after shopper phone settles, lamp larger, "Not anymore!" with exclamation, eBay confirm sub-line removed, beam label width stabilized so it doesn't shift on "Request → Paid." Total runtime 38s.
-
-**Next up:** Audit Organizer Acquisition Playbook — strip all estate sale and AI language, broaden every instance to cover yard sales, auctions, flea markets, consignment. This is a recurring drift issue that needs a hard fix in the doc itself.
 
 ---
 

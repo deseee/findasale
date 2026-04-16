@@ -7,6 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S486 (2026-04-16) — Video polish pass 2 + landing page strip + meta tags**
+
+- **Video polished (organizer-video-ad.html) ✅:** Second full iteration pass on the 38s animated video.
+  - Scene 2 camera lamp enlarged (`.lamp-svg-cam` 76→140px, `.cam-subject` 90→160px with amber frame).
+  - Scene 2 review screen: added `height: 100%` + `box-sizing: border-box` so flex actually distributes, photo 130→190px, gap 10→14px, symmetric padding.
+  - Scene 2 success screen: same `height: 100%` fix + symmetric padding 48/48, ring 96px, title 22px.
+  - Scene 3 payments row: mini-phones 160px, beam min-width 44px, padding 4px — fits in 382px without squish.
+  - Font bump across all 5 scenes: headlines +4–8px, bullets 16→20px, CTA logo 42→52px, CTA main 52→60px, CTA URL 18→24px, eBay push button 16→20px.
+- **Landing page stripped (finda-sale-landing.html) ✅:** Removed hero H1+subtitle, 3 feature cards, testimonial, 3 FAQ rows, "Two sides. One app." eyebrow. Kept: logo, video, "Built for organizers. Loved by shoppers." + split, Free Forever offer, 2 FAQs, CTA, footer.
+- **SEO meta tags added ✅:** Canonical URL, Open Graph (og:title/description/url/image/site_name), Twitter cards, theme-color (#D97706), keywords, author, robots, favicon/apple-touch-icon refs, JSON-LD SoftwareApplication structured data with Offer + Audience.
+
+**S486 Files changed (4):**
+- `organizer-video-ad.html` — scene polish pass 2 + font bump
+- `finda-sale-landing.html` — stripped + SEO meta tags + structured data
+- `claude_docs/STATE.md` — this wrap
+- `claude_docs/patrick-dashboard.md` — this wrap
+
+---
+
 **S485 (2026-04-15) — Animated video iteration (organizer-video-ad.html)**
 
 - **Video polished across 2 sessions (S485 + continuation) ✅:** Full iterative refinement of `organizer-video-ad.html`. Final state: 38-second 9:16 animated HTML5 video, 5 scenes.
@@ -21,9 +40,10 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S486:**
-- Go through Organizer Acquisition Playbook and audit for: (1) estate sale / AI specific language, (2) any other narrowing language that excludes yard sales, auctions, flea markets, consignment. Strip and broaden. Patrick is frustrated this language keeps drifting back session after session — treat it as a hard rule not just a preference.
-- See memory: `feedback_no_estate_ai_language.md` for the full rule.
+**Next Session — S487:**
+- Audit Organizer Acquisition Playbook for: (1) estate sale / AI specific language, (2) any other narrowing language that excludes yard sales, auctions, flea markets, consignment. Strip and broaden. Patrick is frustrated this language keeps drifting back session after session — treat it as a hard rule not just a preference. See memory: `feedback_no_estate_ai_language.md` for the full rule.
+- Synthesis: The True Plan — single 90-day action plan (Week 1 / Month 1 / Month 2-3) with owners, tools, budgets, success metrics. No hedging.
+- Create og-image.png (1200×630) and favicon.png for the landing page — currently referenced in meta tags but not yet in `/public` or whatever serves the root.
 
 ---
 
@@ -336,6 +356,8 @@ Vercel env cleanup: delete old NEXT_PUBLIC_STRIPE_PRO_MONTHLY_PRICE_ID and NEXT_
 
 ## Recent Sessions
 
+- **S486 (2026-04-16):** Video polish pass 2 (scene 2 lamp enlarged, review/success `height: 100%` fix, scene 3 payments row sized to fit beam label, font bump across all 5 scenes). Landing page stripped to essentials — logo, video, split, Free Forever offer, 2 FAQs, CTA, footer. SEO meta tags added: canonical, Open Graph, Twitter cards, theme-color, robots, favicon, JSON-LD SoftwareApplication schema. 4 files.
+- **S485 (2026-04-15):** Animated video polished across 2 sessions. Final state: 38-second 9:16 animated HTML5 video, 5 scenes. Phones no longer shift during payment swap (CSS grid stacking), counter starts at 75, bullets appear after shopper phone settles, beam label width stabilized. 1 file.
 - **S484 (2026-04-15):** Organizer acquisition playbook rebuilt v3 (Koerner/Outscraper methodology at scale — 5k+ contacts, $285/mo; + guru framework mapping for 8 gurus; + influencer flywheel strategy with 8 named targets; + ICP definition). 25-second animated HTML5 video built (9:16 vertical, 5 scenes, brand-accurate, self-contained). RVM scale corrected: 5k–20k contacts, not 25. Two-sided flywheel identified: shopper influencers (Gary Vee) pull buyers → buyers pull organizers (Airbnb model). 9 innovation ideas approved with BUILD NOW / DEFER verdicts. 2 files.
 - **S483 (2026-04-15):** eBay settings bugs (3 fixes). Admin dashboard rebuild — 5 Coming Soon pages delivered (reports, items, broadcast, feature-flags, index KPIs), 3 new backend controllers (adminReports, adminBroadcast, ebayRateLimiter), getStats upgraded with MRR/funnel/sparklines. Cost protection playbook + organizer signals spec written. Architect schema designs for 4 tables (FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) — not yet in schema.prisma. 15 files. Chrome QA pending.
 - **S481 (2026-04-15):** Trails security fix (public endpoint → authenticated /mine + ownership guard). Hubs nav moved to TEAMS block (grey icons). AI camera batch: TEXT_DETECTION for dark/glass, sparse-label fallback, comp-grounded pricing (anti-anchor), conditionGrade visual checklist, tag grouping by type, within-session suppression, condition-adjusted pricing. 9 files. Zero TS errors.
