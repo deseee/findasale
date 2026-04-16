@@ -12,7 +12,7 @@ Review at session start — any FAIL entries need investigation.
 | findasale-nightly-context | Daily 2am | — | — | Refreshes context.md |
 | context-freshness-check | Daily 8am | — | — | Flags stale STATE.md/context.md |
 | findasale-health-scout | Weekly Sun 11pm | — | — | Security + code quality scan |
-| findasale-competitor-monitor | Weekly Mon 8am | PASS | 2026-04-09 | Competitor + industry intel (merged) |
+| findasale-competitor-monitor | Weekly Mon 8am | PASS | 2026-04-16 | Competitor + industry intel (merged) |
 | findasale-ux-spotcheck | Weekly Wed 9am | — | — | Rotating organizer/shopper flow review |
 | findasale-monthly-digest | Monthly 1st 9am | — | — | Feature digest + changelog |
 | findasale-workflow-retrospective | Monthly 8th 9am | — | — | Meta workflow audit (merged from bi-weekly) |
@@ -42,6 +42,7 @@ Review at session start — any FAIL entries need investigation.
 
 | Task | Date | Result | Notes |
 |---|---|---|---|
+| findasale-competitor-monitor | 2026-04-16 | PASS | Top signal: Claude Haiku 3 deprecates April 19 — urgent migration needed if used in AI tagging; Valuable App + Auctronica gaining comparison-site placement; housing market slowdown = estate sale volume opportunity; 3 content pieces generated (social post, 3 subject lines, blog brief) |
 | findasale-competitor-monitor | 2026-04-09 | PASS | Top signal: SimpleConsign shipped April 9 webinar (UI refresh, cash rounding, never-expire items) — active monthly shipping cadence confirmed; MaxSold buyer app now live (two-sided marketplace complete); 3 content pieces generated (social post, 3 subject lines, blog brief) |
 | findasale-competitor-monitor | 2026-04-02 | PASS | Top signal: SimpleConsign AI cataloging is live and they have an April 9 product push — rising competitor to watch; MaxSold photo upload bugs persist; Haiku 4.5 cost case for AI tagging; 3 content pieces generated (social post, 3 subject lines, blog brief) |
 | findasale-competitor-monitor | 2026-03-26 | PASS | Top signal: Rosy still has no payment processing — Stripe Connect is a direct differentiator; EstateSales.NET fee complaints damage organizer trust; 3 content pieces generated (social post, 3 subject lines, blog brief) |
