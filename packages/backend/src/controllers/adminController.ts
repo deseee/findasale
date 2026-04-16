@@ -774,3 +774,110 @@ export const getAdminItems = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to fetch items' });
   }
 };
+
+// GET /api/admin/feature-flags — list all feature flags
+export const getFeatureFlags = async (req: AuthRequest, res: Response) => {
+  try {
+    const flags = await prisma.featureFlag.findMany({
+      orderBy: { key: 'asc' },
+    });
+
+    res.json(flags);
+  } catch (error) {
+    console.error('Error fetching feature flags:', error);
+    res.status(500).json({ message: 'Failed to fetch feature flags' });
+  }
+};
+
+// POST /api/admin/feature-flags — create new feature flag
+export const createFeatureFlag = async (req: AuthRequest, res: Response) => {
+  try {
+    const { key, description, enabled, tierRestricted } = req.body;
+
+    // Validate required fields
+    if (!key || !key.trim()) {
+      return res.status(400).json({ message: 'Flag key is required' });
+    }
+
+    // Check for unique key
+    const existing = await prisma.featureFlag.findUnique({
+      where: { key },
+    });
+
+    if (existing) {
+      return res.status(409).json({ message: 'A flag with this key already exists' });
+    }
+
+    const flag = await prisma.featureFlag.create({
+      data: {
+        key: key.trim(),
+        description: description?.trim() || '',
+        enabled: enabled === true,
+        tierRestricted: tierRestricted || null,
+        updatedBy: req.user?.email || req.user?.id || 'unknown',
+      },
+    });
+
+    res.status(201).json(flag);
+  } catch (error) {
+    console.error('Error creating feature flag:', error);
+    res.status(500).json({ message: 'Failed to create feature flag' });
+  }
+};
+
+// PATCH /api/admin/feature-flags/:id — update feature flag
+export const updateFeatureFlag = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { enabled, description, tierRestricted } = req.body;
+
+    // Build update data with only provided fields
+    const updateData: any = {
+      updatedBy: req.user?.email || req.user?.id || 'unknown',
+    };
+
+    if (enabled !== undefined) {
+      updateData.enabled = enabled;
+    }
+
+    if (description !== undefined) {
+      updateData.description = description.trim();
+    }
+
+    if (tierRestricted !== undefined) {
+      updateData.tierRestricted = tierRestricted || null;
+    }
+
+    const flag = await prisma.featureFlag.update({
+      where: { id },
+      data: updateData,
+    });
+
+    res.json(flag);
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ message: 'Feature flag not found' });
+    }
+    console.error('Error updating feature flag:', error);
+    res.status(500).json({ message: 'Failed to update feature flag' });
+  }
+};
+
+// DELETE /api/admin/feature-flags/:id — delete feature flag
+export const deleteFeatureFlag = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.featureFlag.delete({
+      where: { id },
+    });
+
+    res.json({ message: 'Feature flag deleted successfully' });
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ message: 'Feature flag not found' });
+    }
+    console.error('Error deleting feature flag:', error);
+    res.status(500).json({ message: 'Failed to delete feature flag' });
+  }
+};
