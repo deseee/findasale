@@ -657,7 +657,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-header dark:shadow-gray-800/50">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-12 lg:h-16">
-            <Link href="/" className="text-xl lg:text-2xl font-bold font-heading flex-shrink-0 text-gray-900 dark:text-white">
+            <Link href="/" className="text-xl lg:text-2xl flex-shrink-0 text-gray-900 dark:text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800 }}>
               Find<span className="text-amber-600">A.</span>Sale
             </Link>
 
@@ -841,7 +841,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       >
         {/* Drawer header */}
         <div className="flex items-center justify-between px-4 h-12 border-b border-warm-200 dark:border-gray-700">
-          <span className="font-bold font-heading text-lg text-gray-900 dark:text-white">Find<span className="text-amber-600">A.</span>Sale</span>
+          <span className="text-lg text-gray-900 dark:text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800 }}>Find<span className="text-amber-600">A.</span>Sale</span>
           <button
             onClick={() => setMenuOpen(false)}
             aria-label="Close menu"
