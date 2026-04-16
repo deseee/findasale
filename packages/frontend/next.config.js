@@ -155,6 +155,15 @@ const nextConfig = {
     ];
   },
 
+  // Static HTML rewrites — serve public/*.html files at clean URLs
+  async rewrites() {
+    return [
+      // S486: Marketing landing page with embedded 38s demo video
+      // Served at finda.sale/video from public/video.html + public/organizer-video-ad.html
+      { source: '/video', destination: '/video.html' },
+    ];
+  },
+
   // Security + performance headers on every response
   async headers() {
     return [
