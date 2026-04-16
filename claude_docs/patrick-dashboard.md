@@ -1,5 +1,64 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
+## S491 Summary (2026-04-16)
+
+**Security audit fixes + eBay push quota + admin reports fix — 11 files changed, migration required.**
+
+**Your actions (do these in order):**
+
+1. Run the push block:
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/backend/src/controllers/adminReportsController.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260416_ebay_push_quota/migration.sql
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/treasureHuntQRController.ts
+git add packages/backend/src/jobs/auctionJob.ts
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/services/referralService.ts
+git add packages/backend/src/middleware/requireTier.ts
+git add packages/backend/src/controllers/stripeController.ts
+git commit -m "S491: admin reports fix, eBay push quota, 4 security fixes (XP caps, referral atomicity, grace period, payment dedup)"
+.\push.ps1
+```
+
+2. After the push lands, run the migration (Railway DB):
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+3. Chrome QA (P0 — low-confidence fix): Navigate to `/admin/reports` and verify organizers appear in the list. The fix added `deletedAt: null` filtering to sales includes — root cause may be frontend-side, so visual confirmation needed before declaring this closed.
+
+4. Chrome QA (P1): Register a new account to confirm the email verification gate fires without blocking existing organizers.
+
+5. Chrome QA (P1): Log in as a SIMPLE-tier user and confirm no grace period banner and DowngradePreviewModal show correctly.
+
+6. Pending decisions on orphaned pages (78 of 170 pages have no nav entry): `/search`, `/organizer/pricing`, `/organizer/storefront`, `/hall-of-fame`, `/shopper/lucky-roll`, `/shopper/crews`, `/condition-guide` — which of these should get nav links in the next session?
+
+**What was fixed this session:**
+
+Admin reports — added `where: { deletedAt: null }` to organizer query in `getOrganizerPerformance`. LOW-CONFIDENCE — needs Chrome confirmation.
+
+eBay push quota — SIMPLE=10/month, PRO=200/month, TEAMS/ENT=unlimited. New schema fields `ebayPushesThisMonth` + `ebayPushesResetAt` on Organizer. Migration required (step 2 above).
+
+XP caps — CONDITION_RATING (50 XP/month), TREASURE_HUNT_SCAN (100 XP/day), AUCTION_WIN (100 XP/month) all now silently skip if cap exceeded. Prevents XP farming.
+
+Referral atomicity — `processReferral()` now runs inside the user-creation transaction. Orphaned users from failed referral writes are now impossible.
+
+Grace period enforcement — downgraded users in grace period now get 403 `GRACE_PERIOD_RESTRICTION` for PRO+ features instead of full access. SIMPLE features remain open.
+
+Payment dedup flag — duplicate card fingerprint detected → `User.fraudSuspect = true` set for review. Payment not blocked, just flagged.
+
+**Also this session:** DB integrity confirmed clean (0 NULL migrations, 0 FK orphans). Seed accounts identified for deletion after Chrome QA.
+
+---
+
 ## S490 Summary (2026-04-16)
 
 **Video + landing page polished ✅ — 11 rounds on the marketing video, landing copy cleaned up, two-tone Montserrat logo in the app nav.**

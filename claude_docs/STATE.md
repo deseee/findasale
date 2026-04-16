@@ -7,6 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S491 (2026-04-16) — Admin reports bug + security audit + eBay quota + orphaned pages**
+
+- **Admin reports "No organizers found" fix ⚠️ LOW-CONFIDENCE:** `adminReportsController.ts` — added `where: { deletedAt: null }` to sales include. Deployed to Railway. Chrome QA needed to confirm fix actually resolves the issue (the change alone shouldn't prevent organizers from appearing; root cause may be elsewhere in frontend data handling).
+- **eBay push quota wired ✅:** `ebayPushesThisMonth Int @default(0)` + `ebayPushesResetAt DateTime?` added to Organizer. Migration `20260416_ebay_push_quota` created. Quota check + monthly reset wired in `ebayController.ts`. Limits: SIMPLE=10, PRO=200, TEAMS/ENT=unlimited. Migration pending Patrick run.
+- **CRITICAL: XP monthly caps now enforced ✅:** `checkMonthlyXpCap()` return value was being ignored — caps were advisory only. Now enforced silently (no error, just skips award). Fixed in `itemController.ts` (CONDITION_RATING, 50/mo), `treasureHuntQRController.ts` (TREASURE_HUNT_SCAN, 100/day), `auctionJob.ts` (AUCTION_WIN, 100/mo).
+- **CRITICAL: Referral rewards now atomic ✅:** `processReferral()` moved inside `prisma.$transaction()` in `authController.ts`. `referralService.ts` updated to accept optional tx client parameter. Prevents race-condition duplicate XP awards on concurrent registrations.
+- **HIGH: Grace period now blocks PRO/TEAMS features ✅:** `requireTier.ts` now returns 403 `GRACE_PERIOD_RESTRICTION` when organizer is in 7-day downgrade grace period and tries to access PRO/TEAMS-gated route. SIMPLE features remain accessible. Includes `graceEndAt` + `remainingDays` in response for frontend UX.
+- **HIGH: Payment dedup now activates fraudSuspect flag ✅:** `stripeController.ts` — after duplicate card fingerprint detected, sets `User.fraudSuspect = true` + logs warning. Payment still processes (flag for review, not block).
+- **DB integrity verified ✅ (psycopg2):** 0 NULL migrations, 0 FK orphans, 13 UserRoleSubscription rows correct. 103 users: 2 survivors, 9 test organizers, 91 test shoppers. Safe-to-delete: all `user@example.com` + `workandothers1@gmail.com`.
+- **Orphaned pages audit ✅:** 78 of 170 pages have no nav entry. Key missing links: `/search` (main discovery), `/organizer/pricing`, `/organizer/storefront`, `/shopper/lucky-roll`, `/shopper/crews`, `/hall-of-fame` (AvatarDropdown only, missing from Layout). Patrick decisions needed before wiring.
+
+**S491 Files changed (11 total):**
+- `packages/backend/src/controllers/adminReportsController.ts` — sales where deletedAt null
+- `packages/database/prisma/schema.prisma` — ebayPushesThisMonth + ebayPushesResetAt on Organizer
+- `packages/database/prisma/migrations/20260416_ebay_push_quota/migration.sql` (NEW)
+- `packages/backend/src/controllers/ebayController.ts` — quota check + increment
+- `packages/backend/src/controllers/itemController.ts` — XP cap enforcement (CONDITION_RATING)
+- `packages/backend/src/controllers/treasureHuntQRController.ts` — XP cap (TREASURE_HUNT_SCAN)
+- `packages/backend/src/jobs/auctionJob.ts` — XP cap (AUCTION_WIN)
+- `packages/backend/src/controllers/authController.ts` — referral inside transaction
+- `packages/backend/src/services/referralService.ts` — tx client parameter
+- `packages/backend/src/middleware/requireTier.ts` — grace period enforcement
+- `packages/backend/src/controllers/stripeController.ts` — fraudSuspect on dedup
+
+---
+
 **S490 (2026-04-16) — Video + landing page polish + two-tone Montserrat logo**
 
 - **organizer-video-ad.html polished (11 rounds) ✅:** White checkmarks on all 4 green-circle elements (Published scene + payment scene). Font sizes bumped (success-sub 14→18px, counter-text 15→17px, items-row 15→18px). Scene nav added: prev/next arrows + dot indicators (5 scenes). Wrapper height fixed after nav added (iframe 844→915px, desktop wrapper 693→750px, mobile 628→679px). Lamp SVG redesigned — empire style (narrow-top 18px, wide-bottom 52px, finial + collar + two-tier base) replacing martini-glass shape. Return beam delays corrected for right→left flow (0s/0.2s/0.4s with row-reverse). eBay push button color matched to amber-600 (#D97706). Scene 2 headline "You're done." on own line in orange; "Under an hour." nowrap on own line. Scene 3: "Shoppers Pay" / "on their phone." split. Beam + item labels brightened to rgba(255,255,255,0.60). s3 bullet timing fixed (moved to at:20600, before charge event at:22500 — were firing simultaneously due to array ordering). CTA copy: "Snap your first photo and watch it work."
@@ -396,6 +422,7 @@ Files (7):
 
 ## Recent Sessions
 
+- **S491 (2026-04-16):** Admin reports bug fix (low-confidence, Chrome QA needed). eBay push quota wired (schema + migration + controller). 4 CRITICAL/HIGH security fixes: XP cap enforcement (3 files), referral atomicity (tx + service), grace period blocking (requireTier), payment dedup fraudSuspect activation. DB integrity verified clean. Orphaned pages audit: 78/170 pages have no nav entry, key decisions surfaced. 11 files.
 - **S490 (2026-04-16):** Video + landing + logo polish. organizer-video-ad.html: white checkmarks, font sizes, scene nav (dots + arrows), wrapper height fix, empire-style lamp SVG, return beam direction fix, eBay button color, headline/badge line breaks, label brightness, bullet timing fix, CTA copy. video.html: padding, features copy, per-sale offer copy, badge. Layout.tsx + _document.tsx: two-tone Montserrat logo in nav + mobile drawer. 4 files.
 - **S489 (2026-04-16):** Security gates for "First Sale Free PRO" (8 of 9): email verify, first-sale tracking, IP rate limit, AI quota, card dedup, eBay push quota constants, temporal fraud detection. Graceful tier degradation system: 7-day grace period, GRACE_LOCKED status, DowngradePreviewModal, dashboard banner, daily cron. 2 migrations applied. 27 files across 4 commits. All green.
 - **S488 (2026-04-16):** Feature flags backend API ✅ (4 CRUD routes). Chrome QA: /admin/feature-flags ✅, /admin/reports ✅. Migration audit: 4 stuck records cleaned up, all intended schema state confirmed present. Feature #72 (UserRoleSubscription) activated — 13 ORGANIZER rows backfilled via psycopg2; tier lapse tracking now live for all organizers. 2 code files pushed.
@@ -454,72 +481,60 @@ Files (7):
 
 ## Next Session Priority
 
-**1. Push S490 wrap docs (first thing):**
+**1. Push S491 wrap docs + S491 code (first thing):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/public/organizer-video-ad.html
-git add packages/frontend/public/video.html
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/pages/_document.tsx
-git commit -m "S490: video polish (scene nav, lamp, beam, fonts, CTA), landing page, two-tone Montserrat logo"
+git add packages/backend/src/controllers/adminReportsController.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260416_ebay_push_quota/migration.sql
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/treasureHuntQRController.ts
+git add packages/backend/src/jobs/auctionJob.ts
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/services/referralService.ts
+git add packages/backend/src/middleware/requireTier.ts
+git add packages/backend/src/controllers/stripeController.ts
+git commit -m "S491: admin reports fix, eBay push quota, 4 security fixes (XP caps, referral atomicity, grace period, payment dedup)"
 .\push.ps1
 ```
 
-**2. Admin reports page bug — "No organizers found" (P0):**
-`/admin/reports` Organizer Performance tab shows "No organizers found." Debug `getOrganizerPerformance` in `adminReportsController.ts` — likely the query has a wrong JOIN or missing include that filters out all rows. Dispatch `findasale-dev` with the controller file + schema.
+**2. Run S491 migration (eBay push quota — schema change):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-**3. Hacker deep dive — full security audit for launch (P0):**
-Dispatch `findasale-hacker` for a comprehensive threat model across:
-- All auth + registration security gates (email verify, IP rate limit, fraud detection — S489)
-- All tier enforcement gates (requireTier, grace period, GRACE_LOCKED)
-- eBay push abuse surface (quota, per-organizer enforcement)
-- Gamification integrity: XP earning, coupon redemption, Scout Reveal, referral
-- Stripe: webhook signature verification, checkout session abuse, subscription manipulation
-- Admin routes: are they properly gated to ADMIN role only?
-- Data exposure: can shoppers read other shoppers' data? Can organizers read other organizers'?
-- Goal: launch readiness report + investor-facing security posture + gamification abuse scenarios
+**3. Chrome QA — admin reports fix (P0, low-confidence):**
+Navigate to `/admin/reports` as admin. Verify Organizer Performance tab shows organizers. If still empty, re-dispatch `findasale-dev` with deeper diagnosis (may be a frontend data handling issue, not just the query).
 
-**4. Full pricing + monetization review (P1):**
-Before Stripe goes live with real customers, audit the full money surface:
-- All XP/dollar sinks: values correct, no abuse vectors, all wired end-to-end
-- A-la-carte sales: pricing model, Stripe product/price IDs, wiring
-- Extra team members: pricing per seat, Stripe wiring, enforcement
-- Per-sale offer ($9.99): Stripe product/price ID, wiring, correct tier gate
-- PRO + TEAMS monthly/annual pricing: all IDs correct in env, no test IDs leaked to prod
-- Hunt Pass $4.99/mo: subscription flow verified, cancellation works
-- Dispatch: findasale-investor + findasale-hacker to jointly audit; findasale-dev to fix any gaps
+**4. Chrome QA — security gates smoke test (P1, carry from S489):**
+Register a new test account → verify email gate fires. Verify existing organizers are NOT blocked.
 
-**5. Orphaned pages audit — Dev + Architect (P1):**
-Dispatch `findasale-architect` + `findasale-dev` to:
-- Find all pages in `packages/frontend/pages/` that have no nav entry in Layout.tsx or AvatarDropdown.tsx
-- For each orphaned page: add a roadmap entry tagged "missing nav" (or confirm it's intentionally nav-less)
-- Patrick has spotted several orphaned pages during manual browsing — find them all programmatically
-- Return a list of: page path, page title, current status (linked/orphaned/intentional), recommended action
-
-**6. DB integrity check before removing seed accounts (P1):**
-Before nuking test accounts, verify DB health:
-- Run a query confirming all foreign key relationships are intact (no dangling FK references)
-- Confirm no silent migration failures (NULL finished_at entries — S488 cleaned most, verify still clean)
-- Identify which records belong to test-only accounts vs Patrick's two survivor accounts
-- Survivor accounts: `deseee@gmail.com` (admin) + `artifactmi@gmail.com` (TEAMS organizer)
-- Produce a "safe to delete" list of user IDs + counts of associated records
-- Do NOT delete yet — return the list for Patrick review
-
-**7. Chrome QA — security gates smoke test (P1, carry from S489):**
-Register a new test account → verify email is sent → confirm sale creation is gated until verified. Verify existing organizers (pre-S489) are NOT blocked.
-
-**8. Chrome QA — tier degradation smoke test (P1, carry from S489):**
+**5. Chrome QA — tier degradation smoke test (P1, carry from S489):**
 As existing organizer (user2 SIMPLE), confirm no grace banner. Check DowngradePreviewModal renders from upgrade page.
 
-**9. eBay push quota — complete wiring (P1, carry from S489):**
-Add `ebayPushesThisMonth Int @default(0)` to Organizer + migration. Wire quota check in ebayController.ts TODO comment. ~15 lines.
+**6. Orphaned pages — Patrick decisions needed (P1):**
+Confirm which of these to wire into nav (dispatch `findasale-dev` after decisions):
+- `/search` — main discovery page, currently unreachable from nav (RECOMMEND: add)
+- `/organizer/pricing` — plan selection, unreachable (RECOMMEND: add)
+- `/organizer/storefront/[slug]` — public storefront, unreachable (RECOMMEND: add)
+- `/hall-of-fame` — in AvatarDropdown but not Layout.tsx (RECOMMEND: add to Layout)
+- `/shopper/lucky-roll` — gamified discovery (in-progress or ready?)
+- `/shopper/crews` — crew collaboration (in-progress or ready?)
+- `/condition-guide` — reference page (add to shopper nav?)
 
-**10. Root file cleanup (Patrick manual):**
-Delete from repo root (superseded by public/ copies):
-- `finda-sale-landing.html`
-- `organizer-video-ad.html`
-- `The_True_Plan.md` (carry-over)
+**7. Full pricing + monetization review (P1):**
+Dispatch `findasale-investor` + `findasale-hacker` jointly to audit all money surfaces before live customers.
+
+**8. Delete seed accounts — after Chrome QA confirms app is healthy (P1):**
+Safe to delete: all `user@example.com` (user1–user100) + `workandothers1@gmail.com`. Survivors: `deseee@gmail.com` + `artifactmi@gmail.com`. DB integrity clean as of S491.
+
+**9. Root file cleanup (Patrick manual):**
+Delete from repo root: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)

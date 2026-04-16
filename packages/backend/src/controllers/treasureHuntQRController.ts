@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
-import { awardXp, XP_AWARDS } from '../services/xpService';
+import { awardXp, XP_AWARDS, checkDailyXpCap } from '../services/xpService';
 
 /**
  * Feature #85: Treasure Hunt QR Controller
@@ -284,12 +284,21 @@ export async function markClueFound(req: AuthRequest, res: Response) {
       },
     });
 
-    // Award XP for the clue (uses constant from xpService)
-    let xpEarned = XP_AWARDS.TREASURE_HUNT_SCAN;
-    await awardXp(req.user.id, 'TREASURE_HUNT_SCAN', XP_AWARDS.TREASURE_HUNT_SCAN, {
-      saleId,
-      description: `Treasure Hunt QR Clue found: ${clueId}`,
-    });
+    // Award XP for the clue (respecting daily cap: 100 XP/day, 150 with Hunt Pass)
+    let xpEarned = 0;
+    try {
+      const dailyRemaining = await checkDailyXpCap(req.user.id, 'TREASURE_HUNT_SCAN');
+      const xpToAward = Math.min(XP_AWARDS.TREASURE_HUNT_SCAN, dailyRemaining);
+      if (xpToAward > 0) {
+        await awardXp(req.user.id, 'TREASURE_HUNT_SCAN', xpToAward, {
+          saleId,
+          description: `Treasure Hunt QR Clue found: ${clueId}`,
+        });
+        xpEarned = xpToAward;
+      }
+    } catch (err) {
+      console.warn('[treasureHuntQR] Failed to award scan XP:', err);
+    }
 
     // Check for completion
     const totalClues = await prisma.treasureHuntQRClue.count({
@@ -307,12 +316,16 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     const completed = userScans >= totalClues;
 
     if (completed && sale.treasureHuntCompletionBadge) {
-      // Award completion bonus XP (uses constant from xpService)
-      bonusXp = XP_AWARDS.TREASURE_HUNT_COMPLETION;
-      await awardXp(req.user.id, 'TREASURE_HUNT_COMPLETION', XP_AWARDS.TREASURE_HUNT_COMPLETION, {
-        saleId,
-        description: `Treasure Hunt QR completed: ${saleId}`,
-      });
+      // Award completion bonus XP (no daily cap for completion bonus — one-time per hunt)
+      try {
+        bonusXp = XP_AWARDS.TREASURE_HUNT_COMPLETION;
+        await awardXp(req.user.id, 'TREASURE_HUNT_COMPLETION', XP_AWARDS.TREASURE_HUNT_COMPLETION, {
+          saleId,
+          description: `Treasure Hunt QR completed: ${saleId}`,
+        });
+      } catch (err) {
+        console.warn('[treasureHuntQR] Failed to award completion bonus XP:', err);
+      }
     }
 
     res.json({

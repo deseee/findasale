@@ -868,6 +868,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
             const { isDuplicate, otherUserIds } = await checkPaymentDuplicate(paymentMethod.card.fingerprint, purchase.user.id);
             if (isDuplicate && otherUserIds.length > 0) {
               logPaymentDuplicateWarning(purchase.user.id, paymentMethod.card.fingerprint, otherUserIds);
+              // CRITICAL FIX: Flag account for fraud review when shared card detected
+              await prisma.user.update({
+                where: { id: purchase.user.id },
+                data: { fraudSuspect: true }
+              });
+              console.warn(`[stripe] Fraud flag set for user ${purchase.user.id} — shared card fingerprint with users: ${otherUserIds.join(', ')}`);
             }
             // Store fingerprint on user account
             await storePaymentFingerprint(purchase.user.id, paymentMethod.card.fingerprint);
