@@ -211,7 +211,7 @@ const AdminReportsPage = () => {
 
   const totalPages = Math.ceil(organizersTotal / 20);
   const maxDailyRevenue =
-    revenue?.byDay.length && Math.max(...revenue.byDay.map((d) => d.transactionRevenue)) || 1;
+    revenue?.byDay?.length ? Math.max(...revenue.byDay.map((d) => d.transactionRevenue)) : 1;
 
   return (
     <>

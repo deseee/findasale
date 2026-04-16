@@ -21,6 +21,23 @@ Full audit: `claude_docs/audits/weekly-audit-2026-04-16.md`
 
 ## What Happened This Week
 
+**S487** (2026-04-16) — Schema additions + admin nav cleanup + Chrome QA of 5 admin pages
+
+4 new database tables added to schema.prisma (FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) and migration SQL written. Patrick must run `prisma migrate deploy` before feature flags backend works.
+
+`(Soon)` labels removed from admin nav — Items, Reports, Feature Flags, and Broadcast now appear as real links in both the avatar dropdown and mobile nav.
+
+Chrome QA results:
+- **/admin (KPI dashboard) — ✅ PASS** (verified pre-compaction)
+- **/admin/items — ✅ PASS** Search filter works, real thumbnails, no errors.
+- **/admin/broadcast — ✅ PASS** Audience selector (103 users), subject/body/character counter, Send Broadcast button all render correctly.
+- **/admin/feature-flags — ❌ P1 BUG** Red "Failed to load feature flags" error. Backend returns 404 — the backend API for feature flags was never built in S483 (frontend only). Fix: dev dispatch to build GET/POST/PATCH/DELETE endpoints using the new FeatureFlag Prisma model.
+- **/admin/reports — fix applied, UNVERIFIED** The crash (TypeError on initial render) was caused by `revenue?.byDay.length` — added `?.` before `.length`. Fix needs to deploy before re-verify.
+
+Also broadened two instances of estate-sale-specific language in `Organizer_Acquisition_Playbook.md`.
+
+---
+
 **S486** (2026-04-16) — Video polish pass 2 + landing page strip + SEO meta tags ✅
 
 Second polish pass on `organizer-video-ad.html`: scene 2 lamp made bigger (it was too small inside the new enlarged camera frame), success and review screens fixed so content actually centers vertically (needed `height: 100%` + `box-sizing: border-box` — flex had no space to distribute before), scene 3 payments row sized down to fit the "Request" beam label without squishing the phones, and font sizes bumped across the entire video — especially scene 5 CTA and scene 3 bullet points.
@@ -409,6 +426,44 @@ Architect designed 4 new tables: FeatureFlag (needed for feature flags backend),
 ---
 
 ## Action Items for Patrick
+
+**NEW — S487 push blocks (do these now):**
+
+```powershell
+git add packages/database/prisma/schema.prisma
+git add "packages/database/prisma/migrations/20260416_admin_tables/migration.sql"
+git commit -m "S487: Add FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog schema + migration"
+.\push.ps1
+```
+```powershell
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/pages/admin/reports.tsx
+git commit -m "S487: Remove (Soon) labels from admin nav, fix reports.tsx crash on null revenue"
+.\push.ps1
+```
+```powershell
+git add Organizer_Acquisition_Playbook.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S487 wrap: playbook language broadened, STATE + dashboard updated"
+.\push.ps1
+```
+
+**NEW — S487 migration (run after pushing schema):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+This creates the FeatureFlag, PwaEvent, OrganizerScore, and ApiUsageLog tables.
+
+**NEW — S487 P1 bug to dispatch next session:** `/admin/feature-flags` needs backend API (GET/POST/PATCH/DELETE). Frontend exists, backend routes don't. Dispatch `findasale-dev` once migration is applied.
+
+**NEW — Delete manually:** `The_True_Plan.md` in your workspace folder — cannot be deleted programmatically. The Organizer_Acquisition_Playbook.md IS the 90-day plan.
+
+---
 
 **✅ All S464 manual actions COMPLETE (verified S465).** Migration run, Vercel + Railway env clean, all live Stripe keys/IDs confirmed by screenshot.
 

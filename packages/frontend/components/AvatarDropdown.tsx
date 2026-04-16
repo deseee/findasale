@@ -300,7 +300,7 @@ const AvatarDropdown: React.FC = () => {
                     onClick={() => setIsOpen(false)}
                   >
                     <Package size={14} className="text-red-400" />
-                    <span>Manage Items <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Manage Items</span>
                   </Link>
                   <Link
                     href="/admin/reports"
@@ -308,7 +308,7 @@ const AvatarDropdown: React.FC = () => {
                     onClick={() => setIsOpen(false)}
                   >
                     <BarChart2 size={14} className="text-red-400" />
-                    <span>Reports <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Reports</span>
                   </Link>
                   <Link
                     href="/admin/feature-flags"
@@ -316,7 +316,7 @@ const AvatarDropdown: React.FC = () => {
                     onClick={() => setIsOpen(false)}
                   >
                     <Lightbulb size={14} className="text-red-400" />
-                    <span>Feature Flags <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Feature Flags</span>
                   </Link>
                   <Link
                     href="/admin/broadcast"
@@ -324,7 +324,7 @@ const AvatarDropdown: React.FC = () => {
                     onClick={() => setIsOpen(false)}
                   >
                     <MessageSquare size={14} className="text-red-400" />
-                    <span>Broadcast Message <span className="text-xs text-gray-400 ml-1">(Soon)</span></span>
+                    <span>Broadcast Message</span>
                   </Link>
                   <Link
                     href="/admin/ab-tests"
