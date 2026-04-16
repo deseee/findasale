@@ -1,30 +1,37 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
-## S489 Summary (2026-04-16)
+## S490 Summary (2026-04-16)
 
-**"First Sale Free PRO" offer is now abuse-proof ✅** — Hacker threat model identified 4 P0 + 3 P1 + 3 P2 attack vectors. All 8 code-implementable gates shipped:
-- Email verification required before creating sales (burner emails blocked)
-- First-sale tracking — free PRO only for organizers created <7 days ago, first sale only
-- IP rate limiting — max 5 registrations per IP per hour
-- AI tag quota — SIMPLE gets 100/month, PRO gets 2,000/month, enforced per organizer
-- Card fingerprint dedup — 5+ accounts same card = fraud flag
-- eBay push quota constants (wiring still needed — see next session)
-- Temporal fraud detection — 10+ accounts from same IP in 30 days = fraud flag
+**Video + landing page polished ✅ — 11 rounds on the marketing video, landing copy cleaned up, two-tone Montserrat logo in the app nav.**
 
-**Graceful tier degradation system shipped ✅** — Organizers no longer get hard-blocked or data-wiped when they downgrade from PRO/TEAMS to SIMPLE:
-- 7-day grace period on downgrade
-- Items 201+ enter GRACE_LOCKED: hidden from shoppers, visible to organizer with lock badge
-- Dashboard shows grace period banner with countdown + upgrade link
-- Downgrade preview modal shows exactly what they'll lose before confirming
-- Daily cron finalizes expired grace periods automatically
-- Re-upgrading immediately restores all locked items
+**organizer-video-ad.html:**
+- White checkmarks on the green circle elements in the Published and payment scenes (were black)
+- Fonts bumped (counter, item row, success sub-text — all 2–3px larger to fill the space)
+- Scene nav added: left/right arrows + 5 dot indicators so viewers can skip between scenes
+- Wrapper height corrected after nav addition (iframe grew 844→915px, desktop wrapper 693→750px, mobile 628→679px — nav was being clipped)
+- Lamp SVG completely redesigned — traditional empire style (narrow top 18px, wide base 52px) instead of the martini-glass shape it was. Includes finial, socket collar, and two-tier base.
+- Return beam (shopper → organizer) now flows right-to-left correctly (delay order was backwards)
+- eBay push button color corrected to amber-600 (#D97706) — was a slightly different shade
+- Scene 2 "You're done." and "Under an hour." now each on their own line, "You're done." in orange
+- Scene 3 "Shoppers Pay" / "on their phone." split across two lines
+- Beam and item label text brightened (30% → 60% white) — now readable
+- Bullet timing bug fixed: bullets were appearing simultaneously with the charge tap instead of before it (array ordering issue in the RAF event loop)
+- CTA copy: "Snap your first photo and watch it work."
 
-**2 migrations applied to Railway DB.** 27 files across 4 commits. All green.
+**video.html (landing page at finda.sale/video):**
+- Page padding reduced — less dead space above the video
+- Features list updated: "Advanced Analytics" instead of "Insights"
+- Per-sale offer copy: "Run just a few large sales a year? Get PRO capacity for $9.99 per sale."
+- Badge: "No credit card. No trial. / No catch." (No catch on its own line)
 
-**Your actions next session:**
-1. Smoke test registration flow — new account → verify email → create sale
-2. Delete `The_True_Plan.md` from workspace
-3. Delete root-level `finda-sale-landing.html` and `organizer-video-ad.html` (superseded by public/ copies)
+**App nav logo:**
+- Both nav locations (desktop + mobile drawer) now show `FindA.Sale` in two-tone Montserrat 800: grey/white outer text + amber "A." — same treatment as the video landing page
+- Montserrat was not previously loaded in the app — added to the Google Fonts URL in `_document.tsx`
+
+**Your actions:**
+1. Run the push block below
+2. Delete root-level `finda-sale-landing.html` and `organizer-video-ad.html` from repo root (superseded by public/ copies)
+3. Delete `The_True_Plan.md` from workspace
 
 ---
 
@@ -448,16 +455,23 @@ Architect designed 4 new tables: FeatureFlag (needed for feature flags backend),
 
 ## Action Items for Patrick
 
-**S488 wrap push (do this now):**
+**S490 wrap push (do this now):**
 
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S488 wrap: STATE + dashboard updated"
+git add packages/frontend/public/organizer-video-ad.html
+git add packages/frontend/public/video.html
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/_document.tsx
+git commit -m "S490: video polish (scene nav, lamp, beam, fonts, CTA), landing page, two-tone Montserrat logo"
 .\push.ps1
 ```
 
-**Delete manually:** `The_True_Plan.md` in your workspace folder — cannot be deleted programmatically.
+**Delete manually from repo root** (cannot be deleted programmatically — these are superseded):
+- `finda-sale-landing.html`
+- `organizer-video-ad.html`
+- `The_True_Plan.md`
 
 ---
 

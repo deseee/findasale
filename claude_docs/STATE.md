@@ -7,39 +7,17 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S489 (2026-04-16) — Security gates (First Sale Free PRO) + Graceful tier degradation**
+**S490 (2026-04-16) — Video + landing page polish + two-tone Montserrat logo**
 
-- **Hacker threat model ✅:** Full abuse analysis for "First Sale Free PRO" offer. 4 P0 gates, 3 P1, 3 P2.
-- **Security gates (8 of 9) ✅:** Email verification, first-sale tracking + age window, IP rate limiting on /register, AI tags quota enforcement (SIMPLE=100/mo, PRO=2000/mo), card fingerprint dedup, eBay push quota constants, temporal fraud detection. Schema migration `20260416_first_sale_security_gates` applied. Task 9 (AI feedback persistence) skipped — AiTagFeedback table doesn't exist yet.
-- **Graceful tier degradation ✅:** Architect spec + full implementation. 7-day grace period, GRACE_LOCKED item status (hidden from shoppers, visible to organizer), DowngradePreviewModal, dashboard grace banner, daily cron to finalize expired grace periods, requireTier returns grace context in 403. Schema migration `20260416_grace_period_fields` applied.
-- **Wiring ✅:** Billing routes (downgrade-preview + downgrade-confirm), tierGraceCron startup in index.ts, organizer profile returns graceEndAt.
-- **TS fixes ✅:** billingController Stripe deleted customer guard, dashboard orgProfile type extended with graceEndAt.
-- **eBay push quota ⚠️:** Constants added to tierLimits.ts, TODO comment in ebayController.ts. Full enforcement requires `ebayPushesThisMonth` field on Organizer (schema + migration pending).
+- **organizer-video-ad.html polished (11 rounds) ✅:** White checkmarks on all 4 green-circle elements (Published scene + payment scene). Font sizes bumped (success-sub 14→18px, counter-text 15→17px, items-row 15→18px). Scene nav added: prev/next arrows + dot indicators (5 scenes). Wrapper height fixed after nav added (iframe 844→915px, desktop wrapper 693→750px, mobile 628→679px). Lamp SVG redesigned — empire style (narrow-top 18px, wide-bottom 52px, finial + collar + two-tier base) replacing martini-glass shape. Return beam delays corrected for right→left flow (0s/0.2s/0.4s with row-reverse). eBay push button color matched to amber-600 (#D97706). Scene 2 headline "You're done." on own line in orange; "Under an hour." nowrap on own line. Scene 3: "Shoppers Pay" / "on their phone." split. Beam + item labels brightened to rgba(255,255,255,0.60). s3 bullet timing fixed (moved to at:20600, before charge event at:22500 — were firing simultaneously due to array ordering). CTA copy: "Snap your first photo and watch it work."
+- **video.html (landing page) polished ✅:** Page top padding 40→16px, logo-bar padding reduced. Mobile page padding reduced. Features list updated ("Advanced Analytics"). Per-sale offer copy: "Run just a few large sales a year? Get PRO capacity for $9.99 per sale." Badge: "No credit card. No trial.<br>No catch."
+- **Two-tone Montserrat logo in app nav ✅:** Layout.tsx updated in 2 spots (desktop nav line 660, mobile drawer line 844). `Find<span text-amber-600>A.</span>Sale` with inline Montserrat 800 style. Montserrat added to _document.tsx Google Fonts URL (was not loaded before).
 
-**S489 Files changed (27 total across 4 commits):**
-- `packages/database/prisma/schema.prisma` — 6 security fields (User + Organizer) + 6 grace fields (Organizer + Item + WorkspaceMember)
-- `packages/database/prisma/migrations/20260416_first_sale_security_gates/migration.sql` (NEW)
-- `packages/database/prisma/migrations/20260416_grace_period_fields/migration.sql` (NEW)
-- `packages/backend/src/lib/registrationRateLimiter.ts` (NEW)
-- `packages/backend/src/lib/aiTagsQuotaTracker.ts` (NEW)
-- `packages/backend/src/lib/fraudDetectionService.ts` (NEW)
-- `packages/backend/src/services/tierGraceService.ts` (NEW)
-- `packages/backend/src/jobs/tierGraceCronJob.ts` (NEW)
-- `packages/backend/src/constants/tierLimits.ts` — ebayPushesPerMonth added
-- `packages/backend/src/controllers/authController.ts` — email verify + IP rate limit + fraud detection
-- `packages/backend/src/controllers/saleController.ts` — email verify gate + first-sale free PRO
-- `packages/backend/src/controllers/itemController.ts` — AI tags quota gate
-- `packages/backend/src/controllers/billingController.ts` — card dedup + downgrade preview/confirm + deleted customer guard
-- `packages/backend/src/controllers/ebayController.ts` — eBay quota TODO comment
-- `packages/backend/src/middleware/requireTier.ts` — grace context in 403
-- `packages/backend/src/helpers/itemQueries.ts` — PUBLIC_ITEM_FILTER excludes GRACE_LOCKED
-- `packages/backend/src/routes/auth.ts` — /verify-email endpoint
-- `packages/backend/src/routes/billing.ts` — downgrade-preview + downgrade-confirm routes
-- `packages/backend/src/routes/organizers.ts` — graceEndAt in /me response
-- `packages/backend/src/index.ts` — tierGraceCron startup
-- `packages/frontend/pages/verify-email.tsx` (NEW)
-- `packages/frontend/pages/organizer/dashboard.tsx` — grace banner + type fix
-- `packages/frontend/components/DowngradePreviewModal.tsx` (NEW)
+**S490 Files changed (4):**
+- `packages/frontend/public/organizer-video-ad.html` — 11 polish rounds
+- `packages/frontend/public/video.html` — wrapper heights, padding, copy
+- `packages/frontend/components/Layout.tsx` — two-tone Montserrat logo (desktop + mobile)
+- `packages/frontend/pages/_document.tsx` — Montserrat added to Google Fonts URL
 
 ---
 
@@ -418,6 +396,7 @@ Files (7):
 
 ## Recent Sessions
 
+- **S490 (2026-04-16):** Video + landing + logo polish. organizer-video-ad.html: white checkmarks, font sizes, scene nav (dots + arrows), wrapper height fix, empire-style lamp SVG, return beam direction fix, eBay button color, headline/badge line breaks, label brightness, bullet timing fix, CTA copy. video.html: padding, features copy, per-sale offer copy, badge. Layout.tsx + _document.tsx: two-tone Montserrat logo in nav + mobile drawer. 4 files.
 - **S489 (2026-04-16):** Security gates for "First Sale Free PRO" (8 of 9): email verify, first-sale tracking, IP rate limit, AI quota, card dedup, eBay push quota constants, temporal fraud detection. Graceful tier degradation system: 7-day grace period, GRACE_LOCKED status, DowngradePreviewModal, dashboard banner, daily cron. 2 migrations applied. 27 files across 4 commits. All green.
 - **S488 (2026-04-16):** Feature flags backend API ✅ (4 CRUD routes). Chrome QA: /admin/feature-flags ✅, /admin/reports ✅. Migration audit: 4 stuck records cleaned up, all intended schema state confirmed present. Feature #72 (UserRoleSubscription) activated — 13 ORGANIZER rows backfilled via psycopg2; tier lapse tracking now live for all organizers. 2 code files pushed.
 - **S487 (2026-04-16):** Schema additions (4 tables: FeatureFlag, PwaEvent, OrganizerScore, ApiUsageLog) ✅. (Soon) nav labels removed from Layout + AvatarDropdown ✅. Chrome QA: /admin/items ✅, /admin/broadcast ✅. reports.tsx crash fix applied (revenue?.byDay?.length). Acquisition Playbook language broadened. 6 files.
@@ -475,43 +454,72 @@ Files (7):
 
 ## Next Session Priority
 
-**1. Push S489 wrap docs:**
+**1. Push S490 wrap docs (first thing):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S489 wrap: security gates, tier degradation system"
+git add packages/frontend/public/organizer-video-ad.html
+git add packages/frontend/public/video.html
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/_document.tsx
+git commit -m "S490: video polish (scene nav, lamp, beam, fonts, CTA), landing page, two-tone Montserrat logo"
 .\push.ps1
 ```
 
-**2. Patrick manual — delete The_True_Plan.md from workspace (carry-over).**
+**2. Admin reports page bug — "No organizers found" (P0):**
+`/admin/reports` Organizer Performance tab shows "No organizers found." Debug `getOrganizerPerformance` in `adminReportsController.ts` — likely the query has a wrong JOIN or missing include that filters out all rows. Dispatch `findasale-dev` with the controller file + schema.
 
-**3. Chrome QA — security gates smoke test (P1):**
-Verify the new email verification flow doesn't break existing organizer registration. Navigate to finda.sale, register a new test account, confirm verification email is sent, confirm sale creation is gated. Then verify existing organizers (pre-2026-04-16) are NOT blocked.
+**3. Hacker deep dive — full security audit for launch (P0):**
+Dispatch `findasale-hacker` for a comprehensive threat model across:
+- All auth + registration security gates (email verify, IP rate limit, fraud detection — S489)
+- All tier enforcement gates (requireTier, grace period, GRACE_LOCKED)
+- eBay push abuse surface (quota, per-organizer enforcement)
+- Gamification integrity: XP earning, coupon redemption, Scout Reveal, referral
+- Stripe: webhook signature verification, checkout session abuse, subscription manipulation
+- Admin routes: are they properly gated to ADMIN role only?
+- Data exposure: can shoppers read other shoppers' data? Can organizers read other organizers'?
+- Goal: launch readiness report + investor-facing security posture + gamification abuse scenarios
 
-**4. Chrome QA — tier degradation smoke test (P1):**
-As an existing organizer (user2 SIMPLE), check dashboard — verify no grace banner appears. Then check `/api/billing/downgrade-preview` response. Confirm DowngradePreviewModal renders correctly from upgrade page.
+**4. Full pricing + monetization review (P1):**
+Before Stripe goes live with real customers, audit the full money surface:
+- All XP/dollar sinks: values correct, no abuse vectors, all wired end-to-end
+- A-la-carte sales: pricing model, Stripe product/price IDs, wiring
+- Extra team members: pricing per seat, Stripe wiring, enforcement
+- Per-sale offer ($9.99): Stripe product/price ID, wiring, correct tier gate
+- PRO + TEAMS monthly/annual pricing: all IDs correct in env, no test IDs leaked to prod
+- Hunt Pass $4.99/mo: subscription flow verified, cancellation works
+- Dispatch: findasale-investor + findasale-hacker to jointly audit; findasale-dev to fix any gaps
 
-**5. eBay push quota — complete wiring (P1):**
-Add `ebayPushesThisMonth Int @default(0)` to Organizer model + migration. Wire quota check in ebayController.ts using the TODO comment placeholder. Small dispatch — ~15 lines.
+**5. Orphaned pages audit — Dev + Architect (P1):**
+Dispatch `findasale-architect` + `findasale-dev` to:
+- Find all pages in `packages/frontend/pages/` that have no nav entry in Layout.tsx or AvatarDropdown.tsx
+- For each orphaned page: add a roadmap entry tagged "missing nav" (or confirm it's intentionally nav-less)
+- Patrick has spotted several orphaned pages during manual browsing — find them all programmatically
+- Return a list of: page path, page title, current status (linked/orphaned/intentional), recommended action
 
-**6. Remaining S467 QA (carry over):**
-- USED grade-S item push → confirm eBay gets USED_EXCELLENT (needs item with weight set).
-- Watermark QR 85px bottom-right (UNVERIFIED).
+**6. DB integrity check before removing seed accounts (P1):**
+Before nuking test accounts, verify DB health:
+- Run a query confirming all foreign key relationships are intact (no dangling FK references)
+- Confirm no silent migration failures (NULL finished_at entries — S488 cleaned most, verify still clean)
+- Identify which records belong to test-only accounts vs Patrick's two survivor accounts
+- Survivor accounts: `deseee@gmail.com` (admin) + `artifactmi@gmail.com` (TEAMS organizer)
+- Produce a "safe to delete" list of user IDs + counts of associated records
+- Do NOT delete yet — return the list for Patrick review
 
-**7. eBay Chrome QA queue:**
-- Full "push a real item" — book, clothing, furniture — verify condition/aspect/price land correctly.
-- PostSaleEbayPanel end-to-end (ENDED sale).
+**7. Chrome QA — security gates smoke test (P1, carry from S489):**
+Register a new test account → verify email is sent → confirm sale creation is gated until verified. Verify existing organizers (pre-S489) are NOT blocked.
 
-**8. Cost protection checklist (Patrick manual — see `claude_docs/operations/cost-protection-playbook.md`):**
-- Cloudinary: spending cap + 75% alert
-- Anthropic: $50/month spend limit at console.anthropic.com/settings/limits
-- Google Vision: 2,000/day quota + $25 budget alert in GCP
-- Stripe: enable Radar rules + dispute notifications
+**8. Chrome QA — tier degradation smoke test (P1, carry from S489):**
+As existing organizer (user2 SIMPLE), confirm no grace banner. Check DowngradePreviewModal renders from upgrade page.
 
-**9. Root file cleanup (Patrick manual):**
+**9. eBay push quota — complete wiring (P1, carry from S489):**
+Add `ebayPushesThisMonth Int @default(0)` to Organizer + migration. Wire quota check in ebayController.ts TODO comment. ~15 lines.
+
+**10. Root file cleanup (Patrick manual):**
 Delete from repo root (superseded by public/ copies):
 - `finda-sale-landing.html`
 - `organizer-video-ad.html`
+- `The_True_Plan.md` (carry-over)
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)
