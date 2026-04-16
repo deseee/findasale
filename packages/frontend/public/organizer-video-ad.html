@@ -1137,6 +1137,44 @@ body.embed #timer { display: none; }
   50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
 }
 
+/* ── Scene Navigation ── */
+#scene-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+.nav-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.75);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+#scene-dots {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.scene-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: background 0.25s, transform 0.25s;
+  flex-shrink: 0;
+}
+.scene-dot.active { background: #D97706; transform: scale(1.4); }
+.scene-dot:hover:not(.active) { background: rgba(255,255,255,0.45); }
+
 /* ── Info panel below player ── */
 #info {
   margin-top: 20px;
@@ -1396,6 +1434,19 @@ body.embed #timer { display: none; }
 
 </div>
 
+<!-- Scene navigation -->
+<div id="scene-nav">
+  <button class="nav-btn" id="prev-btn">&#8249;</button>
+  <div id="scene-dots">
+    <div class="scene-dot active" data-scene="0" title="Scene 1: Hook"></div>
+    <div class="scene-dot" data-scene="1" title="Scene 2: Product Demo"></div>
+    <div class="scene-dot" data-scene="2" title="Scene 3: Payments"></div>
+    <div class="scene-dot" data-scene="3" title="Scene 4: eBay Push"></div>
+    <div class="scene-dot" data-scene="4" title="Scene 5: CTA"></div>
+  </div>
+  <button class="nav-btn" id="next-btn">&#8250;</button>
+</div>
+
 <div id="info">
   <strong>FindA.Sale — 42-second Marketing Video</strong><br>
   9:16 vertical · TikTok / YouTube Shorts format<br>
@@ -1415,6 +1466,8 @@ let running = false;
 let paused = false;
 let pauseStart = null;
 const DURATION = 38000;
+const sceneStarts = [0, 4000, 19500, 29000, 35500];
+let currentScene = 0;
 
 // ── DOM refs ──
 const player       = document.getElementById('player');
@@ -1465,6 +1518,33 @@ function showScene(id) {
   scenes.forEach(s => { if (s) s.classList.remove('active'); });
   const el = document.getElementById(id);
   if (el) el.classList.add('active');
+  const idx = parseInt(id.replace('s', '')) - 1;
+  if (!isNaN(idx) && idx >= 0) { currentScene = idx; updateDots(); }
+}
+
+// ── Sync nav dots to current scene ──
+function updateDots() {
+  document.querySelectorAll('.scene-dot').forEach(function(dot, i) {
+    dot.classList.toggle('active', i === currentScene);
+  });
+}
+
+// ── Jump to scene by index (0–4) ──
+function seekToScene(n) {
+  n = Math.max(0, Math.min(4, n));
+  running = false;
+  cancelAnimationFrame(rafId);
+  playOverlay.classList.add('hidden');
+  replayBtn.style.display = 'none';
+  resetAll();
+  const seekMs = sceneStarts[n];
+  startTime = performance.now() - seekMs;
+  nextEvent = 0;
+  while (nextEvent < events.length && events[nextEvent].at < seekMs) { nextEvent++; }
+  showScene('s' + (n + 1));
+  paused = false;
+  running = true;
+  rafId = requestAnimationFrame(tick);
 }
 
 // ── Reset all ──
@@ -1775,6 +1855,19 @@ playOverlay.addEventListener('click', () => {
 replayBtn.addEventListener('click', () => {
   replayBtn.style.display = 'none';
   start();
+});
+
+// ── Scene navigation ──
+document.getElementById('prev-btn').addEventListener('click', function() {
+  seekToScene(currentScene - 1);
+});
+document.getElementById('next-btn').addEventListener('click', function() {
+  seekToScene(currentScene + 1);
+});
+document.querySelectorAll('.scene-dot').forEach(function(dot) {
+  dot.addEventListener('click', function() {
+    seekToScene(parseInt(this.dataset.scene));
+  });
 });
 </script>
 </body>
