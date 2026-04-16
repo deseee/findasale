@@ -18,11 +18,20 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **Landing page stripped (finda-sale-landing.html) ✅:** Removed hero H1+subtitle, 3 feature cards, testimonial, 3 FAQ rows, "Two sides. One app." eyebrow. Kept: logo, video, "Built for organizers. Loved by shoppers." + split, Free Forever offer, 2 FAQs, CTA, footer.
 - **SEO meta tags added ✅:** Canonical URL, Open Graph (og:title/description/url/image/site_name), Twitter cards, theme-color (#D97706), keywords, author, robots, favicon/apple-touch-icon refs, JSON-LD SoftwareApplication structured data with Offer + Audience.
 
-**S486 Files changed (4):**
-- `organizer-video-ad.html` — scene polish pass 2 + font bump
-- `finda-sale-landing.html` — stripped + SEO meta tags + structured data
+- **Pipeline wiring ✅:** Landing deployed at `finda.sale/video` via Next.js rewrite (`next.config.js` rewrites: `/video` → `/video.html`). Canonical + og:url + twitter:url + JSON-LD url all updated to `https://finda.sale/video`. Uses existing icon system (`/icons/favicon-32x32.png`, `/icons/apple-touch-icon.png`, `/favicon.ico`). Fixed pre-existing broken `og:image` refs in `trending.tsx` + `map.tsx` by adding `og-default.png` (1200×630).
+- **File hygiene:** Canonical copies now live at `packages/frontend/public/video.html` + `packages/frontend/public/organizer-video-ad.html`. Repo-root copies should be removed to avoid edit-the-wrong-file trap.
+
+**S486 Files changed (6):**
+- `packages/frontend/public/video.html` (NEW — canonical landing)
+- `packages/frontend/public/organizer-video-ad.html` (NEW — 38s demo video embed)
+- `packages/frontend/public/og-default.png` (NEW — 1200×630 social share image, fixes broken refs in trending/map)
+- `packages/frontend/next.config.js` — `/video` → `/video.html` rewrite
 - `claude_docs/STATE.md` — this wrap
 - `claude_docs/patrick-dashboard.md` — this wrap
+
+**S486 Files to delete (duplicates after move):**
+- `finda-sale-landing.html` (root) — superseded by `public/video.html`
+- `organizer-video-ad.html` (root) — superseded by `public/organizer-video-ad.html`
 
 ---
 
