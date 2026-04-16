@@ -910,16 +910,16 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                           <Store size={14} className="inline mr-2" /> Manage Sales
                         </Link>
                         <Link href="/admin/items" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Package size={14} className="inline mr-2" /> Manage Items <span className="text-xs text-gray-400">(Soon)</span>
+                          <Package size={14} className="inline mr-2" /> Manage Items
                         </Link>
                         <Link href="/admin/reports" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <BarChart2 size={14} className="inline mr-2" /> Reports <span className="text-xs text-gray-400">(Soon)</span>
+                          <BarChart2 size={14} className="inline mr-2" /> Reports
                         </Link>
                         <Link href="/admin/feature-flags" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Lightbulb size={14} className="inline mr-2" /> Feature Flags <span className="text-xs text-gray-400">(Soon)</span>
+                          <Lightbulb size={14} className="inline mr-2" /> Feature Flags
                         </Link>
                         <Link href="/admin/broadcast" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <MessageSquare size={14} className="inline mr-2" /> Broadcast Message <span className="text-xs text-gray-400">(Soon)</span>
+                          <MessageSquare size={14} className="inline mr-2" /> Broadcast Message
                         </Link>
                         <Link href="/admin/ab-tests" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Lightbulb size={14} className="inline mr-2" /> A/B Tests
