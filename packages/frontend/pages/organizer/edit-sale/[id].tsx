@@ -139,53 +139,55 @@ const EditSalePage = () => {
   };
 
   useEffect(() => {
-    if (sale) {
-      // Convert ISO date strings to YYYY-MM-DD format for input type="date"
-      const formatDate = (isoDate: string | undefined) => {
-        if (!isoDate) return '';
-        return new Date(isoDate).toISOString().split('T')[0];
-      };
+    if (!sale) return;
+    if (formInitialized.current) return; // Skip resets after first init
+    formInitialized.current = true;
 
-      setFormData({
-        title: sale.title,
-        description: sale.description,
-        startDate: formatDate(sale.startDate),
-        endDate: formatDate(sale.endDate),
-        address: sale.address,
-        city: sale.city,
-        state: sale.state,
-        zip: sale.zip,
-        neighborhood: sale.neighborhood ?? '',
-        saleType: sale.saleType ?? 'ESTATE',
-        photoUrls: sale.photoUrls ?? [],
-        entranceLat: sale.entranceLat ?? undefined,
-        entranceLng: sale.entranceLng ?? undefined,
-        entranceNote: sale.entranceNote ?? '',
-        // Feature #84: Approach Notes
-        notes: sale.notes ?? '',
-        // Feature #91: Auto-Markdown (Smart Clearance)
-        markdownEnabled: sale.markdownEnabled ?? false,
-        markdownFloor: sale.markdownFloor ?? undefined,
-        // Feature #85: Treasure Hunt QR
-        treasureHuntEnabled: sale.treasureHuntEnabled ?? true,
-        treasureHuntCompletionBadge: sale.treasureHuntCompletionBadge ?? false,
-        // Feature #121: Allow item holds for this sale
-        holdsEnabled: sale.holdsEnabled ?? true,
-      });
+    // Convert ISO date strings to YYYY-MM-DD format for input type="date"
+    const formatDate = (isoDate: string | undefined) => {
+      if (!isoDate) return '';
+      return new Date(isoDate).toISOString().split('T')[0];
+    };
 
-      // Auto-trigger geocoding if sale has no coordinates but has address fields
-      if (!sale.lat && !sale.lng && sale.address && sale.city && sale.state && !geocodingAttempted) {
-        attemptGeocode(sale.address, sale.city, sale.state, sale.zip).then(async (coords) => {
-          if (coords) {
-            try {
-              await api.patch(`/sales/${id}/coordinates`, { lat: coords.lat, lng: coords.lng });
-              refetch();
-            } catch {
-              setGeocodingAttempted(true);
-            }
+    setFormData({
+      title: sale.title,
+      description: sale.description,
+      startDate: formatDate(sale.startDate),
+      endDate: formatDate(sale.endDate),
+      address: sale.address,
+      city: sale.city,
+      state: sale.state,
+      zip: sale.zip,
+      neighborhood: sale.neighborhood ?? '',
+      saleType: sale.saleType ?? 'ESTATE',
+      photoUrls: sale.photoUrls ?? [],
+      entranceLat: sale.entranceLat ?? undefined,
+      entranceLng: sale.entranceLng ?? undefined,
+      entranceNote: sale.entranceNote ?? '',
+      // Feature #84: Approach Notes
+      notes: sale.notes ?? '',
+      // Feature #91: Auto-Markdown (Smart Clearance)
+      markdownEnabled: sale.markdownEnabled ?? false,
+      markdownFloor: sale.markdownFloor ?? undefined,
+      // Feature #85: Treasure Hunt QR
+      treasureHuntEnabled: sale.treasureHuntEnabled ?? true,
+      treasureHuntCompletionBadge: sale.treasureHuntCompletionBadge ?? false,
+      // Feature #121: Allow item holds for this sale
+      holdsEnabled: sale.holdsEnabled ?? true,
+    });
+
+    // Auto-trigger geocoding if sale has no coordinates but has address fields
+    if (!sale.lat && !sale.lng && sale.address && sale.city && sale.state && !geocodingAttempted) {
+      attemptGeocode(sale.address, sale.city, sale.state, sale.zip).then(async (coords) => {
+        if (coords) {
+          try {
+            await api.patch(`/sales/${id}/coordinates`, { lat: coords.lat, lng: coords.lng });
+            refetch();
+          } catch {
+            setGeocodingAttempted(true);
           }
-        });
-      }
+        }
+      });
     }
   }, [sale, geocodingAttempted]);
 
@@ -222,7 +224,7 @@ const EditSalePage = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   // Feature #91: Auto-Markdown handler
