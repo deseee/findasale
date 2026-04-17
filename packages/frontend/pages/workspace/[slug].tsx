@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import Skeleton from '../../components/Skeleton';
 import { useAuth } from '../../components/AuthContext';
+import { useOrganizerActivityFeed } from '../../hooks/useOrganizerActivityFeed';
+import OrganizerActivityFeedCard from '../../components/OrganizerActivityFeedCard';
 
 interface WorkspaceMember {
   id: string;
@@ -19,6 +21,14 @@ interface WorkspaceMember {
   };
 }
 
+interface WorkspaceSale {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  city: string;
+}
+
 interface WorkspaceInternal {
   id: string;
   name: string;
@@ -29,6 +39,34 @@ interface WorkspaceInternal {
   ownerName: string;
   members: WorkspaceMember[];
   description?: string;
+  upcomingSales?: WorkspaceSale[];
+  pastSales?: WorkspaceSale[];
+}
+
+interface ChatMessage {
+  id: string;
+  content: string;
+  createdAt: string;
+  organizer: {
+    id: string;
+    businessName: string;
+  };
+}
+
+interface WorkspaceTask {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  dueAt?: string;
+  assignedTo?: string;
+  assignedToInfo?: { id: string; businessName: string };
+  createdAt: string;
+  sale: { id: string; title: string };
+}
+
+interface TasksResponse {
+  tasks: WorkspaceTask[];
 }
 
 export default function WorkspacePage() {
@@ -45,6 +83,128 @@ export default function WorkspacePage() {
     enabled: !!slug && !authLoading && !!user,
     retry: 1,
   });
+
+  // Combine all sale IDs for activity feed
+  const allSales = [
+    ...(workspace?.upcomingSales || []),
+    ...(workspace?.pastSales || []),
+  ];
+  const saleIds = allSales.map((s) => s.id);
+
+  // Fetch activity feed
+  const { data: activityData, isLoading: activityLoading } = useOrganizerActivityFeed(
+    saleIds.length > 0 ? saleIds : undefined
+  );
+
+  // Chat state
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [messageInput, setMessageInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Tasks state
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskSaleId, setNewTaskSaleId] = useState<string>('');
+  const [newTaskAssignee, setNewTaskAssignee] = useState<string>('');
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+
+  // Auto-select first upcoming sale if available
+  useEffect(() => {
+    if (workspace?.upcomingSales && workspace.upcomingSales.length > 0 && !selectedSaleId) {
+      setSelectedSaleId(workspace.upcomingSales[0].id);
+    }
+  }, [workspace?.upcomingSales, selectedSaleId]);
+
+  // Fetch chat messages for selected sale
+  const { data: chatData, isLoading: chatLoading, refetch: refetchChat } = useQuery({
+    queryKey: ['workspace-sale-chat', workspace?.id, selectedSaleId],
+    queryFn: async () => {
+      if (!workspace?.id || !selectedSaleId) return null;
+      const { data } = await api.get(`/workspace/${workspace.id}/sales/${selectedSaleId}/chat`);
+      return data as { messages: ChatMessage[] };
+    },
+    enabled: !!workspace?.id && !!selectedSaleId,
+    refetchInterval: 15000, // Poll every 15 seconds
+    retry: 1,
+  });
+
+  // Fetch tasks
+  const { data: tasksData, isLoading: tasksLoading, refetch: refetchTasks } = useQuery({
+    queryKey: ['workspace-tasks', workspace?.id],
+    queryFn: async () => {
+      if (!workspace?.id) return null;
+      const { data } = await api.get(`/workspace/${workspace.id}/tasks`);
+      return data as TasksResponse;
+    },
+    enabled: !!workspace?.id,
+    refetchInterval: 30000, // Poll every 30 seconds
+    retry: 1,
+  });
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatData?.messages]);
+
+  // Handle sending a message
+  const handleSendMessage = async () => {
+    if (!messageInput.trim() || !workspace?.id || !selectedSaleId) return;
+
+    setIsSending(true);
+    try {
+      await api.post(`/workspace/${workspace.id}/sales/${selectedSaleId}/chat`, {
+        message: messageInput,
+      });
+      setMessageInput('');
+      // Refetch messages immediately
+      await refetchChat();
+    } catch (error) {
+      console.error('Error sending message:', error);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Handle creating a task
+  const handleCreateTask = async () => {
+    if (!newTaskTitle.trim() || !newTaskSaleId || !workspace?.id) return;
+
+    setIsCreatingTask(true);
+    try {
+      await api.post(`/workspace/${workspace.id}/tasks`, {
+        title: newTaskTitle,
+        saleId: newTaskSaleId,
+        assignedToId: newTaskAssignee || null,
+      });
+      setNewTaskTitle('');
+      setNewTaskSaleId('');
+      setNewTaskAssignee('');
+      setShowAddTask(false);
+      await refetchTasks();
+    } catch (error) {
+      console.error('Error creating task:', error);
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
+  // Handle toggling task status
+  const handleToggleTaskStatus = async (task: WorkspaceTask) => {
+    if (!workspace?.id) return;
+
+    const statusCycle = { PENDING: 'IN_PROGRESS', IN_PROGRESS: 'COMPLETED', COMPLETED: 'PENDING' };
+    const nextStatus = statusCycle[task.status as keyof typeof statusCycle] || 'PENDING';
+
+    try {
+      await api.patch(`/workspace/${workspace.id}/tasks/${task.id}`, {
+        status: nextStatus,
+      });
+      await refetchTasks();
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -280,40 +440,252 @@ export default function WorkspacePage() {
 
           {/* Activity & Features - Right Column (spans 2) */}
           <div className="md:col-span-2 space-y-6">
-            {/* Coming Soon - Activity Feed */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
-                Team Activity
-              </h2>
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 text-center">
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  <span className="font-semibold">Coming soon:</span> Real-time activity feed showing items sold, team events, and notifications.
-                </p>
+            {/* Activity Feed */}
+            {saleIds.length > 0 ? (
+              <OrganizerActivityFeedCard
+                activities={activityData?.activities || []}
+                isLoading={activityLoading}
+              />
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+                  Team Activity
+                </h2>
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 text-center">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    No sales yet. Create a sale to see team activity.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Coming Soon - Team Communication */}
+            {/* Team Communications */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
                 Team Communications
               </h2>
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 text-center">
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  <span className="font-semibold">Coming soon:</span> Per-sale team chat and broadcast messages for quick team coordination.
-                </p>
-              </div>
+
+              {workspace.upcomingSales && workspace.upcomingSales.length > 0 ? (
+                <>
+                  {/* Sale Tabs */}
+                  <div className="flex gap-2 mb-4 overflow-x-auto border-b border-warm-200 dark:border-gray-700">
+                    {workspace.upcomingSales.map((sale) => (
+                      <button
+                        key={sale.id}
+                        onClick={() => setSelectedSaleId(sale.id)}
+                        className={`px-4 py-2 font-semibold text-sm whitespace-nowrap transition border-b-2 ${
+                          selectedSaleId === sale.id
+                            ? 'border-sage-600 text-sage-600 dark:text-sage-400'
+                            : 'border-transparent text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100'
+                        }`}
+                      >
+                        {sale.title}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Chat Container */}
+                  {selectedSaleId && (
+                    <div className="flex flex-col h-80">
+                      {/* Messages */}
+                      <div className="flex-1 overflow-y-auto bg-warm-50 dark:bg-gray-700 rounded-lg p-4 mb-4 space-y-3">
+                        {chatLoading ? (
+                          <div className="flex items-center justify-center h-full">
+                            <Skeleton className="h-20 w-full" />
+                          </div>
+                        ) : chatData?.messages && chatData.messages.length > 0 ? (
+                          <>
+                            {chatData.messages.map((msg) => (
+                              <div key={msg.id} className="flex gap-2">
+                                <div className="flex-shrink-0">
+                                  <div className="w-8 h-8 rounded-full bg-sage-200 dark:bg-sage-700 flex items-center justify-center">
+                                    <span className="text-xs font-bold text-sage-900 dark:text-sage-100">
+                                      {msg.organizer.businessName.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-baseline gap-2">
+                                    <span className="font-semibold text-sm text-warm-900 dark:text-warm-100">
+                                      {msg.organizer.businessName}
+                                    </span>
+                                    <span className="text-xs text-warm-500 dark:text-warm-400">
+                                      {new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-warm-800 dark:text-warm-200 break-words">
+                                    {msg.content}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                            <div ref={messagesEndRef} />
+                          </>
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-warm-600 dark:text-warm-400 text-sm">
+                            No messages yet. Start the conversation!
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Message Input */}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={messageInput}
+                          onChange={(e) => setMessageInput(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                          placeholder="Type a message..."
+                          disabled={isSending}
+                          className="flex-1 px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-500 dark:placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-sage-500 disabled:opacity-50"
+                          maxLength={1000}
+                        />
+                        <button
+                          onClick={handleSendMessage}
+                          disabled={isSending || !messageInput.trim()}
+                          className="px-4 py-2 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                        >
+                          Send
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 text-center">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Create a sale to enable team chat for quick coordination.
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Coming Soon - Tasks & Assignments */}
+            {/* Tasks & Assignments */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
-                Tasks & Assignments
-              </h2>
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 text-center">
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  <span className="font-semibold">Coming soon:</span> Assign tasks to team members based on skills and availability.
-                </p>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">
+                  Tasks & Assignments
+                </h2>
+                {(isOwner || workspace.members.some((m) => m.acceptedAt && ['ADMIN', 'MANAGER'].includes(m.role))) && (
+                  <button
+                    onClick={() => setShowAddTask(!showAddTask)}
+                    className="px-3 py-1 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold text-sm rounded-lg transition"
+                  >
+                    + Add Task
+                  </button>
+                )}
               </div>
+
+              {/* Add Task Form */}
+              {showAddTask && (
+                <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4 mb-4 space-y-3">
+                  <input
+                    type="text"
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
+                    placeholder="Task title..."
+                    maxLength={200}
+                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-500 dark:placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-sage-500"
+                  />
+                  <select
+                    value={newTaskSaleId}
+                    onChange={(e) => setNewTaskSaleId(e.target.value)}
+                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+                  >
+                    <option value="">Select a sale...</option>
+                    {allSales.map((sale) => (
+                      <option key={sale.id} value={sale.id}>
+                        {sale.title}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={newTaskAssignee}
+                    onChange={(e) => setNewTaskAssignee(e.target.value)}
+                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+                  >
+                    <option value="">Assign to...</option>
+                    {acceptedMembers.map((member) => (
+                      <option key={member.id} value={member.organizerId}>
+                        {member.organizer?.businessName || member.organizer?.user?.email || 'Team Member'}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCreateTask}
+                      disabled={isCreatingTask || !newTaskTitle.trim() || !newTaskSaleId}
+                      className="flex-1 px-3 py-2 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold rounded-lg transition disabled:opacity-50"
+                    >
+                      Create
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAddTask(false);
+                        setNewTaskTitle('');
+                        setNewTaskSaleId('');
+                        setNewTaskAssignee('');
+                      }}
+                      className="flex-1 px-3 py-2 bg-warm-200 hover:bg-warm-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-warm-900 dark:text-warm-100 font-semibold rounded-lg transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Task List */}
+              {tasksLoading ? (
+                <Skeleton className="h-32" />
+              ) : tasksData?.tasks && tasksData.tasks.length > 0 ? (
+                <div className="space-y-3">
+                  {tasksData.tasks.map((task) => (
+                    <div key={task.id} className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 hover:bg-warm-50 dark:hover:bg-gray-700/50 transition">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <button
+                              onClick={() => handleToggleTaskStatus(task)}
+                              className={`flex-shrink-0 w-5 h-5 rounded-full border-2 transition ${
+                                task.status === 'COMPLETED'
+                                  ? 'bg-green-500 border-green-500'
+                                  : task.status === 'IN_PROGRESS'
+                                  ? 'bg-amber-500 border-amber-500'
+                                  : 'border-warm-300 dark:border-gray-600 hover:border-warm-400'
+                              }`}
+                              title={`Status: ${task.status}`}
+                            />
+                            <h3 className={`font-semibold text-sm ${task.status === 'COMPLETED' ? 'line-through text-warm-500 dark:text-warm-500' : 'text-warm-900 dark:text-warm-100'}`}>
+                              {task.title}
+                            </h3>
+                          </div>
+                          <div className="flex flex-wrap gap-2 items-center mt-2">
+                            <span className="text-xs bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 px-2 py-1 rounded">
+                              {task.sale.title}
+                            </span>
+                            {task.assignedToInfo && (
+                              <span className="text-xs bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 px-2 py-1 rounded">
+                                {task.assignedToInfo.businessName}
+                              </span>
+                            )}
+                            {task.dueAt && (
+                              <span className="text-xs text-warm-600 dark:text-warm-400">
+                                Due: {new Date(task.dueAt).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4 text-center">
+                  <p className="text-sm text-warm-600 dark:text-warm-400">
+                    No tasks yet. Create one to get started!
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

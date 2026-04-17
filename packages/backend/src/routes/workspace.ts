@@ -21,6 +21,11 @@ import {
   validateInviteToken,
   acceptMagicLinkInvite,
   getMyWorkspaceMemberships,
+  getWorkspaceSaleChat,
+  postWorkspaceSaleChat,
+  getWorkspaceTasks,
+  createWorkspaceTask,
+  updateWorkspaceTask,
 } from '../controllers/workspaceController';
 
 const router = Router();
@@ -48,5 +53,14 @@ router.get('/:workspaceId/permissions', authenticate, requireWorkspaceMember(), 
 router.patch('/:workspaceId/permissions/:role', authenticate, requireWorkspaceMember(), requirePermission('edit_permissions'), updateWorkspacePermissions);
 router.get('/:workspaceId/cost-calculator', authenticate, requireWorkspaceMember(), getWorkspaceCostCalculator);
 router.delete('/:workspaceId', authenticate, requireWorkspaceMember(), deleteWorkspace);
+
+// Workspace Sale Chat endpoints
+router.get('/:workspaceId/sales/:saleId/chat', authenticate, requireWorkspaceMember(), getWorkspaceSaleChat);
+router.post('/:workspaceId/sales/:saleId/chat', authenticate, requireWorkspaceMember(), postWorkspaceSaleChat);
+
+// Workspace Tasks endpoints
+router.get('/:workspaceId/tasks', authenticate, requireWorkspaceMember(), getWorkspaceTasks);
+router.post('/:workspaceId/tasks', authenticate, requireWorkspaceMember(), createWorkspaceTask);
+router.patch('/:workspaceId/tasks/:taskId', authenticate, requireWorkspaceMember(), updateWorkspaceTask);
 
 export default router;

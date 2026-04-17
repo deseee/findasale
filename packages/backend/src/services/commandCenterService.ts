@@ -5,6 +5,8 @@ import type {
   CommandCenterFilters,
   SaleMetrics,
   CommandCenterSummary,
+  TeamMember,
+  TechnicalAlert,
 } from '../types/commandCenter';
 
 /**
@@ -98,6 +100,33 @@ export async function getCommandCenterSummary(
   const saleIds = sales.map((s) => s.id);
 
   if (saleIds.length === 0) {
+    // Fetch team members even if no sales
+    const teamMembers: TeamMember[] = [];
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizerId },
+      include: {
+        members: {
+          include: {
+            organizer: { select: { businessName: true } },
+            user: { select: { id: true } },
+          },
+        },
+      },
+    });
+
+    if (workspace) {
+      teamMembers.push(
+        ...workspace.members
+          .filter((m) => m.acceptedAt !== null)
+          .map((m) => ({
+            id: m.id,
+            businessName: m.organizer?.businessName || 'Unknown Member',
+            role: m.role,
+            acceptedAt: m.acceptedAt?.toISOString() || null,
+          }))
+      );
+    }
+
     const emptyResponse: CommandCenterResponse = {
       success: true,
       organizerId,
@@ -110,6 +139,8 @@ export async function getCommandCenterSummary(
         totalPendingActions: 0,
       },
       sales: [],
+      teamMembers,
+      technicalAlerts: [],
     };
     try {
       await redis.setex(cacheKey, 300, JSON.stringify(emptyResponse));
@@ -256,6 +287,78 @@ export async function getCommandCenterSummary(
     0
   );
 
+  // Fetch team members from workspace (if organizer has a workspace)
+  const teamMembers: TeamMember[] = [];
+  const workspace = await prisma.organizerWorkspace.findUnique({
+    where: { ownerId: organizerId },
+    include: {
+      members: {
+        include: {
+          organizer: { select: { businessName: true } },
+          user: { select: { id: true } },
+        },
+      },
+    },
+  });
+
+  if (workspace) {
+    teamMembers.push(
+      ...workspace.members
+        .filter((m) => m.acceptedAt !== null) // Only accepted members
+        .map((m) => ({
+          id: m.id,
+          businessName: m.organizer?.businessName || 'Unknown Member',
+          role: m.role,
+          acceptedAt: m.acceptedAt?.toISOString() || null,
+        }))
+    );
+  }
+
+  // Generate technical alerts based on sale metrics
+  const technicalAlerts: TechnicalAlert[] = [];
+
+  saleMetrics.forEach((sale) => {
+    // NO_ITEMS: published sale with zero items listed
+    if (sale.status === 'PUBLISHED' && sale.itemsListed === 0) {
+      technicalAlerts.push({
+        saleId: sale.id,
+        saleTitle: sale.title,
+        alertType: 'NO_ITEMS',
+        detail: 'This sale has no items listed yet.',
+      });
+    }
+
+    // ITEMS_MISSING_PHOTOS: sale has items without photos
+    if (sale.pendingActions.itemsNeedingPhotos > 0) {
+      technicalAlerts.push({
+        saleId: sale.id,
+        saleTitle: sale.title,
+        alertType: 'ITEMS_MISSING_PHOTOS',
+        detail: `${sale.pendingActions.itemsNeedingPhotos} item(s) are missing photos.`,
+      });
+    }
+
+    // EXPIRING_HOLDS: sale has pending holds
+    if (sale.pendingActions.pendingHolds > 0) {
+      technicalAlerts.push({
+        saleId: sale.id,
+        saleTitle: sale.title,
+        alertType: 'EXPIRING_HOLDS',
+        detail: `${sale.pendingActions.pendingHolds} hold(s) awaiting confirmation or payment.`,
+      });
+    }
+
+    // SALE_STARTING_SOON: sale starts within 48 hours
+    if (sale.daysUntilStart > 0 && sale.daysUntilStart <= 2) {
+      technicalAlerts.push({
+        saleId: sale.id,
+        saleTitle: sale.title,
+        alertType: 'SALE_STARTING_SOON',
+        detail: `Sale starts in ${Math.ceil(sale.daysUntilStart)} day(s).`,
+      });
+    }
+  });
+
   const response: CommandCenterResponse = {
     success: true,
     organizerId,
@@ -268,6 +371,8 @@ export async function getCommandCenterSummary(
       totalPendingActions,
     },
     sales: saleMetrics,
+    teamMembers,
+    technicalAlerts,
   };
 
   try {

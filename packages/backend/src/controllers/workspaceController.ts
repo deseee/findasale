@@ -774,3 +774,324 @@ export const getMyWorkspaceMemberships = async (req: AuthRequest, res: Response)
     return res.status(500).json({ message: 'Failed to fetch workspace memberships' });
   }
 };
+
+export const getWorkspaceSaleChat = async (req: any, res: Response) => {
+  try {
+    const { workspaceId, saleId } = req.params;
+    const organizerId = req.user?.organizerProfile?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!workspaceId || !saleId) return res.status(400).json({ message: 'Workspace ID and Sale ID required' });
+
+    // Auto-create WorkspaceSaleChat if it doesn't exist
+    let chat = await prisma.workspaceSaleChat.findUnique({
+      where: { workspaceId_saleId: { workspaceId, saleId } },
+    });
+
+    if (!chat) {
+      chat = await prisma.workspaceSaleChat.create({
+        data: { workspaceId, saleId },
+      });
+    }
+
+    // Fetch last 50 messages ordered chronologically (oldest first for scrolling)
+    const messages = await prisma.workspaceChatMessage.findMany({
+      where: { chatId: chat.id },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        organizer: {
+          select: {
+            id: true,
+            businessName: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+
+    return res.json({ messages });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error fetching workspace sale chat:', error);
+    return res.status(500).json({ message: 'Failed to fetch chat messages' });
+  }
+};
+
+export const postWorkspaceSaleChat = async (req: any, res: Response) => {
+  try {
+    const { workspaceId, saleId } = req.params;
+    const { message } = req.body;
+    const organizerId = req.user?.organizerProfile?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!workspaceId || !saleId) return res.status(400).json({ message: 'Workspace ID and Sale ID required' });
+    if (!message || typeof message !== 'string') return res.status(400).json({ message: 'Message is required' });
+
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length === 0) return res.status(400).json({ message: 'Message cannot be empty' });
+    if (trimmedMessage.length > 1000) return res.status(400).json({ message: 'Message cannot exceed 1000 characters' });
+
+    // Get or create WorkspaceSaleChat
+    let chat = await prisma.workspaceSaleChat.findUnique({
+      where: { workspaceId_saleId: { workspaceId, saleId } },
+    });
+
+    if (!chat) {
+      chat = await prisma.workspaceSaleChat.create({
+        data: { workspaceId, saleId },
+      });
+    }
+
+    // Create the message
+    const createdMessage = await prisma.workspaceChatMessage.create({
+      data: {
+        chatId: chat.id,
+        organizerId,
+        content: trimmedMessage,
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+        organizer: {
+          select: {
+            id: true,
+            businessName: true,
+          },
+        },
+      },
+    });
+
+    return res.status(201).json(createdMessage);
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error posting workspace sale chat message:', error);
+    return res.status(500).json({ message: 'Failed to create message' });
+  }
+};
+
+export const getWorkspaceTasks = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    const { saleId } = req.query;
+    const organizerId = req.user?.organizerProfile?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
+
+    // Check workspace membership
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { id: workspaceId },
+      include: { members: { where: { organizerId } } },
+    });
+    if (!workspace || (workspace.ownerId !== organizerId && workspace.members.length === 0)) {
+      return res.status(403).json({ message: 'Not a workspace member' });
+    }
+
+    // Build query filter
+    const where: any = { workspaceId };
+    if (saleId && typeof saleId === 'string') {
+      where.saleId = saleId;
+    }
+
+    const tasks = await prisma.workspaceTask.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        dueAt: true,
+        assignedTo: true,
+        createdAt: true,
+        sale: {
+          select: { id: true, title: true },
+        },
+      },
+      orderBy: [
+        { status: 'asc' }, // DONE last
+        { dueAt: 'asc' },  // soonest first
+      ],
+    });
+
+    // Format response to include assignedTo name if available
+    const formattedTasks = await Promise.all(
+      tasks.map(async (task: any) => {
+        let assigneeInfo = null;
+        if (task.assignedTo) {
+          const member = workspace.members.find((m: any) => m.organizerId === task.assignedTo);
+          if (member) {
+            const organizer = await prisma.organizer.findUnique({
+              where: { id: member.organizerId },
+              select: { businessName: true },
+            });
+            assigneeInfo = { id: member.organizerId, businessName: organizer?.businessName };
+          }
+        }
+        return {
+          ...task,
+          assignedToInfo: assigneeInfo,
+        };
+      })
+    );
+
+    return res.json({ tasks: formattedTasks });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error fetching workspace tasks:', error);
+    return res.status(500).json({ message: 'Failed to fetch tasks' });
+  }
+};
+
+export const createWorkspaceTask = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    const { title, description, dueAt, assignedToId, saleId } = req.body;
+    const organizerId = req.user?.organizerProfile?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ message: 'Title is required' });
+    }
+    if (title.length > 200) return res.status(400).json({ message: 'Title cannot exceed 200 characters' });
+    if (!saleId || typeof saleId !== 'string') {
+      return res.status(400).json({ message: 'Sale ID is required' });
+    }
+
+    // Check workspace membership and role
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { id: workspaceId },
+      include: { members: { where: { organizerId } } },
+    });
+    if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
+
+    const isOwner = workspace.ownerId === organizerId;
+    const member = workspace.members[0];
+    const isAdmin = member?.role === 'ADMIN';
+    const isManager = member?.role === 'MANAGER';
+
+    if (!isOwner && !isAdmin && !isManager) {
+      return res.status(403).json({ message: 'Insufficient permissions to create tasks' });
+    }
+
+    // Create task
+    const task = await prisma.workspaceTask.create({
+      data: {
+        workspaceId,
+        saleId,
+        title: title.trim(),
+        description: description && typeof description === 'string' ? description.trim() : null,
+        dueAt: dueAt ? new Date(dueAt) : null,
+        assignedTo: assignedToId && typeof assignedToId === 'string' ? assignedToId : null,
+        status: 'PENDING',
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        dueAt: true,
+        assignedTo: true,
+        createdAt: true,
+        sale: {
+          select: { id: true, title: true },
+        },
+      },
+    });
+
+    return res.status(201).json(task);
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error creating workspace task:', error);
+    return res.status(500).json({ message: 'Failed to create task' });
+  }
+};
+
+export const updateWorkspaceTask = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId, taskId } = req.params;
+    const { status, title, description, dueAt, assignedToId } = req.body;
+    const organizerId = req.user?.organizerProfile?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!workspaceId || !taskId) return res.status(400).json({ message: 'Workspace ID and Task ID required' });
+
+    // Fetch the task
+    const task = await prisma.workspaceTask.findUnique({
+      where: { id: taskId },
+      include: { workspace: { include: { members: { where: { organizerId } } } } },
+    });
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+    if (task.workspaceId !== workspaceId) return res.status(403).json({ message: 'Task does not belong to this workspace' });
+
+    // Check permissions
+    const isOwner = task.workspace.ownerId === organizerId;
+    const member = task.workspace.members[0];
+    const isAdmin = member?.role === 'ADMIN';
+    const isAssignee = task.assignedTo === organizerId;
+
+    // Assignees can only update status; others need admin/manager role
+    if (!isOwner && !isAdmin && !isAssignee) {
+      return res.status(403).json({ message: 'Insufficient permissions to update task' });
+    }
+
+    // If not owner/admin, can only update own status
+    if (!isOwner && !isAdmin && isAssignee && (title || description || dueAt || assignedToId)) {
+      return res.status(403).json({ message: 'Assignees can only update task status' });
+    }
+
+    // Build update data
+    const updateData: any = {};
+    if (status && typeof status === 'string' && ['PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(status)) {
+      updateData.status = status;
+      if (status === 'COMPLETED') {
+        updateData.completedAt = new Date();
+      } else {
+        updateData.completedAt = null;
+      }
+    }
+    if (title !== undefined) {
+      if (title && typeof title === 'string' && title.trim().length > 0) {
+        if (title.length > 200) return res.status(400).json({ message: 'Title cannot exceed 200 characters' });
+        updateData.title = title.trim();
+      }
+    }
+    if (description !== undefined) {
+      updateData.description = description && typeof description === 'string' ? description.trim() : null;
+    }
+    if (dueAt !== undefined) {
+      updateData.dueAt = dueAt ? new Date(dueAt) : null;
+    }
+    if (assignedToId !== undefined) {
+      updateData.assignedTo = assignedToId && typeof assignedToId === 'string' ? assignedToId : null;
+    }
+
+    const updated = await prisma.workspaceTask.update({
+      where: { id: taskId },
+      data: updateData,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        dueAt: true,
+        assignedTo: true,
+        completedAt: true,
+        createdAt: true,
+        sale: {
+          select: { id: true, title: true },
+        },
+      },
+    });
+
+    return res.json(updated);
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error updating workspace task:', error);
+    return res.status(500).json({ message: 'Failed to update task' });
+  }
+};
