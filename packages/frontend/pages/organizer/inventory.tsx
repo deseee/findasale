@@ -126,13 +126,17 @@ const InventoryPage: React.FC = () => {
     const saleTitle = sales.find(s => s.id === batchSaleId)?.title ?? 'the sale';
     const ids = Array.from(selectedItemIds);
     let successCount = 0;
+    let skipCount = 0;
     setBatchPullProgress({ current: 0, total: ids.length });
     for (let i = 0; i < ids.length; i++) {
       setBatchPullProgress({ current: i + 1, total: ids.length });
       await new Promise<void>((resolve) => {
         pullFromInventory(ids[i], batchSaleId, undefined, {
           onSuccess: () => { successCount++; resolve(); },
-          onError: () => resolve(),
+          onError: (err) => {
+            if (err?.message?.includes('already been pulled')) skipCount++;
+            resolve();
+          },
         });
       });
     }
@@ -140,7 +144,8 @@ const InventoryPage: React.FC = () => {
     setBatchPullModal(false);
     setSelectedItemIds(new Set());
     setBatchSaleId('');
-    showToast(`${successCount} item${successCount !== 1 ? 's' : ''} added to ${saleTitle}`, 'success');
+    const skipNote = skipCount > 0 ? ` (${skipCount} already in sale)` : '';
+    showToast(`${successCount} item${successCount !== 1 ? 's' : ''} added to ${saleTitle}${skipNote}`, 'success');
   };
 
   return (

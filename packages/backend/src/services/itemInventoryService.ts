@@ -86,6 +86,15 @@ export const pullFromInventory = async (
     throw new Error('Unauthorized: sale does not belong to this organizer');
   }
 
+  // Deduplication check: block if this inventory item is already in the target sale
+  const existing = await prisma.item.findFirst({
+    where: { saleId, libraryId: inventoryItemId, inInventory: false },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new Error('This item has already been pulled into this sale');
+  }
+
   // Create new item in the sale (copy from inventory item)
   const newItem = await prisma.item.create({
     data: {
