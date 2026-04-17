@@ -85,7 +85,6 @@ model User {
   disputesAsBuyer              Dispute[]              @relation("DisputeBuyer")
   disputesAsSeller             Dispute[]              @relation("DisputeSeller")
   messageTemplates             MessageTemplate[]      @relation("OrganizerTemplates")
-  shopperCredits               Float                  @default(0) // Batch 17: shopper referral store credit
   saleWaitlist                 SaleWaitlist[]
   saleReminders                SaleReminder[]
   coupons                      Coupon[]

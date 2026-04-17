@@ -38,17 +38,21 @@ export const useShopperCart = (userId?: string) => {
   // Hydrate from localStorage on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    setIsHydrated(false); // Reset on key change
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as CartState;
         setCart(parsed);
+      } else {
+        // Clear stale state when key changes and no stored data found
+        setCart({ items: [], saleId: null });
       }
     } catch (err) {
       console.error('Failed to hydrate cart from localStorage:', err);
     }
     setIsHydrated(true);
-  }, []);
+  }, [STORAGE_KEY]);
 
   // Sync across same-tab instances (e.g. Layout + item page both mount useShopperCart)
   // The browser only fires 'storage' for other tabs — we dispatch manually from mutations
@@ -62,7 +66,7 @@ export const useShopperCart = (userId?: string) => {
     };
     window.addEventListener('fas_cart_sync', handleSync);
     return () => window.removeEventListener('fas_cart_sync', handleSync);
-  }, []);
+  }, [STORAGE_KEY]);
 
   // Persist to localStorage whenever cart changes
   // Fire sync event AFTER localStorage write to avoid race condition
