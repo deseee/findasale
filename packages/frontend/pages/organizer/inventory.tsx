@@ -45,6 +45,7 @@ const InventoryPage: React.FC = () => {
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [batchPullModal, setBatchPullModal] = useState(false);
   const [batchSaleId, setBatchSaleId] = useState('');
+  const [batchPullProgress, setBatchPullProgress] = useState<{ current: number; total: number } | null>(null);
 
   const { showToast } = useToast();
   const { inventoryItems, loading, isRemovingFromInventory, isPullingFromInventory, removeFromInventory, pullFromInventory, getPriceHistory } =
@@ -125,14 +126,17 @@ const InventoryPage: React.FC = () => {
     const saleTitle = sales.find(s => s.id === batchSaleId)?.title ?? 'the sale';
     const ids = Array.from(selectedItemIds);
     let successCount = 0;
-    for (const itemId of ids) {
+    setBatchPullProgress({ current: 0, total: ids.length });
+    for (let i = 0; i < ids.length; i++) {
+      setBatchPullProgress({ current: i + 1, total: ids.length });
       await new Promise<void>((resolve) => {
-        pullFromInventory(itemId, batchSaleId, undefined, {
+        pullFromInventory(ids[i], batchSaleId, undefined, {
           onSuccess: () => { successCount++; resolve(); },
           onError: () => resolve(),
         });
       });
     }
+    setBatchPullProgress(null);
     setBatchPullModal(false);
     setSelectedItemIds(new Set());
     setBatchSaleId('');
@@ -325,25 +329,41 @@ const InventoryPage: React.FC = () => {
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Pull to Sale</h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">{selectedItemIds.size} items selected</p>
-                <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Select Sale</label>
-                  <select value={batchSaleId} onChange={(e) => setBatchSaleId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100">
-                    <option value="">Choose a sale...</option>
-                    {sales.map((sale) => <option key={sale.id} value={sale.id}>{sale.title}</option>)}
-                  </select>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Each item will be pulled at its current inventory price. You can adjust prices individually after pulling.</p>
-                <div className="flex gap-3">
-                  <button onClick={() => setBatchPullModal(false)} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 font-semibold hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
-                  <button
-                    onClick={handleBatchPull}
-                    disabled={!batchSaleId || isPullingFromInventory}
-                    className="flex-1 px-4 py-2 bg-[#8FB897] hover:bg-[#7BA380] text-white font-semibold rounded-lg disabled:opacity-50"
-                  >
-                    Pull {selectedItemIds.size} Items
-                  </button>
-                </div>
+                {batchPullProgress ? (
+                  <div className="py-4">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 text-center">
+                      Pulling item {batchPullProgress.current} of {batchPullProgress.total}…
+                    </p>
+                    <div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-2">
+                      <div
+                        className="bg-[#8FB897] h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(batchPullProgress.current / batchPullProgress.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-gray-600 dark:text-gray-400 mb-4">{selectedItemIds.size} items selected</p>
+                    <div className="mb-4">
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Select Sale</label>
+                      <select value={batchSaleId} onChange={(e) => setBatchSaleId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100">
+                        <option value="">Choose a sale...</option>
+                        {sales.map((sale) => <option key={sale.id} value={sale.id}>{sale.title}</option>)}
+                      </select>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Each item will be pulled at its current inventory price. You can adjust prices individually after pulling.</p>
+                    <div className="flex gap-3">
+                      <button onClick={() => setBatchPullModal(false)} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 font-semibold hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
+                      <button
+                        onClick={handleBatchPull}
+                        disabled={!batchSaleId || isPullingFromInventory}
+                        className="flex-1 px-4 py-2 bg-[#8FB897] hover:bg-[#7BA380] text-white font-semibold rounded-lg disabled:opacity-50"
+                      >
+                        Pull {selectedItemIds.size} Items
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
