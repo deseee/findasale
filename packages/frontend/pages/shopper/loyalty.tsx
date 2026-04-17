@@ -58,6 +58,25 @@ function LoyaltyPage() {
     }
   }, []);
 
+  // Detect rank-up since last visit and show the modal
+  const RANK_ORDER = ['INITIATE', 'SCOUT', 'RANGER', 'SAGE', 'GRANDMASTER'];
+  useEffect(() => {
+    if (!xpProfile?.explorerRank || typeof window === 'undefined') return;
+    const currentRank = xpProfile.explorerRank.toUpperCase();
+    const lastRank = (localStorage.getItem('guild_last_rank') || 'INITIATE').toUpperCase();
+    const currentIdx = RANK_ORDER.indexOf(currentRank);
+    const lastIdx = RANK_ORDER.indexOf(lastRank);
+    if (currentIdx > lastIdx) {
+      // Rank has increased — show the modal
+      setRankUpData({ newRank: xpProfile.explorerRank });
+      setShowRankUpModal(true);
+      localStorage.setItem('guild_last_rank', currentRank);
+    } else if (currentIdx >= 0) {
+      // Keep localStorage in sync (first visit or same rank)
+      localStorage.setItem('guild_last_rank', currentRank);
+    }
+  }, [xpProfile?.explorerRank]);
+
   // Redirect if not authenticated
   if (mounted && !authLoading && !user) {
     router.push('/login');

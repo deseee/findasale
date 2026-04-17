@@ -679,6 +679,15 @@ export default function SubscriptionPage() {
                     Change Plan
                   </Link>
 
+                  {tier && tier !== 'SIMPLE' && (
+                    <button
+                      onClick={() => setShowDowngradePreview(true)}
+                      className="block w-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 py-3 px-4 rounded-lg font-semibold hover:bg-amber-100 transition border border-amber-200 dark:border-amber-800"
+                    >
+                      Downgrade to SIMPLE
+                    </button>
+                  )}
+
                   {!subscription.cancelAtPeriodEnd && (
                     <button
                       onClick={() => setShowCancelConfirm(true)}

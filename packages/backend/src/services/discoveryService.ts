@@ -28,6 +28,12 @@ export interface SaleWithScore {
   };
   favoriteCount: number;
   score: number;
+  boost: {
+    boostType: string;
+    status: string;
+    expiresAt: Date;
+    targetId: string | null;
+  } | null;
 }
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -63,11 +69,31 @@ export async function getPersonalizedFeed(
     },
   });
 
-  // Serialize and add score field
+  // BoostPurchase has no direct FK on Sale — query separately by targetId
+  const saleIds = sales.map((s) => s.id);
+  const activeBoosts = saleIds.length > 0
+    ? await prisma.boostPurchase.findMany({
+        where: {
+          targetType: 'SALE',
+          targetId: { in: saleIds },
+          status: 'ACTIVE',
+          expiresAt: { gt: new Date() },
+        },
+        select: { targetId: true, boostType: true, expiresAt: true, status: true },
+        orderBy: { createdAt: 'desc' },
+      })
+    : [];
+  const boostBySaleId = new Map<string, typeof activeBoosts[0]>();
+  for (const b of activeBoosts) {
+    if (b.targetId && !boostBySaleId.has(b.targetId)) boostBySaleId.set(b.targetId, b);
+  }
+
+  // Serialize and add score + boost fields
   const serializedSales = sales.map(({ _count, ...sale }) => ({
     ...sale,
     favoriteCount: _count.favorites,
     score: 0,
+    boost: boostBySaleId.get(sale.id) ?? null,
   }));
 
   // If no user logged in, return geo-sorted results (by default region center coords)
