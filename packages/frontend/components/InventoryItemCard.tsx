@@ -158,7 +158,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
         <div className={`mt-4 flex gap-2 transition-opacity ${showActions || isLoading ? 'opacity-100' : 'md:opacity-0'}`}>
           {status === 'AVAILABLE' && (
             <button
-              onClick={onPull}
+              onClick={(e) => { e.stopPropagation(); onPull?.(); }}
               disabled={isLoading}
               className="flex-1 flex items-center justify-center gap-1 bg-[#8FB897] hover:bg-[#7BA380] text-white text-xs font-semibold py-2 rounded transition-colors disabled:opacity-50"
             >
@@ -168,7 +168,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
           )}
 
           <button
-            onClick={onViewHistory}
+            onClick={(e) => { e.stopPropagation(); onViewHistory?.(); }}
             disabled={isLoading}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded transition-colors disabled:opacity-50"
             title="View price history"
@@ -177,7 +177,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
           </button>
 
           <button
-            onClick={onDelete}
+            onClick={(e) => { e.stopPropagation(); onDelete?.(); }}
             disabled={isLoading}
             className="p-2 hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 rounded transition-colors disabled:opacity-50"
             title="Remove from inventory"
