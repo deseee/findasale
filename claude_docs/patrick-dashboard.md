@@ -1,8 +1,8 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
-## S493 Summary (2026-04-16) — QA pass: Feature #294 eBay picker, workspace, admin, layout fixes
+## S494 Summary (2026-04-16) — QA verified: city page, eBay chip, command center, dark mode fixes
 
-**eBay category picker P0 save bug found and fixed. 2 layout fixes dispatched. Multiple pages verified. 2 open regressions.**
+**All 5 fixes confirmed live in browser. 0 open P0/P1 regressions from S491–S493.**
 
 ### Your actions:
 
@@ -10,9 +10,22 @@
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S493 wrap — eBay picker QA, P0 save fix pushed, layout fix dispatches pending"
+git add claude_docs/strategy/roadmap.md
+git commit -m "docs: S494 wrap — QA verified city page/eBay chip/command center/dark mode, roadmap updated"
 .\push.ps1
 ```
+
+### What was verified this session:
+
+- ✅ **/city/grand-rapids** — Was 404. Fixed: `getStaticProps` was misreading API response shape. Now loads with 5 Grand Rapids sales.
+- ✅ **EbayCategoryPicker chip** — After selecting a category, picker now shows a green confirmation chip (leaf name + L1 parent) that persists on reload. × button to clear and re-search.
+- ✅ **Command Center layout** — All 4 stat cards visible, no right-edge overflow. "All systems go" panel compact. Team Coverage names truncate cleanly.
+- ✅ **H-001 complete** — SearchFilterPanel Condition/Category/Sort By dropdowns now readable in dark mode.
+- ✅ **H-002 cleared** — Was a false flag. Items section is correctly the first full-width section on sale detail. No fix needed.
+
+---
+
+## S493 Summary (2026-04-16) — QA pass: Feature #294 eBay picker, workspace, admin, layout fixes
 
 **2. When dev agents return** — they'll have changes for:
 - `packages/frontend/components/EbayCategoryPicker.tsx` (P2: show selected leaf category name)

@@ -7,29 +7,29 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S493 (2026-04-16) — Chrome QA pass: S491+S492 features + Feature #294 eBay category picker**
+**S494 (2026-04-16) — QA verification + batch fixes: city page, picker chip, layout, dark mode**
 
-- **Feature #294 eBay live category picker — P0 save bug found + fixed ✅:** `ebayCategoryId`/`ebayCategoryName` missing from `updateItem` req.body destructuring (line 661) and updateData block. Added 4 lines — fields now save and persist correctly. Pushed in S493 (green).
-- **P2 EbayCategoryPicker display — dispatched ✅:** After selection, leaf name not shown (L1 parent name shown as placeholder instead). Fix dispatched to findasale-dev: `selectedLeafName` state + confirmation chip below input.
-- **Command-center layout fix — dispatched ✅:** 4th stat card + Team Coverage right-edge overflow. `lg:grid-cols-3 gap-8` → `lg:grid-cols-2 gap-6`, remove `lg:col-span-2`, `overflow-x-hidden`, `min-w-0` on member text. Dispatched to findasale-dev.
-- **Workspace chat + tasks verified ✅:** Chat send/persist confirmed. Task create (with sale selector) → persist → reload → status cycling (PENDING→IN_PROGRESS→COMPLETED) all working end-to-end.
-- **Workspace live activity empty state ✅:** Renders correctly with proper copy.
-- **Workspace layout P2:** Same right-side overflow as command-center (Workspace Settings button, Send button, Workspace ID card all clip) — same fix covers it.
-- **/organizer/subscription (TEAMS) ✅:** Plan renders, features list correct, "Compare All Plans" → /pricing (no loop).
-- **/organizer/add-items/[saleId] ✅:** No React Hooks crash on load.
-- **/admin/reports ✅:** Organizer list renders with real data, tier badges (SIMPLE/PRO/TEAMS), sort + export working. Key mismatch fix confirmed.
-- **/shopper/hall-of-fame ✅:** Redirects to /leaderboard. Data loads with real shoppers, XP, medals, badges.
-- **❌ /city/grand-rapids — still 404:** getStaticPaths fix was pushed in S492 but page still returns 404 in production. Likely Vercel didn't regenerate static paths or no city DB record exists.
-- **⚠️ Search dark mode H-001 PARTIAL:** Section labels (Price Range, Condition, etc.) are visible (dark:text fix confirmed ✅). But Condition/Category/Sort By `<select>` dropdowns still have white backgrounds in dark mode — dark: variants missing from those inputs.
-- **❌ H-002 not confirmed in browser:** STATE.md says "Items is first full-width section (position 5)" but browser shows: About → Live Activity → Items for Sale. Items is 3rd full-width section, not 1st.
-- **Feature #294 resolved:** ebayCategoryId now saves. P2 display dispatched.
+**Chrome QA verified this session:**
+- **✅ /city/grand-rapids** — now loads with 5 Grand Rapids sales. Root cause: `getStaticProps` was treating `{ cities: [...] }` response as plain array; `.find()` threw TypeError → notFound:true. Fixed response parsing + `activeSales`→`count` mapping.
+- **✅ EbayCategoryPicker chip** — confirmation chip shows leaf name + L1 parent after selection; persists on reload via `ebayCategoryName` prop pre-population. × clear button works.
+- **✅ Command Center layout** — all 4 stat cards visible, no right-edge clip; "All systems go" compact (not giant box); Team Coverage names truncate cleanly. `lg:grid-cols-2 gap-6` + `overflow-x-hidden`.
+- **✅ H-001 COMPLETE** — SearchFilterPanel: section labels fixed (S491), select inputs (Condition/Category/Sort By) dark mode variants added this session (`dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600`).
+- **✅ H-002 CLEARED** — False flag. "About" is inside the photo grid's right column, not a standalone full-width section. Items at line 898 IS the first full-width section. No fix needed.
 
-**S493 Files changed (1 — itemController.ts P0 fix, pushed):**
-- `packages/backend/src/controllers/itemController.ts` — ebayCategoryId/ebayCategoryName added to destructuring + updateData block
+**S493 verified (carried forward):**
+- Feature #294 P0 save bug ✅ | Workspace chat+tasks ✅ | Subscription ✅ | Add-items no crash ✅ | Admin reports ✅ | Hall-of-fame ✅
 
-**S493 Pending (dev agent results not yet received):**
-- `packages/frontend/components/EbayCategoryPicker.tsx` — P2 leaf name confirmation display (agent dispatched)
-- `packages/frontend/pages/organizer/command-center.tsx` — layout overflow fix (agent dispatched)
+**S494 Files changed (5, pushed green):**
+- `packages/frontend/components/EbayCategoryPicker.tsx` — `ebayCategoryName` prop + `selectedLeaf` state + confirmation chip + × clear
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — added `ebayCategoryName={formData.ebayCategoryName}` prop
+- `packages/frontend/pages/organizer/command-center.tsx` — `lg:grid-cols-2 gap-6`, `overflow-x-hidden`, compact alerts empty state
+- `packages/frontend/pages/city/[city].tsx` — `getStaticProps` response parsing fix (`citiesJson.cities ?? []` + `activeSales→count` map)
+- `packages/frontend/components/SearchFilterPanel.tsx` — dark mode variants on all 3 `<select>` inputs
+
+**Pending Chrome QA (sequential, one at a time):**
+- Workspace layout P2 — Settings button / Send button / ID card right-edge overflow (same overflow-x-hidden pattern)
+- H-001 SearchFilterPanel select dark mode — needs browser verification in dark mode
+- Remaining orphaned component QA: LiveFeedWidget (command-center), QuickReplyPicker (messages/[id]), SearchSuggestions, BoostBadge, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, SharePromoteModal, DowngradePreviewModal
 
 ---
 
