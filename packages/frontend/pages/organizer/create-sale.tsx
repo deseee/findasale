@@ -35,6 +35,8 @@ const CreateSalePage = () => {
     state: '',
     zip: '',
     neighborhood: '',
+    lat: null as number | null,
+    lng: null as number | null,
     // B1: Sale type selector
     saleType: 'ESTATE',
   });
@@ -312,6 +314,8 @@ const CreateSalePage = () => {
                     city: suggestion.city,
                     state: suggestion.state,
                     zip: suggestion.zip,
+                    lat: suggestion.lat,
+                    lng: suggestion.lng,
                   }));
                 }}
                 placeholder="123 Main St"
