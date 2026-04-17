@@ -1,34 +1,44 @@
-# Patrick's Dashboard — Week of April 14, 2026
+# Patrick's Dashboard — Week of April 17, 2026
 
-## S494 Summary (2026-04-16) — QA verified + dark mode + overflow fixes
+> **Daily Friction Audit (2026-04-17 auto-run):** STATE.md "Next Session" section was stale — it still listed the S491 push and migration as pending. Both confirmed complete (migration applied 2026-04-16 19:58 UTC; S492–S495 have shipped). Section rewritten to reflect post-S495 priorities. No P0/P1 issues found. Current pending action: push the S494+S495 block below.
 
-**0 open P0/P1 regressions. 3 new visual fixes shipped.**
+## S495 Summary (2026-04-17) — Orphaned component QA complete + 3 bug fixes
 
-### Your actions — push block:
+**0 open P0/P1 regressions. All 9 orphaned components verified. 3 wiring bugs fixed.**
+
+### Your actions — push S494 + S495 together:
 
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git add packages/frontend/components/SearchSuggestions.tsx
+git add packages/frontend/components/EbayCategoryPicker.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/frontend/pages/organizer/command-center.tsx
+git add packages/frontend/pages/city/[city].tsx
 git add packages/frontend/components/SearchFilterPanel.tsx
-git commit -m "fix: SearchSuggestions dark mode, SearchFilterPanel price input overflow + dark mode; roadmap v109"
+git add packages/frontend/components/SearchSuggestions.tsx
+git add packages/backend/src/services/discoveryService.ts
+git add packages/frontend/pages/shopper/loyalty.tsx
+git add packages/frontend/pages/organizer/subscription.tsx
+git commit -m "fix: orphaned component QA + BoostBadge feed wiring + RankUpModal trigger + DowngradePreviewModal trigger"
 .\push.ps1
 ```
 
-### What was verified this session:
+### What was QA-verified this session:
 
-- ✅ **/city/grand-rapids** — Was 404. Fixed `getStaticProps` response parsing. Loads with 5 Grand Rapids sales.
-- ✅ **EbayCategoryPicker chip** — Confirmation chip shows leaf name + L1 parent, persists on reload. × clear works.
-- ✅ **Command Center layout** — All 4 stat cards visible, no right-edge overflow. Compact alerts empty state.
-- ✅ **H-001 complete** — SearchFilterPanel Condition/Category/Sort By dropdowns render dark in dark mode.
-- ✅ **H-002 cleared** — False flag. Items is correctly the first full-width section on sale detail.
-- ✅ **Workspace P2 cleared** — False positive from dual-monitor Chrome window. At correct viewport all content fully visible.
+- ✅ **LiveFeedWidget** — command-center, real sale events loading
+- ✅ **QuickReplyPicker** — messages/[id], all 3 chips work, sends real message
+- ✅ **RankLevelingHint** — /shopper/ranks as Karen (5 XP, Initiate), next-rank hint renders
+- ✅ **ShopperReferralCard** — /profile as Karen, real referral code + 1 referral tracked
+- ✅ **storefront/[slug]** — brand banner, About card, 4 active sales with photos
+- ✅ **SharePromoteModal** — /organizer/promote/[saleId], 5 tabs, real sale data, copy works
 
-### What was fixed this session (2 files, push pending):
+### What was fixed this session (3 files):
 
-- **SearchSuggestions.tsx** — Dropdown had `bg-white` with no dark variant. Bright white box in dark mode. Fixed: container, section headers, search buttons, category links all get dark mode classes.
-- **SearchFilterPanel.tsx (Price Range inputs)** — Min $ and Max $ inputs were overflowing the sidebar into the results thumbnails. Root cause: `flex-1` inputs missing `min-w-0`. Fixed. Also added dark mode (`dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600`) to both inputs.
+- **discoveryService.ts** — Feed API was not including active boost data on sales. BoostBadge was wired in SaleCard but `sale.boost` was always `null` from the feed endpoint. Fixed by adding the same `boostPurchase.findMany()` lookup used in `saleController.ts`.
+- **loyalty.tsx** — RankUpModal was imported and rendered but `setShowRankUpModal(true)` was never called anywhere. Fixed by adding a `useEffect` that watches `xpProfile.explorerRank`, compares to `localStorage.guild_last_rank`, and triggers the modal when the rank increases.
+- **subscription.tsx** — DowngradePreviewModal was imported and rendered but `setShowDowngradePreview(true)` was never called. Fixed by adding a "Downgrade to SIMPLE" button (amber style) in the Plan Actions section, visible only when `tier !== 'SIMPLE'`.
 
 ---
 

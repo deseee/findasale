@@ -7,31 +7,37 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S494 (2026-04-16) — QA verification + batch fixes: city page, picker chip, layout, dark mode**
+**S495 (2026-04-17) — Chrome QA: orphaned components complete + 3 bug fixes**
 
-**Chrome QA verified this session:**
-- **✅ /city/grand-rapids** — now loads with 5 Grand Rapids sales. Root cause: `getStaticProps` was treating `{ cities: [...] }` response as plain array; `.find()` threw TypeError → notFound:true. Fixed response parsing + `activeSales`→`count` mapping.
-- **✅ EbayCategoryPicker chip** — confirmation chip shows leaf name + L1 parent after selection; persists on reload via `ebayCategoryName` prop pre-population. × clear button works.
-- **✅ Command Center layout** — all 4 stat cards visible, no right-edge clip; "All systems go" compact (not giant box); Team Coverage names truncate cleanly. `lg:grid-cols-2 gap-6` + `overflow-x-hidden`.
-- **✅ H-001 COMPLETE** — SearchFilterPanel: section labels fixed (S491), select inputs (Condition/Category/Sort By) dark mode variants added this session (`dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600`).
-- **✅ H-002 CLEARED** — False flag. "About" is inside the photo grid's right column, not a standalone full-width section. Items at line 898 IS the first full-width section. No fix needed.
-- **✅ Workspace layout P2 CLEARED** — False positive from dual-monitor Chrome window spanning 1244px. At correct 1440px viewport: Settings button, Send button, Workspace ID card all fully visible. No overflow.
-- **✅ SearchFilterPanel selects dark mode verified** — Condition/Category/Sort By all render `dark:bg-gray-700` in dark mode. H-001 complete.
+**Chrome QA verified this session (all 9 remaining orphaned components):**
+- **✅ LiveFeedWidget** (S494 carry-forward) — command-center, real sale events streaming
+- **✅ QuickReplyPicker** (S494 carry-forward) — messages/[id], all 3 reply chips work, sends real message
+- **✅ BoostBadge** — API returns boost data but badge NOT rendering on feed SaleCards → ❌ BUG FIXED (discoveryService.ts missing boost lookup)
+- **✅ RankLevelingHint** — `/shopper/ranks` as Karen (USER), 5 XP / Initiate rank, next-rank hint renders correctly
+- **✅ RankUpModal** — trigger `setShowRankUpModal(true)` was NEVER called → ❌ BUG FIXED (localStorage rank-diff useEffect added to loyalty.tsx)
+- **✅ ShopperReferralCard** — `/profile` as Karen, referral code REF-993548D8, 1 referral tracked, copy button visible
+- **✅ storefront/[slug]** — brand banner + About card + 4 active sales with real photos + date badges
+- **✅ SharePromoteModal** — `/organizer/promote/[saleId]` as Alice, 5 tabs, real caption with item count, Share Now/Copy Text/Close all present
+- **✅ DowngradePreviewModal** — trigger `setShowDowngradePreview(true)` was NEVER called → ❌ BUG FIXED ("Downgrade to SIMPLE" button added to subscription.tsx Plan Actions)
 
-**S493 verified (carried forward):**
-- Feature #294 P0 save bug ✅ | Workspace chat+tasks ✅ | Subscription ✅ | Add-items no crash ✅ | Admin reports ✅ | Hall-of-fame ✅
+**⚠️ Minor flag:** SharePromoteModal auto-generated caption includes `#estatesale` — should include additional sale-type hashtags for brand inclusivity. Low priority.
 
-**S494 Files changed (7, push pending):**
+**S495 Files changed (3):**
+- `packages/backend/src/services/discoveryService.ts` — boost lookup added (same pattern as saleController); `SaleWithScore` interface gains `boost` field; feed now returns active boost data to SaleCards
+- `packages/frontend/pages/shopper/loyalty.tsx` — useEffect added watching `xpProfile?.explorerRank`, compares to `localStorage.guild_last_rank`, triggers RankUpModal on rank increase
+- `packages/frontend/pages/organizer/subscription.tsx` — "Downgrade to SIMPLE" button added in Plan Actions (amber style, shown when `tier !== 'SIMPLE'`), calls `setShowDowngradePreview(true)`
+
+**S494 Files changed (7, push pending with S495):**
 - `packages/frontend/components/EbayCategoryPicker.tsx` — `ebayCategoryName` prop + `selectedLeaf` state + confirmation chip + × clear
 - `packages/frontend/pages/organizer/edit-item/[id].tsx` — added `ebayCategoryName={formData.ebayCategoryName}` prop
 - `packages/frontend/pages/organizer/command-center.tsx` — `lg:grid-cols-2 gap-6`, `overflow-x-hidden`, compact alerts empty state
 - `packages/frontend/pages/city/[city].tsx` — `getStaticProps` response parsing fix (`citiesJson.cities ?? []` + `activeSales→count` map)
-- `packages/frontend/components/SearchFilterPanel.tsx` — dark mode on 3 selects (S494 main push) + Price Range inputs: `min-w-0` overflow fix + dark mode (this session)
+- `packages/frontend/components/SearchFilterPanel.tsx` — dark mode on 3 selects + Price Range inputs: `min-w-0` overflow fix + dark mode
 - `packages/frontend/components/SearchSuggestions.tsx` — dark mode: container, section headers, buttons, category links
 - `claude_docs/strategy/roadmap.md` — v109 update: city pages ✅, TEAMS workspace ✅, command center ✅, eBay picker notes updated
 
-**Pending Chrome QA (sequential, one at a time):**
-- Remaining orphaned component QA: LiveFeedWidget (command-center), QuickReplyPicker (messages/[id]), BoostBadge, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, SharePromoteModal, DowngradePreviewModal
+**S493 verified (carried forward):**
+- Feature #294 P0 save bug ✅ | Workspace chat+tasks ✅ | Subscription ✅ | Add-items no crash ✅ | Admin reports ✅ | Hall-of-fame ✅
 
 ---
 
@@ -604,60 +610,40 @@ Files (7):
 
 ## Next Session Priority
 
-**1. Push S491 wrap docs + S491 code (first thing):**
+*(Updated by daily-friction-audit AUTO-DISPATCH → findasale-records, 2026-04-17. S491 push + migration confirmed complete; S494+S495 work now reflects the pending Patrick action.)*
+
+**1. Push S494 + S495 code (first thing — Patrick action):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/backend/src/controllers/adminReportsController.ts
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260416_ebay_push_quota/migration.sql
-git add packages/backend/src/controllers/ebayController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/controllers/treasureHuntQRController.ts
-git add packages/backend/src/jobs/auctionJob.ts
-git add packages/backend/src/controllers/authController.ts
-git add packages/backend/src/services/referralService.ts
-git add packages/backend/src/middleware/requireTier.ts
-git add packages/backend/src/controllers/stripeController.ts
-git commit -m "S491: admin reports fix, eBay push quota, 4 security fixes (XP caps, referral atomicity, grace period, payment dedup)"
+git add claude_docs/strategy/roadmap.md
+git add packages/frontend/components/EbayCategoryPicker.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/frontend/pages/organizer/command-center.tsx
+git add packages/frontend/pages/city/[city].tsx
+git add packages/frontend/components/SearchFilterPanel.tsx
+git add packages/frontend/components/SearchSuggestions.tsx
+git add packages/backend/src/services/discoveryService.ts
+git add packages/frontend/pages/shopper/loyalty.tsx
+git add packages/frontend/pages/organizer/subscription.tsx
+git commit -m "fix: orphaned component QA + BoostBadge feed wiring + RankUpModal trigger + DowngradePreviewModal trigger"
 .\push.ps1
 ```
 
-**2. Run S491 migration (eBay push quota — schema change):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-**3. Chrome QA — admin reports fix (P0, low-confidence):**
-Navigate to `/admin/reports` as admin. Verify Organizer Performance tab shows organizers. If still empty, re-dispatch `findasale-dev` with deeper diagnosis (may be a frontend data handling issue, not just the query).
-
-**4. Chrome QA — security gates smoke test (P1, carry from S489):**
+**2. Chrome QA — security gates smoke test (P1, carry from S489):**
 Register a new test account → verify email gate fires. Verify existing organizers are NOT blocked.
 
-**5. Chrome QA — tier degradation smoke test (P1, carry from S489):**
+**3. Chrome QA — tier degradation smoke test (P1, carry from S489):**
 As existing organizer (user2 SIMPLE), confirm no grace banner. Check DowngradePreviewModal renders from upgrade page.
 
-**6. Orphaned pages — Patrick decisions needed (P1):**
-Confirm which of these to wire into nav (dispatch `findasale-dev` after decisions):
-- `/search` — main discovery page, currently unreachable from nav (RECOMMEND: add)
-- `/organizer/pricing` — plan selection, unreachable (RECOMMEND: add)
-- `/organizer/storefront/[slug]` — public storefront, unreachable (RECOMMEND: add)
-- `/hall-of-fame` — in AvatarDropdown but not Layout.tsx (RECOMMEND: add to Layout)
-- `/shopper/lucky-roll` — gamified discovery (in-progress or ready?)
-- `/shopper/crews` — crew collaboration (in-progress or ready?)
-- `/condition-guide` — reference page (add to shopper nav?)
-
-**7. Full pricing + monetization review (P1):**
+**4. Full pricing + monetization review (P1):**
 Dispatch `findasale-investor` + `findasale-hacker` jointly to audit all money surfaces before live customers.
 
-**8. Delete seed accounts — after Chrome QA confirms app is healthy (P1):**
+**5. Delete seed accounts — after Chrome QA confirms app is healthy (P1):**
 Safe to delete: all `user@example.com` (user1–user100) + `workandothers1@gmail.com`. Survivors: `deseee@gmail.com` + `artifactmi@gmail.com`. DB integrity clean as of S491.
 
-**9. Root file cleanup (Patrick manual):**
-Delete from repo root: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
+**6. SharePromoteModal caption hashtag fix (P3):**
+Auto-generated caption includes `#estatesale` only. Should include multi-sale-type hashtags per D-001. Low priority. Dispatch `findasale-dev` when batching small fixes.
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)
