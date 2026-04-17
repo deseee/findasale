@@ -121,6 +121,18 @@ interface Bid {
   createdAt: string;
 }
 
+const formatCategoryLabel = (cat: string): string => {
+  const decoded = cat
+    .replace(/&amp;/g, '&')
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+  const segments = decoded.split(':').map((s) => s.trim()).filter(Boolean);
+  const label = segments[segments.length - 1] || decoded;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
 const SaleDetailPage = () => {
   const router = useRouter();
   const { id } = router.query;
@@ -980,7 +992,7 @@ const SaleDetailPage = () => {
                             : 'bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-gray-300 hover:bg-warm-300 dark:hover:bg-gray-600'
                         }`}
                       >
-                        {(normalizedCategory as string).charAt(0).toUpperCase() + (normalizedCategory as string).slice(1)} ({count})
+                        {formatCategoryLabel(normalizedCategory as string)} ({count})
                       </button>
                     );
                   }
