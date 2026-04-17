@@ -7,6 +7,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S492 (2026-04-16) — Workspace collaboration + command center monitoring + build fixes**
+
+- **Workspace activity feed wired ✅:** `/workspace/[slug].tsx` Team Activity section replaced with real `useOrganizerActivityFeed` data scoped to workspace sale IDs. Backend was already live.
+- **Workspace team chat built ✅:** `GET/POST /:workspaceId/sales/:saleId/chat` endpoints added to workspaceController + routes. Frontend: per-sale tabs, 15s polling, auto-scroll, 1000-char limit, member-only posting. `WorkspaceChatMessage` schema was already in place.
+- **Workspace task assignments built ✅:** `GET/POST/PATCH /:workspaceId/tasks` endpoints added. Frontend: task list with clickable status cycling (PENDING→IN_PROGRESS→COMPLETED), assignee selector, sale selector, 30s polling. `WorkspaceTask` schema was already in place.
+- **Command center staffing + technical alerts ✅:** `commandCenterService.ts` now queries workspace members and generates 4 alert types (NO_ITEMS, ITEMS_MISSING_PHOTOS, EXPIRING_HOLDS, SALE_STARTING_SOON). `command-center.tsx` gains Team Coverage panel + Technical Alerts section (red/amber/green). `commandCenter.ts` types extended in both backend and frontend packages.
+- **Build fixes ✅:** workspaceController.ts TS2322 (`string | null` → `as string`). Frontend `types/commandCenter.ts` was missing `TeamMember`, `TechnicalAlert`, and updated `CommandCenterResponse` — Agent D only updated backend types. Fixed. `city/[city].tsx` `getStaticPaths` was calling `.filter()` on `{ cities: [] }` object instead of array — fixed with `Array.isArray(data) ? data : data.cities ?? []`.
+- **All pushes + eBay migration confirmed green by Patrick ✅**
+
+**S492 Files changed (10):**
+- `packages/backend/src/controllers/workspaceController.ts` — chat + task endpoints + TS2322 fix
+- `packages/backend/src/routes/workspace.ts` — chat + task routes
+- `packages/backend/src/services/commandCenterService.ts` — teamMembers + technicalAlerts
+- `packages/backend/src/controllers/commandCenterController.ts` — passthrough
+- `packages/backend/src/types/commandCenter.ts` — TeamMember, TechnicalAlert, extended CommandCenterResponse
+- `packages/frontend/types/commandCenter.ts` — same additions (frontend copy was out of sync)
+- `packages/frontend/pages/organizer/command-center.tsx` — Team Coverage + Technical Alerts sections
+- `packages/frontend/pages/workspace/[slug].tsx` — activity feed wired, chat built, tasks built
+- `packages/frontend/pages/city/[city].tsx` — getStaticPaths cities array fix
+
+---
+
 **S491 (2026-04-16) — Admin reports bug + security audit + eBay quota + orphaned pages + batch fixes**
 
 - **Admin reports "No organizers found" root cause fixed ✅:** Frontend interface declared `organizers` key but backend returns `{ items, pagination }`. Line 78 `res.data.organizers ?? []` always returned `[]`. Fixed to `res.data.items ?? []` + `res.data.pagination?.total`. Also fixed `OrganizerResponse` interface.
@@ -162,32 +184,31 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S492:**
+**Next Session — S493:**
 
-**Theme: Audit the audits — find blind spots in the agent/QA/preflight setup.**
+**Theme: Chrome QA pass — verify S491 + S492 features live in browser.**
 
-Questions to investigate:
-1. **Dev preflight gap:** The saleController boosts error passed the dev agent's TS check but failed Railway. How? The agent ran `tsc --noEmit` but the Prisma client wasn't regenerated in the VM — so `SaleInclude` didn't reflect actual schema relations. Fix: dev agents must run `npx prisma generate` before `tsc --noEmit` when their changes touch Prisma queries.
-2. **QA gate effectiveness:** 20+ features from S491 are unverified. Is the Chrome QA backlog growing faster than it's being cleared? What's the actual verified-vs-shipped ratio over the last 10 sessions?
-3. **Scheduled tasks:** Are the 3+ scheduled tasks actually running? When did they last fire? Check `mcp__scheduled-tasks__list_scheduled_tasks`.
-4. **Skills drift:** Are findasale-* skill rules (schema gate, TS check gate, removal gate) actually being followed, or are agents skipping them under compression? Review the last 5 dev agent handoffs for gate compliance.
-5. **Blind spots in setup:** What categories of errors keep recurring (Prisma relation assumptions, implicit-any, missing null checks)? Is there a pattern the preflight gates don't catch?
-6. **Memory staleness:** Several project memory entries are from S225–S296. Which are stale or contradicted by current STATE.md?
+**QA priority order (Chrome, sequential per §10c):**
+1. `/organizer/command-center` — Team Coverage panel + Technical Alerts section (S492)
+2. `/workspace/test` — team chat (per-sale tabs, send message), task assignments (status cycle, assignee), activity feed (real data)
+3. `/organizer/subscription` — pricing copy, 12 team members, DowngradePreviewModal
+4. `/organizer/add-items/[saleId]` — React Hooks violations fix (no hook-order crash on nav)
+5. `/admin/reports` — organizers appear in list (S491 key mismatch fix)
+6. `/shopper/hall-of-fame` — data loads (api.get fix)
+7. `/city/grand-rapids` — page renders without crash (getStaticPaths fix)
+8. Search page dark mode — filter labels visible in dark mode (H-001)
+9. `/sales/[id]` — Items section is first full-width section (H-002)
+10. `/organizer/pricing` and `/pricing` — both redirect to `/organizer/subscription` with no loop
+11. LiveFeedWidget, QuickReplyPicker, SearchSuggestions, BoostBadge, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, SharePromoteModal (batch remaining)
 
-**Patrick manual actions required:**
-1. Run eBay migration: `cd packages/database && $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway" && npx prisma migrate deploy && npx prisma generate`
-2. Run full push block (below)
-3. Stripe Connect webhook (P2 ongoing since S421): Stripe Dashboard → Connected account events → `payment_intent.succeeded` → `/api/webhooks/stripe` → Railway `STRIPE_CONNECT_WEBHOOK_SECRET`
-4. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
+**Patrick manual actions (carry-forward):**
+1. Stripe Connect webhook (P2 since S421): Stripe Dashboard → Connected account events → `payment_intent.succeeded` → `/api/webhooks/stripe` → Railway `STRIPE_CONNECT_WEBHOOK_SECRET`
+2. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
 
-**Pending Chrome QA (none browser-verified this session):**
-Admin reports fix, LiveFeedWidget, QuickReplyPicker, SearchSuggestions, BoostBadge, DowngradePreviewModal, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, hall-of-fame fix, pricing redirects (confirm no loop), SharePromoteModal, H-001 dark mode filters, H-002 section order, H-003 team cap copy, React Hooks violations, Scout Reveal fix.
-
-**Next work:**
-- S492 audit: dev preflight gap, QA backlog ratio, scheduled task health, skill gate compliance, recurring error patterns, memory staleness
-- Weekly audit M-001/M-002/M-003/M-004 medium findings (shopper/history table clipping, etc.)
-- DECISIONS.md entry needed: Wishlist is canonical name (confirmed by Patrick S491)
-- Chrome QA pass on S491 batch (20+ items need verification)
+**Remaining code (after QA):**
+- Weekly audit M-001/M-002/M-003/M-004 medium findings
+- DECISIONS.md entry: Wishlist is canonical name (confirmed by Patrick S491)
+- Audit-the-audits investigation (dev preflight gap, QA backlog ratio, scheduled task health, skill gate compliance)
 
 ---
 

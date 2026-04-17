@@ -1,5 +1,39 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
+## S492 Summary (2026-04-16) — Workspace collaboration + command center monitoring
+
+**Workspace chat, task assignments, activity feed all live. Command center staffing and technical alerts added. 4 build errors fixed.**
+
+### Your actions:
+
+**1. Docs push block (STATE.md + dashboard wrap):**
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "docs: S492 wrap — workspace chat/tasks/activity, command center staffing+alerts, S493 QA theme"
+.\push.ps1
+```
+
+### What was built this session:
+
+**Workspace team chat** — `/workspace/[slug]` now has a working chat panel. Per-sale tabs, 15-second polling, auto-scroll, 1000-char limit, member-only posting. Backend: `GET/POST /:workspaceId/sales/:saleId/chat`.
+
+**Workspace task assignments** — Task list with clickable status cycling (PENDING → IN_PROGRESS → COMPLETED), assignee selector, sale selector, 30-second polling. Backend: `GET/POST/PATCH /:workspaceId/tasks`.
+
+**Workspace activity feed wired** — Team Activity section replaced with real data from the activity feed API, scoped to workspace sale IDs (backend was already live, frontend was using a stub).
+
+**Command center staffing panel** — Team Coverage section shows workspace members with roles and accept status.
+
+**Command center technical alerts** — Technical Alerts section shows color-coded alerts: NO_ITEMS (no items listed for an upcoming sale), ITEMS_MISSING_PHOTOS (items without photos), EXPIRING_HOLDS (holds expiring in 24h), SALE_STARTING_SOON (sale starts within 48h).
+
+**4 build fixes:**
+- workspaceController.ts TS2322 (`string | null` used where `string` required) — fixed with `as string`
+- Frontend `types/commandCenter.ts` was missing `TeamMember`, `TechnicalAlert`, and updated `CommandCenterResponse` — Agent D only updated the backend copy
+- `city/[city].tsx` `getStaticPaths` was calling `.filter()` on `{ cities: [] }` object instead of array — fixed
+- saleController.ts `boosts` Prisma include (doesn't exist on Sale) — replaced with batch BoostPurchase query by targetId
+
+---
+
 ## S491 Summary (2026-04-16) — Large batch: 40+ files
 
 **Admin reports fixed, 20 orphaned components wired, 4 security fixes, eBay quota, batch brand/audit fixes, Hooks violations, Scout Reveal hardened.**
