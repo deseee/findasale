@@ -170,27 +170,32 @@ export const listSales = async (req: Request, res: Response) => {
             where: { isActive: true, isPublic: true },
             select: { id: true, shareToken: true }
           },
-          boosts: {
-            where: {
-              targetType: 'SALE',
-              status: 'ACTIVE',
-              expiresAt: { gt: new Date() },
-            },
-            select: {
-              boostType: true,
-              expiresAt: true,
-              status: true,
-            },
-            take: 1,
-            orderBy: { createdAt: 'desc' },
-          },
         }
       }),
       prisma.sale.count({ where }),
     ]);
 
+    // BoostPurchase has no direct relation on Sale — query separately by targetId
+    const saleIds = sales.map((s: any) => s.id);
+    const activeBoosts = saleIds.length > 0
+      ? await prisma.boostPurchase.findMany({
+          where: {
+            targetType: 'SALE',
+            targetId: { in: saleIds },
+            status: 'ACTIVE',
+            expiresAt: { gt: new Date() },
+          },
+          select: { targetId: true, boostType: true, expiresAt: true, status: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+    const boostBySaleId = new Map<string, typeof activeBoosts[0]>();
+    for (const b of activeBoosts) {
+      if (b.targetId && !boostBySaleId.has(b.targetId)) boostBySaleId.set(b.targetId, b);
+    }
+
     const convertedSales = sales.map((sale: any) => {
-      const { _count, trails, items, boosts, ...rest } = convertDecimalsToNumbers(sale);
+      const { _count, trails, items, ...rest } = convertDecimalsToNumbers(sale);
       const maxOrganizerDiscount = items && items.length > 0
         ? Math.max(...items
             .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
@@ -202,7 +207,7 @@ export const listSales = async (req: Request, res: Response) => {
         favoriteCount: _count?.favorites ?? 0,
         hasActiveTrail: (trails && trails.length > 0) ?? false,
         trailShareToken: trails?.[0]?.shareToken ?? null,
-        boost: boosts?.[0] ?? null,
+        boost: boostBySaleId.get(sale.id) ?? null,
       };
     });
     
