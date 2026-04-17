@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
+import { formatCategoryLabel } from '../../lib/itemConstants';
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
 import { useToast } from '../../components/ToastContext';
@@ -120,18 +121,6 @@ interface Bid {
   };
   createdAt: string;
 }
-
-const formatCategoryLabel = (cat: string): string => {
-  const decoded = cat
-    .replace(/&amp;/g, '&')
-    .replace(/&apos;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
-  const segments = decoded.split(':').map((s) => s.trim()).filter(Boolean);
-  const label = segments[segments.length - 1] || decoded;
-  return label.charAt(0).toUpperCase() + label.slice(1);
-};
 
 const SaleDetailPage = () => {
   const router = useRouter();

@@ -6,6 +6,7 @@ import { GetServerSidePropsContext } from 'next';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client'; // type-only — prevents SSR module crash
 import api from '../../lib/api';
+import { formatCategoryLabel } from '../../lib/itemConstants';
 import { useAuth } from '../../components/AuthContext';
 import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import CheckoutModal from '../../components/CheckoutModal';
@@ -665,7 +666,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 </div>
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">Category:</span>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">{item.category}</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCategoryLabel(item.category)}</p>
                 </div>
               </div>
 
