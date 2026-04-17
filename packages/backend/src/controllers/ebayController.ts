@@ -3810,10 +3810,10 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
       `[eBay EndedSync] Organizer ${organizerId}: checking ${activeListings.length} active listings`
     );
 
-    // Get app token (no OAuth needed for Trading API)
-    const appToken = await getEbayAccessToken();
-    if (!appToken) {
-      console.error(`[eBay EndedSync] Failed to get app token for organizer ${organizerId}`);
+    // Get organizer's OAuth access token for Trading API
+    const accessToken = connection.accessToken;
+    if (!accessToken) {
+      console.error(`[eBay EndedSync] Organizer ${organizerId}: no OAuth access token found`);
       return result;
     }
 
@@ -3826,9 +3826,6 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
       // Build Trading API XML request
       const requestXml = `<?xml version="1.0" encoding="UTF-8"?>
 <GetMultipleItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <RequesterCredentials>
-    <eBayAuthToken>${appToken}</eBayAuthToken>
-  </RequesterCredentials>
   <ItemID>${itemIds}</ItemID>
   <IncludeSelector>Details</IncludeSelector>
 </GetMultipleItemsRequest>`;
@@ -3838,12 +3835,11 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
           method: 'POST',
           headers: {
             'X-EBAY-API-CALL-NAME': 'GetMultipleItems',
-            'X-EBAY-API-APP-NAME': process.env.EBAY_APP_ID || '',
             'X-EBAY-API-SITEID': '0',
-            'X-EBAY-API-REQUEST-ENCODING': 'XML',
-            'X-EBAY-API-RESPONSE-ENCODING': 'JSON',
-            'X-EBAY-API-VERSION': '1155',
-            'Content-Type': 'application/xml',
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+            'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+            'X-EBAY-API-IAF-TOKEN': accessToken,
+            'Content-Type': 'text/xml',
           },
           body: requestXml,
         });
@@ -3855,9 +3851,23 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
           continue; // Skip this batch, proceed to next
         }
 
-        const ebayData = (await ebayResponse.json()) as {
-          Item?: Array<{ ItemID: string; ListingStatus: string }>;
-        };
+        const ebayText = await ebayResponse.text();
+
+        // Check for XML error response (eBay returns XML errors even on HTTP 200)
+        const ack = xmlVal(ebayText, 'Ack');
+        if (ack && ack !== 'Success' && ack !== 'Warning') {
+          const errMsg = xmlVal(ebayText, 'LongMessage') || xmlVal(ebayText, 'ShortMessage') || 'Unknown error';
+          console.error(`[eBay EndedSync] Trading API failure for organizer ${organizerId}: ${errMsg}`);
+          continue; // Skip this batch, proceed to next
+        }
+
+        let ebayData: { Item?: Array<{ ItemID: string; ListingStatus: string }> };
+        try {
+          ebayData = JSON.parse(ebayText);
+        } catch (parseErr) {
+          console.error(`[eBay EndedSync] Failed to parse JSON response for organizer ${organizerId}:`, parseErr);
+          continue; // Skip this batch, proceed to next
+        }
         const items = ebayData.Item || [];
 
         console.log(`[eBay EndedSync] Batch response: ${items.length} items`);
