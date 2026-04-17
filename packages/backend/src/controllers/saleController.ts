@@ -1094,11 +1094,12 @@ export const getSaleActivity = async (req: Request, res: Response) => {
 // ── AI Sale Description Generator ─────────────────────────────────────────────
 
 export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { title, tags, city, isAuctionSale, startDate, endDate } = req.body as {
+  const { title, tags, city, isAuctionSale, saleType, startDate, endDate } = req.body as {
     title?: string;
     tags?: string[];
     city?: string;
     isAuctionSale?: boolean;
+    saleType?: string;
     startDate?: string;
     endDate?: string;
   };
@@ -1124,6 +1125,7 @@ export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Resp
       tags: Array.isArray(tags) ? tags : [],
       city: typeof city === 'string' ? city : undefined,
       isAuctionSale: typeof isAuctionSale === 'boolean' ? isAuctionSale : false,
+      saleType: typeof saleType === 'string' ? saleType : undefined,
       startDate: typeof startDate === 'string' ? startDate : undefined,
       endDate: typeof endDate === 'string' ? endDate : undefined,
     });
