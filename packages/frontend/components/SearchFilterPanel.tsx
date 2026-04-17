@@ -156,7 +156,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
         <select
           value={filters.condition}
           onChange={handleConditionChange}
-          className="w-full px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+          className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
         >
           {CONDITION_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -172,7 +172,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
         <select
           value={filters.category}
           onChange={handleCategoryChange}
-          className="w-full px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+          className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
         >
           <option value="">All Categories</option>
           {categories.map((cat) => (
@@ -226,7 +226,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
         <select
           value={filters.sortBy}
           onChange={handleSortChange}
-          className="w-full px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+          className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
