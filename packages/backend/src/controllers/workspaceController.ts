@@ -925,10 +925,10 @@ export const getWorkspaceTasks = async (req: AuthRequest, res: Response) => {
           const member = workspace.members.find((m: any) => m.organizerId === task.assignedTo);
           if (member) {
             const organizer = await prisma.organizer.findUnique({
-              where: { id: member.organizerId },
+              where: { id: member.organizerId as string },
               select: { businessName: true },
             });
-            assigneeInfo = { id: member.organizerId, businessName: organizer?.businessName };
+            assigneeInfo = { id: member.organizerId as string, businessName: organizer?.businessName ?? '' };
           }
         }
         return {
