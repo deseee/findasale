@@ -3226,8 +3226,17 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const pictureUrls = xmlAll(itemBlock, 'PictureURL');
           const photoUrls = pictureUrls.length > 0 ? pictureUrls : (xmlVal(itemBlock, 'GalleryURL') ? [xmlVal(itemBlock, 'GalleryURL')!] : []);
           // Extract description — strip HTML tags from eBay's CDATA description
+          // Many eBay sellers use HTML templates; strip <style>/<script> blocks first
+          // so CSS/JS doesn't become part of the visible text output
           const descriptionRaw = xmlVal(itemBlock, 'Description') || '';
-          const description = decodeHtmlEntities(descriptionRaw).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+          const descriptionWithoutBlocks = descriptionRaw
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ');
+          const description = decodeHtmlEntities(descriptionWithoutBlocks)
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 2000);
           const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
           const conditionGrade = tradingConditionMap[conditionId] || null;
           const condition = conditionGrade === 'S' ? 'NEW'

@@ -17,6 +17,8 @@ interface InventoryItemCardProps {
   isLoading?: boolean;
   priceBeforeMarkdown?: number;
   markdownApplied?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 /**
@@ -57,6 +59,8 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
   isLoading = false,
   priceBeforeMarkdown,
   markdownApplied,
+  isSelected = false,
+  onToggleSelect,
 }) => {
   const router = useRouter();
   const [showActions, setShowActions] = useState(false);
@@ -71,7 +75,9 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
 
   return (
     <div
-      className="relative bg-white dark:bg-slate-800 rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden cursor-pointer"
+      className={`relative bg-white dark:bg-slate-800 rounded-lg shadow hover:shadow-lg transition-all overflow-hidden cursor-pointer ${
+        isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
+      }`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       onClick={handleCardClick}
@@ -85,6 +91,18 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
     >
       {/* Photo */}
       <div className="relative w-full h-32 bg-gray-200 dark:bg-gray-700 overflow-hidden">
+        {onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onToggleSelect?.();
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-2 left-2 w-5 h-5 cursor-pointer z-10"
+          />
+        )}
         <img
           key={photoUrl}
           src={photoUrl}
@@ -137,7 +155,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
         )}
 
         {/* Action buttons */}
-        <div className={`mt-4 flex gap-2 transition-opacity ${showActions || isLoading ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`mt-4 flex gap-2 transition-opacity ${showActions || isLoading ? 'opacity-100' : 'md:opacity-0'}`}>
           {status === 'AVAILABLE' && (
             <button
               onClick={onPull}

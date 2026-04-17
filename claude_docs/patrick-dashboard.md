@@ -1,5 +1,48 @@
 # Patrick's Dashboard — Week of April 17, 2026
 
+## S497 Summary (2026-04-17) — Geocoding + entrance pin + treasure hunt + eBay fixes
+
+**12 files changed. Push block below.**
+
+### Your action — push S497:
+
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/backend/src/controllers/geocodeController.ts
+git add packages/backend/src/routes/sales.ts
+git add packages/frontend/pages/organizer/edit-sale/[id].tsx
+git rm packages/frontend/components/ManualLocationPicker.tsx
+git add packages/frontend/components/TreasureHuntQRManager.tsx
+git add packages/backend/src/controllers/treasureHuntQRController.ts
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/services/cloudAIService.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/ebayController.ts
+git add packages/frontend/components/InventoryItemCard.tsx
+git add packages/frontend/pages/organizer/inventory.tsx
+git commit -m "fix: geocoding fallbacks + entrance pin save + treasure hunt hardening + eBay description sync + inventory batch pull"
+.\push.ps1
+```
+
+### What was fixed this session:
+
+**"Sale location not found" on edit page** — Nominatim doesn't know every USPS-valid address. Added US Census Geocoder as a third fallback strategy. It runs after both Nominatim attempts fail and handles addresses that USPS considers valid but OpenStreetMap doesn't have indexed.
+
+**Entrance pin and notes not saving** — Two bugs in `edit-sale/[id].tsx`: (1) The form change handler was using `{...formData, [field]: value}` which captures a stale snapshot — if you edited a field after placing the entrance pin, the pin coordinates were wiped from state. Fixed with functional updater `prev => ({...prev})`. (2) The `formInitialized` ref was declared but never actually checked in the useEffect, so every background refetch reset the form. Now wired in correctly.
+
+**Treasure hunt: removed organizer toggle** — Organizers no longer control whether the completion bonus fires. It always fires. The checkbox is gone from the form.
+
+**Treasure hunt: anti-gaming** — Max 10 clues per sale (enforced server-side). Completion bonus is now deduped via `PointsTransaction` — a user can't delete and recreate clues to farm the bonus repeatedly.
+
+**Description generator now matches your sale type** — Instead of always describing it as "an estate sale", the AI now uses the actual sale type label (yard sale, auction, flea market, etc.) based on what the organizer selected.
+
+**eBay description sync** — Many eBay sellers use HTML templates (full CSS layout, header graphics, etc.). When the sync stripped HTML tags, all that layout code was leaving an empty string instead of the item description. Now strips `<style>` and `<script>` blocks first, then removes remaining tags. Descriptions should now come through correctly on next sync.
+
+**Inventory on mobile** — Action buttons (Pull to Sale, price history, delete) were always invisible on mobile because they used a hover-only reveal. Now always visible on small screens. Also added batch select: tap the checkbox on any card, select as many as you want, then tap "Pull X to Sale" from the sticky bottom bar to send them all to one sale at once.
+
+---
+
 ## S496 Summary (2026-04-17) — Nav freeze + sale creation geocoding
 
 **2 bugs fixed. shopperCredits migration confirmed applied.**

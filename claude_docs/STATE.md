@@ -7,6 +7,34 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S497 (2026-04-17) — Geocoding fallbacks + entrance pin save + treasure hunt hardening + eBay fixes**
+
+- **"Sale location not found" on edit page:** Added US Census Geocoder as Strategy 3 fallback (handles USPS-valid addresses Nominatim misses). Three-strategy chain: Nominatim structured → Nominatim free-text → Census geocoder.
+- **Geolocation "Failed to save location":** Added dedicated `PATCH /api/sales/:id/coordinates` endpoint. Previous `PUT /api/sales/:id` was wrong route. Ownership check fixed: looks up `organizer.findUnique({ userId })` first, then compares `organizerProfile.id` to `sale.organizerId`.
+- **Entrance pin + notes not saving:** Two root causes fixed: (1) `handleChange` stale closure (`{...formData}` → functional `prev => ({...prev})`) overwrote entrance pin when editing other fields; (2) `formInitialized` ref was declared but never used — form reset on every refetch. Both fixed in `edit-sale/[id].tsx`.
+- **Treasure hunt completion badge removed:** Organizer-visible toggle removed. Platform always awards completion bonus. `TreasureHuntQRManager.tsx` updated; backend `markClueFound` no longer checks `sale.treasureHuntCompletionBadge`.
+- **Treasure hunt anti-gaming:** 10-clue cap per sale enforced in `createClue`. Completion dedup via `PointsTransaction` (type=TREASURE_HUNT_COMPLETION, saleId) — delete+recreate clue bypass closed. Daily cap added for completion bonus.
+- **Description generator sale-type awareness:** `cloudAIService.ts` now takes `saleType` from `generateSaleDescriptionHandler`, maps to human label (yard sale, auction, flea market, etc.), uses in prompt instead of hardcoded "estate sale organizer".
+- **eBay description sync fix:** `ebayController.ts` now strips `<style>` and `<script>` blocks before stripping HTML tags. Template-heavy eBay descriptions with pure CSS/layout markup were stripping to empty strings, so descriptions were never written.
+- **Inventory mobile + batch pull:** `InventoryItemCard.tsx` — action buttons now always visible on mobile (`md:opacity-0`). Batch select added (checkboxes + blue ring). `inventory.tsx` — multi-select state + sticky bottom action bar + batch pull modal (pulls selected items sequentially to a chosen sale).
+- **Deleted:** `ManualLocationPicker.tsx` (182-line Leaflet component, replaced by inline geolocation + suggestions UX).
+
+**S497 Files changed (12):**
+- `packages/backend/src/controllers/geocodeController.ts` — three-strategy geocoding + Census fallback
+- `packages/backend/src/routes/sales.ts` — PATCH /:id/coordinates route (before generic /:id)
+- `packages/frontend/pages/organizer/edit-sale/[id].tsx` — entrance pin stale closure fix, formInitialized guard, geolocation UX
+- `packages/frontend/components/ManualLocationPicker.tsx` — DELETED (git rm)
+- `packages/frontend/components/TreasureHuntQRManager.tsx` — removed completion badge toggle
+- `packages/backend/src/controllers/treasureHuntQRController.ts` — 10-clue cap + completion dedup + daily cap on bonus
+- `packages/backend/src/services/xpService.ts` — TREASURE_HUNT_COMPLETION added to DAILY_XP_CAPS
+- `packages/backend/src/services/cloudAIService.ts` — saleType param + resolvedType in prompt
+- `packages/backend/src/controllers/saleController.ts` — forwards saleType to cloudAIService
+- `packages/backend/src/controllers/ebayController.ts` — strip style/script blocks before HTML tag removal
+- `packages/frontend/components/InventoryItemCard.tsx` — mobile button visibility + batch select checkbox + blue ring
+- `packages/frontend/pages/organizer/inventory.tsx` — batch select state + sticky toolbar + batch pull modal
+
+---
+
 **S496 (2026-04-17) — Navigation freeze fix + sale creation geocoding fix**
 
 - **Navigation frozen sitewide (P0) ✅ FIXED:** `useShopperCart` mounts in 5 simultaneous instances (Layout, AvatarDropdown, ShopperCartFAB, ShopperCartDrawer, sale/item pages). `isSelfSync` ref prevented self-echo but not cross-instance cascade. Each instance's sync handler called `setCart(JSON.parse(stored))` — new object reference every time — triggering persistence effects → dispatching `fas_cart_sync` → cascade kept React scheduler permanently busy. Clicks silently swallowed on desktop and Android. Fix: functional `setCart` with `JSON.stringify(prev) === stored` comparison returns same `prev` reference when data unchanged → React skips re-render → no persistence effect fires → loop terminates. Chrome verified: Login nav works post-fix.
