@@ -34,16 +34,21 @@ enum SaleType {
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone,
 // or plain YYYY-MM-DD date strings (coerced to midnight UTC)
-const iso8601DatetimeSchema = z.string()
-  .regex(
-    /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/,
-    'Invalid datetime format. Expected ISO 8601 format or YYYY-MM-DD.'
-  )
+const isoDateRegex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+// startDate: date-only → start of day UTC (00:00:00Z)
+const iso8601StartDateSchema = z.string()
+  .regex(isoDateRegex, 'Invalid datetime format. Expected ISO 8601 format or YYYY-MM-DD.')
   .transform((val) => {
-    // If it's a plain date (YYYY-MM-DD), convert to ISO datetime at midnight UTC
-    if (!/T/.test(val)) {
-      return `${val}T00:00:00Z`;
-    }
+    if (!/T/.test(val)) return `${val}T00:00:00Z`;
+    return val;
+  });
+
+// endDate: date-only → end of day UTC (23:59:59Z) so "Apr 17" stays Apr 17 in all timezones
+const iso8601EndDateSchema = z.string()
+  .regex(isoDateRegex, 'Invalid datetime format. Expected ISO 8601 format or YYYY-MM-DD.')
+  .transform((val) => {
+    if (!/T/.test(val)) return `${val}T23:59:59Z`;
     return val;
   });
 
@@ -63,8 +68,8 @@ const saleQuerySchema = z.object({
 const saleCreateSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  startDate: iso8601DatetimeSchema,
-  endDate: iso8601DatetimeSchema,
+  startDate: iso8601StartDateSchema,
+  endDate: iso8601EndDateSchema,
   address: z.string().min(1),
   city: z.string().min(1),
   state: z.string().min(2).max(2),
