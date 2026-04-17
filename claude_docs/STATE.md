@@ -7,6 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S493 (2026-04-16) — Chrome QA pass: S491+S492 features + Feature #294 eBay category picker**
+
+- **Feature #294 eBay live category picker — P0 save bug found + fixed ✅:** `ebayCategoryId`/`ebayCategoryName` missing from `updateItem` req.body destructuring (line 661) and updateData block. Added 4 lines — fields now save and persist correctly. Pushed in S493 (green).
+- **P2 EbayCategoryPicker display — dispatched ✅:** After selection, leaf name not shown (L1 parent name shown as placeholder instead). Fix dispatched to findasale-dev: `selectedLeafName` state + confirmation chip below input.
+- **Command-center layout fix — dispatched ✅:** 4th stat card + Team Coverage right-edge overflow. `lg:grid-cols-3 gap-8` → `lg:grid-cols-2 gap-6`, remove `lg:col-span-2`, `overflow-x-hidden`, `min-w-0` on member text. Dispatched to findasale-dev.
+- **Workspace chat + tasks verified ✅:** Chat send/persist confirmed. Task create (with sale selector) → persist → reload → status cycling (PENDING→IN_PROGRESS→COMPLETED) all working end-to-end.
+- **Workspace live activity empty state ✅:** Renders correctly with proper copy.
+- **Workspace layout P2:** Same right-side overflow as command-center (Workspace Settings button, Send button, Workspace ID card all clip) — same fix covers it.
+- **/organizer/subscription (TEAMS) ✅:** Plan renders, features list correct, "Compare All Plans" → /pricing (no loop).
+- **/organizer/add-items/[saleId] ✅:** No React Hooks crash on load.
+- **/admin/reports ✅:** Organizer list renders with real data, tier badges (SIMPLE/PRO/TEAMS), sort + export working. Key mismatch fix confirmed.
+- **/shopper/hall-of-fame ✅:** Redirects to /leaderboard. Data loads with real shoppers, XP, medals, badges.
+- **❌ /city/grand-rapids — still 404:** getStaticPaths fix was pushed in S492 but page still returns 404 in production. Likely Vercel didn't regenerate static paths or no city DB record exists.
+- **⚠️ Search dark mode H-001 PARTIAL:** Section labels (Price Range, Condition, etc.) are visible (dark:text fix confirmed ✅). But Condition/Category/Sort By `<select>` dropdowns still have white backgrounds in dark mode — dark: variants missing from those inputs.
+- **❌ H-002 not confirmed in browser:** STATE.md says "Items is first full-width section (position 5)" but browser shows: About → Live Activity → Items for Sale. Items is 3rd full-width section, not 1st.
+- **Feature #294 resolved:** ebayCategoryId now saves. P2 display dispatched.
+
+**S493 Files changed (1 — itemController.ts P0 fix, pushed):**
+- `packages/backend/src/controllers/itemController.ts` — ebayCategoryId/ebayCategoryName added to destructuring + updateData block
+
+**S493 Pending (dev agent results not yet received):**
+- `packages/frontend/components/EbayCategoryPicker.tsx` — P2 leaf name confirmation display (agent dispatched)
+- `packages/frontend/pages/organizer/command-center.tsx` — layout overflow fix (agent dispatched)
+
+---
+
 **S492 (2026-04-16) — Workspace collaboration + command center monitoring + build fixes**
 
 - **Workspace activity feed wired ✅:** `/workspace/[slug].tsx` Team Activity section replaced with real `useOrganizerActivityFeed` data scoped to workspace sale IDs. Backend was already live.
@@ -184,22 +210,26 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S493:**
+**Next Session — S494:**
 
-**Theme: Chrome QA pass — verify S491 + S492 features live in browser.**
+**Theme: Receive dev agent returns + fix open bugs + batch QA remaining.**
 
-**QA priority order (Chrome, sequential per §10c):**
-1. `/organizer/command-center` — Team Coverage panel + Technical Alerts section (S492)
-2. `/workspace/test` — team chat (per-sale tabs, send message), task assignments (status cycle, assignee), activity feed (real data)
-3. `/organizer/subscription` — pricing copy, 12 team members, DowngradePreviewModal
-4. `/organizer/add-items/[saleId]` — React Hooks violations fix (no hook-order crash on nav)
-5. `/admin/reports` — organizers appear in list (S491 key mismatch fix)
-6. `/shopper/hall-of-fame` — data loads (api.get fix)
-7. `/city/grand-rapids` — page renders without crash (getStaticPaths fix)
-8. Search page dark mode — filter labels visible in dark mode (H-001)
-9. `/sales/[id]` — Items section is first full-width section (H-002)
-10. `/organizer/pricing` and `/pricing` — both redirect to `/organizer/subscription` with no loop
-11. LiveFeedWidget, QuickReplyPicker, SearchSuggestions, BoostBadge, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, SharePromoteModal (batch remaining)
+**Priority 1 — Receive dev agent results (dispatched in S493):**
+- EbayCategoryPicker P2 fix (leaf name confirmation chip) — get changed files, add to push block
+- Command-center layout fix (grid overflow) — get changed files, add to push block
+- Push both together + workspace page gets covered by same layout fix
+
+**Priority 2 — Open bugs from S493 QA:**
+- ❌ /city/grand-rapids 404 — investigate: check if city record exists in DB via psycopg2, check next.config.js static paths config. May need fallback: true in getStaticPaths.
+- ⚠️ Search dark mode H-001 PARTIAL — select dropdowns (Condition, Category, Sort By) need `dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600` — dispatch to findasale-dev
+- ❌ H-002 — confirm what's in sales/[id].tsx section order right now, compare to D-006. Dispatch fix if needed.
+
+**Priority 3 — Batch QA remaining (Chrome, sequential):**
+- LiveFeedWidget (command-center), QuickReplyPicker (messages/[id])
+- SearchSuggestions (search), BoostBadge (SaleCard + ItemCard)
+- RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page
+- SharePromoteModal (subscription)
+- DowngradePreviewModal (subscription — trigger by attempting downgrade as PRO user)
 
 **Patrick manual actions (carry-forward):**
 1. Stripe Connect webhook (P2 since S421): Stripe Dashboard → Connected account events → `payment_intent.succeeded` → `/api/webhooks/stripe` → Railway `STRIPE_CONNECT_WEBHOOK_SECRET`

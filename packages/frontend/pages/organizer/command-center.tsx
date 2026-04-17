@@ -127,7 +127,7 @@ const CommandCenterPage = () => {
       </Head>
 
       <TierGate requiredTier="TEAMS" featureName="Command Center" description="Multi-sale overview dashboard with real-time status, quick actions, and performance metrics across all your sales.">
-      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900 overflow-x-hidden">
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4 mb-8">
           <div className="max-w-6xl mx-auto flex items-center gap-3">
             <Link href="/organizer/dashboard" className="text-warm-400 hover:text-warm-600 dark:text-gray-400 dark:hover:text-gray-300 text-sm">
@@ -172,9 +172,9 @@ const CommandCenterPage = () => {
           )}
 
           {/* Technical Alerts & Team Coverage Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Technical Alerts */}
-            <div className="lg:col-span-2">
+            <div>
               {data?.technicalAlerts && data.technicalAlerts.length > 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Technical Alerts</h3>
@@ -222,7 +222,7 @@ const CommandCenterPage = () => {
                   </div>
                 </div>
               ) : (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 text-center">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 flex flex-col items-center justify-center min-h-[140px]">
                   <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-3">
                     <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />

@@ -482,6 +482,7 @@ const EditItemPage = () => {
 
             <EbayCategoryPicker
               value={formData.category}
+              ebayCategoryName={formData.ebayCategoryName}
               onChange={({ leafCategoryName, leafCategoryId, l1CategoryName }) =>
                 setFormData({
                   ...formData,

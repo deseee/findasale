@@ -1,5 +1,50 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
+## S493 Summary (2026-04-16) — QA pass: Feature #294 eBay picker, workspace, admin, layout fixes
+
+**eBay category picker P0 save bug found and fixed. 2 layout fixes dispatched. Multiple pages verified. 2 open regressions.**
+
+### Your actions:
+
+**1. Docs push block (STATE.md + dashboard wrap):**
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "docs: S493 wrap — eBay picker QA, P0 save fix pushed, layout fix dispatches pending"
+.\push.ps1
+```
+
+**2. When dev agents return** — they'll have changes for:
+- `packages/frontend/components/EbayCategoryPicker.tsx` (P2: show selected leaf category name)
+- `packages/frontend/pages/organizer/command-center.tsx` (layout: overflow + Team Coverage clip + alerts empty state)
+
+### What happened this session:
+
+**Feature #294 — Live eBay Taxonomy Category Picker** ✅ (with P2 open)
+- Live API search confirmed working — typed "typewriter", got 5 real results with IDs + L1 parent labels
+- P0 bug found: `ebayCategoryId`/`ebayCategoryName` were never wired into `updateItem` handler — saved silently to null in DB
+- P0 fix: added both fields to destructuring + `updateData` block in `itemController.ts` — pushed green
+- P2 open: after selecting a category, picker shows L1 parent as placeholder instead of confirming the leaf name — dispatched to findasale-dev
+
+**Workspace (TEAMS tier)** ✅
+- Chat, task assignments (PENDING→IN_PROGRESS→COMPLETED), activity feed — all verified end-to-end with real data
+- Sale selector, assignee selector, status cycling all working
+
+**Other pages verified** ✅
+- Subscription page loads, tier display correct
+- Add-items page no crash (previous bug from S491 confirmed resolved)
+- Admin reports (Alice Johnson / user1@example.com) — loads correctly
+- Hall of fame → redirects to /leaderboard ✅
+- /organizer/pricing → /pricing (confirmed correct by Patrick)
+
+**Open regressions:**
+- ❌ `/city/grand-rapids` still 404 — getStaticPaths fix from S492 may not have triggered a Vercel rebuild, or no city record with slug "grand-rapids" exists in DB
+- ⚠️ H-001 PARTIAL — SearchFilterPanel section labels fixed (dark mode readable), but Condition/Category/Sort By `<select>` inputs still show white backgrounds in dark mode
+- ❌ H-002 NOT CONFIRMED — STATE.md says Items section moved to position 1 on sale detail, but browser shows: About → Live Activity → Items. Either fix didn't deploy or there's a discrepancy.
+- ⚠️ Command-center layout broken — 4th stat card clipped, Team Coverage overflows, alerts empty state oversized — layout fix dispatched
+
+---
+
 ## S492 Summary (2026-04-16) — Workspace collaboration + command center monitoring
 
 **Workspace chat, task assignments, activity feed all live. Command center staffing and technical alerts added. 4 build errors fixed.**
