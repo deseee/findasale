@@ -328,7 +328,8 @@ export async function getStaticPaths(): Promise<GetStaticPathsResult> {
       };
     }
 
-    const cities = (await response.json()) as Array<{ city: string; count: number }>;
+    const data = await response.json();
+    const cities = (Array.isArray(data) ? data : data.cities ?? []) as Array<{ city: string; count: number }>;
 
     // Build Grand Rapids as primary path
     const paths = cities
