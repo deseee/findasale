@@ -40,6 +40,12 @@ export async function createClue(req: AuthRequest, res: Response) {
       return res.status(403).json({ message: 'Not authorized to manage this sale' });
     }
 
+    // Check clue count limit
+    const existingCount = await prisma.treasureHuntQRClue.count({ where: { saleId } });
+    if (existingCount >= 10) {
+      return res.status(400).json({ message: 'Sales are limited to 10 treasure hunt clues.' });
+    }
+
     // Create the clue
     const clue = await prisma.treasureHuntQRClue.create({
       data: {
@@ -224,7 +230,7 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     // Verify sale exists
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true, treasureHuntCompletionBadge: true },
+      select: { id: true },
     });
 
     if (!sale) {
@@ -323,20 +329,35 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     let bonusNewRank: string | undefined;
     const completed = userScans >= totalClues;
 
-    if (completed && sale.treasureHuntCompletionBadge) {
-      // Award completion bonus XP (no daily cap for completion bonus — one-time per hunt)
-      try {
-        bonusXp = XP_AWARDS.TREASURE_HUNT_COMPLETION;
-        const bonusResult = await awardXp(req.user.id, 'TREASURE_HUNT_COMPLETION', XP_AWARDS.TREASURE_HUNT_COMPLETION, {
+    if (completed) {
+      // Check if user has already received completion bonus for this sale
+      const alreadyCompleted = await prisma.pointsTransaction.findFirst({
+        where: {
+          userId: req.user.id,
+          type: 'TREASURE_HUNT_COMPLETION',
           saleId,
-          description: `Treasure Hunt QR completed: ${saleId}`,
-        });
-        if (bonusResult) {
-          bonusRankIncreased = bonusResult.rankIncreased;
-          bonusNewRank = bonusResult.newRank;
+        },
+      });
+
+      if (!alreadyCompleted) {
+        // Award completion bonus XP (one-time per hunt, subject to daily cap)
+        try {
+          const dailyRemaining = await checkDailyXpCap(req.user.id, 'TREASURE_HUNT_COMPLETION');
+          const bonusToAward = Math.min(XP_AWARDS.TREASURE_HUNT_COMPLETION, dailyRemaining);
+          if (bonusToAward > 0) {
+            bonusXp = bonusToAward;
+            const bonusResult = await awardXp(req.user.id, 'TREASURE_HUNT_COMPLETION', bonusToAward, {
+              saleId,
+              description: `Treasure Hunt QR completed: ${saleId}`,
+            });
+            if (bonusResult) {
+              bonusRankIncreased = bonusResult.rankIncreased;
+              bonusNewRank = bonusResult.newRank;
+            }
+          }
+        } catch (err) {
+          console.warn('[treasureHuntQR] Failed to award completion bonus XP:', err);
         }
-      } catch (err) {
-        console.warn('[treasureHuntQR] Failed to award completion bonus XP:', err);
       }
     }
 
@@ -373,7 +394,7 @@ export async function getProgress(req: AuthRequest, res: Response) {
     // Verify sale exists
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true, treasureHuntCompletionBadge: true },
+      select: { id: true },
     });
 
     if (!sale) {
@@ -397,7 +418,7 @@ export async function getProgress(req: AuthRequest, res: Response) {
       cluesFound,
       totalClues,
       progress: `${cluesFound}/${totalClues}`,
-      completionBonus: sale.treasureHuntCompletionBadge && cluesFound >= totalClues,
+      completionBonus: cluesFound >= totalClues,
     });
   } catch (err) {
     console.error('GET /sales/:saleId/treasure-hunt-qr/progress error:', err);

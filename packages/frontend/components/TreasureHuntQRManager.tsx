@@ -14,17 +14,13 @@ interface Clue {
 interface TreasureHuntQRManagerProps {
   saleId: string;
   enabled: boolean;
-  completionBadge: boolean;
   onEnabledChange: (enabled: boolean) => void;
-  onCompletionBadgeChange: (badge: boolean) => void;
 }
 
 const TreasureHuntQRManager: React.FC<TreasureHuntQRManagerProps> = ({
   saleId,
   enabled,
-  completionBadge,
   onEnabledChange,
-  onCompletionBadgeChange,
 }) => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -102,26 +98,7 @@ const TreasureHuntQRManager: React.FC<TreasureHuntQRManagerProps> = ({
               Enable Treasure Hunt QR for this sale
             </span>
             <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
-              Shoppers scan QR codes to find items and earn XP
-            </span>
-          </label>
-        </div>
-
-        <div className="flex items-start space-x-3">
-          <input
-            type="checkbox"
-            id="completionBadge"
-            checked={completionBadge}
-            onChange={(e) => onCompletionBadgeChange(e.target.checked)}
-            disabled={!enabled}
-            className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500 border-warm-300 rounded cursor-pointer disabled:opacity-50"
-          />
-          <label htmlFor="completionBadge" className="cursor-pointer flex flex-col">
-            <span className="text-sm font-medium text-warm-700 dark:text-gray-300">
-              Offer completion bonus (50 XP when all clues found)
-            </span>
-            <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
-              Shoppers earn extra XP when they find all treasure hunt clues
+              Shoppers scan QR codes to find items and earn XP. Completing all clues earns a 30 XP bonus.
             </span>
           </label>
         </div>
