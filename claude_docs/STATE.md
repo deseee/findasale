@@ -7,6 +7,18 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S496 (2026-04-17) — Navigation freeze fix + sale creation geocoding fix**
+
+- **Navigation frozen sitewide (P0) ✅ FIXED:** `useShopperCart` mounts in 5 simultaneous instances (Layout, AvatarDropdown, ShopperCartFAB, ShopperCartDrawer, sale/item pages). `isSelfSync` ref prevented self-echo but not cross-instance cascade. Each instance's sync handler called `setCart(JSON.parse(stored))` — new object reference every time — triggering persistence effects → dispatching `fas_cart_sync` → cascade kept React scheduler permanently busy. Clicks silently swallowed on desktop and Android. Fix: functional `setCart` with `JSON.stringify(prev) === stored` comparison returns same `prev` reference when data unchanged → React skips re-render → no persistence effect fires → loop terminates. Chrome verified: Login nav works post-fix.
+- **"Sale location not found" on create sale (P1) ✅ FIXED:** `AddressAutocomplete` component provides `lat` and `lng` when user selects a suggestion. `create-sale.tsx` was discarding them — `onSuggestionSelected` only saved `address/city/state/zip`. Sale was created without coordinates, forcing a secondary Nominatim geocode on the edit page that failed for specific addresses. Fix: added `lat: null | number` and `lng: null | number` to `formData` state, updated `onSuggestionSelected` to include `lat: suggestion.lat, lng: suggestion.lng`. POST body already spreads `formData` — no change needed there. Backend `createSale` schema already accepts them as `z.number().optional()`.
+- **shopperCredits DROP COLUMN migration ✅:** Patrick ran manually — confirmed complete.
+
+**S496 Files changed (2):**
+- `packages/frontend/hooks/useShopperCart.ts` — sync handler: `setCart(JSON.parse(stored))` → functional update with JSON equality check (cross-instance loop prevention)
+- `packages/frontend/pages/organizer/create-sale.tsx` — lat/lng added to formData state + onSuggestionSelected handler; now included in POST /sales body
+
+---
+
 **S495 (2026-04-17) — Chrome QA: orphaned components complete + 3 bug fixes**
 
 **Chrome QA verified this session (all 9 remaining orphaned components):**
@@ -551,6 +563,8 @@ Files (7):
 
 ## Recent Sessions
 
+- **S496 (2026-04-17):** P0 nav freeze fixed (useShopperCart cross-instance infinite loop — 5 instances, JSON equality guard added). P1 "Sale location not found" fixed (create-sale.tsx was discarding lat/lng from autocomplete selection). shopperCredits DROP COLUMN migration confirmed applied. 2 files.
+- **S495 (2026-04-17):** 9 orphaned components Chrome-verified. 3 wiring bugs fixed: BoostBadge (discoveryService missing boost lookup), RankUpModal (setShowRankUpModal never called → useEffect added), DowngradePreviewModal (setShowDowngradePreview never called → button added). 3 files.
 - **S491 (2026-04-16):** Admin reports bug fix (low-confidence, Chrome QA needed). eBay push quota wired (schema + migration + controller). 4 CRITICAL/HIGH security fixes: XP cap enforcement (3 files), referral atomicity (tx + service), grace period blocking (requireTier), payment dedup fraudSuspect activation. DB integrity verified clean. Orphaned pages audit: 78/170 pages have no nav entry, key decisions surfaced. 11 files.
 - **S490 (2026-04-16):** Video + landing + logo polish. organizer-video-ad.html: white checkmarks, font sizes, scene nav (dots + arrows), wrapper height fix, empire-style lamp SVG, return beam direction fix, eBay button color, headline/badge line breaks, label brightness, bullet timing fix, CTA copy. video.html: padding, features copy, per-sale offer copy, badge. Layout.tsx + _document.tsx: two-tone Montserrat logo in nav + mobile drawer. 4 files.
 - **S489 (2026-04-16):** Security gates for "First Sale Free PRO" (8 of 9): email verify, first-sale tracking, IP rate limit, AI quota, card dedup, eBay push quota constants, temporal fraud detection. Graceful tier degradation system: 7-day grace period, GRACE_LOCKED status, DowngradePreviewModal, dashboard banner, daily cron. 2 migrations applied. 27 files across 4 commits. All green.
@@ -610,13 +624,13 @@ Files (7):
 
 ## Next Session Priority
 
-*(Updated by daily-friction-audit AUTO-DISPATCH → findasale-records, 2026-04-17. S491 push + migration confirmed complete; S494+S495 work now reflects the pending Patrick action.)*
-
-**1. Push S494 + S495 code (first thing — Patrick action):**
+**1. Push S494 + S495 + S496 code (first thing — Patrick action):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
+git add packages/frontend/hooks/useShopperCart.ts
+git add packages/frontend/pages/organizer/create-sale.tsx
 git add packages/frontend/components/EbayCategoryPicker.tsx
 git add packages/frontend/pages/organizer/edit-item/[id].tsx
 git add packages/frontend/pages/organizer/command-center.tsx
@@ -626,7 +640,7 @@ git add packages/frontend/components/SearchSuggestions.tsx
 git add packages/backend/src/services/discoveryService.ts
 git add packages/frontend/pages/shopper/loyalty.tsx
 git add packages/frontend/pages/organizer/subscription.tsx
-git commit -m "fix: orphaned component QA + BoostBadge feed wiring + RankUpModal trigger + DowngradePreviewModal trigger"
+git commit -m "fix: nav freeze (useShopperCart cross-instance loop) + geocoding on create sale + orphaned component wiring"
 .\push.ps1
 ```
 
