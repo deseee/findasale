@@ -1,10 +1,10 @@
-// Permanent redirect — canonical pricing/subscription page is /organizer/subscription (S491)
-import { GetServerSideProps } from 'next';
+// /organizer/pricing redirects to canonical /pricing (S492 — corrected S491 mistake)
+import type { GetServerSideProps } from 'next';
 
 export const getServerSideProps: GetServerSideProps = async () => {
   return {
     redirect: {
-      destination: '/organizer/subscription',
+      destination: '/pricing',
       permanent: true,
     },
   };
