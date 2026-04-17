@@ -3355,7 +3355,12 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
 
       const enrichSingleItem = async (item: typeof itemsToEnrich[0]): Promise<void> => {
         const itemId = item.ebayListingId!;
-        const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${itemId}</ItemID><OutputSelector>Description</OutputSelector><OutputSelector>ItemSpecifics</OutputSelector><OutputSelector>PictureDetails</OutputSelector><OutputSelector>ConditionID</OutputSelector><OutputSelector>PrimaryCategory</OutputSelector></GetItemRequest>`;
+        // Skip items where ebayListingId is not a real eBay numeric ItemID (e.g. FAS-* internal IDs)
+        if (!/^\d+$/.test(itemId)) {
+          console.warn(`[eBay Enrich] Skipping ${itemId} — not a numeric eBay ItemID`);
+          return;
+        }
+        const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${itemId}</ItemID><OutputSelector>Description</OutputSelector><OutputSelector>ConditionDescription</OutputSelector><OutputSelector>ItemSpecifics</OutputSelector><OutputSelector>PictureDetails</OutputSelector><OutputSelector>ConditionID</OutputSelector><OutputSelector>PrimaryCategory</OutputSelector></GetItemRequest>`;
         try {
           const getItemHeaders: Record<string, string> = {
             'X-EBAY-API-CALL-NAME': 'GetItem',
@@ -3383,7 +3388,10 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             .replace(/\s+/g, ' ')
             .trim()
             .slice(0, 2000);
-          if (descClean) backfill.description = descClean;
+          // Fall back to ConditionDescription if main description is template-only (strips to empty)
+          const conditionDesc = (xmlVal(itemBlock, 'ConditionDescription') || '').trim().slice(0, 2000);
+          const finalDesc = descClean || conditionDesc;
+          if (finalDesc) backfill.description = finalDesc;
           const pictureUrls = xmlAll(itemBlock, 'PictureURL');
           if (pictureUrls.length > 0) backfill.photoUrls = pictureUrls;
           if (!item.conditionGrade) {
