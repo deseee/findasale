@@ -149,7 +149,6 @@ import saleWaitlistRoutes from './routes/saleWaitlist';         // Sale Waitlist
 import treasureHuntRoutes from './routes/treasureHunt';         // Daily Treasure Hunt
 import trendingRoutes from './routes/trending';                 // Trending Items & Sales
 import unsubscribeRoutes from './routes/unsubscribe';           // Unsubscribe / Preferences
-import shopperReferralRoutes from './routes/shopperReferral';   // Feature #7: Shopper Referral Rewards
 import earningsPdfRoutes from './routes/earningsPdf';           // Payout PDF Export
 import abTestRoutes from './routes/abTest';                     // A/B Testing Infrastructure
 import feedbackRoutes from './routes/feedback';                 // User Feedback
@@ -494,7 +493,6 @@ app.use('/api/sale-waitlist', saleWaitlistRoutes);                     // Sale W
 app.use('/api/treasure-hunt', treasureHuntRoutes);                     // Daily Treasure Hunt
 app.use('/api/trending', trendingRoutes);                              // Trending Items & Sales
 app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubscribe / Preferences
-app.use('/api/shopper-referral', shopperReferralRoutes);               // Feature #7: Shopper Referral Rewards
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)
 app.use('/api/ab', abTestRoutes);                                      // A/B Testing Infrastructure
 app.use('/api/feedback', feedbackRoutes);                              // User Feedback
