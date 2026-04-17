@@ -679,6 +679,7 @@ export interface SaleDescriptionInput {
   tags?: string[];
   city?: string;
   isAuctionSale?: boolean;
+  saleType?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -699,21 +700,32 @@ export async function generateSaleDescription(input: SaleDescriptionInput): Prom
   }
 
   try {
-    const { title, tags = [], city = regionConfig.city, isAuctionSale = false, startDate, endDate } = input;
+    const { title, tags = [], city = regionConfig.city, isAuctionSale = false, saleType, startDate, endDate } = input;
 
     const tagContext = tags.length > 0 ? `Featured categories/items: ${tags.join(', ')}.` : '';
     const dateContext =
       startDate && endDate
         ? `Sale runs ${new Date(startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} through ${new Date(endDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`
         : '';
-    const auctionContext = isAuctionSale ? 'This is an auction-style sale.' : '';
 
-    const prompt = `You are helping an estate sale organizer in ${city}, ${regionConfig.state} write a compelling 2–3 sentence listing description.
+    const saleTypeLabels: Record<string, string> = {
+      ESTATE: 'estate sale',
+      YARD: 'yard sale',
+      AUCTION: 'auction',
+      FLEA_MARKET: 'flea market',
+      CONSIGNMENT: 'consignment sale',
+      CHARITY: 'charity sale',
+      BUSINESS_CORPORATE: 'business liquidation sale',
+    };
+    const resolvedType = saleType
+      ? (saleTypeLabels[saleType] ?? 'sale')
+      : isAuctionSale ? 'auction' : 'sale';
+
+    const prompt = `You are helping a ${resolvedType} organizer in ${city}, ${regionConfig.state} write a compelling 2–3 sentence listing description.
 
 Sale title: "${title}"
 ${tagContext}
 ${dateContext}
-${auctionContext}
 
 Write a friendly, inviting description that shoppers will see on the listing. Use a warm tone. Mention the city if relevant. Do NOT make up specific items or prices — only reference what's provided. Respond with just the description text, no quotes, no explanation.`;
 
