@@ -83,44 +83,38 @@ export const geocodeAddress = async (req: Request, res: Response) => {
       });
     }
 
-    // Strategy 3: Loose city+state+zip query for partial candidates
+    // Strategy 3: US Census Geocoder (authoritative for US addresses)
     if (!response.data || response.data.length === 0) {
-      // Wait for rate limit before third attempt
-      const now3 = Date.now();
-      const timeSinceLastRequest3 = now3 - lastRequestTime;
-      if (timeSinceLastRequest3 < MIN_REQUEST_INTERVAL_MS) {
-        await sleep(MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest3);
-      }
-      lastRequestTime = Date.now();
-
       try {
-        const looseCityQuery = `${city}, ${state}${zip ? ' ' + zip : ''}`;
-        const looseSuggestions = await axios.get('https://nominatim.openstreetmap.org/search', {
+        const censusBenchmark = 'Public_AR_Current';
+        const censusResponse = await axios.get('https://geocoding.geo.census.gov/geocoder/locations/address', {
           params: {
-            q: looseCityQuery,
+            street: address,
+            city: city,
+            state: state,
+            zip: zip || undefined,
+            benchmark: censusBenchmark,
             format: 'json',
-            limit: 3,
-            countrycodes: 'us',
-            addressdetails: 1,
-          },
-          headers: {
-            'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)',
           },
           timeout: 8000,
         });
 
-        if (looseSuggestions.data && looseSuggestions.data.length > 0) {
-          // Return suggestions with HTTP 200
-          const suggestions = looseSuggestions.data.map((result: any) => ({
-            lat: result.lat,
-            lng: result.lon,
-            displayName: result.display_name,
-          }));
-          return res.json({ suggestions });
+        if (censusResponse.data?.result?.addressMatches && censusResponse.data.result.addressMatches.length > 0) {
+          const match = censusResponse.data.result.addressMatches[0];
+          const geoResult: GeoResult = {
+            lat: match.coordinates.y,
+            lng: match.coordinates.x,
+            displayName: match.matchedAddress,
+            cachedAt: Date.now(),
+          };
+
+          geocodeCache.set(cacheKey, geoResult);
+
+          return res.json({ lat: geoResult.lat, lng: geoResult.lng, displayName: geoResult.displayName, fromCache: false });
         }
-      } catch (fallbackError) {
-        console.error('Strategy 3 fallback error:', fallbackError);
-        // Continue to 404 if fallback fails
+      } catch (censuError) {
+        console.error('Strategy 3 Census Geocoder error:', censuError);
+        // Continue to 404 if Census fails
       }
 
       // All three strategies failed

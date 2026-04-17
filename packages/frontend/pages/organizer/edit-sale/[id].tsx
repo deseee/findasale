@@ -178,7 +178,7 @@ const EditSalePage = () => {
         attemptGeocode(sale.address, sale.city, sale.state, sale.zip).then(async (coords) => {
           if (coords) {
             try {
-              await api.patch(`/sales/${id}`, { lat: coords.lat, lng: coords.lng });
+              await api.patch(`/sales/${id}/coordinates`, { lat: coords.lat, lng: coords.lng });
               refetch();
             } catch {
               setGeocodingAttempted(true);
@@ -751,7 +751,7 @@ const EditSalePage = () => {
                         async (pos) => {
                           try {
                             const { latitude: lat, longitude: lng } = pos.coords;
-                            await api.patch(`/sales/${id}`, { lat, lng });
+                            await api.patch(`/sales/${id}/coordinates`, { lat, lng });
                             showToast('Location set', 'success');
                             setGeocodingAttempted(false);
                             refetch();
@@ -800,7 +800,7 @@ const EditSalePage = () => {
                                   setIsSettingLocation(true);
                                   const lat = parseFloat(suggestion.lat);
                                   const lng = parseFloat(suggestion.lng);
-                                  await api.patch(`/sales/${id}`, { lat, lng });
+                                  await api.patch(`/sales/${id}/coordinates`, { lat, lng });
                                   showToast('Location set', 'success');
                                   setGeocodingAttempted(false);
                                   setSuggestions([]);

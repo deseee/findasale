@@ -67,6 +67,25 @@ router.post('/:id/generate-marketing-kit', authenticate, generateMarketingKit);
 router.post('/:id/ala-carte-checkout', authenticate, createAlaCarteCheckout); // #132: À La Carte
 router.post('/:id/cancel', authenticate, cancelSale); // #120: Sale cancellation audit
 
+// Fix 1: Dedicated coordinates endpoint (must come before generic /:id routes)
+router.patch('/:id/coordinates', authenticate, requireOrganizer, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { lat, lng } = req.body;
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      return res.status(400).json({ message: 'lat and lng must be numbers' });
+    }
+    // Verify this organizer owns the sale
+    const sale = await prisma.sale.findFirst({ where: { id, organizerId: req.user!.id } });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    const updated = await prisma.sale.update({ where: { id }, data: { lat, lng } });
+    return res.json({ lat: updated.lat, lng: updated.lng });
+  } catch (err: any) {
+    console.error('Coordinates update error:', err);
+    return res.status(500).json({ message: 'Failed to update coordinates' });
+  }
+});
+
 // Generic /:id routes (last so they don't intercept specific subroutes)
 router.get('/:id', getSale);
 router.put('/:id', authenticate, updateSale);
