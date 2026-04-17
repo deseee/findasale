@@ -658,7 +658,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -731,6 +731,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (auctionEndTime !== undefined) updateData.auctionEndTime = auctionEndTime ? new Date(auctionEndTime) : null;
     if (status !== undefined) updateData.status = status;
     if (category !== undefined) updateData.category = category || null;
+    if (ebayCategoryId !== undefined) updateData.ebayCategoryId = ebayCategoryId || null;
+    if (ebayCategoryName !== undefined) updateData.ebayCategoryName = ebayCategoryName || null;
     if (condition !== undefined) updateData.condition = condition || null;
     if (conditionGrade !== undefined) updateData.conditionGrade = conditionGrade || null; // #145: Persist condition grade
     if (tags !== undefined) updateData.tags = tags; // #145: Persist tags from review page
