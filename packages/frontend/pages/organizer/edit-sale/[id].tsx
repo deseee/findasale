@@ -19,6 +19,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import PickupSlotManager from '../../../components/PickupSlotManager';
 import EntrancePinPicker from '../../../components/EntrancePinPicker'; // Feature 35: Front Door Locator
+import ManualLocationPicker from '../../../components/ManualLocationPicker'; // Manual location fallback when geocoding fails
 import Skeleton from '../../../components/Skeleton';
 import PublishCelebration from '../../../components/PublishCelebration';
 import AlaCartePublishModal from '../../../components/AlaCartePublishModal'; // #132: À La Carte
@@ -708,20 +709,29 @@ const EditSalePage = () => {
                 </p>
               </div>
             ) : geocodingAttempted ? (
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded">
-                <p className="text-yellow-800 dark:text-yellow-200 font-semibold">
-                  Coordinates not found — your sale can still be saved, but it may not appear on the map.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
+              <div>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded mb-4">
+                  <p className="text-yellow-800 dark:text-yellow-200 font-semibold">
+                    Coordinates not found — set your location manually on the map below.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeocodingAttempted(false);
+                      attemptGeocode(formData.address, formData.city, formData.state, formData.zip);
+                    }}
+                    className="text-sm bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded mt-3"
+                  >
+                    Retry Geocoding
+                  </button>
+                </div>
+                <ManualLocationPicker
+                  saleId={id as string}
+                  onLocationSet={() => {
                     setGeocodingAttempted(false);
-                    attemptGeocode(formData.address, formData.city, formData.state, formData.zip);
+                    refetch();
                   }}
-                  className="text-sm bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded mt-3"
-                >
-                  Retry
-                </button>
+                />
               </div>
             ) : null}
 
