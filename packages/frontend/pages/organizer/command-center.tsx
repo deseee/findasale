@@ -171,6 +171,102 @@ const CommandCenterPage = () => {
             </div>
           )}
 
+          {/* Technical Alerts & Team Coverage Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            {/* Technical Alerts */}
+            <div className="lg:col-span-2">
+              {data?.technicalAlerts && data.technicalAlerts.length > 0 ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Technical Alerts</h3>
+                  <div className="space-y-3">
+                    {data.technicalAlerts.map((alert) => (
+                      <Link
+                        key={`${alert.saleId}-${alert.alertType}`}
+                        href={`/organizer/sales/${alert.saleId}/manage`}
+                        className="block p-3 rounded-lg border-l-4 transition-colors hover:bg-warm-50 dark:hover:bg-gray-700"
+                        style={{
+                          borderLeftColor:
+                            alert.alertType === 'SALE_STARTING_SOON'
+                              ? '#f59e0b'
+                              : alert.alertType === 'EXPIRING_HOLDS'
+                              ? '#f59e0b'
+                              : '#ef4444',
+                          backgroundColor:
+                            alert.alertType === 'SALE_STARTING_SOON'
+                              ? '#fffbeb'
+                              : alert.alertType === 'EXPIRING_HOLDS'
+                              ? '#fffbeb'
+                              : '#fef2f2',
+                        }}
+                      >
+                        <p className={`font-semibold text-sm ${
+                          alert.alertType === 'SALE_STARTING_SOON'
+                            ? 'text-amber-900 dark:text-amber-200'
+                            : alert.alertType === 'EXPIRING_HOLDS'
+                            ? 'text-amber-900 dark:text-amber-200'
+                            : 'text-red-900 dark:text-red-200'
+                        }`}>
+                          {alert.saleTitle}
+                        </p>
+                        <p className={`text-xs mt-1 ${
+                          alert.alertType === 'SALE_STARTING_SOON'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : alert.alertType === 'EXPIRING_HOLDS'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-red-700 dark:text-red-300'
+                        }`}>
+                          {alert.detail}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 mb-3">
+                    <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <p className="text-warm-900 dark:text-gray-100 font-semibold">All systems go</p>
+                  <p className="text-warm-600 dark:text-gray-400 text-sm mt-1">No technical issues detected</p>
+                </div>
+              )}
+            </div>
+
+            {/* Team Coverage */}
+            <div>
+              {data?.teamMembers && data.teamMembers.length > 0 ? (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+                  <h3 className="text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Team Coverage</h3>
+                  <div className="space-y-3">
+                    {data.teamMembers.map((member) => (
+                      <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-sm font-semibold">
+                          {member.businessName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-warm-900 dark:text-gray-100 truncate">{member.businessName}</p>
+                          <p className="text-xs text-warm-500 dark:text-gray-400">{member.role}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 text-center">
+                  <p className="text-warm-600 dark:text-gray-400 text-sm mb-3">No workspace set up yet</p>
+                  <Link
+                    href="/organizer/workspace"
+                    className="inline-block bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Set Up Workspace
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Live Activity Feed & Weather Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
             {/* Activity Feed (spans 2 cols on lg) */}
