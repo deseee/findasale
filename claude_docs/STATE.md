@@ -155,11 +155,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
+**S491 continuation fixes:**
+- **saleController.ts boost query fixed ✅:** `boosts` was used as a Prisma include on Sale — field doesn't exist on that model. Correct fix: batch query `BoostPurchase` by `targetId IN [saleIds]` after fetching sales, build a Map, merge into response. TS2353 error resolved. Railway build unblocked.
+- **organizer/premium.tsx deleted ✅:** `export {};` stub broke Next.js build ("page without valid component"). Deleted via `git rm`.
+- **shopper/lucky-roll.tsx deleted ✅:** Patrick confirmed delete (not redirect). Replaced by early-access-cache in S449 / D-XP-002.
+
+---
+
 **Next Session — S492:**
+
+**Theme: Audit the audits — find blind spots in the agent/QA/preflight setup.**
+
+Questions to investigate:
+1. **Dev preflight gap:** The saleController boosts error passed the dev agent's TS check but failed Railway. How? The agent ran `tsc --noEmit` but the Prisma client wasn't regenerated in the VM — so `SaleInclude` didn't reflect actual schema relations. Fix: dev agents must run `npx prisma generate` before `tsc --noEmit` when their changes touch Prisma queries.
+2. **QA gate effectiveness:** 20+ features from S491 are unverified. Is the Chrome QA backlog growing faster than it's being cleared? What's the actual verified-vs-shipped ratio over the last 10 sessions?
+3. **Scheduled tasks:** Are the 3+ scheduled tasks actually running? When did they last fire? Check `mcp__scheduled-tasks__list_scheduled_tasks`.
+4. **Skills drift:** Are findasale-* skill rules (schema gate, TS check gate, removal gate) actually being followed, or are agents skipping them under compression? Review the last 5 dev agent handoffs for gate compliance.
+5. **Blind spots in setup:** What categories of errors keep recurring (Prisma relation assumptions, implicit-any, missing null checks)? Is there a pattern the preflight gates don't catch?
+6. **Memory staleness:** Several project memory entries are from S225–S296. Which are stale or contradicted by current STATE.md?
 
 **Patrick manual actions required:**
 1. Run eBay migration: `cd packages/database && $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway" && npx prisma migrate deploy && npx prisma generate`
-2. Run full push block (see push block in S491 session)
+2. Run full push block (below)
 3. Stripe Connect webhook (P2 ongoing since S421): Stripe Dashboard → Connected account events → `payment_intent.succeeded` → `/api/webhooks/stripe` → Railway `STRIPE_CONNECT_WEBHOOK_SECRET`
 4. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
 
@@ -167,8 +184,8 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 Admin reports fix, LiveFeedWidget, QuickReplyPicker, SearchSuggestions, BoostBadge, DowngradePreviewModal, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, hall-of-fame fix, pricing redirects (confirm no loop), SharePromoteModal, H-001 dark mode filters, H-002 section order, H-003 team cap copy, React Hooks violations, Scout Reveal fix.
 
 **Next work:**
+- S492 audit: dev preflight gap, QA backlog ratio, scheduled task health, skill gate compliance, recurring error patterns, memory staleness
 - Weekly audit M-001/M-002/M-003/M-004 medium findings (shopper/history table clipping, etc.)
-- `/shopper/lucky-roll` stubbed ✅ — permanent redirect to `/shopper/early-access-cache` (replaced in S449, commit b8aa04b, D-XP-002)
 - DECISIONS.md entry needed: Wishlist is canonical name (confirmed by Patrick S491)
 - Chrome QA pass on S491 batch (20+ items need verification)
 

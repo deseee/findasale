@@ -6,7 +6,7 @@
 
 ### Your actions (do these in order):
 
-**1. Run the push block (41 files):**
+**1. Run the push block (43 files — includes deletions and build fixes):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
@@ -35,7 +35,6 @@ git add packages/frontend/components/SearchFilterPanel.tsx
 git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/organizer/subscription.tsx
 git add packages/frontend/pages/organizer/pricing.tsx
-git add packages/frontend/pages/organizer/premium.tsx
 git add "packages/frontend/pages/organizer/storefront/[slug].tsx"
 git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
 git add "packages/frontend/pages/sales/[id].tsx"
@@ -43,7 +42,6 @@ git add packages/frontend/pages/shopper/crews/index.tsx
 git add packages/frontend/pages/shopper/hall-of-fame.tsx
 git add packages/frontend/pages/shopper/loyalty.tsx
 git add packages/frontend/pages/shopper/ranks.tsx
-git add packages/frontend/pages/shopper/lucky-roll.tsx
 git add packages/frontend/pages/profile.tsx
 git add "packages/frontend/pages/messages/[id].tsx"
 git add packages/frontend/pages/organizer/command-center.tsx
@@ -51,7 +49,9 @@ git add packages/frontend/pages/faq.tsx
 git add packages/frontend/pages/condition-guide.tsx
 git add packages/frontend/pages/pricing.tsx
 git add "packages/frontend/pages/organizers/[id].tsx"
-git commit -m "S491: admin reports fix, orphaned pages wired, security fixes, brand drift, H-001/H-002/H-003, Hooks violations, Scout Reveal hardened, lucky-roll redirect"
+git rm packages/frontend/pages/organizer/premium.tsx
+git rm packages/frontend/pages/shopper/lucky-roll.tsx
+git commit -m "S491: admin reports, orphaned pages, security fixes, brand drift, H-001/H-002/H-003, Hooks, Scout Reveal, boost query fix, delete premium+lucky-roll"
 .\push.ps1
 ```
 
