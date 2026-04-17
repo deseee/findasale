@@ -1061,7 +1061,7 @@ const SaleDetailPage = () => {
                         )}
                         {item.category && (
                           <span className="inline-block bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-2 py-1 rounded text-xs font-medium">
-                            {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
+                            {formatCategoryLabel(item.category)}
                           </span>
                         )}
                         {item.condition && (
