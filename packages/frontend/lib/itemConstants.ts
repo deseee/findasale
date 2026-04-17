@@ -83,7 +83,8 @@ export type Category = typeof CATEGORIES[number];
 // Decodes HTML entities and simplifies colon-separated eBay category paths
 // to just the last (most specific) segment for display purposes.
 // The raw value is preserved for filtering/data operations.
-export const formatCategoryLabel = (category: string): string => {
+export const formatCategoryLabel = (category: string | null | undefined): string => {
+  if (!category) return '';
   const decoded = category
     .replace(/&amp;/g, '&')
     .replace(/&apos;/g, "'")

@@ -666,7 +666,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 </div>
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">Category:</span>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCategoryLabel(item.category)}</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCategoryLabel(item.category) || '—'}</p>
                 </div>
               </div>
 
