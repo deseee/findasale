@@ -380,7 +380,13 @@ export async function getStaticProps(
 
     // Fetch all cities to get counts and identify state
     const citiesResponse = await fetch(`${apiBase}/sales/cities`);
-    const allCities = (await citiesResponse.json()) as Array<{ city: string; count: number }>;
+    const citiesJson = await citiesResponse.json();
+    // API returns { cities: [...] } — extract the array and normalize count field
+    const rawCities = (Array.isArray(citiesJson) ? citiesJson : citiesJson.cities ?? []) as Array<{ city: string; state?: string; activeSales?: number; count?: number }>;
+    const allCities: Array<{ city: string; count: number }> = rawCities.map((c) => ({
+      city: c.city,
+      count: c.activeSales ?? c.count ?? 0,
+    }));
 
     // Find matching city (case-insensitive)
     const cityData = allCities.find((c) => c.city.toLowerCase() === cityName.toLowerCase());
