@@ -13,6 +13,7 @@ import api from '../lib/api';
 import SaleCard from '../components/SaleCard';
 import VisualSearchButton from '../components/VisualSearchButton';
 import SearchFilterPanel, { SearchFilters } from '../components/SearchFilterPanel';
+import SearchSuggestions from '../components/SearchSuggestions';
 import EmptyState from '../components/EmptyState';
 import { SkeletonGrid } from '../components/SkeletonCards';
 // Sprint 4b — FTS item search
@@ -197,8 +198,8 @@ const SearchPage = () => {
 
       <main className="container mx-auto px-4 py-8">
         {/* Search bar */}
-        <form onSubmit={handleSearch} className="mb-8">
-          <div className="flex gap-2 max-w-2xl mx-auto">
+        <form onSubmit={handleSearch} className="mb-8 relative max-w-2xl mx-auto">
+          <div className="flex gap-2">
             <input
               name="q"
               defaultValue={q}
@@ -215,6 +216,9 @@ const SearchPage = () => {
               Search
             </button>
           </div>
+          <SearchSuggestions query={q} isOpen={!q} onSelectSuggestion={(suggestion) => {
+            router.push(`/search?q=${encodeURIComponent(suggestion)}`);
+          }} />
         </form>
 
         {/* Mobile filter panel — hidden on items tab (uses FilterSidebar drawer instead) */}

@@ -5,6 +5,7 @@ import Skeleton from './Skeleton';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import RarityBadge from './RarityBadge';
 import FavoriteButton from './FavoriteButton';
+import BoostBadge from './BoostBadge'; // Phase 2b: Boost badges
 
 // Unified item type supporting multiple surfaces
 export interface UnifiedItemCardItem {
@@ -48,6 +49,13 @@ export interface UnifiedItemCardItem {
   // Markdown pricing
   priceBeforeMarkdown?: number;
   markdownApplied?: boolean;
+
+  // Phase 2b: Boost badge
+  boost?: {
+    boostType: string;
+    expiresAt: string;
+    status: string;
+  };
 }
 
 // Legacy Item interface (deprecated, kept for backward compatibility)
@@ -74,6 +82,12 @@ interface Item {
   // Markdown pricing
   priceBeforeMarkdown?: number;
   markdownApplied?: boolean;
+  // Phase 2b: Boost badge
+  boost?: {
+    boostType: string;
+    expiresAt: string;
+    status: string;
+  };
 }
 
 export interface ItemCardProps {
@@ -258,15 +272,22 @@ const ItemCard: React.FC<ItemCardProps> = ({
             </span>
           )}
 
-          {/* Favorite count badge — top-right (trending) */}
-          {shouldShowFavoriteCount && (
+          {/* Boost badge — top-right corner (highest priority) */}
+          {item.boost && item.boost.status === 'ACTIVE' && (
+            <div className="absolute top-2 right-2">
+              <BoostBadge boostType={item.boost.boostType} size="sm" />
+            </div>
+          )}
+
+          {/* Favorite count badge — top-right (trending) — positioned below boost if present */}
+          {shouldShowFavoriteCount && !item.boost && (
             <div className="absolute top-2 right-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-xs font-semibold px-2 py-0.5 rounded-full text-warm-700 dark:text-amber-400 shadow">
               ❤️ {(item as any)._count?.favorites}
             </div>
           )}
 
           {/* Rarity badge — top-right overlay */}
-          {showRarity && item.rarity && item.rarity !== 'COMMON' && !shouldShowFavoriteCount && (
+          {showRarity && item.rarity && item.rarity !== 'COMMON' && !shouldShowFavoriteCount && !item.boost && (
             <div className="absolute top-2 right-2">
               <RarityBadge rarity={item.rarity} size="sm" />
             </div>

@@ -23,6 +23,7 @@ import StreakWidget from '@/components/StreakWidget';
 import { useMyAchievements } from '@/hooks/useAchievements';
 import { AchievementBadgesSection } from '@/components/AchievementBadgesSection';
 import { RarityBoostModal } from '@/components/RarityBoostModal';
+import RankUpModal from '@/components/RankUpModal';
 
 function LoyaltyPage() {
   const router = useRouter();
@@ -42,6 +43,8 @@ function LoyaltyPage() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [showRarityBoostModal, setShowRarityBoostModal] = useState(false);
+  const [showRankUpModal, setShowRankUpModal] = useState(false);
+  const [rankUpData, setRankUpData] = useState<{ newRank: string } | null>(null);
   const { data: achievementsData, isLoading: achievementsLoading } = useMyAchievements();
 
   useEffect(() => {
@@ -595,6 +598,17 @@ function LoyaltyPage() {
             // refetchXpProfile();
           }}
         />
+
+        {/* Rank Up Modal — shows when user ranks up */}
+        {showRankUpModal && rankUpData && (
+          <RankUpModal
+            rank={rankUpData.newRank as any}
+            onDismiss={() => {
+              setShowRankUpModal(false);
+              setRankUpData(null);
+            }}
+          />
+        )}
     </>
   );
 }

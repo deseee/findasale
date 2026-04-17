@@ -64,16 +64,32 @@ const OrganizerStorefront = () => {
         setIsLoading(true);
         setError(null);
 
-        // Fetch brand kit by slug
-        const brandResponse = await api.get(`/brand-kit/by-slug/${slug}`);
-        const brandData = brandResponse.data;
-        setBrandKit(brandData);
+        // Fetch organizer profile by customStorefrontSlug or ID
+        const orgResponse = await api.get(`/organizers/${slug}`);
+        const orgData = orgResponse.data;
 
-        // Fetch active sales for this organizer
-        const salesResponse = await api.get(`/sales?organizerId=${brandData.id}&status=PUBLISHED`, {
-          params: { limit: 50 },
-        });
-        setSales(salesResponse.data.sales || []);
+        // Map organizer data to BrandKitData format
+        const brandData: BrandKitData = {
+          id: orgData.id,
+          businessName: orgData.businessName,
+          bio: orgData.bio,
+          profilePhoto: orgData.profilePhoto,
+          website: orgData.website,
+          facebook: orgData.facebook,
+          instagram: orgData.instagram,
+          etsy: orgData.etsy,
+          brandLogoUrl: orgData.brandLogoUrl,
+          brandPrimaryColor: orgData.brandPrimaryColor,
+          brandSecondaryColor: orgData.brandSecondaryColor,
+          brandFontFamily: orgData.brandFontFamily,
+          brandBannerImageUrl: orgData.brandBannerImageUrl,
+          brandAccentColor: orgData.brandAccentColor,
+          customStorefrontSlug: orgData.customStorefrontSlug,
+          subscriptionTier: orgData.subscriptionTier || 'SIMPLE',
+        };
+
+        setBrandKit(brandData);
+        setSales(orgData.sales || []);
       } catch (err: any) {
         console.error('Failed to fetch storefront data:', err);
         setError(err.response?.data?.message || 'Storefront not found');
