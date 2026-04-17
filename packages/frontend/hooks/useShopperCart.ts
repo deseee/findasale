@@ -62,7 +62,10 @@ export const useShopperCart = (userId?: string) => {
       if (isSelfSync.current) return; // Skip: we wrote this, React state already up to date
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) setCart(JSON.parse(stored) as CartState);
+        // Use functional update with JSON comparison — if data is identical, returns the same
+        // object reference and React skips the re-render. Prevents cross-instance loops when
+        // multiple useShopperCart instances are mounted (Layout, FAB, Drawer, AvatarDropdown…).
+        if (stored) setCart(prev => JSON.stringify(prev) === stored ? prev : JSON.parse(stored) as CartState);
       } catch {}
     };
     window.addEventListener('fas_cart_sync', handleSync);
