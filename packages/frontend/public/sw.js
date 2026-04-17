@@ -3,18 +3,17 @@
  * Implements cache-first (static), network-first (API), and offline fallback strategies
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v20260417';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `images-${CACHE_VERSION}`;
 const OFFLINE_FALLBACK_URL = '/offline.html';
 
-// Files to pre-cache on install
+// Only pre-cache truly static files.
+// Do NOT list _next/static/chunks/* here — Next.js uses content-hashed
+// filenames that change every deployment, hardcoding them causes stale-bundle issues.
 const STATIC_ASSETS = [
-  '/',
   '/offline.html',
-  '/_next/static/chunks/main.js',
-  '/_next/static/chunks/webpack.js',
 ];
 
 /**
