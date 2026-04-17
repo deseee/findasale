@@ -83,8 +83,47 @@ export const geocodeAddress = async (req: Request, res: Response) => {
       });
     }
 
-    // Both strategies failed
+    // Strategy 3: Loose city+state+zip query for partial candidates
     if (!response.data || response.data.length === 0) {
+      // Wait for rate limit before third attempt
+      const now3 = Date.now();
+      const timeSinceLastRequest3 = now3 - lastRequestTime;
+      if (timeSinceLastRequest3 < MIN_REQUEST_INTERVAL_MS) {
+        await sleep(MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest3);
+      }
+      lastRequestTime = Date.now();
+
+      try {
+        const looseCityQuery = `${city}, ${state}${zip ? ' ' + zip : ''}`;
+        const looseSuggestions = await axios.get('https://nominatim.openstreetmap.org/search', {
+          params: {
+            q: looseCityQuery,
+            format: 'json',
+            limit: 3,
+            countrycodes: 'us',
+            addressdetails: 1,
+          },
+          headers: {
+            'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)',
+          },
+          timeout: 8000,
+        });
+
+        if (looseSuggestions.data && looseSuggestions.data.length > 0) {
+          // Return suggestions with HTTP 200
+          const suggestions = looseSuggestions.data.map((result: any) => ({
+            lat: result.lat,
+            lng: result.lon,
+            displayName: result.display_name,
+          }));
+          return res.json({ suggestions });
+        }
+      } catch (fallbackError) {
+        console.error('Strategy 3 fallback error:', fallbackError);
+        // Continue to 404 if fallback fails
+      }
+
+      // All three strategies failed
       return res.status(404).json({ message: 'Address not found. Please check the address and try again.' });
     }
 

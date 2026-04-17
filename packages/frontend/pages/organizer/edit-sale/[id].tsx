@@ -19,7 +19,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import PickupSlotManager from '../../../components/PickupSlotManager';
 import EntrancePinPicker from '../../../components/EntrancePinPicker'; // Feature 35: Front Door Locator
-import ManualLocationPicker from '../../../components/ManualLocationPicker'; // Manual location fallback when geocoding fails
 import Skeleton from '../../../components/Skeleton';
 import PublishCelebration from '../../../components/PublishCelebration';
 import AlaCartePublishModal from '../../../components/AlaCartePublishModal'; // #132: À La Carte
@@ -43,6 +42,8 @@ const EditSalePage = () => {
   const [geocodingAttempted, setGeocodingAttempted] = useState(false); // Track whether geocoding has been attempted
   const [isAutoGeocodingOnLoad, setIsAutoGeocodingOnLoad] = useState(false); // Track auto-geocoding in progress
   const [tierLimitError, setTierLimitError] = useState<any>(null); // Feature #249: Concurrent Sales Gate
+  const [suggestions, setSuggestions] = useState<Array<{lat: string, lng: string, displayName: string}>>([]);
+  const [isSettingLocation, setIsSettingLocation] = useState(false);
   const formInitialized = useRef(false); // prevent background refetches from resetting form
   const formDataRef = useRef<any>(null); // Capture current formData to avoid stale closure in mutations
 
@@ -112,18 +113,25 @@ const EditSalePage = () => {
     if (!address || !city || !state) return false;
 
     setIsAutoGeocodingOnLoad(true);
+    setSuggestions([]); // Clear suggestions before new attempt
     try {
       const response = await api.get('/geocode', { params: { address, city, state, zip } });
 
       if (response.data.lat && response.data.lng) {
         setIsAutoGeocodingOnLoad(false);
+        setSuggestions([]); // Clear suggestions on success
         return { lat: response.data.lat, lng: response.data.lng };
+      }
+      // Check if response contains suggestions (partial match fallback)
+      if (response.data.suggestions && response.data.suggestions.length > 0) {
+        setSuggestions(response.data.suggestions);
       }
       setIsAutoGeocodingOnLoad(false);
       setGeocodingAttempted(true);
       return false;
     } catch (error) {
       console.error('Geocoding failed:', error);
+      setSuggestions([]); // Clear suggestions on error
       setIsAutoGeocodingOnLoad(false);
       setGeocodingAttempted(true);
       return false;
@@ -712,7 +720,7 @@ const EditSalePage = () => {
               <div>
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded mb-4">
                   <p className="text-yellow-800 dark:text-yellow-200 font-semibold">
-                    Coordinates not found — set your location manually on the map below.
+                    Coordinates not found — try one of the options below.
                   </p>
                   <button
                     type="button"
@@ -725,13 +733,95 @@ const EditSalePage = () => {
                     Retry Geocoding
                   </button>
                 </div>
-                <ManualLocationPicker
-                  saleId={id as string}
-                  onLocationSet={() => {
-                    setGeocodingAttempted(false);
-                    refetch();
-                  }}
-                />
+
+                {/* Option A: Use current location button */}
+                <div className="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 font-semibold mb-3">
+                    Quick setup options:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!navigator.geolocation) {
+                        showToast('Geolocation not supported', 'error');
+                        return;
+                      }
+                      setIsSettingLocation(true);
+                      navigator.geolocation.getCurrentPosition(
+                        async (pos) => {
+                          try {
+                            const { latitude: lat, longitude: lng } = pos.coords;
+                            await api.patch(`/sales/${id}`, { lat, lng });
+                            showToast('Location set', 'success');
+                            setGeocodingAttempted(false);
+                            refetch();
+                          } catch (error: any) {
+                            showToast(error.response?.data?.message || 'Failed to save location', 'error');
+                          } finally {
+                            setIsSettingLocation(false);
+                          }
+                        },
+                        () => {
+                          showToast('Location access denied', 'error');
+                          setIsSettingLocation(false);
+                        }
+                      );
+                    }}
+                    disabled={isSettingLocation}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors mb-3"
+                  >
+                    {isSettingLocation ? 'Getting location...' : '📍 Use my current location'}
+                  </button>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Uses your device's GPS to set the sale location
+                  </p>
+                </div>
+
+                {/* Option B: Address suggestions (if available) */}
+                {suggestions.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 font-semibold mb-3">
+                      Did we find your address?
+                    </p>
+                    <div className="space-y-2">
+                      {suggestions.map((suggestion, idx) => {
+                        const truncatedName = suggestion.displayName.length > 60
+                          ? suggestion.displayName.substring(0, 60) + '...'
+                          : suggestion.displayName;
+                        return (
+                          <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              {truncatedName}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  setIsSettingLocation(true);
+                                  const lat = parseFloat(suggestion.lat);
+                                  const lng = parseFloat(suggestion.lng);
+                                  await api.patch(`/sales/${id}`, { lat, lng });
+                                  showToast('Location set', 'success');
+                                  setGeocodingAttempted(false);
+                                  setSuggestions([]);
+                                  refetch();
+                                } catch (error: any) {
+                                  showToast(error.response?.data?.message || 'Failed to save location', 'error');
+                                } finally {
+                                  setIsSettingLocation(false);
+                                }
+                              }}
+                              disabled={isSettingLocation}
+                              className="text-xs bg-amber-600 hover:bg-amber-700 text-white py-1 px-3 rounded disabled:opacity-50 transition-colors whitespace-nowrap"
+                            >
+                              Use This
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
 
