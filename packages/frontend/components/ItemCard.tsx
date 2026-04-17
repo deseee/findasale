@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getOptimizedUrl, getLqipUrl, getThumbnailUrl } from '../lib/imageUtils';
+import { formatCategoryLabel } from '../lib/itemConstants';
 import Skeleton from './Skeleton';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import RarityBadge from './RarityBadge';
@@ -330,7 +331,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
         {/* Category badge (if enabled) */}
         {showCategory && item.category && (
           <span className="inline-block bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-warm-200 text-xs px-2 py-1 rounded-full w-fit">
-            {item.category}
+            {formatCategoryLabel(item.category)}
           </span>
         )}
 

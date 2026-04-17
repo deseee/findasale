@@ -76,3 +76,21 @@ export const CATEGORIES = [
 ] as const;
 
 export type Category = typeof CATEGORIES[number];
+
+// ============================================================================
+// CATEGORY DISPLAY HELPER
+// ============================================================================
+// Decodes HTML entities and simplifies colon-separated eBay category paths
+// to just the last (most specific) segment for display purposes.
+// The raw value is preserved for filtering/data operations.
+export const formatCategoryLabel = (category: string): string => {
+  const decoded = category
+    .replace(/&amp;/g, '&')
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+  const segments = decoded.split(':').map((s) => s.trim()).filter(Boolean);
+  const label = segments[segments.length - 1] || decoded;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
