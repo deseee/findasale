@@ -7,29 +7,70 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S491 (2026-04-16) — Admin reports bug + security audit + eBay quota + orphaned pages**
+**S491 (2026-04-16) — Admin reports bug + security audit + eBay quota + orphaned pages + batch fixes**
 
-- **Admin reports "No organizers found" fix ⚠️ LOW-CONFIDENCE:** `adminReportsController.ts` — added `where: { deletedAt: null }` to sales include. Deployed to Railway. Chrome QA needed to confirm fix actually resolves the issue (the change alone shouldn't prevent organizers from appearing; root cause may be elsewhere in frontend data handling).
+- **Admin reports "No organizers found" root cause fixed ✅:** Frontend interface declared `organizers` key but backend returns `{ items, pagination }`. Line 78 `res.data.organizers ?? []` always returned `[]`. Fixed to `res.data.items ?? []` + `res.data.pagination?.total`. Also fixed `OrganizerResponse` interface.
 - **eBay push quota wired ✅:** `ebayPushesThisMonth Int @default(0)` + `ebayPushesResetAt DateTime?` added to Organizer. Migration `20260416_ebay_push_quota` created. Quota check + monthly reset wired in `ebayController.ts`. Limits: SIMPLE=10, PRO=200, TEAMS/ENT=unlimited. Migration pending Patrick run.
-- **CRITICAL: XP monthly caps now enforced ✅:** `checkMonthlyXpCap()` return value was being ignored — caps were advisory only. Now enforced silently (no error, just skips award). Fixed in `itemController.ts` (CONDITION_RATING, 50/mo), `treasureHuntQRController.ts` (TREASURE_HUNT_SCAN, 100/day), `auctionJob.ts` (AUCTION_WIN, 100/mo).
-- **CRITICAL: Referral rewards now atomic ✅:** `processReferral()` moved inside `prisma.$transaction()` in `authController.ts`. `referralService.ts` updated to accept optional tx client parameter. Prevents race-condition duplicate XP awards on concurrent registrations.
-- **HIGH: Grace period now blocks PRO/TEAMS features ✅:** `requireTier.ts` now returns 403 `GRACE_PERIOD_RESTRICTION` when organizer is in 7-day downgrade grace period and tries to access PRO/TEAMS-gated route. SIMPLE features remain accessible. Includes `graceEndAt` + `remainingDays` in response for frontend UX.
-- **HIGH: Payment dedup now activates fraudSuspect flag ✅:** `stripeController.ts` — after duplicate card fingerprint detected, sets `User.fraudSuspect = true` + logs warning. Payment still processes (flag for review, not block).
-- **DB integrity verified ✅ (psycopg2):** 0 NULL migrations, 0 FK orphans, 13 UserRoleSubscription rows correct. 103 users: 2 survivors, 9 test organizers, 91 test shoppers. Safe-to-delete: all `user@example.com` + `workandothers1@gmail.com`.
-- **Orphaned pages audit ✅:** 78 of 170 pages have no nav entry. Key missing links: `/search` (main discovery), `/organizer/pricing`, `/organizer/storefront`, `/shopper/lucky-roll`, `/shopper/crews`, `/hall-of-fame` (AvatarDropdown only, missing from Layout). Patrick decisions needed before wiring.
+- **CRITICAL: XP monthly caps now enforced ✅:** `checkMonthlyXpCap()` return value was being ignored — caps were advisory only. Now enforced silently. Fixed in `itemController.ts`, `treasureHuntQRController.ts`, `auctionJob.ts`.
+- **CRITICAL: Referral rewards now atomic ✅:** `processReferral()` inside `prisma.$transaction()` in `authController.ts`. Prevents race-condition duplicate XP awards.
+- **HIGH: Grace period blocks PRO/TEAMS features ✅:** `requireTier.ts` returns 403 `GRACE_PERIOD_RESTRICTION` for 7-day downgrade window.
+- **HIGH: FraudSuspect flag on payment dedup ✅:** `stripeController.ts` — duplicate card fingerprint sets `User.fraudSuspect = true`.
+- **Orphaned pages wired (batch 1+2) ✅:** SearchSuggestions (search page), FAQ (condition content added), BoostBadge (SaleCard + ItemCard), LiveFeedWidget (command-center), QuickReplyPicker (messages/[id]), DowngradePreviewModal (subscription), RankLevelingHint (ranks), RankUpModal (loyalty), ShopperReferralCard (profile), storefront/[slug] page rebuilt, hall-of-fame page fixed (raw fetch→api.get), hall-of-fame redirect added to next.config.js. Search link added to Layout.tsx Explore nav.
+- **Backend gap fixes ✅:** Boost data included in listSales + getItemsBySaleId API responses. `rankIncreased: boolean` added to xpService.ts return type + propagated to all XP-awarding controllers. `rankIncreased`/`newRank` added to QR scan response.
+- **Layout.tsx cleanup ✅:** My Collections → My Wishlist (title attribute line 727). Two-tone Montserrat logo (desktop + mobile, S490).
+- **Pricing redirect loop fixed ✅:** `/pricing` was → `/organizer/pricing` was → `/pricing` (loop). Both now redirect to canonical `/organizer/subscription`. `/organizer/pricing.tsx` and `/pricing.tsx` both converted to permanent server-side redirects.
+- **Deprecated stubs ✅:** `OrganizerHoldsPanel.tsx` stubbed (inferior to `/organizer/holds` page). `organizer/premium.tsx` stubbed (superseded by `/organizer/subscription`). `QuickActionsBar.tsx` stubbed (all links were `/organizer/dashboard` placeholders).
+- **SharePromoteModal P0 fixed ✅:** 3 hardcoded "estate sale" instances in share templates replaced with dynamic `saleTypeLabel`. subscription.tsx brand drift fixed (4 occurrences "estate sale or auction" → inclusive). organizers/[id].tsx 4 dark mode violations fixed.
+- **H-001 fixed ✅:** SearchFilterPanel.tsx — all filter section labels + radio labels now have `dark:text-gray-200`. Were invisible white-on-white in dark mode.
+- **H-002 fixed ✅:** sales/[id].tsx — sections reordered to match D-006. Items is now first full-width section (position 5), before Reviews and Location.
+- **H-003 fixed ✅:** subscription.tsx — "5 team members" → "Up to 12 team members" (D-007 locked at 12).
+- **React Hooks violations fixed ✅:** add-items/[saleId].tsx — 3 useMutation + 1 useEffect moved above all conditional early returns. Rules of Hooks compliant.
+- **Scout Reveal persistence verified + hardened ✅:** `scoutReveals` IS a `String[]` field on UGCPhoto — DB-persisted, no reset on restart. Fixed: null pointer exception (findFirst→findMany + null check), guard scope mismatch (was checking one photo but updating all — changed to `findMany` + `.some()` guard).
 
-**S491 Files changed (11 total):**
-- `packages/backend/src/controllers/adminReportsController.ts` — sales where deletedAt null
-- `packages/database/prisma/schema.prisma` — ebayPushesThisMonth + ebayPushesResetAt on Organizer
+**S491 Files changed (~35 total — see push block):**
+- `packages/frontend/pages/admin/reports.tsx` — key mismatch fix (res.data.items, pagination.total)
+- `packages/database/prisma/schema.prisma` — ebayPushesThisMonth + ebayPushesResetAt
 - `packages/database/prisma/migrations/20260416_ebay_push_quota/migration.sql` (NEW)
 - `packages/backend/src/controllers/ebayController.ts` — quota check + increment
-- `packages/backend/src/controllers/itemController.ts` — XP cap enforcement (CONDITION_RATING)
-- `packages/backend/src/controllers/treasureHuntQRController.ts` — XP cap (TREASURE_HUNT_SCAN)
+- `packages/backend/src/controllers/itemController.ts` — XP cap enforcement
+- `packages/backend/src/controllers/treasureHuntQRController.ts` — XP cap + rankIncreased
 - `packages/backend/src/jobs/auctionJob.ts` — XP cap (AUCTION_WIN)
 - `packages/backend/src/controllers/authController.ts` — referral inside transaction
 - `packages/backend/src/services/referralService.ts` — tx client parameter
 - `packages/backend/src/middleware/requireTier.ts` — grace period enforcement
 - `packages/backend/src/controllers/stripeController.ts` — fraudSuspect on dedup
+- `packages/backend/src/controllers/saleController.ts` — boost include in listSales
+- `packages/backend/src/controllers/xpController.ts` — rankIncreased return type + Scout Reveal null/scope fix
+- `packages/backend/src/services/xpService.ts` — rankIncreased in awardXp return
+- `packages/backend/src/controllers/treasureHuntQRController.ts` — rankIncreased/newRank in QR scan response
+- `packages/frontend/next.config.js` — hall-of-fame redirects + hall-of-fame/shopper redirect
+- `packages/frontend/components/Layout.tsx` — search link, My Wishlist title fix
+- `packages/frontend/components/SaleCard.tsx` — optional boost field + BoostBadge
+- `packages/frontend/components/ItemCard.tsx` — optional boost field + BoostBadge
+- `packages/frontend/components/OrganizerHoldsPanel.tsx` — deprecated stub
+- `packages/frontend/components/QuickActionsBar.tsx` — deprecated stub
+- `packages/frontend/components/SharePromoteModal.tsx` — 3 hardcoded "estate sale" → dynamic saleTypeLabel
+- `packages/frontend/components/SearchFilterPanel.tsx` — dark mode filter labels (H-001)
+- `packages/frontend/pages/organizer/dashboard.tsx` — QuickActionsBar removed, My Storefront link added
+- `packages/frontend/pages/organizer/subscription.tsx` — brand drift fix + "Up to 12 team members" (H-003)
+- `packages/frontend/pages/organizer/pricing.tsx` — permanent redirect → /organizer/subscription
+- `packages/frontend/pages/organizer/premium.tsx` — deprecated stub
+- `packages/frontend/pages/organizer/storefront/[slug].tsx` — rebuilt public storefront page
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx` — React Hooks violations fixed
+- `packages/frontend/pages/sales/[id].tsx` — D-006 section reorder (H-002)
+- `packages/frontend/pages/shopper/crews/index.tsx` — Coming Soon page
+- `packages/frontend/pages/shopper/hall-of-fame.tsx` — raw fetch → api.get
+- `packages/frontend/pages/shopper/loyalty.tsx` — RankUpModal wired
+- `packages/frontend/pages/shopper/ranks.tsx` — RankLevelingHint wired
+- `packages/frontend/pages/profile.tsx` — ShopperReferralCard wired
+- `packages/frontend/pages/messages/[id].tsx` — QuickReplyPicker wired
+- `packages/frontend/pages/organizer/command-center.tsx` — LiveFeedWidget wired
+- `packages/frontend/pages/organizer/subscription.tsx` — DowngradePreviewModal wired
+- `packages/frontend/pages/faq.tsx` — condition FAQs added
+- `packages/frontend/pages/condition-guide.tsx` — client-side redirect to /faq
+- `packages/frontend/pages/pricing.tsx` — permanent redirect → /organizer/subscription
+- `packages/frontend/pages/organizers/[id].tsx` — 4 dark mode violations fixed
+- `packages/frontend/pages/shopper/lucky-roll.tsx` — permanent redirect → /shopper/early-access-cache (replaced S449 D-XP-002)
 
 ---
 
@@ -114,10 +155,22 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S487:**
-- Audit Organizer Acquisition Playbook for: (1) estate sale / AI specific language, (2) any other narrowing language that excludes yard sales, auctions, flea markets, consignment. Strip and broaden. Patrick is frustrated this language keeps drifting back session after session — treat it as a hard rule not just a preference. See memory: `feedback_no_estate_ai_language.md` for the full rule.
-- Synthesis: The True Plan — single 90-day action plan (Week 1 / Month 1 / Month 2-3) with owners, tools, budgets, success metrics. No hedging.
-- Create og-image.png (1200×630) and favicon.png for the landing page — currently referenced in meta tags but not yet in `/public` or whatever serves the root.
+**Next Session — S492:**
+
+**Patrick manual actions required:**
+1. Run eBay migration: `cd packages/database && $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway" && npx prisma migrate deploy && npx prisma generate`
+2. Run full push block (see push block in S491 session)
+3. Stripe Connect webhook (P2 ongoing since S421): Stripe Dashboard → Connected account events → `payment_intent.succeeded` → `/api/webhooks/stripe` → Railway `STRIPE_CONNECT_WEBHOOK_SECRET`
+4. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
+
+**Pending Chrome QA (none browser-verified this session):**
+Admin reports fix, LiveFeedWidget, QuickReplyPicker, SearchSuggestions, BoostBadge, DowngradePreviewModal, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, hall-of-fame fix, pricing redirects (confirm no loop), SharePromoteModal, H-001 dark mode filters, H-002 section order, H-003 team cap copy, React Hooks violations, Scout Reveal fix.
+
+**Next work:**
+- Weekly audit M-001/M-002/M-003/M-004 medium findings (shopper/history table clipping, etc.)
+- `/shopper/lucky-roll` stubbed ✅ — permanent redirect to `/shopper/early-access-cache` (replaced in S449, commit b8aa04b, D-XP-002)
+- DECISIONS.md entry needed: Wishlist is canonical name (confirmed by Patrick S491)
+- Chrome QA pass on S491 batch (20+ items need verification)
 
 ---
 

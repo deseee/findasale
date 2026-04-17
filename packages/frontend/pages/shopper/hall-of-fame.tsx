@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import api from '../../lib/api';
 
 interface GrandmasterEntry {
   rank: number;
@@ -50,12 +51,8 @@ export default function HallOfFame() {
   useEffect(() => {
     const fetchHallOfFame = async () => {
       try {
-        const response = await fetch('/api/guild/hall-of-fame');
-        if (!response.ok) {
-          throw new Error('Failed to fetch Hall of Fame');
-        }
-        const json = await response.json();
-        setData(json);
+        const response = await api.get('/guild/hall-of-fame');
+        setData(response.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {

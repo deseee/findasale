@@ -1,18 +1,18 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
-## S491 Summary (2026-04-16)
+## S491 Summary (2026-04-16) — Large batch: 40+ files
 
-**Security audit fixes + eBay push quota + admin reports fix — 11 files changed, migration required.**
+**Admin reports fixed, 20 orphaned components wired, 4 security fixes, eBay quota, batch brand/audit fixes, Hooks violations, Scout Reveal hardened.**
 
-**Your actions (do these in order):**
+### Your actions (do these in order):
 
-1. Run the push block:
+**1. Run the push block (41 files):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/backend/src/controllers/adminReportsController.ts
+git add packages/frontend/pages/admin/reports.tsx
 git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260416_ebay_push_quota/migration.sql
+git add "packages/database/prisma/migrations/20260416_ebay_push_quota/migration.sql"
 git add packages/backend/src/controllers/ebayController.ts
 git add packages/backend/src/controllers/itemController.ts
 git add packages/backend/src/controllers/treasureHuntQRController.ts
@@ -21,11 +21,41 @@ git add packages/backend/src/controllers/authController.ts
 git add packages/backend/src/services/referralService.ts
 git add packages/backend/src/middleware/requireTier.ts
 git add packages/backend/src/controllers/stripeController.ts
-git commit -m "S491: admin reports fix, eBay push quota, 4 security fixes (XP caps, referral atomicity, grace period, payment dedup)"
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/xpController.ts
+git add packages/backend/src/services/xpService.ts
+git add packages/frontend/next.config.js
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/components/SaleCard.tsx
+git add packages/frontend/components/ItemCard.tsx
+git add packages/frontend/components/OrganizerHoldsPanel.tsx
+git add packages/frontend/components/QuickActionsBar.tsx
+git add packages/frontend/components/SharePromoteModal.tsx
+git add packages/frontend/components/SearchFilterPanel.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/pages/organizer/subscription.tsx
+git add packages/frontend/pages/organizer/pricing.tsx
+git add packages/frontend/pages/organizer/premium.tsx
+git add "packages/frontend/pages/organizer/storefront/[slug].tsx"
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add "packages/frontend/pages/sales/[id].tsx"
+git add packages/frontend/pages/shopper/crews/index.tsx
+git add packages/frontend/pages/shopper/hall-of-fame.tsx
+git add packages/frontend/pages/shopper/loyalty.tsx
+git add packages/frontend/pages/shopper/ranks.tsx
+git add packages/frontend/pages/shopper/lucky-roll.tsx
+git add packages/frontend/pages/profile.tsx
+git add "packages/frontend/pages/messages/[id].tsx"
+git add packages/frontend/pages/organizer/command-center.tsx
+git add packages/frontend/pages/faq.tsx
+git add packages/frontend/pages/condition-guide.tsx
+git add packages/frontend/pages/pricing.tsx
+git add "packages/frontend/pages/organizers/[id].tsx"
+git commit -m "S491: admin reports fix, orphaned pages wired, security fixes, brand drift, H-001/H-002/H-003, Hooks violations, Scout Reveal hardened, lucky-roll redirect"
 .\push.ps1
 ```
 
-2. After the push lands, run the migration (Railway DB):
+**2. Run the eBay migration (Railway DB):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -33,29 +63,37 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-3. Chrome QA (P0 — low-confidence fix): Navigate to `/admin/reports` and verify organizers appear in the list. The fix added `deletedAt: null` filtering to sales includes — root cause may be frontend-side, so visual confirmation needed before declaring this closed.
+**3. Chrome QA (P0):** Navigate to `/admin/reports` — verify organizers appear in the list. Root cause was the frontend reading `res.data.organizers` (never existed) instead of `res.data.items`. Should be fully resolved now.
 
-4. Chrome QA (P1): Register a new account to confirm the email verification gate fires without blocking existing organizers.
+### What was fixed this session:
 
-5. Chrome QA (P1): Log in as a SIMPLE-tier user and confirm no grace period banner and DowngradePreviewModal show correctly.
+**Admin reports** — frontend interface mismatch (was reading `res.data.organizers`, backend sends `res.data.items`). Should fully resolve "No organizers found."
 
-6. Pending decisions on orphaned pages (78 of 170 pages have no nav entry): `/search`, `/organizer/pricing`, `/organizer/storefront`, `/hall-of-fame`, `/shopper/lucky-roll`, `/shopper/crews`, `/condition-guide` — which of these should get nav links in the next session?
+**eBay push quota** — SIMPLE=10/month, PRO=200/month, TEAMS/ENT=unlimited. Migration required (step 2 above).
 
-**What was fixed this session:**
+**XP caps enforced** — CONDITION_RATING, TREASURE_HUNT_SCAN, AUCTION_WIN now silently skip if daily/monthly cap exceeded.
 
-Admin reports — added `where: { deletedAt: null }` to organizer query in `getOrganizerPerformance`. LOW-CONFIDENCE — needs Chrome confirmation.
+**Referral atomicity** — `processReferral()` inside `prisma.$transaction()`. No more orphaned users from race conditions.
 
-eBay push quota — SIMPLE=10/month, PRO=200/month, TEAMS/ENT=unlimited. New schema fields `ebayPushesThisMonth` + `ebayPushesResetAt` on Organizer. Migration required (step 2 above).
+**Grace period enforcement** — downgraded organizers in 7-day window get 403 for PRO+ features.
 
-XP caps — CONDITION_RATING (50 XP/month), TREASURE_HUNT_SCAN (100 XP/day), AUCTION_WIN (100 XP/month) all now silently skip if cap exceeded. Prevents XP farming.
+**Payment dedup** — duplicate card fingerprint → `fraudSuspect = true` set for manual review.
 
-Referral atomicity — `processReferral()` now runs inside the user-creation transaction. Orphaned users from failed referral writes are now impossible.
+**20 orphaned pages/components wired:** SearchSuggestions, BoostBadge, LiveFeedWidget, QuickReplyPicker, DowngradePreviewModal, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront slug page rebuilt, hall-of-fame fetch fixed, hall-of-fame redirects added.
 
-Grace period enforcement — downgraded users in grace period now get 403 `GRACE_PERIOD_RESTRICTION` for PRO+ features instead of full access. SIMPLE features remain open.
+**SharePromoteModal P0 (3rd week!) fixed** — "estate sale" in 3 share templates → dynamic label. subscription.tsx brand drift fixed (4 instances). organizers/[id].tsx 4 dark mode violations fixed.
 
-Payment dedup flag — duplicate card fingerprint detected → `User.fraudSuspect = true` set for review. Payment not blocked, just flagged.
+**H-001/H-002/H-003 all fixed** — search filter dark mode, sale detail section order (Items first), Teams "Up to 12 team members."
 
-**Also this session:** DB integrity confirmed clean (0 NULL migrations, 0 FK orphans). Seed accounts identified for deletion after Chrome QA.
+**React Hooks violations fixed** — add-items/[saleId].tsx: 3 useMutation + 1 useEffect moved above conditional returns.
+
+**Scout Reveal hardened** — `scoutReveals` is DB-persisted (no bug), but fixed null pointer exception + guard scope mismatch (was checking 1 photo, updating all).
+
+**Pricing redirect loop fixed** — `/pricing` ↔ `/organizer/pricing` were pointing at each other. Both now point directly to `/organizer/subscription`.
+
+**Deprecated stubs** — OrganizerHoldsPanel, QuickActionsBar, organizer/premium.tsx (all inferior/unused versions of existing features).
+
+**Lucky-roll resolved** — `/shopper/lucky-roll` was replaced in S449 (commit b8aa04b, D-XP-002) by `/shopper/early-access-cache`. Stubbed as permanent redirect to early-access-cache.
 
 ---
 

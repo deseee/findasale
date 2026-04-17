@@ -129,7 +129,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     <div className="space-y-6">
       {/* Price Range */}
       <div>
-        <h3 className="font-semibold text-warm-900 mb-3">Price Range</h3>
+        <h3 className="font-semibold text-warm-900 dark:text-gray-200 mb-3">Price Range</h3>
         <div className="flex gap-2">
           <input
             type="number"
@@ -152,7 +152,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
 
       {/* Condition */}
       <div>
-        <h3 className="font-semibold text-warm-900 mb-3">Condition</h3>
+        <h3 className="font-semibold text-warm-900 dark:text-gray-200 mb-3">Condition</h3>
         <select
           value={filters.condition}
           onChange={handleConditionChange}
@@ -168,7 +168,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
 
       {/* Category */}
       <div>
-        <h3 className="font-semibold text-warm-900 mb-3">Category</h3>
+        <h3 className="font-semibold text-warm-900 dark:text-gray-200 mb-3">Category</h3>
         <select
           value={filters.category}
           onChange={handleCategoryChange}
@@ -185,7 +185,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
 
       {/* Sale Status */}
       <div>
-        <h3 className="font-semibold text-warm-900 mb-3">Sale Status</h3>
+        <h3 className="font-semibold text-warm-900 dark:text-gray-200 mb-3">Sale Status</h3>
         <div className="space-y-2">
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -195,7 +195,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
               onChange={() => handleSaleStatusChange('all')}
               className="w-4 h-4"
             />
-            <span className="text-sm text-warm-900">All Sales</span>
+            <span className="text-sm text-warm-900 dark:text-gray-200">All Sales</span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -205,7 +205,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
               onChange={() => handleSaleStatusChange('active')}
               className="w-4 h-4"
             />
-            <span className="text-sm text-warm-900">Active Now</span>
+            <span className="text-sm text-warm-900 dark:text-gray-200">Active Now</span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -215,14 +215,14 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
               onChange={() => handleSaleStatusChange('upcoming')}
               className="w-4 h-4"
             />
-            <span className="text-sm text-warm-900">Upcoming</span>
+            <span className="text-sm text-warm-900 dark:text-gray-200">Upcoming</span>
           </label>
         </div>
       </div>
 
       {/* Sort */}
       <div>
-        <h3 className="font-semibold text-warm-900 mb-3">Sort By</h3>
+        <h3 className="font-semibold text-warm-900 dark:text-gray-200 mb-3">Sort By</h3>
         <select
           value={filters.sortBy}
           onChange={handleSortChange}

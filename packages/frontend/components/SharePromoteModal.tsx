@@ -96,7 +96,7 @@ Find amazing deals on quality items! ${itemCount ? `We have ${itemCount}+ items`
 📅 ${startDate} - ${endDate}
 🕐 ${time}
 
-${sale.tags && sale.tags.length > 0 ? `#${sale.tags.join(' #')} ` : ''}#LocalSales #EstateSale #Bargains #ShoppingLocal
+${sale.tags && sale.tags.length > 0 ? `#${sale.tags.join(' #')} ` : ''}#LocalSales #${saleTypeLabel.replace(/\s+/g, '')} #Bargains #ShoppingLocal
 
 Don't miss out! Visit us today.`,
     },
@@ -112,7 +112,7 @@ LOCATION: ${address}
 
 HIGHLIGHTS:
 • ${itemCount ? `${itemCount}+ quality items` : 'Wide selection of items'}
-• Estate quality merchandise
+• Quality merchandise
 • Unbeatable prices
 • First come, first served
 ${sale.description ? `• ${sale.description.substring(0, 60)}...` : ''}
@@ -173,7 +173,7 @@ It's running from ${fullStartDate} through ${fullEndDate}, starting at ${time}.
 
 📍 Location: ${address}
 
-They've got ${itemCount ? `${itemCount}+ items` : 'a lot of items'} available, so if you're into estate sales or looking for good deals, it's definitely worth checking out!
+They've got ${itemCount ? `${itemCount}+ items` : 'a lot of items'} available, so if you're into ${saleTypeLabel}s or looking for good deals, it's definitely worth checking out!
 
 ${sale.tags && sale.tags.length > 0 ? `They specialize in ${sale.tags.join(', ')}.
 

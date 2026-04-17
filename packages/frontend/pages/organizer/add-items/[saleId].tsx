@@ -507,21 +507,66 @@ const AddItemsDetailPage = () => {
     itemCountRef.current = items.length;
   }, [items.length, showSurvey]);
 
-  // Early returns after all hooks
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
+  // Validate saleId on mount and when router is ready
+  useEffect(() => {
+    if (!router.isReady) return;
 
-  // P1-A: Loading guard — don't render if saleId is falsy
-  if (!saleId) {
-    return null;
-  }
+    const saleIdParam = router.query.saleId;
+    if (!saleIdParam || typeof saleIdParam !== 'string' || saleIdParam.trim() === '') {
+      showToast('Sale not found', 'error');
+      router.replace('/organizer/dashboard');
+    }
+  }, [router.isReady, router.query.saleId, router, showToast]);
 
-  const publishedCount = items.filter((i: any) => computeDraftStatus(i) === 'PUBLISHED').length;
-  const unpublishedCount = items.filter((i: any) => computeDraftStatus(i) !== 'PUBLISHED').length;
-  const draftCount = items.filter((i: any) => computeDraftStatus(i) === 'DRAFT').length;
+  // Refetch items when returning from edit-item page (ensures sort order is fresh)
+  useEffect(() => {
+    const handleFocus = () => {
+      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [saleId, queryClient]);
 
+  // Polling for draft status updates
+  useEffect(() => {
+    const draftItems = rapidItems.filter(
+      (i) => i.draftStatus === 'DRAFT' && !i.aiError && !i.id.startsWith('temp-')
+    );
+    if (draftItems.length === 0 || aiPaused) return;
+
+    let retries = 0;
+    const MAX_RETRIES = 10;
+
+    const interval = setInterval(async () => {
+      for (const item of draftItems) {
+        try {
+          const res = await api.get(`/items/${item.id}/draft-status`);
+          const data = res.data;
+          if (data.draftStatus !== 'DRAFT') {
+            setRapidItems((prev) =>
+              prev.map((i) =>
+                i.id !== item.id ? i :
+                { ...i, ...data, thumbnailUrl: i.thumbnailUrl || data.thumbnailUrl }
+              )
+            );
+          }
+        } catch (e) {
+          // If 404, stop retrying after MAX_RETRIES (item may have been deleted)
+          if ((e as any).response?.status === 404) {
+            retries++;
+            if (retries >= MAX_RETRIES) {
+              clearInterval(interval);
+              return;
+            }
+          }
+        }
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [rapidItems, aiPaused]);
+
+  // HOOKS RULE: All mutations must be called unconditionally before any early returns
   const createMutation = useMutation({
     mutationFn: async () => {
       const photoUrls = formData.photoUrls;
@@ -664,6 +709,21 @@ const AddItemsDetailPage = () => {
     },
     onSettled: () => { inMutationFlight.current = false; },
   });
+
+  // Early returns after all hooks and mutations
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
+
+  // P1-A: Loading guard — don't render if saleId is falsy
+  if (!saleId) {
+    return null;
+  }
+
+  const publishedCount = items.filter((i: any) => computeDraftStatus(i) === 'PUBLISHED').length;
+  const unpublishedCount = items.filter((i: any) => computeDraftStatus(i) !== 'PUBLISHED').length;
+  const draftCount = items.filter((i: any) => computeDraftStatus(i) === 'DRAFT').length;
 
   const handlePhotoUpload = (urls: string[]) => {
     setFormData((prev) => ({
@@ -1288,65 +1348,6 @@ const AddItemsDetailPage = () => {
   const handleDeleteDraft = async (itemId: string) => {
     setRapidItems((prev) => prev.filter((i) => i.id !== itemId));
   };
-
-  // Validate saleId on mount and when router is ready
-  useEffect(() => {
-    if (!router.isReady) return;
-
-    const saleIdParam = router.query.saleId;
-    if (!saleIdParam || typeof saleIdParam !== 'string' || saleIdParam.trim() === '') {
-      showToast('Sale not found', 'error');
-      router.replace('/organizer/dashboard');
-    }
-  }, [router.isReady, router.query.saleId, router, showToast]);
-
-  // Refetch items when returning from edit-item page (ensures sort order is fresh)
-  useEffect(() => {
-    const handleFocus = () => {
-      queryClient.invalidateQueries({ queryKey: ['items', saleId] });
-    };
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [saleId, queryClient]);
-
-  // Polling for draft status updates
-  useEffect(() => {
-    const draftItems = rapidItems.filter(
-      (i) => i.draftStatus === 'DRAFT' && !i.aiError && !i.id.startsWith('temp-')
-    );
-    if (draftItems.length === 0 || aiPaused) return;
-
-    let retries = 0;
-    const MAX_RETRIES = 10;
-
-    const interval = setInterval(async () => {
-      for (const item of draftItems) {
-        try {
-          const res = await api.get(`/items/${item.id}/draft-status`);
-          const data = res.data;
-          if (data.draftStatus !== 'DRAFT') {
-            setRapidItems((prev) =>
-              prev.map((i) =>
-                i.id !== item.id ? i :
-                { ...i, ...data, thumbnailUrl: i.thumbnailUrl || data.thumbnailUrl }
-              )
-            );
-          }
-        } catch (e) {
-          // If 404, stop retrying after MAX_RETRIES (item may have been deleted)
-          if ((e as any).response?.status === 404) {
-            retries++;
-            if (retries >= MAX_RETRIES) {
-              clearInterval(interval);
-              return;
-            }
-          }
-        }
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [rapidItems, aiPaused]);
 
   if (authLoading) {
     return (

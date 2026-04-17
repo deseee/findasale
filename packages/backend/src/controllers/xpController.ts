@@ -278,21 +278,31 @@ router.post(
         return res.status(404).json({ error: 'Item not found' });
       }
 
-      // Check if user has already revealed this item
-      const ugcPhoto = await prisma.uGCPhoto.findFirst({
+      // Check if user has already revealed this item (check ALL photos for the item)
+      const ugcPhotos = await prisma.uGCPhoto.findMany({
         where: {
           itemId: itemId,
           isHaulPost: false, // Only check actual items, not haul posts
         },
       });
 
-      if (ugcPhoto && ugcPhoto.scoutReveals.includes(userId)) {
+      // If no photos exist for this item, return 404
+      if (ugcPhotos.length === 0) {
+        return res.status(404).json({ error: 'No photos found for this item' });
+      }
+
+      // Check if user has already revealed this item (across any photo for the item)
+      const userHasRevealed = ugcPhotos.some((photo: any) =>
+        photo.scoutReveals.includes(userId)
+      );
+
+      if (userHasRevealed) {
         return res.status(400).json({ error: 'You have already revealed this item' });
       }
 
-      // P0 Exploit Fix: Check spendable XP
+      // P0 Exploit Fix: Check spendable XP (5 XP for scout reveal)
       const spendable = await getSpendableXp(userId);
-      if (spendable < XP_SINKS.RARITY_BOOST) { // Using RARITY_BOOST as placeholder for 5 XP
+      if (spendable < 5) {
         return res.status(400).json({
           error: 'Insufficient spendable XP. You need 5 XP.',
           required: 5,
