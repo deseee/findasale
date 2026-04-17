@@ -15,21 +15,23 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 - **✅ Command Center layout** — all 4 stat cards visible, no right-edge clip; "All systems go" compact (not giant box); Team Coverage names truncate cleanly. `lg:grid-cols-2 gap-6` + `overflow-x-hidden`.
 - **✅ H-001 COMPLETE** — SearchFilterPanel: section labels fixed (S491), select inputs (Condition/Category/Sort By) dark mode variants added this session (`dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600`).
 - **✅ H-002 CLEARED** — False flag. "About" is inside the photo grid's right column, not a standalone full-width section. Items at line 898 IS the first full-width section. No fix needed.
+- **✅ Workspace layout P2 CLEARED** — False positive from dual-monitor Chrome window spanning 1244px. At correct 1440px viewport: Settings button, Send button, Workspace ID card all fully visible. No overflow.
+- **✅ SearchFilterPanel selects dark mode verified** — Condition/Category/Sort By all render `dark:bg-gray-700` in dark mode. H-001 complete.
 
 **S493 verified (carried forward):**
 - Feature #294 P0 save bug ✅ | Workspace chat+tasks ✅ | Subscription ✅ | Add-items no crash ✅ | Admin reports ✅ | Hall-of-fame ✅
 
-**S494 Files changed (5, pushed green):**
+**S494 Files changed (7, push pending):**
 - `packages/frontend/components/EbayCategoryPicker.tsx` — `ebayCategoryName` prop + `selectedLeaf` state + confirmation chip + × clear
 - `packages/frontend/pages/organizer/edit-item/[id].tsx` — added `ebayCategoryName={formData.ebayCategoryName}` prop
 - `packages/frontend/pages/organizer/command-center.tsx` — `lg:grid-cols-2 gap-6`, `overflow-x-hidden`, compact alerts empty state
 - `packages/frontend/pages/city/[city].tsx` — `getStaticProps` response parsing fix (`citiesJson.cities ?? []` + `activeSales→count` map)
-- `packages/frontend/components/SearchFilterPanel.tsx` — dark mode variants on all 3 `<select>` inputs
+- `packages/frontend/components/SearchFilterPanel.tsx` — dark mode on 3 selects (S494 main push) + Price Range inputs: `min-w-0` overflow fix + dark mode (this session)
+- `packages/frontend/components/SearchSuggestions.tsx` — dark mode: container, section headers, buttons, category links
+- `claude_docs/strategy/roadmap.md` — v109 update: city pages ✅, TEAMS workspace ✅, command center ✅, eBay picker notes updated
 
 **Pending Chrome QA (sequential, one at a time):**
-- Workspace layout P2 — Settings button / Send button / ID card right-edge overflow (same overflow-x-hidden pattern)
-- H-001 SearchFilterPanel select dark mode — needs browser verification in dark mode
-- Remaining orphaned component QA: LiveFeedWidget (command-center), QuickReplyPicker (messages/[id]), SearchSuggestions, BoostBadge, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, SharePromoteModal, DowngradePreviewModal
+- Remaining orphaned component QA: LiveFeedWidget (command-center), QuickReplyPicker (messages/[id]), BoostBadge, RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page, SharePromoteModal, DowngradePreviewModal
 
 ---
 

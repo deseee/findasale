@@ -1,27 +1,34 @@
 # Patrick's Dashboard — Week of April 14, 2026
 
-## S494 Summary (2026-04-16) — QA verified: city page, eBay chip, command center, dark mode fixes
+## S494 Summary (2026-04-16) — QA verified + dark mode + overflow fixes
 
-**All 5 fixes confirmed live in browser. 0 open P0/P1 regressions from S491–S493.**
+**0 open P0/P1 regressions. 3 new visual fixes shipped.**
 
-### Your actions:
+### Your actions — push block:
 
-**1. Docs push block (STATE.md + dashboard wrap):**
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "docs: S494 wrap — QA verified city page/eBay chip/command center/dark mode, roadmap updated"
+git add packages/frontend/components/SearchSuggestions.tsx
+git add packages/frontend/components/SearchFilterPanel.tsx
+git commit -m "fix: SearchSuggestions dark mode, SearchFilterPanel price input overflow + dark mode; roadmap v109"
 .\push.ps1
 ```
 
 ### What was verified this session:
 
-- ✅ **/city/grand-rapids** — Was 404. Fixed: `getStaticProps` was misreading API response shape. Now loads with 5 Grand Rapids sales.
-- ✅ **EbayCategoryPicker chip** — After selecting a category, picker now shows a green confirmation chip (leaf name + L1 parent) that persists on reload. × button to clear and re-search.
-- ✅ **Command Center layout** — All 4 stat cards visible, no right-edge overflow. "All systems go" panel compact. Team Coverage names truncate cleanly.
-- ✅ **H-001 complete** — SearchFilterPanel Condition/Category/Sort By dropdowns now readable in dark mode.
-- ✅ **H-002 cleared** — Was a false flag. Items section is correctly the first full-width section on sale detail. No fix needed.
+- ✅ **/city/grand-rapids** — Was 404. Fixed `getStaticProps` response parsing. Loads with 5 Grand Rapids sales.
+- ✅ **EbayCategoryPicker chip** — Confirmation chip shows leaf name + L1 parent, persists on reload. × clear works.
+- ✅ **Command Center layout** — All 4 stat cards visible, no right-edge overflow. Compact alerts empty state.
+- ✅ **H-001 complete** — SearchFilterPanel Condition/Category/Sort By dropdowns render dark in dark mode.
+- ✅ **H-002 cleared** — False flag. Items is correctly the first full-width section on sale detail.
+- ✅ **Workspace P2 cleared** — False positive from dual-monitor Chrome window. At correct viewport all content fully visible.
+
+### What was fixed this session (2 files, push pending):
+
+- **SearchSuggestions.tsx** — Dropdown had `bg-white` with no dark variant. Bright white box in dark mode. Fixed: container, section headers, search buttons, category links all get dark mode classes.
+- **SearchFilterPanel.tsx (Price Range inputs)** — Min $ and Max $ inputs were overflowing the sidebar into the results thumbnails. Root cause: `flex-1` inputs missing `min-w-0`. Fixed. Also added dark mode (`dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600`) to both inputs.
 
 ---
 
