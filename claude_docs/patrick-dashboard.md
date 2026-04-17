@@ -1,17 +1,17 @@
 # Patrick's Dashboard — Week of April 17, 2026
 
-> **Daily Friction Audit (2026-04-17 auto-run):** STATE.md "Next Session" section was stale — it still listed the S491 push and migration as pending. Both confirmed complete (migration applied 2026-04-16 19:58 UTC; S492–S495 have shipped). Section rewritten to reflect post-S495 priorities. No P0/P1 issues found. Current pending action: push the S494+S495 block below.
+## S496 Summary (2026-04-17) — Nav freeze + sale creation geocoding
 
-## S495 Summary (2026-04-17) — Orphaned component QA complete + 3 bug fixes
+**2 bugs fixed. shopperCredits migration confirmed applied.**
 
-**0 open P0/P1 regressions. All 9 orphaned components verified. 3 wiring bugs fixed.**
-
-### Your actions — push S494 + S495 together:
+### Your action — push S494 + S495 + S496 together:
 
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
+git add packages/frontend/hooks/useShopperCart.ts
+git add packages/frontend/pages/organizer/create-sale.tsx
 git add packages/frontend/components/EbayCategoryPicker.tsx
 git add packages/frontend/pages/organizer/edit-item/[id].tsx
 git add packages/frontend/pages/organizer/command-center.tsx
@@ -21,9 +21,21 @@ git add packages/frontend/components/SearchSuggestions.tsx
 git add packages/backend/src/services/discoveryService.ts
 git add packages/frontend/pages/shopper/loyalty.tsx
 git add packages/frontend/pages/organizer/subscription.tsx
-git commit -m "fix: orphaned component QA + BoostBadge feed wiring + RankUpModal trigger + DowngradePreviewModal trigger"
+git commit -m "fix: nav freeze (useShopperCart cross-instance loop) + geocoding on create sale + orphaned component wiring"
 .\push.ps1
 ```
+
+### What was fixed this session:
+
+**Navigation frozen sitewide (P0)** — Clicking Login, any nav link, or any button did nothing on desktop and Android. Root cause: `useShopperCart` mounted in 5 simultaneous instances (Layout, AvatarDropdown, ShopperCartFAB, ShopperCartDrawer, sale/item pages). The sync handler was calling `setCart(JSON.parse(stored))` on every `fas_cart_sync` event — which creates a new object reference even when the data is identical. That triggered each instance's persistence effect → which dispatched another sync event → infinite cascade that kept React's scheduler permanently busy. Clicks were silently dropped. Fix: functional `setCart` with `JSON.stringify(prev) === stored` check — when data hasn't changed, returns the same `prev` reference and React skips the re-render entirely. Loop terminates. Chrome-verified: Login nav works.
+
+**"Sale location not found" on new sale (P1)** — When creating a sale and selecting an address from the autocomplete dropdown, you'd hit this error on the edit page. Root cause: `create-sale.tsx` was throwing away the `lat` and `lng` that the autocomplete provided when a suggestion was selected. The sale was created without coordinates, then the edit page tried to re-geocode via Nominatim and failed for specific addresses. Fix: `lat`/`lng` now flow from the autocomplete selection through `formData` into the POST body. The backend already accepted them — nothing else needed.
+
+**shopperCredits DROP COLUMN migration** — Confirmed applied by Patrick this session ✅.
+
+---
+
+## S495 Summary (2026-04-17) — Orphaned component QA complete + 3 bug fixes
 
 ### What was QA-verified this session:
 
