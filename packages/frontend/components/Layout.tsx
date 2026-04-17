@@ -511,6 +511,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             )}
 
             <SectionHeader icon={Compass} label="Explore" color="indigo" />
+            <Link href="/search" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Search across all sales and items">
+              <Search size={16} className="text-indigo-500" />
+              <span>Search</span>
+            </Link>
             <Link href="/shopper/explorer-passport" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your collector journey, badges, and discovery history">
               <Award size={16} className="text-indigo-500" />
               <span>Explorer Profile</span>

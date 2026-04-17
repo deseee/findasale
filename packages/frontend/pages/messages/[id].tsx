@@ -7,6 +7,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import Layout from '../../components/Layout';
+import QuickReplyPicker from '../../components/QuickReplyPicker';
 
 interface Message {
   id: string;
@@ -169,35 +170,40 @@ const MessageThreadPage = () => {
       {/* Input */}
       <form
         onSubmit={handleSend}
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 p-3 pb-safe flex gap-2 items-end z-20"
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 p-3 pb-safe z-20"
       >
-        <textarea
-          value={body}
-          onChange={e => setBody(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              if (body.trim()) sendMutation.mutate(body.trim());
-            }
-          }}
-          rows={1}
-          placeholder="Type a message…"
-          className="flex-1 resize-none rounded-xl border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 dark:bg-gray-900 max-h-28 overflow-y-auto"
-        />
-        <button
-          type="submit"
-          disabled={!body.trim() || sendMutation.isPending}
-          className="w-10 h-10 rounded-full bg-amber-600 dark:bg-amber-700 text-white flex items-center justify-center disabled:opacity-50 hover:bg-amber-700 dark:hover:bg-amber-600 transition-colors flex-shrink-0"
-          aria-label="Send message"
-        >
-          {sendMutation.isPending ? (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          )}
-        </button>
+        <div className="flex gap-2 items-end">
+          <QuickReplyPicker onSelect={(text) => setBody(text)} />
+          <div className="flex-1 flex gap-2 items-end">
+            <textarea
+              value={body}
+              onChange={e => setBody(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (body.trim()) sendMutation.mutate(body.trim());
+                }
+              }}
+              rows={1}
+              placeholder="Type a message…"
+              className="flex-1 resize-none rounded-xl border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 dark:bg-gray-900 max-h-28 overflow-y-auto"
+            />
+            <button
+              type="submit"
+              disabled={!body.trim() || sendMutation.isPending}
+              className="w-10 h-10 rounded-full bg-amber-600 dark:bg-amber-700 text-white flex items-center justify-center disabled:opacity-50 hover:bg-amber-700 dark:hover:bg-amber-600 transition-colors flex-shrink-0"
+              aria-label="Send message"
+            >
+              {sendMutation.isPending ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
       </form>
     </div>
   );

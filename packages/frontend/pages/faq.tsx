@@ -289,6 +289,62 @@ const shopperFAQs: FAQItem[] = [
       </>
     ),
   },
+  {
+    question: 'What does "Excellent" condition mean?',
+    answer: (
+      <>
+        Excellent condition means the item is like new — no signs of wear or use, and may still have original packaging. These items are priced near retail (80–100% of retail value). Examples include new in box items, rarely used vintage collectibles, and display pieces in perfect condition.
+      </>
+    ),
+  },
+  {
+    question: 'What does "Good" condition mean?',
+    answer: (
+      <>
+        Good condition items have minor signs of use but are fully functional with only small cosmetic imperfections that don't affect use. Examples include gently used furniture, dishes without chips, and electronics in working order. Good items typically cost 50–75% of retail.
+      </>
+    ),
+  },
+  {
+    question: 'What does "Fair" condition mean?',
+    answer: (
+      <>
+        Fair condition items show visible wear or age but are fully functional. They may have noticeable cosmetic issues like scratches, fading, or patina. Fair items include well-loved vintage pieces, furniture with minor scuffs, and books with reading wear. Expect to pay 25–50% of retail value — fair condition items are excellent finds for budget shoppers, collectors, and people restoring or upcycling items.
+      </>
+    ),
+  },
+  {
+    question: 'What does "Poor" condition mean?',
+    answer: (
+      <>
+        Poor condition items show heavy wear, damage, or missing parts and may need repair. They're best suited for people working on restoration or upcycling projects. Examples include chipped or cracked ceramics, furniture needing reupholstering, and electronics with cosmetic damage. Poor items cost 10–25% of retail value.
+      </>
+    ),
+  },
+  {
+    question: 'What does "As-Is" condition mean?',
+    answer: (
+      <>
+        As-Is items are sold in their current condition without warranty or implied fitness for use. They may not function and should be inspected before purchasing. Examples include unknown condition electronics, untested vintage items, and items sold as found. Pricing is typically negotiable and often the lowest available.
+      </>
+    ),
+  },
+  {
+    question: 'Who decides the condition rating?',
+    answer: (
+      <>
+        The estate sale organizer or item seller sets the condition rating based on their professional assessment. If you have questions about a specific item's condition, you can contact the organizer directly through the item's listing to ask for additional photos or details.
+      </>
+    ),
+  },
+  {
+    question: 'Can I dispute a condition rating?',
+    answer: (
+      <>
+        If you believe an item's condition is misrepresented, contact the organizer directly through the item's listing. They may provide additional photos or clarifications. If you purchased an item and it arrives in worse condition than described, check the organizer's return and refund policy — most provide a grace period for inspection after pickup or delivery.
+      </>
+    ),
+  },
 ];
 
 const organizerFAQs: FAQItem[] = [

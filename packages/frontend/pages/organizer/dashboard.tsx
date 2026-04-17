@@ -195,6 +195,17 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id && isClient,
   });
 
+  // Fetch organizer storefront slug for public storefront link
+  const { data: storefrontSlug } = useQuery({
+    queryKey: ['organizer-storefront-slug'],
+    queryFn: async () => {
+      const response = await api.get('/brand-kit/organizers/me');
+      return response.data?.customStorefrontSlug || response.data?.id;
+    },
+    enabled: !!user?.id && isClient,
+    staleTime: 5 * 60_000, // 5 minutes
+  });
+
   // Fetch earnings to check for cash fee balance
   const { data: earnings } = useQuery({
     queryKey: ['earnings-breakdown'],
@@ -671,6 +682,13 @@ const OrganizerDashboard = () => {
               <Clock className="w-4 h-4" />
               Holds
             </Link>
+
+            {storefrontSlug && (
+              <Link href={`/organizer/storefront/${storefrontSlug}`} className="rounded-full px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors flex items-center gap-1">
+                <Eye className="w-4 h-4" />
+                My Storefront
+              </Link>
+            )}
 
             <Link href="/organizer/ripples" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 transition-colors flex items-center gap-1">
               <Megaphone className="w-4 h-4" />

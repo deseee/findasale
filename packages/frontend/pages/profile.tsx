@@ -7,6 +7,7 @@ import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import ReferralWidget from '../components/ReferralWidget';
+import ShopperReferralCard from '../components/ShopperReferralCard';
 
 interface Bid {
   id: string;
@@ -559,6 +560,13 @@ const ProfilePage = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Shopper Referral Card — only for shoppers */}
+        {!isOrganizerOnly && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+            <ShopperReferralCard />
           </div>
         )}
 

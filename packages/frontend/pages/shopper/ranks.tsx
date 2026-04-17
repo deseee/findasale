@@ -14,6 +14,7 @@ import { useAuth } from '@/components/AuthContext';
 import useXpProfile from '@/hooks/useXpProfile';
 import { ExplorerRank } from '@/components/RankBadge';
 import { Check } from 'lucide-react';
+import RankLevelingHint from '@/components/RankLevelingHint';
 
 // Rank metadata
 const RANK_ORDER: ExplorerRank[] = ['INITIATE', 'SCOUT', 'RANGER', 'SAGE', 'GRANDMASTER'];
@@ -308,6 +309,16 @@ function RanksPage() {
               Climb the ranks and unlock exclusive perks
             </p>
           </div>
+
+          {/* Rank Leveling Hint — shows progress to next rank */}
+          {user && xpProfile && (
+            <RankLevelingHint
+              rank={currentRank}
+              currentXp={currentXp}
+              nextRankXp={xpProfile.rankProgress.nextRankXp}
+              nextRank={xpProfile.rankProgress.nextRank}
+            />
+          )}
 
           {/* Current XP Display */}
           {user && (

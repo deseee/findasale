@@ -152,6 +152,8 @@ const nextConfig = {
       { source: '/auth/:path*', destination: '/login', permanent: true },
       // /organizer/inventory/[id] never existed as a page — redirect to edit-item
       { source: '/organizer/inventory/:id', destination: '/organizer/edit-item/:id', permanent: false },
+      // Hall of fame redirect for bookmarks hitting /hall-of-fame directly
+      { source: '/hall-of-fame', destination: '/shopper/hall-of-fame', permanent: true },
     ];
   },
 

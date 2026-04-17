@@ -5,6 +5,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useOrganizerTier, type SubscriptionTier } from '../../hooks/useOrganizerTier';
 import UsageBar from '../../components/UsageBar';
+import DowngradePreviewModal from '../../components/DowngradePreviewModal';
 
 interface Subscription {
   status: string | null;
@@ -23,6 +24,7 @@ export default function SubscriptionPage() {
   const [canceling, setCanceling] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [managingPlan, setManagingPlan] = useState(false);
+  const [showDowngradePreview, setShowDowngradePreview] = useState(false);
 
   useEffect(() => {
     fetchSubscription();
@@ -736,6 +738,23 @@ export default function SubscriptionPage() {
               </div>
             </div>
           )}
+
+          {/* Downgrade Preview Modal — shows when user initiates downgrade to SIMPLE */}
+          <DowngradePreviewModal
+            isOpen={showDowngradePreview}
+            onClose={() => setShowDowngradePreview(false)}
+            preview={{
+              currentTier: tier || 'PRO',
+              itemsHidden: 0,
+              photosAffected: 0,
+              graceEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              teamMembersLosing: 0,
+              totalItems: 0,
+            }}
+            onConfirm={async () => {
+              await handleCancel();
+            }}
+          />
         </div>
       </div>
     </>

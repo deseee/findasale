@@ -17,6 +17,7 @@ import { useOrganizerActivityFeed } from '../../hooks/useOrganizerActivityFeed';
 import { useToast } from '../../components/ToastContext';
 import CommandCenterCard from '../../components/CommandCenterCard';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
+import LiveFeedWidget from '../../components/LiveFeedWidget';
 import OrganizerActivityFeedCard from '../../components/OrganizerActivityFeedCard';
 import SaleHealthMiniCard from '../../components/SaleHealthMiniCard';
 import WeatherAlertCard from '../../components/WeatherAlertCard';
@@ -224,7 +225,14 @@ const CommandCenterPage = () => {
                   {sale.status === 'PUBLISHED' &&
                     new Date(sale.startDate) <= new Date() &&
                     new Date(sale.endDate) >= new Date() && (
-                      <SaleStatusWidget saleId={sale.id} />
+                      <>
+                        <div className="mb-4">
+                          <SaleStatusWidget saleId={sale.id} />
+                        </div>
+                        <div className="mb-4">
+                          <LiveFeedWidget saleId={sale.id} />
+                        </div>
+                      </>
                     )}
                 </div>
               ))}

@@ -6,6 +6,7 @@ import Skeleton from './Skeleton';
 import TierBadge from './TierBadge'; // Phase 22
 import ReputationBadge from './ReputationBadge'; // Feature #71
 import VerifiedBadge from './VerifiedBadge'; // Feature #16
+import BoostBadge from './BoostBadge'; // Phase 2b: Boost badges
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 
 interface Sale {
@@ -35,6 +36,11 @@ interface Sale {
   tags?: string[];
   favoriteCount?: number;
   maxOrganizerDiscount?: number; // D-XP-003: Max organizer discount across items
+  boost?: { // Phase 2b: Boost badge
+    boostType: string;
+    expiresAt: string;
+    status: string;
+  };
 }
 
 interface BadgeConfig {
@@ -160,6 +166,12 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
               {badge.pulse && <span className="w-2 h-2 rounded-full bg-white animate-pulse" />}
               {badge.label}
             </span>
+          </div>
+        )}
+
+        {sale.boost && sale.boost.status === 'ACTIVE' && (
+          <div className="absolute top-2 right-2">
+            <BoostBadge boostType={sale.boost.boostType} size="sm" />
           </div>
         )}
       </Link>
