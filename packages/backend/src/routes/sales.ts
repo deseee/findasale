@@ -75,8 +75,10 @@ router.patch('/:id/coordinates', authenticate, requireOrganizer, async (req: Aut
     if (typeof lat !== 'number' || typeof lng !== 'number') {
       return res.status(400).json({ message: 'lat and lng must be numbers' });
     }
-    // Verify this organizer owns the sale
-    const sale = await prisma.sale.findFirst({ where: { id, organizerId: req.user!.id } });
+    // Verify this organizer owns the sale (organizerId references Organizer.id, not User.id)
+    const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user!.id } });
+    if (!organizerProfile) return res.status(403).json({ message: 'Organizer profile not found' });
+    const sale = await prisma.sale.findFirst({ where: { id, organizerId: organizerProfile.id } });
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
     const updated = await prisma.sale.update({ where: { id }, data: { lat, lng } });
     return res.json({ lat: updated.lat, lng: updated.lng });
