@@ -81,17 +81,17 @@ const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
   }
 
   return (
-    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-warm-200 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-600 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
       {recentSearches.length > 0 && !query && (
         <>
-          <div className="px-4 py-2 text-xs font-semibold text-warm-600 border-b border-warm-100">
+          <div className="px-4 py-2 text-xs font-semibold text-warm-600 dark:text-gray-400 border-b border-warm-100 dark:border-gray-700">
             Recent Searches
           </div>
           {recentSearches.slice(0, 4).map((search) => (
             <button
               key={search}
               onClick={() => addRecentSearch(search)}
-              className="w-full text-left px-4 py-2 hover:bg-warm-50 text-sm text-warm-900 flex items-center gap-2 transition-colors"
+              className="w-full text-left px-4 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 text-sm text-warm-900 dark:text-gray-100 flex items-center gap-2 transition-colors"
             >
               <span className="text-warm-400">🕐</span>
               {search}
@@ -102,7 +102,7 @@ const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
 
       {(query ? suggestionsToShow.some((s) => !recentSearches.includes(s)) : true) && (
         <>
-          <div className="px-4 py-2 text-xs font-semibold text-warm-600 border-b border-warm-100">
+          <div className="px-4 py-2 text-xs font-semibold text-warm-600 dark:text-gray-400 border-b border-warm-100 dark:border-gray-700">
             {query ? 'Matching Searches' : 'Popular Categories'}
           </div>
           {suggestionsToShow
@@ -111,7 +111,7 @@ const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
               <button
                 key={suggestion}
                 onClick={() => addRecentSearch(suggestion)}
-                className="w-full text-left px-4 py-2 hover:bg-warm-50 text-sm text-warm-900 flex items-center gap-2 transition-colors"
+                className="w-full text-left px-4 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 text-sm text-warm-900 dark:text-gray-100 flex items-center gap-2 transition-colors"
               >
                 <span className="text-amber-600">🔍</span>
                 {suggestion}
@@ -122,14 +122,14 @@ const SearchSuggestions: React.FC<SearchSuggestionsProps> = ({
 
       {!query && (
         <>
-          <div className="px-4 py-2 text-xs font-semibold text-warm-600 border-b border-warm-100">
+          <div className="px-4 py-2 text-xs font-semibold text-warm-600 dark:text-gray-400 border-b border-warm-100 dark:border-gray-700">
             Browse Categories
           </div>
           {POPULAR_CATEGORIES.map((cat) => (
             <Link
               key={cat}
               href={`/categories/${cat.toLowerCase()}`}
-              className="block px-4 py-2 hover:bg-warm-50 text-sm text-warm-900 transition-colors"
+              className="block px-4 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 text-sm text-warm-900 dark:text-gray-100 transition-colors"
             >
               {cat}
             </Link>

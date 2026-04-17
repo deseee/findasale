@@ -136,7 +136,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
             placeholder="Min $"
             value={priceMinInput}
             onChange={handlePriceMinChange}
-            className="flex-1 px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+            className="flex-1 min-w-0 px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
             min="0"
           />
           <input
@@ -144,7 +144,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
             placeholder="Max $"
             value={priceMaxInput}
             onChange={handlePriceMaxChange}
-            className="flex-1 px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+            className="flex-1 min-w-0 px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
             min="0"
           />
         </div>
