@@ -23,6 +23,7 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
   const cart = useShopperCart(user?.id);
   const { showToast } = useToast();
   const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'shared' | 'error'>('idle');
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   const handleRemoveItem = (itemId: string) => {
     cart.removeItem(itemId);
@@ -30,10 +31,9 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
   };
 
   const handleClearCart = () => {
-    if (typeof window !== 'undefined' && window.confirm('Clear your entire cart?')) {
-      cart.clearCart();
-      showToast('Cart cleared', 'info');
-    }
+    cart.clearCart();
+    showToast('Cart cleared', 'info');
+    setConfirmingClear(false);
   };
 
   const handleShareWithCashier = async () => {
@@ -178,7 +178,7 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
                   {/* Remove Button */}
                   <button
                     onClick={() => handleRemoveItem(item.id)}
-                    className="w-full text-xs font-medium py-2 px-3 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    className="w-full text-xs font-medium py-3 px-3 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   >
                     Remove
                   </button>
@@ -234,12 +234,32 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
               )}
 
               {/* Clear Cart */}
-              <button
-                onClick={handleClearCart}
-                className="w-full text-xs font-medium py-2 px-3 rounded border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                Clear Cart
-              </button>
+              {!confirmingClear ? (
+                <button
+                  onClick={() => setConfirmingClear(true)}
+                  className="w-full text-xs font-medium py-2 px-3 rounded border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Clear Cart
+                </button>
+              ) : (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-medium text-red-800 dark:text-red-300">Clear all items from cart?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleClearCart}
+                      className="flex-1 text-xs font-semibold py-2 px-3 rounded bg-red-600 dark:bg-red-700 text-white hover:bg-red-700 dark:hover:bg-red-800 transition-colors"
+                    >
+                      Yes, clear all
+                    </button>
+                    <button
+                      onClick={() => setConfirmingClear(false)}
+                      className="flex-1 text-xs font-semibold py-2 px-3 rounded border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

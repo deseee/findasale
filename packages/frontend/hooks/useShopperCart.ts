@@ -65,21 +65,18 @@ export const useShopperCart = (userId?: string) => {
   }, []);
 
   // Persist to localStorage whenever cart changes
+  // Fire sync event AFTER localStorage write to avoid race condition
   useEffect(() => {
     if (!isHydrated) return;
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+      // Dispatch sync event only AFTER localStorage is updated
+      window.dispatchEvent(new Event('fas_cart_sync'));
     } catch (err) {
       console.error('Failed to persist cart to localStorage:', err);
     }
   }, [cart, isHydrated]);
-
-  const notifySync = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('fas_cart_sync'));
-    }
-  }, []);
 
   const addItem = useCallback(
     (item: CartItem) => {
@@ -88,26 +85,21 @@ export const useShopperCart = (userId?: string) => {
         if (prev.items.some((i) => i.id === item.id)) return prev;
         return { saleId: item.saleId, items: [...prev.items, item] };
       });
-      // Notify other instances after state flush (next microtask)
-      setTimeout(notifySync, 0);
     },
-    [notifySync]
+    []
   );
 
   const removeItem = useCallback((itemId: string) => {
     setCart((prev) => ({ ...prev, items: prev.items.filter((i) => i.id !== itemId) }));
-    setTimeout(notifySync, 0);
-  }, [notifySync]);
+  }, []);
 
   const clearCart = useCallback(() => {
     setCart({ items: [], saleId: null });
-    setTimeout(notifySync, 0);
-  }, [notifySync]);
+  }, []);
 
   const switchSale = useCallback((newSaleId: string) => {
     setCart({ items: [], saleId: newSaleId });
-    setTimeout(notifySync, 0);
-  }, [notifySync]);
+  }, []);
 
   const getTotal = useCallback((): number => {
     return cart.items.reduce((sum, item) => sum + (item.price || 0), 0);
