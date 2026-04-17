@@ -3375,7 +3375,14 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const itemBlock = text.match(/<Item>([\s\S]*?)<\/Item>/)?.[1] || '';
           const backfill: Record<string, any> = {};
           const descRaw = xmlVal(itemBlock, 'Description') || '';
-          const descClean = decodeHtmlEntities(descRaw).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+          const descWithoutBlocks = descRaw
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ');
+          const descClean = decodeHtmlEntities(descWithoutBlocks)
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 2000);
           if (descClean) backfill.description = descClean;
           const pictureUrls = xmlAll(itemBlock, 'PictureURL');
           if (pictureUrls.length > 0) backfill.photoUrls = pictureUrls;
