@@ -1,10 +1,10 @@
 # Patrick's Dashboard — Week of April 17, 2026
 
-## S497 Summary (2026-04-17) — Geocoding + entrance pin + treasure hunt + eBay fixes
+## S497 Summary (2026-04-17) — Geocoding + entrance pin + treasure hunt + eBay + inventory batch pull
 
-**12 files changed. Push block below.**
+**14 files changed. 3 commits to push (consolidate or push separately).**
 
-### Your action — push S497:
+### Push 1 — Main S497 batch:
 
 ```powershell
 git add claude_docs/STATE.md
@@ -24,6 +24,9 @@ git add packages/frontend/pages/organizer/inventory.tsx
 git commit -m "fix: geocoding fallbacks + entrance pin save + treasure hunt hardening + eBay description sync + inventory batch pull"
 .\push.ps1
 ```
+
+### Also connected this session:
+**Railway MCP** — `mcp.railway.com` is now connected. Tools available in next session: list-projects, list-services, redeploy, whoami, railway-agent. First use will OAuth prompt → Railway login.
 
 ### What was fixed this session:
 

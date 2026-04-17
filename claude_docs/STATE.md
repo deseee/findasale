@@ -258,13 +258,29 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S494:**
+**Next Session — S498:**
 
-**Theme: Receive dev agent returns + fix open bugs + batch QA remaining.**
+**Theme: QA S497 fixes live + Railway MCP exploration + normal roadmap work.**
 
-**Priority 1 — Receive dev agent results (dispatched in S493):**
-- EbayCategoryPicker P2 fix (leaf name confirmation chip) — get changed files, add to push block
-- Command-center layout fix (grid overflow) — get changed files, add to push block
+**Priority 1 — Verify S497 fixes deployed:**
+- Entrance pin save fix — test on edit sale page: place pin, edit another field, save, reload. Pin should persist.
+- Geocoding Census fallback — test with an address that previously failed "Sale location not found"
+- Inventory batch pull — select multiple items, pull to sale, confirm they appear in sale
+- eBay description sync — have artifactmi@gmail.com re-sync; check if ConditionDescription populated any items
+
+**Priority 2 — Railway MCP (newly connected this session):**
+- Tools available: list-projects, list-services, redeploy, accept-deploy, create-project, railway-agent, whoami
+- First use will prompt OAuth → Railway login. Try `whoami` to verify auth.
+- Can now check Railway deploy status, trigger redeploys, and manage services directly from Cowork
+
+**Patrick manual actions pending:**
+1. Push S497 (push block in patrick-dashboard.md)
+2. Push the button fix commit (InventoryItemCard stopPropagation)
+3. Push the eBay ConditionDescription commit
+4. Stripe Connect webhook (carry-forward P2 since S421)
+5. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
+
+**Receive dev agent returns (carry-forward):**
 - Push both together + workspace page gets covered by same layout fix
 
 **Priority 2 — Open bugs from S493 QA:**
