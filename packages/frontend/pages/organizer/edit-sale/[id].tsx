@@ -71,7 +71,6 @@ const EditSalePage = () => {
     markdownFloor: undefined as number | undefined,
     // Feature #85: Treasure Hunt QR
     treasureHuntEnabled: true,
-    treasureHuntCompletionBadge: false,
     // Feature #121: Allow item holds for this sale
     holdsEnabled: true,
   });
@@ -171,7 +170,6 @@ const EditSalePage = () => {
       markdownFloor: sale.markdownFloor ?? undefined,
       // Feature #85: Treasure Hunt QR
       treasureHuntEnabled: sale.treasureHuntEnabled ?? true,
-      treasureHuntCompletionBadge: sale.treasureHuntCompletionBadge ?? false,
       // Feature #121: Allow item holds for this sale
       holdsEnabled: sale.holdsEnabled ?? true,
     });
@@ -276,6 +274,7 @@ const EditSalePage = () => {
       const response = await api.post('/sales/generate-description', {
         title: formData.title,
         city: formData.city || undefined,
+        saleType: formData.saleType,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
       });
@@ -939,12 +938,8 @@ const EditSalePage = () => {
             <TreasureHuntQRManager
               saleId={id as string}
               enabled={formData.treasureHuntEnabled}
-              completionBadge={formData.treasureHuntCompletionBadge}
               onEnabledChange={(enabled) =>
                 setFormData({ ...formData, treasureHuntEnabled: enabled })
-              }
-              onCompletionBadgeChange={(badge) =>
-                setFormData({ ...formData, treasureHuntCompletionBadge: badge })
               }
             />
 

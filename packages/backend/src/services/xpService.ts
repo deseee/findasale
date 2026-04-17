@@ -116,6 +116,7 @@ export const MONTHLY_XP_CAPS = {
 // Daily XP caps (exploit prevention)
 export const DAILY_XP_CAPS = {
   TREASURE_HUNT_SCAN: 100,    // Max 100 XP/day from QR clue scans (150 with Hunt Pass)
+  TREASURE_HUNT_COMPLETION: 100,  // Max 100 XP/day from completion bonuses
   APPRAISAL_SELECTED: 100,    // Max 100 XP/day from appraisal selections (5 selections × 20 XP) — P0 security fix
 };
 
