@@ -286,15 +286,21 @@ export async function markClueFound(req: AuthRequest, res: Response) {
 
     // Award XP for the clue (respecting daily cap: 100 XP/day, 150 with Hunt Pass)
     let xpEarned = 0;
+    let rankIncreased = false;
+    let newRank: string | undefined;
     try {
       const dailyRemaining = await checkDailyXpCap(req.user.id, 'TREASURE_HUNT_SCAN');
       const xpToAward = Math.min(XP_AWARDS.TREASURE_HUNT_SCAN, dailyRemaining);
       if (xpToAward > 0) {
-        await awardXp(req.user.id, 'TREASURE_HUNT_SCAN', xpToAward, {
+        const xpResult = await awardXp(req.user.id, 'TREASURE_HUNT_SCAN', xpToAward, {
           saleId,
           description: `Treasure Hunt QR Clue found: ${clueId}`,
         });
         xpEarned = xpToAward;
+        if (xpResult) {
+          rankIncreased = xpResult.rankIncreased;
+          newRank = xpResult.newRank;
+        }
       }
     } catch (err) {
       console.warn('[treasureHuntQR] Failed to award scan XP:', err);
@@ -313,26 +319,38 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     });
 
     let bonusXp = 0;
+    let bonusRankIncreased = false;
+    let bonusNewRank: string | undefined;
     const completed = userScans >= totalClues;
 
     if (completed && sale.treasureHuntCompletionBadge) {
       // Award completion bonus XP (no daily cap for completion bonus — one-time per hunt)
       try {
         bonusXp = XP_AWARDS.TREASURE_HUNT_COMPLETION;
-        await awardXp(req.user.id, 'TREASURE_HUNT_COMPLETION', XP_AWARDS.TREASURE_HUNT_COMPLETION, {
+        const bonusResult = await awardXp(req.user.id, 'TREASURE_HUNT_COMPLETION', XP_AWARDS.TREASURE_HUNT_COMPLETION, {
           saleId,
           description: `Treasure Hunt QR completed: ${saleId}`,
         });
+        if (bonusResult) {
+          bonusRankIncreased = bonusResult.rankIncreased;
+          bonusNewRank = bonusResult.newRank;
+        }
       } catch (err) {
         console.warn('[treasureHuntQR] Failed to award completion bonus XP:', err);
       }
     }
+
+    // Use completion rank change if it happened, otherwise scan rank change
+    const finalRankIncreased = bonusRankIncreased || rankIncreased;
+    const finalNewRank = bonusNewRank || newRank;
 
     res.json({
       xpEarned,
       bonus: bonusXp,
       completed,
       totalProgress: `${userScans}/${totalClues}`,
+      rankIncreased: finalRankIncreased,
+      newRank: finalNewRank,
     });
   } catch (err) {
     console.error('POST /sales/:saleId/treasure-hunt-qr/:clueId/found error:', err);

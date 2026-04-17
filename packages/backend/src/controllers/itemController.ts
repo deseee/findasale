@@ -426,6 +426,37 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
       }
     });
 
+    // Fetch active boosts for these items
+    const itemIds = items.map(item => item.id);
+    const boostsByItemId: Record<string, any> = {};
+    if (itemIds.length > 0) {
+      const boosts = await prisma.boostPurchase.findMany({
+        where: {
+          targetType: 'ITEM',
+          targetId: { in: itemIds },
+          status: 'ACTIVE',
+          expiresAt: { gt: new Date() },
+        },
+        select: {
+          targetId: true,
+          boostType: true,
+          expiresAt: true,
+          status: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      // Index boosts by targetId, keeping only the latest per item
+      boosts.forEach((boost: any) => {
+        if (boost.targetId && !boostsByItemId[boost.targetId]) {
+          boostsByItemId[boost.targetId] = {
+            boostType: boost.boostType,
+            expiresAt: boost.expiresAt,
+            status: boost.status,
+          };
+        }
+      });
+    }
+
     // Filter based on rarity visibility + Hunt Pass status
     items = items.filter(item => isItemVisibleToUser(item, hasHuntPass));
 
@@ -446,10 +477,13 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
       return now >= legendaryVisibleAtTime;
     });
 
-    // Remove internal fields before sending to client
+    // Remove internal fields and add boost data before sending to client
     const itemsForClient = items.map(item => {
       const { legendaryVisibleAt, ...rest } = item;
-      return rest;
+      return {
+        ...rest,
+        boost: boostsByItemId[item.id] ?? null,
+      };
     });
 
     res.json(itemsForClient);
@@ -779,7 +813,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           if (monthlyRemaining > 0) {
             // Award XP to the organizer (capped at remaining monthly allowance)
             const xpToAward = Math.min(XP_AWARDS.CONDITION_RATING, monthlyRemaining);
-            await awardXp(
+            const xpResult = await awardXp(
               req.user.id,
               'CONDITION_RATING',
               xpToAward,
@@ -789,6 +823,11 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
                 description: `Condition rating S-D for item "${updatedItem.title}"`,
               }
             );
+            // Include rank change in response if available
+            if (xpResult?.rankIncreased) {
+              (updatedItem as any).rankIncreased = true;
+              (updatedItem as any).newRank = xpResult.newRank;
+            }
           }
         }
       } catch (err) {
@@ -1910,6 +1949,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       message: 'QR scan recorded successfully.',
       xpAwarded: xpResult?.xpAwarded || 0,
       newRank: updatedUser?.explorerRank,
+      rankIncreased: xpResult?.rankIncreased || false,
       totalXp: updatedUser?.guildXp,
       badgeAwarded: !existingBadge ? badge.name : null,
     });

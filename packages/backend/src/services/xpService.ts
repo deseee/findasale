@@ -291,7 +291,7 @@ export async function awardXp(
     description?: string;
     holdUntil?: Date; // P0 Exploit Fix: when this XP becomes spendable
   }
-): Promise<{ newXp: number; newRank: ExplorerRank; xpAwarded: number } | null> {
+): Promise<{ newXp: number; newRank: ExplorerRank; xpAwarded: number; rankIncreased: boolean } | null> {
   try {
     // Platform Safety #118: Device Fingerprinting — block XP awards to fraud suspects
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -299,6 +299,9 @@ export async function awardXp(
       console.log(`[FRAUD] Blocked XP award to fraudSuspect user ${userId}, type: ${type}, amount: ${amount}`);
       return null;
     }
+
+    // Calculate old rank before XP increment
+    const oldRank = getRankForXp(user?.guildXp || 0);
 
     // Add transaction record
     await prisma.pointsTransaction.create({
@@ -338,7 +341,9 @@ export async function awardXp(
 
     // Recalculate rank based on new XP
     const newRank = getRankForXp(updatedUser.guildXp);
-    if (newRank !== updatedUser.explorerRank) {
+    const rankIncreased = newRank !== oldRank;
+
+    if (rankIncreased) {
       await prisma.user.update({
         where: { id: userId },
         data: { explorerRank: newRank },
@@ -359,6 +364,7 @@ export async function awardXp(
       newXp: updatedUser.guildXp,
       newRank,
       xpAwarded: amount,
+      rankIncreased,
     };
   } catch (error) {
     console.error(`[xpService] Failed to award ${amount} XP to user ${userId}:`, error);

@@ -93,11 +93,11 @@ const OrganizerProfilePage = () => {
         </Link>
 
         {/* Organizer header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-warm-900">{organizer.businessName}</h1>
+                <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">{organizer.businessName}</h1>
                 <ReputationTier tier={organizer.reputationTier} size="sm" />
               </div>
               {typeof organizer.reputationScore === 'number' && (
@@ -147,7 +147,7 @@ const OrganizerProfilePage = () => {
                 )}
               </div>
             </div>
-            <div className="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ml-4">
+            <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ml-4">
               {organizer.sales.length} sale{organizer.sales.length !== 1 ? 's' : ''}
             </div>
           </div>
@@ -156,7 +156,7 @@ const OrganizerProfilePage = () => {
         {/* Upcoming sales */}
         {upcomingSales.length > 0 && (
           <section className="mb-8">
-            <h2 className="text-xl font-bold text-warm-900 mb-4">Upcoming &amp; Active Sales</h2>
+            <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-4">Upcoming &amp; Active Sales</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {upcomingSales.map(sale => (
                 <SaleCard key={sale.id} sale={sale} />
@@ -168,7 +168,7 @@ const OrganizerProfilePage = () => {
         {/* Past sales */}
         {pastSales.length > 0 && (
           <section>
-            <h2 className="text-xl font-bold text-warm-900 mb-4 text-warm-500">Past Sales</h2>
+            <h2 className="text-xl font-bold text-warm-500 dark:text-warm-400 mb-4">Past Sales</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 opacity-75">
               {pastSales.map(sale => (
                 <SaleCard key={sale.id} sale={sale} />
@@ -178,7 +178,7 @@ const OrganizerProfilePage = () => {
         )}
 
         {organizer.sales.length === 0 && (
-          <div className="bg-white rounded-lg shadow-md p-8 text-center text-warm-500">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center text-warm-500 dark:text-warm-400">
             No sales listed yet.
           </div>
         )}

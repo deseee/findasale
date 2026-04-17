@@ -163,7 +163,7 @@ export default function SubscriptionPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">3 concurrent sales</p>
-                      <p className="text-sm text-amber-700 dark:text-amber-300">Run estate sales, yard sales, and auctions at the same time.</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">Run multiple sales at the same time.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">500 items per sale</p>
@@ -204,7 +204,7 @@ export default function SubscriptionPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 items & 10 photos each</p>
-                      <p className="text-sm text-purple-700 dark:text-purple-300">Everything you need for a large estate sale or auction.</p>
+                      <p className="text-sm text-purple-700 dark:text-purple-300">Everything you need for a large sale.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 auto tags included</p>
@@ -403,7 +403,7 @@ export default function SubscriptionPage() {
                       <p className="text-sm text-teal-700 dark:text-teal-300">Run as many sales as you need simultaneously.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">5 team members included</p>
+                      <p className="font-semibold text-teal-900 dark:text-teal-100 mb-1">Up to 12 team members</p>
                       <p className="text-sm text-teal-700 dark:text-teal-300">Add members, set custom roles & permissions. Add more at $20/mo each.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
@@ -475,7 +475,7 @@ export default function SubscriptionPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">3 concurrent sales</p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">Run estate sales, yard sales, and auctions at the same time.</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">Run multiple sales at the same time.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">500 items per sale</p>
@@ -516,7 +516,7 @@ export default function SubscriptionPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 items & 10 photos each</p>
-                    <p className="text-sm text-purple-700 dark:text-purple-300">Everything you need for a large estate sale or auction.</p>
+                    <p className="text-sm text-purple-700 dark:text-purple-300">Everything you need for a large sale.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                     <p className="font-semibold text-purple-900 dark:text-purple-100 mb-1">500 auto tags included</p>

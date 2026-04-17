@@ -169,14 +169,28 @@ export const listSales = async (req: Request, res: Response) => {
           trails: {
             where: { isActive: true, isPublic: true },
             select: { id: true, shareToken: true }
-          }
+          },
+          boosts: {
+            where: {
+              targetType: 'SALE',
+              status: 'ACTIVE',
+              expiresAt: { gt: new Date() },
+            },
+            select: {
+              boostType: true,
+              expiresAt: true,
+              status: true,
+            },
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+          },
         }
       }),
       prisma.sale.count({ where }),
     ]);
 
     const convertedSales = sales.map((sale: any) => {
-      const { _count, trails, items, ...rest } = convertDecimalsToNumbers(sale);
+      const { _count, trails, items, boosts, ...rest } = convertDecimalsToNumbers(sale);
       const maxOrganizerDiscount = items && items.length > 0
         ? Math.max(...items
             .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
@@ -187,7 +201,8 @@ export const listSales = async (req: Request, res: Response) => {
         maxOrganizerDiscount: maxOrganizerDiscount || null,
         favoriteCount: _count?.favorites ?? 0,
         hasActiveTrail: (trails && trails.length > 0) ?? false,
-        trailShareToken: trails?.[0]?.shareToken ?? null
+        trailShareToken: trails?.[0]?.shareToken ?? null,
+        boost: boosts?.[0] ?? null,
       };
     });
     
@@ -1440,6 +1455,7 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
       message: 'Visit recorded. XP awarded!',
       guildXp: xpResult.newXp,
       explorerRank: xpResult.newRank,
+      rankIncreased: xpResult.rankIncreased,
     });
   } catch (error) {
     console.error('Record visit error:', error);
