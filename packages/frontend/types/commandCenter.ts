@@ -38,11 +38,27 @@ export interface CommandCenterSummary {
   totalPendingActions: number;
 }
 
+export interface TeamMember {
+  id: string;
+  businessName: string;
+  role: string;
+  acceptedAt: string | null;
+}
+
+export interface TechnicalAlert {
+  saleId: string;
+  saleTitle: string;
+  alertType: 'NO_ITEMS' | 'ITEMS_MISSING_PHOTOS' | 'EXPIRING_HOLDS' | 'SALE_STARTING_SOON';
+  detail: string;
+}
+
 export interface CommandCenterResponse {
   success: boolean;
   organizerId: string;
   summary: CommandCenterSummary;
   sales: SaleMetrics[];
+  teamMembers: TeamMember[];
+  technicalAlerts: TechnicalAlert[];
 }
 
 export interface CommandCenterFilters {
