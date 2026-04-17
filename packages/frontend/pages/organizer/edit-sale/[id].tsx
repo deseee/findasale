@@ -708,9 +708,9 @@ const EditSalePage = () => {
                 </p>
               </div>
             ) : geocodingAttempted ? (
-              <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded">
-                <p className="text-red-800 dark:text-red-200 font-semibold">
-                  Sale location not found — please verify your address and try again.
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded">
+                <p className="text-yellow-800 dark:text-yellow-200 font-semibold">
+                  Coordinates not found — your sale can still be saved, but it may not appear on the map.
                 </p>
                 <button
                   type="button"
@@ -718,7 +718,7 @@ const EditSalePage = () => {
                     setGeocodingAttempted(false);
                     attemptGeocode(formData.address, formData.city, formData.state, formData.zip);
                   }}
-                  className="text-sm bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded mt-3"
+                  className="text-sm bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded mt-3"
                 >
                   Retry
                 </button>
