@@ -11,7 +11,7 @@
  *   cart.clearCart();
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface CartItem {
   id: string;
@@ -34,31 +34,32 @@ export const useShopperCart = (userId?: string) => {
   const STORAGE_KEY = getStorageKey(userId);
   const [cart, setCart] = useState<CartState>({ items: [], saleId: null });
   const [isHydrated, setIsHydrated] = useState(false);
+  // Prevents the persistence effect → sync handler → setCart → persistence loop.
+  // dispatchEvent is synchronous: set true before dispatch, false after.
+  // The sync handler checks this and skips self-dispatched events.
+  const isSelfSync = useRef(false);
 
-  // Hydrate from localStorage on mount
+  // Hydrate from localStorage on mount AND when userId/key changes
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    setIsHydrated(false); // Reset on key change
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored) as CartState;
-        setCart(parsed);
-      } else {
-        // Clear stale state when key changes and no stored data found
-        setCart({ items: [], saleId: null });
+        setCart(JSON.parse(stored) as CartState);
       }
+      // No else: if no stored data, keep existing state (avoids unnecessary re-render)
     } catch (err) {
       console.error('Failed to hydrate cart from localStorage:', err);
     }
     setIsHydrated(true);
   }, [STORAGE_KEY]);
 
-  // Sync across same-tab instances (e.g. Layout + item page both mount useShopperCart)
-  // The browser only fires 'storage' for other tabs — we dispatch manually from mutations
+  // Sync across same-tab instances (e.g. Layout + item page both mount useShopperCart).
+  // Skips events this instance dispatched to prevent the persistence → sync → setCart loop.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleSync = () => {
+      if (isSelfSync.current) return; // Skip: we wrote this, React state already up to date
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) setCart(JSON.parse(stored) as CartState);
@@ -68,15 +69,16 @@ export const useShopperCart = (userId?: string) => {
     return () => window.removeEventListener('fas_cart_sync', handleSync);
   }, [STORAGE_KEY]);
 
-  // Persist to localStorage whenever cart changes
-  // Fire sync event AFTER localStorage write to avoid race condition
+  // Persist to localStorage after every cart change (post-hydration).
+  // Guard isSelfSync around the dispatch so the sync handler ignores our own event.
   useEffect(() => {
     if (!isHydrated) return;
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
-      // Dispatch sync event only AFTER localStorage is updated
+      isSelfSync.current = true;
       window.dispatchEvent(new Event('fas_cart_sync'));
+      isSelfSync.current = false;
     } catch (err) {
       console.error('Failed to persist cart to localStorage:', err);
     }
@@ -114,10 +116,8 @@ export const useShopperCart = (userId?: string) => {
   }, [cart.items]);
 
   const canAddFromDifferentSale = useCallback((newSaleId: string): boolean => {
-    // Returns true if cart is empty or saleId matches
     return !cart.saleId || cart.saleId === newSaleId;
   }, [cart.saleId]);
-
 
   const cartCount = cart.items.length;
   const saleId = cart.saleId;
