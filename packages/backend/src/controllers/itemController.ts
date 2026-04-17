@@ -420,6 +420,10 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         legendaryVisibleAt: true, // Phase 2b: Legendary early access (internal only)
         ebayListingId: true,
         ebayNeedsReview: true,
+        isHighValue: true,
+        highValueThreshold: true,
+        highValueSource: true,
+        isHighValueLocked: true,
         createdAt: true,
         updatedAt: true,
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
