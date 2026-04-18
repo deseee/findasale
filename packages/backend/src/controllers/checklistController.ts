@@ -58,46 +58,46 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'setup_cover', stage: 'Setup', label: 'Cover photo uploaded', isAuto: true, autoCheck: (d) => d.sale.photoUrls.length > 0, link: '/organizer/edit-sale/{saleId}' },
 
   // Stage 2: Cataloging
-  { id: 'cat_rapidfire', stage: 'Cataloging', label: 'First items uploaded via Rapidfire', isAuto: true, autoCheck: (d) => d.itemCount >= 1, link: '/organizer/inventory' },
+  { id: 'cat_rapidfire', stage: 'Cataloging', label: 'First items uploaded via Rapidfire', isAuto: true, autoCheck: (d) => d.itemCount >= 1, link: '/organizer/add-items/{saleId}' },
   { id: 'cat_tags', stage: 'Cataloging', label: 'Tags & categories reviewed', isAuto: false, link: '/organizer/inventory' },
   { id: 'cat_pricing', stage: 'Cataloging', label: 'All items priced', isAuto: true, autoCheck: (d) => d.unpricedCount === 0 && d.itemCount > 0, link: '/organizer/inventory' },
   { id: 'cat_smartpricing', stage: 'Cataloging', label: 'Smart Pricing suggestions reviewed', isAuto: false, requiredTier: 'PRO', link: '/organizer/inventory' },
   { id: 'cat_ebay', stage: 'Cataloging', label: 'eBay sync pushed for high-value items', isAuto: false, link: '/organizer/inventory' },
-  { id: 'cat_social_draft', stage: 'Cataloging', label: 'Social post drafted', isAuto: false, link: '/organizer/inventory' },
+  { id: 'cat_social_draft', stage: 'Cataloging', label: 'Social post drafted', isAuto: false, link: '/organizer/send-update/{saleId}' },
 
   // Stage 3: Ready to Publish
-  { id: 'pub_pricetags', stage: 'Ready to Publish', label: 'Price tags printed', isAuto: false, link: '/organizer/inventory' },
-  { id: 'pub_qr', stage: 'Ready to Publish', label: 'Item QR codes downloaded', isAuto: false, link: '/organizer/inventory' },
-  { id: 'pub_queue_qr', stage: 'Ready to Publish', label: 'Virtual Queue QR printed & tested', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue' },
+  { id: 'pub_pricetags', stage: 'Ready to Publish', label: 'Price tags printed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
+  { id: 'pub_qr', stage: 'Ready to Publish', label: 'Item QR codes downloaded', isAuto: false, link: '/organizer/qr-codes' },
+  { id: 'pub_queue_qr', stage: 'Ready to Publish', label: 'Virtual Queue QR printed & tested', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue/{saleId}' },
   { id: 'pub_treasure', stage: 'Ready to Publish', label: 'Treasure Hunt clues printed & placed', isAuto: false, requiredTier: 'PRO' },
   { id: 'pub_preview', stage: 'Ready to Publish', label: 'Sale previewed on mobile', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
-  { id: 'pub_signs', stage: 'Ready to Publish', label: 'Neighborhood signs made', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
+  { id: 'pub_signs', stage: 'Ready to Publish', label: 'Neighborhood signs made', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_published', stage: 'Ready to Publish', label: 'Sale published', isAuto: true, autoCheck: (d) => d.sale.status === 'PUBLISHED' || d.sale.status === 'LIVE', link: '/organizer/edit-sale/{saleId}' },
-  { id: 'pub_social', stage: 'Ready to Publish', label: 'Sale shared on social media', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
+  { id: 'pub_social', stage: 'Ready to Publish', label: 'Sale shared on social media', isAuto: false, link: '/organizer/promote/{saleId}' },
 
   // Stage 4: Live
   { id: 'live_internet', stage: 'Live', label: 'Internet connection tested', isAuto: false },
-  { id: 'live_pos', stage: 'Live', label: 'POS app open & working', isAuto: false },
+  { id: 'live_pos', stage: 'Live', label: 'POS app open & working', isAuto: false, link: '/organizer/pos' },
   { id: 'live_float', stage: 'Live', label: 'Cash float counted', isAuto: false },
   { id: 'live_signs', stage: 'Live', label: 'Signs posted at property entrance', isAuto: false },
-  { id: 'live_qr_stations', stage: 'Live', label: 'QR codes posted at photo stations', isAuto: false },
-  { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO' },
+  { id: 'live_qr_stations', stage: 'Live', label: 'QR codes posted at photo stations', isAuto: false, link: '/organizer/qr-codes' },
+  { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue/{saleId}' },
   { id: 'live_helpers', stage: 'Live', label: 'Helpers briefed on their roles', isAuto: false },
-  { id: 'live_command', stage: 'Live', label: 'Command Center open', isAuto: false, requiredTier: 'TEAMS' },
+  { id: 'live_command', stage: 'Live', label: 'Command Center open', isAuto: false, requiredTier: 'TEAMS', link: '/organizer/command-center' },
   { id: 'live_first_sold', stage: 'Live', label: 'First item sold', isAuto: true, autoCheck: (d) => d.soldCount >= 1 },
 
   // Stage 5: Wrapping Up
   { id: 'wrap_unsold', stage: 'Wrapping Up', label: 'Unsold items handled', isAuto: false, link: '/organizer/inventory' },
-  { id: 'wrap_messages', stage: 'Wrapping Up', label: 'Shopper messages answered', isAuto: false },
+  { id: 'wrap_messages', stage: 'Wrapping Up', label: 'Shopper messages answered', isAuto: false, link: '/organizer/messages' },
   { id: 'wrap_settlement', stage: 'Wrapping Up', label: 'Settlement Wizard completed', isAuto: false, link: '/organizer/settlement/{saleId}' },
   { id: 'wrap_flip', stage: 'Wrapping Up', label: 'Flip Report reviewed', isAuto: false, requiredTier: 'PRO', link: '/organizer/flip-report/{saleId}' },
   { id: 'wrap_donate', stage: 'Wrapping Up', label: 'Unsold items donated', isAuto: false, link: '/organizer/inventory' },
   { id: 'wrap_closed', stage: 'Wrapping Up', label: 'Sale marked complete', isAuto: true, autoCheck: (d) => d.sale.status === 'ENDED' },
 
   // Stage 6: Complete
-  { id: 'done_earnings', stage: 'Complete', label: 'Earnings reviewed', isAuto: false },
+  { id: 'done_earnings', stage: 'Complete', label: 'Earnings reviewed', isAuto: false, link: '/organizer/earnings' },
   { id: 'done_payout', stage: 'Complete', label: 'Client payout confirmed', isAuto: true, autoCheck: (d) => d.settlement?.lifecycleStage === 'CLOSED' },
-  { id: 'done_reviews', stage: 'Complete', label: 'Shopper reviews responded to', isAuto: false },
+  { id: 'done_reviews', stage: 'Complete', label: 'Shopper reviews responded to', isAuto: false, link: '/organizer/reviews' },
   { id: 'done_next', stage: 'Complete', label: 'Next sale ready to start?', isAuto: false },
 ];
 
