@@ -119,6 +119,27 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     router.push('/organizer/dashboard');
   };
 
+  const printQRPage = (url: string, label: string, sublabel: string) => {
+    const qrSrc = getQRUrl(url, 300);
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>${label}</title>
+      <style>
+        body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; font-family: sans-serif; background: white; }
+        img { width: 300px; height: 300px; }
+        .label { font-size: 24px; font-weight: bold; margin-top: 16px; text-align: center; }
+        .sublabel { font-size: 16px; color: #555; margin-top: 8px; text-align: center; }
+        @media print { body { margin: 0; } }
+      </style></head><body>
+      <img src="${qrSrc}" alt="${label}" />
+      <div class="label">${label}</div>
+      <div class="sublabel">${sublabel}</div>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); w.close(); }, 600);
+  };
+
   // Download file with auth token
   const downloadAuthenticatedFile = async (url: string, filename: string) => {
     try {
@@ -549,6 +570,49 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
               </div>
 
+              {/* Interactive QR Codes Section */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Interactive QR Codes</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Virtual Queue QR (PRO/TEAMS only) */}
+                  {isPro && (
+                    <div className="text-center">
+                      <button
+                        onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}`, '🚶 Virtual Queue', 'Print this QR — shoppers scan to join the line')}
+                        className="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                      >
+                        🚶 Virtual Queue
+                      </button>
+                      <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR — shoppers scan to join the line</p>
+                    </div>
+                  )}
+
+                  {/* Treasure Hunt QR (PRO/TEAMS only) */}
+                  {isPro && (
+                    <div className="text-center">
+                      <button
+                        onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr`, '🗺️ Treasure Hunt', 'Print this QR — attach near each clue location')}
+                        className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                      >
+                        🗺️ Treasure Hunt
+                      </button>
+                      <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR — attach near each clue location</p>
+                    </div>
+                  )}
+
+                  {/* Photo Station QR (all tiers) */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/photo-station`, '📸 Photo Station', 'Print this QR — place at your photo spot')}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      📸 Photo Station
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR — place at your photo spot</p>
+                  </div>
+                </div>
+              </div>
+
               {/* Legacy Print Preview */}
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Print Preview</h2>
@@ -666,20 +730,15 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               )}
 
               {/* Section 5 — Photo Station QR (all tiers) */}
-              <div className="print-container bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
-                <div className="qr-compact-grid">
-                  {/* 4 compact QR codes per page */}
-                  {[0, 1, 2, 3].map((index) => (
-                    <div key={index} className="qr-compact">
-                      <img
-                        src={getQRUrl(`https://finda.sale/sales/${sale.id}`, 150)}
-                        alt="Photo Station QR Code"
-                        className="qr-compact-qr"
-                      />
-                      <div className="qr-compact-label">Scan to browse & buy items</div>
-                      <div className="qr-compact-sublabel">FindA.Sale</div>
-                    </div>
-                  ))}
+              <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
+                <div className="flex-1 flex flex-col justify-center items-center">
+                  <img
+                    src={getQRUrl(`https://finda.sale/sales/${sale.id}/photo-station`, 300)}
+                    alt="Photo Station QR Code"
+                    className="qr-full-page-qr"
+                  />
+                  <div className="qr-full-page-label">Scan to snap a photo & earn XP</div>
+                  <div className="qr-full-page-sublabel">FindA.Sale</div>
                 </div>
               </div>
             </div>
