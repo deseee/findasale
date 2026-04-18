@@ -59,11 +59,11 @@ const ALL_TASKS: TaskDefinition[] = [
 
   // Stage 2: Cataloging
   { id: 'cat_rapidfire', stage: 'Cataloging', label: 'First items uploaded via Rapidfire', isAuto: true, autoCheck: (d) => d.itemCount >= 1, link: '/organizer/add-items/{saleId}' },
-  { id: 'cat_tags', stage: 'Cataloging', label: 'Tags & categories reviewed', isAuto: false, link: '/organizer/inventory' },
-  { id: 'cat_pricing', stage: 'Cataloging', label: 'All items priced', isAuto: true, autoCheck: (d) => d.unpricedCount === 0 && d.itemCount > 0, link: '/organizer/inventory' },
+  { id: 'cat_tags', stage: 'Cataloging', label: 'Tags & categories reviewed', isAuto: false, link: '/organizer/add-items/{saleId}' },
+  { id: 'cat_pricing', stage: 'Cataloging', label: 'All items priced', isAuto: true, autoCheck: (d) => d.unpricedCount === 0 && d.itemCount > 0, link: '/organizer/add-items/{saleId}' },
   { id: 'cat_smartpricing', stage: 'Cataloging', label: 'Smart Pricing suggestions reviewed', isAuto: false, requiredTier: 'PRO', link: '/organizer/inventory' },
-  { id: 'cat_ebay', stage: 'Cataloging', label: 'eBay sync pushed for high-value items', isAuto: false, link: '/organizer/inventory' },
-  { id: 'cat_social_draft', stage: 'Cataloging', label: 'Social post drafted', isAuto: false, link: '/organizer/send-update/{saleId}' },
+  { id: 'cat_ebay', stage: 'Cataloging', label: 'eBay sync pushed for high-value items (optional)', isAuto: false, link: '/organizer/add-items/{saleId}' },
+  { id: 'cat_social_draft', stage: 'Cataloging', label: 'Social post drafted', isAuto: false, link: '/organizer/promote/{saleId}' },
 
   // Stage 3: Ready to Publish
   { id: 'pub_pricetags', stage: 'Ready to Publish', label: 'Price tags printed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
