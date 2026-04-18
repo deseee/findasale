@@ -16,6 +16,7 @@ import {
   submitShare,
   listShares,
   likeShare,
+  photoStationScan,
 } from '../controllers/photoOpController';
 
 const router = express.Router({ mergeParams: true }); // mergeParams to access :saleId from parent router
@@ -30,5 +31,8 @@ router.delete('/:stationId', authenticate, deleteStation);
 router.post('/:stationId/shares', photoShareLimiter, submitShare);
 router.get('/:stationId/shares', listShares);
 router.post('/shares/:shareId/like', shareLikeLimiter, likeShare);
+
+// Photo station scan (authenticated, awards XP)
+router.post('/photo-station-scan', authenticate, photoStationScan);
 
 export default router;

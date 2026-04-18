@@ -9,6 +9,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { awardXp, XP_AWARDS } from '../services/xpService';
 
 // Validation schemas
 const createStationSchema = z.object({
@@ -324,5 +325,75 @@ export const likeShare = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[photoOp] likeShare error:', error);
     res.status(500).json({ message: 'Server error while updating like' });
+  }
+};
+
+/**
+ * POST /api/sales/:saleId/photo-station-scan
+ * Shopper scans photo station QR code and earns XP
+ * One-time per sale per user (prevents repeated scans)
+ * Auth: authenticated shopper only
+ */
+export const photoStationScan = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { saleId } = req.params;
+
+    // Verify sale exists
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { id: true },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    // Check if user has already scanned this photo station
+    const existingScan = await prisma.pointsTransaction.findFirst({
+      where: {
+        userId: req.user.id,
+        saleId,
+        type: 'PHOTO_STATION_SCAN',
+      },
+    });
+
+    if (existingScan) {
+      // Already scanned, return 200 with alreadyScanned flag
+      return res.json({
+        alreadyScanned: true,
+        xpAwarded: 0,
+        shareXp: 10,
+        message: "You've already scanned this photo station.",
+      });
+    }
+
+    // Award 5 XP for photo station scan (PHOTO_STATION_SCAN: 5 XP per S500 game design decision)
+    let xpAwarded = 0;
+    try {
+      const xpResult = await awardXp(req.user.id, 'PHOTO_STATION_SCAN', XP_AWARDS.PHOTO_STATION_SCAN, {
+        saleId,
+        description: `Photo station scan at sale: ${saleId}`,
+      });
+      if (xpResult) {
+        xpAwarded = xpResult.xpAwarded;
+      }
+    } catch (err) {
+      console.warn('[photoOp] Failed to award photo station scan XP:', err);
+    }
+
+    // Return XP awarded + shareXp for social share award
+    res.status(200).json({
+      alreadyScanned: false,
+      xpAwarded,
+      shareXp: 10, // SHARE award constant (existing XP_AWARDS.SHARE = 5, but social share to external platform = 10 per context)
+      message: `You earned ${xpAwarded} XP! Share to earn 10 more.`,
+    });
+  } catch (error) {
+    console.error('[photoOp] photoStationScan error:', error);
+    res.status(500).json({ message: 'Server error while processing scan' });
   }
 };

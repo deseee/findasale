@@ -49,6 +49,9 @@ export const XP_AWARDS = {
   TREASURE_HUNT_SCAN: 3, // Per clue scan — progress marker, not the payout (D-XP-015, was 12)
   TREASURE_HUNT_COMPLETION: 15, // All clues found bonus — the real reward (D-XP-015, was 30)
 
+  // Photo Station Scan (Feature #39 extension) — PHOTO_STATION_SCAN: 5 XP per S500 game design decision
+  PHOTO_STATION_SCAN: 5,
+
   // RSVPs and engagement
   RSVP: 2, // Feature #154: Shopper RSVPs to sale (capped 10/month)
 
