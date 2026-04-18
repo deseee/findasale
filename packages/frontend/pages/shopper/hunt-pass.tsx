@@ -231,7 +231,7 @@ const HuntPassPage = () => {
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-6 py-3 text-warm-900 dark:text-warm-100">Walk-in visit (check-in)</td>
                     <td className="px-6 py-3 text-warm-600 dark:text-warm-400">5 XP</td>
-                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">1/sale per day</td>
+                    <td className="px-6 py-3 text-xs text-warm-500 dark:text-warm-400">Once per sale (unlimited sales/day)</td>
                     <td className="px-6 py-3 font-semibold text-purple-600 dark:text-purple-300">8 XP</td>
                   </tr>
                   <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50 transition-colors">
@@ -580,7 +580,7 @@ const HuntPassPage = () => {
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Custom Map Pin</p>
                         <p className="text-sm text-warm-600 dark:text-warm-400">Customize your sale's map icon with an emoji or short icon.</p>
                       </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">75 XP</span>
+                      <span className="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap ml-4">500 XP</span>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Organizer Scout+ | One-time | Permanent</p>
                   </div>
@@ -620,11 +620,11 @@ const HuntPassPage = () => {
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-semibold text-warm-900 dark:text-warm-100">Haul Visibility Boost</p>
-                        <p className="text-sm text-warm-600 dark:text-warm-400">Feature your haul as "Trending" to reach more collectors.</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400">Bump your haul post to the top of the local feed for 2 hours.</p>
                       </div>
                       <div className="text-right whitespace-nowrap ml-4">
-                        <span className="font-bold text-purple-600 dark:text-purple-300 block">25 XP</span>
-                        <span className="text-xs text-blue-500 dark:text-blue-400">or $0.25 via card</span>
+                        <span className="font-bold text-purple-600 dark:text-purple-300 block">10 XP</span>
+                        <span className="text-xs text-blue-500 dark:text-blue-400">or $0.10 via card</span>
                       </div>
                     </div>
                     <p className="text-xs text-warm-500 dark:text-warm-400">Account requirement: Scout+ | 7 days</p>
