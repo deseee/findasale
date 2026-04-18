@@ -97,16 +97,43 @@ body.embed #timer { display: none; }
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.55);
+  gap: 0;
+  background: rgba(0,0,0,0.72);
   backdrop-filter: blur(4px);
   z-index: 400;
   cursor: pointer;
   border-radius: 44px;
   transition: opacity 0.3s;
+  padding: 60px 36px 80px;
 }
 #play-overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+}
+.overlay-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.overlay-logo .a-dot { color: #D97706; }
+.overlay-watch {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+}
 .play-icon {
   width: 72px; height: 72px;
   background: rgba(217,119,6,0.9);
@@ -1213,6 +1240,10 @@ body.embed #timer { display: none; }
 
   <!-- Play overlay -->
   <div id="play-overlay">
+    <div class="overlay-brand">
+      <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="overlay-watch">Watch — 38 Seconds</div>
+    </div>
     <div class="play-icon">
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
         <path d="M8 5L23 14L8 23V5Z" fill="white"/>
