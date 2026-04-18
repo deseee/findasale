@@ -189,18 +189,21 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="yard-sign-${saleId}.pdf"`);
     doc.pipe(res);
 
-    const qrSize = 360; // 5 inches
-    const qrX = (PAGE_W - qrSize) / 2;
-    const qrY = 80;
+    // Yard sign layout: vertically centered block on letter page
+    // Total content ~630pt; center offset = (792-630)/2 = 81
+    const startY = 30;
+    const qrSize = 500; // ~6.9 inches
+    const qrX = (PAGE_W - qrSize) / 2; // = 56
+    const qrY = startY + 50; // after title
 
     // Title
     doc
-      .fontSize(24)
+      .fontSize(22)
       .fillColor('#1a1a2e')
       .font('Helvetica-Bold')
-      .text(sale.title, PAGE_MARGIN, 20, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+      .text(sale.title, PAGE_MARGIN, startY, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // QR Code
+    // QR Code (dominant element — fills most of page)
     doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
 
     // Date range
@@ -216,26 +219,26 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
     });
 
     doc
-      .fontSize(16)
-      .fillColor('#666666')
+      .fontSize(18)
+      .fillColor('#333333')
       .font('Helvetica-Bold')
-      .text(`${startDate} – ${endDate}`, PAGE_MARGIN, qrY + qrSize + 20, {
+      .text(`${startDate} – ${endDate}`, PAGE_MARGIN, qrY + qrSize + 14, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
 
     // Address
     doc
-      .fontSize(12)
-      .fillColor('#333333')
+      .fontSize(13)
+      .fillColor('#444444')
       .font('Helvetica')
-      .text(`${sale.address}`, PAGE_MARGIN, doc.y + 8, {
+      .text(`${sale.address}`, PAGE_MARGIN, doc.y + 6, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
 
     doc
-      .fontSize(11)
+      .fontSize(13)
       .text(`${sale.city}, ${sale.state} ${sale.zip}`, PAGE_MARGIN, doc.y + 2, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
@@ -244,8 +247,8 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
     // Footer
     doc
       .fontSize(10)
-      .fillColor('#666666')
-      .text('Scan to browse & buy online', PAGE_MARGIN, doc.y + 12, {
+      .fillColor('#888888')
+      .text('Scan to browse & buy online  •  finda.sale', PAGE_MARGIN, doc.y + 10, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
@@ -835,39 +838,39 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       year: 'numeric',
     });
 
-    // PAGE 1: Yard Sign
-    const qrSize = 360;
-    const qrX = (PAGE_W - qrSize) / 2;
-    const qrY = 80;
+    // PAGE 1: Yard Sign (identical layout to standalone yard sign)
+    const fkQrSize = 500; // ~6.9 inches
+    const fkQrX = (PAGE_W - fkQrSize) / 2;
+    const fkQrY = 80;
 
     doc
-      .fontSize(24)
+      .fontSize(22)
       .fillColor('#1a1a2e')
       .font('Helvetica-Bold')
-      .text(sale.title, PAGE_MARGIN, 20, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+      .text(sale.title, PAGE_MARGIN, 30, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    doc.image(qrYardSign, qrX, qrY, { width: qrSize, height: qrSize });
-
-    doc
-      .fontSize(16)
-      .fillColor('#666666')
-      .font('Helvetica-Bold')
-      .text(`${startDate} – ${endDate}`, PAGE_MARGIN, qrY + qrSize + 20, {
-        width: PAGE_W - PAGE_MARGIN * 2,
-        align: 'center',
-      });
+    doc.image(qrYardSign, fkQrX, fkQrY, { width: fkQrSize, height: fkQrSize });
 
     doc
-      .fontSize(12)
+      .fontSize(18)
       .fillColor('#333333')
-      .font('Helvetica')
-      .text(`${sale.address}`, PAGE_MARGIN, doc.y + 8, {
+      .font('Helvetica-Bold')
+      .text(`${startDate} – ${endDate}`, PAGE_MARGIN, fkQrY + fkQrSize + 14, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
 
     doc
-      .fontSize(11)
+      .fontSize(13)
+      .fillColor('#444444')
+      .font('Helvetica')
+      .text(`${sale.address}`, PAGE_MARGIN, doc.y + 6, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    doc
+      .fontSize(13)
       .text(`${sale.city}, ${sale.state} ${sale.zip}`, PAGE_MARGIN, doc.y + 2, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
@@ -875,8 +878,8 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
 
     doc
       .fontSize(10)
-      .fillColor('#666666')
-      .text('Scan to browse & buy online', PAGE_MARGIN, doc.y + 12, {
+      .fillColor('#888888')
+      .text('Scan to browse & buy online  •  finda.sale', PAGE_MARGIN, doc.y + 10, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
@@ -1126,90 +1129,78 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
 
     // PAGE 5: Check-In / Virtual Queue QR
     doc.addPage({ size: 'LETTER' });
-    const qrSize_interactive = 400;
-    const qrX_interactive = (612 - qrSize_interactive) / 2;
+    const qrSize_interactive = 480; // ~6.7 inches
+    const qrX_interactive = (PAGE_W - qrSize_interactive) / 2;
 
-    // Title
     doc
-      .fontSize(28)
+      .fontSize(26)
       .fillColor('#1a1a2e')
       .font('Helvetica-Bold')
-      .text('Check In & Join the Line', PAGE_MARGIN, 50, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+      .text('Check In & Join the Line', PAGE_MARGIN, 30, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // QR Code
-    doc.image(qrCheckIn, qrX_interactive, 100, { width: qrSize_interactive, height: qrSize_interactive });
+    doc.image(qrCheckIn, qrX_interactive, 75, { width: qrSize_interactive, height: qrSize_interactive });
 
-    // Instruction
     doc
-      .fontSize(14)
+      .fontSize(13)
       .fillColor('#333333')
       .font('Helvetica')
-      .text('Scan with your phone to check in, browse items, and join the virtual queue for entry.', PAGE_MARGIN, 520, {
+      .text('Scan with your phone to check in, browse items, and join the virtual queue for entry.', PAGE_MARGIN, 570, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
 
-    // Footer
     doc
-      .fontSize(11)
+      .fontSize(10)
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
     // PAGE 6: Treasure Hunt QR
     doc.addPage({ size: 'LETTER' });
 
-    // Title
     doc
-      .fontSize(28)
+      .fontSize(26)
       .fillColor('#1a1a2e')
       .font('Helvetica-Bold')
-      .text('Scan to Hunt for Treasure', PAGE_MARGIN, 50, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+      .text('Scan to Hunt for Treasure', PAGE_MARGIN, 30, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // QR Code
-    doc.image(qrTreasureHunt, qrX_interactive, 100, { width: qrSize_interactive, height: qrSize_interactive });
+    doc.image(qrTreasureHunt, qrX_interactive, 75, { width: qrSize_interactive, height: qrSize_interactive });
 
-    // Instruction
     doc
-      .fontSize(14)
+      .fontSize(13)
       .fillColor('#333333')
       .font('Helvetica')
-      .text('Scan at each clue location to unlock the next hint and earn XP rewards.', PAGE_MARGIN, 520, {
+      .text('Scan at each clue location to unlock the next hint and earn XP rewards.', PAGE_MARGIN, 570, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
 
-    // Footer
     doc
-      .fontSize(11)
+      .fontSize(10)
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
     // PAGE 7: Photo Station QR
     doc.addPage({ size: 'LETTER' });
 
-    // Title
     doc
-      .fontSize(28)
+      .fontSize(26)
       .fillColor('#1a1a2e')
       .font('Helvetica-Bold')
-      .text('Scan to Snap a Photo', PAGE_MARGIN, 50, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+      .text('Scan to Snap a Photo & Earn XP', PAGE_MARGIN, 30, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // QR Code
-    doc.image(qrPhotoStation, qrX_interactive, 100, { width: qrSize_interactive, height: qrSize_interactive });
+    doc.image(qrPhotoStation, qrX_interactive, 75, { width: qrSize_interactive, height: qrSize_interactive });
 
-    // Instruction
     doc
-      .fontSize(14)
+      .fontSize(13)
       .fillColor('#333333')
       .font('Helvetica')
-      .text('Take a photo of your favorite find and share it to earn XP.', PAGE_MARGIN, 520, {
+      .text('Take a photo of your favorite find and share it to earn XP.', PAGE_MARGIN, 570, {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
 
-    // Footer
     doc
-      .fontSize(11)
+      .fontSize(10)
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
