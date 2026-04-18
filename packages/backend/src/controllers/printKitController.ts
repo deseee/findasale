@@ -304,8 +304,16 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
     doc.pipe(res);
 
     // Draw two directional signs per page (top and bottom)
+    // Each sign: 792×306 pts. Large arrow with text inside (white), QR on opposite side.
+    // Sign 1 (i=0): right-pointing arrow (left zone) + QR (right zone)
+    // Sign 2 (i=1): QR (left zone) + left-pointing arrow (right zone)
     for (let i = 0; i < 2; i++) {
       const yOffset = i * 306; // 612 / 2 = 306 per sign
+      const cy = yOffset + 153; // vertical center of sign
+
+      // Arrow geometry constants
+      const shaftHalfH = 72;   // shaft ±72pt → 144pt tall shaft
+      const headHalfH  = 118;  // head wing ±118pt → 236pt total head height (fills most of 306pt)
 
       // Border
       doc
@@ -313,63 +321,70 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
         .lineWidth(2)
         .stroke('#cccccc');
 
-      // Arrow — right-pointing for sign 1 (i=0), left-pointing for sign 2 (i=1)
-      const ax = 20;
-      const ay = yOffset + 80;
       if (i === 0) {
-        // Right-pointing arrow (LEFT third)
+        // ── RIGHT-POINTING ARROW ──────────────────────────────────────────
+        // Shaft: x=15..385, Head: x=385..495, QR: x=520..740
         doc
           .polygon(
-            [ax, ay + 75],              // left-top
-            [ax + 90, ay],              // right-top point
-            [ax + 90, ay + 40],         // step in
-            [ax + 140, ay + 40],        // arrow shaft top-right
-            [ax + 140, ay + 110],       // arrow shaft bottom-right
-            [ax + 90, ay + 110],        // step out
-            [ax + 90, ay + 150],        // right-bottom point
+            [15,  cy - shaftHalfH],  // shaft top-left
+            [385, cy - shaftHalfH],  // shaft meets head (top)
+            [385, cy - headHalfH],   // head top wing
+            [495, cy],               // tip →
+            [385, cy + headHalfH],   // head bottom wing
+            [385, cy + shaftHalfH],  // shaft meets head (bottom)
+            [15,  cy + shaftHalfH],  // shaft bottom-left
           )
           .fill('#16a34a');
-      } else {
-        // Left-pointing arrow (tip on LEFT, shaft on RIGHT)
+
+        // Sale name — white, inside shaft
         doc
-          .polygon(
-            [ax + 140, ay + 75],        // right-center (tail right edge)
-            [ax + 50, ay],              // upper-right of arrowhead
-            [ax + 50, ay + 40],         // notch into shaft
-            [ax, ay + 40],              // shaft top-left
-            [ax, ay + 110],             // shaft bottom-left
-            [ax + 50, ay + 110],        // notch out of shaft
-            [ax + 50, ay + 150],        // lower-right of arrowhead
-          )
-          .fill('#16a34a');
-      }
+          .font('Helvetica-Bold')
+          .fontSize(19)
+          .fillColor('#ffffff')
+          .text(sale.title, 35, cy - 22, { width: 335, lineBreak: false });
 
-      // Sale name (middle section)
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(28)
-        .fillColor('#1a1a2e')
-        .text(sale.title, 180, yOffset + 50, { width: 250, lineBreak: false });
-
-      // "This Way" subtext
-      doc
-        .font('Helvetica')
-        .fontSize(14)
-        .fillColor('#666666')
-        .text('This Way', 180, yOffset + 140, { width: 250, lineBreak: false });
-
-      // Address line (if available)
-      if (sale.address) {
+        // "This Way →" — white, below sale name
         doc
           .font('Helvetica')
-          .fontSize(11)
-          .fillColor('#999999')
-          .text(sale.address, 180, yOffset + 165, { width: 250, lineBreak: false });
-      }
+          .fontSize(14)
+          .fillColor('#ffffff')
+          .text('This Way  →', 35, cy + 6, { width: 335, lineBreak: false });
 
-      // QR code — right side, fits within landscape page (792pt wide)
-      // x=510, width=250 → right edge=760, clear of 792pt boundary
-      doc.image(qrBuffer, 510, yOffset + 28, { width: 250, height: 250 });
+        // QR code — right zone, centered vertically
+        doc.image(qrBuffer, 520, yOffset + 43, { width: 220, height: 220 });
+
+      } else {
+        // ── LEFT-POINTING ARROW ───────────────────────────────────────────
+        // QR: x=30..250, Shaft: x=275..775, Head: x=275..165 (tip at left)
+        doc
+          .polygon(
+            [775, cy - shaftHalfH],  // shaft top-right
+            [775, cy + shaftHalfH],  // shaft bottom-right
+            [305, cy + shaftHalfH],  // shaft meets head (bottom)
+            [305, cy + headHalfH],   // head bottom wing
+            [195, cy],               // tip ←
+            [305, cy - headHalfH],   // head top wing
+            [305, cy - shaftHalfH],  // shaft meets head (top)
+          )
+          .fill('#16a34a');
+
+        // Sale name — white, inside shaft
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(19)
+          .fillColor('#ffffff')
+          .text(sale.title, 320, cy - 22, { width: 435, lineBreak: false });
+
+        // "← This Way" — white, below sale name
+        doc
+          .font('Helvetica')
+          .fontSize(14)
+          .fillColor('#ffffff')
+          .text('←  This Way', 320, cy + 6, { width: 435, lineBreak: false });
+
+        // QR code — left zone, centered vertically
+        doc.image(qrBuffer, 30, yOffset + 43, { width: 220, height: 220 });
+      }
     }
 
     doc.end();
@@ -422,8 +437,8 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="table-tents-${saleId}.pdf"`);
     doc.pipe(res);
 
-    const PANEL_W = 306;  // each half
-    const TENT_H = 396;
+    const PANEL_W = 306;  // each half of the folded tent (612 / 2)
+    const TENT_H = 396;   // two tents per letter page (792 / 2)
 
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
       month: 'short',
@@ -434,71 +449,131 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
       day: 'numeric',
     });
 
+    // Format sale type for human display
+    const saleTypeLabel: Record<string, string> = {
+      ESTATE: 'Estate Sale', YARD: 'Yard Sale', AUCTION: 'Auction',
+      FLEA_MARKET: 'Flea Market', CONSIGNMENT: 'Consignment Sale',
+    };
+    const saleTypeStr = saleTypeLabel[sale.saleType ?? ''] ?? '';
+
+    // QR centered in a 306pt panel: x = (306 - 190) / 2 = 58
+    const QR_SIZE = 190;
+    const QR_X_FRONT = (PANEL_W - QR_SIZE) / 2;        // 58 — left panel
+    const QR_X_BACK  = PANEL_W + (PANEL_W - QR_SIZE) / 2; // 364 — right panel
+
     // Draw two tents per page (tent 1: y=0..396, tent 2: y=396..792)
     for (let i = 0; i < 2; i++) {
       const yOffset = i * 396;
 
-      // LEFT PANEL (front — customer sees this)
-      // Border
-      doc
-        .rect(0, yOffset, PANEL_W, TENT_H)
-        .lineWidth(1.5)
-        .stroke('#cccccc');
+      // ── LEFT PANEL (front — visible when tent is standing) ──────────────
+      // Green header bar
+      doc.rect(0, yOffset, PANEL_W, 50).fill('#16a34a');
 
-      // Sale title
+      // Sale title — white on green header
       doc
         .font('Helvetica-Bold')
-        .fontSize(18)
+        .fontSize(15)
+        .fillColor('#ffffff')
+        .text(sale.title, 10, yOffset + 13, { width: 286, lineBreak: false });
+
+      // Sale type + date range row
+      const typeAndDate = saleTypeStr
+        ? `${saleTypeStr}  ·  ${startDate} – ${endDate}`
+        : `${startDate} – ${endDate}`;
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(11)
         .fillColor('#1a1a2e')
-        .text(sale.title, 12, yOffset + 20, { width: 282, lineBreak: false });
+        .text(typeAndDate, 12, yOffset + 60, { width: 282, lineBreak: false });
 
-      // Date range
-      doc
-        .font('Helvetica')
-        .fontSize(12)
-        .fillColor('#666666')
-        .text(`${startDate} – ${endDate}`, 12, yOffset + 90, { width: 282, lineBreak: false });
+      // Address (if available)
+      if (sale.address) {
+        doc
+          .font('Helvetica')
+          .fontSize(10)
+          .fillColor('#666666')
+          .text(sale.address, 12, yOffset + 78, { width: 282, lineBreak: false });
+      }
 
-      // QR code — centered in left panel, 200×200, x=(306-200)/2=53
-      // 200pt QR at y+120 ends at y+320 — fits within 396pt panel height
-      doc.image(qrBuffer, 53, yOffset + 120, { width: 200, height: 200 });
-
-      // RIGHT PANEL (back)
-      // Border
-      doc
-        .rect(PANEL_W, yOffset, PANEL_W, TENT_H)
-        .lineWidth(1.5)
-        .stroke('#cccccc');
-
-      // Fold line (dashed vertical)
-      doc
-        .moveTo(PANEL_W, yOffset)
-        .lineTo(PANEL_W, yOffset + TENT_H)
-        .dash(4, { space: 4 })
-        .lineWidth(1)
-        .stroke('#aaaaaa')
-        .undash();
-
-      // finda.sale
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(24)
-        .fillColor('#16a34a')
-        .text('finda.sale', PANEL_W + 18, yOffset + 20, { width: 270, align: 'center', lineBreak: false });
+      // Divider
+      doc.moveTo(12, yOffset + 98).lineTo(294, yOffset + 98).lineWidth(0.5).stroke('#dddddd');
 
       // Tagline
       doc
         .font('Helvetica')
-        .fontSize(14)
-        .fillColor('#1a1a2e')
-        .text('Browse items before you arrive.', PANEL_W + 18, yOffset + 70, { width: 270, align: 'center', lineBreak: false });
+        .fontSize(11)
+        .fillColor('#16a34a')
+        .text('Browse & buy before you arrive.', 12, yOffset + 106, { width: 282, align: 'center', lineBreak: false });
 
-      // Small instruction
+      // QR code — centered, 190×190, starts at y+125 → ends y+315
+      doc.image(qrBuffer, QR_X_FRONT, yOffset + 125, { width: QR_SIZE, height: QR_SIZE });
+
+      // "Scan to view items" caption
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#999999')
+        .text('Scan to view items online', 12, yOffset + 322, { width: 282, align: 'center', lineBreak: false });
+
+      // Outer border
+      doc.rect(0, yOffset, PANEL_W, TENT_H).lineWidth(1).stroke('#cccccc');
+
+      // ── RIGHT PANEL (back of tent) ───────────────────────────────────────
+      // Fold / cut line (dashed vertical)
+      doc
+        .moveTo(PANEL_W, yOffset)
+        .lineTo(PANEL_W, yOffset + TENT_H)
+        .dash(5, { space: 5 })
+        .lineWidth(1)
+        .stroke('#aaaaaa')
+        .undash();
+
+      // Green header bar
+      doc.rect(PANEL_W, yOffset, PANEL_W, 50).fill('#16a34a');
+
+      // "finda.sale" — white on green
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(22)
+        .fillColor('#ffffff')
+        .text('finda.sale', PANEL_W + 10, yOffset + 13, { width: 286, align: 'center', lineBreak: false });
+
+      // Tagline
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .fillColor('#1a1a2e')
+        .text('Browse & buy before you arrive.', PANEL_W + 12, yOffset + 60, { width: 282, align: 'center', lineBreak: false });
+
+      // Sale name (so shoppers know which sale this is)
       doc
         .font('Helvetica')
         .fontSize(10)
+        .fillColor('#666666')
+        .text(sale.title, PANEL_W + 12, yOffset + 80, { width: 282, align: 'center', lineBreak: false });
+
+      // Divider
+      doc.moveTo(PANEL_W + 12, yOffset + 98).lineTo(PANEL_W + 294, yOffset + 98).lineWidth(0.5).stroke('#dddddd');
+
+      // Second QR code — same URL, centered in back panel
+      doc.image(qrBuffer, QR_X_BACK, yOffset + 110, { width: QR_SIZE, height: QR_SIZE });
+
+      // "Scan to view items" caption
+      doc
+        .font('Helvetica')
+        .fontSize(9)
         .fillColor('#999999')
-        .text('Scan QR code on the left to view online.', PANEL_W + 18, yOffset + 180, { width: 270, align: 'center', lineBreak: false });
+        .text('Scan to view items online', PANEL_W + 12, yOffset + 307, { width: 282, align: 'center', lineBreak: false });
+
+      // Date + type footer
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor('#aaaaaa')
+        .text(typeAndDate, PANEL_W + 12, yOffset + 325, { width: 282, align: 'center', lineBreak: false });
+
+      // Outer border
+      doc.rect(PANEL_W, yOffset, PANEL_W, TENT_H).lineWidth(1).stroke('#cccccc');
     }
 
     doc.end();
@@ -880,12 +955,16 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       });
 
     // PAGE 2: Directional Signs (landscape orientation, 2 per page)
-    // Switch to landscape by creating a new page with custom size
-    // Note: getFullSignKitPDF continues with portrait pages, so we add it before switching back
-    doc.addPage({ size: [792, 612] });
+    // Large arrows filling most of each sign's height. Text inside arrow in white.
+    // Sign 1: right-pointing arrow (left zone) + QR (right zone)
+    // Sign 2: QR (left zone) + left-pointing arrow (right zone)
+    doc.addPage({ size: [792, 612], margins: 0 });
 
     for (let i = 0; i < 2; i++) {
       const yOffset = i * 306;
+      const cy = yOffset + 153;
+      const shaftHalfH = 72;
+      const headHalfH  = 118;
 
       // Border
       doc
@@ -893,124 +972,142 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         .lineWidth(2)
         .stroke('#cccccc');
 
-      // Arrow — filled right-pointing polygon (LEFT third)
-      const ax = 20;
-      const ay = yOffset + 80;
-      doc
-        .polygon(
-          [ax, ay + 75],              // left-top
-          [ax + 90, ay],              // right-top point
-          [ax + 90, ay + 40],         // step in
-          [ax + 140, ay + 40],        // arrow shaft top-right
-          [ax + 140, ay + 110],       // arrow shaft bottom-right
-          [ax + 90, ay + 110],        // step out
-          [ax + 90, ay + 150],        // right-bottom point
-        )
-        .fill('#16a34a');
-
-      // Sale name (middle section)
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(28)
-        .fillColor('#1a1a2e')
-        .text(sale.title, 180, yOffset + 50, { width: 250, lineBreak: false });
-
-      // "This Way" subtext
-      doc
-        .font('Helvetica')
-        .fontSize(14)
-        .fillColor('#666666')
-        .text('This Way', 180, yOffset + 140, { width: 250, lineBreak: false });
-
-      // Address line (if available)
-      if (sale.address) {
+      if (i === 0) {
+        // Right-pointing: shaft x=15..385, head x=385..495, QR x=520..740
         doc
-          .font('Helvetica')
-          .fontSize(11)
-          .fillColor('#999999')
-          .text(sale.address, 180, yOffset + 165, { width: 250, lineBreak: false });
-      }
+          .polygon(
+            [15,  cy - shaftHalfH],
+            [385, cy - shaftHalfH],
+            [385, cy - headHalfH],
+            [495, cy],
+            [385, cy + headHalfH],
+            [385, cy + shaftHalfH],
+            [15,  cy + shaftHalfH],
+          )
+          .fill('#16a34a');
 
-      // QR code — right side, fits within landscape page (792pt wide)
-      // x=510, width=250 → right edge=760, clear of 792pt boundary
-      doc.image(qrDirectional, 510, yOffset + 28, { width: 250, height: 250 });
+        doc
+          .font('Helvetica-Bold').fontSize(19).fillColor('#ffffff')
+          .text(sale.title, 35, cy - 22, { width: 335, lineBreak: false });
+        doc
+          .font('Helvetica').fontSize(14).fillColor('#ffffff')
+          .text('This Way  →', 35, cy + 6, { width: 335, lineBreak: false });
+
+        doc.image(qrDirectional, 520, yOffset + 43, { width: 220, height: 220 });
+
+      } else {
+        // Left-pointing: QR x=30..250, head x=195..305, shaft x=305..775
+        doc
+          .polygon(
+            [775, cy - shaftHalfH],
+            [775, cy + shaftHalfH],
+            [305, cy + shaftHalfH],
+            [305, cy + headHalfH],
+            [195, cy],
+            [305, cy - headHalfH],
+            [305, cy - shaftHalfH],
+          )
+          .fill('#16a34a');
+
+        doc
+          .font('Helvetica-Bold').fontSize(19).fillColor('#ffffff')
+          .text(sale.title, 320, cy - 22, { width: 435, lineBreak: false });
+        doc
+          .font('Helvetica').fontSize(14).fillColor('#ffffff')
+          .text('←  This Way', 320, cy + 6, { width: 435, lineBreak: false });
+
+        doc.image(qrDirectional, 30, yOffset + 43, { width: 220, height: 220 });
+      }
     }
 
     // PAGE 3: Table Tents (switch back to portrait Letter)
-    doc.addPage({ size: 'LETTER' });
+    // Both panels now have QR code + full sale info. No dead space.
+    doc.addPage({ size: 'LETTER', margins: 0 });
 
-    const PANEL_W_FULL = 306;  // each half
+    const PANEL_W_FULL = 306;
     const TENT_H_FULL = 396;
 
-    // Draw two tents per page (tent 1: y=0..396, tent 2: y=396..792)
+    const fkSaleTypeLabel: Record<string, string> = {
+      ESTATE: 'Estate Sale', YARD: 'Yard Sale', AUCTION: 'Auction',
+      FLEA_MARKET: 'Flea Market', CONSIGNMENT: 'Consignment Sale',
+    };
+    const fkSaleTypeStr = fkSaleTypeLabel[sale.saleType ?? ''] ?? '';
+    const fkTypeAndDate = fkSaleTypeStr
+      ? `${fkSaleTypeStr}  ·  ${startDate} – ${endDate}`
+      : `${startDate} – ${endDate}`;
+
+    const FK_QR_SIZE = 190;
+    const FK_QR_X_FRONT = (PANEL_W_FULL - FK_QR_SIZE) / 2;               // 58
+    const FK_QR_X_BACK  = PANEL_W_FULL + (PANEL_W_FULL - FK_QR_SIZE) / 2; // 364
+
     for (let i = 0; i < 2; i++) {
       const yOffset = i * 396;
 
-      // LEFT PANEL (front — customer sees this)
-      // Border
+      // ── LEFT PANEL (front) ──────────────────────────────────────────────
+      doc.rect(0, yOffset, PANEL_W_FULL, 50).fill('#16a34a');
       doc
-        .rect(0, yOffset, PANEL_W_FULL, TENT_H_FULL)
-        .lineWidth(1.5)
-        .stroke('#cccccc');
+        .font('Helvetica-Bold').fontSize(15).fillColor('#ffffff')
+        .text(sale.title, 10, yOffset + 13, { width: 286, lineBreak: false });
 
-      // Sale title
       doc
-        .font('Helvetica-Bold')
-        .fontSize(18)
-        .fillColor('#1a1a2e')
-        .text(sale.title, 12, yOffset + 20, { width: 282, lineBreak: false });
+        .font('Helvetica-Bold').fontSize(11).fillColor('#1a1a2e')
+        .text(fkTypeAndDate, 12, yOffset + 60, { width: 282, lineBreak: false });
 
-      // Date range
+      if (sale.address) {
+        doc
+          .font('Helvetica').fontSize(10).fillColor('#666666')
+          .text(sale.address, 12, yOffset + 78, { width: 282, lineBreak: false });
+      }
+
+      doc.moveTo(12, yOffset + 98).lineTo(294, yOffset + 98).lineWidth(0.5).stroke('#dddddd');
+
       doc
-        .font('Helvetica')
-        .fontSize(12)
-        .fillColor('#666666')
-        .text(`${startDate} – ${endDate}`, 12, yOffset + 90, { width: 282, lineBreak: false });
+        .font('Helvetica').fontSize(11).fillColor('#16a34a')
+        .text('Browse & buy before you arrive.', 12, yOffset + 106, { width: 282, align: 'center', lineBreak: false });
 
-      // QR code — centered in left panel, 200×200, x=(306-200)/2=53
-      // 200pt QR at y+120 ends at y+320 — fits within 396pt panel height
-      doc.image(qrTableTent, 53, yOffset + 120, { width: 200, height: 200 });
+      doc.image(qrTableTent, FK_QR_X_FRONT, yOffset + 125, { width: FK_QR_SIZE, height: FK_QR_SIZE });
 
-      // RIGHT PANEL (back)
-      // Border
       doc
-        .rect(PANEL_W_FULL, yOffset, PANEL_W_FULL, TENT_H_FULL)
-        .lineWidth(1.5)
-        .stroke('#cccccc');
+        .font('Helvetica').fontSize(9).fillColor('#999999')
+        .text('Scan to view items online', 12, yOffset + 322, { width: 282, align: 'center', lineBreak: false });
 
-      // Fold line (dashed vertical)
-      doc
-        .moveTo(PANEL_W_FULL, yOffset)
-        .lineTo(PANEL_W_FULL, yOffset + TENT_H_FULL)
-        .dash(4, { space: 4 })
-        .lineWidth(1)
-        .stroke('#aaaaaa')
-        .undash();
+      doc.rect(0, yOffset, PANEL_W_FULL, TENT_H_FULL).lineWidth(1).stroke('#cccccc');
 
-      // finda.sale
+      // ── RIGHT PANEL (back) ──────────────────────────────────────────────
       doc
-        .font('Helvetica-Bold')
-        .fontSize(24)
-        .fillColor('#16a34a')
-        .text('finda.sale', PANEL_W_FULL + 18, yOffset + 20, { width: 270, align: 'center', lineBreak: false });
+        .moveTo(PANEL_W_FULL, yOffset).lineTo(PANEL_W_FULL, yOffset + TENT_H_FULL)
+        .dash(5, { space: 5 }).lineWidth(1).stroke('#aaaaaa').undash();
 
-      // Tagline
+      doc.rect(PANEL_W_FULL, yOffset, PANEL_W_FULL, 50).fill('#16a34a');
       doc
-        .font('Helvetica')
-        .fontSize(14)
-        .fillColor('#1a1a2e')
-        .text('Browse items before you arrive.', PANEL_W_FULL + 18, yOffset + 70, { width: 270, align: 'center', lineBreak: false });
+        .font('Helvetica-Bold').fontSize(22).fillColor('#ffffff')
+        .text('finda.sale', PANEL_W_FULL + 10, yOffset + 13, { width: 286, align: 'center', lineBreak: false });
 
-      // Small instruction
       doc
-        .font('Helvetica')
-        .fontSize(10)
-        .fillColor('#999999')
-        .text('Scan QR code on the left to view online.', PANEL_W_FULL + 18, yOffset + 180, { width: 270, align: 'center', lineBreak: false });
+        .font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e')
+        .text('Browse & buy before you arrive.', PANEL_W_FULL + 12, yOffset + 60, { width: 282, align: 'center', lineBreak: false });
+
+      doc
+        .font('Helvetica').fontSize(10).fillColor('#666666')
+        .text(sale.title, PANEL_W_FULL + 12, yOffset + 80, { width: 282, align: 'center', lineBreak: false });
+
+      doc.moveTo(PANEL_W_FULL + 12, yOffset + 98).lineTo(PANEL_W_FULL + 294, yOffset + 98).lineWidth(0.5).stroke('#dddddd');
+
+      doc.image(qrTableTent, FK_QR_X_BACK, yOffset + 110, { width: FK_QR_SIZE, height: FK_QR_SIZE });
+
+      doc
+        .font('Helvetica').fontSize(9).fillColor('#999999')
+        .text('Scan to view items online', PANEL_W_FULL + 12, yOffset + 307, { width: 282, align: 'center', lineBreak: false });
+
+      doc
+        .font('Helvetica').fontSize(9).fillColor('#aaaaaa')
+        .text(fkTypeAndDate, PANEL_W_FULL + 12, yOffset + 325, { width: 282, align: 'center', lineBreak: false });
+
+      doc.rect(PANEL_W_FULL, yOffset, PANEL_W_FULL, TENT_H_FULL).lineWidth(1).stroke('#cccccc');
     }
 
     // PAGE 4: Check-In / Virtual Queue QR
-    doc.addPage({ size: 'LETTER' });
+    doc.addPage({ size: 'LETTER', margins: 0 });
     const qrSize_interactive = 480; // ~6.7 inches
     const qrX_interactive = (PAGE_W - qrSize_interactive) / 2;
 
@@ -1037,7 +1134,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
     // PAGE 5: Treasure Hunt QR
-    doc.addPage({ size: 'LETTER' });
+    doc.addPage({ size: 'LETTER', margins: 0 });
 
     doc
       .fontSize(26)
@@ -1062,7 +1159,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
     // PAGE 6: Photo Station QR
-    doc.addPage({ size: 'LETTER' });
+    doc.addPage({ size: 'LETTER', margins: 0 });
 
     doc
       .fontSize(26)
@@ -1087,7 +1184,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
     // PAGE 7+: Price Sheet
-    doc.addPage({ size: 'LETTER' });
+    doc.addPage({ size: 'LETTER', margins: 0 });
     await renderPriceSheet(doc, saleId, sale.title, frontendUrl);
 
     doc.end();
