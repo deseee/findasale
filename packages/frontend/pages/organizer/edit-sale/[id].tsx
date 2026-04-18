@@ -73,6 +73,9 @@ const EditSalePage = () => {
     treasureHuntEnabled: true,
     // Feature #121: Allow item holds for this sale
     holdsEnabled: true,
+    // Sale times
+    startTime: '09:00' as string,
+    endTime: '15:00' as string,
   });
 
   // Helper: Compute distance between two lat/lng points (degrees, approx)
@@ -148,11 +151,22 @@ const EditSalePage = () => {
       return new Date(isoDate).toISOString().split('T')[0];
     };
 
+    // Extract local HH:MM from ISO string for time inputs
+    const formatTime = (isoDate: string | undefined, fallback: string) => {
+      if (!isoDate) return fallback;
+      const d = new Date(isoDate);
+      const h = d.getHours().toString().padStart(2, '0');
+      const m = d.getMinutes().toString().padStart(2, '0');
+      return `${h}:${m}`;
+    };
+
     setFormData({
       title: sale.title,
       description: sale.description,
       startDate: formatDate(sale.startDate),
       endDate: formatDate(sale.endDate),
+      startTime: formatTime(sale.startDate, '09:00'),
+      endTime: formatTime(sale.endDate, '15:00'),
       address: sale.address,
       city: sale.city,
       state: sale.state,
@@ -194,7 +208,14 @@ const EditSalePage = () => {
       // Feature #91: Exclude markdown fields from main update (they go to separate endpoint)
       // Feature #85: Include treasure hunt fields in main update
       // Feature #121: Include holdsEnabled in main update
-      const { markdownEnabled, markdownFloor, ...saleData } = formDataRef.current;
+      const { markdownEnabled, markdownFloor, startTime, endTime, ...rest } = formDataRef.current;
+
+      // Recombine date + time into UTC ISO strings before submitting
+      const saleData = {
+        ...rest,
+        startDate: rest.startDate ? new Date(`${rest.startDate}T${startTime}`).toISOString() : rest.startDate,
+        endDate: rest.endDate ? new Date(`${rest.endDate}T${endTime}`).toISOString() : rest.endDate,
+      };
 
       // First update the sale (includes treasure hunt fields and holdsEnabled)
       await api.put(`/sales/${id}`, saleData);
@@ -585,6 +606,27 @@ const EditSalePage = () => {
                   name="endDate"
                   value={formData.endDate}
                   onChange={handleChange}
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Time</label>
+                <input
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Time</label>
+                <input
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
                 />
               </div>
