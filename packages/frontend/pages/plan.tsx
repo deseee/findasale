@@ -272,7 +272,6 @@ const PlanPage = () => {
               </div>
             </div>
           </div>
-        </div>
 
         {/* Footer CTA */}
         <div className="bg-warm-50 dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 py-6">
