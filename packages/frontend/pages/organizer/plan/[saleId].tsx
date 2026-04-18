@@ -79,12 +79,36 @@ const SalePlanPage = () => {
     mutationFn: async (payload: { itemId: string; completed: boolean }) => {
       return api.patch(`/checklist/${saleId}`, payload);
     },
+    onMutate: async (payload) => {
+      // Cancel in-flight re-fetches
+      await queryClient.cancelQueries({ queryKey: ['checklist', saleId] });
+      // Snapshot current data
+      const previous = queryClient.getQueryData<ChecklistResponse>(['checklist', saleId]);
+      // Optimistically update
+      queryClient.setQueryData<ChecklistResponse>(['checklist', saleId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: old.items.map((item) =>
+            item.id === payload.itemId ? { ...item, completed: payload.completed } : item
+          ),
+        };
+      });
+      return { previous };
+    },
+    onError: (_err, _payload, context) => {
+      // Roll back on failure
+      if (context?.previous) {
+        queryClient.setQueryData(['checklist', saleId], context.previous);
+      }
+      showToast('Failed to update task', 'error');
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
       showToast('Task updated', 'success');
     },
-    onError: (error: any) => {
-      showToast(error.response?.data?.message || 'Failed to update task', 'error');
+    onSettled: () => {
+      // Always re-fetch to sync with server
+      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
     },
   });
 
