@@ -366,7 +366,7 @@ export const photoStationScan = async (req: AuthRequest, res: Response) => {
       return res.json({
         alreadyScanned: true,
         xpAwarded: 0,
-        shareXp: 10,
+        shareXp: XP_AWARDS.SHARE,
         message: "You've already scanned this photo station.",
       });
     }
@@ -389,8 +389,8 @@ export const photoStationScan = async (req: AuthRequest, res: Response) => {
     res.status(200).json({
       alreadyScanned: false,
       xpAwarded,
-      shareXp: 10, // SHARE award constant (existing XP_AWARDS.SHARE = 5, but social share to external platform = 10 per context)
-      message: `You earned ${xpAwarded} XP! Share to earn 10 more.`,
+      shareXp: XP_AWARDS.SHARE,
+      message: `You earned ${xpAwarded} XP! Share to earn ${XP_AWARDS.SHARE} more.`,
     });
   } catch (error) {
     console.error('[photoOp] photoStationScan error:', error);

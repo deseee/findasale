@@ -25,7 +25,7 @@ const PhotoStationPage = () => {
   // Scan mutation
   const scanMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.post(`/sales/${id}/photo-station-scan`, {});
+      const response = await api.post(`/sales/${id}/photo-ops/photo-station-scan`, {});
       return response.data as PhotoStationScanResponse;
     },
     onSuccess: (data) => {
@@ -65,19 +65,34 @@ const PhotoStationPage = () => {
   const handleShare = async () => {
     if (!user || !scanData) return;
 
-    // Award share XP via existing share flow
+    const shareUrl = `https://finda.sale/sales/${id}`;
+    const shareText = 'Check out this sale on FindA.Sale!';
+
     try {
+      // Try native Web Share API first
+      if (navigator.share) {
+        await navigator.share({
+          title: 'FindA.Sale',
+          text: shareText,
+          url: shareUrl,
+        });
+      } else {
+        // Fallback: copy to clipboard
+        await navigator.clipboard.writeText(shareUrl);
+        showToast('Link copied to clipboard!', 'success');
+      }
+
+      // Award share XP after successful share/copy
       await api.post('/xp/share', {
         saleId: id,
         platform: 'social',
       });
       showToast(`✨ You earned ${scanData.shareXp} XP for sharing!`, 'success');
     } catch (error: any) {
-      console.error('Share XP award failed:', error);
-      showToast(
-        error.response?.data?.message || 'Failed to award share XP',
-        'error'
-      );
+      // User cancelled share dialog — don't award XP, don't show error
+      if (error?.name === 'AbortError') return;
+      console.error('Share failed:', error);
+      showToast('Failed to share', 'error');
     }
   };
 
@@ -90,10 +105,8 @@ const PhotoStationPage = () => {
       <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-md mx-auto px-4 py-8">
           {/* Back Link */}
-          <Link href={`/sales/${id}`}>
-            <a className="inline-flex items-center text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 mb-4">
-              ← Back to Sale
-            </a>
+          <Link href={`/sales/${id}`} className="inline-flex items-center text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 mb-4">
+            ← Back to Sale
           </Link>
 
           {/* Main Card */}
@@ -129,7 +142,7 @@ const PhotoStationPage = () => {
                           Already Scanned
                         </h2>
                         <p className="text-gray-600 dark:text-gray-400 mt-2">
-                          You've already scanned this photo station. Come back later for more XP!
+                          You've already earned XP at this photo station.
                         </p>
                       </>
                     ) : (
@@ -169,10 +182,8 @@ const PhotoStationPage = () => {
                   )}
 
                   {/* Back to Sale Button */}
-                  <Link href={`/sales/${id}`}>
-                    <a className="w-full block text-center px-4 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 font-semibold rounded-lg transition mt-2">
-                      Back to Sale
-                    </a>
+                  <Link href={`/sales/${id}`} className="w-full block text-center px-4 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 font-semibold rounded-lg transition mt-2">
+                    Back to Sale
                   </Link>
                 </>
               ) : null}

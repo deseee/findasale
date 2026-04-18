@@ -180,7 +180,11 @@ const SaleDetailPage = () => {
   // Award 2 XP for walk-in visit (check-in) at a sale (once per sale per day, auth required)
   useEffect(() => {
     if (!id || !user) return;
-    api.post(`/sales/${id}/visit`).catch(() => { /* fire-and-forget */ });
+    api.post(`/sales/${id}/visit`).then((res) => {
+      if (res.data?.xpAwarded > 0) {
+        showToast('📸 Photo Station is live — snap a pic to earn XP!', 'info');
+      }
+    }).catch(() => { /* fire-and-forget */ });
   }, [id, user?.id]);
 
   // Feature #51: Record VIEW ripple for analytics
@@ -890,6 +894,20 @@ const SaleDetailPage = () => {
                 <p className="text-xs text-warm-400 dark:text-gray-500 mb-4">Print on signs or flyers to drive foot traffic to this sale.</p>
                 <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={180} />
               </div>
+            )}
+
+            {/* Photo Station card — shopper only, not organizer */}
+            {user && !isOrganizer && (
+              <Link href={`/sales/${sale.id}/photo-station`} className="block bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 mb-8 hover:shadow-md transition">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">📸</span>
+                  <div>
+                    <p className="font-semibold text-emerald-800 dark:text-emerald-200">Photo Station</p>
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400">Snap a pic at this sale and earn 5 XP</p>
+                  </div>
+                  <svg className="ml-auto w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </div>
+              </Link>
             )}
 
             {/* Pickup scheduling surfaces on the post-purchase receipt page, not here */}
