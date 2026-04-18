@@ -616,15 +616,13 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
 
                 {/* Label Sheet Composer — prominent CTA */}
-                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between">
+                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <h3 className="font-bold text-warm-900 dark:text-warm-100">Label Sheet Composer</h3>
                     <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">Build custom QR pricetag sheets for Avery 5160. Pick prices, set quantities, print.</p>
                   </div>
-                  <Link href={`/organizer/label-composer/${saleId}`}>
-                    <span className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-5 rounded-lg transition-colors whitespace-nowrap cursor-pointer">
-                      Open Composer →
-                    </span>
+                  <Link href={`/organizer/label-composer/${saleId}`} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-5 rounded-lg transition-colors whitespace-nowrap text-center">
+                    Open Composer →
                   </Link>
                 </div>
               </div>
