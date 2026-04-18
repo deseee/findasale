@@ -13,6 +13,7 @@ export interface ItemForHighValueCheck {
   category?: string | null;
   estimatedValue?: number | string | any;
   aiConfidence?: number;
+  price?: number | string | any; // actual sale price — primary signal for eBay-imported items
 }
 
 /**
@@ -49,11 +50,20 @@ export function evaluateAutoHighValueFlag(
     }
   }
 
+  // Convert price to number (handles Prisma Decimal)
+  let priceNum: number | null = null;
+  if (item.price) {
+    if (typeof item.price === 'number') priceNum = item.price;
+    else if (typeof item.price === 'string') priceNum = parseFloat(item.price);
+    else if (item.price.toNumber) priceNum = item.price.toNumber();
+  }
+
   const categoryMatch = item.category && HIGH_VALUE_CATEGORIES.includes(item.category.toLowerCase());
-  const priceMatch = estimatedValueNum && estimatedValueNum >= saleThreshold;
+  const estimatedValueMatch = estimatedValueNum && estimatedValueNum >= saleThreshold;
+  const priceMatch = priceNum && priceNum >= saleThreshold; // primary signal for eBay-imported items
   const confidenceMatch = item.aiConfidence && item.aiConfidence >= 0.85 && estimatedValueNum && estimatedValueNum >= 300;
 
-  return !!(categoryMatch || priceMatch || confidenceMatch);
+  return !!(categoryMatch || estimatedValueMatch || priceMatch || confidenceMatch);
 }
 
 /**
