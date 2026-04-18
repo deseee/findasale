@@ -400,6 +400,9 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             border: none;
             box-shadow: none;
           }
+          .qr-full-page-last {
+            page-break-after: avoid;
+          }
           .qr-full-page-qr {
             width: 5in;
             height: 5in;
@@ -773,8 +776,8 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
               )}
 
-              {/* Section 5 — Photo Station QR (all tiers) */}
-              <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
+              {/* Section 5 — Photo Station QR (all tiers, last print page) */}
+              <div className="qr-full-page qr-full-page-last bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                 <div className="flex-1 flex flex-col justify-center items-center">
                   <img
                     src={getQRUrl(`https://finda.sale/sales/${sale.id}/photo-station`, 300)}

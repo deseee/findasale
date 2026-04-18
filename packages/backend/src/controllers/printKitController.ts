@@ -73,7 +73,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
           type: 'png',
           width: 150,
           margin: 1,
-          color: { dark: '#1a1a2e', light: '#ffffff' },
+          color: { dark: '#000000', light: '#ffffff' },
         })
       );
     }
@@ -178,7 +178,7 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
       type: 'png',
       width: 500,
       margin: 2,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     });
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -291,7 +291,7 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
       type: 'png',
       width: 500,
       margin: 1,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     });
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -323,16 +323,16 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
 
       if (i === 0) {
         // ── RIGHT-POINTING ARROW ──────────────────────────────────────────
-        // Shaft: x=15..385, Head: x=385..495, QR: x=520..740
+        // QR: x=30..250 (left zone), Shaft: x=270..560, Head: x=560..780, tip →
         doc
           .polygon(
-            [15,  cy - shaftHalfH],  // shaft top-left
-            [385, cy - shaftHalfH],  // shaft meets head (top)
-            [385, cy - headHalfH],   // head top wing
-            [495, cy],               // tip →
-            [385, cy + headHalfH],   // head bottom wing
-            [385, cy + shaftHalfH],  // shaft meets head (bottom)
-            [15,  cy + shaftHalfH],  // shaft bottom-left
+            [270, cy - shaftHalfH],  // shaft top-left
+            [560, cy - shaftHalfH],  // shaft meets head (top)
+            [560, cy - headHalfH],   // head top wing
+            [780, cy],               // tip →
+            [560, cy + headHalfH],   // head bottom wing
+            [560, cy + shaftHalfH],  // shaft meets head (bottom)
+            [270, cy + shaftHalfH],  // shaft bottom-left
           )
           .fill('#16a34a');
 
@@ -341,49 +341,49 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
           .font('Helvetica-Bold')
           .fontSize(19)
           .fillColor('#ffffff')
-          .text(sale.title, 35, cy - 22, { width: 335, lineBreak: false });
+          .text(sale.title, 285, cy - 22, { width: 255, lineBreak: false });
 
-        // "This Way →" — white, below sale name
+        // "This Way" — white, below sale name
         doc
           .font('Helvetica')
           .fontSize(14)
           .fillColor('#ffffff')
-          .text('This Way', 35, cy + 6, { width: 335, lineBreak: false });
-
-        // QR code — right zone, centered vertically
-        doc.image(qrBuffer, 520, yOffset + 43, { width: 220, height: 220 });
-
-      } else {
-        // ── LEFT-POINTING ARROW ───────────────────────────────────────────
-        // QR: x=30..250, Shaft: x=275..775, Head: x=275..165 (tip at left)
-        doc
-          .polygon(
-            [775, cy - shaftHalfH],  // shaft top-right
-            [775, cy + shaftHalfH],  // shaft bottom-right
-            [305, cy + shaftHalfH],  // shaft meets head (bottom)
-            [305, cy + headHalfH],   // head bottom wing
-            [195, cy],               // tip ←
-            [305, cy - headHalfH],   // head top wing
-            [305, cy - shaftHalfH],  // shaft meets head (top)
-          )
-          .fill('#16a34a');
-
-        // Sale name — white, inside shaft
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(19)
-          .fillColor('#ffffff')
-          .text(sale.title, 320, cy - 22, { width: 435, lineBreak: false });
-
-        // "← This Way" — white, below sale name
-        doc
-          .font('Helvetica')
-          .fontSize(14)
-          .fillColor('#ffffff')
-          .text('This Way', 320, cy + 6, { width: 435, lineBreak: false });
+          .text('This Way', 285, cy + 6, { width: 255, lineBreak: false });
 
         // QR code — left zone, centered vertically
         doc.image(qrBuffer, 30, yOffset + 43, { width: 220, height: 220 });
+
+      } else {
+        // ── LEFT-POINTING ARROW ───────────────────────────────────────────
+        // Shaft: x=230..520, Head tip at x=12, QR: x=540..760 (right zone)
+        doc
+          .polygon(
+            [520, cy - shaftHalfH],  // shaft top-right
+            [520, cy + shaftHalfH],  // shaft bottom-right
+            [230, cy + shaftHalfH],  // shaft meets head (bottom)
+            [230, cy + headHalfH],   // head bottom wing
+            [12,  cy],               // tip ←
+            [230, cy - headHalfH],   // head top wing
+            [230, cy - shaftHalfH],  // shaft meets head (top)
+          )
+          .fill('#16a34a');
+
+        // Sale name — white, inside shaft
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(19)
+          .fillColor('#ffffff')
+          .text(sale.title, 245, cy - 22, { width: 255, lineBreak: false });
+
+        // "This Way" — white, below sale name
+        doc
+          .font('Helvetica')
+          .fontSize(14)
+          .fillColor('#ffffff')
+          .text('This Way', 245, cy + 6, { width: 255, lineBreak: false });
+
+        // QR code — right zone, centered vertically
+        doc.image(qrBuffer, 540, yOffset + 43, { width: 220, height: 220 });
       }
     }
 
@@ -425,7 +425,7 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
       type: 'png',
       width: 500,
       margin: 1,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     });
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -622,7 +622,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
         type: 'png',
         width: 500,
         margin: 2,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
+        color: { dark: '#000000', light: '#ffffff' },
       });
     }
 
@@ -800,7 +800,7 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
       type: 'png',
       width: 200,
       margin: 1,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     });
     doc.image(miscQrBuffer, cellX + 4, cellY + 12, { width: QR_SIZE, height: QR_SIZE });
   }
@@ -842,21 +842,21 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       type: 'png',
       width: 500,
       margin: 2,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     });
 
     const qrDirectional = await QRCode.toBuffer(saleUrl, {
       type: 'png',
       width: 500,
       margin: 2,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     });
 
     const qrTableTent = await QRCode.toBuffer(saleUrl, {
       type: 'png',
       width: 500,
       margin: 2,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     });
 
     // Generate QR codes for interactive pages
@@ -866,7 +866,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         type: 'png',
         width: 500,
         margin: 2,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
+        color: { dark: '#000000', light: '#ffffff' },
       }
     );
 
@@ -876,7 +876,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         type: 'png',
         width: 500,
         margin: 2,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
+        color: { dark: '#000000', light: '#ffffff' },
       }
     );
 
@@ -886,7 +886,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         type: 'png',
         width: 500,
         margin: 2,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
+        color: { dark: '#000000', light: '#ffffff' },
       }
     );
 
@@ -974,50 +974,50 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         .stroke('#cccccc');
 
       if (i === 0) {
-        // Right-pointing: shaft x=15..385, head x=385..495, QR x=520..740
+        // Right-pointing: QR x=30..250 (left), shaft x=270..560, head tip x=780
         doc
           .polygon(
-            [15,  cy - shaftHalfH],
-            [385, cy - shaftHalfH],
-            [385, cy - headHalfH],
-            [495, cy],
-            [385, cy + headHalfH],
-            [385, cy + shaftHalfH],
-            [15,  cy + shaftHalfH],
+            [270, cy - shaftHalfH],
+            [560, cy - shaftHalfH],
+            [560, cy - headHalfH],
+            [780, cy],
+            [560, cy + headHalfH],
+            [560, cy + shaftHalfH],
+            [270, cy + shaftHalfH],
           )
           .fill('#16a34a');
 
         doc
           .font('Helvetica-Bold').fontSize(19).fillColor('#ffffff')
-          .text(sale.title, 35, cy - 22, { width: 335, lineBreak: false });
+          .text(sale.title, 285, cy - 22, { width: 255, lineBreak: false });
         doc
           .font('Helvetica').fontSize(14).fillColor('#ffffff')
-          .text('This Way', 35, cy + 6, { width: 335, lineBreak: false });
-
-        doc.image(qrDirectional, 520, yOffset + 43, { width: 220, height: 220 });
-
-      } else {
-        // Left-pointing: QR x=30..250, head x=195..305, shaft x=305..775
-        doc
-          .polygon(
-            [775, cy - shaftHalfH],
-            [775, cy + shaftHalfH],
-            [305, cy + shaftHalfH],
-            [305, cy + headHalfH],
-            [195, cy],
-            [305, cy - headHalfH],
-            [305, cy - shaftHalfH],
-          )
-          .fill('#16a34a');
-
-        doc
-          .font('Helvetica-Bold').fontSize(19).fillColor('#ffffff')
-          .text(sale.title, 320, cy - 22, { width: 435, lineBreak: false });
-        doc
-          .font('Helvetica').fontSize(14).fillColor('#ffffff')
-          .text('This Way', 320, cy + 6, { width: 435, lineBreak: false });
+          .text('This Way', 285, cy + 6, { width: 255, lineBreak: false });
 
         doc.image(qrDirectional, 30, yOffset + 43, { width: 220, height: 220 });
+
+      } else {
+        // Left-pointing: shaft x=230..520, head tip x=12, QR x=540..760 (right)
+        doc
+          .polygon(
+            [520, cy - shaftHalfH],
+            [520, cy + shaftHalfH],
+            [230, cy + shaftHalfH],
+            [230, cy + headHalfH],
+            [12,  cy],
+            [230, cy - headHalfH],
+            [230, cy - shaftHalfH],
+          )
+          .fill('#16a34a');
+
+        doc
+          .font('Helvetica-Bold').fontSize(19).fillColor('#ffffff')
+          .text(sale.title, 245, cy - 22, { width: 255, lineBreak: false });
+        doc
+          .font('Helvetica').fontSize(14).fillColor('#ffffff')
+          .text('This Way', 245, cy + 6, { width: 255, lineBreak: false });
+
+        doc.image(qrDirectional, 540, yOffset + 43, { width: 220, height: 220 });
       }
     }
 
