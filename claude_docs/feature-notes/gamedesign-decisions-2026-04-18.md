@@ -177,6 +177,86 @@ IMPACT: LOW (positive for retention — heavy visitors feel correctly rewarded)
 
 ---
 
+---
+
+## D-XP-015: Treasure Hunt XP Correction (Locked)
+
+DECISION: Treasure Hunt clue scan **12 XP → 3 XP**. Completion bonus **30 XP → 15 XP**. HP multiplied values update accordingly (clue: 3 XP → 4 XP rounded; completion: 30→15 XP → 22 XP HP).
+
+RATIONALE: The commercial hierarchy rule: purchase (10 XP) must be the highest per-action XP for any non-referral single act. A Treasure Hunt with 3 clues + completion bonus previously yielded 66 XP with zero dollars spent — equivalent to 6.6 purchases. This is a farming exploit. At corrected values: 3 clues (9 XP) + completion (15 XP) = 24 XP total per hunt = 2.4 purchases. The hunt remains meaningful (completing an entire hunt earns more than 2 purchases) without inverting the earn hierarchy. Clue scans at 3 XP match the passive-action tier (same as check-in, review, appraisal submit).
+
+PLAYER EXPERIENCE: Treasure Hunts feel rewarding to complete — 15 XP bonus is visible progress. Individual clue scans are progress markers, not the payout. The completion bonus is the reward.
+
+IMPACT: HIGH (balance — closes the highest unintended farming path in the system)
+
+---
+
+## D-XP-016: Haul Post Rebalance (Locked)
+
+DECISION: Haul post XP **25 XP → 15 XP**. Monthly cap stays at 4/month (60 XP max from hauls/month).
+
+RATIONALE: Haul posts are post-purchase documentation — users share items they bought. They are additive to purchase XP, not competing with it. However, the documentation bonus (25 XP) was 2.5× the purchase it documents (10 XP), making the content creation worth more than the commercial act. At 15 XP: buy + post = 25 XP combined; the purchase earns 40% of the combined value. 4 buys + 4 hauls/month = 100 XP — balanced. Haul posts remain the highest single-action non-referral earn after auction wins, correctly rewarding UGC engagement without inverting the commercial hierarchy.
+
+PLAYER EXPERIENCE: Posting hauls still feels meaningfully rewarded. The reduction from 25→15 XP is not visible to users as a nerf — they see "15 XP" not a comparison to a prior number.
+
+IMPACT: MEDIUM (balance — corrects ratio of documentation XP to purchase XP)
+
+---
+
+## D-XP-017: Appraisal Selected — Restored to 20 XP (Locked)
+
+DECISION: Appraisal selected by seller remains **20 XP**. Earlier reduction to 10 XP in this session was reverted.
+
+RATIONALE: Appraisals are a paid service — the requester spends real money or XP to get their item valued. The appraiser is providing skilled expertise to a real economic transaction. Being selected means your valuation was trusted over all others. This is categorically different from passive actions (haul posts, social shares) where no one paid for anything. 20 XP correctly signals that expert contributions to a paid service are valued at the same level as competitive commercial transactions (auction wins). The fraud risk (cartel farming) that prompted the D-XP-004 reduction from 40→20 XP is a gate problem, not a value problem — the XP reward should reflect actual contribution value, and fraud prevention should be handled by selection system guards.
+
+Submitted (5 XP) vs Selected (20 XP): 4× ratio is intentional. Participation earns a small reward; expertise earns a meaningful one.
+
+IMPACT: LOW (revert — restores correct value for expert contributions in a paid service context)
+
+---
+
+## D-XP-018: Social Share XP Correction (Locked)
+
+DECISION: Social share XP **10 XP → 5 XP**.
+
+RATIONALE: Social share XP uses an honor system — user clicks "Did you share this?" and self-reports yes. No verification. At 10 XP this equals a purchase, making unverified self-reporting worth the same as a real commercial transaction. At 5 XP it matches the passive-action tier (review, appraisal submit, check-in) — appropriate for an unverified, low-friction action.
+
+IMPACT: LOW (balance — honor-system actions should not equal verified commercial acts)
+
+---
+
+## Revised Earning Table (Full Reference — Post D-XP-015 through D-XP-018)
+
+Supersedes all prior earning tables. Authoritative as of 2026-04-18.
+
+| Activity | XP | Notes |
+|----------|----|-------|
+| Walk-in visit / check-in | 5 XP | D-XP-007 |
+| QR code scan (check-in) | 5 XP | D-XP-010 |
+| QR clue scan (Treasure Hunt) | **3 XP** | D-XP-015 (was 12) |
+| Seller review | 5 XP | D-XP-004 |
+| Appraisal submitted | 5 XP | D-XP-004 |
+| Social share | **5 XP** | D-XP-018 (was 10) |
+| Haul post | **15 XP** | D-XP-016 (was 25), cap 4/month |
+| Appraisal selected by seller | 20 XP | D-XP-004 (D-XP-017 reverted — see note) |
+| Purchase (any) | 10 XP | D-XP-004 — ANCHOR |
+| Treasure Hunt completion bonus | **15 XP** | D-XP-015 (was 30) |
+| Auction win | 20 XP | D-XP-009 |
+| Referral (friend's first purchase clears) | 500 XP | D-XP-004 |
+| Challenge — Easy | 50 XP | D-XP-011 |
+| Challenge — Medium | 150 XP | D-XP-011 |
+| Challenge — Hard | 300 XP | D-XP-011 |
+| Micro-event completion | 75 XP | D-XP-011 |
+| Seasonal leaderboard Top 10 | 200 XP | D-XP-011 |
+
+**Monthly XP caps:**
+- Haul posts: 4/month max (60 XP max from hauls)
+- Auction wins: 100 XP/month max (D-XP-004)
+- Appraisal submissions: 50 XP/month max (D-XP-004)
+
+**Commercial hierarchy (per action, ascending):**
+3 XP → 5 XP → 10 XP (purchase anchor) → 15 XP (haul post, full hunt completion) → 20 XP (auction win, appraisal selected — both reflect real economic stakes) → 500 XP (referral)
+
 **Decision Authority:** Claude Game Designer, FindA.Sale
-**Amends:** D-XP-004, D-XP-005, D-XP-006 (2026-04-13)
+**Amends:** D-XP-004, D-XP-005, D-XP-006 (2026-04-13); D-XP-007 through D-XP-014 (2026-04-18 earlier)
 **All other decisions from 2026-04-13 unchanged and remain locked**
