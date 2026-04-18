@@ -367,8 +367,9 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
           .text(sale.address, 180, yOffset + 165, { width: 250, lineBreak: false });
       }
 
-      // QR code — top right, 150×150
-      doc.image(qrBuffer, 630, yOffset + 30, { width: 150, height: 150 });
+      // QR code — right side, fits within landscape page (792pt wide)
+      // x=510, width=250 → right edge=760, clear of 792pt boundary
+      doc.image(qrBuffer, 510, yOffset + 28, { width: 250, height: 250 });
     }
 
     doc.end();
@@ -458,8 +459,9 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
         .fillColor('#666666')
         .text(`${startDate} – ${endDate}`, 12, yOffset + 90, { width: 282, lineBreak: false });
 
-      // QR code — centered in left panel, 240×240, x=(306-240)/2=33
-      doc.image(qrBuffer, 33, yOffset + 160, { width: 240, height: 240 });
+      // QR code — centered in left panel, 200×200, x=(306-200)/2=53
+      // 200pt QR at y+120 ends at y+320 — fits within 396pt panel height
+      doc.image(qrBuffer, 53, yOffset + 120, { width: 200, height: 200 });
 
       // RIGHT PANEL (back)
       // Border
@@ -731,8 +733,9 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
 /**
  * GET /api/organizer/sales/:saleId/signs/full-kit
  * Combined multi-section PDF: page 1 = yard sign, page 2 = directional signs,
- * page 3 = table tents, page 4 = hang tags, page 5 = check-in QR,
- * page 6 = treasure hunt QR, page 7 = photo station QR, pages 8+ = price sheet.
+ * page 3 = table tents, page 4 = check-in QR, page 5 = treasure hunt QR,
+ * page 6 = photo station QR, pages 7+ = price sheet.
+ * (Hang tags excluded — download separately from the QR Item Labels section.)
  */
 export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
   try {
@@ -747,7 +750,6 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       where: { id: saleId },
       include: {
         organizer: { select: { userId: true } },
-        items: { select: { id: true, title: true, price: true }, orderBy: { title: 'asc' } },
       },
     });
 
@@ -781,14 +783,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       color: { dark: '#1a1a2e', light: '#ffffff' },
     });
 
-    const qrHangTag = await QRCode.toBuffer(saleUrl, {
-      type: 'png',
-      width: 150,
-      margin: 1,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
-    });
-
-    // Generate QR codes for new interactive pages
+    // Generate QR codes for interactive pages
     const qrCheckIn = await QRCode.toBuffer(
       `${frontendUrl}/sales/${saleId}?utm_source=qr_full_kit_checkin`,
       {
@@ -936,8 +931,9 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
           .text(sale.address, 180, yOffset + 165, { width: 250, lineBreak: false });
       }
 
-      // QR code — right side, 260×260, recentered
-      doc.image(qrDirectional, 610, yOffset + 20, { width: 260, height: 260 });
+      // QR code — right side, fits within landscape page (792pt wide)
+      // x=510, width=250 → right edge=760, clear of 792pt boundary
+      doc.image(qrDirectional, 510, yOffset + 28, { width: 250, height: 250 });
     }
 
     // PAGE 3: Table Tents (switch back to portrait Letter)
@@ -971,8 +967,9 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         .fillColor('#666666')
         .text(`${startDate} – ${endDate}`, 12, yOffset + 90, { width: 282, lineBreak: false });
 
-      // QR code — centered in left panel, 240×240, x=(306-240)/2=33
-      doc.image(qrTableTent, 33, yOffset + 160, { width: 240, height: 240 });
+      // QR code — centered in left panel, 200×200, x=(306-200)/2=53
+      // 200pt QR at y+120 ends at y+320 — fits within 396pt panel height
+      doc.image(qrTableTent, 53, yOffset + 120, { width: 200, height: 200 });
 
       // RIGHT PANEL (back)
       // Border
@@ -1012,122 +1009,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         .text('Scan QR code on the left to view online.', PANEL_W_FULL + 18, yOffset + 180, { width: 270, align: 'center', lineBreak: false });
     }
 
-    // PAGE 4: Hang Tags (item-specific)
-    doc.addPage({ size: 'LETTER' });
-
-    const TAG_W_FULL = 140;
-    const TAG_H_FULL = 220;
-    const COLS_FULL = 4;
-    const ROWS_FULL = 3;
-    const TAGS_PER_PAGE_FULL = COLS_FULL * ROWS_FULL;
-    const MARGIN_X_FULL = (612 - COLS_FULL * TAG_W_FULL) / 2;  // = 26
-    const MARGIN_Y_FULL = (792 - ROWS_FULL * TAG_H_FULL) / 2;  // = 66
-    const QR_SIZE_FULL = 110;
-
-    if (sale.items.length === 0) {
-      // Generate one page of 12 blank tags
-      for (let row = 0; row < ROWS_FULL; row++) {
-        for (let col = 0; col < COLS_FULL; col++) {
-          const tagX = MARGIN_X_FULL + col * TAG_W_FULL;
-          const tagY = MARGIN_Y_FULL + row * TAG_H_FULL;
-
-          // Dashed perforated border
-          doc
-            .rect(tagX, tagY, TAG_W_FULL, TAG_H_FULL)
-            .dash(2, { space: 2 })
-            .lineWidth(1)
-            .stroke('#cccccc')
-            .undash();
-
-          // Hole punch circle at top center
-          doc
-            .circle(tagX + TAG_W_FULL / 2, tagY + 12, 6)
-            .lineWidth(1)
-            .stroke('#999999');
-
-          // "No items yet" message
-          doc
-            .font('Helvetica')
-            .fontSize(10)
-            .fillColor('#999999')
-            .text('No items yet', tagX + 5, tagY + 95, { width: TAG_W_FULL - 10, align: 'center' });
-
-          // finda.sale (bottom)
-          doc
-            .font('Helvetica')
-            .fontSize(7)
-            .fillColor('#999999')
-            .text('finda.sale', tagX + 5, tagY + TAG_H_FULL - 16, { width: TAG_W_FULL - 10, align: 'center', lineBreak: false });
-        }
-      }
-    } else {
-      // Generate one tag per item
-      for (let i = 0; i < sale.items.length; i++) {
-        // Add page when i > 0 && i % TAGS_PER_PAGE_FULL === 0
-        if (i > 0 && i % TAGS_PER_PAGE_FULL === 0) {
-          doc.addPage({ size: 'LETTER' });
-        }
-
-        const col = i % COLS_FULL;
-        const row = Math.floor((i % TAGS_PER_PAGE_FULL) / COLS_FULL);
-        const tagX = MARGIN_X_FULL + col * TAG_W_FULL;
-        const tagY = MARGIN_Y_FULL + row * TAG_H_FULL;
-        const item = sale.items[i];
-
-        // Dashed perforated border
-        doc
-          .rect(tagX, tagY, TAG_W_FULL, TAG_H_FULL)
-          .dash(2, { space: 2 })
-          .lineWidth(1)
-          .stroke('#cccccc')
-          .undash();
-
-        // Hole punch circle at top center
-        doc
-          .circle(tagX + TAG_W_FULL / 2, tagY + 12, 6)
-          .lineWidth(1)
-          .stroke('#999999');
-
-        // Item title (truncated)
-        const titleText = (item.title || '').slice(0, 20);
-        doc
-          .font('Helvetica')
-          .fontSize(8)
-          .fillColor('#1a1a2e')
-          .text(titleText, tagX + 5, tagY + 26, { width: TAG_W_FULL - 10, align: 'center', lineBreak: false });
-
-        // Price (if available)
-        if (item.price != null) {
-          const priceText = `$${item.price.toFixed(2)}`;
-          doc
-            .font('Helvetica-Bold')
-            .fontSize(11)
-            .fillColor('#16a34a')
-            .text(priceText, tagX + 5, tagY + 45, { width: TAG_W_FULL - 10, align: 'center', lineBreak: false });
-        }
-
-        // QR code — centered horizontally
-        const itemUrl = `${frontendUrl}/items/${item.id}`;
-        const itemQrBuffer = await QRCode.toBuffer(itemUrl, {
-          type: 'png',
-          width: 500,
-          margin: 2,
-          color: { dark: '#1a1a2e', light: '#ffffff' },
-        });
-        const qrX_full = tagX + (TAG_W_FULL - QR_SIZE_FULL) / 2;  // = tagX + 15
-        const qrY_full = tagY + (item.price ? 70 : 55);
-        doc.image(itemQrBuffer, qrX_full, qrY_full, { width: QR_SIZE_FULL, height: QR_SIZE_FULL });
-
-        // finda.sale (bottom)
-        doc
-          .font('Helvetica')
-          .fontSize(7)
-          .fillColor('#999999')
-          .text('finda.sale', tagX + 5, tagY + TAG_H_FULL - 16, { width: TAG_W_FULL - 10, align: 'center', lineBreak: false });
-      }
-    }
-
-    // PAGE 5: Check-In / Virtual Queue QR
+    // PAGE 4: Check-In / Virtual Queue QR
     doc.addPage({ size: 'LETTER' });
     const qrSize_interactive = 480; // ~6.7 inches
     const qrX_interactive = (PAGE_W - qrSize_interactive) / 2;
@@ -1154,7 +1036,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // PAGE 6: Treasure Hunt QR
+    // PAGE 5: Treasure Hunt QR
     doc.addPage({ size: 'LETTER' });
 
     doc
@@ -1179,7 +1061,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // PAGE 7: Photo Station QR
+    // PAGE 6: Photo Station QR
     doc.addPage({ size: 'LETTER' });
 
     doc
@@ -1204,7 +1086,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // PAGE 8+: Price Sheet
+    // PAGE 7+: Price Sheet
     doc.addPage({ size: 'LETTER' });
     await renderPriceSheet(doc, saleId, sale.title, frontendUrl);
 

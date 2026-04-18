@@ -515,17 +515,6 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     <p className="text-sm text-warm-600 dark:text-warm-400">Folded cards for tables and counters</p>
                   </div>
 
-                  {/* Hang Tags */}
-                  <div className="text-center">
-                    <button
-                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/signs/hang-tag`, 'hang-tags.pdf')}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
-                    >
-                      🏷️ Hang Tags
-                    </button>
-                    <p className="text-sm text-warm-600 dark:text-warm-400">8 perforated tags per page</p>
-                  </div>
-
                   {/* Full Kit */}
                   <div className="text-center">
                     <button
@@ -563,6 +552,16 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       📌 Avery 5160 Stickers
                     </button>
                     <p className="text-sm text-warm-600 dark:text-warm-400">Price tags & item stickers (30 per page)</p>
+                  </div>
+
+                  <div className="text-center">
+                    <button
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/signs/hang-tag`, 'hang-tags.pdf')}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      🏷️ Hang Tags
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Item-specific perforated tags (12 per page)</p>
                   </div>
 
                   <div className="text-center">
