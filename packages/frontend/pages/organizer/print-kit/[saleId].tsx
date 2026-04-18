@@ -51,14 +51,15 @@ interface PrintKitPageProps {}
 
 const ConditionBadge: React.FC<{ condition: string }> = ({ condition }) => {
   const conditionMap: Record<string, { bg: string; text: string; label: string }> = {
-    S: { bg: '#10b981', text: '#ffffff', label: 'S - Mint' },
-    A: { bg: '#3b82f6', text: '#ffffff', label: 'A - Excellent' },
-    B: { bg: '#f59e0b', text: '#ffffff', label: 'B - Good' },
-    C: { bg: '#ef4444', text: '#ffffff', label: 'C - Fair' },
-    D: { bg: '#6b7280', text: '#ffffff', label: 'D - Poor' },
+    S: { bg: '#10b981', text: '#ffffff', label: 'Mint' },
+    A: { bg: '#3b82f6', text: '#ffffff', label: 'Excellent' },
+    B: { bg: '#f59e0b', text: '#ffffff', label: 'Good' },
+    C: { bg: '#ef4444', text: '#ffffff', label: 'Fair' },
+    D: { bg: '#6b7280', text: '#ffffff', label: 'Poor' },
   };
 
-  const info = conditionMap[condition] || conditionMap['D'];
+  const info = conditionMap[condition];
+  if (!info) return null;
 
   return (
     <span
@@ -66,13 +67,13 @@ const ConditionBadge: React.FC<{ condition: string }> = ({ condition }) => {
         display: 'inline-block',
         backgroundColor: info.bg,
         color: info.text,
-        padding: '4px 8px',
+        padding: '2px 6px',
         borderRadius: '4px',
-        fontSize: '11px',
+        fontSize: '10px',
         fontWeight: 'bold',
       }}
     >
-      {condition}
+      {condition} · {info.label}
     </span>
   );
 };
@@ -302,6 +303,42 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             height: 90pt;
             margin: 0 auto;
             display: block;
+          }
+          .item-qr-label {
+            font-size: 7pt;
+            color: #666;
+            text-align: center;
+            margin-top: 2pt;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+          }
+          /* Screen preview — compact readable layout, not print-sized */
+          @media screen {
+            .item-tags-grid {
+              height: auto;
+              grid-template-rows: auto;
+              gap: 8px;
+            }
+            .item-tag {
+              min-height: 140px;
+              padding: 8px;
+              border-radius: 6px;
+              border: 1px solid #e5e7eb;
+            }
+            .item-qr {
+              width: 64pt;
+              height: 64pt;
+            }
+            .item-photo {
+              max-height: 60px;
+            }
+            .item-title {
+              font-size: 10pt;
+            }
+            .item-price {
+              font-size: 12pt;
+            }
           }
           .yard-sign-title {
             font-size: 44px;
@@ -668,14 +705,19 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                         )}
                         <div className="item-title">{item.title}</div>
                         <div className="item-price">${item.price != null ? item.price.toFixed(2) : 'N/A'}</div>
-                        <div className="item-condition">
-                          <ConditionBadge condition={item.condition || ''} />
+                        {item.condition && (
+                          <div className="item-condition">
+                            <ConditionBadge condition={item.condition} />
+                          </div>
+                        )}
+                        <div>
+                          <img
+                            src={getQRUrl(`https://finda.sale/items/${item.id}`, 80)}
+                            alt={`QR for ${item.title}`}
+                            className="item-qr"
+                          />
+                          <div className="item-qr-label">{item.title}</div>
                         </div>
-                        <img
-                          src={getQRUrl(`https://finda.sale/items/${item.id}`, 80)}
-                          alt="Item QR Code"
-                          className="item-qr"
-                        />
                       </div>
                     ))}
                     {/* Fill empty slots with blank cards */}

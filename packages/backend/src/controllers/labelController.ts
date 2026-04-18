@@ -71,7 +71,15 @@ async function drawLabel(
     .text(priceText, textX, cs + 50, { width: textW, align: 'left', lineBreak: false });
 
   // Category + condition
-  const chips = [item.category, item.condition].filter(Boolean).join('  ·  ');
+  // Decode HTML entities and clean up eBay colon-separated category path
+  const decodeCategory = (raw: string | null): string | null => {
+    if (!raw) return null;
+    const decoded = raw.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+    // Show last 2 segments of colon path for space reasons: "Dollars: Eisenhower (1971-78)"
+    const parts = decoded.split(':').map(s => s.trim()).filter(Boolean);
+    return parts.length > 2 ? parts.slice(-2).join(': ') : decoded;
+  };
+  const chips = [decodeCategory(item.category), item.condition].filter(Boolean).join('  ·  ');
   if (chips) {
     doc
       .fontSize(8)
