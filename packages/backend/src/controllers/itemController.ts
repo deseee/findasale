@@ -843,7 +843,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     // Feature #372: Wire auto high-value flagging after AI analysis
     // If aiConfidence or estimatedValue was just updated, re-evaluate auto-flagging
-    if ((aiConfidence !== undefined || estimatedValue !== undefined) && !updatedItem.isHighValueLocked) {
+    if ((aiConfidence !== undefined || estimatedValue !== undefined || price !== undefined) && !updatedItem.isHighValueLocked) {
       try {
         const sale = await prisma.sale.findUnique({
           where: { id: updatedItem.saleId },
