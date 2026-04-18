@@ -231,9 +231,10 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             margin: 0;
             padding: 0.5in;
             page-break-after: always;
+            page-break-inside: avoid;
           }
           .print-container:last-child {
-            page-break-after: auto;
+            page-break-after: avoid;
           }
           .yard-sign {
             width: 7.5in;
@@ -252,15 +253,15 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
           }
           .item-tags-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.5in;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.25in;
             page-break-inside: avoid;
           }
           .item-tag {
-            width: 3.5in;
-            height: 2in;
-            border: 1px solid black;
-            padding: 0.2in;
+            width: 2.33in;
+            height: 2.67in;
+            border: 1pt solid #000;
+            padding: 0.15in;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -276,28 +277,29 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             margin: 0 auto;
           }
           .item-title {
-            font-size: 10px;
+            font-size: 9pt;
             font-weight: bold;
             line-height: 1.2;
             overflow: hidden;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
-            margin: 4px 0;
+            margin: 4pt 0;
           }
           .item-price {
-            font-size: 18px;
+            font-size: 11pt;
             font-weight: bold;
             color: black;
           }
           .item-condition {
-            font-size: 9px;
-            margin-top: 4px;
+            font-size: 8pt;
+            margin-top: 2pt;
           }
           .item-qr {
-            width: 0.8in;
-            height: 0.8in;
-            margin: 4px auto;
+            width: 80pt;
+            height: 80pt;
+            margin: 4pt auto;
+            display: block;
           }
           .yard-sign-title {
             font-size: 48px;
@@ -615,10 +617,6 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
               </div>
 
-              {/* Legacy Print Preview */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Print Preview</h2>
-              </div>
             </div>
           )}
 
@@ -750,5 +748,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     </>
   );
 };
+
+(PrintKitPage as any).getLayout = (page: React.ReactNode) => page;
 
 export default PrintKitPage;
