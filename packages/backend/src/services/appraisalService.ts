@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { awardXp, checkDailyXpCap } from './xpService';
+import { awardXp, checkDailyXpCap, XP_AWARDS } from './xpService';
 
 /**
  * Appraisal Service — Feature #54: Crowdsourced Appraisal API
@@ -164,8 +164,8 @@ export const calculateConsensus = async (requestId: string) => {
       data: { status: 'COMPLETED' },
     });
 
-    // Award XP to each responder (20 XP per selection, hard cap of 5 selections/day)
-    const XP_AWARD_AMOUNT = 20;
+    // Award XP to each responder — uses locked value (D-XP-004, cap of 5 selections/day)
+    const XP_AWARD_AMOUNT = XP_AWARDS.APPRAISAL_SELECTED;
     const MAX_SELECTIONS_PER_DAY = 5;
     const awardedResponders: string[] = [];
     const cappedResponders: string[] = [];
