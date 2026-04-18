@@ -9,6 +9,7 @@ import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
 import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getHangTagKit, getFullSignKitPDF, getPriceSheet } from '../controllers/printKitController';
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
+import { getCheatsheet, getItemsForLabels, createLabelBatch, printLabelBatch } from '../controllers/labelComposerController';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 
 const router = Router();
@@ -587,6 +588,12 @@ router.get('/:saleId/signs/full-kit', authenticate, getFullSignKitPDF);
 // Feature #241: GET /api/organizers/:saleId/print-kit/price-sheet
 // Download pre-printed price cheat sheet (27 price points, 3×9 grid)
 router.get('/:saleId/print-kit/price-sheet', authenticate, getPriceSheet);
+
+// Label Sheet Composer — batch QR pricetag generation
+router.get('/:saleId/cheatsheet', authenticate, getCheatsheet);
+router.get('/:saleId/items-for-labels', authenticate, getItemsForLabels);
+router.post('/:saleId/label-batch', authenticate, createLabelBatch);
+router.get('/batches/:batchId/print', authenticate, printLabelBatch);
 
 // GET /organizers/efficiency-stats — Organizer benchmarks vs. cohort
 // Must be registered BEFORE /:id to avoid Express matching 'efficiency-stats' as an id param

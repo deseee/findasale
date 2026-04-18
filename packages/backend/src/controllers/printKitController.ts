@@ -6,6 +6,7 @@ import { Response } from 'express';
 import QRCode from 'qrcode';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { CHEATSHEET_PRICES } from '../constants/cheatsheet';
 
 // Avery 5160 label dimensions: 1" × 2.625"
 const STICKER_W = 189; // 2.625 inches @ 72 dpi
@@ -752,8 +753,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
  * Renders 3 cols × 10 rows = 30 cells (27 prices used).
  */
 async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, frontendUrl: string) {
-  const prices = [0.25, 0.50, 0.75, 1.00, 1.50, 2.00, 2.50, 3.00, 3.50,
-                  4.00, 4.50, 5.00, 6, 7, 7.50, 8, 9, 10, 11, 12, 12.50, 13, 14, 15, 16, 17, 18, 19, 20, 25];
+  const prices = CHEATSHEET_PRICES;
   const COLS = 3;
   const CELL_W = 189;   // Avery 5160: 2-5/8" = 189pt
   const CELL_H = 72;    // Avery 5160: 1" = 72pt
