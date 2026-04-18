@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import Skeleton from './Skeleton';
 import { format } from 'date-fns';
@@ -32,6 +32,7 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
+  const queryClient = useQueryClient();
   const [newItemLabel, setNewItemLabel] = useState<Record<string, string>>({
     pre: '',
     during: '',
@@ -59,7 +60,7 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
       return response.data;
     },
     onSuccess: (data: SaleChecklistData) => {
-      // Update local cache
+      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
     },
   });
 
@@ -69,6 +70,9 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
       const response = await api.post(`/checklist/${saleId}/items`, payload);
       return response.data;
     },
+    onSuccess: (data: SaleChecklistData) => {
+      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
+    },
   });
 
   // Mutation to delete item
@@ -76,6 +80,9 @@ const SaleChecklist: React.FC<SaleChecklistProps> = ({ saleId }) => {
     mutationFn: async (itemId: string) => {
       const response = await api.delete(`/checklist/${saleId}/items/${itemId}`);
       return response.data;
+    },
+    onSuccess: (data: SaleChecklistData) => {
+      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
     },
   });
 
