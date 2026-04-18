@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import { Readable } from 'stream';
 import { prisma } from '../index';
 import { Decimal } from '@prisma/client/runtime/library';
+import { ItemRarity } from '@prisma/client';
 import axios from 'axios';
 import FormData from 'form-data';
 import { z } from 'zod';
@@ -84,12 +85,12 @@ const toNumber = (value: string | undefined | null): number | null => {
 
 // Feature #57: Helper to assign item rarity based on price
 // Auto-assignment tiers: price >= 500 → LEGENDARY, >= 200 → ULTRA_RARE, >= 75 → RARE, >= 25 → UNCOMMON, else → COMMON
-const assignRarity = (price: number | undefined | null): string => {
-  if (!price || price < 25) return 'COMMON';
-  if (price >= 500) return 'LEGENDARY';
-  if (price >= 200) return 'ULTRA_RARE';
-  if (price >= 75) return 'RARE';
-  return 'UNCOMMON';
+const assignRarity = (price: number | undefined | null): ItemRarity => {
+  if (!price || price < 25) return ItemRarity.COMMON;
+  if (price >= 500) return ItemRarity.LEGENDARY;
+  if (price >= 200) return ItemRarity.ULTRA_RARE;
+  if (price >= 75) return ItemRarity.RARE;
+  return ItemRarity.UNCOMMON;
 };
 
 // Hunt Pass Feature: Helper to check if item is visible to user based on rarity + Hunt Pass status
