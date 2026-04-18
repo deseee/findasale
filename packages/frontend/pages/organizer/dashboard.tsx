@@ -1043,8 +1043,8 @@ const OrganizerDashboard = () => {
                           if (!confirmed) return;
                           try {
                             await api.patch(`/sales/${activeSale!.id}/status`, { status: 'ENDED' });
-                            showToast('Sale closed successfully', 'success');
-                            setTimeout(() => window.location.reload(), 1000);
+                            showToast('Sale closed — completing your settlement', 'success');
+                            setTimeout(() => router.push(`/organizer/settlement/${activeSale!.id}`), 800);
                           } catch (error: any) {
                             console.error('Failed to close sale:', error);
                             showToast(error.response?.data?.message || 'Failed to close sale', 'error');
