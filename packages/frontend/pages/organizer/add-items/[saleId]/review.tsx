@@ -840,10 +840,19 @@ const ReviewPage = () => {
                       publishMutation.mutate(unpublishedIds);
                     }}
                     disabled={publishMutation.isPending}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 mb-6"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 mb-3"
                   >
                     {publishMutation.isPending ? 'Publishing...' : `Publish All (${items.filter((i) => i.draftStatus !== 'PUBLISHED').length} unpublished)`}
                   </button>
+                )}
+
+                {/* Label Composer shortcut */}
+                {!itemsLoading && items.filter((i) => i.price != null).length > 0 && (
+                  <Link href={`/organizer/label-composer/${saleId}`}>
+                    <span className="block w-full text-center bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-700 dark:text-warm-300 font-semibold py-2.5 px-4 rounded-lg mb-6 cursor-pointer transition-colors">
+                      Print labels for {items.filter((i) => i.price != null).length} priced items →
+                    </span>
+                  </Link>
                 )}
 
                 {itemsLoading ? (

@@ -614,6 +614,19 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     <p className="text-sm text-warm-600 dark:text-warm-400">Pre-printed price cheat sheet ($0.25–$20)</p>
                   </div>
                 </div>
+
+                {/* Label Sheet Composer — prominent CTA */}
+                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-warm-900 dark:text-warm-100">Label Sheet Composer</h3>
+                    <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">Build custom QR pricetag sheets for Avery 5160. Pick prices, set quantities, print.</p>
+                  </div>
+                  <Link href={`/organizer/label-composer/${saleId}`}>
+                    <span className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-5 rounded-lg transition-colors whitespace-nowrap cursor-pointer">
+                      Open Composer →
+                    </span>
+                  </Link>
+                </div>
               </div>
 
               {/* Interactive QR Codes Section */}
