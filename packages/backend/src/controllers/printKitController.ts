@@ -72,7 +72,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       itemQrBuffers.push(
         await QRCode.toBuffer(itemUrl, {
           type: 'png',
-          width: 150,
+          width: 200,
           margin: 1,
           color: { dark: '#000000', light: '#ffffff' },
         })
@@ -1109,7 +1109,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
 
     // PAGE 4: Check-In / Virtual Queue QR
     doc.addPage({ size: 'LETTER', margin: 0 });
-    const qrSize_interactive = 480; // ~6.7 inches
+    const qrSize_interactive = 500; // ~6.9 inches (matches yard sign)
     const qrX_interactive = (PAGE_W - qrSize_interactive) / 2;
 
     doc
