@@ -214,7 +214,7 @@ const SalePlanPage = () => {
                             absolute w-12 h-0.5 -right-6 top-6
                             ${stage.isComplete
                               ? 'bg-green-600 dark:bg-green-400'
-                              : currentStage?.label === stage.label || (idx < stageProgress.findIndex((s) => !s.isComplete) ?? -1)
+                              : currentStage?.label === stage.label || idx < stageProgress.findIndex((s) => !s.isComplete)
                               ? 'bg-amber-600 dark:bg-amber-400'
                               : 'bg-gray-300 dark:bg-gray-600'
                             }
