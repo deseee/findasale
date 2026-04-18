@@ -66,12 +66,6 @@ const PlanPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Scroll to bottom only when messages exist
-  useEffect(() => {
-    if (messages.length > 0) {
-      scrollToBottom();
-    }
-  }, [messages]);
 
   // Scroll to top on page load
   useEffect(() => {
