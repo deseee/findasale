@@ -72,6 +72,8 @@ const SalePlanPage = () => {
       return res.data;
     },
     enabled: !!saleId && typeof saleId === 'string',
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
   });
 
   // Update task mutation

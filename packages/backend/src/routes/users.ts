@@ -74,6 +74,36 @@ router.get('/purchases/:purchaseId', authenticate, async (req: AuthRequest, res:
 });
 router.get('/favorites', authenticate, getFavorites);
 router.get('/me', authenticate, getUserProfile);
+
+// Get user's XP status (for Early Access Cache and other XP features)
+router.get('/xp-status', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        guildXp: true,
+        explorerRank: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      guildXp: user.guildXp,
+      explorerRank: user.explorerRank,
+    });
+  } catch (error) {
+    console.error('Error fetching user XP status:', error);
+    res.status(500).json({ message: 'Server error while fetching XP status' });
+  }
+});
+
 router.get('/leaderboard', getLeaderboard);
 
 // Public endpoint: Shopper QR code data for POS scanning

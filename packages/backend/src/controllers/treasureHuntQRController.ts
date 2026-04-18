@@ -40,10 +40,10 @@ export async function createClue(req: AuthRequest, res: Response) {
       return res.status(403).json({ message: 'Not authorized to manage this sale' });
     }
 
-    // Check clue count limit
+    // Check clue count limit (S499 decision: 3 clues per sale)
     const existingCount = await prisma.treasureHuntQRClue.count({ where: { saleId } });
-    if (existingCount >= 10) {
-      return res.status(400).json({ message: 'Sales are limited to 10 treasure hunt clues.' });
+    if (existingCount >= 3) {
+      return res.status(400).json({ message: 'Sales are limited to 3 treasure hunt clues.' });
     }
 
     // Create the clue

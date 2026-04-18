@@ -585,17 +585,9 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     // Organizers review suggestions before saving — no silent pre-fill.
     const suggestedTags: string[] = [];
 
-    // Feature #57: Validate and assign rarity
-    let assignedRarity = rarity;
-    if (!assignedRarity) {
-      // Auto-assign rarity based on price if not provided
-      const parsedPrice = price ? parseFloat(price) : null;
-      assignedRarity = assignRarity(parsedPrice);
-    } else if (!['COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE', 'LEGENDARY'].includes(assignedRarity)) {
-      return res.status(400).json({
-        message: `Invalid rarity "${assignedRarity}". Must be one of: COMMON, UNCOMMON, RARE, ULTRA_RARE, LEGENDARY`
-      });
-    }
+    // Feature #57: Rarity is always auto-assigned from price — organizers cannot set it manually
+    const parsedPrice = price ? parseFloat(price) : null;
+    const assignedRarity = assignRarity(parsedPrice);
 
     // Create the item in database
     const item = await prisma.item.create({
@@ -717,16 +709,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (description !== undefined) updateData.description = description;
     if (price !== undefined) updateData.price = price ? parseFloat(price) : null;
 
-    // Feature #57: Handle rarity — auto-reassign if price changes and no explicit rarity provided
-    if (rarity !== undefined) {
-      if (!['COMMON', 'UNCOMMON', 'RARE', 'ULTRA_RARE', 'LEGENDARY'].includes(rarity)) {
-        return res.status(400).json({
-          message: `Invalid rarity "${rarity}". Must be one of: COMMON, UNCOMMON, RARE, ULTRA_RARE, LEGENDARY`
-        });
-      }
-      updateData.rarity = rarity;
-    } else if (price !== undefined) {
-      // Auto-reassign rarity if price changes and no explicit rarity provided
+    // Feature #57: Rarity is always auto-assigned from price — organizers cannot override it
+    if (price !== undefined) {
       const newPrice = price ? parseFloat(price) : null;
       updateData.rarity = assignRarity(newPrice);
     }

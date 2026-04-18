@@ -60,6 +60,11 @@ const getSaleTypeLabel = (saleType?: string): string => {
   return labels[saleType] || 'sale';
 };
 
+// Helper: generate comprehensive hashtag list covering all sale types
+const getAllSaleTypeHashtags = (): string => {
+  return '#yardsale #estatesale #garagesale #auction #fleamarket #consignment #findasale';
+};
+
 const SharePromoteModal: React.FC<SharePromoteModalProps> = ({
   sale,
   itemCount = 0,
@@ -96,7 +101,7 @@ Find amazing deals on quality items! ${itemCount ? `We have ${itemCount}+ items`
 📅 ${startDate} - ${endDate}
 🕐 ${time}
 
-${sale.tags && sale.tags.length > 0 ? `#${sale.tags.join(' #')} ` : ''}#LocalSales #${saleTypeLabel.replace(/\s+/g, '')} #Bargains #ShoppingLocal
+${sale.tags && sale.tags.length > 0 ? `#${sale.tags.join(' #')} ` : ''}#LocalSales ${getAllSaleTypeHashtags()} #Bargains #ShoppingLocal
 
 Don't miss out! Visit us today.`,
     },
@@ -191,7 +196,7 @@ See you there! 🛍️`,
 🗓️ ${startDate} - ${endDate}
 🔗 Link in bio → finda.sale
 
-#${saleTypeLabel.replace(/\s+/g, '')} #thrifting #vintagefinds #${sale.city}thrift #secondhand #estatefinds #thrifthaul`,
+${getAllSaleTypeHashtags()} #thrifting #vintagefinds #${sale.city}thrift #secondhand #estatefinds #thrifthaul`,
     },
     pinterest: {
       title: 'Pinterest',
@@ -203,6 +208,8 @@ Discover unique vintage furniture, antiques, collectibles, and one-of-a-kind fin
 
 📍 ${address}
 🗓️ ${startDate} - ${endDate}
+
+${getAllSaleTypeHashtags()}
 
 Find more ${saleTypeLabel}s near you → finda.sale`,
     },

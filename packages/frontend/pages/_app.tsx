@@ -19,6 +19,7 @@ import OnboardingModal from '../components/OnboardingModal'; // Phase 27
 import PosPaymentRequestAlert from '../components/PosPaymentRequestAlert';
 import ErrorBoundary from '../components/ErrorBoundary';
 import NudgeBar from '../components/NudgeBar';
+import RankUpManager from '../components/RankUpManager';
 import { DegradationProvider } from '../contexts/DegradationContext'; // Feature #20: Proactive Degradation Mode
 import DegradationBanner from '../components/DegradationBanner'; // Feature #20: Proactive Degradation Mode
 import { useDegradationMode } from '../hooks/useDegradationMode'; // Feature #20: Proactive Degradation Mode
@@ -275,6 +276,8 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <OnboardingShower />
               {/* POS: Global fullscreen payment request alert for shoppers */}
               <PosPaymentRequestAlert />
+              {/* Explorer's Guild: Rank-up celebration modal */}
+              <RankUpManager />
               </QueryClientProvider>
             </LowBandwidthProvider>
           </DegradationProvider>
