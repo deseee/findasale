@@ -25,6 +25,9 @@ const CreateSalePage = () => {
   const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
 
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('15:00');
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -141,7 +144,13 @@ const CreateSalePage = () => {
     setTierLimitError(null);
 
     try {
-      const response = await api.post('/sales', formData);
+      // Combine date + time and convert to UTC ISO string using browser's local timezone
+      const payload = {
+        ...formData,
+        startDate: formData.startDate ? new Date(`${formData.startDate}T${startTime}`).toISOString() : formData.startDate,
+        endDate: formData.endDate ? new Date(`${formData.endDate}T${endTime}`).toISOString() : formData.endDate,
+      };
+      const response = await api.post('/sales', payload);
       const firstSaleUnlocked = response.data.achievements?.some(
         (a: { key: string }) => a.key === 'FIRST_SALE_CREATED'
       );
@@ -275,7 +284,16 @@ const CreateSalePage = () => {
                 {validationErrors.startDate && touchedFields.has('startDate') && (
                   <p className="text-red-600 text-xs mt-1">{validationErrors.startDate}</p>
                 )}
-                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Dates are based on your local timezone.</p>
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-warm-600 dark:text-warm-400 mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                  />
+                </div>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Times are in your local timezone.</p>
               </div>
               <div>
                 <label htmlFor="endDate" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">End Date</label>
@@ -293,6 +311,15 @@ const CreateSalePage = () => {
                 {validationErrors.endDate && touchedFields.has('endDate') && (
                   <p className="text-red-600 text-xs mt-1">{validationErrors.endDate}</p>
                 )}
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-warm-600 dark:text-warm-400 mb-1">End Time</label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                  />
+                </div>
               </div>
             </div>
 
