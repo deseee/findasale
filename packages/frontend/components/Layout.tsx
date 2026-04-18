@@ -252,6 +252,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Zap size={16} className="text-amber-500" />
               <span>Active Sale</span>
             </Link>
+            <Link href="/plan" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+              <Clock size={16} className="text-amber-500" />
+              <span>Plan</span>
+            </Link>
             <Link href="/organizer/sales" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <List size={16} className="text-amber-500" />
               <span>All Sales</span>

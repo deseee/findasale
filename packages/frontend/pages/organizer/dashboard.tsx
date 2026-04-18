@@ -31,6 +31,7 @@ import OrganizerOnboardingModal from '../../components/OrganizerOnboardingModal'
 import TeamsOnboardingWizard from '../../components/TeamsOnboardingWizard';
 import SimpleModePanel from '../../components/SimpleModePanel';
 import SaleStatusWidget from '../../components/SaleStatusWidget';
+import SaleProgressWidget from '../../components/SaleProgressWidget';
 import SecondarySaleCard from '../../components/SecondarySaleCard';
 import SalePerformanceBadge from '../../components/SalePerformanceBadge';
 import Head from 'next/head';
@@ -1294,6 +1295,11 @@ const OrganizerDashboard = () => {
                   </div>
                 );
               })()}
+
+              {/* Sale Progress Tracker Widget */}
+              {activeSale && (
+                <SaleProgressWidget saleId={activeSale.id} saleTitle={activeSale.title} />
+              )}
 
               {/* Real-Time Metrics Panel */}
               {statsData?.activeSale && (
