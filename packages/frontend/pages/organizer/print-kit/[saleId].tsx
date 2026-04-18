@@ -120,17 +120,18 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
   };
 
   const printQRPage = (url: string, label: string, sublabel: string) => {
-    const qrSrc = getQRUrl(url, 300);
+    const qrSrc = getQRUrl(url, 600);
     const w = window.open('', '_blank');
     if (!w) return;
     w.document.write(`<!DOCTYPE html><html><head><title>${label}</title>
       <style>
-        body { margin: 0; padding: 40px 20px 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; font-family: sans-serif; background: white; box-sizing: border-box; }
-        img { width: min(75vw, 75vh); height: min(75vw, 75vh); display: block; }
-        .label { font-size: clamp(24px, 4vw, 42px); font-weight: 800; margin-top: 24px; text-align: center; }
-        .sublabel { font-size: clamp(14px, 2vw, 22px); color: #333; margin-top: 12px; text-align: center; max-width: 600px; line-height: 1.5; }
-        .footer { font-size: 14px; color: #999; margin-top: 24px; text-align: center; }
-        @media print { body { padding: 20px; } }
+        @page { margin: 0.3in; }
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; min-height: 100vh; font-family: sans-serif; background: white; box-sizing: border-box; }
+        img { width: min(92vw, 80vh); height: min(92vw, 80vh); display: block; flex-shrink: 0; }
+        .label { font-size: clamp(22px, 3.5vw, 40px); font-weight: 800; margin-top: 12px; text-align: center; line-height: 1.2; }
+        .sublabel { font-size: clamp(13px, 1.8vw, 20px); color: #333; margin-top: 8px; text-align: center; max-width: 580px; line-height: 1.4; }
+        .footer { font-size: 13px; color: #999; margin-top: 10px; text-align: center; }
+        @media print { body { padding: 0; } }
       </style></head><body>
       <img src="${qrSrc}" alt="${label}" />
       <div class="label">${label}</div>
@@ -200,10 +201,10 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`;
   };
 
-  // Chunk items into groups of 6 for pagination
+  // Chunk items into groups of 9 for pagination (3×3 grid, fills full page)
   const itemPages = [];
-  for (let i = 0; i < filteredItems.length; i += 6) {
-    itemPages.push(filteredItems.slice(i, i + 6));
+  for (let i = 0; i < filteredItems.length; i += 9) {
+    itemPages.push(filteredItems.slice(i, i + 9));
   }
 
   return (
@@ -242,8 +243,9 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             margin: 0 auto;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
+            gap: 0.2in;
             text-align: center;
             page-break-after: always;
             background: white;
@@ -254,14 +256,14 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
           .item-tags-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 0.25in;
+            grid-template-rows: repeat(3, 1fr);
+            gap: 0.15in;
+            height: 9.5in;
             page-break-inside: avoid;
           }
           .item-tag {
-            width: 2.33in;
-            height: 2.67in;
             border: 1pt solid #000;
-            padding: 0.15in;
+            padding: 0.12in;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -296,53 +298,53 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             margin-top: 2pt;
           }
           .item-qr {
-            width: 80pt;
-            height: 80pt;
-            margin: 4pt auto;
+            width: 90pt;
+            height: 90pt;
+            margin: 0 auto;
             display: block;
           }
           .yard-sign-title {
-            font-size: 48px;
+            font-size: 44px;
             font-weight: bold;
-            margin: 0.3in 0;
+            margin: 0;
             font-family: 'Fraunces', serif;
             color: black;
           }
           .yard-sign-type {
             font-size: 18px;
             font-weight: bold;
-            margin: 0.1in 0;
+            margin: 0;
             color: black;
             background: #f3f4f6;
-            padding: 0.1in 0.2in;
+            padding: 0.08in 0.18in;
             border-radius: 4px;
             display: inline-block;
           }
           .yard-sign-dates {
-            font-size: 28px;
+            font-size: 30px;
             font-weight: bold;
-            margin: 0.2in 0;
+            margin: 0;
             color: black;
           }
           .yard-sign-address {
-            font-size: 14px;
-            margin: 0.2in 0;
+            font-size: 16px;
+            margin: 0;
             color: black;
           }
           .yard-sign-qr {
-            width: 2in;
-            height: 2in;
-            margin: 0.2in auto;
+            width: 5in;
+            height: 5in;
+            margin: 0 auto;
           }
           .yard-sign-footer {
-            font-size: 12px;
-            margin-top: 0.2in;
+            font-size: 13px;
+            margin: 0;
             color: black;
           }
           .yard-sign-logo {
             font-size: 14px;
             font-weight: bold;
-            margin-top: 0.1in;
+            margin: 0;
             color: black;
           }
           .qr-full-page {
@@ -351,8 +353,9 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             margin: 0 auto;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
+            gap: 0.2in;
             text-align: center;
             page-break-after: always;
             background: white;
@@ -361,19 +364,19 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             box-shadow: none;
           }
           .qr-full-page-qr {
-            width: 3in;
-            height: 3in;
-            margin: 0.5in auto;
+            width: 5in;
+            height: 5in;
+            margin: 0 auto;
           }
           .qr-full-page-label {
-            font-size: 28px;
+            font-size: 36px;
             font-weight: bold;
-            margin: 0.5in 0;
+            margin: 0.3in 0 0.1in;
             color: black;
           }
           .qr-full-page-sublabel {
-            font-size: 14px;
-            margin: 0.2in 0;
+            font-size: 16px;
+            margin: 0;
             color: black;
           }
           .qr-compact-grid {
@@ -424,7 +427,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               {sale && (
                 <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
                   {sale.title} • {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}{' '}
-                  ({Math.ceil(filteredItems.length / 6)} page{Math.ceil(filteredItems.length / 6) !== 1 ? 's' : ''})
+                  ({Math.ceil(filteredItems.length / 9)} page{Math.ceil(filteredItems.length / 9) !== 1 ? 's' : ''})
                 </p>
               )}
             </div>
@@ -641,7 +644,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
 
                 <img
-                  src={getQRUrl(`https://finda.sale/sales/${sale.id}`)}
+                  src={getQRUrl(`https://finda.sale/sales/${sale.id}`, 600)}
                   alt="Sale QR Code"
                   className="yard-sign-qr"
                 />
@@ -677,7 +680,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       </div>
                     ))}
                     {/* Fill empty slots with blank cards */}
-                    {[...Array(6 - pageItems.length)].map((_, i) => (
+                    {[...Array(9 - pageItems.length)].map((_, i) => (
                       <div key={`blank-${i}`} className="item-tag" />
                     ))}
                   </div>
