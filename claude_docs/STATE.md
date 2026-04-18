@@ -7,6 +7,25 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S501 (2026-04-18) — Print kit sprint: PDFKit margins root-cause fix, redesigns, label decode, price sheet**
+
+- **PDFKit `margins: 0` root-cause bug fixed ✅:** `margins: 0` (plural) is silently ignored by PDFKit 0.15.2 — defaults to 72pt margins (maxY=720). Must use `margin: 0` (singular). Global sed replace across all 12 instances in `printKitController.ts`. Resolves ALL footer overflow bugs (interactive QR pages 4-6 footer at y=750 > 720) and table tent extra-page bug (caption at y=718+lineHeight > 720 triggered new page).
+- **Directional signs redesigned ✅:** Large green polygon arrows with sale name + "This Way" text in white inside shaft body. Right-pointing: QR on LEFT (x=30, arrow shaft x=270..560, tip x=780). Left-pointing: arrow shaft x=230..520, tip x=12, QR on RIGHT (x=540). Both standalone and full-kit blocks updated.
+- **Table tents dual-QR redesign ✅:** Both panels (front + back) now have QR code, sale info, type/dates. No dead space. Standalone `getTableTentKit` and full-kit PAGE 3 both updated.
+- **QR color standardized → pure black ✅:** All backend QR codes changed from `dark: '#1a1a2e'` to `dark: '#000000'` to match website-generated QR codes (qrserver.com API). `printKitController.ts` (replace_all) + `labelController.ts` (sed). Consistent appearance across all print assets.
+- **Label HTML entity decode + category path fix ✅:** `labelController.ts` — `decodeCategory()` helper decodes `&amp;` → `&` etc. Colon-separated eBay category paths trimmed to last 2 segments (e.g. "Dollars: Eisenhower (1971-78)" instead of full 5-level path).
+- **Print preview condition badges fixed ✅:** `ConditionBadge` returns null for unknown conditions instead of rendering blank. `item.condition &&` null guard added. No more blank badge boxes.
+- **Print preview QR labels ✅:** `item-qr-label` div below each QR shows item title. `@media screen` overrides for non-print layout.
+- **Price sheet: $7.50, $12.50, $25 added ✅:** 27 → 31 prices (2 pages). Avery 5160 column pitch corrected: `col * CELL_W` → `col * (CELL_W + H_GAP)` where H_GAP=9pt (1/8" gap). LEFT_MARGIN corrected to 13.5pt (3/16").
+- **Print preview empty last page fixed ✅:** Photo station QR div (last print element) had `page-break-after: always` via `.qr-full-page`. Added `.qr-full-page-last` class with `page-break-after: avoid`.
+
+**S501 Files changed (3):**
+- `packages/backend/src/controllers/printKitController.ts` — margins fix, directional signs swap + QR color, table tent dual-QR, price sheet prices + Avery column pitch
+- `packages/backend/src/controllers/labelController.ts` — QR color black, decodeCategory helper, category path trim
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — ConditionBadge null fix, QR label, empty last page fix
+
+---
+
 **S500 (2026-04-18) — XP economy full rebalance: commercial hierarchy enforcement, backend wiring**
 
 - **D-XP-015 to D-XP-018 locked ✅:** QR clue scan 12→3 XP (D-XP-015), haul post 25→15 XP (D-XP-016), appraisal selected stays 20 XP (D-XP-017, reverted — paid service context), social share 10→5 XP (D-XP-018). Completion bonus 30→15 XP.
@@ -327,28 +346,28 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S501:**
+**Next Session — S502:**
 
 **Theme: Photo station feature build + treasure hunt 3-clue limit.**
 
-**Priority 1 — Push S500 (Patrick action):**
-See push block below. 8 code files + 2 wrap docs.
+**Priority 1 — Push S501 (Patrick action):**
+See push block in patrick-dashboard.md. 3 code files + 2 wrap docs. S500 push block also pending if not yet pushed.
 
 **Priority 2 — Treasure hunt 3-clue limit:**
 - `treasureHuntQRController.ts` has 10-clue cap — update to 3
-- Already at correct XP rate (3 XP/scan from this session)
+- Already at correct XP rate (3 XP/scan from S500)
 
 **Priority 3 — Photo station feature build:**
 - New shopper page: `packages/frontend/pages/sales/[id]/photo-station.tsx`
-- New backend endpoint: `POST /api/sales/:saleId/photo-station/scan` — dedupe per user per sale (one scan per user), award XP at TREASURE_HUNT_SCAN rate (3 XP)
-- Social share: uses existing SHARE endpoint (5 XP — now updated)
-- Update print kit photo station QR URL from `https://finda.sale/sales/${saleId}` → `https://finda.sale/sales/${saleId}/photo-station`
-- Architect: check if existing table can handle dedup or if PhotoStationScan model needed
+- New backend endpoint: `POST /api/sales/:saleId/photo-station/scan` — dedupe per user per sale, award 3 XP (TREASURE_HUNT_SCAN rate)
+- Update print kit photo station QR URL: `https://finda.sale/sales/${saleId}` → `https://finda.sale/sales/${saleId}/photo-station`
+- Architect: check if existing table handles dedup or if PhotoStationScan model needed
 
 **Patrick manual actions:**
-1. Push S500 (push block in patrick-dashboard.md)
-2. Stripe Connect webhook (carry-forward P2 since S421)
-3. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
+1. Push S501 (push block below)
+2. Push S500 if not yet pushed
+3. Stripe Connect webhook (carry-forward P2 since S421)
+4. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
 
 ---
 

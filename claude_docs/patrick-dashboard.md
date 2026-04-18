@@ -1,5 +1,56 @@
 # Patrick's Dashboard — Week of April 18, 2026
 
+## S501 Summary (2026-04-18) — Print kit sprint: PDFKit root-cause fix, directional signs QR swap, price sheet
+
+**3 files changed. 1 push block.**
+
+### Push block — S501:
+
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/backend/src/controllers/printKitController.ts
+git add packages/backend/src/controllers/labelController.ts
+git add "packages/frontend/pages/organizer/print-kit/[saleId].tsx"
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/routes/users.ts
+git add packages/backend/src/controllers/treasureHuntQRController.ts
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/controllers/photoOpController.ts
+git add packages/backend/src/routes/photoOps.ts
+git add "packages/frontend/pages/sales/[id]/photo-station.tsx"
+git add packages/frontend/components/SharePromoteModal.tsx
+git add packages/frontend/components/RankUpManager.tsx
+git add packages/frontend/hooks/useRankUp.ts
+git add packages/frontend/pages/_app.tsx
+git add "packages/frontend/pages/organizer/plan/[saleId].tsx"
+git commit -m "print-kit: PDFKit margins fix, directional QR swap, black QR, price sheet $7.50/$12.50/$25 + Avery 5160, label decode, empty last page fix"
+.\push.ps1
+```
+
+### What was done this session:
+
+**Root cause found and killed** — Every print kit overflow bug (interactive QR footer, table tent extra pages) traced to one line: `margins: 0` (plural) is silently ignored by PDFKit 0.15.2. Defaults to 72pt margins, maxY=720. Changed to `margin: 0` (singular) across all 12 instances. Footer at y=750 now fits (maxY=792).
+
+**Directional signs** — QR codes swapped sides. Right-pointing arrow: QR now on the left, arrow points right. Left-pointing arrow: QR now on the right, arrow points left. Both standalone and full-kit updated.
+
+**QR codes look the same everywhere** — All backend QR codes changed to pure black to match the website-generated ones (was dark navy #1a1a2e). Item labels, directional signs, table tents, price sheet, yard sign — all consistent now.
+
+**Price sheet** — Added $7.50 (between $7 and $8), $12.50 (between $12 and $13), and $25 at the end. 31 prices, 2 pages. Column spacing corrected to exact Avery 5160 spec (189pt label + 9pt gap = 198pt pitch per column).
+
+**Item labels** — eBay `&amp;` entities now decoded. Long colon-path categories ("Coins & Paper Money:Coins:US:Dollars:Eisenhower (1971-78)") trimmed to last 2 segments ("Dollars: Eisenhower (1971-78)").
+
+**Print preview** — Blank condition badges fixed (returns null for unknown conditions). QR label under each item's QR code shows item title. Empty last page gone (photo station QR was `page-break-after: always` — now `avoid` on last element).
+
+### Next session — S502: Photo station + treasure hunt 3-clue limit
+
+- Treasure hunt: update 10-clue cap → 3 in `treasureHuntQRController.ts`
+- Photo station shopper page: `pages/sales/[id]/photo-station.tsx`
+- Photo station backend: `POST /api/sales/:saleId/photo-station/scan` (3 XP, 1 per user per sale)
+- Update print kit photo station QR URL to point to the new page
+
+---
+
 ## S500 Summary (2026-04-18) — XP economy rebalance: commercial hierarchy enforced, backend fully wired
 
 **8 files changed. 1 push block.**
