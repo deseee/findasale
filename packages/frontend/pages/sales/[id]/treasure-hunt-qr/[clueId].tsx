@@ -160,6 +160,11 @@ const CluePage = () => {
                     )}
                   </button>
 
+                  {/* Cross-promo to Photo Station */}
+                  <Link href={`/sales/${id}/photo-station`} className="inline-flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400 hover:underline mt-3">
+                    📸 Visit the Photo Station for bonus XP →
+                  </Link>
+
                   {/* Instructions */}
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-lg">
                     <p className="text-sm text-blue-900 dark:text-blue-200">
