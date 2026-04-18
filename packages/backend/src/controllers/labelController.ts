@@ -129,7 +129,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
       type: 'png',
       width: 200,
       margin: 1,
-      color: { dark: '#1a1a2e', light: '#ffffff' },
+      color: { dark: '#000000', light: '#ffffff' },
     });
 
     const doc = new PDFDocument({ size: [LABEL_W, LABEL_H], margin: 0, autoFirstPage: true });
@@ -180,7 +180,7 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
         type: 'png',
         width: 200,
         margin: 1,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
+        color: { dark: '#000000', light: '#ffffff' },
       }),
     );
     const qrBuffers = await Promise.all(qrPromises);
