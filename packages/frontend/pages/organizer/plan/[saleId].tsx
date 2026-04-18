@@ -50,7 +50,7 @@ interface ChecklistResponse {
 const stageIcons: Record<string, React.ReactNode> = {
   'Setup': <ListTodo className="w-5 h-5" />,
   'Cataloging': <Zap className="w-5 h-5" />,
-  'Ready to Publish': <Send className="w-5 h-5" />,
+  'Pre-Sale': <Send className="w-5 h-5" />,
   'Live': <Trophy className="w-5 h-5" />,
   'Wrapping Up': <Clock className="w-5 h-5" />,
   'Complete': <CheckCircle2 className="w-5 h-5" />,
@@ -118,7 +118,7 @@ const SalePlanPage = () => {
     itemsByStage[item.stage].push(item);
   });
 
-  const stageOrder = ['Setup', 'Cataloging', 'Ready to Publish', 'Live', 'Wrapping Up', 'Complete'];
+  const stageOrder = ['Setup', 'Cataloging', 'Pre-Sale', 'Live', 'Wrapping Up', 'Complete'];
 
   return (
     <>
@@ -292,17 +292,13 @@ const SalePlanPage = () => {
                         <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-3">
                           {stageTasks.map((task) => (
                             <div key={task.id} className="flex items-start gap-3 group">
-                              {/* Checkbox */}
-                              {!task.link && (
+                              {/* Checkbox — always present for non-auto tasks */}
+                              {!task.isAuto && (
                                 <button
-                                  disabled={task.isAuto}
-                                  onClick={() => !task.isAuto && updateTask({ itemId: task.id, completed: !task.completed })}
+                                  onClick={() => updateTask({ itemId: task.id, completed: !task.completed })}
                                   className={`
                                     mt-0.5 w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-all
-                                    ${task.isAuto
-                                      ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 cursor-not-allowed'
-                                      : 'border-gray-300 dark:border-gray-600 hover:border-amber-600 dark:hover:border-amber-400'
-                                    }
+                                    border-gray-300 dark:border-gray-600 hover:border-amber-600 dark:hover:border-amber-400
                                     ${task.completed
                                       ? 'bg-green-600 dark:bg-green-700 border-green-600 dark:border-green-700'
                                       : ''
@@ -313,9 +309,36 @@ const SalePlanPage = () => {
                                 </button>
                               )}
 
-                              {/* Label (clickable if link, checkbox area if no link) */}
+                              {/* Checkbox — disabled state for auto tasks */}
+                              {task.isAuto && (
+                                <div
+                                  className={`
+                                    mt-0.5 w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-all
+                                    bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 cursor-not-allowed
+                                    ${task.completed
+                                      ? 'bg-green-600 dark:bg-green-700 border-green-600 dark:border-green-700'
+                                      : ''
+                                    }
+                                  `}
+                                >
+                                  {task.completed && <CheckCircle2 className="w-4 h-4 text-white" />}
+                                </div>
+                              )}
+
+                              {/* Label (clickable link if link exists, plain text for auto tasks) */}
                               <div className="flex-1">
-                                {task.link ? (
+                                {task.isAuto ? (
+                                  <label className={`
+                                    text-sm transition-all block
+                                    ${task.completed
+                                      ? 'line-through text-gray-500 dark:text-gray-500'
+                                      : 'text-gray-900 dark:text-gray-100'
+                                    }
+                                    cursor-not-allowed
+                                  `}>
+                                    {task.label}
+                                  </label>
+                                ) : task.link ? (
                                   <Link
                                     href={task.link}
                                     className={`
@@ -335,7 +358,7 @@ const SalePlanPage = () => {
                                       ? 'line-through text-gray-500 dark:text-gray-500'
                                       : 'text-gray-900 dark:text-gray-100'
                                     }
-                                    ${task.isAuto ? 'cursor-not-allowed' : 'cursor-pointer'}
+                                    cursor-pointer
                                   `}>
                                     {task.label}
                                   </label>
