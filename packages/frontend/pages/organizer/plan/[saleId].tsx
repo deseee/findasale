@@ -103,12 +103,13 @@ const SalePlanPage = () => {
       }
       showToast('Failed to update task', 'error');
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      // Use the PATCH response directly — it includes the full updated checklist
+      // Do NOT re-fetch: the GET returns stale data and would undo the optimistic update
+      if (response?.data) {
+        queryClient.setQueryData(['checklist', saleId], response.data);
+      }
       showToast('Task updated', 'success');
-    },
-    onSettled: () => {
-      // Always re-fetch to sync with server
-      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
     },
   });
 
