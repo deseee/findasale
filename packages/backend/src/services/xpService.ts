@@ -36,17 +36,18 @@ export const XP_AWARDS = {
   FIRST_SALE_CREATED: 25, // One-time XP bonus when organizer creates first sale
 
   // Purchases and engagement
-  PURCHASE: 1, // Base for completed purchase ($1 = 1 XP)
-  REVIEW: 8, // For leaving a product review (raised from 5 — requires text effort)
-  SHARE: 10, // For social share to external platform (honor system)
-  HAUL_POST: 10, // For in-app haul post (2+ items + photo, posts to Loot Legend)
+  PURCHASE: 10, // Flat XP per completed purchase (D-XP-004 — not per dollar)
+  REVIEW: 5, // For leaving a product review (D-XP-004)
+  SHARE: 5, // For social share to external platform — honor system (D-XP-018, was 10)
+  HAUL_POST: 15, // For in-app haul post — post-purchase documentation (D-XP-016, was 25)
+  APPRAISAL_SELECTED: 20, // Appraiser's valuation selected by seller — paid service contribution (D-XP-004)
 
   // Condition rating — organizer earns when a shopper rates one of their items
   CONDITION_RATING: 5, // Organizer credit per shopper condition submission
 
-  // Treasure Hunt QR (Feature #85) — gamedesign S417 rebalance
-  TREASURE_HUNT_SCAN: 12, // Per clue scan (down from 25)
-  TREASURE_HUNT_COMPLETION: 30, // All clues found bonus (down from 50)
+  // Treasure Hunt QR (Feature #85) — D-XP-015 rebalance
+  TREASURE_HUNT_SCAN: 3, // Per clue scan — progress marker, not the payout (D-XP-015, was 12)
+  TREASURE_HUNT_COMPLETION: 15, // All clues found bonus — the real reward (D-XP-015, was 30)
 
   // RSVPs and engagement
   RSVP: 2, // Feature #154: Shopper RSVPs to sale (capped 10/month)
@@ -62,14 +63,12 @@ export const XP_AWARDS = {
   COLLECTOR_PASSPORT_COMPLETE: 50, // One-time: passport complete (specialties + categories + keywords all non-empty)
   TRAIL_COMPLETE: 100, // One-time per trail: all QR codes found
 
-  // Auctions (wins only — gamedesign S417 rebalance)
-  AUCTION_WIN: 10, // Base win XP (down from 15)
-  AUCTION_VALUE_BONUS_PER_100: 0.5, // +0.5 XP per $100 of item value, max +5 XP cap
-  AUCTION_MAX_BONUS: 5,
+  // Auctions (wins only — D-XP-009: flat 20 XP, value multiplier eliminated)
+  AUCTION_WIN: 20, // Flat XP per auction win — competitive transaction (D-XP-009, was 10+bonus)
 
   // Referrals
   REFERRAL_SIGNUP: 20,
-  REFERRAL_FIRST_PURCHASE: 30,
+  REFERRAL_FIRST_PURCHASE: 500, // Referrer earns when friend's first purchase clears (D-XP-004, was 30)
 };
 
 // XP sink costs (per spec Decision 7 — gamedesign S417 full sink table)
@@ -85,7 +84,7 @@ export const XP_SINKS = {
   COUPON_CLAIM_SHOPPER: 100,   // Shopper spends for $1 off any purchase (1 XP = $0.01, gamedesign S418)
   RARITY_BOOST: 15,            // Shopper gets +2% legendary odds for one sale
   HUNT_PASS_DISCOUNT: 100,     // Shopper gets $1 off Hunt Pass subscription (1 XP = $0.01, gamedesign S418)
-  HAUL_VISIBILITY_BOOST: 25,   // Shopper boosts haul post visibility for 7 days (1 XP = $0.01, gamedesign S418)
+  HAUL_VISIBILITY_BOOST: 10,   // Shopper bumps haul post to top of local feed for 2h (D-XP-013, was 25)
   SEASONAL_CHALLENGE_ACCESS: 250, // Shopper unlocks seasonal challenge tier (gamedesign S418)
   GUIDE_PUBLICATION: 50,       // Shopper publishes a collection guide (raised from 30)
 
@@ -94,7 +93,7 @@ export const XP_SINKS = {
   CUSTOM_FRAME_BADGE: 2500,     // Permanent profile frame badge (D-XP-005: 2,500 XP)
 
   // Phase 2c: New XP Sinks
-  CUSTOM_MAP_PIN: 75,           // Organizer customizes sale map icon with emoji (one-time)
+  CUSTOM_MAP_PIN: 500,          // Organizer customizes sale map icon with emoji (D-XP-012, was 75)
   PROFILE_SHOWCASE_SLOT_2: 250,  // Shopper unlocks 2nd profile showcase slot — Bronze (D-XP-005: 250 XP)
   PROFILE_SHOWCASE_SLOT_3: 350, // Shopper unlocks 3rd profile showcase slot — Silver (D-XP-005: 350 XP)
   PROFILE_SHOWCASE_SLOT_GOLD: 500, // Shopper unlocks 4th profile showcase slot — Gold (D-XP-005: 500 XP)
@@ -104,10 +103,11 @@ export const XP_SINKS = {
   CREW_CREATION: 500,   // Shopper creates a named collector crew (S420)
 };
 
-// Monthly XP caps (per spec — gamedesign S417 updated)
+// Monthly XP caps (per locked decisions)
 export const MONTHLY_XP_CAPS = {
-  VISIT: 150,
+  // VISIT cap removed — D-XP-014: no daily/monthly cap, only once per unique sale per day
   AUCTION: 100,
+  HAUL_POST_COUNT: 4,         // D-XP-008: max 4 haul posts earn XP per calendar month (60 XP max)
   RSVP: 10,                   // Max 10 XP from RSVPs per calendar month
   CONDITION_RATING: 50,       // Organizer earns max 50 XP/month from condition submissions
   COMMUNITY_VALUATION: 100,   // Max 100 XP/month from price opinions (20 valuations × 5 XP)
@@ -115,8 +115,8 @@ export const MONTHLY_XP_CAPS = {
 
 // Daily XP caps (exploit prevention)
 export const DAILY_XP_CAPS = {
-  TREASURE_HUNT_SCAN: 100,    // Max 100 XP/day from QR clue scans (150 with Hunt Pass)
-  TREASURE_HUNT_COMPLETION: 100,  // Max 100 XP/day from completion bonuses
+  // TREASURE_HUNT_SCAN cap removed — D-XP-015: at 3 XP/scan not farmable; unique-clue gate is sufficient
+  // TREASURE_HUNT_COMPLETION cap removed — D-XP-015: at 15 XP/hunt not farmable
   APPRAISAL_SELECTED: 100,    // Max 100 XP/day from appraisal selections (5 selections × 20 XP) — P0 security fix
 };
 

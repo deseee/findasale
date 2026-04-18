@@ -107,12 +107,8 @@ export const endAuctions = async () => {
           },
         });
 
-        // Award XP to shopper for winning auction (base + value bonus, capped 100 XP/month)
-        const valueBonus = Math.min(
-          Math.floor((price / 100) * XP_AWARDS.AUCTION_VALUE_BONUS_PER_100),
-          XP_AWARDS.AUCTION_MAX_BONUS
-        );
-        const baseXp = XP_AWARDS.AUCTION_WIN + valueBonus;
+        // Award XP to shopper for winning auction — flat 20 XP, no value multiplier (D-XP-009)
+        const baseXp = XP_AWARDS.AUCTION_WIN;
         // Apply Hunt Pass 1.5x multiplier if active
         const totalXp = await applyHuntPassMultiplier(highestBid.userId, baseXp);
 
