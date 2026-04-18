@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -81,6 +82,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
   const { saleId } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { isPro } = useOrganizerTier();
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '/api';
 
   // Redirect if not authenticated or not an organizer
@@ -316,6 +318,73 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             font-size: 14px;
             font-weight: bold;
             margin-top: 0.1in;
+            color: black;
+          }
+          .qr-full-page {
+            width: 7.5in;
+            height: 10in;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            text-align: center;
+            page-break-after: always;
+            background: white;
+            color: black;
+            border: none;
+            box-shadow: none;
+          }
+          .qr-full-page-qr {
+            width: 3in;
+            height: 3in;
+            margin: 0.5in auto;
+          }
+          .qr-full-page-label {
+            font-size: 28px;
+            font-weight: bold;
+            margin: 0.5in 0;
+            color: black;
+          }
+          .qr-full-page-sublabel {
+            font-size: 14px;
+            margin: 0.2in 0;
+            color: black;
+          }
+          .qr-compact-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.25in;
+            page-break-inside: avoid;
+          }
+          .qr-compact {
+            width: 3.5in;
+            height: 2.5in;
+            border: 1px solid black;
+            padding: 0.15in;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            color: black;
+            page-break-inside: avoid;
+          }
+          .qr-compact-qr {
+            width: 1.5in;
+            height: 1.5in;
+            margin: 0 auto;
+          }
+          .qr-compact-label {
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            color: black;
+          }
+          .qr-compact-sublabel {
+            font-size: 12px;
+            text-align: center;
             color: black;
           }
         }
@@ -565,6 +634,54 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   </Link>
                 </div>
               )}
+
+              {/* Section 3 — Virtual Queue QR (PRO/TEAMS only) */}
+              {isPro && (
+                <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
+                  <div className="flex-1 flex flex-col justify-center items-center">
+                    <img
+                      src={getQRUrl(`https://finda.sale/sales/${sale.id}`, 300)}
+                      alt="Virtual Queue QR Code"
+                      className="qr-full-page-qr"
+                    />
+                    <div className="qr-full-page-label">Scan to join the virtual line</div>
+                    <div className="qr-full-page-sublabel">FindA.Sale</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Section 4 — Treasure Hunt Clues QR (PRO/TEAMS only) */}
+              {isPro && (
+                <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
+                  <div className="flex-1 flex flex-col justify-center items-center">
+                    <img
+                      src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr`, 300)}
+                      alt="Treasure Hunt QR Code"
+                      className="qr-full-page-qr"
+                    />
+                    <div className="qr-full-page-label">Scan to view the treasure hunt clues</div>
+                    <div className="qr-full-page-sublabel">FindA.Sale</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Section 5 — Photo Station QR (all tiers) */}
+              <div className="print-container bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
+                <div className="qr-compact-grid">
+                  {/* 4 compact QR codes per page */}
+                  {[0, 1, 2, 3].map((index) => (
+                    <div key={index} className="qr-compact">
+                      <img
+                        src={getQRUrl(`https://finda.sale/sales/${sale.id}`, 150)}
+                        alt="Photo Station QR Code"
+                        className="qr-compact-qr"
+                      />
+                      <div className="qr-compact-label">Scan to browse & buy items</div>
+                      <div className="qr-compact-sublabel">FindA.Sale</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>

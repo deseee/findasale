@@ -65,10 +65,9 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'cat_smartpricing', stage: 'Cataloging', label: 'Smart Pricing suggestions reviewed', isAuto: false, requiredTier: 'PRO', link: '/organizer/inventory' },
 
   // Stage 3: Pre-Sale
-  { id: 'pub_social_draft', stage: 'Pre-Sale', label: 'Social post drafted', isAuto: false, link: '/organizer/promote/{saleId}' },
   { id: 'pub_pricetags', stage: 'Pre-Sale', label: 'Price tags printed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
-  { id: 'pub_queue_qr', stage: 'Pre-Sale', label: 'Virtual Queue QR printed & tested', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue/{saleId}' },
-  { id: 'pub_treasure', stage: 'Pre-Sale', label: 'Treasure Hunt clues printed & placed', isAuto: false, requiredTier: 'PRO' },
+  { id: 'pub_queue_qr', stage: 'Pre-Sale', label: 'Virtual Queue QR printed & posted', isAuto: false, requiredTier: 'PRO', link: '/organizer/print-kit/{saleId}' },
+  { id: 'pub_treasure', stage: 'Pre-Sale', label: 'Treasure Hunt clues printed & placed', isAuto: false, requiredTier: 'PRO', link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_preview', stage: 'Pre-Sale', label: 'Sale previewed on mobile', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
   { id: 'pub_signs', stage: 'Pre-Sale', label: 'Neighborhood signs made', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_published', stage: 'Pre-Sale', label: 'Sale published', isAuto: true, autoCheck: (d) => d.sale.status === 'PUBLISHED' || d.sale.status === 'LIVE', link: '/organizer/edit-sale/{saleId}' },
