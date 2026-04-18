@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { awardXp, XP_AWARDS, MONTHLY_XP_CAPS } from '../services/xpService';
 
 /**
  * GET /api/haul-posts — public trending feed
@@ -61,6 +62,25 @@ export const createHaulPost = async (req: AuthRequest, res: Response) => {
         likesCount: 0,
       },
     });
+
+    // Award XP for haul post — capped at 4/month (D-XP-008)
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+
+    const monthlyCount = await prisma.pointsTransaction.count({
+      where: {
+        userId: (req as any).user.id,
+        type: 'HAUL_POST',
+        createdAt: { gte: monthStart },
+      },
+    });
+
+    if (monthlyCount < MONTHLY_XP_CAPS.HAUL_POST_COUNT) {
+      await awardXp((req as any).user.id, 'HAUL_POST', XP_AWARDS.HAUL_POST, {
+        description: `Haul post created (id: ${haul.id})`,
+      }).catch(err => console.error('[HaulPost] XP award failed:', err));
+    }
 
     res.status(201).json(haul);
   } catch (error) {

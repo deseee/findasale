@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S500 (2026-04-18) — XP economy full rebalance: commercial hierarchy enforcement, backend wiring**
+
+- **D-XP-015 to D-XP-018 locked ✅:** QR clue scan 12→3 XP (D-XP-015), haul post 25→15 XP (D-XP-016), appraisal selected stays 20 XP (D-XP-017, reverted — paid service context), social share 10→5 XP (D-XP-018). Completion bonus 30→15 XP.
+- **hunt-pass.tsx updated ✅:** All displayed XP rates, caps, and Hunt Pass multipliers corrected to match locked decisions.
+- **xpService.ts full rebalance ✅:** PURCHASE flat 10 XP (was per-dollar × amount), REFERRAL_FIRST_PURCHASE 500 XP (was 30 — critical bug fix), SHARE 5 XP, HAUL_POST 15 XP, TREASURE_HUNT_SCAN 3 XP, TREASURE_HUNT_COMPLETION 15 XP, AUCTION_WIN 20 XP flat (value bonus removed per D-XP-009), HAUL_VISIBILITY_BOOST sink 10 XP, CUSTOM_MAP_PIN sink 500 XP. Visit cap removed entirely (D-XP-014). HAUL_POST_COUNT: 4/month count cap added.
+- **auctionJob.ts updated ✅:** Removed value bonus multiplier — awards flat XP_AWARDS.AUCTION_WIN (D-XP-009).
+- **stripeController.ts updated ✅:** Two per-dollar purchase XP calculations (webhook handler ~line 916, POS handler ~line 731) replaced with flat XP_AWARDS.PURCHASE.
+- **appraisalService.ts updated ✅:** Replaced hardcoded `const XP_AWARD_AMOUNT = 20` with `XP_AWARDS.APPRAISAL_SELECTED` (now driven by constant).
+- **haulPostController.ts updated ✅:** Wired first-ever haul post XP award (was never implemented). Awards XP_AWARDS.HAUL_POST (15 XP), gated by MONTHLY_XP_CAPS.HAUL_POST_COUNT (4/month) via pointsTransaction count. Pattern identical to appraisalService.
+- **challengeService.ts updated ✅:** Added ChallengeDifficulty type (EASY|MEDIUM|HARD|MICRO_EVENT), CHALLENGE_COMPLETION_XP map (MICRO_EVENT=10, EASY=25, MEDIUM=50, HARD=100), difficulty field on all CHALLENGE_CONFIG entries (Spring/Summer/Fall=EASY, Holiday=MEDIUM). XP now awarded at badge creation via awardXp type SEASONAL_CHALLENGE_COMPLETE.
+- **Visit cap cleanup ✅:** Agent confirmed zero references to MONTHLY_XP_CAPS.VISIT in backend — removal was already clean.
+
+**S500 Files changed (8):**
+- `packages/backend/src/services/xpService.ts` — all XP constants rebalanced
+- `packages/backend/src/jobs/auctionJob.ts` — flat auction XP, value bonus removed
+- `packages/backend/src/controllers/stripeController.ts` — two per-dollar purchase XP → flat
+- `packages/backend/src/services/appraisalService.ts` — XP_AWARDS.APPRAISAL_SELECTED constant
+- `packages/backend/src/controllers/haulPostController.ts` — first-ever haul post XP award wired
+- `packages/backend/src/services/challengeService.ts` — difficulty enum + XP wired at completion
+- `packages/frontend/pages/shopper/hunt-pass.tsx` — all XP rates corrected to locked decisions
+- `claude_docs/feature-notes/gamedesign-decisions-2026-04-18.md` — D-XP-015 through D-XP-018 locked
+
+---
+
 **S499 (2026-04-18) — Progress tracker: links audited, Pre-Sale rename, checkbox fix, print kit QR sections**
 
 - **Progress tracker task links audited & corrected ✅:** All 29 tasks in `checklistController.ts` now link to correct pages. Rapidfire/tags/pricing → `add-items/{saleId}`, price tags/signs/QR → `print-kit/{saleId}`, QR scan activity → `qr-codes`, virtual queue → `line-queue/{saleId}`, social → `promote/{saleId}`, POS → `pos`, messages → `messages`, earnings → `earnings`, reviews → `reviews`, flip report → `flip-report/{saleId}`, settlement → `settlement/{saleId}`. `{saleId}` placeholder replaced at runtime (line 218).
@@ -303,31 +327,26 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S500:**
+**Next Session — S501:**
 
-**Theme: XP rebalance (hunt-pass.tsx first, backend after) + photo station build.**
+**Theme: Photo station feature build + treasure hunt 3-clue limit.**
 
-**Priority 1 — Push S499 (Patrick action):**
-See push block in patrick-dashboard.md. Includes 7 code files + 2 wrap docs.
+**Priority 1 — Push S500 (Patrick action):**
+See push block below. 8 code files + 2 wrap docs.
 
-**Priority 2 — XP rebalance (SEQUENCE MATTERS — hunt-pass UI first, backend second):**
-1. Dispatch `findasale-gamedesign` to review `hunt-pass.tsx` — correct all displayed XP rates, caps, and Hunt Pass multipliers. Make the page internally consistent and mathematically sound. Anti-abuse analysis: collusion, farming, exploit vectors. Game must still feel rewarding.
-2. ONLY after hunt-pass.tsx is reviewed and correct → dispatch `findasale-dev` to update `xpService.ts` backend constants to match the corrected UI rates.
-3. Key discrepancies known: VISIT shows 2 XP (UI) vs 5 XP (backend). TREASURE_HUNT_SCAN shows 25 XP (old UI) vs 12 XP (backend). Treasure hunt rebalance target: 5 XP/clue, 3 clue limit.
+**Priority 2 — Treasure hunt 3-clue limit:**
+- `treasureHuntQRController.ts` has 10-clue cap — update to 3
+- Already at correct XP rate (3 XP/scan from this session)
 
-**Priority 3 — Treasure hunt 3-clue limit:**
-- `treasureHuntQRController.ts` already has 10-clue cap — update to 3
-- `xpService.ts` TREASURE_HUNT_SCAN: update after hunt-pass.tsx is confirmed
-
-**Priority 4 — Photo station feature build (after XP rates settled):**
+**Priority 3 — Photo station feature build:**
 - New shopper page: `packages/frontend/pages/sales/[id]/photo-station.tsx`
-- New backend endpoint: `POST /api/sales/:saleId/photo-station/scan` — dedupe per user per sale (one scan per user), award XP at TREASURE_HUNT_SCAN rate
-- Social share: uses existing SHARE endpoint (10 XP)
+- New backend endpoint: `POST /api/sales/:saleId/photo-station/scan` — dedupe per user per sale (one scan per user), award XP at TREASURE_HUNT_SCAN rate (3 XP)
+- Social share: uses existing SHARE endpoint (5 XP — now updated)
 - Update print kit photo station QR URL from `https://finda.sale/sales/${saleId}` → `https://finda.sale/sales/${saleId}/photo-station`
-- Schema: may need `PhotoStationScan` model for dedup (check if existing table can be reused)
+- Architect: check if existing table can handle dedup or if PhotoStationScan model needed
 
 **Patrick manual actions:**
-1. Push S499 (push block in patrick-dashboard.md)
+1. Push S500 (push block in patrick-dashboard.md)
 2. Stripe Connect webhook (carry-forward P2 since S421)
 3. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
 

@@ -1,5 +1,55 @@
 # Patrick's Dashboard — Week of April 18, 2026
 
+## S500 Summary (2026-04-18) — XP economy rebalance: commercial hierarchy enforced, backend fully wired
+
+**8 files changed. 1 push block.**
+
+### Push block — S500:
+
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/jobs/auctionJob.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/services/appraisalService.ts
+git add packages/backend/src/controllers/haulPostController.ts
+git add packages/backend/src/services/challengeService.ts
+git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add claude_docs/feature-notes/gamedesign-decisions-2026-04-18.md
+git commit -m "XP rebalance: commercial hierarchy enforcement + haul/challenge wiring — D-XP-015 through D-XP-018"
+.\push.ps1
+```
+
+### What was done this session:
+
+**Commercial hierarchy rule established** — Purchase (10 XP) is the per-action anchor. Every non-commercial action must sit below it. Haul posts are post-purchase documentation (additive, not competing). Appraisals are a paid service (selected responses stay at 20 XP — they're rewarding real expertise).
+
+**Critical bugs fixed in backend:**
+- REFERRAL_FIRST_PURCHASE was 30 XP — should be 500 XP (locked D-XP-004, 16× underpayment — fixed)
+- Purchase XP was per-dollar (1 × amount) — should be flat 10 XP per transaction (D-XP-004 — fixed in both Stripe webhook and POS handler)
+- Auction value bonus removed — flat 20 XP only (D-XP-009 — fixed)
+
+**New things wired for the first time:**
+- Haul post XP: was never awarded anywhere. Now awards 15 XP on post creation, capped at 4/month (D-XP-008)
+- Challenge completion XP: was never awarded. Now awards XP based on difficulty (EASY=25, MEDIUM=50, HARD=100, MICRO_EVENT=10) when a seasonal challenge badge is earned
+
+**XP rates corrected (decisions D-XP-015 through D-XP-018):**
+- QR clue scan: 12 → 3 XP (was beating a purchase)
+- Completion bonus: 30 → 15 XP
+- Haul post: 25 → 15 XP (post-purchase bonus, not a competing earn path)
+- Social share: 10 → 5 XP (honor system, low-verification action)
+- Appraisal selected: stays 20 XP (people pay real money for appraisals — reward the work)
+
+### Next session — S501: Photo station + treasure hunt 3-clue limit
+
+- Treasure hunt clue cap: 10 → 3 per sale (update `treasureHuntQRController.ts`)
+- Photo station shopper page: `pages/sales/[id]/photo-station.tsx`
+- Photo station backend endpoint: `POST /api/sales/:saleId/photo-station/scan`
+- Update print kit QR URL to point to photo station page
+
+---
+
 ## S499 Summary (2026-04-18) — Progress tracker: links fixed, Pre-Sale rename, checkbox fix, print kit QR sections
 
 **7 files changed. 1 push block.**

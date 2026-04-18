@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { awardXp } from './xpService';
 
 /**
  * Feature #55: Seasonal Discovery Challenges
@@ -13,6 +14,8 @@ export interface Objective {
   targetValue?: string; // e.g., 'Collectibles' for PURCHASE_CATEGORY
 }
 
+export type ChallengeDifficulty = 'EASY' | 'MEDIUM' | 'HARD' | 'MICRO_EVENT';
+
 export interface Challenge {
   id: string;
   name: string;
@@ -23,7 +26,16 @@ export interface Challenge {
   endDate: Date;
   objectives: Objective[];
   badgeColor: string;
+  difficulty: ChallengeDifficulty;
 }
+
+/** XP awarded on challenge completion, keyed by difficulty */
+const CHALLENGE_COMPLETION_XP: Record<ChallengeDifficulty, number> = {
+  MICRO_EVENT: 10,
+  EASY: 25,
+  MEDIUM: 50,
+  HARD: 100,
+};
 
 /**
  * Hardcoded seasonal challenges (MVP) — update annually
@@ -43,6 +55,7 @@ export const CHALLENGE_CONFIG: Challenge[] = [
       { id: 'spring-favorites', description: 'Favorite 5 items', type: 'FAVORITE_ITEMS', target: 5 },
     ],
     badgeColor: '#8FB897',
+    difficulty: 'EASY',
   },
   {
     id: 'summer-2026',
@@ -58,6 +71,7 @@ export const CHALLENGE_CONFIG: Challenge[] = [
       { id: 'summer-favorites', description: 'Favorite 10 items', type: 'FAVORITE_ITEMS', target: 10 },
     ],
     badgeColor: '#8FB897',
+    difficulty: 'EASY',
   },
   {
     id: 'fall-2026',
@@ -72,6 +86,7 @@ export const CHALLENGE_CONFIG: Challenge[] = [
       { id: 'fall-visits', description: 'Visit 2 different sales', type: 'VISIT_SALES', target: 2 },
     ],
     badgeColor: '#8FB897',
+    difficulty: 'EASY',
   },
   {
     id: 'holiday-2026',
@@ -88,6 +103,7 @@ export const CHALLENGE_CONFIG: Challenge[] = [
       { id: 'holiday-kitchen', description: 'Purchase from Kitchenware or Art & Decor', type: 'PURCHASE_CATEGORY', target: 1, targetValue: 'kitchenware|art' },
     ],
     badgeColor: '#8FB897',
+    difficulty: 'MEDIUM',
   },
 ];
 
@@ -262,6 +278,12 @@ export const updateChallengeProgress = async (
             challengeId: challenge.id,
           },
         });
+
+        // Award XP for challenge completion based on difficulty
+        const xpAmount = CHALLENGE_COMPLETION_XP[challenge.difficulty];
+        await awardXp(userId, 'SEASONAL_CHALLENGE_COMPLETE', xpAmount, {
+          description: `Completed challenge: ${challenge.name} (${challenge.difficulty})`,
+        }).catch(err => console.error('[Challenge] XP award failed:', err));
       }
     }
   }
