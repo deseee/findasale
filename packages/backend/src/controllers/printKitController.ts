@@ -184,7 +184,7 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
 
-    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    const doc = new PDFDocument({ size: 'LETTER', margin: 0 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="yard-sign-${saleId}.pdf"`);
     doc.pipe(res);
@@ -298,7 +298,7 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
     const PDFDocument = require('pdfkit');
 
     // Landscape Letter: 792×612 pts, 2 signs per page
-    const doc = new PDFDocument({ size: [792, 612], margins: 0 });
+    const doc = new PDFDocument({ size: [792, 612], margin: 0 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="directional-signs-${saleId}.pdf"`);
     doc.pipe(res);
@@ -348,7 +348,7 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
           .font('Helvetica')
           .fontSize(14)
           .fillColor('#ffffff')
-          .text('This Way  →', 35, cy + 6, { width: 335, lineBreak: false });
+          .text('This Way', 35, cy + 6, { width: 335, lineBreak: false });
 
         // QR code — right zone, centered vertically
         doc.image(qrBuffer, 520, yOffset + 43, { width: 220, height: 220 });
@@ -380,7 +380,7 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
           .font('Helvetica')
           .fontSize(14)
           .fillColor('#ffffff')
-          .text('←  This Way', 320, cy + 6, { width: 435, lineBreak: false });
+          .text('This Way', 320, cy + 6, { width: 435, lineBreak: false });
 
         // QR code — left zone, centered vertically
         doc.image(qrBuffer, 30, yOffset + 43, { width: 220, height: 220 });
@@ -432,7 +432,7 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
     const PDFDocument = require('pdfkit');
 
     // Portrait Letter = 612×792 pts
-    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    const doc = new PDFDocument({ size: 'LETTER', margin: 0 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="table-tents-${saleId}.pdf"`);
     doc.pipe(res);
@@ -629,7 +629,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
 
-    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    const doc = new PDFDocument({ size: 'LETTER', margin: 0 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="hang-tags-${saleId}.pdf"`);
     doc.pipe(res);
@@ -685,7 +685,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
       for (let i = 0; i < sale.items.length; i++) {
         // Add page when i > 0 && i % TAGS_PER_PAGE === 0
         if (i > 0 && i % TAGS_PER_PAGE === 0) {
-          doc.addPage({ size: 'LETTER', margins: 0 });
+          doc.addPage({ size: 'LETTER', margin: 0 });
         }
 
         const col = i % COLS;
@@ -753,13 +753,14 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
  */
 async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, frontendUrl: string) {
   const prices = [0.25, 0.50, 0.75, 1.00, 1.50, 2.00, 2.50, 3.00, 3.50,
-                  4.00, 4.50, 5.00, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+                  4.00, 4.50, 5.00, 6, 7, 7.50, 8, 9, 10, 11, 12, 12.50, 13, 14, 15, 16, 17, 18, 19, 20, 25];
   const COLS = 3;
-  const CELL_W = 189;
-  const CELL_H = 72;
+  const CELL_W = 189;   // Avery 5160: 2-5/8" = 189pt
+  const CELL_H = 72;    // Avery 5160: 1" = 72pt
+  const H_GAP = 9;      // Avery 5160: 1/8" gap between columns = 9pt
   const QR_SIZE = 48;
-  const LEFT_MARGIN = 13;
-  const TOP_MARGIN = 36;
+  const LEFT_MARGIN = 13.5;  // Avery 5160: 3/16" = 13.5pt
+  const TOP_MARGIN = 36;     // Avery 5160: 1/2" = 36pt
 
   for (let i = 0; i < prices.length; i++) {
     if (i > 0 && i % 30 === 0) {
@@ -768,7 +769,7 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
 
     const col = i % COLS;
     const row = Math.floor((i % 30) / COLS);
-    const cellX = LEFT_MARGIN + col * CELL_W;
+    const cellX = LEFT_MARGIN + col * (CELL_W + H_GAP);
     const cellY = TOP_MARGIN + row * CELL_H;
 
     // Sale name — top, tiny
@@ -892,7 +893,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const PDFDocument = require('pdfkit');
 
-    const doc = new PDFDocument({ size: 'LETTER', margins: 0 });
+    const doc = new PDFDocument({ size: 'LETTER', margin: 0 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="full-sign-kit-${saleId}.pdf"`);
     doc.pipe(res);
@@ -958,7 +959,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
     // Large arrows filling most of each sign's height. Text inside arrow in white.
     // Sign 1: right-pointing arrow (left zone) + QR (right zone)
     // Sign 2: QR (left zone) + left-pointing arrow (right zone)
-    doc.addPage({ size: [792, 612], margins: 0 });
+    doc.addPage({ size: [792, 612], margin: 0 });
 
     for (let i = 0; i < 2; i++) {
       const yOffset = i * 306;
@@ -991,7 +992,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
           .text(sale.title, 35, cy - 22, { width: 335, lineBreak: false });
         doc
           .font('Helvetica').fontSize(14).fillColor('#ffffff')
-          .text('This Way  →', 35, cy + 6, { width: 335, lineBreak: false });
+          .text('This Way', 35, cy + 6, { width: 335, lineBreak: false });
 
         doc.image(qrDirectional, 520, yOffset + 43, { width: 220, height: 220 });
 
@@ -1014,7 +1015,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
           .text(sale.title, 320, cy - 22, { width: 435, lineBreak: false });
         doc
           .font('Helvetica').fontSize(14).fillColor('#ffffff')
-          .text('←  This Way', 320, cy + 6, { width: 435, lineBreak: false });
+          .text('This Way', 320, cy + 6, { width: 435, lineBreak: false });
 
         doc.image(qrDirectional, 30, yOffset + 43, { width: 220, height: 220 });
       }
@@ -1022,7 +1023,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
 
     // PAGE 3: Table Tents (switch back to portrait Letter)
     // Both panels now have QR code + full sale info. No dead space.
-    doc.addPage({ size: 'LETTER', margins: 0 });
+    doc.addPage({ size: 'LETTER', margin: 0 });
 
     const PANEL_W_FULL = 306;
     const TENT_H_FULL = 396;
@@ -1107,7 +1108,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
     }
 
     // PAGE 4: Check-In / Virtual Queue QR
-    doc.addPage({ size: 'LETTER', margins: 0 });
+    doc.addPage({ size: 'LETTER', margin: 0 });
     const qrSize_interactive = 480; // ~6.7 inches
     const qrX_interactive = (PAGE_W - qrSize_interactive) / 2;
 
@@ -1134,7 +1135,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
     // PAGE 5: Treasure Hunt QR
-    doc.addPage({ size: 'LETTER', margins: 0 });
+    doc.addPage({ size: 'LETTER', margin: 0 });
 
     doc
       .fontSize(26)
@@ -1159,7 +1160,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
     // PAGE 6: Photo Station QR
-    doc.addPage({ size: 'LETTER', margins: 0 });
+    doc.addPage({ size: 'LETTER', margin: 0 });
 
     doc
       .fontSize(26)
@@ -1184,7 +1185,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
     // PAGE 7+: Price Sheet
-    doc.addPage({ size: 'LETTER', margins: 0 });
+    doc.addPage({ size: 'LETTER', margin: 0 });
     await renderPriceSheet(doc, saleId, sale.title, frontendUrl);
 
     doc.end();
