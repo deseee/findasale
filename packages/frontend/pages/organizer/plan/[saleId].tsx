@@ -292,17 +292,8 @@ const SalePlanPage = () => {
                         <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-3">
                           {stageTasks.map((task) => (
                             <div key={task.id} className="flex items-start gap-3 group">
-                              {/* Checkbox or Link Icon */}
-                              {task.link ? (
-                                <Link
-                                  href={task.link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="mt-0.5 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
-                                >
-                                  <ArrowRight className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                                </Link>
-                              ) : (
+                              {/* Checkbox */}
+                              {!task.link && (
                                 <button
                                   disabled={task.isAuto}
                                   onClick={() => !task.isAuto && updateTask({ itemId: task.id, completed: !task.completed })}
@@ -322,18 +313,33 @@ const SalePlanPage = () => {
                                 </button>
                               )}
 
-                              {/* Label */}
+                              {/* Label (clickable if link, checkbox area if no link) */}
                               <div className="flex-1">
-                                <label className={`
-                                  text-sm transition-all
-                                  ${task.completed
-                                    ? 'line-through text-gray-500 dark:text-gray-500'
-                                    : 'text-gray-900 dark:text-gray-100'
-                                  }
-                                  ${task.isAuto ? 'cursor-not-allowed' : 'cursor-pointer'}
-                                `}>
-                                  {task.label}
-                                </label>
+                                {task.link ? (
+                                  <Link
+                                    href={task.link}
+                                    className={`
+                                      block text-sm transition-colors py-0.5 px-1
+                                      ${task.completed
+                                        ? 'line-through text-gray-500 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400'
+                                        : 'text-gray-900 dark:text-gray-100 hover:text-amber-600 dark:hover:text-amber-400 cursor-pointer'
+                                      }
+                                    `}
+                                  >
+                                    {task.label}
+                                  </Link>
+                                ) : (
+                                  <label className={`
+                                    text-sm transition-all block
+                                    ${task.completed
+                                      ? 'line-through text-gray-500 dark:text-gray-500'
+                                      : 'text-gray-900 dark:text-gray-100'
+                                    }
+                                    ${task.isAuto ? 'cursor-not-allowed' : 'cursor-pointer'}
+                                  `}>
+                                    {task.label}
+                                  </label>
+                                )}
                               </div>
 
                               {/* Badges */}
