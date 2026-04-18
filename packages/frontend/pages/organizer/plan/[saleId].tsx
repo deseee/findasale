@@ -1,0 +1,368 @@
+import React, { useState } from 'react';
+import Head from 'next/head';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '../../../lib/api';
+import { useAuth } from '../../../components/AuthContext';
+import { useToast } from '../../../components/ToastContext';
+import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
+import { format } from 'date-fns';
+import {
+  CheckCircle2,
+  Circle,
+  ArrowRight,
+  Clock,
+  Zap,
+  ListTodo,
+  Send,
+  Gift,
+  Trophy,
+  Sparkles,
+} from 'lucide-react';
+
+interface ChecklistItem {
+  id: string;
+  stage: string;
+  label: string;
+  completed: boolean;
+  isAuto: boolean;
+  link?: string;
+  tier?: string;
+}
+
+interface StageProgress {
+  stageId: string;
+  label: string;
+  total: number;
+  completed: number;
+  isComplete: boolean;
+}
+
+interface ChecklistResponse {
+  id: string;
+  saleId: string;
+  items: ChecklistItem[];
+  stageProgress: StageProgress[];
+  updatedAt: string;
+}
+
+const stageIcons: Record<string, React.ReactNode> = {
+  'Setup': <ListTodo className="w-5 h-5" />,
+  'Cataloging': <Zap className="w-5 h-5" />,
+  'Ready to Publish': <Send className="w-5 h-5" />,
+  'Live': <Trophy className="w-5 h-5" />,
+  'Wrapping Up': <Clock className="w-5 h-5" />,
+  'Complete': <CheckCircle2 className="w-5 h-5" />,
+};
+
+const SalePlanPage = () => {
+  const router = useRouter();
+  const { saleId } = router.query;
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  const [expandedStage, setExpandedStage] = useState<string | null>(null);
+
+  // Fetch checklist
+  const { data: checklist, isLoading } = useQuery<ChecklistResponse>({
+    queryKey: ['checklist', saleId],
+    queryFn: async () => {
+      const res = await api.get(`/checklist/${saleId}`);
+      return res.data;
+    },
+    enabled: !!saleId && typeof saleId === 'string',
+  });
+
+  // Update task mutation
+  const { mutate: updateTask } = useMutation({
+    mutationFn: async (payload: { itemId: string; completed: boolean }) => {
+      return api.patch(`/checklist/${saleId}`, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
+      showToast('Task updated', 'success');
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.message || 'Failed to update task', 'error');
+    },
+  });
+
+  if (!saleId || typeof saleId !== 'string') return null;
+
+  const items = checklist?.items || [];
+  const stageProgress = checklist?.stageProgress || [];
+
+  // Find current (active) stage
+  const currentStage =
+    stageProgress.find((s) => !s.isComplete) || stageProgress[stageProgress.length - 1];
+
+  // Auto-expand current stage
+  React.useEffect(() => {
+    if (currentStage && !expandedStage) {
+      setExpandedStage(currentStage.label);
+    }
+  }, [currentStage, expandedStage]);
+
+  // Calculate overall progress
+  const totalTasks = items.length;
+  const completedTasks = items.filter((i) => i.completed).length;
+  const overallPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Group items by stage
+  const itemsByStage: Record<string, ChecklistItem[]> = {};
+  items.forEach((item) => {
+    if (!itemsByStage[item.stage]) {
+      itemsByStage[item.stage] = [];
+    }
+    itemsByStage[item.stage].push(item);
+  });
+
+  const stageOrder = ['Setup', 'Cataloging', 'Ready to Publish', 'Live', 'Wrapping Up', 'Complete'];
+
+  return (
+    <>
+      <Head>
+        <title>Sale Progress | FindA.Sale</title>
+        <meta name="description" content="Track your sale progress through all stages" />
+      </Head>
+
+      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">
+        {/* Header */}
+        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 py-6">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="flex items-center gap-2 mb-4 text-sm text-gray-600 dark:text-gray-400">
+              <Link href="/organizer/dashboard" className="hover:text-gray-900 dark:hover:text-gray-200">
+                Dashboard
+              </Link>
+              <span>/</span>
+              <span>Sale Progress</span>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Track Your Progress</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
+              Complete tasks across 6 stages to successfully run your sale
+            </p>
+          </div>
+        </div>
+
+        <div className="max-w-6xl mx-auto px-4 py-12">
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600" />
+            </div>
+          ) : (
+            <>
+              {/* Overall Progress */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mb-8 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Overall Progress</h2>
+                  <span className="text-2xl font-bold text-amber-600">{overallPercent}%</span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
+                  <div
+                    className="bg-amber-600 h-3 rounded-full transition-all duration-500"
+                    style={{ width: `${overallPercent}%` }}
+                  />
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {completedTasks} of {totalTasks} tasks completed
+                </p>
+              </div>
+
+              {/* Timeline */}
+              <div className="mb-12">
+                <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4 uppercase tracking-wide">
+                  Progress Timeline
+                </h3>
+                <div className="flex items-center justify-between gap-1 mb-8">
+                  {stageProgress.map((stage, idx) => (
+                    <div key={stage.stageId} className="flex flex-col items-center flex-1">
+                      {/* Dot */}
+                      <button
+                        onClick={() => setExpandedStage(stage.label)}
+                        className={`
+                          w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-all
+                          ${stage.isComplete
+                            ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400'
+                            : currentStage?.label === stage.label
+                            ? 'bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 ring-2 ring-amber-600'
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                          }
+                        `}
+                      >
+                        {stage.isComplete ? (
+                          <CheckCircle2 className="w-6 h-6" />
+                        ) : (
+                          <Circle className="w-6 h-6" />
+                        )}
+                      </button>
+
+                      {/* Label */}
+                      <p className="text-xs font-medium text-gray-900 dark:text-gray-100 text-center leading-tight">
+                        {stage.label}
+                      </p>
+
+                      {/* Progress */}
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {stage.completed}/{stage.total}
+                      </p>
+
+                      {/* Connector */}
+                      {idx < stageProgress.length - 1 && (
+                        <div
+                          className={`
+                            absolute w-12 h-0.5 -right-6 top-6
+                            ${stage.isComplete
+                              ? 'bg-green-600 dark:bg-green-400'
+                              : currentStage?.label === stage.label || (idx < stageProgress.findIndex((s) => !s.isComplete) ?? -1)
+                              ? 'bg-amber-600 dark:bg-amber-400'
+                              : 'bg-gray-300 dark:bg-gray-600'
+                            }
+                          `}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stage Cards Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {stageOrder.map((stageName) => {
+                  const stageData = stageProgress.find((s) => s.label === stageName);
+                  const stageTasks = itemsByStage[stageName] || [];
+
+                  if (!stageData || stageTasks.length === 0) return null;
+
+                  const isActive = currentStage?.label === stageName;
+                  const isComplete = stageData.isComplete;
+                  const isFuture = !isComplete && !isActive;
+
+                  return (
+                    <div
+                      key={stageName}
+                      className={`
+                        border rounded-lg transition-all
+                        ${isComplete
+                          ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
+                          : isActive
+                          ? 'border-amber-400 dark:border-amber-600 bg-white dark:bg-gray-800 ring-1 ring-amber-400 dark:ring-amber-600'
+                          : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50'
+                        }
+                        ${isFuture ? 'opacity-50' : ''}
+                      `}
+                    >
+                      {/* Stage Header */}
+                      <button
+                        onClick={() => setExpandedStage(isActive || isComplete || expandedStage === stageName ? null : stageName)}
+                        className="w-full p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`
+                              p-2 rounded-lg
+                              ${isComplete
+                                ? 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400'
+                                : isActive
+                                ? 'bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                              }
+                            `}
+                          >
+                            {stageIcons[stageName]}
+                          </div>
+                          <div className="text-left">
+                            <h3 className="font-semibold text-gray-900 dark:text-white">{stageName}</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {stageData.completed} of {stageData.total} tasks
+                            </p>
+                          </div>
+                        </div>
+                        <ArrowRight
+                          className={`
+                            w-5 h-5 transition-transform
+                            ${expandedStage === stageName ? 'rotate-90' : ''}
+                            text-gray-600 dark:text-gray-400
+                          `}
+                        />
+                      </button>
+
+                      {/* Stage Tasks */}
+                      {expandedStage === stageName && (
+                        <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-3">
+                          {stageTasks.map((task) => (
+                            <div key={task.id} className="flex items-start gap-3 group">
+                              {/* Checkbox or Link Icon */}
+                              {task.link ? (
+                                <Link
+                                  href={task.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-0.5 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                                >
+                                  <ArrowRight className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                </Link>
+                              ) : (
+                                <button
+                                  disabled={task.isAuto}
+                                  onClick={() => !task.isAuto && updateTask({ itemId: task.id, completed: !task.completed })}
+                                  className={`
+                                    mt-0.5 w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-all
+                                    ${task.isAuto
+                                      ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 cursor-not-allowed'
+                                      : 'border-gray-300 dark:border-gray-600 hover:border-amber-600 dark:hover:border-amber-400'
+                                    }
+                                    ${task.completed
+                                      ? 'bg-green-600 dark:bg-green-700 border-green-600 dark:border-green-700'
+                                      : ''
+                                    }
+                                  `}
+                                >
+                                  {task.completed && <CheckCircle2 className="w-4 h-4 text-white" />}
+                                </button>
+                              )}
+
+                              {/* Label */}
+                              <div className="flex-1">
+                                <label className={`
+                                  text-sm transition-all
+                                  ${task.completed
+                                    ? 'line-through text-gray-500 dark:text-gray-500'
+                                    : 'text-gray-900 dark:text-gray-100'
+                                  }
+                                  ${task.isAuto ? 'cursor-not-allowed' : 'cursor-pointer'}
+                                `}>
+                                  {task.label}
+                                </label>
+                              </div>
+
+                              {/* Badges */}
+                              <div className="flex gap-2 flex-shrink-0">
+                                {task.isAuto && (
+                                  <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                                    Auto
+                                  </span>
+                                )}
+                                {task.tier && (
+                                  <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                                    {task.tier}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default SalePlanPage;

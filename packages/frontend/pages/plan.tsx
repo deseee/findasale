@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
-import SaleChecklist from '../components/SaleChecklist';
 
 interface Message {
   id: string;
@@ -27,10 +26,6 @@ const PlanPage = () => {
   const defaultState = process.env.NEXT_PUBLIC_DEFAULT_STATE || 'your state';
   const { user, isLoading: authLoading } = useAuth();
 
-  // Tabs
-  const [activeTab, setActiveTab] = useState<'checklist' | 'assistant'>('checklist');
-  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
-
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -50,17 +45,12 @@ const PlanPage = () => {
 
   const sales = salesData || [];
 
-  // Filter to PUBLISHED, UPCOMING, and DRAFT only
-  const availableSales = sales.filter(
-    s => ['PUBLISHED', 'UPCOMING', 'DRAFT'].includes(s.status)
-  );
+  // Filter to PUBLISHED, UPCOMING, and DRAFT only (most recent first)
+  const activeSales = sales
+    .filter(s => ['PUBLISHED', 'UPCOMING', 'DRAFT'].includes(s.status))
+    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
 
-  // Set first sale as default
-  useEffect(() => {
-    if (availableSales.length > 0 && !selectedSaleId) {
-      setSelectedSaleId(availableSales[0].id);
-    }
-  }, [availableSales, selectedSaleId]);
+  const mostRecentActiveSale = activeSales[0] || null;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -137,134 +127,50 @@ const PlanPage = () => {
   return (
     <>
       <Head>
-        <title>Plan & Prepare | FindA.Sale</title>
+        <title>Planning Assistant | FindA.Sale</title>
         <meta
           name="description"
-          content="Organize your sale with our checklist and planning assistant"
+          content="Get expert planning advice for your sale"
         />
       </Head>
 
       <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800 flex flex-col">
         {/* Header with breadcrumb */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 py-4">
-          <div className="max-w-4xl mx-auto px-4">
+          <div className="max-w-2xl mx-auto px-4">
             <div className="flex items-center gap-3 mb-4">
               <Link href="/organizer/dashboard" className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-400 text-sm">
                 ← Dashboard
               </Link>
               <span className="text-gray-300 dark:text-gray-600">/</span>
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Plan & Prepare</h1>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700">
-          <div className="max-w-4xl mx-auto px-4">
-            <div className="flex gap-8">
-              <button
-                onClick={() => setActiveTab('checklist')}
-                className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === 'checklist'
-                    ? 'text-sage-600 dark:text-sage-400 border-sage-600 dark:border-sage-400'
-                    : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-              >
-                Sale Checklist
-              </button>
-              <button
-                onClick={() => setActiveTab('assistant')}
-                className={`py-4 px-1 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === 'assistant'
-                    ? 'text-sage-600 dark:text-sage-400 border-sage-600 dark:border-sage-400'
-                    : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-              >
-                Planning Assistant
-              </button>
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Planning Assistant</h1>
             </div>
           </div>
         </div>
 
         {/* Main content area */}
         <div className="flex-grow flex flex-col">
-          {/* Sale Checklist Tab */}
-          {activeTab === 'checklist' && (
-            <div className="flex-grow flex flex-col max-w-4xl mx-auto w-full px-4 py-8">
-              {authLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 dark:border-amber-400"></div>
+          <div className="flex-grow flex flex-col max-w-2xl mx-auto w-full px-4 py-8">
+            {/* Progress Tracker CTA */}
+            {!authLoading && isOrganizer && mostRecentActiveSale && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-300 dark:border-amber-700 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Track your sale progress</p>
+                    <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">View 6 stages and 40+ tasks to complete</p>
+                  </div>
+                  <Link
+                    href={`/organizer/plan/${mostRecentActiveSale.id}`}
+                    className="inline-block px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600 text-white text-sm font-medium rounded transition-colors flex-shrink-0"
+                  >
+                    Open Planner →
+                  </Link>
                 </div>
-              ) : !isOrganizer ? (
-                <div className="max-w-2xl mx-auto w-full">
-                  <div className="card p-8 text-center">
-                    <p className="text-gray-600 dark:text-gray-400 text-base">
-                      Checklists help organizers prepare for sales. Create your first sale to get started.
-                    </p>
-                    <Link
-                      href="/organizer/create-sale"
-                      className="inline-block mt-4 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 text-sm font-medium"
-                    >
-                      Create a Sale
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Sale selector dropdown */}
-                  <div className="max-w-2xl mx-auto w-full mb-6">
-                    <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                      Select a sale
-                    </label>
-                    <select
-                      value={selectedSaleId || ''}
-                      onChange={(e) => setSelectedSaleId(e.target.value)}
-                      disabled={salesLoading || availableSales.length === 0}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-500 disabled:opacity-50 text-sm"
-                    >
-                      <option value="">
-                        {salesLoading ? 'Loading sales...' : 'Choose a sale...'}
-                      </option>
-                      {availableSales.map((sale) => (
-                        <option key={sale.id} value={sale.id}>
-                          {sale.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              </div>
+            )}
 
-                  {/* Checklist component */}
-                  <div className="max-w-2xl mx-auto w-full">
-                    {selectedSaleId ? (
-                      <SaleChecklist saleId={selectedSaleId} />
-                    ) : (
-                      <div className="card p-8 text-center">
-                        <p className="text-gray-600 dark:text-gray-400">
-                          {availableSales.length === 0
-                            ? 'No active sales. Start a new sale to use this tool.'
-                            : 'Select a sale to view its checklist'}
-                        </p>
-                        {availableSales.length === 0 && (
-                          <Link
-                            href="/organizer/create-sale"
-                            className="inline-block mt-4 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 text-sm font-medium"
-                          >
-                            Create a Sale
-                          </Link>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Planning Assistant Tab */}
-          {activeTab === 'assistant' && (
-            <div className="flex-grow flex flex-col max-w-2xl mx-auto w-full px-4 py-8">
-              {/* Messages list */}
-              <div className="flex-grow overflow-y-auto mb-6 space-y-4 min-h-96">
+            {/* Messages list */}
+            <div className="flex-grow overflow-y-auto mb-6 space-y-4 min-h-96">
                 {messages.length === 0 && (
                   <div className="text-center py-12">
                     <p className="text-warm-600 dark:text-warm-400 mb-6 text-lg">
@@ -365,22 +271,20 @@ const PlanPage = () => {
                 </p>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Footer CTA - only show on assistant tab */}
-        {activeTab === 'assistant' && (
-          <div className="bg-warm-50 dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 py-6">
-            <div className="max-w-2xl mx-auto px-4 text-center">
-              <p className="text-warm-700 dark:text-warm-300 mb-3">
-                Ready to list your sale?{' '}
-                <Link href="/guide" className="text-sage-600 hover:text-sage-700 font-medium underline">
-                  Read the organizer guide →
-                </Link>
-              </p>
-            </div>
+        {/* Footer CTA */}
+        <div className="bg-warm-50 dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 py-6">
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <p className="text-warm-700 dark:text-warm-300 mb-3">
+              Ready to list your sale?{' '}
+              <Link href="/guide" className="text-sage-600 hover:text-sage-700 font-medium underline">
+                Read the organizer guide →
+              </Link>
+            </p>
           </div>
-        )}
+        </div>
       </div>
     </>
   );

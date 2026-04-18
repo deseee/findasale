@@ -6,28 +6,99 @@ import { AuthRequest } from '../middleware/auth';
 
 interface ChecklistItem {
   id: string;
-  phase: 'pre' | 'during' | 'post';
+  stage: string; // "Setup", "Cataloging", "Ready to Publish", "Live", "Wrapping Up", "Complete"
   label: string;
   completed: boolean;
-  completedAt?: string;
+  isAuto: boolean; // true = auto-detected from real data, false = manual
+  link?: string; // for tasks with links (e.g., settlement)
+  tier?: string; // "PRO" or "TEAMS" if tier-gated
 }
 
-const DEFAULT_CHECKLIST: ChecklistItem[] = [
-  // Pre-sale
-  { id: 'pre1', phase: 'pre', label: 'Upload item photos (Rapidfire mode)', completed: false },
-  { id: 'pre2', phase: 'pre', label: 'Review AI-generated tags and categories', completed: false },
-  { id: 'pre3', phase: 'pre', label: 'Set item pricing', completed: false },
-  { id: 'pre4', phase: 'pre', label: 'Write sale description and details', completed: false },
-  { id: 'pre5', phase: 'pre', label: 'Set sale dates, hours, and location', completed: false },
-  { id: 'pre6', phase: 'pre', label: 'Publish sale listing', completed: false },
-  // During
-  { id: 'dur1', phase: 'during', label: 'Process sales and mark items sold', completed: false },
-  { id: 'dur2', phase: 'during', label: 'Handle holds and reservations', completed: false },
-  { id: 'dur3', phase: 'during', label: 'Monitor live sale dashboard', completed: false },
-  // Post
-  { id: 'post1', phase: 'post', label: 'Mark sale as complete', completed: false },
-  { id: 'post2', phase: 'post', label: 'Review earnings and payouts', completed: false },
-  { id: 'post3', phase: 'post', label: 'Respond to shopper reviews', completed: false },
+interface StageProgress {
+  stageId: string;
+  label: string;
+  total: number;
+  completed: number;
+  isComplete: boolean;
+}
+
+// Legacy format for stored manual states (backward compatibility)
+interface StoredManualState {
+  [taskId: string]: boolean; // taskId -> completed
+}
+
+// Define all tasks with their properties
+interface TaskDefinition {
+  id: string;
+  stage: string;
+  label: string;
+  isAuto: boolean;
+  requiredTier?: 'PRO' | 'TEAMS'; // undefined = all tiers
+  link?: string;
+  autoCheck?: (data: TaskEvaluationData) => boolean;
+}
+
+interface TaskEvaluationData {
+  sale: any;
+  itemCount: number;
+  unpricedCount: number;
+  soldCount: number;
+  clueCount: number;
+  settlement: any;
+  organizerTier: string;
+}
+
+// Define all tasks
+const ALL_TASKS: TaskDefinition[] = [
+  // Stage 1: Setup (all auto)
+  { id: 'setup_title', stage: 'Setup', label: 'Sale title & description written', isAuto: true, autoCheck: (d) => !!(d.sale.description && d.sale.description.length > 0) },
+  { id: 'setup_type', stage: 'Setup', label: 'Sale type selected', isAuto: true, autoCheck: (d) => !!d.sale.saleType },
+  { id: 'setup_dates', stage: 'Setup', label: 'Dates & hours confirmed', isAuto: true, autoCheck: (d) => !!d.sale.startDate },
+  { id: 'setup_location', stage: 'Setup', label: 'Address & location confirmed', isAuto: true, autoCheck: (d) => !!(d.sale.lat && d.sale.lng) },
+  { id: 'setup_cover', stage: 'Setup', label: 'Cover photo uploaded', isAuto: true, autoCheck: (d) => d.sale.photoUrls.length > 0 },
+
+  // Stage 2: Cataloging
+  { id: 'cat_rapidfire', stage: 'Cataloging', label: 'First items uploaded via Rapidfire', isAuto: true, autoCheck: (d) => d.itemCount >= 1 },
+  { id: 'cat_tags', stage: 'Cataloging', label: 'Tags & categories reviewed', isAuto: false },
+  { id: 'cat_pricing', stage: 'Cataloging', label: 'All items priced', isAuto: true, autoCheck: (d) => d.unpricedCount === 0 && d.itemCount > 0 },
+  { id: 'cat_smartpricing', stage: 'Cataloging', label: 'Smart Pricing suggestions reviewed', isAuto: false, requiredTier: 'PRO' },
+  { id: 'cat_ebay', stage: 'Cataloging', label: 'eBay sync pushed for high-value items', isAuto: false },
+  { id: 'cat_social_draft', stage: 'Cataloging', label: 'Social post drafted', isAuto: false },
+
+  // Stage 3: Ready to Publish
+  { id: 'pub_pricetags', stage: 'Ready to Publish', label: 'Price tags printed', isAuto: false },
+  { id: 'pub_qr', stage: 'Ready to Publish', label: 'Item QR codes downloaded', isAuto: false },
+  { id: 'pub_queue_qr', stage: 'Ready to Publish', label: 'Virtual Queue QR printed & tested', isAuto: false, requiredTier: 'PRO' },
+  { id: 'pub_treasure', stage: 'Ready to Publish', label: 'Treasure Hunt clues printed & placed', isAuto: false, requiredTier: 'PRO' },
+  { id: 'pub_preview', stage: 'Ready to Publish', label: 'Sale previewed on mobile', isAuto: false },
+  { id: 'pub_signs', stage: 'Ready to Publish', label: 'Neighborhood signs made', isAuto: false },
+  { id: 'pub_published', stage: 'Ready to Publish', label: 'Sale published', isAuto: true, autoCheck: (d) => d.sale.status === 'PUBLISHED' || d.sale.status === 'LIVE' },
+  { id: 'pub_social', stage: 'Ready to Publish', label: 'Sale shared on social media', isAuto: false },
+
+  // Stage 4: Live
+  { id: 'live_internet', stage: 'Live', label: 'Internet connection tested', isAuto: false },
+  { id: 'live_pos', stage: 'Live', label: 'POS app open & working', isAuto: false },
+  { id: 'live_float', stage: 'Live', label: 'Cash float counted', isAuto: false },
+  { id: 'live_signs', stage: 'Live', label: 'Signs posted at property entrance', isAuto: false },
+  { id: 'live_qr_stations', stage: 'Live', label: 'QR codes posted at photo stations', isAuto: false },
+  { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO' },
+  { id: 'live_helpers', stage: 'Live', label: 'Helpers briefed on their roles', isAuto: false },
+  { id: 'live_command', stage: 'Live', label: 'Command Center open', isAuto: false, requiredTier: 'TEAMS' },
+  { id: 'live_first_sold', stage: 'Live', label: 'First item sold', isAuto: true, autoCheck: (d) => d.soldCount >= 1 },
+
+  // Stage 5: Wrapping Up
+  { id: 'wrap_unsold', stage: 'Wrapping Up', label: 'Unsold items handled', isAuto: false },
+  { id: 'wrap_messages', stage: 'Wrapping Up', label: 'Shopper messages answered', isAuto: false },
+  { id: 'wrap_settlement', stage: 'Wrapping Up', label: 'Settlement Wizard completed', isAuto: false, link: '/organizer/settlement/{saleId}' },
+  { id: 'wrap_flip', stage: 'Wrapping Up', label: 'Flip Report reviewed', isAuto: false, requiredTier: 'PRO' },
+  { id: 'wrap_donate', stage: 'Wrapping Up', label: 'Unsold items donated', isAuto: false },
+  { id: 'wrap_closed', stage: 'Wrapping Up', label: 'Sale marked complete', isAuto: true, autoCheck: (d) => d.sale.status === 'ENDED' },
+
+  // Stage 6: Complete
+  { id: 'done_earnings', stage: 'Complete', label: 'Earnings reviewed', isAuto: false },
+  { id: 'done_payout', stage: 'Complete', label: 'Client payout confirmed', isAuto: true, autoCheck: (d) => d.settlement?.lifecycleStage === 'CLOSED' },
+  { id: 'done_reviews', stage: 'Complete', label: 'Shopper reviews responded to', isAuto: false },
+  { id: 'done_next', stage: 'Complete', label: 'Next sale ready to start?', isAuto: false },
 ];
 
 // Validation schemas
@@ -42,7 +113,7 @@ const addItemSchema = z.object({
   phase: z.enum(['pre', 'during', 'post']),
 });
 
-// GET /api/checklist/:saleId — get checklist, create with defaults if none exists
+// GET /api/checklist/:saleId — get progress tracker checklist with auto+manual merge
 export const getChecklist = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -52,10 +123,10 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
 
     const { saleId } = req.params;
 
-    // Verify sale exists and user owns it
+    // Step 1: Verify sale ownership and fetch sale + organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      include: { organizer: true },
+      include: { organizer: true, settlement: true },
     });
 
     if (!sale) {
@@ -66,29 +137,143 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'You do not own this sale' });
     }
 
-    // Find or create checklist
-    let checklist = await prisma.saleChecklist.findUnique({
+    // Step 2: Fetch item counts
+    const itemCount = await prisma.item.count({
+      where: { saleId, deletedAt: null },
+    });
+
+    const unpricedCount = await prisma.item.count({
+      where: { saleId, price: null, deletedAt: null },
+    });
+
+    const soldCount = await prisma.item.count({
+      where: { saleId, status: 'SOLD', deletedAt: null },
+    });
+
+    // Step 3: Fetch treasure hunt clue count
+    const clueCount = await prisma.treasureHuntQRClue.count({
       where: { saleId },
     });
 
-    if (!checklist) {
-      // Create with defaults
-      checklist = await prisma.saleChecklist.create({
+    // Step 4: Load stored checklist (for manual task states)
+    let storedChecklist = await prisma.saleChecklist.findUnique({
+      where: { saleId },
+    });
+
+    const manualStates: StoredManualState = storedChecklist
+      ? (storedChecklist.items as unknown as StoredManualState) || {}
+      : {};
+
+    // Step 5: Build task evaluation data
+    const evalData: TaskEvaluationData = {
+      sale,
+      itemCount,
+      unpricedCount,
+      soldCount,
+      clueCount,
+      settlement: sale.settlement,
+      organizerTier: sale.organizer.subscriptionTier || 'SIMPLE',
+    };
+
+    // Step 6: Build items list (filtered by tier, merging auto+manual)
+    const items: ChecklistItem[] = [];
+    const stageGroups: Record<string, { total: number; completed: number }> = {};
+
+    for (const taskDef of ALL_TASKS) {
+      // Skip pub_treasure if no clues
+      if (taskDef.id === 'pub_treasure' && clueCount === 0) {
+        continue;
+      }
+
+      // Skip if tier-gated and organizer doesn't have access
+      if (taskDef.requiredTier) {
+        const tierRank: Record<string, number> = { SIMPLE: 0, PRO: 1, TEAMS: 2 };
+        const tierMap: Record<string, number> = { PRO: 1, TEAMS: 2 };
+        const required = tierMap[taskDef.requiredTier];
+        const current = tierRank[evalData.organizerTier];
+        if (current < required) {
+          continue;
+        }
+      }
+
+      // Determine completion state
+      let completed = false;
+      if (taskDef.isAuto && taskDef.autoCheck) {
+        completed = taskDef.autoCheck(evalData);
+      } else {
+        // Manual task: check stored state
+        completed = manualStates[taskDef.id] || false;
+      }
+
+      // Build item
+      const item: ChecklistItem = {
+        id: taskDef.id,
+        stage: taskDef.stage,
+        label: taskDef.label,
+        completed,
+        isAuto: taskDef.isAuto,
+      };
+
+      if (taskDef.link) {
+        item.link = taskDef.link.replace('{saleId}', saleId);
+      }
+
+      if (taskDef.requiredTier) {
+        item.tier = taskDef.requiredTier;
+      }
+
+      items.push(item);
+
+      // Track stage progress
+      if (!stageGroups[taskDef.stage]) {
+        stageGroups[taskDef.stage] = { total: 0, completed: 0 };
+      }
+      stageGroups[taskDef.stage].total++;
+      if (completed) {
+        stageGroups[taskDef.stage].completed++;
+      }
+    }
+
+    // Step 7: Build stage progress
+    const stageOrder = ['Setup', 'Cataloging', 'Ready to Publish', 'Live', 'Wrapping Up', 'Complete'];
+    const stageProgress: StageProgress[] = stageOrder.map((stageName) => {
+      const group = stageGroups[stageName];
+      if (!group) {
+        return { stageId: stageName.toLowerCase().replace(/ /g, '_'), label: stageName, total: 0, completed: 0, isComplete: false };
+      }
+      return {
+        stageId: stageName.toLowerCase().replace(/ /g, '_'),
+        label: stageName,
+        total: group.total,
+        completed: group.completed,
+        isComplete: group.total > 0 && group.completed === group.total,
+      };
+    });
+
+    // Create checklist in DB if it doesn't exist (for backward compatibility)
+    if (!storedChecklist) {
+      storedChecklist = await prisma.saleChecklist.create({
         data: {
           saleId,
-          items: DEFAULT_CHECKLIST as unknown as Prisma.InputJsonValue,
+          items: {} as unknown as Prisma.InputJsonValue,
         },
       });
     }
 
-    return res.json(checklist);
+    return res.json({
+      id: storedChecklist.id,
+      saleId,
+      items,
+      stageProgress,
+      updatedAt: storedChecklist.updatedAt,
+    });
   } catch (error: any) {
     console.error('Error fetching checklist:', error);
     return res.status(500).json({ message: 'Failed to fetch checklist' });
   }
 };
 
-// PATCH /api/checklist/:saleId — update item completion status or label
+// PATCH /api/checklist/:saleId — update manual task completion state
 export const updateChecklist = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -122,39 +307,34 @@ export const updateChecklist = async (req: AuthRequest, res: Response) => {
       checklist = await prisma.saleChecklist.create({
         data: {
           saleId,
-          items: DEFAULT_CHECKLIST as unknown as Prisma.InputJsonValue,
+          items: {} as unknown as Prisma.InputJsonValue,
         },
       });
     }
 
-    // Update items array
-    const items = (checklist.items as unknown as ChecklistItem[]) || [];
-    const itemIndex = items.findIndex(item => item.id === data.itemId);
+    // Update manual states (only for non-auto tasks)
+    const manualStates = (checklist.items as unknown as StoredManualState) || {};
+    const taskDef = ALL_TASKS.find(t => t.id === data.itemId);
 
-    if (itemIndex === -1) {
+    if (!taskDef) {
       return res.status(404).json({ message: 'Checklist item not found' });
     }
 
-    // Update the item
-    items[itemIndex].completed = data.completed;
-    if (data.completed) {
-      items[itemIndex].completedAt = new Date().toISOString();
-    } else {
-      delete items[itemIndex].completedAt;
+    // Only allow updating manual tasks
+    if (taskDef.isAuto) {
+      return res.status(400).json({ message: 'Cannot manually update auto-detected tasks' });
     }
 
-    // Optionally update label
-    if (data.label !== undefined) {
-      items[itemIndex].label = data.label;
-    }
+    manualStates[data.itemId] = data.completed;
 
     // Save updated checklist
     const updated = await prisma.saleChecklist.update({
       where: { saleId },
-      data: { items: items as unknown as Prisma.InputJsonValue },
+      data: { items: manualStates as unknown as Prisma.InputJsonValue },
     });
 
-    return res.json(updated);
+    // Fetch fresh and return full checklist (for consistency with getChecklist)
+    return getChecklist(req, res);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
@@ -164,121 +344,12 @@ export const updateChecklist = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// POST /api/checklist/:saleId/items — add a custom checklist item
+// POST /api/checklist/:saleId/items — (deprecated, kept for backward compat)
 export const addChecklistItem = async (req: AuthRequest, res: Response) => {
-  try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!req.user || !hasOrganizerRole) {
-      return res.status(403).json({ message: 'Organizer access required.' });
-    }
-
-    const { saleId } = req.params;
-    const data = addItemSchema.parse(req.body);
-
-    // Verify sale exists and user owns it
-    const sale = await prisma.sale.findUnique({
-      where: { id: saleId },
-      include: { organizer: true },
-    });
-
-    if (!sale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
-
-    if (sale.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'You do not own this sale' });
-    }
-
-    // Get or create checklist
-    let checklist = await prisma.saleChecklist.findUnique({
-      where: { saleId },
-    });
-
-    if (!checklist) {
-      checklist = await prisma.saleChecklist.create({
-        data: {
-          saleId,
-          items: DEFAULT_CHECKLIST as unknown as Prisma.InputJsonValue,
-        },
-      });
-    }
-
-    // Add new item
-    const items = (checklist.items as unknown as ChecklistItem[]) || [];
-    const newItem: ChecklistItem = {
-      id: `custom_${Date.now()}`,
-      phase: data.phase,
-      label: data.label,
-      completed: false,
-    };
-    items.push(newItem);
-
-    // Save updated checklist
-    const updated = await prisma.saleChecklist.update({
-      where: { saleId },
-      data: { items: items as unknown as Prisma.InputJsonValue },
-    });
-
-    return res.status(201).json(updated);
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: 'Invalid request data', errors: error.errors });
-    }
-    console.error('Error adding checklist item:', error);
-    return res.status(500).json({ message: 'Failed to add checklist item' });
-  }
+  return res.status(400).json({ message: 'Custom checklist items no longer supported. Use the progress tracker.' });
 };
 
-// DELETE /api/checklist/:saleId/items/:itemId — delete a custom checklist item
+// DELETE /api/checklist/:saleId/items/:itemId — (deprecated, kept for backward compat)
 export const deleteChecklistItem = async (req: AuthRequest, res: Response) => {
-  try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!req.user || !hasOrganizerRole) {
-      return res.status(403).json({ message: 'Organizer access required.' });
-    }
-
-    const { saleId, itemId } = req.params;
-
-    // Verify sale exists and user owns it
-    const sale = await prisma.sale.findUnique({
-      where: { id: saleId },
-      include: { organizer: true },
-    });
-
-    if (!sale) {
-      return res.status(404).json({ message: 'Sale not found' });
-    }
-
-    if (sale.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'You do not own this sale' });
-    }
-
-    // Get checklist
-    const checklist = await prisma.saleChecklist.findUnique({
-      where: { saleId },
-    });
-
-    if (!checklist) {
-      return res.status(404).json({ message: 'Checklist not found' });
-    }
-
-    // Remove item
-    const items = (checklist.items as unknown as ChecklistItem[]) || [];
-    const filtered = items.filter(item => item.id !== itemId);
-
-    if (filtered.length === items.length) {
-      return res.status(404).json({ message: 'Checklist item not found' });
-    }
-
-    // Save updated checklist
-    const updated = await prisma.saleChecklist.update({
-      where: { saleId },
-      data: { items: filtered as unknown as Prisma.InputJsonValue },
-    });
-
-    return res.json(updated);
-  } catch (error: any) {
-    console.error('Error deleting checklist item:', error);
-    return res.status(500).json({ message: 'Failed to delete checklist item' });
-  }
+  return res.status(400).json({ message: 'Custom checklist items no longer supported. Use the progress tracker.' });
 };
