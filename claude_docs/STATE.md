@@ -7,6 +7,27 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S502 (2026-04-18) — Label Sheet Composer: build + 3 bug fixes (auth, export, saved batches)**
+
+- **Label Sheet Composer built ✅:** Full single-page tool at `/organizer/label-composer/[saleId]`. Two input modes: preset price chips (30 cheat-sheet prices) + pull from catalog (search priced items). Live Avery 5160 sheet preview with color-coded price bands. useReducer with 14 action types. localStorage persistence for in-progress batches.
+- **Backend endpoints ✅:** 4 new routes — `GET /cheatsheet`, `GET /items-for-labels` (paginated cursor search), `POST /label-batch` (create batch, assign unique tagIds), `GET /batches/:batchId/print` (PDFKit PDF with real QR codes). In-memory ephemeral batch store with 2hr TTL.
+- **Shared cheatsheet constant ✅:** Extracted 30-price array to `constants/cheatsheet.ts`, shared between labelComposerController and printKitController.
+- **CTA links wired ✅:** Label Composer linked from print-kit page (amber CTA card) and review page ("Print labels for N priced items →").
+- **Bug fix: Print PDF auth failure ✅:** `window.open()` with `?token=` query param replaced with authenticated blob fetch via `api.get()` + `responseType: 'blob'`. Backend authenticate middleware only reads Bearer header — blob fetch sends it correctly.
+- **Bug fix: Export PDF download ✅:** Separate `handleExportPdf` function creates blob URL + temporary anchor with `download` attribute. "Export PDF" button now triggers file download instead of duplicating Print behavior.
+- **Bug fix: Saved batch recall UI ✅:** Added `savedBatches` state, `refreshSavedBatches()` localStorage scanner, `handleLoadBatch()` and `handleDeleteBatch()`. Collapsible "Saved batches (N)" section below action bar with Load/Delete per saved preset.
+
+**S502 Files changed (5):**
+- `packages/backend/src/constants/cheatsheet.ts` — NEW, shared 30-price constant
+- `packages/backend/src/controllers/labelComposerController.ts` — NEW, 4 endpoints
+- `packages/backend/src/routes/organizers.ts` — 4 new label composer routes
+- `packages/backend/src/controllers/printKitController.ts` — import shared cheatsheet constant
+- `packages/frontend/pages/organizer/label-composer/[saleId].tsx` — NEW, full composer page + 3 bug fixes
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — Label Composer CTA card
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx` — "Print labels" link
+
+---
+
 **S501 (2026-04-18) — Print kit sprint: PDFKit margins root-cause fix, redesigns, label decode, price sheet**
 
 - **PDFKit `margins: 0` root-cause bug fixed ✅:** `margins: 0` (plural) is silently ignored by PDFKit 0.15.2 — defaults to 72pt margins (maxY=720). Must use `margin: 0` (singular). Global sed replace across all 12 instances in `printKitController.ts`. Resolves ALL footer overflow bugs (interactive QR pages 4-6 footer at y=750 > 720) and table tent extra-page bug (caption at y=718+lineHeight > 720 triggered new page).
@@ -672,11 +693,11 @@ Files (7):
 
 ## Recent Sessions
 
-- **S499 (2026-04-18):** Progress tracker task links audited + corrected (29 tasks). "Ready to Publish" → "Pre-Sale" throughout. Checkbox rendering + optimistic update fix (removed onSettled/invalidateQueries, use PATCH response directly). Print kit: 3 new QR sections (virtual queue, treasure hunt clues, photo station). Photo station design: 1/sale, 5 XP scan + 10 XP share. XP discrepancy found (VISIT 2 vs 5, clue scan 25 vs 12). Rebalance deferred to S500. 7 files.
+- **S502 (2026-04-18):** Label Sheet Composer built end-to-end. 4 backend endpoints (cheatsheet, items-for-labels, label-batch, print). Full frontend page with useReducer, price chips, catalog search, live Avery 5160 preview, drag reorder. 3 bug fixes: PDF auth (blob fetch), export download (anchor+download attr), saved batch recall UI (localStorage scan + load/delete). Shared cheatsheet constant extracted. CTA links on print-kit + review pages. 7 files.
+- **S501 (2026-04-18):** PDFKit `margins: 0` root-cause fix (singular `margin: 0`). Directional signs QR swap. QR color standardized black. Price sheet +$7.50/$12.50/$25. Label HTML entity decode. Print preview condition badges + QR labels + empty last page fix. 3 files.
+- **S500 (2026-04-18):** XP economy full rebalance — 8 decision locks (D-XP-015 to D-XP-018). All backend XP constants updated. Flat purchase XP, referral 500 XP, haul post wired, challenge difficulty+XP wired. hunt-pass.tsx corrected. 8 files.
+- **S499 (2026-04-18):** Progress tracker task links audited + corrected (29 tasks). "Ready to Publish" → "Pre-Sale" throughout. Checkbox rendering + optimistic update fix. Print kit: 3 new QR sections. Photo station design. XP discrepancy found. 7 files.
 - **S498 (2026-04-17):** Time pickers on edit sale form. Inventory sort newest-first. Video opening frame branding. Sale checklist cache invalidation fix. Planner inclusive copy. Chat auto-scroll removed. 7 files.
-- **S496 (2026-04-17):** P0 nav freeze fixed (useShopperCart cross-instance infinite loop — 5 instances, JSON equality guard added). P1 "Sale location not found" fixed (create-sale.tsx was discarding lat/lng from autocomplete selection). shopperCredits DROP COLUMN migration confirmed applied. 2 files.
-- **S495 (2026-04-17):** 9 orphaned components Chrome-verified. 3 wiring bugs fixed: BoostBadge (discoveryService missing boost lookup), RankUpModal (setShowRankUpModal never called → useEffect added), DowngradePreviewModal (setShowDowngradePreview never called → button added). 3 files.
-- **S491 (2026-04-16):** Admin reports bug fix (low-confidence, Chrome QA needed). eBay push quota wired (schema + migration + controller). 4 CRITICAL/HIGH security fixes: XP cap enforcement (3 files), referral atomicity (tx + service), grace period blocking (requireTier), payment dedup fraudSuspect activation. DB integrity verified clean. Orphaned pages audit: 78/170 pages have no nav entry, key decisions surfaced. 11 files.
 - **S490 (2026-04-16):** Video + landing + logo polish. organizer-video-ad.html: white checkmarks, font sizes, scene nav (dots + arrows), wrapper height fix, empire-style lamp SVG, return beam direction fix, eBay button color, headline/badge line breaks, label brightness, bullet timing fix, CTA copy. video.html: padding, features copy, per-sale offer copy, badge. Layout.tsx + _document.tsx: two-tone Montserrat logo in nav + mobile drawer. 4 files.
 - **S489 (2026-04-16):** Security gates for "First Sale Free PRO" (8 of 9): email verify, first-sale tracking, IP rate limit, AI quota, card dedup, eBay push quota constants, temporal fraud detection. Graceful tier degradation system: 7-day grace period, GRACE_LOCKED status, DowngradePreviewModal, dashboard banner, daily cron. 2 migrations applied. 27 files across 4 commits. All green.
 - **S488 (2026-04-16):** Feature flags backend API ✅ (4 CRUD routes). Chrome QA: /admin/feature-flags ✅, /admin/reports ✅. Migration audit: 4 stuck records cleaned up, all intended schema state confirmed present. Feature #72 (UserRoleSubscription) activated — 13 ORGANIZER rows backfilled via psycopg2; tier lapse tracking now live for all organizers. 2 code files pushed.
@@ -735,40 +756,27 @@ Files (7):
 
 ## Next Session Priority
 
-**1. Push S494 + S495 + S496 code (first thing — Patrick action):**
-```powershell
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git add packages/frontend/hooks/useShopperCart.ts
-git add packages/frontend/pages/organizer/create-sale.tsx
-git add packages/frontend/components/EbayCategoryPicker.tsx
-git add packages/frontend/pages/organizer/edit-item/[id].tsx
-git add packages/frontend/pages/organizer/command-center.tsx
-git add packages/frontend/pages/city/[city].tsx
-git add packages/frontend/components/SearchFilterPanel.tsx
-git add packages/frontend/components/SearchSuggestions.tsx
-git add packages/backend/src/services/discoveryService.ts
-git add packages/frontend/pages/shopper/loyalty.tsx
-git add packages/frontend/pages/organizer/subscription.tsx
-git commit -m "fix: nav freeze (useShopperCart cross-instance loop) + geocoding on create sale + orphaned component wiring"
-.\push.ps1
-```
+**1. Fix QR code sizing consistency across print kit (P1, from S502):**
+Patrick identified that QR codes are different sizes between interactive codes (on-screen), full-page print, and the individual label PDFs. All QR codes should be the same size. Files to audit:
+- `packages/backend/src/controllers/printKitController.ts` — interactive QR, full-page QR, directional signs QR, table tent QR, yard sign QR
+- `packages/backend/src/controllers/labelComposerController.ts` — label QR (48pt currently)
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — on-screen preview QR sizes
+Standardize all QR generation `width` params and PDF `doc.image()` render sizes. The label QR is 48pt (constrained by 1" label height). Full-page and interactive QRs should match each other.
 
-**2. Chrome QA — security gates smoke test (P1, carry from S489):**
+**2. Photo station + treasure hunt 3-clue limit (carry from S501):**
+- Treasure hunt: update 10-clue cap → 3 in `treasureHuntQRController.ts`
+- Photo station shopper page: `pages/sales/[id]/photo-station.tsx`
+- Photo station backend: `POST /api/sales/:saleId/photo-station/scan` (3 XP, 1 per user per sale)
+- Update print kit photo station QR URL to point to the new page
+
+**3. Chrome QA — security gates smoke test (P1, carry from S489):**
 Register a new test account → verify email gate fires. Verify existing organizers are NOT blocked.
 
-**3. Chrome QA — tier degradation smoke test (P1, carry from S489):**
+**4. Chrome QA — tier degradation smoke test (P1, carry from S489):**
 As existing organizer (user2 SIMPLE), confirm no grace banner. Check DowngradePreviewModal renders from upgrade page.
 
-**4. Full pricing + monetization review (P1):**
-Dispatch `findasale-investor` + `findasale-hacker` jointly to audit all money surfaces before live customers.
-
-**5. Delete seed accounts — after Chrome QA confirms app is healthy (P1):**
-Safe to delete: all `user@example.com` (user1–user100) + `workandothers1@gmail.com`. Survivors: `deseee@gmail.com` + `artifactmi@gmail.com`. DB integrity clean as of S491.
-
-**6. SharePromoteModal caption hashtag fix (P3):**
-Auto-generated caption includes `#estatesale` only. Should include multi-sale-type hashtags per D-001. Low priority. Dispatch `findasale-dev` when batching small fixes.
+**5. SharePromoteModal caption hashtag fix (P3):**
+Auto-generated caption includes `#estatesale` only. Should include multi-sale-type hashtags per D-001.
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)
