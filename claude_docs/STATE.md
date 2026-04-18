@@ -7,6 +7,27 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S498 (2026-04-17) — Time pickers, inventory sort, video branding, checklist fix, planner copy, chat scroll**
+
+- **Edit-sale time pickers ✅:** Added `startTime`/`endTime` to formData state with `'09:00'`/`'15:00'` defaults. `formatTime` helper extracts local HH:MM from ISO on load. Update mutation recombines as UTC ISO: `new Date(\`${date}T${time}\`).toISOString()`. Two `type="time"` inputs added to the form grid.
+- **Inventory sort — new items first ✅:** `getItemsBySaleId` findMany was missing `orderBy`. Added `orderBy: { createdAt: 'desc' }` so newly added items appear at top of review/publish list.
+- **Video opening frame branding ✅:** `organizer-video-ad.html` play overlay redesigned — `flex-direction: column`, brand block above play button. Adds `FindA.Sale` logo (46px Montserrat 900) + `WATCH — 38 SECONDS` label (12px Inter 600, letter-spacing 3.5px) to the opening black frame.
+- **Wrapper page logo removed ✅:** `video.html` — removed `<div class="logo-bar">` (FindA.Sale wordmark) and `<div class="video-caption">` (Watch — 38 seconds) from above the iframe. Branding now lives inside the player.
+- **SaleChecklist checkboxes fixed ✅:** Root cause: all 3 mutations (`updateItem`, `addItem`, `deleteItem`) had empty `onSuccess` — no cache invalidation. Added `useQueryClient` + `queryClient.invalidateQueries({ queryKey: ['checklist', saleId] })` to all three.
+- **Planner system prompt broadened ✅:** `plannerController.ts` — rewrote `SYSTEM_PROMPT` to cover all sale types (estate, yard, auction, flea market, consignment). Can mention estate sales when contextually relevant but no longer the sole focus. Audience broadened to individuals, small businesses, auctioneers, flea market vendors.
+- **Chat auto-scroll removed ✅:** `plan.tsx` — the `useEffect` watching `messages` was calling `scrollIntoView` on an unconstrained flex container, causing the whole page to jump on every message. Removed the effect entirely; page grows naturally.
+
+**S498 Files changed (7):**
+- `packages/frontend/pages/organizer/edit-sale/[id].tsx` — time pickers + formatTime helper + update mutation time recombination
+- `packages/backend/src/controllers/itemController.ts` — `orderBy: { createdAt: 'desc' }` on getItemsBySaleId
+- `packages/frontend/public/organizer-video-ad.html` — overlay brand block (logo + watch label) in opening frame
+- `packages/frontend/public/video.html` — removed logo-bar div and video-caption div
+- `packages/frontend/components/SaleChecklist.tsx` — useQueryClient + invalidateQueries in all 3 mutations
+- `packages/backend/src/controllers/plannerController.ts` — inclusive multi-sale-type system prompt
+- `packages/frontend/pages/plan.tsx` — removed auto-scroll useEffect
+
+---
+
 **S497 (2026-04-17) — Geocoding fallbacks + entrance pin save + treasure hunt hardening + eBay fixes**
 
 - **"Sale location not found" on edit page:** Added US Census Geocoder as Strategy 3 fallback (handles USPS-valid addresses Nominatim misses). Three-strategy chain: Nominatim structured → Nominatim free-text → Census geocoder.
@@ -258,51 +279,35 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S498:**
+**Next Session — S499:**
 
-**Theme: QA S497 fixes live + Railway MCP exploration + normal roadmap work.**
+**Theme: QA S497+S498 fixes live + open bug backlog.**
 
-**Priority 1 — Verify S497 fixes deployed:**
+**Priority 1 — Push S498 first:**
+See push block in patrick-dashboard.md. Includes 7 code files + 2 wrap docs.
+
+**Priority 2 — Verify S497 fixes deployed (carry-forward):**
 - Entrance pin save fix — test on edit sale page: place pin, edit another field, save, reload. Pin should persist.
 - Geocoding Census fallback — test with an address that previously failed "Sale location not found"
 - Inventory batch pull — select multiple items, pull to sale, confirm they appear in sale
 - eBay description sync — have artifactmi@gmail.com re-sync; check if ConditionDescription populated any items
 
-**Priority 2 — Railway MCP (newly connected this session):**
-- Tools available: list-projects, list-services, redeploy, accept-deploy, create-project, railway-agent, whoami
-- First use will prompt OAuth → Railway login. Try `whoami` to verify auth.
-- Can now check Railway deploy status, trigger redeploys, and manage services directly from Cowork
+**Priority 3 — Verify S498 fixes:**
+- Edit sale time pickers — verify times appear on the edit sale form and persist on save
+- Inventory sort — add a new item, confirm it appears at top of review/publish list
+- Sale checklist — check/uncheck boxes at /plan, verify they actually toggle
+- Planner assistant — send a yard-sale or flea-market question, verify non-estate-sale response
 
-**Patrick manual actions pending:**
-1. Push S497 (push block in patrick-dashboard.md)
-2. Push the button fix commit (InventoryItemCard stopPropagation)
-3. Push the eBay ConditionDescription commit
-4. Stripe Connect webhook (carry-forward P2 since S421)
-5. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
+**Priority 4 — Open bugs:**
+- ❌ /city/grand-rapids 404 — check DB via psycopg2, check getStaticPaths, may need `fallback: true`
+- ⚠️ Search dark mode H-001 PARTIAL — select dropdowns (Condition, Category, Sort By) need dark variants — dispatch findasale-dev
+- ❌ H-002 — confirm sales/[id].tsx section order vs. D-006, dispatch fix if needed
 
-**Receive dev agent returns (carry-forward):**
-- Push both together + workspace page gets covered by same layout fix
-
-**Priority 2 — Open bugs from S493 QA:**
-- ❌ /city/grand-rapids 404 — investigate: check if city record exists in DB via psycopg2, check next.config.js static paths config. May need fallback: true in getStaticPaths.
-- ⚠️ Search dark mode H-001 PARTIAL — select dropdowns (Condition, Category, Sort By) need `dark:bg-gray-700 dark:text-warm-100 dark:border-gray-600` — dispatch to findasale-dev
-- ❌ H-002 — confirm what's in sales/[id].tsx section order right now, compare to D-006. Dispatch fix if needed.
-
-**Priority 3 — Batch QA remaining (Chrome, sequential):**
-- LiveFeedWidget (command-center), QuickReplyPicker (messages/[id])
-- SearchSuggestions (search), BoostBadge (SaleCard + ItemCard)
-- RankLevelingHint, RankUpModal, ShopperReferralCard, storefront page
-- SharePromoteModal (subscription)
-- DowngradePreviewModal (subscription — trigger by attempting downgrade as PRO user)
-
-**Patrick manual actions (carry-forward):**
-1. Stripe Connect webhook (P2 since S421): Stripe Dashboard → Connected account events → `payment_intent.succeeded` → `/api/webhooks/stripe` → Railway `STRIPE_CONNECT_WEBHOOK_SECRET`
-2. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
-
-**Remaining code (after QA):**
-- Weekly audit M-001/M-002/M-003/M-004 medium findings
-- DECISIONS.md entry: Wishlist is canonical name (confirmed by Patrick S491)
-- Audit-the-audits investigation (dev preflight gap, QA backlog ratio, scheduled task health, skill gate compliance)
+**Patrick manual actions:**
+1. Push S498 (push block in patrick-dashboard.md)
+2. Push S497 (push block still pending from S497 wrap — patrick-dashboard.md)
+3. Stripe Connect webhook (carry-forward P2 since S421)
+4. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
 
 ---
 

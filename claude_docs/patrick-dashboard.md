@@ -1,5 +1,41 @@
 # Patrick's Dashboard — Week of April 17, 2026
 
+## S498 Summary (2026-04-17) — Time pickers, inventory sort, video branding, checklist fix, planner copy
+
+**7 files changed. 1 push block.**
+
+### Push block — S498:
+
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/frontend/pages/organizer/edit-sale/[id].tsx
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/public/organizer-video-ad.html
+git add packages/frontend/public/video.html
+git add packages/frontend/components/SaleChecklist.tsx
+git add packages/backend/src/controllers/plannerController.ts
+git add packages/frontend/pages/plan.tsx
+git commit -m "fix: time pickers on edit sale, inventory sort (newest first), video frame branding, checklist cache invalidation, planner inclusive copy, chat scroll removed"
+.\push.ps1
+```
+
+### What was fixed this session:
+
+**Edit-sale time pickers** — Start and end times now appear on the edit sale form as separate time inputs (HH:MM) alongside the date fields. Times load from the existing sale's ISO dates. On save they're recombined into UTC ISO before being sent to the backend.
+
+**Inventory sort — new items first** — When you add a new item to a sale, it now appears at the top of the review/publish list instead of the bottom. One-line fix: added `orderBy: { createdAt: 'desc' }` to the inventory query.
+
+**Video opening frame branding** — The opening black frame of the animated video player now shows the FindA.Sale logo and "WATCH — 38 SECONDS" text above the play button, matching the treatment you showed in the screenshot. The page-level logo and caption that used to live above the iframe wrapper have been removed — branding now lives inside the player where it belongs.
+
+**Sale checklist checkboxes** — Checking/unchecking items at finda.sale/plan now actually works. Root cause: all three data mutations (toggle item, add item, delete item) had empty `onSuccess` callbacks with no cache invalidation, so the UI never refreshed after a change. Fixed by adding proper `invalidateQueries` to each.
+
+**Planning assistant — inclusive copy** — The planning assistant's system prompt no longer opens with "estate sale planning assistant" and focuses only on estate sale scenarios. It now covers all sale types — estate, yard, auction, flea market, consignment. Can still mention estate sales when relevant but won't treat them as the only sale type.
+
+**Chat auto-scroll removed** — Sending a message in the planning assistant no longer jumps the page down. The auto-scroll `useEffect` was calling `scrollIntoView` on an element inside an unconstrained flex container, making the browser window itself scroll. Removed it entirely.
+
+---
+
 ## S497 Summary (2026-04-17) — Geocoding + entrance pin + treasure hunt + eBay + inventory batch pull
 
 **14 files changed. 3 commits to push (consolidate or push separately).**
