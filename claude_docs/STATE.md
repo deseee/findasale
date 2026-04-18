@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S499 (2026-04-18) — Progress tracker: links audited, Pre-Sale rename, checkbox fix, print kit QR sections**
+
+- **Progress tracker task links audited & corrected ✅:** All 29 tasks in `checklistController.ts` now link to correct pages. Rapidfire/tags/pricing → `add-items/{saleId}`, price tags/signs/QR → `print-kit/{saleId}`, QR scan activity → `qr-codes`, virtual queue → `line-queue/{saleId}`, social → `promote/{saleId}`, POS → `pos`, messages → `messages`, earnings → `earnings`, reviews → `reviews`, flip report → `flip-report/{saleId}`, settlement → `settlement/{saleId}`. `{saleId}` placeholder replaced at runtime (line 218).
+- **"Ready to Publish" → "Pre-Sale" ✅:** Renamed throughout `checklistController.ts` (replace_all) + `plan/[saleId].tsx` (`stageOrder` + `stageIcons`).
+- **setup_photo_qr moved to Pre-Sale ✅:** Linked to `print-kit/{saleId}`.
+- **pub_social_draft removed ✅:** Task eliminated from ALL_TASKS.
+- **Checkbox rendering fixed ✅:** Non-auto tasks always show a checkbox even when a link exists. Three-case render: `isAuto` → disabled div; `!isAuto` → checkbox `<button>` always present; label renders as `<Link>` if link exists, plain `<label>` otherwise.
+- **Checkbox optimistic update fixed ✅:** Root cause was `onSettled` calling `invalidateQueries` — GET re-fetch returned stale data that overwrote the optimistic state. Fix: removed `onSettled` entirely; `onSuccess` uses `queryClient.setQueryData` with the PATCH response directly (backend returns full updated checklist from `getChecklist` internally).
+- **Print kit: three new QR sections ✅:** Section 3 (Virtual Queue QR — PRO/TEAMS, full-page), Section 4 (Treasure Hunt Clues QR — PRO/TEAMS, full-page, links to `/sales/{saleId}/treasure-hunt-qr`), Section 5 (Photo Station QR — all tiers, compact grid of 4, currently links to sale page — correct URL `/sales/{saleId}/photo-station` not yet built).
+- **Photo station design decision ✅:** 1 QR per sale, 5 XP for scan (TREASURE_HUNT_SCAN rate), 10 XP for social share (existing SHARE award). Shopper page `/pages/sales/[id]/photo-station.tsx` not yet built.
+- **XP discrepancy found ✅:** `hunt-pass.tsx` shows VISIT=2 XP; backend has 5. Shows TREASURE_HUNT_SCAN=25 XP; backend has 12 (rebalanced S417, UI never updated). Full rebalance deferred to S500.
+- **Treasure hunt rates set (pending implementation) ✅:** 5 XP/clue, 3 clue limit per sale (down from 10). Not yet written to backend.
+
+**S499 Files changed (7):**
+- `packages/backend/src/controllers/checklistController.ts` — links fixed, Pre-Sale rename, task restructure
+- `packages/frontend/pages/organizer/plan/[saleId].tsx` — Pre-Sale rename, checkbox rendering, optimistic update fix
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — three new QR sections
+- `packages/frontend/components/SaleProgressWidget.tsx` — progress widget component (prior context)
+- `packages/frontend/pages/plan.tsx` — progress tracker integration (prior context)
+- `packages/frontend/pages/organizer/dashboard.tsx` — SaleProgressWidget wired (prior context)
+- `packages/frontend/components/Layout.tsx` — nav link to progress tracker (prior context)
+
+---
+
 **S498 (2026-04-17) — Time pickers, inventory sort, video branding, checklist fix, planner copy, chat scroll**
 
 - **Edit-sale time pickers ✅:** Added `startTime`/`endTime` to formData state with `'09:00'`/`'15:00'` defaults. `formatTime` helper extracts local HH:MM from ISO on load. Update mutation recombines as UTC ISO: `new Date(\`${date}T${time}\`).toISOString()`. Two `type="time"` inputs added to the form grid.
@@ -279,35 +303,33 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ---
 
-**Next Session — S499:**
+**Next Session — S500:**
 
-**Theme: QA S497+S498 fixes live + open bug backlog.**
+**Theme: XP rebalance (hunt-pass.tsx first, backend after) + photo station build.**
 
-**Priority 1 — Push S498 first:**
+**Priority 1 — Push S499 (Patrick action):**
 See push block in patrick-dashboard.md. Includes 7 code files + 2 wrap docs.
 
-**Priority 2 — Verify S497 fixes deployed (carry-forward):**
-- Entrance pin save fix — test on edit sale page: place pin, edit another field, save, reload. Pin should persist.
-- Geocoding Census fallback — test with an address that previously failed "Sale location not found"
-- Inventory batch pull — select multiple items, pull to sale, confirm they appear in sale
-- eBay description sync — have artifactmi@gmail.com re-sync; check if ConditionDescription populated any items
+**Priority 2 — XP rebalance (SEQUENCE MATTERS — hunt-pass UI first, backend second):**
+1. Dispatch `findasale-gamedesign` to review `hunt-pass.tsx` — correct all displayed XP rates, caps, and Hunt Pass multipliers. Make the page internally consistent and mathematically sound. Anti-abuse analysis: collusion, farming, exploit vectors. Game must still feel rewarding.
+2. ONLY after hunt-pass.tsx is reviewed and correct → dispatch `findasale-dev` to update `xpService.ts` backend constants to match the corrected UI rates.
+3. Key discrepancies known: VISIT shows 2 XP (UI) vs 5 XP (backend). TREASURE_HUNT_SCAN shows 25 XP (old UI) vs 12 XP (backend). Treasure hunt rebalance target: 5 XP/clue, 3 clue limit.
 
-**Priority 3 — Verify S498 fixes:**
-- Edit sale time pickers — verify times appear on the edit sale form and persist on save
-- Inventory sort — add a new item, confirm it appears at top of review/publish list
-- Sale checklist — check/uncheck boxes at /plan, verify they actually toggle
-- Planner assistant — send a yard-sale or flea-market question, verify non-estate-sale response
+**Priority 3 — Treasure hunt 3-clue limit:**
+- `treasureHuntQRController.ts` already has 10-clue cap — update to 3
+- `xpService.ts` TREASURE_HUNT_SCAN: update after hunt-pass.tsx is confirmed
 
-**Priority 4 — Open bugs:**
-- ❌ /city/grand-rapids 404 — check DB via psycopg2, check getStaticPaths, may need `fallback: true`
-- ⚠️ Search dark mode H-001 PARTIAL — select dropdowns (Condition, Category, Sort By) need dark variants — dispatch findasale-dev
-- ❌ H-002 — confirm sales/[id].tsx section order vs. D-006, dispatch fix if needed
+**Priority 4 — Photo station feature build (after XP rates settled):**
+- New shopper page: `packages/frontend/pages/sales/[id]/photo-station.tsx`
+- New backend endpoint: `POST /api/sales/:saleId/photo-station/scan` — dedupe per user per sale (one scan per user), award XP at TREASURE_HUNT_SCAN rate
+- Social share: uses existing SHARE endpoint (10 XP)
+- Update print kit photo station QR URL from `https://finda.sale/sales/${saleId}` → `https://finda.sale/sales/${saleId}/photo-station`
+- Schema: may need `PhotoStationScan` model for dedup (check if existing table can be reused)
 
 **Patrick manual actions:**
-1. Push S498 (push block in patrick-dashboard.md)
-2. Push S497 (push block still pending from S497 wrap — patrick-dashboard.md)
-3. Stripe Connect webhook (carry-forward P2 since S421)
-4. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
+1. Push S499 (push block in patrick-dashboard.md)
+2. Stripe Connect webhook (carry-forward P2 since S421)
+3. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
 
 ---
 
@@ -612,6 +634,8 @@ Files (7):
 
 ## Recent Sessions
 
+- **S499 (2026-04-18):** Progress tracker task links audited + corrected (29 tasks). "Ready to Publish" → "Pre-Sale" throughout. Checkbox rendering + optimistic update fix (removed onSettled/invalidateQueries, use PATCH response directly). Print kit: 3 new QR sections (virtual queue, treasure hunt clues, photo station). Photo station design: 1/sale, 5 XP scan + 10 XP share. XP discrepancy found (VISIT 2 vs 5, clue scan 25 vs 12). Rebalance deferred to S500. 7 files.
+- **S498 (2026-04-17):** Time pickers on edit sale form. Inventory sort newest-first. Video opening frame branding. Sale checklist cache invalidation fix. Planner inclusive copy. Chat auto-scroll removed. 7 files.
 - **S496 (2026-04-17):** P0 nav freeze fixed (useShopperCart cross-instance infinite loop — 5 instances, JSON equality guard added). P1 "Sale location not found" fixed (create-sale.tsx was discarding lat/lng from autocomplete selection). shopperCredits DROP COLUMN migration confirmed applied. 2 files.
 - **S495 (2026-04-17):** 9 orphaned components Chrome-verified. 3 wiring bugs fixed: BoostBadge (discoveryService missing boost lookup), RankUpModal (setShowRankUpModal never called → useEffect added), DowngradePreviewModal (setShowDowngradePreview never called → button added). 3 files.
 - **S491 (2026-04-16):** Admin reports bug fix (low-confidence, Chrome QA needed). eBay push quota wired (schema + migration + controller). 4 CRITICAL/HIGH security fixes: XP cap enforcement (3 files), referral atomicity (tx + service), grace period blocking (requireTier), payment dedup fraudSuspect activation. DB integrity verified clean. Orphaned pages audit: 78/170 pages have no nav entry, key decisions surfaced. 11 files.

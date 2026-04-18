@@ -1,4 +1,55 @@
-# Patrick's Dashboard — Week of April 17, 2026
+# Patrick's Dashboard — Week of April 18, 2026
+
+## S499 Summary (2026-04-18) — Progress tracker: links fixed, Pre-Sale rename, checkbox fix, print kit QR sections
+
+**7 files changed. 1 push block.**
+
+### Push block — S499 (includes S498 carry-forward if not already pushed):
+
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add packages/backend/src/controllers/checklistController.ts
+git add "packages/frontend/pages/organizer/plan/[saleId].tsx"
+git add "packages/frontend/pages/organizer/print-kit/[saleId].tsx"
+git add packages/frontend/components/SaleProgressWidget.tsx
+git add packages/frontend/pages/plan.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/components/Layout.tsx
+git commit -m "feat: progress tracker links, Pre-Sale rename, checkbox fix, print kit QR sections (queue/clues/photo-station)"
+.\push.ps1
+```
+
+*(If you already pushed S498, the plan.tsx/dashboard.tsx/Layout.tsx lines above may be clean — git add will skip unchanged files.)*
+
+### What was done this session:
+
+**Progress tracker task links** — Audited every task in the 6-stage checklist. All 29 tasks now link to the right page. Previously many linked to `/organizer/inventory` incorrectly. Key corrections: Rapidfire/tags/pricing → Add Items page, price tags/signs/QR codes → Print Kit, POS → POS page, social sharing → Promote page, QR scan activity → QR Codes page, virtual queue → Line Queue, flip report → Flip Report, settlement → Settlement Wizard.
+
+**"Ready to Publish" renamed "Pre-Sale"** — Stage 3 is now called Pre-Sale throughout the backend and frontend (checklist controller, stage timeline, stage cards).
+
+**QR codes at photo stations moved to Pre-Sale** — The photo station QR task is now in the Pre-Sale stage where it belongs, linked to the Print Kit.
+
+**Checkbox rendering fixed** — Many tasks had a link label but no way to check them off. Fixed: every non-auto task now always shows a checkbox alongside its label. Click the checkbox to toggle completion, click the label to navigate to that feature.
+
+**Checkbox saves now stick** — Checking a task fired a success toast but the box immediately unchecked itself. Root cause: after saving, the app was re-fetching checklist data from the server, and the server was briefly returning the old state. Fixed by not re-fetching at all — the save response itself contains the full updated checklist, so that gets applied directly to the UI.
+
+**Print Kit — three new QR sections added:**
+- **Virtual Queue QR** (PRO/TEAMS only) — full-page printable QR so shoppers can scan to join the virtual queue
+- **Treasure Hunt Clues QR** (PRO/TEAMS only) — full-page QR linking to your treasure hunt clues page
+- **Photo Station QR** (all tiers) — compact grid of 4 QR codes for posting around your sale; shoppers scan to browse & buy items
+
+**Photo station design locked** — One QR per sale. Shoppers who scan earn XP (same rate as a treasure hunt clue scan). If they share a photo to social media from the page, they earn an additional share bonus. This gives non-buyers an XP on-ramp — they didn't buy anything for a haul post, but they can still engage. The shopper-facing photo station page (`/sales/[id]/photo-station`) isn't built yet — that's next session.
+
+**XP discrepancy found** — The hunt-pass page and the backend are out of sync on several XP rates. The hunt-pass page shows a sale visit = 2 XP; the backend has it as 5. Clue scans show 25 XP on the page; backend has 12 (was rebalanced months ago and the UI was never updated). Full rebalance is next session.
+
+### Next session — S500: XP rebalance + photo station
+
+**Sequence matters:** The game designer reviews and corrects `hunt-pass.tsx` first (source of truth for intended rates). Once the UI is right and approved, the backend `xpService.ts` constants get updated to match. Not the other way around.
+
+Then: implement treasure hunt 3-clue limit, build the photo station shopper page, update print kit QR URL to point to it.
+
+---
 
 ## S498 Summary (2026-04-17) — Time pickers, inventory sort, video branding, checklist fix, planner copy
 
