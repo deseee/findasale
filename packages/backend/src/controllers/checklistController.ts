@@ -51,29 +51,29 @@ interface TaskEvaluationData {
 // Define all tasks
 const ALL_TASKS: TaskDefinition[] = [
   // Stage 1: Setup (all auto)
-  { id: 'setup_title', stage: 'Setup', label: 'Sale title & description written', isAuto: true, autoCheck: (d) => !!(d.sale.description && d.sale.description.length > 0) },
-  { id: 'setup_type', stage: 'Setup', label: 'Sale type selected', isAuto: true, autoCheck: (d) => !!d.sale.saleType },
-  { id: 'setup_dates', stage: 'Setup', label: 'Dates & hours confirmed', isAuto: true, autoCheck: (d) => !!d.sale.startDate },
-  { id: 'setup_location', stage: 'Setup', label: 'Address & location confirmed', isAuto: true, autoCheck: (d) => !!(d.sale.lat && d.sale.lng) },
-  { id: 'setup_cover', stage: 'Setup', label: 'Cover photo uploaded', isAuto: true, autoCheck: (d) => d.sale.photoUrls.length > 0 },
+  { id: 'setup_title', stage: 'Setup', label: 'Sale title & description written', isAuto: true, autoCheck: (d) => !!(d.sale.description && d.sale.description.length > 0), link: '/organizer/edit-sale/{saleId}' },
+  { id: 'setup_type', stage: 'Setup', label: 'Sale type selected', isAuto: true, autoCheck: (d) => !!d.sale.saleType, link: '/organizer/edit-sale/{saleId}' },
+  { id: 'setup_dates', stage: 'Setup', label: 'Dates & hours confirmed', isAuto: true, autoCheck: (d) => !!d.sale.startDate, link: '/organizer/edit-sale/{saleId}' },
+  { id: 'setup_location', stage: 'Setup', label: 'Address & location confirmed', isAuto: true, autoCheck: (d) => !!(d.sale.lat && d.sale.lng), link: '/organizer/edit-sale/{saleId}' },
+  { id: 'setup_cover', stage: 'Setup', label: 'Cover photo uploaded', isAuto: true, autoCheck: (d) => d.sale.photoUrls.length > 0, link: '/organizer/edit-sale/{saleId}' },
 
   // Stage 2: Cataloging
-  { id: 'cat_rapidfire', stage: 'Cataloging', label: 'First items uploaded via Rapidfire', isAuto: true, autoCheck: (d) => d.itemCount >= 1 },
-  { id: 'cat_tags', stage: 'Cataloging', label: 'Tags & categories reviewed', isAuto: false },
-  { id: 'cat_pricing', stage: 'Cataloging', label: 'All items priced', isAuto: true, autoCheck: (d) => d.unpricedCount === 0 && d.itemCount > 0 },
-  { id: 'cat_smartpricing', stage: 'Cataloging', label: 'Smart Pricing suggestions reviewed', isAuto: false, requiredTier: 'PRO' },
-  { id: 'cat_ebay', stage: 'Cataloging', label: 'eBay sync pushed for high-value items', isAuto: false },
-  { id: 'cat_social_draft', stage: 'Cataloging', label: 'Social post drafted', isAuto: false },
+  { id: 'cat_rapidfire', stage: 'Cataloging', label: 'First items uploaded via Rapidfire', isAuto: true, autoCheck: (d) => d.itemCount >= 1, link: '/organizer/inventory' },
+  { id: 'cat_tags', stage: 'Cataloging', label: 'Tags & categories reviewed', isAuto: false, link: '/organizer/inventory' },
+  { id: 'cat_pricing', stage: 'Cataloging', label: 'All items priced', isAuto: true, autoCheck: (d) => d.unpricedCount === 0 && d.itemCount > 0, link: '/organizer/inventory' },
+  { id: 'cat_smartpricing', stage: 'Cataloging', label: 'Smart Pricing suggestions reviewed', isAuto: false, requiredTier: 'PRO', link: '/organizer/inventory' },
+  { id: 'cat_ebay', stage: 'Cataloging', label: 'eBay sync pushed for high-value items', isAuto: false, link: '/organizer/inventory' },
+  { id: 'cat_social_draft', stage: 'Cataloging', label: 'Social post drafted', isAuto: false, link: '/organizer/inventory' },
 
   // Stage 3: Ready to Publish
-  { id: 'pub_pricetags', stage: 'Ready to Publish', label: 'Price tags printed', isAuto: false },
-  { id: 'pub_qr', stage: 'Ready to Publish', label: 'Item QR codes downloaded', isAuto: false },
-  { id: 'pub_queue_qr', stage: 'Ready to Publish', label: 'Virtual Queue QR printed & tested', isAuto: false, requiredTier: 'PRO' },
+  { id: 'pub_pricetags', stage: 'Ready to Publish', label: 'Price tags printed', isAuto: false, link: '/organizer/inventory' },
+  { id: 'pub_qr', stage: 'Ready to Publish', label: 'Item QR codes downloaded', isAuto: false, link: '/organizer/inventory' },
+  { id: 'pub_queue_qr', stage: 'Ready to Publish', label: 'Virtual Queue QR printed & tested', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue' },
   { id: 'pub_treasure', stage: 'Ready to Publish', label: 'Treasure Hunt clues printed & placed', isAuto: false, requiredTier: 'PRO' },
-  { id: 'pub_preview', stage: 'Ready to Publish', label: 'Sale previewed on mobile', isAuto: false },
-  { id: 'pub_signs', stage: 'Ready to Publish', label: 'Neighborhood signs made', isAuto: false },
-  { id: 'pub_published', stage: 'Ready to Publish', label: 'Sale published', isAuto: true, autoCheck: (d) => d.sale.status === 'PUBLISHED' || d.sale.status === 'LIVE' },
-  { id: 'pub_social', stage: 'Ready to Publish', label: 'Sale shared on social media', isAuto: false },
+  { id: 'pub_preview', stage: 'Ready to Publish', label: 'Sale previewed on mobile', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
+  { id: 'pub_signs', stage: 'Ready to Publish', label: 'Neighborhood signs made', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
+  { id: 'pub_published', stage: 'Ready to Publish', label: 'Sale published', isAuto: true, autoCheck: (d) => d.sale.status === 'PUBLISHED' || d.sale.status === 'LIVE', link: '/organizer/edit-sale/{saleId}' },
+  { id: 'pub_social', stage: 'Ready to Publish', label: 'Sale shared on social media', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
 
   // Stage 4: Live
   { id: 'live_internet', stage: 'Live', label: 'Internet connection tested', isAuto: false },
@@ -87,11 +87,11 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'live_first_sold', stage: 'Live', label: 'First item sold', isAuto: true, autoCheck: (d) => d.soldCount >= 1 },
 
   // Stage 5: Wrapping Up
-  { id: 'wrap_unsold', stage: 'Wrapping Up', label: 'Unsold items handled', isAuto: false },
+  { id: 'wrap_unsold', stage: 'Wrapping Up', label: 'Unsold items handled', isAuto: false, link: '/organizer/inventory' },
   { id: 'wrap_messages', stage: 'Wrapping Up', label: 'Shopper messages answered', isAuto: false },
   { id: 'wrap_settlement', stage: 'Wrapping Up', label: 'Settlement Wizard completed', isAuto: false, link: '/organizer/settlement/{saleId}' },
-  { id: 'wrap_flip', stage: 'Wrapping Up', label: 'Flip Report reviewed', isAuto: false, requiredTier: 'PRO' },
-  { id: 'wrap_donate', stage: 'Wrapping Up', label: 'Unsold items donated', isAuto: false },
+  { id: 'wrap_flip', stage: 'Wrapping Up', label: 'Flip Report reviewed', isAuto: false, requiredTier: 'PRO', link: '/organizer/flip-report/{saleId}' },
+  { id: 'wrap_donate', stage: 'Wrapping Up', label: 'Unsold items donated', isAuto: false, link: '/organizer/inventory' },
   { id: 'wrap_closed', stage: 'Wrapping Up', label: 'Sale marked complete', isAuto: true, autoCheck: (d) => d.sale.status === 'ENDED' },
 
   // Stage 6: Complete
