@@ -288,7 +288,6 @@ export default function LabelComposerPage() {
   const { saleId } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || '/api';
 
   const [state, dispatch] = useReducer(batchReducer, initialState);
   const [searchQuery, setSearchQuery] = useState('');
@@ -296,6 +295,29 @@ export default function LabelComposerPage() {
   const [catalogQtys, setCatalogQtys] = useState<Record<string, number>>({});
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [savedBatches, setSavedBatches] = useState<Array<{ key: string; name: string; itemCount: number }>>([]);
+  const [showSavedBatches, setShowSavedBatches] = useState(false);
+
+  // Refresh saved batches list from localStorage
+  const refreshSavedBatches = useCallback(() => {
+    if (!saleId || typeof saleId !== 'string') return;
+    const prefix = `label-batch-preset-${saleId}-`;
+    const results: Array<{ key: string; name: string; itemCount: number }> = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(key) || '');
+          if (parsed && parsed.name && Array.isArray(parsed.items)) {
+            results.push({ key, name: parsed.name, itemCount: parsed.items.length });
+          }
+        } catch {}
+      }
+    }
+    // Sort newest first (timestamp is in the key)
+    results.sort((a, b) => b.key.localeCompare(a.key));
+    setSavedBatches(results);
+  }, [saleId]);
 
   // Auth redirect
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -378,7 +400,8 @@ export default function LabelComposerPage() {
       }
     } catch {}
     setInitialized(true);
-  }, [saleId, initialized]);
+    refreshSavedBatches();
+  }, [saleId, initialized, refreshSavedBatches]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -433,14 +456,39 @@ export default function LabelComposerPage() {
     }
     try {
       const result = await createBatchMutation.mutateAsync();
-      // Open PDF in new tab
-      const token = localStorage.getItem('token');
-      window.open(
-        `${apiBase}/organizers/batches/${result.batchId}/print?token=${token}`,
-        '_blank'
-      );
+      const response = await api.get(`/organizers/batches/${result.batchId}/print`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
     } catch (err) {
       showToast('Failed to generate labels', 'error');
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (totalLabels === 0) {
+      showToast('Add labels to the batch first', 'error');
+      return;
+    }
+    try {
+      const result = await createBatchMutation.mutateAsync();
+      const response = await api.get(`/organizers/batches/${result.batchId}/print`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `labels-${saleId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('PDF downloaded', 'success');
+    } catch (err) {
+      showToast('Failed to export PDF', 'error');
     }
   };
 
@@ -451,8 +499,43 @@ export default function LabelComposerPage() {
       const key = `label-batch-preset-${saleId}-${Date.now()}`;
       localStorage.setItem(key, JSON.stringify({ name, items: state.items }));
       showToast(`Batch saved as "${name}"`, 'success');
+      refreshSavedBatches();
     } catch {
       showToast('Failed to save batch', 'error');
+    }
+  };
+
+  const handleLoadBatch = (key: string) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.items)) {
+        dispatch({
+          type: 'LOAD_SAVED',
+          state: {
+            selectedPrice: null,
+            qty: 0,
+            items: parsed.items,
+            leftoverFill: null,
+            currentPage: 0,
+          },
+        });
+        showToast(`Loaded "${parsed.name}"`, 'success');
+      }
+    } catch {
+      showToast('Failed to load batch', 'error');
+    }
+  };
+
+  const handleDeleteBatch = (key: string, name: string) => {
+    if (!confirm(`Delete saved batch "${name}"?`)) return;
+    try {
+      localStorage.removeItem(key);
+      refreshSavedBatches();
+      showToast(`Deleted "${name}"`, 'success');
+    } catch {
+      showToast('Failed to delete batch', 'error');
     }
   };
 
@@ -908,7 +991,7 @@ export default function LabelComposerPage() {
               {createBatchMutation.isPending ? 'Generating...' : 'Print sheet'}
             </button>
             <button
-              onClick={handlePrint}
+              onClick={handleExportPdf}
               disabled={totalLabels === 0 || createBatchMutation.isPending}
               className="px-4 py-2.5 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 font-semibold text-sm hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
@@ -932,6 +1015,45 @@ export default function LabelComposerPage() {
               Avery 5160 · {totalLabels} labels · {totalPages} sheet{totalPages !== 1 ? 's' : ''}
             </span>
           </div>
+
+          {/* Saved Batches */}
+          {savedBatches.length > 0 && (
+            <div className="mt-3">
+              <button
+                onClick={() => setShowSavedBatches(!showSavedBatches)}
+                className="text-xs text-warm-500 dark:text-gray-400 hover:text-warm-700 dark:hover:text-gray-200 transition-colors"
+              >
+                {showSavedBatches ? '▾' : '▸'} Saved batches ({savedBatches.length})
+              </button>
+              {showSavedBatches && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {savedBatches.map(b => (
+                    <div
+                      key={b.key}
+                      className="inline-flex items-center gap-1.5 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-sm"
+                    >
+                      <span className="text-warm-700 dark:text-gray-300 font-medium">{b.name}</span>
+                      <span className="text-xs text-warm-400 dark:text-gray-500">
+                        ({b.itemCount} price{b.itemCount !== 1 ? 's' : ''})
+                      </span>
+                      <button
+                        onClick={() => handleLoadBatch(b.key)}
+                        className="ml-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 font-semibold"
+                      >
+                        Load
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBatch(b.key, b.name)}
+                        className="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>
