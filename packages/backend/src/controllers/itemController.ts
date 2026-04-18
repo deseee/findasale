@@ -382,6 +382,7 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     let items = await prisma.item.findMany({
       where: filterWhere,
       take: 500,
+      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         saleId: true,
