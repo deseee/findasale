@@ -728,7 +728,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                         )}
                         <div>
                           <img
-                            src={getQRUrl(`https://finda.sale/items/${item.id}`, 80)}
+                            src={getQRUrl(`https://finda.sale/items/${item.id}`, 200)}
                             alt={`QR for ${item.title}`}
                             className="item-qr"
                           />
@@ -764,7 +764,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                   <div className="flex-1 flex flex-col justify-center items-center">
                     <img
-                      src={getQRUrl(`https://finda.sale/sales/${sale.id}`, 300)}
+                      src={getQRUrl(`https://finda.sale/sales/${sale.id}`, 600)}
                       alt="Check In & Join the Line QR Code"
                       className="qr-full-page-qr"
                     />
@@ -779,7 +779,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                   <div className="flex-1 flex flex-col justify-center items-center">
                     <img
-                      src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr`, 300)}
+                      src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr`, 600)}
                       alt="Treasure Hunt QR Code"
                       className="qr-full-page-qr"
                     />
@@ -793,7 +793,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               <div className="qr-full-page qr-full-page-last bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                 <div className="flex-1 flex flex-col justify-center items-center">
                   <img
-                    src={getQRUrl(`https://finda.sale/sales/${sale.id}/photo-station`, 300)}
+                    src={getQRUrl(`https://finda.sale/sales/${sale.id}/photo-station`, 600)}
                     alt="Photo Station QR Code"
                     className="qr-full-page-qr"
                   />
