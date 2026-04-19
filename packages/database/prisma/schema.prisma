@@ -920,6 +920,7 @@ model Purchase {
   affiliateLink         AffiliateLink?    @relation(fields: [affiliateLinkId], references: [id])
   source                String            @default("ONLINE") // ONLINE | POS
   buyerEmail            String? // POS only: optional email for receipt delivery
+  isTestTransaction     Boolean           @default(false)
   digitalReceipt        DigitalReceipt?
   returnRequests        ReturnRequest[]
   checkoutEvidence      CheckoutEvidence? // Platform Safety #98: Chargeback defense documentation
@@ -927,6 +928,7 @@ model Purchase {
   updatedAt             DateTime          @updatedAt
 
   @@index([stripePaymentIntentId])
+  @@index([isTestTransaction])
 }
 
 model SaleSubscriber {

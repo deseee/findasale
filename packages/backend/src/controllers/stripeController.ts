@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getStripe } from '../utils/stripe';
+import { getStripe, getTestStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { Resend } from 'resend';
 import { createNotification as createNotificationEmail } from '../services/notificationService';
@@ -2043,5 +2043,94 @@ export const createAlaCarteCheckout = async (req: AuthRequest, res: Response) =>
   } catch (error: unknown) {
     console.error('À la carte checkout error:', error);
     res.status(500).json({ message: 'Failed to create checkout session' });
+  }
+};
+
+// POST /api/stripe/test-transaction
+// Runs a test payment through Stripe test key to verify POS is working.
+// Auto-checks live_pos in the sale progress checklist on success.
+export const testTransaction = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const { saleId, amount, paymentMethod } = req.body as {
+      saleId?: string;
+      amount?: number;
+      paymentMethod?: 'terminal' | 'payment-link' | 'direct';
+    };
+
+    if (!saleId || typeof saleId !== 'string') {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ message: 'amount must be a positive number' });
+    }
+    if (!paymentMethod || !['terminal', 'payment-link', 'direct'].includes(paymentMethod)) {
+      return res.status(400).json({ message: 'paymentMethod must be terminal, payment-link, or direct' });
+    }
+
+    // Verify sale ownership
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'You do not own this sale' });
+    }
+
+    const testStripe = getTestStripe();
+    const amountCents = Math.round(amount * 100);
+
+    // Fee based on organizer tier
+    const feeRate = getPlatformFeeRate(sale.organizer.subscriptionTier as SubscriptionTier);
+    const platformFeeAmount = Math.round(amountCents * feeRate);
+    const netAmount = (amountCents - platformFeeAmount) / 100;
+
+    // Create and immediately confirm a test PaymentIntent
+    // Test keys allow confirm_payment_intent with pm_card_visa synchronously
+    const paymentIntent = await testStripe.paymentIntents.create({
+      amount: amountCents,
+      currency: 'usd',
+      payment_method: 'pm_card_visa',
+      confirm: true,
+      automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+      metadata: {
+        saleId,
+        source: 'TEST',
+        paymentMethod,
+        organizerId: sale.organizer.id,
+      },
+    });
+
+    // Record the test purchase
+    const purchase = await prisma.purchase.create({
+      data: {
+        saleId,
+        amount,
+        platformFeeAmount: platformFeeAmount / 100,
+        stripePaymentIntentId: paymentIntent.id,
+        status: 'PAID',
+        source: 'POS',
+        isTestTransaction: true,
+      },
+    });
+
+    return res.json({
+      success: true,
+      transactionId: purchase.id,
+      stripePaymentIntentId: paymentIntent.id,
+      amount,
+      platformFeeAmount: platformFeeAmount / 100,
+      netAmount,
+      checklistAutoUpdated: true,
+      message: 'Test transaction successful. live_pos task will auto-check on next checklist load.',
+    });
+  } catch (error: any) {
+    console.error('[test-transaction] error:', error);
+    return res.status(500).json({ message: 'Test transaction failed', details: error.message });
   }
 };

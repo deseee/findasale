@@ -46,6 +46,7 @@ interface TaskEvaluationData {
   clueCount: number;
   settlement: any;
   organizerTier: string;
+  hasTestTransaction: boolean;
 }
 
 // Define all tasks
@@ -75,7 +76,7 @@ const ALL_TASKS: TaskDefinition[] = [
   // Stage 4: Live
   { id: 'live_internet', stage: 'Live', label: 'Internet connection tested', isAuto: false },
   { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue/{saleId}' },
-  { id: 'live_pos', stage: 'Live', label: 'POS open and test transaction done', isAuto: false, link: '/organizer/pos' },
+  { id: 'live_pos', stage: 'Live', label: 'POS open and test transaction done', isAuto: true, autoCheck: (d) => d.hasTestTransaction, link: '/organizer/pos' },
   { id: 'live_float', stage: 'Live', label: 'Bills and coins ready for making change', isAuto: false },
   { id: 'live_helpers', stage: 'Live', label: 'Helpers briefed on their roles', isAuto: false },
   { id: 'live_first_sold', stage: 'Live', label: 'First item sold', isAuto: true, autoCheck: (d) => d.soldCount >= 1 },
@@ -153,6 +154,10 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
       where: { saleId },
     });
 
+    const hasTestTransaction = !!(await prisma.purchase.findFirst({
+      where: { saleId, isTestTransaction: true },
+    }));
+
     // Step 4: Load stored checklist (for manual task states)
     let storedChecklist = await prisma.saleChecklist.findUnique({
       where: { saleId },
@@ -173,6 +178,7 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
       clueCount,
       settlement: sale.settlement,
       organizerTier: sale.organizer.subscriptionTier || 'SIMPLE',
+      hasTestTransaction,
     };
 
     // Step 6: Build items list (filtered by tier, merging auto+manual)
