@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
@@ -14,6 +14,11 @@ interface PhotoStationScanResponse {
   message: string;
 }
 
+interface Sale {
+  id: string;
+  title: string;
+}
+
 const PhotoStationPage = () => {
   const router = useRouter();
   const { id } = router.query;
@@ -21,6 +26,17 @@ const PhotoStationPage = () => {
   const { showToast } = useToast();
   const [hasScanned, setHasScanned] = useState(false);
   const [scanData, setScanData] = useState<PhotoStationScanResponse | null>(null);
+  const [sharedOnce, setSharedOnce] = useState(false);
+
+  // Fetch sale data
+  const { data: sale, isLoading: saleLoading } = useQuery({
+    queryKey: ['sale', id],
+    queryFn: async () => {
+      const response = await api.get(`/sales/${id}`);
+      return response.data as Sale;
+    },
+    enabled: !!id,
+  });
 
   // Scan mutation
   const scanMutation = useMutation({
@@ -35,7 +51,7 @@ const PhotoStationPage = () => {
         showToast("You've already scanned this photo station.", 'info');
       } else if (data.xpAwarded > 0) {
         showToast(
-          `🎉 You earned ${data.xpAwarded} XP! Share to earn ${data.shareXp} more.`,
+          `You earned ${data.xpAwarded} XP! Share to earn ${data.shareXp} more.`,
           'success'
         );
       }
@@ -55,7 +71,7 @@ const PhotoStationPage = () => {
     }
   }, [id, user, hasScanned]);
 
-  const isLoading = authLoading || scanMutation.isPending;
+  const isLoading = authLoading || saleLoading || scanMutation.isPending;
 
   if (!authLoading && !user) {
     router.push('/login');
@@ -66,7 +82,7 @@ const PhotoStationPage = () => {
     if (!user || !scanData) return;
 
     const shareUrl = `https://finda.sale/sales/${id}`;
-    const shareText = 'Check out this sale on FindA.Sale!';
+    const shareText = `Check out this sale on FindA.Sale: ${sale?.title || 'A great sale'}`;
 
     try {
       // Try native Web Share API first
@@ -76,18 +92,14 @@ const PhotoStationPage = () => {
           text: shareText,
           url: shareUrl,
         });
+        setSharedOnce(true);
+        showToast(`You earned ${scanData.shareXp} XP for sharing!`, 'success');
       } else {
         // Fallback: copy to clipboard
         await navigator.clipboard.writeText(shareUrl);
-        showToast('Link copied to clipboard!', 'success');
+        setSharedOnce(true);
+        showToast('Link copied! Share to earn XP.', 'success');
       }
-
-      // Award share XP after successful share/copy
-      await api.post('/xp/share', {
-        saleId: id,
-        platform: 'social',
-      });
-      showToast(`✨ You earned ${scanData.shareXp} XP for sharing!`, 'success');
     } catch (error: any) {
       // User cancelled share dialog — don't award XP, don't show error
       if (error?.name === 'AbortError') return;
@@ -102,100 +114,107 @@ const PhotoStationPage = () => {
         <title>Photo Station | FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">
+      <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-md mx-auto px-4 py-8">
           {/* Back Link */}
-          <Link href={`/sales/${id}`} className="inline-flex items-center text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 mb-4">
+          <Link
+            href={`/sales/${id}`}
+            className="inline-flex items-center text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200 mb-6 font-medium"
+          >
             ← Back to Sale
           </Link>
 
           {/* Main Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-6 text-white">
-              <h1 className="text-2xl font-bold">Photo Station</h1>
-              <p className="text-emerald-50 text-sm mt-1">
-                Snap a photo and share it with the community
-              </p>
+            <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-8 text-white">
+              <div className="text-5xl mb-3">📸</div>
+              <h1 className="text-3xl font-bold">Share Your Find</h1>
+              {sale && (
+                <p className="text-amber-50 text-sm mt-2 font-medium">
+                  {sale.title}
+                </p>
+              )}
             </div>
 
             {/* Content */}
-            <div className="p-6 space-y-4">
+            <div className="p-8 space-y-6">
               {isLoading ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin"></div>
+                <div className="flex justify-center items-center py-12">
+                  <div className="w-10 h-10 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"></div>
                 </div>
               ) : scanData ? (
                 <>
-                  {/* Camera Icon */}
-                  <div className="flex justify-center mb-4">
-                    <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900 rounded-full flex items-center justify-center">
-                      <span className="text-4xl">📸</span>
+                  {scanData.alreadyScanned ? (
+                    <div className="text-center space-y-3">
+                      <div className="text-5xl">✅</div>
+                      <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
+                        Already Scanned
+                      </h2>
+                      <p className="text-gray-600 dark:text-gray-400">
+                        You've already earned XP at this photo station.
+                      </p>
+                      <div className="pt-2 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                        <p className="text-sm text-amber-900 dark:text-amber-100">
+                          Come back next time for more rewards!
+                        </p>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Message */}
-                  <div className="text-center">
-                    {scanData.alreadyScanned ? (
-                      <>
-                        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                          Already Scanned
-                        </h2>
-                        <p className="text-gray-600 dark:text-gray-400 mt-2">
-                          You've already earned XP at this photo station.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                          ✨ You Earned {scanData.xpAwarded} XP!
-                        </h2>
-                        <p className="text-gray-600 dark:text-gray-400 mt-2">
-                          Share your photo to earn {scanData.shareXp} more XP!
-                        </p>
-                      </>
-                    )}
-                  </div>
-
-                  {/* XP Display */}
-                  {!scanData.alreadyScanned && (
-                    <div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg">
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Success Message */}
                       <div className="text-center">
+                        <div className="text-5xl mb-3">🎉</div>
+                        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                          You Earned {scanData.xpAwarded} XP!
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400 mt-2">
+                          Now share the sale to earn {scanData.shareXp} more XP
+                        </p>
+                      </div>
+
+                      {/* XP Display */}
+                      <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl text-center border border-amber-200 dark:border-amber-700">
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                           XP Earned
                         </p>
-                        <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                        <p className="text-4xl font-bold text-amber-600 dark:text-amber-400">
                           +{scanData.xpAwarded}
+                        </p>
+                      </div>
+
+                      {/* Share Button */}
+                      <button
+                        onClick={handleShare}
+                        disabled={sharedOnce}
+                        className={`w-full px-6 py-4 font-semibold rounded-xl transition flex items-center justify-center gap-2 ${
+                          sharedOnce
+                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
+                            : 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white'
+                        }`}
+                      >
+                        {sharedOnce ? '✓ Shared' : `Share Sale (+${scanData.shareXp} XP)`}
+                      </button>
+
+                      {/* Info */}
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                          <strong>Tip:</strong> Share on social media, text, or email to spread the word and earn rewards!
                         </p>
                       </div>
                     </div>
                   )}
 
-                  {/* Share Button */}
-                  {!scanData.alreadyScanned && (
-                    <button
-                      onClick={handleShare}
-                      className="w-full mt-6 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white font-semibold rounded-lg transition"
-                    >
-                      Share Photo (+{scanData.shareXp} XP)
-                    </button>
-                  )}
-
                   {/* Back to Sale Button */}
-                  <Link href={`/sales/${id}`} className="w-full block text-center px-4 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 font-semibold rounded-lg transition mt-2">
+                  <Link
+                    href={`/sales/${id}`}
+                    className="w-full block text-center px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 font-semibold rounded-xl transition"
+                  >
                     Back to Sale
                   </Link>
                 </>
               ) : null}
             </div>
-          </div>
-
-          {/* Info Box */}
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              📌 <strong>Tip:</strong> Photo stations are great places to capture memories. Scan the QR
-              code to unlock XP rewards!
-            </p>
           </div>
         </div>
       </div>
