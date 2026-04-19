@@ -124,11 +124,10 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
           .json({ message: 'Registration verification failed' });
       }
 
-      // Extract credential data — v10 moved these under registrationInfo.credential
-      const regCredential = verified.registrationInfo?.credential;
-      const regCredentialID = regCredential?.id;
-      const regCredentialPublicKey = regCredential?.publicKey;
-      const regCounter = regCredential?.counter ?? 0;
+      // Extract credential data — v10.0.1 keeps these directly on registrationInfo
+      const regCredentialID = verified.registrationInfo?.credentialID;
+      const regCredentialPublicKey = verified.registrationInfo?.credentialPublicKey;
+      const regCounter = verified.registrationInfo?.counter ?? 0;
 
       if (!regCredentialID || !regCredentialPublicKey) {
         return res.status(400).json({ message: 'Invalid credential data' });
