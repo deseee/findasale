@@ -74,7 +74,8 @@ const SalePlanPage = () => {
     setPosTestLoading(true);
     try {
       await api.post('/stripe/test-transaction', { saleId });
-      updateTask({ itemId: 'live_pos', completed: true });
+      // live_pos is auto-detected from DB (hasTestTransaction) — invalidate so it refetches
+      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
       showToast('POS test passed — no inventory affected ✓', 'success');
     } catch {
       showToast('POS test failed. Check your Stripe connection.', 'error');
