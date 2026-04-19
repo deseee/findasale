@@ -28,6 +28,7 @@ import PosInvoiceModal from '../../components/PosInvoiceModal';
 import PosOpenCarts from '../../components/PosOpenCarts';
 import PosPaymentQr from '../../components/PosPaymentQr';
 import PosManualCard from '../../components/PosManualCard';
+import TestCheckoutModal from '../../components/TestCheckoutModal';
 import { PosTierStatus } from '../../lib/types/posTiers';
 
 // ─── Types ────────────────────────────────────────────────────────────────────────────
@@ -180,6 +181,9 @@ export default function POSPage() {
 
   // POS test done flag (separate from paymentStatus which is shared)
   const [posTestDone, setPosTestDone] = useState(false);
+
+  // In-app checkout test modal
+  const [showTestInAppModal, setShowTestInAppModal] = useState(false);
 
   // Linked Shopper QR state (shopper account QR scan)
   const [linkedShopperData, setLinkedShopperData] = useState<any | null>(null);
@@ -874,30 +878,19 @@ export default function POSPage() {
     }
   };
 
-  const handleInAppPayment = async () => {
+  const handleInAppPayment = () => {
     if (!selectedSaleId) {
       showToast('Please select a sale first', 'error');
       return;
     }
+    setShowTestInAppModal(true);
+  };
 
-    setInAppPaymentStatus('loading');
-    try {
-      await api.post('/stripe/test-in-app-payment', { saleId: selectedSaleId });
-      setInAppPaymentStatus('success');
-
-      // Auto-check the checklist item
-      await api.patch(`/checklist/${selectedSaleId}`, {
-        itemId: 'pre_in_app_payment',
-        completed: true,
-      });
-
-      showToast('In-app payment verified!', 'success');
-      queryClient.invalidateQueries({ queryKey: ['organizer-checklist'] });
-    } catch (err: any) {
-      console.error('[pos] In-app payment test failed:', err);
-      setInAppPaymentStatus('error');
-      showToast(err?.response?.data?.message || 'In-app payment test failed', 'error');
-    }
+  const handleInAppPaymentDone = () => {
+    setShowTestInAppModal(false);
+    setInAppPaymentStatus('success');
+    showToast('In-app payment verified! ✓', 'success');
+    queryClient.invalidateQueries({ queryKey: ['organizer-checklist'] });
   };
 
   const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
@@ -2609,6 +2602,15 @@ export default function POSPage() {
         </a>
       </div>
       </div>
+
+      {/* Test In-App Checkout Modal */}
+      {showTestInAppModal && selectedSaleId && (
+        <TestCheckoutModal
+          saleId={selectedSaleId}
+          onClose={() => setShowTestInAppModal(false)}
+          onDone={handleInAppPaymentDone}
+        />
+      )}
 
       {/* Invoice Modal */}
       {invoiceModalHold && (
