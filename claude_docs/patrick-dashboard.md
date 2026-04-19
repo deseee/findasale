@@ -32,6 +32,12 @@ The 403 bug (fixed this session) was: the controller was passing the User ID to 
 ### Also fixed this session:
 - Inventory page was invisible to ADMIN users (role check was too strict — fixed to check roles array)
 
+### Next session queue:
+1. **Smoke test** all S510 fixes in Chrome first
+2. **Role check batch** (5 files) — BountyModal, authController, hubs page, RippleIndicator, access-denied page
+3. **eBay ended-sync fix** — `GetMultipleItems` API deprecated, auto-mark-sold from eBay is silently broken
+4. **Treasure Hunt XP badge** — confirm it shows 3/15 XP not 50 XP
+
 ---
 
 ## S508 Summary (2026-04-19) — Feature #300 TS repair complete, Railway build clean

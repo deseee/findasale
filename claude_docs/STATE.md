@@ -942,10 +942,22 @@ Files (7):
 
 ## Next Session Priority
 
-**0. Feature #300 Return-to-Inventory — dispatch dev (P0, from S506):**
-Dev brief is complete at `claude_docs/feature-notes/feature-300-return-to-inventory-dev-brief.md`.
-Dispatch `findasale-dev` with the full brief. This is the top priority next session — do NOT start other work first.
-Schema migration required — follow §2 of the brief. Patrick runs the migration manually after push.
+**0. Smoke test S510 fixes (mandatory first action):**
+Open Chrome, verify the S510 fixes are live: messages reply bar, flip report icons, SOLD items sorting, TEAMS copy, HypeMeter initials, inventory role check. Flag any that aren't working before starting new work.
+
+**0a. Role check fixes — 5 files (P2/P3, from S510 health-scout audit):**
+Dispatch `findasale-dev` with all 5 in one batch (different files, no conflicts):
+- `BountyModal.tsx:49` — P2: `user?.role === 'ORGANIZER'` → `user?.roles?.includes('ORGANIZER')` (ADMIN users see bounty modal on own sales)
+- `authController.ts:303` — P2: `if (user.role === 'ORGANIZER')` → `if (user.role === 'ORGANIZER' || user.roles?.includes('ORGANIZER'))` (ADMIN+ORGANIZER users don't get subscriptionTier in JWT)
+- `hubs/[slug].tsx:158` — P3: same strict check → roles.includes pattern (ADMIN users miss hub CTA)
+- `RippleIndicator.tsx:33` — P3: `(session?.user as any)?.role === 'ORGANIZER'` → roles.includes (ADMIN organizer views not tracked)
+- `access-denied.tsx:9-10` — P3: both role === checks → roles.includes (ADMIN gets generic error message)
+
+**0b. eBay ended-sync `GetMultipleItems` deprecation fix (P2, from S510 Railway logs):**
+`GetMultipleItems` Trading API endpoint is deprecated and failing silently — eBay ended-sync is non-functional. Dispatch `findasale-dev` to fix the eBay service to use a supported endpoint.
+
+**0c. Treasure Hunt XP badge — verify or fix (P2, from S509 audit):**
+Badge on homepage still may show +50 XP (should be 3/scan, 15/completion per D-XP-015). Confirm in Chrome smoke test; dispatch fix if still wrong.
 
 **ALSO: QA S505 checklist test flows:**
 Deferred from S505. 4 test buttons on plan page need Chrome QA:
