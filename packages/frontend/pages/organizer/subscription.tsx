@@ -205,7 +205,8 @@ export default function SubscriptionPage() {
 
                   <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-8">
                     <p className="text-green-900 dark:text-green-200">
-                      Your TEAMS plan is managed by your organization admin. Contact your account administrator for billing inquiries.
+                      Your TEAMS plan was set up directly. For billing questions or changes, contact{' '}
+                      <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>.
                     </p>
                   </div>
 
@@ -558,7 +559,7 @@ export default function SubscriptionPage() {
                             day: 'numeric',
                           })
                         : tier === 'TEAMS'
-                          ? <span className="text-gray-500 dark:text-gray-500 text-base">Managed by organization</span>
+                          ? <span className="text-gray-500 dark:text-gray-500 text-base">Contact support</span>
                           : <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
                     </p>
                   </div>
@@ -632,7 +633,7 @@ export default function SubscriptionPage() {
                   ) : (
                     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                       <p className="text-green-800 dark:text-green-200 text-sm">
-                        Your plan is managed by your organization admin. For billing changes, contact{' '}
+                        Your TEAMS plan was set up directly. For billing questions or changes, contact{' '}
                         <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>.
                       </p>
                     </div>
