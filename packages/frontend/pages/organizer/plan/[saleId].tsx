@@ -7,6 +7,7 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
+import TestCheckoutModal from '../../../components/TestCheckoutModal';
 import { format } from 'date-fns';
 import {
   CheckCircle2,
@@ -63,6 +64,60 @@ const SalePlanPage = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
+  const [posTestLoading, setPosTestLoading] = useState(false);
+  const [onlineCheckoutLoading, setOnlineCheckoutLoading] = useState(false);
+  const [auctionCheckoutLoading, setAuctionCheckoutLoading] = useState(false);
+  const [showTestInAppModal, setShowTestInAppModal] = useState(false);
+
+  const handlePosTest = async () => {
+    if (!saleId || typeof saleId !== 'string') return;
+    setPosTestLoading(true);
+    try {
+      await api.post('/stripe/test-transaction', { saleId });
+      updateTask({ itemId: 'live_pos', completed: true });
+      showToast('POS test passed — no inventory affected ✓', 'success');
+    } catch {
+      showToast('POS test failed. Check your Stripe connection.', 'error');
+    } finally {
+      setPosTestLoading(false);
+    }
+  };
+
+  const handleOnlineCheckout = async () => {
+    if (!saleId || typeof saleId !== 'string') return;
+    setOnlineCheckoutLoading(true);
+    try {
+      const res = await api.post('/stripe/test-checkout-session', { saleId, type: 'standard' });
+      const url = res.data?.url;
+      if (url) {
+        window.location.href = url;
+      } else {
+        showToast('Test failed. Check console for details.', 'error');
+      }
+    } catch {
+      showToast('Test failed. Check your Stripe connection.', 'error');
+    } finally {
+      setOnlineCheckoutLoading(false);
+    }
+  };
+
+  const handleAuctionCheckout = async () => {
+    if (!saleId || typeof saleId !== 'string') return;
+    setAuctionCheckoutLoading(true);
+    try {
+      const res = await api.post('/stripe/test-checkout-session', { saleId, type: 'auction' });
+      const url = res.data?.url;
+      if (url) {
+        window.location.href = url;
+      } else {
+        showToast('Test failed. Check console for details.', 'error');
+      }
+    } catch {
+      showToast('Test failed. Check your Stripe connection.', 'error');
+    } finally {
+      setAuctionCheckoutLoading(false);
+    }
+  };
 
   // Fetch checklist
   const { data: checklist, isLoading } = useQuery<ChecklistResponse>({
@@ -407,8 +462,8 @@ const SalePlanPage = () => {
                                 )}
                               </div>
 
-                              {/* Badges */}
-                              <div className="flex gap-2 flex-shrink-0">
+                              {/* Badges + Test Buttons */}
+                              <div className="flex gap-2 flex-shrink-0 items-center">
                                 {task.isAuto && (
                                   <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
                                     Auto
@@ -418,6 +473,41 @@ const SalePlanPage = () => {
                                   <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
                                     {task.tier}
                                   </span>
+                                )}
+                                {!task.completed && task.id === 'live_pos' && (
+                                  <button
+                                    onClick={handlePosTest}
+                                    disabled={posTestLoading}
+                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white transition"
+                                  >
+                                    {posTestLoading ? '…' : 'Run Test'}
+                                  </button>
+                                )}
+                                {!task.completed && task.id === 'pre_online_checkout' && (
+                                  <button
+                                    onClick={handleOnlineCheckout}
+                                    disabled={onlineCheckoutLoading}
+                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white transition"
+                                  >
+                                    {onlineCheckoutLoading ? '…' : 'Run Test'}
+                                  </button>
+                                )}
+                                {!task.completed && task.id === 'pre_auction_checkout' && (
+                                  <button
+                                    onClick={handleAuctionCheckout}
+                                    disabled={auctionCheckoutLoading}
+                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white transition"
+                                  >
+                                    {auctionCheckoutLoading ? '…' : 'Run Test'}
+                                  </button>
+                                )}
+                                {!task.completed && task.id === 'pre_in_app_payment' && (
+                                  <button
+                                    onClick={() => setShowTestInAppModal(true)}
+                                    className="px-2 py-0.5 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 text-white transition"
+                                  >
+                                    Run Test
+                                  </button>
                                 )}
                               </div>
                             </div>
@@ -432,6 +522,17 @@ const SalePlanPage = () => {
           )}
         </div>
       </div>
+
+      {showTestInAppModal && typeof saleId === 'string' && (
+        <TestCheckoutModal
+          saleId={saleId}
+          onClose={() => setShowTestInAppModal(false)}
+          onDone={() => {
+            setShowTestInAppModal(false);
+            updateTask({ itemId: 'pre_in_app_payment', completed: true });
+          }}
+        />
+      )}
     </>
   );
 };
