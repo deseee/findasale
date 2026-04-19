@@ -547,6 +547,21 @@ const OrganizerDashboard = () => {
           {/* Workspace Invitation Banner */}
           <WorkspaceInvitationBanner />
 
+          {/* Email Verification Banner — S512: show until emailVerified === true */}
+          {user?.emailVerified === false && (
+            <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 flex items-start gap-3">
+              <span className="text-amber-500 text-lg mt-0.5" aria-hidden="true">✉️</span>
+              <div>
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  Check your inbox to verify your email
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                  We sent a verification link to <strong>{user.email}</strong>. Verify your email to publish sales and unlock your full account.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Workspace Welcome Banner */}
           {welcomedWorkspace && (
             <div className="mb-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 flex items-start justify-between">

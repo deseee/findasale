@@ -325,6 +325,7 @@ export const register = async (req: Request, res: Response) => {
         roles: userRoles,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
+        emailVerified: user.emailVerified, // S512: gate dashboard banner
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
@@ -467,6 +468,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         roles:        userRoles,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
+        emailVerified: user.emailVerified, // S512: gate dashboard banner
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
@@ -628,6 +630,7 @@ export const login = async (req: Request, res: Response) => {
         roles: userRoles,
         referralCode: user.referralCode,
         tokenVersion: user.tokenVersion,
+        emailVerified: user.emailVerified, // S512: gate dashboard banner
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
@@ -745,6 +748,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
         roles: userRoles,
         referralCode: updatedUser.referralCode,
         tokenVersion: updatedUser.tokenVersion,
+        emailVerified: updatedUser.emailVerified, // S512: gate dashboard banner
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
