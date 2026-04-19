@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S503 (2026-04-18) — Print kit QR sizing, item grid 15/page, tear-off tab text, photo station fixes**
+
+- **Print preview QR sizing fixed ✅:** `.yard-sign-qr` and `.qr-full-page-qr` bumped from 5in→6in in print CSS to match standalone PDF sizing (~6.7in).
+- **Item card grid 9→15 per page ✅:** Grid changed from 3×3 to 3×5. Cards compacted: padding, font sizes, QR size (90→50pt), photo height all reduced. JS chunking updated 9→15.
+- **Broken `@media screen` fixed ✅:** Screen preview styles were nested inside `@media print` (never applied). Moved to top-level `@media screen` block with proper preview sizes.
+- **Tear-off flyer tab text ✅:** Changed from single dot-joined line to 4 separate lines (sale name, dates, address, finda.sale) in evenly-spaced columns across tab width. Still vertical orientation.
+- **Photo station API 404 fixed ✅:** Frontend called wrong path missing `/photo-ops/` segment.
+- **Photo station UX fixes ✅:** Share XP corrected (hardcoded 10→`XP_AWARDS.SHARE`=5), misleading "come back later" copy fixed, Web Share API + clipboard fallback added, Link patterns cleaned.
+- **Photo station discovery paths added ✅:** Shopper card on sale detail page, cross-promo link from treasure hunt QR page, visit XP toast.
+- **Tear-off flyer template built ✅:** New `getTearOffFlyer` export + route. Large QR top half + 8 vertical-text tear-off tabs. Added to full-kit as page 4.
+- **Label Composer CTA card mobile fix ✅:** `flex justify-between` → `flex-col sm:flex-row` to prevent overflow on small screens.
+- **Sign Templates grid fixed ✅:** `lg:grid-cols-6` → `lg:grid-cols-5` (matches 5 buttons).
+
+**S503 Files changed (5):**
+- `packages/backend/src/controllers/printKitController.ts` — tear-off tab text columns, tear-off flyer template (new export)
+- `packages/backend/src/controllers/photoOpController.ts` — shareXp fix
+- `packages/backend/src/routes/organizers.ts` — tear-off route added
+- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — QR sizing, 15/page grid, screen CSS fix, composer CTA, grid cols, tear-off button
+- `packages/frontend/pages/sales/[id]/photo-station.tsx` — API path fix, share button, copy fixes
+- `packages/frontend/pages/sales/[id].tsx` — photo station card + visit toast
+- `packages/frontend/pages/sales/[id]/treasure-hunt-qr/[clueId].tsx` — photo station cross-promo
+
+---
+
 **S502 (2026-04-18) — Label Sheet Composer: build + 3 bug fixes (auth, export, saved batches)**
 
 - **Label Sheet Composer built ✅:** Full single-page tool at `/organizer/label-composer/[saleId]`. Two input modes: preset price chips (30 cheat-sheet prices) + pull from catalog (search priced items). Live Avery 5160 sheet preview with color-coded price bands. useReducer with 14 action types. localStorage persistence for in-progress batches.

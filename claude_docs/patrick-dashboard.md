@@ -1,40 +1,32 @@
 # Patrick's Dashboard — Week of April 18, 2026
 
-## S502 Summary (2026-04-18) — Label Sheet Composer: build + 3 bug fixes
+## S503 Summary (2026-04-18) — Print kit polish: QR sizing, 15 items/page, tear-off tabs, photo station
 
-**7 files changed. 1 push block.**
+**2 files changed this push. Prior session files already pushed.**
 
-### Push block — S502:
+### Push block — S503:
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/backend/src/constants/cheatsheet.ts
-git add packages/backend/src/controllers/labelComposerController.ts
-git add packages/backend/src/routes/organizers.ts
 git add packages/backend/src/controllers/printKitController.ts
-git add "packages/frontend/pages/organizer/label-composer/[saleId].tsx"
 git add "packages/frontend/pages/organizer/print-kit/[saleId].tsx"
-git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
-git commit -m "feat: label sheet composer + fix PDF auth, export download, saved batch recall"
+git commit -m "Print kit: bigger QRs, 15 items/page, tear-off tab columns, screen CSS fix"
 .\push.ps1
 ```
 
 ### What was done this session:
 
-**Label Sheet Composer built** — Full single-page tool at `/organizer/label-composer/[saleId]`. Pick from 30 cheat-sheet prices or search your catalog. Set quantities, see a live Avery 5160 sheet preview with color-coded price bands. Drag to reorder. Fill leftover cells. Backend generates real PDFs with QR codes.
+**Print preview QRs enlarged** — Yard sign and interactive QR pages (check-in, treasure hunt, photo station) bumped from 5in to 6in in print CSS to match standalone PDF sizing.
 
-**3 bugs fixed after your testing:**
-1. Print/Export PDF was failing with "Authentication required" — `window.open()` can't send auth headers. Replaced with authenticated blob fetch.
-2. Export PDF now triggers an actual file download instead of opening in a new tab.
-3. Saved batches now have a recall UI — collapsible section below the action bar shows all saved presets with Load and Delete buttons.
+**Item cards 9→15 per page** — Grid changed from 3×3 to 3×5. Cards compacted with smaller QR codes, tighter padding, and reduced font sizes so 15 fit cleanly on a letter page.
 
-**CTA links** — Label Composer linked from print-kit page (amber card) and the review page ("Print labels for N priced items").
+**Tear-off tab text fixed** — Each detail (sale name, dates, address, finda.sale) now renders in its own evenly-spaced column within each tab, still vertical. No more smooshed single-line text.
 
-### Next session — S503: QR code sizing consistency
+**Broken screen CSS fixed** — Screen preview styles were accidentally nested inside `@media print` (never applied on screen). Moved to proper `@media screen` block.
 
-You flagged that QR codes are different sizes between interactive codes, full-page print, and label PDFs. Next session will audit all QR generation across `printKitController.ts`, `labelComposerController.ts`, and the print-kit frontend, then standardize sizes so they all match.
+**Photo station + other fixes from prior session** — API 404 fixed, share button wired, discovery paths added, composer CTA mobile overflow fixed, sign grid columns corrected. These were pushed in the prior session.
 
 ---
 
