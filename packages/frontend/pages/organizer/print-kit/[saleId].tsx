@@ -521,7 +521,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               {/* Sign Templates Section */}
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Sign Templates</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                   {/* Yard Sign */}
                   <div className="text-center">
                     <button
@@ -553,6 +553,17 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       🏕️ Table Tents
                     </button>
                     <p className="text-sm text-warm-600 dark:text-warm-400">Folded cards for tables and counters</p>
+                  </div>
+
+                  {/* Tear-Off Flyer */}
+                  <div className="text-center">
+                    <button
+                      onClick={() => downloadAuthenticatedFile(`${apiBase}/organizers/${saleId}/signs/tear-off`, 'tear-off-flyer.pdf')}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                    >
+                      ✂️ Tear-Off Flyer
+                    </button>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Large QR + rip-off tabs for bulletin boards</p>
                   </div>
 
                   {/* Full Kit */}

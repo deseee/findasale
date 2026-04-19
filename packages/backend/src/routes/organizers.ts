@@ -7,7 +7,7 @@ import { getPerformanceMetricsHandler } from '../controllers/performanceControll
 import { exportOrganizer } from '../controllers/exportController';
 import { getCsvExportHandler } from '../controllers/csvExportController';
 import { getPosTierStatus } from '../controllers/posTiersController';
-import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getHangTagKit, getFullSignKitPDF, getPriceSheet } from '../controllers/printKitController';
+import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getTearOffFlyer, getHangTagKit, getFullSignKitPDF, getPriceSheet } from '../controllers/printKitController';
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
 import { getCheatsheet, getItemsForLabels, createLabelBatch, printLabelBatch } from '../controllers/labelComposerController';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
@@ -582,6 +582,7 @@ router.get('/:saleId/print-kit', authenticate, getPrintKit);
 router.get('/:saleId/signs/yard', authenticate, getYardSignKit);
 router.get('/:saleId/signs/directional', authenticate, getDirectionalSignKit);
 router.get('/:saleId/signs/table-tent', authenticate, getTableTentKit);
+router.get('/:saleId/signs/tear-off', authenticate, getTearOffFlyer);
 router.get('/:saleId/signs/hang-tag', authenticate, getHangTagKit);
 router.get('/:saleId/signs/full-kit', authenticate, getFullSignKitPDF);
 
