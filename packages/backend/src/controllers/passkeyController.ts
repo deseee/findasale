@@ -38,7 +38,7 @@ export const registerBegin = async (req: AuthRequest, res: Response) => {
     const options = await generateRegistrationOptions({
       rpID: WEBAUTHN_RP_ID,
       rpName: WEBAUTHN_RP_NAME,
-      userID: userId,
+      userID: Buffer.from(userId), // v10+ requires Uint8Array, not string
       userName: user.email,
       userDisplayName: user.name || 'User',
       // Support both platform (biometric) and cross-platform (security key)

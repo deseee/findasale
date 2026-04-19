@@ -167,3 +167,34 @@ export const adminRejectVerification = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+/**
+ * Admin: Get pending verification requests
+ * Requires: auth + admin
+ * Returns: array of organizers with verificationStatus = 'PENDING'
+ */
+export const getPendingOrganizers = async (req: Request, res: Response) => {
+  try {
+    const organizers = await prisma.organizer.findMany({
+      where: { verificationStatus: 'PENDING' },
+      select: {
+        id: true,
+        businessName: true,
+        subscriptionTier: true,
+        createdAt: true,
+        user: {
+          select: {
+            email: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    return res.json({ organizers });
+  } catch (error) {
+    console.error('Get pending organizers error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
