@@ -1,5 +1,28 @@
 # Patrick's Dashboard — Week of April 18, 2026
 
+## S504 Summary (2026-04-18) — Checklist bugs, task redesign, Stripe test harness
+
+**8 files changed. All pushed ✅. Migration deployed to Railway ✅.**
+
+### What was done this session:
+
+**Checklist task unchecking bug fixed** — Old checklist records were stored as an array `[{id, completed}]` instead of the newer `{taskId: boolean}` map. Setting a named property on a JS array gets silently dropped by JSON.stringify. Added an `Array.isArray()` guard — on first save, old format coerces to `{}` and correct format is written. Tasks now stay checked.
+
+**Completed stages stuck closed fixed** — Green/complete stages couldn't be re-expanded to review their tasks. Fixed the toggle condition so any stage can be opened/closed regardless of completion state.
+
+**Checklist task improvements** — Pre-Sale stage reordered: pricetags → check-in QR (no PRO gate) → treasure clues (no PRO gate) → photo station QR → preview → signs made and placed → published → social. Live stage: internet → queue → POS → float → helpers → first sold → QR activity. Removed "signs posted" from Live.
+
+**Wrapping Up redesigned** — Replaced vague placeholders with research-backed actionable tasks: Signs taken down, Property fully cleared, Unsold items sorted, Donation drop-off scheduled, Relist items on FindA.Sale (non-PRO), Messages closed out, Flip Report reviewed (PRO), Sale marked closed.
+
+**Stripe test harness built** — "Run $1.00 Test Transaction" button on POS page. Uses your `STRIPE_TEST_SECRET_KEY` to send a real $1 charge through Stripe test mode. Records the purchase in the DB with `isTestTransaction: true`. The checklist item "POS open and test transaction done" auto-checks when this runs. Works as a universal test for all three payment paths (terminal, payment link, direct).
+
+**`STRIPE_PLATFORM_FEE_PERCENT` deleted** — Confirmed dead env var (fee logic is hardcoded in feeCalculator.ts, not this variable). Already deleted from Railway.
+
+### QA needed next session:
+- Open POS page → Run $1.00 Test Transaction → verify it succeeds → go to checklist → verify `live_pos` is auto-checked
+
+---
+
 ## S503 Summary (2026-04-18) — Print kit polish: QR sizing, 15 items/page, tear-off tabs, photo station
 
 **2 files changed this push. Prior session files already pushed.**

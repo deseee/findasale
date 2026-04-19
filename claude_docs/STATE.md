@@ -7,6 +7,33 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S504 (2026-04-18) — Checklist bugs fixed, task redesign, Stripe test harness built**
+
+- **Tasks unchecking after toast fixed ✅:** Root cause: `SaleChecklist.items` stored as old array format `[{id, completed}]`. New code treated it as `{taskId: boolean}` map. Setting named property on an array is silently dropped by `JSON.stringify`. Fix: `Array.isArray(rawItems) ? {} : rawItems` coerces old data to empty object — first save writes correct map format.
+- **Completed stages not expandable fixed ✅:** Toggle condition `isActive || isComplete || expandedStage === stageName` blocked re-expanding green stages. Simplified to `expandedStage === stageName ? null : stageName`.
+- **Pre-Sale task reorder ✅:** pricetags → check-in QR (no PRO) → treasure clues (no PRO) → photo station QR (singular label) → preview → signs "made and placed" → published → social.
+- **Live stage reorder ✅:** internet → queue (PRO) → pos (auto) → float → helpers → first_sold → qr_check. Removed `live_signs`.
+- **Wrapping Up redesigned ✅:** Replaced vague tasks with research-backed actionable items: signs down, property cleared, items sorted, donation scheduled, relist (non-PRO), messages closed, flip report (PRO), closed.
+- **Stripe test harness built ✅:** `STRIPE_TEST_SECRET_KEY` env var + `getTestStripe()` singleton in `stripe.ts`. `POST /api/stripe/test-transaction` creates $1 PaymentIntent with `pm_card_visa` via test Stripe, records `Purchase` with `isTestTransaction: true`, auto-checks `live_pos` checklist item. "Run $1.00 Test Transaction" button added to POS page.
+- **`live_pos` auto-check wired ✅:** `hasTestTransaction` added to `TaskEvaluationData`. Controller queries `Purchase.findFirst({ isTestTransaction: true, saleId })` at checklist load.
+- **Dead env var deleted ✅:** `STRIPE_PLATFORM_FEE_PERCENT` confirmed unused (fee logic hardcoded in feeCalculator.ts). Deleted from Railway by Patrick.
+- **Migration deployed ✅:** `isTestTransaction Boolean @default(false)` + index on Purchase. Manual SQL migration (`20260418223201_add_isTestTransaction`) applied via `migrate deploy` to Railway (shadow DB issue blocked `migrate dev` due to pre-existing `add_ebay_subscription_id` migration dependency).
+
+**S504 Files changed (8):**
+- `packages/database/prisma/schema.prisma` — isTestTransaction field + index on Purchase
+- `packages/database/prisma/migrations/20260418223201_add_isTestTransaction/migration.sql` — NEW
+- `packages/backend/src/utils/stripe.ts` — getTestStripe() singleton with STRIPE_TEST_SECRET_KEY
+- `packages/backend/src/controllers/checklistController.ts` — array format guard, hasTestTransaction, live_pos isAuto, task reorders + Wrapping Up redesign
+- `packages/backend/src/controllers/stripeController.ts` — testTransaction export
+- `packages/backend/src/routes/stripe.ts` — POST /test-transaction route
+- `packages/frontend/pages/organizer/plan/[saleId].tsx` — optimistic update fix, stage toggle fix
+- `packages/frontend/pages/organizer/pos.tsx` — test transaction button + card
+
+**Needs QA (payment flow — defer to next session):**
+- Run test transaction from POS → verify Purchase record created with isTestTransaction=true → verify live_pos auto-checks on checklist reload
+
+---
+
 **S503 (2026-04-18) — Print kit QR sizing, item grid 15/page, tear-off tab text, photo station fixes**
 
 - **Print preview QR sizing fixed ✅:** `.yard-sign-qr` and `.qr-full-page-qr` bumped from 5in→6in in print CSS to match standalone PDF sizing (~6.7in).
