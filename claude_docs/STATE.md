@@ -27,10 +27,24 @@ Built two new pages and completed S505 checklist test flow QA.
 
 **Lucky Roll #291 deprecated:** Replaced by `/shopper/early-access-cache`. No Lucky Roll page exists or is needed.
 
-**Files changed (3):**
+**In-App Payment modal scroll fix (P1):**
+- Stripe PaymentElement iframe renders taller than viewport on desktop. Modal had no max-height, so Pay button was below the fold with no way to scroll. Patrick confirmed: "can't scroll down on desktop in the stripe popup."
+- Fix: `TestCheckoutModal.tsx` line 146 — added `max-h-[90vh] overflow-y-auto` to inner modal container. Patrick confirmed: "that worked."
+
+**`live_pos` isAuto removed (Patrick explicit request):**
+- `checklistController.ts` line 81: `live_pos` changed from `isAuto: true` → `isAuto: false`, `autoCheck` removed. "Auto" badge no longer shows on the POS plan task row.
+
+**Roadmap updated to v112.**
+
+**Files changed (7):**
 - `packages/frontend/pages/shopper/early-access-cache/items.tsx` — NEW
 - `packages/frontend/pages/sales/[id]/photo-station.tsx` — built/completed
 - `packages/frontend/pages/organizer/plan/[saleId].tsx` — POS Run Test fix (line 76)
+- `packages/frontend/components/TestCheckoutModal.tsx` — modal scroll fix
+- `packages/backend/src/controllers/checklistController.ts` — live_pos isAuto: false
+- `claude_docs/STATE.md`
+- `claude_docs/patrick-dashboard.md`
+- `claude_docs/strategy/roadmap.md` — v112, #291 deprecated, #303 and #304 added
 
 ---
 
@@ -983,14 +997,27 @@ Files (7):
 
 ## Next Session Priority
 
-**0. Push S513 changes + smoke test POS Run Test fix (mandatory first action):**
-Push these 3 files (+ STATE.md + dashboard.md), wait for Railway/Vercel deploy, then re-test POS Run Test button on plan page — confirm it now shows a success toast instead of error toast. Then verify `live_pos` auto-checks after reload.
+**0. Patrick: push S513 + smoke test (mandatory first action):**
+Run commit block below. After Railway/Vercel deploy, open plan page → expand Live → click POS "Run Test" → confirm success toast (not error). Then verify `live_pos` auto-checks on reload.
 
-**1. Treasure hunt 3-clue limit (carry from S501, P1):**
-- Update 10-clue cap → 3 in `treasureHuntQRController.ts`
+```powershell
+git add packages/frontend/pages/shopper/early-access-cache/items.tsx
+git add packages/frontend/pages/sales/[id]/photo-station.tsx
+git add "packages/frontend/pages/organizer/plan/[saleId].tsx"
+git add packages/frontend/components/TestCheckoutModal.tsx
+git add packages/backend/src/controllers/checklistController.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "S513: photo station page, early-access-cache items page, POS Run Test fix, modal scroll fix, live_pos isAuto removed, roadmap v112"
+.\push.ps1
+```
 
-**2. In-App Payment Run Test completion — Patrick manual verify (⚠️ UNVERIFIED from S513):**
-- MCP can't interact with cross-origin Stripe iframe. Patrick should open `/organizer/plan/{saleId}`, click In-App Payment "Run Test", type `4242 4242 4242 4242` + any expiry/CVC, confirm success state and `pre_in_app_payment` auto-checks.
+**1. Patrick: manually verify In-App Payment Run Test (⚠️ UNVERIFIED — MCP can't reach Stripe iframe):**
+Open `/organizer/plan/{saleId}`, expand Live, click In-App Payment "Run Test". Type `4242 4242 4242 4242`, any future expiry, any 3-digit CVC. Confirm "In-app payment flow verified" success state + `pre_in_app_payment` auto-checks.
+
+**2. Treasure hunt 3-clue limit (carry from S501, P1):**
+Update 10-clue cap → 3 in `treasureHuntQRController.ts`
 
 **3. Chrome QA — security gates smoke test (P1, carry from S489):**
 Register a new test account → verify email gate fires. Verify existing organizers are NOT blocked.
