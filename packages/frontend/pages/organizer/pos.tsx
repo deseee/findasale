@@ -770,6 +770,40 @@ export default function POSPage() {
     setSearchResults([]);
   };
 
+  // ─── Test transaction handler ───────────────────────────────────────────────────────
+
+  const handleTestTransaction = async () => {
+    if (!selectedSaleId) {
+      showToast('Please select a sale first', 'error');
+      return;
+    }
+
+    try {
+      setPaymentStatus('processing');
+      setErrorMessage('');
+      const res = await api.post('/stripe/test-transaction', {
+        saleId: selectedSaleId,
+        amount: 1.0,
+        paymentMethod: 'terminal',
+      });
+
+      if (res.data.success) {
+        showToast('Test transaction successful! live_pos task will auto-check.', 'success');
+        if (soundEnabled) playSuccessChime();
+        setPaymentStatus('idle');
+        // Optionally refresh checklist or sale data here
+        queryClient.invalidateQueries(['organizer-checklist']);
+      } else {
+        setErrorMessage(res.data.message || 'Test transaction failed');
+        setPaymentStatus('error');
+      }
+    } catch (err: any) {
+      console.error('[pos] Test transaction error:', err);
+      setErrorMessage(err?.response?.data?.message || err?.message || 'Test transaction failed');
+      setPaymentStatus('error');
+    }
+  };
+
   const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
   const cartChange = Math.max(0, cashReceived - cartTotal);
   // Amount to charge on card: cartTotal minus cash if a partial cash payment is entered
@@ -1452,6 +1486,26 @@ export default function POSPage() {
           </select>
         )}
       </div>
+
+      {/* Pre-Sale Test Card */}
+      {selectedSaleId && (
+        <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🧪</span>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Pre-Sale Test</h3>
+              <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Verify your POS is working before the sale starts by running a $1.00 test transaction.</p>
+              <button
+                onClick={handleTestTransaction}
+                disabled={paymentStatus === 'processing'}
+                className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
+              >
+                {paymentStatus === 'processing' ? 'Running test…' : 'Run $1.00 Test Transaction'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Item search + results */}
       {selectedSaleId && (
