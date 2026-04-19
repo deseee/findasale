@@ -25,6 +25,8 @@ export default function SubscriptionPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [managingPlan, setManagingPlan] = useState(false);
   const [showDowngradePreview, setShowDowngradePreview] = useState(false);
+  const [downgradePreview, setDowngradePreview] = useState<any>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   useEffect(() => {
     fetchSubscription();
@@ -648,10 +650,22 @@ export default function SubscriptionPage() {
 
                   {(tier === 'PRO' || tier === 'TEAMS') && (
                     <button
-                      onClick={() => setShowDowngradePreview(true)}
-                      className="block w-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 py-3 px-4 rounded-lg font-semibold hover:bg-amber-100 transition border border-amber-200 dark:border-amber-800"
+                      onClick={async () => {
+                        setLoadingPreview(true);
+                        try {
+                          const res = await api.get('/billing/downgrade-preview');
+                          setDowngradePreview(res.data);
+                        } catch {
+                          setDowngradePreview(null);
+                        } finally {
+                          setLoadingPreview(false);
+                          setShowDowngradePreview(true);
+                        }
+                      }}
+                      disabled={loadingPreview}
+                      className="block w-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 py-3 px-4 rounded-lg font-semibold hover:bg-amber-100 transition border border-amber-200 dark:border-amber-800 disabled:opacity-50"
                     >
-                      Downgrade to SIMPLE
+                      {loadingPreview ? 'Loading...' : 'Downgrade to SIMPLE'}
                     </button>
                   )}
 
@@ -720,12 +734,12 @@ export default function SubscriptionPage() {
             isOpen={showDowngradePreview}
             onClose={() => setShowDowngradePreview(false)}
             preview={{
-              currentTier: tier || 'PRO',
-              itemsHidden: 0,
-              photosAffected: 0,
-              graceEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-              teamMembersLosing: 0,
-              totalItems: 0,
+              currentTier: downgradePreview?.currentTier || tier || 'PRO',
+              itemsHidden: downgradePreview?.itemsHidden ?? 0,
+              photosAffected: downgradePreview?.photosAffected ?? 0,
+              graceEndDate: downgradePreview?.graceEndDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              teamMembersLosing: downgradePreview?.teamMembersLosing ?? 0,
+              totalItems: downgradePreview?.totalItems ?? 0,
             }}
             onConfirm={async () => {
               await handleCancel();
