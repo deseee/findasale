@@ -78,7 +78,7 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'pre_in_app_payment', stage: 'Live', label: 'In-app payment tested', isAuto: false, link: '/organizer/plan/{saleId}' },
 
   // Stage 4: Live
-  { id: 'live_pos', stage: 'Live', label: 'POS open and test transaction done', isAuto: true, autoCheck: (d) => d.hasTestTransaction, link: '/organizer/pos' },
+  { id: 'live_pos', stage: 'Live', label: 'POS open and test transaction done', isAuto: false, link: '/organizer/pos' },
   { id: 'live_float', stage: 'Live', label: 'Bills and coins ready for making change', isAuto: false },
   { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue/{saleId}' },
   { id: 'live_helpers', stage: 'Live', label: 'Helpers briefed on their roles', isAuto: false },
