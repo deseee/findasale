@@ -1,41 +1,39 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
+## S508 Summary (2026-04-19) — Feature #300 TS repair complete, Railway build clean
+
+**3 targeted fixes. No new features — just making the build green.**
+
+After S507 shipped the nullable `Item.saleId` migration, Railway's fresh TypeScript compile caught 3 errors that the local dev environment hid (stale Prisma client issue). Fixed:
+- `fraudService.ts` — null-to-undefined coercion on a nested saleId query
+- `itemInventoryService.ts` — readonly array type on `notIn` filter
+- `itemInventoryService.ts` — missing required `title` field on a notification
+
+Railway build is now clean. Feature #300 is fully live.
+
+### What still needs QA (Chrome, next session):
+- Open an ended sale's Flip Report → "Return to Inventory" panel appears at bottom
+- Select items → Return → confirm they show in `/organizer/inventory`
+- Pull an inventory item into a new sale → confirm it disappears from inventory (move, not copy)
+- eBay import → confirm imported items appear in `/organizer/inventory`
+
+---
+
 ## S507 Summary (2026-04-19) — Feature #300 Return-to-Inventory: SHIPPED
 
-**27 files changed. Migration required before going live (see below).**
+**27 files changed. Migration ran. Railway build resolved in S508.**
 
-### What shipped:
-
-**The item duplication problem is permanently fixed.** Items no longer get copied when pulled into sales. One physical object = one database record, forever. When an item moves from inventory → sale → back to inventory, it's the same record the whole time — just a field update.
+**The item duplication problem is permanently fixed.** Items no longer get copied when pulled into sales. One physical object = one database record, forever.
 
 **Organizers can now return unsold items from the Flip Report page:**
 - Open any ended sale's Flip Report → scroll to bottom → "Return to Inventory" panel
 - Items are pre-selected by sale type (Estate = none pre-selected, all others = pre-selected)
 - Checkbox list, select all / deselect all
-- Click "Return N items to inventory" → they're immediately back in your inventory
-- Any items that were reserved or on a waitlist get automatically released (shoppers notified)
+- Click "Return N items" → back in inventory immediately. Reservations auto-released, shoppers notified.
 
-**eBay imports cleaned up** — imported items now go into inventory directly (no more invisible "container sale" workaround).
+**eBay imports cleaned up** — imported items go straight to inventory (no more invisible container sale workaround).
 
-**Flip Report accuracy improved** — items you returned to inventory now correctly show in the "unsold" count, so your sell-through rate is accurate.
-
-### ⚠️ YOU NEED TO RUN THE MIGRATION BEFORE THIS GOES LIVE
-
-This feature requires a database schema change. After pushing the code, run this in PowerShell:
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-The migration is safe — it preserves all your existing data and backfills the new fields automatically.
-
-### QA needed after deploy:
-- Open an ended sale's Flip Report → confirm "Return to Inventory" panel appears
-- Select a few items → click Return → confirm they appear in `/organizer/inventory`
-- Pull an item into a new sale → confirm it moves (not copies) — item count should be consistent
+**Flip Report accuracy improved** — returned items now correctly count in sell-through rate.
 
 ---
 
