@@ -146,7 +146,7 @@ export const returnItemsToInventory = async (
   const query =
     itemIds.length > 0
       ? { id: { in: itemIds }, saleId }
-      : { saleId, status: { notIn: ['SOLD', 'DONATED'] as const } };
+      : { saleId, status: { notIn: ['SOLD', 'DONATED'] as string[] } };
 
   const items = await prisma.item.findMany({ where: query });
 
@@ -179,6 +179,7 @@ export const returnItemsToInventory = async (
         data: {
           userId: reservation.userId,
           type: 'RESERVATION_CANCELLED',
+          title: 'Hold released',
           body: `A hold on "${item.title}" was released — the sale has ended.`,
         },
       });
