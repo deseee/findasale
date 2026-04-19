@@ -786,7 +786,7 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
           width: textAreaHeight,
           align: 'left',
           lineBreak: true,
-          lineGap: 2,
+          lineGap: 28,
         });
       doc.restore();
     }
@@ -1474,7 +1474,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
           width: fkTextAreaHeight,
           align: 'left',
           lineBreak: true,
-          lineGap: 2,
+          lineGap: 28,
         });
       doc.restore();
     }
