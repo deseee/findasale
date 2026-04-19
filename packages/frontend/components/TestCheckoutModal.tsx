@@ -143,7 +143,7 @@ const TestCheckoutModal = ({ saleId, onClose, onDone }: TestCheckoutModalProps) 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <div>
             <h2 className="text-base font-semibold text-warm-900 dark:text-warm-100">Test In-App Checkout</h2>
