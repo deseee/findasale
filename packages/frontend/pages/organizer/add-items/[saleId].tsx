@@ -52,6 +52,7 @@ import BulkStatusModal from '../../../components/BulkStatusModal';
 import BulkPriceModal from '../../../components/BulkPriceModal';
 import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal';
 import ValuationWidget from '../../../components/ValuationWidget';
+import { decodeHtmlEntities } from '../../../utils/textUtils';
 import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42: Voice-to-Tag
 
 /**
@@ -245,10 +246,7 @@ const normalizeToArray = (value: string | undefined, arr: string[]): string => {
 
 const formatCategory = (category: string | null | undefined): string => {
   if (!category) return '\u2014';
-  return category
-    .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+  return decodeHtmlEntities(category);
 };
 
 const computeDraftStatus = (item: any): 'DRAFT' | 'PENDING_REVIEW' | 'PUBLISHED' => {
