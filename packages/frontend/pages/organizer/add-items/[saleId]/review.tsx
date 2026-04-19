@@ -29,6 +29,7 @@ import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing F
 import RapidCapture, { RapidItem } from '../../../../components/RapidCapture';
 import EbayCategoryPicker from '../../../../components/EbayCategoryPicker';
 import { CATEGORIES, CONDITIONS, CONDITION_LABELS, CONDITION_MAP, formatCondition } from '../../../../lib/itemConstants';
+import { decodeHtmlEntities } from '../../../../utils/textUtils';
 
 type AspectRatio = '4:3' | '1:1' | '16:9';
 
@@ -790,7 +791,7 @@ const ReviewPage = () => {
                             'No price'
                           )}
                         </div>
-                        <p className="text-warm-600 dark:text-warm-400 text-xs mt-1">{item.category || 'Uncategorized'}</p>
+                        <p className="text-warm-600 dark:text-warm-400 text-xs mt-1">{item.category ? decodeHtmlEntities(item.category) : 'Uncategorized'}</p>
                       </div>
                     </div>
                   ))}
@@ -1061,7 +1062,7 @@ const ReviewPage = () => {
                                   <span className="text-red-500 dark:text-red-400">No price set</span>
                                 )}
                                 <span>·</span>
-                                <span className="truncate">{item.category || 'Uncategorized'}</span>
+                                <span className="truncate">{item.category ? decodeHtmlEntities(item.category) : 'Uncategorized'}</span>
                               </p>
                               {/* Status line — compact, single row */}
                               {item.draftStatus === 'PUBLISHED' ? (
