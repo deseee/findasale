@@ -93,6 +93,12 @@ export const register = async (req: Request, res: Response) => {
       // Generate email verification token
       const emailVerificationToken = crypto.randomBytes(32).toString('hex');
 
+      // Hash deviceFingerprint before storage — raw fingerprint strings can exceed PostgreSQL btree
+      // index row size limit (2704 bytes). SHA-256 produces a fixed 64-char hex string.
+      const hashedFingerprint = deviceFingerprint
+        ? crypto.createHash('sha256').update(deviceFingerprint).digest('hex')
+        : null;
+
       const newUser = await tx.user.create({
         data: {
           email,
@@ -100,17 +106,17 @@ export const register = async (req: Request, res: Response) => {
           role: effectiveRole,
           password: hashedPassword,
           referralCode: userReferralCode,
-          deviceFingerprint: deviceFingerprint || null,
+          deviceFingerprint: hashedFingerprint,
           emailVerified: false, // New accounts must verify email
           emailVerificationToken, // Store token for verification link
         }
       });
 
       // Platform Safety #118: Device Fingerprinting — flag if 2+ accounts share same fingerprint
-      if (deviceFingerprint) {
+      if (hashedFingerprint) {
         const otherAccounts = await tx.user.count({
           where: {
-            deviceFingerprint,
+            deviceFingerprint: hashedFingerprint,
             id: { not: newUser.id }
           }
         });
