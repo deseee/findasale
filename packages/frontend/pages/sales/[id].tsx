@@ -597,6 +597,21 @@ const SaleDetailPage = () => {
           </div>
         )}
 
+        {/* Sale Type Badge — L-001 */}
+        {sale.saleType && (
+          <div className="mb-8">
+            <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold ${
+              sale.saleType === 'AUCTION' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200' :
+              sale.saleType === 'ESTATE_SALE' ? 'bg-sage-100 dark:bg-sage-900/30 text-sage-800 dark:text-sage-200' :
+              sale.saleType === 'YARD_SALE' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200' :
+              sale.saleType === 'FLEA_MARKET' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200' :
+              'bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-gray-300'
+            }`}>
+              {sale.saleType.replace(/_/g, ' ')}
+            </span>
+          </div>
+        )}
+
         {/* Organizer Info Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex items-start justify-between">
@@ -789,12 +804,6 @@ const SaleDetailPage = () => {
               <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
             </div>
 
-            {/* Live Activity — viewer count + recent sale events */}
-            <div className="mt-8 space-y-2">
-              <HypeMeter saleId={sale.id} />
-              <LiveFeedTicker saleId={sale.id} />
-            </div>
-
             {/* SocialProofBadge removed — redundant with LiveFeedTicker */}
           </div>
 
@@ -914,15 +923,21 @@ const SaleDetailPage = () => {
           </div>
         </div>
 
-        {/* Items Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6">
+        {/* Live Activity — viewer count + recent sale events */}
+        <div className="mt-8 space-y-2 mb-8">
+          <HypeMeter saleId={sale.id} />
+          <LiveFeedTicker saleId={sale.id} />
+        </div>
+
+        {/* Items Section — D-006: First full-width section after About/Photo grid */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50">
               {sale.isAuctionSale ? 'Auction Items' : 'Items for Sale'}
             </h2>
             {isOrganizer && sale.items.length > 0 && (
               <div className="flex space-x-2">
-                <Link 
+                <Link
                   href={`/organizer/add-items/${sale.id}`}
                   className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
                 >
@@ -1119,13 +1134,13 @@ const SaleDetailPage = () => {
                             />
                           )}
                         </div>
-                        
+
                         <div className="mb-2">
                           <span className="text-sm text-warm-600 dark:text-gray-300">
                             Minimum bid: {formatPrice((item.currentBid || item.auctionStartPrice) + (item.bidIncrement || 1))}
                           </span>
                         </div>
-                        
+
                         {!isOrganizer && user && item.status === 'AVAILABLE' && item.auctionEndTime && new Date(item.auctionEndTime) > new Date() && (
                           <div className="flex mb-2">
                             <input
@@ -1146,7 +1161,7 @@ const SaleDetailPage = () => {
                             </button>
                           </div>
                         )}
-                        
+
                         {item.status === 'AUCTION_ENDED' && (
                           <div className="text-sm text-center py-2 bg-warm-100 dark:bg-gray-700 rounded text-warm-600 dark:text-gray-400">
                             Auction ended
@@ -1184,7 +1199,7 @@ const SaleDetailPage = () => {
                       </span>
                       {isOrganizer && (
                         <div className="flex gap-2">
-                          <Link 
+                          <Link
                             href={`/organizer/edit-item/${item.id}`}
                             className="text-amber-600 hover:text-amber-800 text-sm"
                           >

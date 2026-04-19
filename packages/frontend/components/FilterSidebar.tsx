@@ -59,13 +59,13 @@ const CheckRow = ({
       type="checkbox"
       checked={selected}
       onChange={onToggle}
-      className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-500"
+      className="w-4 h-4 rounded border-warm-300 dark:border-gray-600 text-amber-600 focus:ring-amber-500"
     />
-    <span className="flex-1 text-sm text-warm-800 capitalize group-hover:text-warm-900">
+    <span className="flex-1 text-sm text-warm-800 dark:text-gray-200 capitalize group-hover:text-warm-900 dark:group-hover:text-gray-100">
       {label}
     </span>
     {count !== null && (
-      <span className="text-xs text-warm-400">{count}</span>
+      <span className="text-xs text-warm-400 dark:text-gray-500">{count}</span>
     )}
   </label>
 );
@@ -78,14 +78,14 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
     <div className="space-y-5">
       {/* Sort */}
       <div>
-        <label htmlFor="item-sort" className="block text-sm font-semibold text-warm-900 mb-2">
+        <label htmlFor="item-sort" className="block text-sm font-semibold text-warm-900 dark:text-gray-200 mb-2">
           Sort by
         </label>
         <select
           id="item-sort"
           value={filters.sort}
           onChange={(e) => onChange({ sort: e.target.value as ItemSearchFilters['sort'], offset: 0 })}
-          className="w-full text-sm border border-warm-300 rounded-lg px-3 py-2 bg-white text-warm-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="w-full text-sm border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-warm-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -97,7 +97,7 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
 
       {/* Category */}
       <div>
-        <p className="text-sm font-semibold text-warm-900 mb-2">Category</p>
+        <p className="text-sm font-semibold text-warm-900 dark:text-gray-200 mb-2">Category</p>
         {CATEGORIES.map((cat) => (
           <CheckRow
             key={cat}
@@ -114,7 +114,7 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
 
       {/* Condition */}
       <div>
-        <p className="text-sm font-semibold text-warm-900 mb-2">Condition</p>
+        <p className="text-sm font-semibold text-warm-900 dark:text-gray-200 mb-2">Condition</p>
         {CONDITIONS.map((cond) => (
           <CheckRow
             key={cond}
@@ -131,7 +131,7 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
 
       {/* Price range */}
       <div>
-        <p className="text-sm font-semibold text-warm-900 mb-2">Price Range</p>
+        <p className="text-sm font-semibold text-warm-900 dark:text-gray-200 mb-2">Price Range</p>
         <div className="flex items-center gap-2">
           <input
             type="number"
@@ -140,9 +140,9 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
             value={filters.priceMin}
             onChange={(e) => onChange({ priceMin: e.target.value, offset: 0 })}
             aria-label="Minimum price"
-            className="w-full text-sm border border-warm-300 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full text-sm border border-warm-300 dark:border-gray-600 rounded-lg px-2 py-2 bg-white dark:bg-gray-800 text-warm-800 dark:text-gray-200 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
-          <span className="text-warm-400 text-sm">–</span>
+          <span className="text-warm-400 dark:text-gray-500 text-sm">–</span>
           <input
             type="number"
             min={0}
@@ -150,7 +150,7 @@ const FiltersContent = ({ filters, facets, onChange, onClear }: Omit<FilterSideb
             value={filters.priceMax}
             onChange={(e) => onChange({ priceMax: e.target.value, offset: 0 })}
             aria-label="Maximum price"
-            className="w-full text-sm border border-warm-300 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full text-sm border border-warm-300 dark:border-gray-600 rounded-lg px-2 py-2 bg-white dark:bg-gray-800 text-warm-800 dark:text-gray-200 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
       </div>
@@ -182,8 +182,8 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
       className="hidden md:block w-56 flex-shrink-0"
       aria-label="Search filters"
     >
-      <div className="sticky top-4 bg-white rounded-xl border border-warm-100 p-4 shadow-sm">
-        <p className="text-base font-bold text-warm-900 mb-4">Filters</p>
+      <div className="sticky top-4 bg-white dark:bg-gray-800 rounded-xl border border-warm-100 dark:border-gray-700 p-4 shadow-sm">
+        <p className="text-base font-bold text-warm-900 dark:text-gray-200 mb-4">Filters</p>
         <FiltersContent filters={filters} facets={facets} onChange={onChange} onClear={onClear} />
       </div>
     </aside>
@@ -203,13 +203,13 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
           aria-hidden="true"
         />
         {/* Drawer */}
-        <div className="relative mt-auto bg-white rounded-t-2xl max-h-[90vh] flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-warm-100">
-            <p className="text-base font-bold text-warm-900">Filters</p>
+        <div className="relative mt-auto bg-white dark:bg-gray-800 rounded-t-2xl max-h-[90vh] flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-warm-100 dark:border-gray-700">
+            <p className="text-base font-bold text-warm-900 dark:text-gray-200">Filters</p>
             <button
               onClick={onMobileClose}
               aria-label="Close filters"
-              className="p-2 text-warm-500 hover:text-warm-900 transition-colors"
+              className="p-2 text-warm-500 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200 transition-colors"
             >
               ✕
             </button>
@@ -217,7 +217,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
           <div className="overflow-y-auto px-4 py-4 flex-1">
             <FiltersContent filters={filters} facets={facets} onChange={onChange} onClear={onClear} />
           </div>
-          <div className="px-4 py-3 border-t border-warm-100">
+          <div className="px-4 py-3 border-t border-warm-100 dark:border-gray-700">
             <button
               onClick={onMobileClose}
               className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-xl transition-colors"

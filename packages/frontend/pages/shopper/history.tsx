@@ -314,9 +314,9 @@ const PurchaseHistoryPage = () => {
                             <p className="text-sm text-warm-600 dark:text-warm-400">From: {purchase.sale?.organizer?.businessName || purchase.sale?.title || 'Unknown'}</p>
                             <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">{new Date(purchase.createdAt).toLocaleDateString()}</p>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-xl font-bold text-warm-900 dark:text-warm-100">${typeof purchase.amount === 'number' ? purchase.amount.toFixed(2) : purchase.amount}</p>
-                            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          <div className="text-right flex-shrink-0 ml-4 whitespace-nowrap">
+                            <p className="text-xl font-bold text-warm-900 dark:text-warm-100 whitespace-nowrap">${typeof purchase.amount === 'number' ? purchase.amount.toFixed(2) : purchase.amount}</p>
+                            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
                               purchase.status === 'completed' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300' : 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300'
                             }`}>
                               {purchase.status}
