@@ -199,7 +199,7 @@ const ReviewPage = () => {
   const [bulkCategory, setBulkCategory] = useState('');
   const [showBuyerPreview, setShowBuyerPreview] = useState(router.query.preview === 'true');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'status' | 'date'>('date');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [inlineCameraOpen, setInlineCameraOpen] = useState(false);
   const [inlineCaptureMode, setInlineCaptureMode] = useState<'rapidfire' | 'regular'>('regular');
   const [inlineCaptureItemId, setInlineCaptureItemId] = useState<string | null>(null);
