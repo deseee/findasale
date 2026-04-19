@@ -2262,3 +2262,47 @@ export const testInAppPayment = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: 'In-app payment test failed', details: error.message });
   }
 };
+
+// Creates an unconfirmed $1 test PaymentIntent and returns clientSecret so the
+// organizer can experience the full Stripe Elements form (the real shopper checkout UI).
+export const testInAppIntent = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const { saleId } = req.body as { saleId?: string };
+    if (!saleId || typeof saleId !== 'string') {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'You do not own this sale' });
+    }
+
+    const testStripe = getTestStripe();
+
+    // Create an UNconfirmed PaymentIntent — organizer completes it via Stripe Elements
+    const paymentIntent = await testStripe.paymentIntents.create({
+      amount: 100, // $1.00
+      currency: 'usd',
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        isTestTransaction: 'true',
+        saleId,
+        source: 'in_app_ui_test',
+      },
+    });
+
+    return res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (error: any) {
+    console.error('[test-in-app-intent] error:', error);
+    return res.status(500).json({ message: 'Could not create test payment session', details: error.message });
+  }
+};

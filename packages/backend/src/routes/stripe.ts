@@ -10,6 +10,7 @@ import {
   testTransaction,
   testCheckoutSession,
   testInAppPayment,
+  testInAppIntent,
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
 import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown } from '../controllers/payoutController';
@@ -58,6 +59,7 @@ router.post('/terminal/cash-payment', authenticate, cashPayment);
 router.post('/test-transaction', authenticate, testTransaction);
 router.post('/test-checkout-session', authenticate, testCheckoutSession);
 router.post('/test-in-app-payment', authenticate, testInAppPayment);
+router.post('/test-in-app-intent', authenticate, testInAppIntent);
 
 // Webhook
 router.post('/webhook', webhookHandler);
