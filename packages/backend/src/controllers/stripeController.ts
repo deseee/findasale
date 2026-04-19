@@ -88,10 +88,10 @@ const sendReceiptEmail = async (purchase: {
     }
 
     const saleDate = purchase.sale?.startDate && purchase.sale?.endDate
-      ? ` (${new Date(purchase.sale.startDate).toLocaleDateString()} - ${new Date(purchase.sale.endDate).toLocaleDateString()})`
+      ? ` (${new Date(purchase.sale!.startDate).toLocaleDateString()} - ${new Date(purchase.sale!.endDate).toLocaleDateString()})`
       : '';
 
-    const organizerName = purchase.sale?.organizer?.businessName ? `<p style="margin-top: 12px; color: #6b7280; font-size: 14px;">Organized by: <strong>${purchase.sale.organizer.businessName}</strong></p>` : '';
+    const organizerName = purchase.sale?.organizer?.businessName ? `<p style="margin-top: 12px; color: #6b7280; font-size: 14px;">Organized by: <strong>${purchase.sale!.organizer.businessName}</strong></p>` : '';
 
     const html = buildEmail({
       preheader: `Receipt for ${purchase.item?.title ?? 'your purchase'} - Transaction ID: ${purchase.id.slice(0, 8)}`,
@@ -289,11 +289,11 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
       if (updatedItem) {
         try {
           const io = getIO();
-          pushEvent(io, updatedItem.saleId, {
+          pushEvent(io, updatedItem.saleId ?? '', {
             type: 'SOLD',
             itemTitle: updatedItem.title,
             amount: updatedItem.price || undefined,
-            saleId: updatedItem.saleId,
+            saleId: updatedItem.saleId ?? '',
             timestamp: new Date(),
           });
         } catch (err) {
@@ -362,11 +362,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(409).json({ message: `Item is no longer available (status: ${item.status})` });
     }
 
-    if (!item.sale.organizer.stripeConnectId) {
+    if (!item.sale!.organizer.stripeConnectId) {
       return res.status(400).json({ message: 'Organizer has not set up payment processing' });
     }
 
-    if (item.sale.organizer.userId === req.user.id) {
+    if (item.sale!.organizer.userId === req.user.id) {
       return res.status(400).json({ message: 'You cannot purchase items from your own sale' });
     }
 
@@ -408,9 +408,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     }
 
     const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const baseFeePercent = feeStructure?.feeRate ?? getPlatformFeeRate(item.sale.organizer.subscriptionTier as any);
+    const baseFeePercent = feeStructure?.feeRate ?? getPlatformFeeRate(item.sale!.organizer.subscriptionTier as any);
 
-    const discountExpiry = item.sale.organizer.referralDiscountExpiry;
+    const discountExpiry = item.sale!.organizer.referralDiscountExpiry;
     const hasReferralDiscount = discountExpiry != null && discountExpiry > new Date();
     const feePercent = hasReferralDiscount ? 0 : baseFeePercent;
 
@@ -458,7 +458,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const idempotencyKey = `pi-${itemId}-${req.user.id}${couponSuffix}`;
 
     let paymentIntent;
-    const stripeConnectId = item.sale.organizer.stripeConnectId;
+    const stripeConnectId = item.sale!.organizer.stripeConnectId;
     const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
 
     const basePaymentIntentData = {
@@ -466,7 +466,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       currency: 'usd',
       metadata: {
         itemId: item.id,
-        saleId: item.sale.id,
+        saleId: item.sale!.id,
         userId: req.user.id,
         ...(affiliateLinkId ? { affiliateLinkId } : {}),
         ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
@@ -511,7 +511,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       data: {
         userId: req.user.id,
         itemId: item.id,
-        saleId: item.sale.id,
+        saleId: item.sale!.id,
         amount: finalPriceCents / 100,
         platformFeeAmount: platformFeeAmount / 100,
         stripePaymentIntentId: paymentIntent.id,
@@ -543,8 +543,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     }).catch(err => console.warn('[checkoutEvidence] Failed to save checkout evidence:', err));
 
     // Format sale dates for display
-    const saleStartDate = item.sale.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    const saleEndDate = item.sale.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const saleStartDate = item.sale!.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const saleEndDate = item.sale!.endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const saleDates = `${saleStartDate} - ${saleEndDate}`;
 
     res.json({
@@ -560,8 +560,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       // Legacy fields for backwards compatibility
       originalAmount: price,
       buyerPremium: buyerPremiumAmount / 100,
-      saleName: item.sale.title,
-      saleAddress: `${item.sale.address}, ${item.sale.city}, ${item.sale.state}`,
+      saleName: item.sale!.title,
+      saleAddress: `${item.sale!.address}, ${item.sale!.city}, ${item.sale!.state}`,
       saleDates: saleDates,
       ...(couponCode ? { couponCode } : {}),
     });
@@ -1000,7 +1000,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // Notify organizer of payment received
         if (purchase.sale?.organizer?.userId) {
           createNotification({
-            userId: purchase.sale.organizer.userId,
+            userId: purchase.sale!.organizer.userId,
             type: 'payment_received',
             title: 'Payment received',
             body: `Payment of $${(paymentIntent.amount_received / 100).toFixed(2)} received for "${purchase.item?.title || 'item'}"`,
@@ -1050,11 +1050,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
           if (soldItem) {
             try {
               const io = getIO();
-              pushEvent(io, soldItem.saleId, {
+              pushEvent(io, soldItem.saleId!, {
                 type: 'SOLD',
                 itemTitle: soldItem.title,
                 amount: soldItem.price || undefined,
-                saleId: soldItem.saleId,
+                saleId: soldItem.saleId!,
                 timestamp: new Date(),
               });
             } catch (err) {
@@ -1063,14 +1063,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
             try {
               const io = getIO();
-              await pushSaleStatus(io, soldItem.saleId);
+              await pushSaleStatus(io, soldItem.saleId!);
             } catch (err) {
               console.warn('[saleStatus] Failed to push status update:', err);
             }
 
             try {
               const saleData = await prisma.sale.findUnique({
-                where: { id: soldItem.saleId },
+                where: { id: soldItem.saleId! },
                 include: { organizer: { include: { user: { select: { email: true, name: true } } } } },
               });
               if (saleData?.organizer?.user) {
@@ -1081,7 +1081,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     itemTitle: soldItem.title,
                     saleTitle: saleData.title,
                     price: soldItem.price || 0,
-                    saleId: soldItem.saleId,
+                    saleId: soldItem.saleId!,
                   }).catch(err => console.warn('[alert] Failed to send item sold email:', err));
                 });
               }
@@ -1226,7 +1226,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // Feature #107: Record chargeback incident in fraud tracking
             const { recordChargebackIncident } = await import('../services/fraudService');
             await recordChargebackIncident(
-              purchase.item.sale.organizerId,
+              purchase.item.sale!.organizerId,
               purchase.id,
               dispute.id
             );
@@ -1485,7 +1485,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
               // Look up organizer tier for fee calculation
               const posOrganizerTier = posPaymentLink.saleId
-                ? (await tx.sale.findUnique({
+                ? (await tx.sale!.findUnique({
                     where: { id: posPaymentLink.saleId },
                     select: { organizer: { select: { subscriptionTier: true } } },
                   }))?.organizer?.subscriptionTier ?? null
@@ -1663,7 +1663,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             if (resend) {
               const fromEmail = process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale';
               const itemList = bundledItems.length > 1
-                ? `${bundledItems.length} items from ${holdInvoice.sale.title}`
+                ? `${bundledItems.length} items from ${holdInvoice.sale!.title}`
                 : bundledItems[0]?.title;
               const totalPaid = (holdInvoice.totalAmount / 100).toFixed(2);
               const platformFee = (holdInvoice.platformFeeAmount / 100).toFixed(2);

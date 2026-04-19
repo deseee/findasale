@@ -40,7 +40,7 @@ export async function closeAuction(itemId: string): Promise<void> {
     }
 
     const highestBid = item.bids[0];
-    const organizerId = item.sale.organizer.userId;
+    const organizerId = item.sale!.organizer.userId;
 
     if (!highestBid) {
       // No bids — just mark closed and notify organizer

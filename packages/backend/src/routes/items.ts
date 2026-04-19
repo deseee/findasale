@@ -142,7 +142,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), async (req, res) => {
     });
 
     const unauthorised = items.filter(
-      (i) => i.sale.organizer.userId !== authReq.user!.id
+      (i) => i.sale!.organizer.userId !== authReq.user!.id
     );
     if (unauthorised.length > 0) {
       // P0 Fix 1: Hide item existence — return 404 instead of 403 to prevent auth bypass
@@ -662,7 +662,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
     });
 
     const unauthorised = items.filter(
-      (i) => i.sale.organizer.userId !== authReq.user!.id
+      (i) => i.sale!.organizer.userId !== authReq.user!.id
     );
     if (unauthorised.length > 0) {
       // P0 Fix 1: Hide item existence — return 404 instead of 403 to prevent auth bypass

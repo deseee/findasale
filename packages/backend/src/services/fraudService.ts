@@ -278,7 +278,7 @@ export async function checkWinningBidVelocity(
       );
 
       // Create fraud signal (item.saleId! — auction items always have saleId by domain invariant)
-      if (!item.saleId) return; // skip if item has no saleId (shouldn't happen for auction items)
+      if (!item.saleId) return { isSuspicious: false, holdDuration: 0 }; // skip if item has no saleId
       const sale = await prisma.sale.findUnique({
         where: { id: item.saleId },
         select: { organizerId: true },

@@ -334,11 +334,11 @@ export const getComps = async (req: AuthRequest, res: Response) => {
     }
 
     // Verify organizer owns this item
-    // userId is User.id, but item.sale.organizerId is Organizer.id, so we need to look up the organizer first
+    // userId is User.id, but item.sale!.organizerId is Organizer.id, so we need to look up the organizer first
     const organizer = await prisma.organizer.findUnique({
       where: { userId },
     });
-    if (!organizer || item.sale.organizerId !== organizer.id) {
+    if (!organizer || item.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Not authorized to access this item' });
     }
 
@@ -1444,7 +1444,7 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
       where: { userId },
     });
 
-    if (!organizer || item.sale.organizerId !== organizer.id) {
+    if (!organizer || item.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Not authorized to preview this item' });
     }
 
@@ -3552,7 +3552,7 @@ export const handleEbayNotification = async (req: express.Request, res: Response
       const legacyItemId = lineItem.legacyItemId || '';
 
       // Match FindA.Sale item by SKU (FAS-{itemId}) or by legacyItemId (eBay listing ID)
-      let matchedItem: { id: string; title: string; saleId: string; ebayOfferId: string | null; sale: { organizerId: string; organizer: { userId: string } } } | null = null;
+      let matchedItem: { id: string; title: string; saleId: string | null; ebayOfferId: string | null; sale: { organizerId: string; organizer: { userId: string } } | null } | null = null;
 
       if (sku.startsWith('FAS-')) {
         const itemId = sku.substring(4);
@@ -3586,11 +3586,11 @@ export const handleEbayNotification = async (req: express.Request, res: Response
       // Notify organizer
       await prisma.notification.create({
         data: {
-          userId: matchedItem.sale.organizer.userId,
+          userId: matchedItem.sale!.organizer.userId,
           type: 'SALE_UPDATE',
           title: 'Item sold on eBay',
           body: `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
-          link: `/organizer/sales/${matchedItem.saleId}`,
+          link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : '/organizer/inventory',
           notificationChannel: 'IN_APP',
         },
       });
@@ -3720,7 +3720,7 @@ export const setEbayShippingOverride = async (req: AuthRequest, res: Response) =
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale.organizerId !== organizer.id) {
+    if (item.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Not authorized to modify this item' });
     }
 

@@ -50,7 +50,7 @@ export function scheduleAuctionAutoCloseCron() {
 
         // Notify organizer of auction closure
         await createNotification(
-          item.sale.organizer.userId,
+          item.sale!.organizer.userId,
           'AUCTION_CLOSED',
           'Auction Closed',
           `Your auction for ${item.title} has ended. Final bid: $${(item.currentBid ?? 0).toFixed(2)}`,

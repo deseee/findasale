@@ -894,7 +894,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     }
 
     // Verify organizer owns the sale
-    const organizer = reservation.item.sale.organizer;
+    const organizer = reservation.item.sale!.organizer;
     if (organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied — you do not own this sale' });
     }
@@ -1053,8 +1053,8 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         if (resend) {
           const expiryTime = new Date(expiresAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
           const itemList = bundledItemIds.length > 1
-            ? `${bundledItemIds.length} items from ${reservation.item.sale.title}`
-            : `${allShopperHolds[0]?.item.title} from ${reservation.item.sale.title}`;
+            ? `${bundledItemIds.length} items from ${reservation.item.sale!.title}`
+            : `${allShopperHolds[0]?.item.title} from ${reservation.item.sale!.title}`;
 
           await resend.emails.send({
             from: process.env.RESEND_FROM_EMAIL || 'invoices@finda.sale',
@@ -1256,7 +1256,7 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     const userOrganizer2 = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
     });
-    if (reservation.item.sale.organizerId !== userOrganizer2?.id) {
+    if (reservation.item.sale!.organizerId !== userOrganizer2?.id) {
       return res.status(403).json({ message: 'Access denied — you do not own this sale' });
     }
 
@@ -1349,8 +1349,8 @@ export const getMyHoldsFull = async (req: AuthRequest, res: Response) => {
         photoUrls: hold.item.photoUrls,
         status: hold.item.status,
         sale: {
-          id: hold.item.sale.id,
-          title: hold.item.sale.title,
+          id: hold.item.sale!.id,
+          title: hold.item.sale!.title,
         },
       },
     }));

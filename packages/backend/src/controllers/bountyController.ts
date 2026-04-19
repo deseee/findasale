@@ -155,7 +155,7 @@ export const fulfillBounty = async (req: AuthRequest, res: Response) => {
     });
     if (!bounty) return res.status(404).json({ message: 'Bounty not found.' });
     if (!bounty.sale) return res.status(400).json({ message: 'This bounty is not linked to a sale.' });
-    if (bounty.sale.organizer.userId !== req.user.id) {
+    if (bounty.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Not your sale.' });
     }
     if (bounty.status !== 'OPEN') {
@@ -329,7 +329,7 @@ export const submitBountySubmission = async (req: AuthRequest, res: Response) =>
       include: { sale: true },
     });
     if (!item) return res.status(404).json({ message: 'Item not found.' });
-    if (item.sale.organizerId !== organizerId) {
+    if (item.sale!.organizerId !== organizerId) {
       return res.status(403).json({ message: 'Item does not belong to you.' });
     }
     if (item.status === 'DRAFT') {
@@ -554,7 +554,7 @@ export const matchItemToBounties = async (req: AuthRequest, res: Response) => {
       include: { sale: true },
     });
     if (!item) return res.status(404).json({ message: 'Item not found.' });
-    if (item.sale.organizerId !== organizerId) {
+    if (item.sale!.organizerId !== organizerId) {
       return res.status(403).json({ message: 'Item does not belong to you.' });
     }
 

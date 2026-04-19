@@ -224,6 +224,7 @@ export async function getCommandCenterSummary(
 
   const statusMap = new Map<string, Record<string, number>>();
   itemStatus.forEach((s) => {
+    if (!s.saleId) return; // inventory items have no saleId — skip
     if (!statusMap.has(s.saleId)) {
       statusMap.set(s.saleId, {});
     }

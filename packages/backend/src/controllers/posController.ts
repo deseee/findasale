@@ -199,7 +199,7 @@ export const pullCart = async (req: AuthRequest, res: Response) => {
     });
 
     if (!session) return res.status(404).json({ message: 'Session not found' });
-    if (session.sale.organizerId !== organizer.id) {
+    if (session.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Session does not belong to your sale' });
     }
 
@@ -516,7 +516,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     });
 
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
-    if (reservation.item.sale.organizerId !== organizer.id) {
+    if (reservation.item.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Reservation does not belong to your sale' });
     }
 
@@ -538,7 +538,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         reservationId,
         shopperUserId: reservation.userId,
         organizerUserId: organizer.id,
-        saleId: reservation.item.sale.id,
+        saleId: reservation.item.sale!.id,
         itemIds: [reservation.itemId],
         totalAmount: grandTotal,
         platformFeeAmount,
@@ -702,7 +702,7 @@ export const requestCartShare = async (req: AuthRequest, res: Response) => {
     });
 
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
-    if (reservation.item.sale.organizerId !== organizer.id) {
+    if (reservation.item.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Reservation does not belong to your sale' });
     }
 
@@ -712,8 +712,8 @@ export const requestCartShare = async (req: AuthRequest, res: Response) => {
     try {
       const io = getIO();
       io.to(`user:${shopperId}`).emit('CART_SHARE_REQUEST', {
-        saleId: reservation.item.sale.id,
-        saleName: reservation.item.sale.title,
+        saleId: reservation.item.sale!.id,
+        saleName: reservation.item.sale!.title,
       });
     } catch (socketErr) {
       console.warn('[pos] CART_SHARE_REQUEST socket emit failed:', socketErr);
@@ -726,7 +726,7 @@ export const requestCartShare = async (req: AuthRequest, res: Response) => {
         type: 'cart_share_request',
         title: 'Cashier is ready for you',
         body: `Open the app and tap "Share cart with cashier" to check out.`,
-        link: `/sales/${reservation.item.sale.id}`,
+        link: `/sales/${reservation.item.sale!.id}`,
       });
     } catch (notifErr) {
       console.warn('[pos] CART_SHARE_REQUEST notification failed:', notifErr);
@@ -760,7 +760,7 @@ export const deleteSession = async (req: AuthRequest, res: Response) => {
     });
 
     if (!session) return res.status(404).json({ message: 'Session not found' });
-    if (session.sale.organizerId !== organizer.id) {
+    if (session.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Session does not belong to your sale' });
     }
 
@@ -800,7 +800,7 @@ export const searchShopperHolds = async (req: AuthRequest, res: Response) => {
     });
 
     if (!session) return res.status(404).json({ message: 'Session not found' });
-    if (session.sale.organizerId !== organizer.id) {
+    if (session.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Session does not belong to your sale' });
     }
 
@@ -865,7 +865,7 @@ export const pullHoldsToCart = async (req: AuthRequest, res: Response) => {
     });
 
     if (!session) return res.status(404).json({ message: 'Session not found' });
-    if (session.sale.organizerId !== organizer.id) {
+    if (session.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Session does not belong to your sale' });
     }
 
@@ -960,7 +960,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     });
 
     if (!session) return res.status(404).json({ message: 'Session not found' });
-    if (session.sale.organizerId !== organizer.id) {
+    if (session.sale!.organizerId !== organizer.id) {
       return res.status(403).json({ message: 'Session does not belong to your sale' });
     }
 
@@ -982,7 +982,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
 
     // Validate held items
     for (const heldItem of heldReservations) {
-      if ((heldItem.item.saleId ?? '') !== session.sale.id) {
+      if ((heldItem.item.saleId ?? '') !== session.sale!.id) {
         return res.status(403).json({ message: 'Hold does not belong to this session sale' });
       }
       if (heldItem.status !== 'HOLD_IN_CART') {
@@ -1091,7 +1091,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
               itemIds: bundledItemIds.join(','),
               shopperId: shopper.id,
               organizerId: organizer.id,
-              saleId: session.sale.id,
+              saleId: session.sale!.id,
             },
             application_fee_amount: platformFeeCents,
             transfer_data: {
@@ -1120,7 +1120,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
           ...(heldReservations.length > 0 ? { reservationId: heldReservations[0].id } : {}),
           shopperUserId: shopper.id,
           organizerUserId: organizer.id,
-          saleId: session.sale.id,
+          saleId: session.sale!.id,
           stripeSessionId,
           totalAmount: grandTotalCents,
           platformFeeAmount: platformFeeCents,

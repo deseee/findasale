@@ -118,7 +118,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
     if (!item) return res.status(404).json({ message: 'Item not found.' });
 
     // Only organizer who owns the sale
-    if (item.sale.organizer.userId !== req.user.id) {
+    if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Not your item.' });
     }
 
@@ -137,7 +137,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="label-${id}.pdf"`);
     doc.pipe(res);
 
-    await drawLabel(doc, item, item.sale.title, qrBuffer);
+    await drawLabel(doc, item, item.sale!.title, qrBuffer);
 
     doc.end();
   } catch (error) {

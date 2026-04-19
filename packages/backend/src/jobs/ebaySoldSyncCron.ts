@@ -23,7 +23,7 @@ interface EbayItem {
   ebayListingId: string | null;
   ebayOfferId: string | null;
   title: string;
-  saleId: string;
+  saleId: string | null; // Feature #300: nullable — inventory items have no sale
 }
 
 interface SyncResult {
@@ -182,7 +182,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
             type: 'SALE_UPDATE',
             title: 'Item sold on eBay',
             body: `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
-            link: `/organizer/sales/${matchedItem.saleId}`,
+            link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : `/organizer/inventory`,
             notificationChannel: 'IN_APP',
           },
         });

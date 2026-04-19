@@ -69,8 +69,8 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
           photoUrls: item.photoUrls,
         },
         sale: {
-          id: item.sale.id,
-          title: item.sale.title,
+          id: item.sale!.id,
+          title: item.sale!.title,
         },
       };
     });
