@@ -49,7 +49,7 @@ const InventoryPage: React.FC = () => {
 
   const { showToast } = useToast();
   const { inventoryItems, loading, isRemovingFromInventory, isPullingFromInventory, removeFromInventory, pullFromInventory, getPriceHistory } =
-    useInventory(user?.role === 'ORGANIZER' ? user?.id : undefined);
+    useInventory(user?.roles?.includes('ORGANIZER') ? user?.id : undefined);
 
   // Filter items
   const filteredItems = useMemo(() => {
