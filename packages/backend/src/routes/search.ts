@@ -137,6 +137,8 @@ router.get('/', async (req: Request, res: Response) => {
               category: true,
               condition: true,
               status: true,
+              priceBeforeMarkdown: true,
+              markdownApplied: true,
               sale: {
                 select: {
                   id: true,
@@ -269,6 +271,8 @@ router.get('/categories/:category', async (req: Request, res: Response) => {
           photoUrls: true,
           category: true,
           condition: true,
+          priceBeforeMarkdown: true,
+          markdownApplied: true,
           sale: {
             select: {
               id: true,
@@ -328,6 +332,8 @@ router.get('/random', async (req: Request, res: Response) => {
       photo_urls: string[];
       category: string | null;
       condition: string | null;
+      price_before_markdown: number | null;
+      markdown_applied: boolean;
       sale_id: string;
       sale_title: string;
       sale_city: string;
@@ -471,6 +477,8 @@ router.post('/visual', upload.single('photo'), async (req: Request, res: Respons
         category: true,
         condition: true,
         status: true,
+        priceBeforeMarkdown: true,
+        markdownApplied: true,
         sale: {
           select: {
             id: true,
