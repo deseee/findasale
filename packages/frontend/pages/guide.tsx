@@ -303,10 +303,10 @@ const sections: Section[] = [
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">3. Test Online Checkout (if using self-checkout QR codes)</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          If shoppers will scan QR codes to buy items on their phones, test that flow before you print
-          your QR materials. Open your sale's public page, tap through to checkout on any priced item,
-          and use test card number <strong>4242 4242 4242 4242</strong> with any future expiry date and
-          any CVC. Confirm the purchase appears in your Earnings view.
+          Open the Promote page for your sale and tap &quot;Test Online Checkout&quot;. You&apos;ll get a link and QR code — click to open on desktop, or scan with your phone to test the real mobile experience. Use card <strong>4242 4242 4242 4242</strong> with any future expiry and any CVC. Your inventory won&apos;t change — the test is fully isolated.
+        </p>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed mt-3">
+          If you&apos;re running an auction, tap &quot;Test Auction Checkout&quot; to verify the winner payment flow works the same way.
         </p>
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">4. Walk Through the POS Flow Once</h3>

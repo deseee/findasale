@@ -129,6 +129,17 @@ const SalePlanPage = () => {
     }
   }, [currentStage, expandedStage]);
 
+  // Handle test checkout success redirect
+  React.useEffect(() => {
+    if (router.query.testCheckout === 'success') {
+      const type = router.query.type === 'auction' ? 'Auction checkout' : 'Online checkout';
+      showToast(`${type} test passed — inventory untouched ✓`, 'success');
+      // Clean URL
+      const { testCheckout, type: _, ...rest } = router.query;
+      router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
+    }
+  }, [router.query.testCheckout, showToast, router]);
+
   // Calculate overall progress
   const totalTasks = items.length;
   const completedTasks = items.filter((i) => i.completed).length;
