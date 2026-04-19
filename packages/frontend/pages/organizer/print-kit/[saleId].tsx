@@ -521,7 +521,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               {/* Sign Templates Section */}
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                 <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Sign Templates</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   {/* Yard Sign */}
                   <div className="text-center">
                     <button

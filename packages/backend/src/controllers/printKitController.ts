@@ -741,6 +741,10 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
     const TAB_HEIGHT = 292;
     const TAB_Y_START = CUT_LINE_Y + 5;
 
+    // Build the vertical text string for each tab (reads bottom-to-top when rotated)
+    const addressLine = [sale.address, sale.city, sale.state].filter(Boolean).join(', ');
+    const tabLines = [sale.title, `${startDate} – ${endDate}`, addressLine, 'finda.sale'].filter(Boolean).join('  ·  ');
+
     for (let i = 0; i < TABS_PER_ROW; i++) {
       const tabX = MARGIN_SIDE + i * TAB_WIDTH;
 
@@ -755,61 +759,31 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
           .undash();
       }
 
-      // Small QR code — centered in tab, ~60pt
-      const qrSmallSize = 60;
+      // Small QR code — centered in tab top
+      const qrSmallSize = 55;
       const qrSmallX = tabX + (TAB_WIDTH - qrSmallSize) / 2;
-      const qrSmallY = TAB_Y_START + 15;
+      const qrSmallY = TAB_Y_START + 8;
       doc.image(qrSmall, qrSmallX, qrSmallY, { width: qrSmallSize, height: qrSmallSize });
 
-      // Sale title — truncated, tiny font (6pt), centered below QR
-      const titleText = sale.title.length > 12
-        ? sale.title.slice(0, 10) + '…'
-        : sale.title;
-      let textY = qrSmallY + qrSmallSize + 4;
+      // Vertical text — rotated 90° CCW (reads bottom-to-top)
+      // Available vertical space below QR: PAGE_H - (qrSmallY + qrSmallSize + 8) ≈ 220pt
+      const textAreaTop = qrSmallY + qrSmallSize + 8;
+      const textAreaHeight = PAGE_H - textAreaTop - 10;
+
+      doc.save();
+      // Translate to bottom-left of text area, rotate -90° so text reads upward
+      doc.translate(tabX + TAB_WIDTH / 2 + 4, PAGE_H - 10);
+      doc.rotate(-90);
       doc
         .font('Helvetica-Bold')
-        .fontSize(5.5)
+        .fontSize(7)
         .fillColor('#1a1a2e')
-        .text(titleText, tabX + 2, textY, {
-          width: TAB_WIDTH - 4,
-          align: 'center',
+        .text(tabLines, 0, 0, {
+          width: textAreaHeight,
+          align: 'left',
           lineBreak: false,
         });
-
-      // Date range
-      textY += 9;
-      doc
-        .font('Helvetica')
-        .fontSize(4.5)
-        .fillColor('#444444')
-        .text(`${startDate} – ${endDate}`, tabX + 2, textY, {
-          width: TAB_WIDTH - 4,
-          align: 'center',
-          lineBreak: false,
-        });
-
-      // Address (city, state)
-      if (sale.city && sale.state) {
-        textY += 8;
-        doc
-          .fontSize(4.5)
-          .fillColor('#444444')
-          .text(`${sale.city}, ${sale.state}`, tabX + 2, textY, {
-            width: TAB_WIDTH - 4,
-            align: 'center',
-            lineBreak: false,
-          });
-      }
-
-      // finda.sale branding — tiny text (5pt) at bottom of tab
-      doc
-        .fontSize(5)
-        .fillColor('#999999')
-        .text('finda.sale', tabX + 2, PAGE_H - 20, {
-          width: TAB_WIDTH - 4,
-          align: 'center',
-          lineBreak: false,
-        });
+      doc.restore();
     }
 
     doc.end();
@@ -1451,6 +1425,10 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
     const TEAR_OFF_TAB_HEIGHT = 292;
     const TEAR_OFF_TAB_Y_START = TEAR_OFF_CUT_Y + 5;
 
+    // Build the vertical text string for each tab (reads bottom-to-top when rotated)
+    const fkAddressLine = [sale.address, sale.city, sale.state].filter(Boolean).join(', ');
+    const fkTabLines = [sale.title, `${startDate} – ${endDate}`, fkAddressLine, 'finda.sale'].filter(Boolean).join('  ·  ');
+
     for (let i = 0; i < TEAR_OFF_TABS_PER_ROW; i++) {
       const tabX = TEAR_OFF_MARGIN_SIDE + i * TEAR_OFF_TAB_WIDTH;
 
@@ -1465,61 +1443,29 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
           .undash();
       }
 
-      // Small QR code
-      const smallQrSize = 60;
+      // Small QR code — centered in tab top
+      const smallQrSize = 55;
       const smallQrX = tabX + (TEAR_OFF_TAB_WIDTH - smallQrSize) / 2;
-      const smallQrY = TEAR_OFF_TAB_Y_START + 15;
+      const smallQrY = TEAR_OFF_TAB_Y_START + 8;
       doc.image(qrTearOffSmall, smallQrX, smallQrY, { width: smallQrSize, height: smallQrSize });
 
-      // Sale title (truncated)
-      const titleText = sale.title.length > 12
-        ? sale.title.slice(0, 10) + '…'
-        : sale.title;
-      let tabTextY = smallQrY + smallQrSize + 4;
+      // Vertical text — rotated 90° CCW (reads bottom-to-top)
+      const fkTextAreaTop = smallQrY + smallQrSize + 8;
+      const fkTextAreaHeight = PAGE_H - fkTextAreaTop - 10;
+
+      doc.save();
+      doc.translate(tabX + TEAR_OFF_TAB_WIDTH / 2 + 4, PAGE_H - 10);
+      doc.rotate(-90);
       doc
         .font('Helvetica-Bold')
-        .fontSize(5.5)
+        .fontSize(7)
         .fillColor('#1a1a2e')
-        .text(titleText, tabX + 2, tabTextY, {
-          width: TEAR_OFF_TAB_WIDTH - 4,
-          align: 'center',
+        .text(fkTabLines, 0, 0, {
+          width: fkTextAreaHeight,
+          align: 'left',
           lineBreak: false,
         });
-
-      // Date range
-      tabTextY += 9;
-      doc
-        .font('Helvetica')
-        .fontSize(4.5)
-        .fillColor('#444444')
-        .text(`${startDate} – ${endDate}`, tabX + 2, tabTextY, {
-          width: TEAR_OFF_TAB_WIDTH - 4,
-          align: 'center',
-          lineBreak: false,
-        });
-
-      // Address (city, state)
-      if (sale.city && sale.state) {
-        tabTextY += 8;
-        doc
-          .fontSize(4.5)
-          .fillColor('#444444')
-          .text(`${sale.city}, ${sale.state}`, tabX + 2, tabTextY, {
-            width: TEAR_OFF_TAB_WIDTH - 4,
-            align: 'center',
-            lineBreak: false,
-          });
-      }
-
-      // finda.sale at bottom of tab
-      doc
-        .fontSize(5)
-        .fillColor('#999999')
-        .text('finda.sale', tabX + 2, PAGE_H - 20, {
-          width: TEAR_OFF_TAB_WIDTH - 4,
-          align: 'center',
-          lineBreak: false,
-        });
+      doc.restore();
     }
 
     // PAGE 5: Check-In / Virtual Queue QR
