@@ -21,6 +21,11 @@ export interface PricingInsights {
   priceDropRate: number;
 }
 
+export interface Recommendation {
+  text: string;
+  type: 'positive' | 'warning' | 'neutral';
+}
+
 export interface FlipReport {
   saleId: string;
   saleTitle: string;
@@ -35,7 +40,7 @@ export interface FlipReport {
   unsoldItems: Array<{ id: string; title: string; askingPrice: number | null; category: string | null }>;
   categoryBreakdown: CategoryBreakdown[];
   pricingInsights: PricingInsights;
-  recommendations: string[];
+  recommendations: Recommendation[];
 }
 
 /**

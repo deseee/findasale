@@ -249,8 +249,8 @@ const InventoryPage: React.FC = () => {
             ) : filteredItems.length === 0 ? (
               <EmptyState
                 icon="📦"
-                heading="No items match your filters"
-                subtext="Try adjusting your search terms, category, or price range to find items in your inventory."
+                heading={searchQuery || categoryFilter || conditionFilter || minPrice || maxPrice ? "No items match your filters" : "Your inventory is empty"}
+                subtext={searchQuery || categoryFilter || conditionFilter || minPrice || maxPrice ? "Try adjusting your search terms, category, or price range to find items in your inventory." : "Add items to get started building your inventory."}
               />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -297,7 +297,7 @@ const MapPage = () => {
                 {isLoading ? '...' : `${saleCount} sale${saleCount !== 1 ? 's' : ''} near you`}
               </p>
             </div>
-            <div className="flex gap-2 flex-shrink-0">
+            <div className="flex gap-2 flex-shrink-0 pr-4">
               <button
                 onClick={() => {
                   const routeBuilder = document.getElementById('route-builder');
