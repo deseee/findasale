@@ -30,7 +30,7 @@ export const RippleIndicator: React.FC<RippleIndicatorProps> = ({
   // Record a view event when component mounts (only for organizers)
   // BUG-13: Only fire ripples POST if user is organizer, not shopper
   useEffect(() => {
-    if (!hasRecordedView && saleId && (session?.user as any)?.role === 'ORGANIZER') {
+    if (!hasRecordedView && saleId && (session?.user as any)?.roles?.includes('ORGANIZER')) {
       recordView({ saleId, type: 'VIEW' });
       setHasRecordedView(true);
     }

@@ -46,7 +46,7 @@ const BountyModal: React.FC<Props> = ({ saleId, saleStatus }) => {
   };
 
   // Don't render for ended sales or organizers
-  if (saleStatus === 'ENDED' || user?.role === 'ORGANIZER') return null;
+  if (saleStatus === 'ENDED' || user?.roles?.includes('ORGANIZER')) return null;
 
   return (
     <>

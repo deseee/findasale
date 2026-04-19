@@ -27,6 +27,9 @@ const H_GAP = 9;         // 0.125" gutter between columns
 const LEFT_MARGIN = 13.5; // 3/16"
 const TOP_MARGIN = 36;    // 0.5"
 
+// QR code standard sizes for label printing (Avery 5160)
+const QR_SIZE_LABEL = 48;     // Small label QR for price tags
+
 // ---------------------------------------------------------------------------
 // In-memory batch store (ephemeral — v1 has no DB persistence for batches)
 // ---------------------------------------------------------------------------
@@ -275,7 +278,6 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
 
     const totalPages = Math.ceil(batch.tags.length / LABELS_PER_PAGE);
     const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
-    const QR_SIZE = 48;
 
     for (let page = 0; page < totalPages; page++) {
       if (page > 0) {
@@ -297,11 +299,11 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
         const qrUrl = `${FRONTEND_URL}/t/${tag.tagId}`;
         const qrBuffer = await QRCode.toBuffer(qrUrl, {
           type: 'png',
-          width: 200,
+          width: QR_SIZE_LABEL,
           margin: 1,
           color: { dark: '#000000', light: '#ffffff' },
         });
-        doc.image(qrBuffer, cellX + 4, cellY + 12, { width: QR_SIZE, height: QR_SIZE });
+        doc.image(qrBuffer, cellX + 4, cellY + 12, { width: QR_SIZE_LABEL, height: QR_SIZE_LABEL });
 
         // Sale name — top, tiny
         doc

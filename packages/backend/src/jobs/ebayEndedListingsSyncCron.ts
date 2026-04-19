@@ -4,7 +4,7 @@
  *
  * Runs every 4 hours. For each organizer with eBay connected:
  * 1. Fetch all active (AVAILABLE) items with ebayListingId
- * 2. Batch call Trading API GetMultipleItems to check ListingStatus
+ * 2. Call Trading API GetItem (individual calls) to check ListingStatus
  * 3. For items with status ENDED/COMPLETED, clear ebayListingId, listedOnEbayAt, ebayOfferId
  * 4. Create notifications for organizer
  *

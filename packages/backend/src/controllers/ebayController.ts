@@ -3759,7 +3759,8 @@ export const setEbayShippingOverride = async (req: AuthRequest, res: Response) =
 /**
  * Checks all active eBay listings for a given organizer and clears
  * ebayListingId/listedOnEbayAt/ebayOfferId for any listings that have ENDED on eBay.
- * Uses Trading API GetMultipleItems (batches of 20, no OAuth required).
+ * Uses Trading API GetItem (individual calls, still supported, no OAuth required).
+ * Maintains batch structure of 20 for rate limiting.
  *
  * Returns: { checked: number, ended: number, itemsEnded: Array<{id, title, ebayListingId}> }
  */
@@ -3823,109 +3824,109 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
       return result;
     }
 
-    // Batch listings in groups of 20 (Trading API limit)
+    // Batch listings in groups of 20 for rate limiting
     const batchSize = 20;
     for (let i = 0; i < activeListings.length; i += batchSize) {
       const batch = activeListings.slice(i, i + batchSize);
-      const itemIds = batch.map((item) => item.ebayListingId).join('</itemId><itemId>');
 
-      // Build Trading API XML request
-      const requestXml = `<?xml version="1.0" encoding="UTF-8"?>
-<GetMultipleItemsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <ItemID>${itemIds}</ItemID>
-  <IncludeSelector>Details</IncludeSelector>
-</GetMultipleItemsRequest>`;
-
-      try {
-        const ebayResponse = await fetch('https://api.ebay.com/ws/api.dll', {
-          method: 'POST',
-          headers: {
-            'X-EBAY-API-CALL-NAME': 'GetMultipleItems',
-            'X-EBAY-API-SITEID': '0',
-            'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-            'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
-            'X-EBAY-API-IAF-TOKEN': accessToken,
-            'Content-Type': 'text/xml',
-          },
-          body: requestXml,
-        });
-
-        if (!ebayResponse.ok) {
-          console.error(
-            `[eBay EndedSync] Trading API error ${ebayResponse.status} for organizer ${organizerId}`
-          );
-          continue; // Skip this batch, proceed to next
-        }
-
-        const ebayText = await ebayResponse.text();
-
-        // Check for XML error response (eBay returns XML errors even on HTTP 200)
-        const ack = xmlVal(ebayText, 'Ack');
-        if (ack && ack !== 'Success' && ack !== 'Warning') {
-          const errMsg = xmlVal(ebayText, 'LongMessage') || xmlVal(ebayText, 'ShortMessage') || 'Unknown error';
-          console.error(`[eBay EndedSync] Trading API failure for organizer ${organizerId}: ${errMsg}`);
-          continue; // Skip this batch, proceed to next
-        }
-
-        let ebayData: { Item?: Array<{ ItemID: string; ListingStatus: string }> };
+      // Call GetItem individually for each listing in the batch
+      for (const item of batch) {
         try {
-          ebayData = JSON.parse(ebayText);
-        } catch (parseErr) {
-          console.error(`[eBay EndedSync] Failed to parse JSON response for organizer ${organizerId}:`, parseErr);
-          continue; // Skip this batch, proceed to next
-        }
-        const items = ebayData.Item || [];
+          // Build Trading API XML request for single item
+          const requestXml = `<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>${item.ebayListingId}</ItemID>
+</GetItemRequest>`;
 
-        console.log(`[eBay EndedSync] Batch response: ${items.length} items`);
+          const ebayResponse = await fetch('https://api.ebay.com/ws/api.dll', {
+            method: 'POST',
+            headers: {
+              'X-EBAY-API-CALL-NAME': 'GetItem',
+              'X-EBAY-API-SITEID': '0',
+              'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+              'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+              'X-EBAY-API-IAF-TOKEN': accessToken,
+              'Content-Type': 'text/xml',
+            },
+            body: requestXml,
+          });
 
-        // Process each item and check status
-        for (const ebayItem of items) {
+          if (!ebayResponse.ok) {
+            console.warn(
+              `[eBay EndedSync] Trading API HTTP error ${ebayResponse.status} for item ${item.ebayListingId}`
+            );
+            continue; // Skip this item, proceed to next
+          }
+
+          const ebayText = await ebayResponse.text();
+
+          // Check for XML error response (eBay returns XML errors even on HTTP 200)
+          const ack = xmlVal(ebayText, 'Ack');
+          if (ack && ack !== 'Success' && ack !== 'Warning') {
+            const errMsg = xmlVal(ebayText, 'LongMessage') || xmlVal(ebayText, 'ShortMessage') || 'Unknown error';
+            console.warn(`[eBay EndedSync] GetItem ${item.ebayListingId}: ${ack} — ${errMsg}`);
+            continue; // Skip this item, proceed to next
+          }
+
+          let ebayData: { Item?: { ItemID: string; ListingStatus: string } };
+          try {
+            ebayData = JSON.parse(ebayText);
+          } catch (parseErr) {
+            console.warn(`[eBay EndedSync] Failed to parse response for item ${item.ebayListingId}:`, parseErr);
+            continue; // Skip this item, proceed to next
+          }
+
+          const ebayItem = ebayData.Item;
+          if (!ebayItem) {
+            console.warn(`[eBay EndedSync] No Item in response for ${item.ebayListingId}`);
+            continue; // Skip this item, proceed to next
+          }
+
           const status = ebayItem.ListingStatus || '';
           result.checked++;
 
           // If listing is ENDED or COMPLETED, clear the eBay fields
           if (status === 'Ended' || status === 'Completed') {
-            const matchedLocal = batch.find((item) => item.ebayListingId === ebayItem.ItemID);
-            if (matchedLocal) {
-              console.log(
-                `[eBay EndedSync] Item ${matchedLocal.id} ("${matchedLocal.title}"): listing status = ${status}`
-              );
+            console.log(
+              `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing status = ${status}`
+            );
 
-              // Clear eBay fields
-              await prisma.item.update({
-                where: { id: matchedLocal.id },
-                data: {
-                  ebayListingId: null,
-                  listedOnEbayAt: null,
-                  ebayOfferId: null,
-                },
-              });
+            // Clear eBay fields
+            await prisma.item.update({
+              where: { id: item.id },
+              data: {
+                ebayListingId: null,
+                listedOnEbayAt: null,
+                ebayOfferId: null,
+              },
+            });
 
-              // Create notification
-              await prisma.notification.create({
-                data: {
-                  userId: organizer.userId,
-                  type: 'SALE_UPDATE',
-                  title: 'eBay listing ended',
-                  body: `"${matchedLocal.title}" listing ended on eBay. You can re-push this item.`,
-                  link: `/organizer/sales/${matchedLocal.saleId}`,
-                  notificationChannel: 'IN_APP',
-                },
-              });
+            // Create notification
+            await prisma.notification.create({
+              data: {
+                userId: organizer.userId,
+                type: 'SALE_UPDATE',
+                title: 'eBay listing ended',
+                body: `"${item.title}" listing ended on eBay. You can re-push this item.`,
+                link: `/organizer/sales/${item.saleId}`,
+                notificationChannel: 'IN_APP',
+              },
+            });
 
-              result.ended++;
-              result.itemsEnded.push({
-                id: matchedLocal.id,
-                title: matchedLocal.title,
-                ebayListingId: matchedLocal.ebayListingId || '',
-              });
-            }
+            result.ended++;
+            result.itemsEnded.push({
+              id: item.id,
+              title: item.title,
+              ebayListingId: item.ebayListingId || '',
+            });
           }
+        } catch (error) {
+          console.error(`[eBay EndedSync] Error checking item ${item.ebayListingId}:`, error);
+          // Continue to next item
         }
-      } catch (error) {
-        console.error(`[eBay EndedSync] Batch processing error for organizer ${organizerId}:`, error);
-        // Continue to next batch
       }
+
+      console.log(`[eBay EndedSync] Batch processed: ${batch.length} items checked`);
     }
 
     console.log(

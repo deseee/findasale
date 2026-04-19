@@ -170,7 +170,7 @@ const MessageThreadPage = () => {
       {/* Input */}
       <form
         onSubmit={handleSend}
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 px-4 py-4 pb-safe z-20"
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 px-4 pt-3 pb-6 z-20"
       >
         <div className="flex gap-2 items-end">
           <QuickReplyPicker onSelect={(text) => setBody(text)} />
