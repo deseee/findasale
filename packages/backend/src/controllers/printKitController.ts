@@ -770,17 +770,12 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
       const qrSmallY = TAB_Y_START + 8;
       doc.image(qrSmall, qrSmallX, qrSmallY, { width: qrSmallSize, height: qrSmallSize });
 
-      // Vertical text — rotated 90° CCW, 4 lines centered under QR
-      const textStartY = qrSmallY + qrSmallSize + 6;
-      const lineHeight = 12; // 7pt font + 5pt gap
-      const textBlockHeight = tabTextLines.length * lineHeight;
-      // Center the text block in available space below QR
-      const availableSpace = PAGE_H - textStartY - 5;
-      const textOffsetY = textStartY + (availableSpace - textBlockHeight) / 2;
-
+      // Vertical text — each line in its own column across the tab width
+      // After -90° rotation, translate X controls horizontal position in tab
+      const colWidth = TAB_WIDTH / (tabTextLines.length + 1);
       tabTextLines.forEach((line, idx) => {
         doc.save();
-        doc.translate(tabX + TAB_WIDTH / 2 + 3, textOffsetY + idx * lineHeight + lineHeight);
+        doc.translate(tabX + colWidth * (idx + 1), PAGE_H - 10);
         doc.rotate(-90);
         doc.font('Helvetica-Bold').fontSize(7).fillColor('#1a1a2e')
           .text(line, 0, 0, { lineBreak: false });
@@ -1456,16 +1451,11 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       const smallQrY = TEAR_OFF_TAB_Y_START + 8;
       doc.image(qrTearOffSmall, smallQrX, smallQrY, { width: smallQrSize, height: smallQrSize });
 
-      // Vertical text — rotated 90° CCW, 4 lines centered under QR
-      const fkTextStartY = smallQrY + smallQrSize + 6;
-      const fkLineHeight = 12;
-      const fkTextBlockHeight = fkTabTextLines.length * fkLineHeight;
-      const fkAvailableSpace = PAGE_H - fkTextStartY - 5;
-      const fkTextOffsetY = fkTextStartY + (fkAvailableSpace - fkTextBlockHeight) / 2;
-
+      // Vertical text — each line in its own column across the tab width
+      const fkColWidth = TEAR_OFF_TAB_WIDTH / (fkTabTextLines.length + 1);
       fkTabTextLines.forEach((line, idx) => {
         doc.save();
-        doc.translate(tabX + TEAR_OFF_TAB_WIDTH / 2 + 3, fkTextOffsetY + idx * fkLineHeight + fkLineHeight);
+        doc.translate(tabX + fkColWidth * (idx + 1), PAGE_H - 10);
         doc.rotate(-90);
         doc.font('Helvetica-Bold').fontSize(7).fillColor('#1a1a2e')
           .text(line, 0, 0, { lineBreak: false });
