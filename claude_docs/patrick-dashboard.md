@@ -1,5 +1,26 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
+## S513 Summary (2026-04-19) — Early access items page, photo station, POS Run Test fix ✅
+
+**3 files changed. Push block below — deploy before testing.**
+
+### What was built:
+- **`/shopper/early-access-cache/items`** (NEW) — The missing items page. When shoppers have active early access windows, clicking "EXPLORE" now lands here. Shows items matching their active categories with photos, badges, prices, and "View Item" links. Was previously a dead link.
+- **`/sales/[saleId]/photo-station`** (completed) — Shopper photo station page. Auto-awards 5 XP on scan. Duplicate protection. Web Share API + clipboard fallback for share link.
+
+### S505 checklist test flows QA:
+- ✅ **Online Checkout** → Real `cs_test_...` Stripe session created, browser redirects to checkout
+- ✅ **Auction Checkout** → Real `cs_test_...` Stripe session created, browser redirects to checkout
+- ⚠️ **In-App Payment** → Modal opens correctly, Stripe Elements loads — payment completion needs Patrick manual test (MCP can't type into cross-origin Stripe iframe). Type `4242 4242 4242 4242` + any expiry/CVC to complete.
+- ❌→✅ **POS Run Test** → **Fixed.** Frontend was only sending `{ saleId }` — backend needs `saleId + amount + paymentMethod`. Fixed to send `amount: 1, paymentMethod: 'direct'`. Push to verify.
+
+### Patrick action required:
+1. **Run the push block below**
+2. After deploy: open `/organizer/plan/{yourSaleId}`, expand Live stage, click POS "Run Test" — should now succeed
+3. Optional manual verify: click In-App Payment "Run Test" → type `4242 4242 4242 4242` + `12/28` + `123` → confirm success state
+
+---
+
 ## S512 Summary (2026-04-19) — Email verification gate shipped + QA security/tier gates ✅
 
 **4 files changed. Railway + Vercel both green. Roadmap updated to v111.**

@@ -7,6 +7,33 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S513 (2026-04-19) — Early access cache items page, photo station, S505 QA + POS Run Test fix**
+
+Built two new pages and completed S505 checklist test flow QA.
+
+**New pages built:**
+- `pages/shopper/early-access-cache/items.tsx` (NEW) — items page for active early access windows. Fetches `GET /api/early-access-cache/items`, shows item grid with category badge/emoji, title, price, "View Item" link. Auth-gated. Empty state + dark mode.
+- `pages/sales/[id]/photo-station.tsx` (completed/fixed) — shopper photo station page. Auto-scan on load awards 5 XP via `POST /sales/:saleId/photo-ops/photo-station-scan`. Duplicate scan protection ("Already Scanned" state). Web Share API + clipboard fallback for share incentive.
+
+**S505 checklist test flows QA results:**
+- ✅ Online Checkout Run Test → `cs_test_...` Stripe session created, browser redirected to checkout.stripe.com
+- ✅ Auction Checkout Run Test → `cs_test_...` Stripe session created, browser redirected to checkout.stripe.com
+- ⚠️ In-App Payment Run Test → TestCheckoutModal opens, `test-in-app-intent` returns clientSecret (PaymentElement renders). Payment completion UNVERIFIED (cross-origin Stripe iframe — can't type card via MCP)
+- ❌ POS Run Test → FIXED (see below)
+
+**POS Run Test fix (P0):**
+- Root cause: `handlePosTest` sent `{ saleId }` only; backend `POST /stripe/test-transaction` requires `saleId + amount + paymentMethod`. 400 → catch block → error toast every time.
+- Fix: `plan/[saleId].tsx` line 76 — added `amount: 1, paymentMethod: 'direct'` to request body. Zero TS errors post-fix.
+
+**Lucky Roll #291 deprecated:** Replaced by `/shopper/early-access-cache`. No Lucky Roll page exists or is needed.
+
+**Files changed (3):**
+- `packages/frontend/pages/shopper/early-access-cache/items.tsx` — NEW
+- `packages/frontend/pages/sales/[id]/photo-station.tsx` — built/completed
+- `packages/frontend/pages/organizer/plan/[saleId].tsx` — POS Run Test fix (line 76)
+
+---
+
 **S512 (2026-04-19) — Email verification gate + QA security/tier gates + roadmap catch-up**
 
 QA security gate verified. Email verification feature built and deployed. Roadmap updated to v111.
@@ -956,27 +983,14 @@ Files (7):
 
 ## Next Session Priority
 
-**0. Smoke test S511 fixes (mandatory first action):**
-S511 push complete. Verify these are live: messages reply bar padding (pb-6), treasure hunt XP badge (+3 not +50), role fixes for ADMIN+ORGANIZER users (5 files), eBay ended-sync active.
+**0. Push S513 changes + smoke test POS Run Test fix (mandatory first action):**
+Push these 3 files (+ STATE.md + dashboard.md), wait for Railway/Vercel deploy, then re-test POS Run Test button on plan page — confirm it now shows a success toast instead of error toast. Then verify `live_pos` auto-checks after reload.
 
-**ALSO: QA S505 checklist test flows (blocked on Patrick env vars):**
-Deferred from S505. 4 test buttons on plan page need Chrome QA — requires env vars first:
-- Set `STRIPE_TEST_SECRET_KEY` (Railway) + `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY` (Vercel)
-- Then QA: POS test → auto-checks `live_pos`; Online/Auction checkout → Stripe test session; In-app modal → Stripe Elements form
+**1. Treasure hunt 3-clue limit (carry from S501, P1):**
+- Update 10-clue cap → 3 in `treasureHuntQRController.ts`
 
----
-
-**1. Photo station + treasure hunt 3-clue limit (carry from S501, P1):**
-- Treasure hunt: update 10-clue cap → 3 in `treasureHuntQRController.ts`
-- Photo station shopper page: `pages/sales/[id]/photo-station.tsx`
-- Photo station backend: `POST /api/sales/:saleId/photo-station/scan` (3 XP, 1 per user per sale)
-- Update print kit photo station QR URL to point to the new page
-
-**2. Photo station + treasure hunt 3-clue limit (carry from S501):**
-- Treasure hunt: update 10-clue cap → 3 in `treasureHuntQRController.ts`
-- Photo station shopper page: `pages/sales/[id]/photo-station.tsx`
-- Photo station backend: `POST /api/sales/:saleId/photo-station/scan` (3 XP, 1 per user per sale)
-- Update print kit photo station QR URL to point to the new page
+**2. In-App Payment Run Test completion — Patrick manual verify (⚠️ UNVERIFIED from S513):**
+- MCP can't interact with cross-origin Stripe iframe. Patrick should open `/organizer/plan/{saleId}`, click In-App Payment "Run Test", type `4242 4242 4242 4242` + any expiry/CVC, confirm success state and `pre_in_app_payment` auto-checks.
 
 **3. Chrome QA — security gates smoke test (P1, carry from S489):**
 Register a new test account → verify email gate fires. Verify existing organizers are NOT blocked.

@@ -73,7 +73,7 @@ const SalePlanPage = () => {
     if (!saleId || typeof saleId !== 'string') return;
     setPosTestLoading(true);
     try {
-      await api.post('/stripe/test-transaction', { saleId });
+      await api.post('/stripe/test-transaction', { saleId, amount: 1, paymentMethod: 'direct' });
       // live_pos is auto-detected from DB (hasTestTransaction) — invalidate so it refetches
       queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
       showToast('POS test passed — no inventory affected ✓', 'success');
