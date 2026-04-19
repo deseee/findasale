@@ -1368,7 +1368,7 @@ const OrganizerDashboard = () => {
                   </div>
                   {user?.organizerTier !== 'TEAMS' && (
                     <Link href="/pricing" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm">
-                      Upgrade →
+                      View rank progress →
                     </Link>
                   )}
                 </div>
