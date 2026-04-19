@@ -102,9 +102,16 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
     }
 
     try {
-      // Verify the registration response
+      // Verify the registration response — v10 expects the full RegistrationResponseJSON,
+      // not just the inner .response sub-object
       const verified = await verifyRegistrationResponse({
-        response: clientResponse,
+        response: {
+          id: credentialIdBase64,
+          rawId: rawIdBase64,
+          response: clientResponse,
+          type,
+          clientExtensionResults: {},
+        },
         expectedChallenge: challenge,
         expectedOrigin: WEBAUTHN_ORIGIN,
         expectedRPID: WEBAUTHN_RP_ID,
@@ -117,9 +124,11 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
           .json({ message: 'Registration verification failed' });
       }
 
-      // Extract credential data from registrationInfo (pre-v11 API shape)
-      const regCredentialID = verified.registrationInfo?.credentialID;
-      const regCredentialPublicKey = verified.registrationInfo?.credentialPublicKey;
+      // Extract credential data — v10 moved these under registrationInfo.credential
+      const regCredential = verified.registrationInfo?.credential;
+      const regCredentialID = regCredential?.id;
+      const regCredentialPublicKey = regCredential?.publicKey;
+      const regCounter = regCredential?.counter ?? 0;
 
       if (!regCredentialID || !regCredentialPublicKey) {
         return res.status(400).json({ message: 'Invalid credential data' });
@@ -128,7 +137,7 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
       // credentialID is a Base64URLString
       const credentialIdBase64url = regCredentialID;
 
-      // Store public key as base64url (credentialPublicKey is Uint8Array)
+      // Store public key as base64url (publicKey is Uint8Array)
       const publicKeyBase64url = Buffer.from(regCredentialPublicKey).toString('base64')
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
@@ -149,7 +158,7 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
           userId,
           credentialId: credentialIdBase64url,
           publicKey: publicKeyBase64url,
-          counter: verified.registrationInfo?.counter || 0,
+          counter: regCounter,
           deviceName: deviceName || 'Passkey',
         },
       });
