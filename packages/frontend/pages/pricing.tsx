@@ -86,7 +86,7 @@ const TIERS: PricingTier[] = [
       'Unlimited sales*, Unlimited Items*',
       'Unlimited photos*, Unlimited auto tags*',
       'Command Center — manage all sales at once',
-      'Multi-user workspace — Includes 5 team members',
+      'Multi-user workspace — Up to 12 team members',
       'Extra members: $20/mo',
       'Team roles & permissions',
       'Webhooks - Connect your systems',

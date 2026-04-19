@@ -252,7 +252,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
               loading="lazy"
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center bg-warm-100 dark:bg-gray-700">
               <span className="text-warm-400 dark:text-gray-500 text-xs">No image</span>
             </div>
           )}

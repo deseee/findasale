@@ -83,7 +83,7 @@ export default function TrendingPage() {
                 {(salesData?.sales || []).map((sale: TrendingSale, index: number) => (
                   <Link key={sale.id} href={`/sales/${sale.id}`}>
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden hover:shadow-md transition group cursor-pointer">
-                      <div className="relative h-36 bg-warm-100">
+                      <div className="relative h-36 bg-warm-100 dark:bg-gray-700 border border-warm-200 dark:border-gray-600">
                         {sale.photoUrls?.[0] ? (
                           <Image
                             key={sale.photoUrls[0]}
