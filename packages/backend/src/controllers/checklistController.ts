@@ -66,9 +66,9 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'pub_pricetags', stage: 'Pre-Sale', label: 'Price tags printed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_queue_qr', stage: 'Pre-Sale', label: 'Check-in / Queue QR printed & posted', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_treasure', stage: 'Pre-Sale', label: 'Treasure Hunt clues printed & placed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
-  { id: 'setup_photo_qr', stage: 'Pre-Sale', label: 'QR codes placed at photo stations', isAuto: false, link: '/organizer/print-kit/{saleId}' },
+  { id: 'setup_photo_qr', stage: 'Pre-Sale', label: 'QR code placed at photo station', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_preview', stage: 'Pre-Sale', label: 'Sale previewed on mobile', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
-  { id: 'pub_signs', stage: 'Pre-Sale', label: 'Neighborhood signs made', isAuto: false, link: '/organizer/print-kit/{saleId}' },
+  { id: 'pub_signs', stage: 'Pre-Sale', label: 'Neighborhood signs made and placed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_published', stage: 'Pre-Sale', label: 'Sale published', isAuto: true, autoCheck: (d) => d.sale.status === 'PUBLISHED' || d.sale.status === 'LIVE', link: '/organizer/edit-sale/{saleId}' },
   { id: 'pub_social', stage: 'Pre-Sale', label: 'Sale shared on social media', isAuto: false, link: '/organizer/promote/{saleId}' },
 
@@ -83,9 +83,11 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'live_first_sold', stage: 'Live', label: 'First item sold', isAuto: true, autoCheck: (d) => d.soldCount >= 1 },
 
   // Stage 5: Wrapping Up
-  { id: 'wrap_unsold', stage: 'Wrapping Up', label: 'Unsold items handled', isAuto: false, link: '/organizer/inventory' },
-  { id: 'wrap_ebay', stage: 'Wrapping Up', label: 'Unsold items synced to eBay (optional)', isAuto: false, link: '/organizer/add-items/{saleId}' },
-  { id: 'wrap_donate', stage: 'Wrapping Up', label: 'Unsold items donated', isAuto: false, link: '/organizer/inventory' },
+  { id: 'wrap_signs_down', stage: 'Wrapping Up', label: 'Signs taken down', isAuto: false },
+  { id: 'wrap_property_cleared', stage: 'Wrapping Up', label: 'Property cleaned up and cleared', isAuto: false },
+  { id: 'wrap_items_sorted', stage: 'Wrapping Up', label: 'Unsold items sorted — donate, relist, or discard', isAuto: false, link: '/organizer/inventory' },
+  { id: 'wrap_donation_scheduled', stage: 'Wrapping Up', label: 'Donation pickup scheduled', isAuto: false },
+  { id: 'wrap_relist', stage: 'Wrapping Up', label: 'Valuable items relisted for sale', isAuto: false, link: '/organizer/sales/{saleId}' },
   { id: 'wrap_messages', stage: 'Wrapping Up', label: 'Shopper messages answered', isAuto: false, link: '/organizer/messages' },
   { id: 'wrap_flip', stage: 'Wrapping Up', label: 'Flip Report reviewed', isAuto: false, requiredTier: 'PRO', link: '/organizer/flip-report/{saleId}' },
   { id: 'wrap_closed', stage: 'Wrapping Up', label: 'Sale marked complete', isAuto: true, autoCheck: (d) => d.sale.status === 'ENDED' },
