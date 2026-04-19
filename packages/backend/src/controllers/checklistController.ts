@@ -158,9 +158,11 @@ export const getChecklist = async (req: AuthRequest, res: Response) => {
       where: { saleId },
     });
 
-    const manualStates: StoredManualState = storedChecklist
-      ? (storedChecklist.items as unknown as StoredManualState) || {}
-      : {};
+    // Guard: old schema stored items as an array; new code uses {taskId: boolean} object.
+    // If it's an array (or null), start fresh — old IDs don't map to new task IDs anyway.
+    const rawItems = storedChecklist?.items;
+    const manualStates: StoredManualState =
+      !rawItems || Array.isArray(rawItems) ? {} : (rawItems as unknown as StoredManualState);
 
     // Step 5: Build task evaluation data
     const evalData: TaskEvaluationData = {
@@ -310,8 +312,11 @@ export const updateChecklist = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Update manual states (only for non-auto tasks)
-    const manualStates = (checklist.items as unknown as StoredManualState) || {};
+    // Update manual states (only for non-auto tasks).
+    // Guard: old schema stored items as an array; treat it as empty to avoid JSON stringify losing named props.
+    const rawItems = checklist.items;
+    const manualStates: StoredManualState =
+      !rawItems || Array.isArray(rawItems) ? {} : (rawItems as unknown as StoredManualState);
     const taskDef = ALL_TASKS.find(t => t.id === data.itemId);
 
     if (!taskDef) {
