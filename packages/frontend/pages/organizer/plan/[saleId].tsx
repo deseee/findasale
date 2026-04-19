@@ -132,13 +132,19 @@ const SalePlanPage = () => {
   // Handle test checkout success redirect
   React.useEffect(() => {
     if (router.query.testCheckout === 'success') {
-      const type = router.query.type === 'auction' ? 'Auction checkout' : 'Online checkout';
-      showToast(`${type} test passed — inventory untouched ✓`, 'success');
+      const type = router.query.type as string;
+      const label = type === 'auction' ? 'Auction checkout' : 'Online checkout';
+      showToast(`${label} test passed — inventory untouched ✓`, 'success');
+
+      // Auto-check the relevant checklist item
+      const itemId = type === 'auction' ? 'pre_auction_checkout' : 'pre_online_checkout';
+      updateTask({ itemId, completed: true });
+
       // Clean URL
       const { testCheckout, type: _, ...rest } = router.query;
       router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
     }
-  }, [router.query.testCheckout, showToast, router]);
+  }, [router.query.testCheckout, showToast, router, updateTask]);
 
   // Calculate overall progress
   const totalTasks = items.length;

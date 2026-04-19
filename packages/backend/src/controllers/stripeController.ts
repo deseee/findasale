@@ -2215,3 +2215,50 @@ export const testCheckoutSession = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: 'Test checkout session creation failed', details: error.message });
   }
 };
+
+export const testInAppPayment = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const { saleId } = req.body as { saleId?: string };
+
+    if (!saleId || typeof saleId !== 'string') {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+
+    // Verify sale ownership
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'You do not own this sale' });
+    }
+
+    const testStripe = getTestStripe();
+
+    // Create and confirm a $1 PaymentIntent server-side
+    const paymentIntent = await testStripe.paymentIntents.create({
+      amount: 100, // $1.00
+      currency: 'usd',
+      payment_method: 'pm_card_visa',
+      confirm: true,
+      metadata: {
+        isTestTransaction: 'true',
+        saleId,
+        source: 'in_app_test',
+      },
+      automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
+    });
+
+    // DO NOT create a Purchase record — frontend calls updateTask directly
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error('[test-in-app-payment] error:', error);
+    return res.status(500).json({ message: 'In-app payment test failed', details: error.message });
+  }
+};

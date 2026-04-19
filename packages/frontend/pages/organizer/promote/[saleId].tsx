@@ -115,11 +115,6 @@ export default function PromotePage(): JSX.Element {
   const [socialTemplate, setSocialTemplate] = useState<SocialTemplate | null>(null);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [testCheckoutStatus, setTestCheckoutStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  const [testCheckoutUrl, setTestCheckoutUrl] = useState<string | null>(null);
-  const [testCheckoutQr, setTestCheckoutQr] = useState<string | null>(null);
-  const [testCheckoutType, setTestCheckoutType] = useState<'standard' | 'auction'>('standard');
-
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
@@ -334,22 +329,6 @@ export default function PromotePage(): JSX.Element {
     }
   };
 
-  const handleTestCheckout = async (type: 'standard' | 'auction') => {
-    setTestCheckoutStatus('loading');
-    setTestCheckoutType(type);
-    try {
-      const res = await api.post('/stripe/test-checkout-session', { saleId, type });
-      setTestCheckoutUrl(res.data.url);
-      setTestCheckoutQr(res.data.qrCodeUrl);
-      setTestCheckoutStatus('ready');
-      showToast('Test checkout link ready! Click to test the flow.', 'success');
-    } catch (error) {
-      setTestCheckoutStatus('error');
-      showToast('Failed to create test checkout session', 'error');
-      console.error('Test checkout error:', error);
-    }
-  };
-
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
   const downloadEstatesalesCSV = () =>
@@ -430,83 +409,6 @@ export default function PromotePage(): JSX.Element {
               </div>
             </div>
           )}
-
-          {/* Test Checkout Card */}
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-900 border border-amber-200 dark:border-amber-700 rounded-lg p-6 mb-8">
-            <div className="flex items-start gap-4">
-              <div className="text-3xl">🧪</div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-amber-900 dark:text-amber-100 mb-2">Test Your Checkout Flow</h3>
-                <p className="text-amber-800 dark:text-amber-200 text-sm mb-4">
-                  Before your sale opens, verify shoppers can complete purchases. Select a flow to test — no real money moves and your inventory won't change.
-                </p>
-
-                {testCheckoutStatus === 'idle' && (
-                  <div className="flex gap-3 flex-wrap">
-                    <button
-                      onClick={() => handleTestCheckout('standard')}
-                      disabled={loading}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-lg font-medium transition"
-                    >
-                      Test Online Checkout
-                    </button>
-                    <button
-                      onClick={() => handleTestCheckout('auction')}
-                      disabled={loading}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white rounded-lg font-medium transition"
-                    >
-                      Test Auction Checkout
-                    </button>
-                  </div>
-                )}
-
-                {testCheckoutStatus === 'loading' && (
-                  <p className="text-amber-800 dark:text-amber-200 text-sm">Creating test checkout link...</p>
-                )}
-
-                {testCheckoutStatus === 'ready' && testCheckoutUrl && testCheckoutQr && (
-                  <div className="space-y-4">
-                    <p className="text-amber-800 dark:text-amber-200 text-sm font-medium">
-                      Ready to test! Use card <strong>4242 4242 4242 4242</strong> • Any future expiry • Any CVC
-                    </p>
-                    <div className="flex gap-4 items-start">
-                      <div className="flex-1">
-                        <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">Open on this device:</p>
-                        <a
-                          href={testCheckoutUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block px-4 py-2 bg-white dark:bg-gray-700 text-amber-600 dark:text-amber-400 rounded-lg font-medium hover:bg-amber-50 dark:hover:bg-gray-600 transition"
-                        >
-                          Open Checkout →
-                        </a>
-                      </div>
-                      <div className="flex-shrink-0">
-                        <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">Or scan QR code:</p>
-                        <img src={testCheckoutQr} alt="Checkout QR code" className="w-32 h-32 bg-white p-1 rounded" />
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setTestCheckoutStatus('idle');
-                        setTestCheckoutUrl(null);
-                        setTestCheckoutQr(null);
-                      }}
-                      className="text-sm text-amber-600 dark:text-amber-400 hover:underline"
-                    >
-                      Create another link
-                    </button>
-                  </div>
-                )}
-
-                {testCheckoutStatus === 'error' && (
-                  <p className="text-red-600 dark:text-red-400 text-sm">
-                    Failed to create test checkout session. Please try again.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
 
           {/* Export cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
