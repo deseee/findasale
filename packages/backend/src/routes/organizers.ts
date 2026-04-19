@@ -1059,22 +1059,28 @@ router.get('/sale-pulse/:saleId', authenticate, async (req: AuthRequest, res: Re
     });
     if (!sale) return res.status(404).json({ message: 'Sale not found or access denied.' });
 
-    // Count page views (qrScanCount as proxy), item saves (favorites), shopper questions (conversations)
-    const saleData = await prisma.sale.findUnique({
-      where: { id: saleId },
-      select: {
-        qrScanCount: true,
-        _count: {
-          select: {
-            favorites: true,
-            conversations: true,
-            subscribers: true,
+    // Count ripple views (not qrScanCount), item saves (favorites), shopper questions (conversations)
+    const [rippleCounts, saleData] = await Promise.all([
+      prisma.saleRipple.groupBy({
+        by: ['type'],
+        where: { saleId },
+        _count: true,
+      }),
+      prisma.sale.findUnique({
+        where: { id: saleId },
+        select: {
+          _count: {
+            select: {
+              favorites: true,
+              conversations: true,
+              subscribers: true,
+            },
           },
         },
-      },
-    });
+      }),
+    ]);
 
-    const pageViews = saleData?.qrScanCount ?? 0;
+    const pageViews = rippleCounts.find((r) => r.type === 'VIEW')?._count ?? 0;
     const itemSaves = saleData?._count?.favorites ?? 0;
     const shopperQuestions = saleData?._count?.conversations ?? 0;
     const shopperCount = saleData?._count?.subscribers ?? 0;
