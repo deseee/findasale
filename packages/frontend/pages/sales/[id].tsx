@@ -799,9 +799,9 @@ const SaleDetailPage = () => {
           </div>
 
           {/* Sidebar */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 overflow-hidden">
             {/* Share Buttons */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8 overflow-hidden">
               <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Share</h2>
               <div className="flex flex-col gap-2">
                 {/* Primary Share Button using Web Share API */}
@@ -889,7 +889,7 @@ const SaleDetailPage = () => {
 
             {/* CD2-P2: QR Code for print marketing — organizer only */}
             {isOrganizer && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8 overflow-hidden">
                 <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-2">QR Code</h2>
                 <p className="text-xs text-warm-400 dark:text-gray-500 mb-4">Print on signs or flyers to drive foot traffic to this sale.</p>
                 <SaleQRCode saleId={sale.id} saleTitle={sale.title} size={180} />
@@ -1015,7 +1015,7 @@ const SaleDetailPage = () => {
             <div className="text-center py-8">
               <p className="text-warm-600 dark:text-gray-400 mb-4">No items listed for this sale yet.</p>
               {isOrganizer && (
-                <Link 
+                <Link
                   href={`/organizer/add-items/${sale.id}`}
                   className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
                 >
@@ -1033,6 +1033,13 @@ const SaleDetailPage = () => {
                   (item) =>
                     selectedCategory === null || item.category?.toLowerCase() === selectedCategory
                 )
+                .sort((a, b) => {
+                  // Sort: available items first, sold items last
+                  if (a.status === 'SOLD' && b.status !== 'SOLD') return 1;
+                  if (a.status !== 'SOLD' && b.status === 'SOLD') return -1;
+                  // Within same status, sort by price (ascending) or createdAt
+                  return 0;
+                })
                 .map((item) => (
                 <div key={item.id} className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800 h-full flex flex-col">
                   <div className="relative aspect-square overflow-hidden">
