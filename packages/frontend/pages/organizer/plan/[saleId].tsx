@@ -279,7 +279,7 @@ const SalePlanPage = () => {
                     >
                       {/* Stage Header */}
                       <button
-                        onClick={() => setExpandedStage(isActive || isComplete || expandedStage === stageName ? null : stageName)}
+                        onClick={() => setExpandedStage(expandedStage === stageName ? null : stageName)}
                         className="w-full p-4 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
                       >
                         <div className="flex items-center gap-3">
