@@ -202,10 +202,10 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`;
   };
 
-  // Chunk items into groups of 9 for pagination (3×3 grid, fills full page)
+  // Chunk items into groups of 15 for pagination (3×5 grid, fills full page)
   const itemPages = [];
-  for (let i = 0; i < filteredItems.length; i += 9) {
-    itemPages.push(filteredItems.slice(i, i + 9));
+  for (let i = 0; i < filteredItems.length; i += 15) {
+    itemPages.push(filteredItems.slice(i, i + 15));
   }
 
   return (
@@ -257,14 +257,14 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
           .item-tags-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 0.15in;
+            grid-template-rows: repeat(5, 1fr);
+            gap: 0.08in;
             height: 9.5in;
             page-break-inside: avoid;
           }
           .item-tag {
             border: 1pt solid #000;
-            padding: 0.12in;
+            padding: 0.06in;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -272,35 +272,36 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             background: white;
             color: black;
             page-break-inside: avoid;
+            overflow: hidden;
           }
           .item-photo {
             max-width: 100%;
-            max-height: 0.8in;
+            max-height: 0.45in;
             object-fit: cover;
             margin: 0 auto;
           }
           .item-title {
-            font-size: 9pt;
+            font-size: 7pt;
             font-weight: bold;
-            line-height: 1.2;
+            line-height: 1.1;
             overflow: hidden;
             display: -webkit-box;
-            -webkit-line-clamp: 2;
+            -webkit-line-clamp: 1;
             -webkit-box-orient: vertical;
-            margin: 4pt 0;
+            margin: 2pt 0;
           }
           .item-price {
-            font-size: 11pt;
+            font-size: 9pt;
             font-weight: bold;
             color: black;
           }
           .item-condition {
-            font-size: 8pt;
-            margin-top: 2pt;
+            font-size: 7pt;
+            margin-top: 1pt;
           }
           .item-qr {
-            width: 90pt;
-            height: 90pt;
+            width: 50pt;
+            height: 50pt;
             margin: 0 auto;
             display: block;
           }
@@ -313,33 +314,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             white-space: nowrap;
             text-overflow: ellipsis;
           }
-          /* Screen preview — compact readable layout, not print-sized */
-          @media screen {
-            .item-tags-grid {
-              height: auto;
-              grid-template-rows: auto;
-              gap: 8px;
-            }
-            .item-tag {
-              min-height: 140px;
-              padding: 8px;
-              border-radius: 6px;
-              border: 1px solid #e5e7eb;
-            }
-            .item-qr {
-              width: 64pt;
-              height: 64pt;
-            }
-            .item-photo {
-              max-height: 60px;
-            }
-            .item-title {
-              font-size: 10pt;
-            }
-            .item-price {
-              font-size: 12pt;
-            }
-          }
+          /* Screen overrides moved outside @media print below */
           .yard-sign-title {
             font-size: 44px;
             font-weight: bold;
@@ -369,8 +344,8 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             color: black;
           }
           .yard-sign-qr {
-            width: 5in;
-            height: 5in;
+            width: 6in;
+            height: 6in;
             margin: 0 auto;
           }
           .yard-sign-footer {
@@ -404,8 +379,8 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             page-break-after: avoid;
           }
           .qr-full-page-qr {
-            width: 5in;
-            height: 5in;
+            width: 6in;
+            height: 6in;
             margin: 0 auto;
           }
           .qr-full-page-label {
@@ -456,6 +431,41 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             color: black;
           }
         }
+        /* Screen preview — compact readable layout, not print-sized */
+        @media screen {
+          .item-tags-grid {
+            height: auto;
+            grid-template-rows: auto;
+            gap: 8px;
+          }
+          .item-tag {
+            min-height: 120px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+          }
+          .item-qr {
+            width: 48pt;
+            height: 48pt;
+          }
+          .item-photo {
+            max-height: 50px;
+          }
+          .item-title {
+            font-size: 9pt;
+          }
+          .item-price {
+            font-size: 11pt;
+          }
+          .yard-sign-qr {
+            width: 4in;
+            height: 4in;
+          }
+          .qr-full-page-qr {
+            width: 4in;
+            height: 4in;
+          }
+        }
       `}</style>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -467,7 +477,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
               {sale && (
                 <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
                   {sale.title} • {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}{' '}
-                  ({Math.ceil(filteredItems.length / 9)} page{Math.ceil(filteredItems.length / 9) !== 1 ? 's' : ''})
+                  ({Math.ceil(filteredItems.length / 15)} page{Math.ceil(filteredItems.length / 15) !== 1 ? 's' : ''})
                 </p>
               )}
             </div>
@@ -746,7 +756,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       </div>
                     ))}
                     {/* Fill empty slots with blank cards */}
-                    {[...Array(9 - pageItems.length)].map((_, i) => (
+                    {[...Array(15 - pageItems.length)].map((_, i) => (
                       <div key={`blank-${i}`} className="item-tag" />
                     ))}
                   </div>

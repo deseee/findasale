@@ -741,9 +741,14 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
     const TAB_HEIGHT = 292;
     const TAB_Y_START = CUT_LINE_Y + 5;
 
-    // Build the vertical text string for each tab (reads bottom-to-top when rotated)
+    // Build separate lines for each tab (each detail on its own line, vertical orientation)
     const addressLine = [sale.address, sale.city, sale.state].filter(Boolean).join(', ');
-    const tabLines = [sale.title, `${startDate} – ${endDate}`, addressLine, 'finda.sale'].filter(Boolean).join('  ·  ');
+    const tabTextLines = [
+      sale.title,
+      `${startDate} – ${endDate}`,
+      addressLine,
+      'finda.sale',
+    ].filter(Boolean);
 
     for (let i = 0; i < TABS_PER_ROW; i++) {
       const tabX = MARGIN_SIDE + i * TAB_WIDTH;
@@ -765,8 +770,7 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
       const qrSmallY = TAB_Y_START + 8;
       doc.image(qrSmall, qrSmallX, qrSmallY, { width: qrSmallSize, height: qrSmallSize });
 
-      // Vertical text — rotated 90° CCW (reads bottom-to-top)
-      // Available vertical space below QR: PAGE_H - (qrSmallY + qrSmallSize + 8) ≈ 220pt
+      // Vertical text — rotated 90° CCW, each detail on its own line
       const textAreaTop = qrSmallY + qrSmallSize + 8;
       const textAreaHeight = PAGE_H - textAreaTop - 10;
 
@@ -778,10 +782,11 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
         .font('Helvetica-Bold')
         .fontSize(7)
         .fillColor('#1a1a2e')
-        .text(tabLines, 0, 0, {
+        .text(tabTextLines.join('\n'), 0, 0, {
           width: textAreaHeight,
           align: 'left',
-          lineBreak: false,
+          lineBreak: true,
+          lineGap: 2,
         });
       doc.restore();
     }
@@ -1425,9 +1430,14 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
     const TEAR_OFF_TAB_HEIGHT = 292;
     const TEAR_OFF_TAB_Y_START = TEAR_OFF_CUT_Y + 5;
 
-    // Build the vertical text string for each tab (reads bottom-to-top when rotated)
+    // Build separate lines for each tab (each detail on its own line, vertical orientation)
     const fkAddressLine = [sale.address, sale.city, sale.state].filter(Boolean).join(', ');
-    const fkTabLines = [sale.title, `${startDate} – ${endDate}`, fkAddressLine, 'finda.sale'].filter(Boolean).join('  ·  ');
+    const fkTabTextLines = [
+      sale.title,
+      `${startDate} – ${endDate}`,
+      fkAddressLine,
+      'finda.sale',
+    ].filter(Boolean);
 
     for (let i = 0; i < TEAR_OFF_TABS_PER_ROW; i++) {
       const tabX = TEAR_OFF_MARGIN_SIDE + i * TEAR_OFF_TAB_WIDTH;
@@ -1449,7 +1459,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       const smallQrY = TEAR_OFF_TAB_Y_START + 8;
       doc.image(qrTearOffSmall, smallQrX, smallQrY, { width: smallQrSize, height: smallQrSize });
 
-      // Vertical text — rotated 90° CCW (reads bottom-to-top)
+      // Vertical text — rotated 90° CCW, each detail on its own line
       const fkTextAreaTop = smallQrY + smallQrSize + 8;
       const fkTextAreaHeight = PAGE_H - fkTextAreaTop - 10;
 
@@ -1460,10 +1470,11 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         .font('Helvetica-Bold')
         .fontSize(7)
         .fillColor('#1a1a2e')
-        .text(fkTabLines, 0, 0, {
+        .text(fkTabTextLines.join('\n'), 0, 0, {
           width: fkTextAreaHeight,
           align: 'left',
-          lineBreak: false,
+          lineBreak: true,
+          lineGap: 2,
         });
       doc.restore();
     }
