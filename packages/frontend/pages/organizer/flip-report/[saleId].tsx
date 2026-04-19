@@ -15,6 +15,17 @@ export default function FlipReportPage() {
   const { canAccess } = useOrganizerTier();
   const { data: flipReport, isLoading, error } = useFlipReport(saleId as string | null);
 
+  // Show minimal loader while router is hydrating
+  if (!saleId) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
+        <div className="max-w-7xl mx-auto text-center">
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
