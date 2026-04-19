@@ -152,7 +152,7 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       where: { organizerId: organizer.id },
       include: {
         items: {
-          select: { id: true, status: true, draftStatus: true },
+          select: { id: true, status: true, draftStatus: true, inInventory: true },
         },
         purchases: {
           where: { status: 'PAID' },
@@ -181,20 +181,24 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       (s: any) => s.status === 'DRAFT'
     );
 
-    // Count items by status
+    // Count items by status — exclude inventory source items (inInventory=true are library originals,
+    // not sale items; their pulled copies are counted separately via inInventory=false)
     let totalItems = 0;
     let availableItems = 0;
     let soldItems = 0;
     let draftItems = 0;
+    // Draft count is scoped to the active sale only (not inventory container or ended sales)
+    const activeSaleId = activeSale?.id;
     sales.forEach((sale: any) => {
       sale.items.forEach((item: any) => {
+        if (item.inInventory) return; // skip inventory source items (eBay library)
         totalItems++;
-        // Count unpublished items (DRAFT or PENDING_REVIEW) from all active/draft sales
-        if (item.draftStatus !== 'PUBLISHED') {
+        // Count unpublished items only from the active sale
+        if (item.draftStatus !== 'PUBLISHED' && sale.id === activeSaleId) {
           draftItems++;
-        } else if (item.status === 'SOLD') {
+        } else if (item.draftStatus === 'PUBLISHED' && item.status === 'SOLD') {
           soldItems++;
-        } else if (item.status === 'AVAILABLE') {
+        } else if (item.draftStatus === 'PUBLISHED' && item.status === 'AVAILABLE') {
           availableItems++;
         }
       });
