@@ -6,7 +6,7 @@ const AccessDenied = () => {
   const { user } = useAuth();
 
   // Determine context-appropriate messaging based on user role
-  const isOrganizer = user?.role === 'ORGANIZER';
+  const isOrganizer = user?.roles?.includes('ORGANIZER');
   const isShopper = user?.role === 'USER';
 
   let title = 'Access Denied';

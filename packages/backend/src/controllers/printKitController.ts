@@ -20,6 +20,12 @@ const PAGE_W = 612;    // 8.5 inches @ 72 dpi
 const PAGE_H = 792;    // 11 inches @ 72 dpi
 const PAGE_MARGIN = 36; // 0.5 inch margins
 
+// QR code standard sizes (in pixels @ 72 dpi for PDF rendering)
+const QR_SIZE_LABEL = 48;     // Small label QR (Avery 5160 stickers, price tags)
+const QR_SIZE_ITEM = 110;     // Medium item QR (hang tags)
+const QR_SIZE_STANDARD = 300;  // Standard QR (full-page kits, tear-off large)
+const QR_SIZE_LARGE = 500;    // Large QR (yard sign, directional, interactive pages)
+
 /**
  * GET /api/organizer/sales/:saleId/print-kit
  * Generates a combined PDF with:
@@ -72,7 +78,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       itemQrBuffers.push(
         await QRCode.toBuffer(itemUrl, {
           type: 'png',
-          width: 200,
+          width: QR_SIZE_STANDARD,
           margin: 1,
           color: { dark: '#000000', light: '#ffffff' },
         })
@@ -177,7 +183,7 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 500,
+      width: QR_SIZE_LARGE,
       margin: 2,
       color: { dark: '#000000', light: '#ffffff' },
     });
@@ -290,7 +296,7 @@ export const getDirectionalSignKit = async (req: AuthRequest, res: Response) => 
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 500,
+      width: QR_SIZE_LARGE,
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     });
@@ -424,7 +430,7 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
 
     const qrBuffer = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 500,
+      width: QR_SIZE_LARGE,
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     });
@@ -457,10 +463,10 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
     };
     const saleTypeStr = saleTypeLabel[sale.saleType ?? ''] ?? '';
 
-    // QR centered in a 306pt panel: x = (306 - 190) / 2 = 58
-    const QR_SIZE = 190;
-    const QR_X_FRONT = (PANEL_W - QR_SIZE) / 2;        // 58 — left panel
-    const QR_X_BACK  = PANEL_W + (PANEL_W - QR_SIZE) / 2; // 364 — right panel
+    // QR centered in a 306pt panel: x = (306 - 300) / 2 = 3 (use standard 300pt for consistency)
+    const QR_SIZE_TENT = QR_SIZE_STANDARD;  // 300pt for consistency across kits
+    const QR_X_FRONT = (PANEL_W - QR_SIZE_TENT) / 2;        // 3 — left panel
+    const QR_X_BACK  = PANEL_W + (PANEL_W - QR_SIZE_TENT) / 2; // 309 — right panel
 
     // Draw two tents per page (tent 1: y=0..396, tent 2: y=396..792)
     for (let i = 0; i < 2; i++) {
@@ -506,8 +512,8 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
         .fillColor('#16a34a')
         .text('Browse & buy before you arrive.', 12, yOffset + 106, { width: 282, align: 'center', lineBreak: false });
 
-      // QR code — centered, 190×190, starts at y+125 → ends y+315
-      doc.image(qrBuffer, QR_X_FRONT, yOffset + 125, { width: QR_SIZE, height: QR_SIZE });
+      // QR code — centered, standardized size, starts at y+125 → ends y+425
+      doc.image(qrBuffer, QR_X_FRONT, yOffset + 125, { width: QR_SIZE_TENT, height: QR_SIZE_TENT });
 
       // "Scan to view items" caption
       doc
@@ -557,7 +563,7 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
       doc.moveTo(PANEL_W + 12, yOffset + 98).lineTo(PANEL_W + 294, yOffset + 98).lineWidth(0.5).stroke('#dddddd');
 
       // Second QR code — same URL, centered in back panel
-      doc.image(qrBuffer, QR_X_BACK, yOffset + 110, { width: QR_SIZE, height: QR_SIZE });
+      doc.image(qrBuffer, QR_X_BACK, yOffset + 110, { width: QR_SIZE_TENT, height: QR_SIZE_TENT });
 
       // "Scan to view items" caption
       doc
@@ -615,7 +621,7 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
     // Generate large QR for top section
     const qrLarge = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 500,
+      width: QR_SIZE_STANDARD,
       margin: 2,
       color: { dark: '#000000', light: '#ffffff' },
     });
@@ -623,7 +629,7 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
     // Generate small QR for tabs (reuse for all tabs since same URL)
     const qrSmall = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 200,
+      width: 100,  // Small size for tear-off tabs
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     });
@@ -827,7 +833,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
       const itemUrl = `${frontendUrl}/items/${item.id}`;
       itemQrBuffers[item.id] = await QRCode.toBuffer(itemUrl, {
         type: 'png',
-        width: 500,
+        width: QR_SIZE_STANDARD,
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
       });
@@ -849,7 +855,7 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
     const TAGS_PER_PAGE = COLS * ROWS;
     const MARGIN_X = (612 - COLS * TAG_W) / 2;  // = 26
     const MARGIN_Y = (792 - ROWS * TAG_H) / 2;  // = 66
-    const QR_SIZE = 110;
+    const QR_SIZE_HANGTAG = QR_SIZE_ITEM;  // 110pt for item-specific tags
 
     // If no items, generate one page of 12 blank tags with "No items yet" text
     if (sale.items.length === 0) {
@@ -934,9 +940,9 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
         }
 
         // QR code — centered horizontally
-        const qrX = tagX + (TAG_W - QR_SIZE) / 2;  // = tagX + 15
+        const qrX = tagX + (TAG_W - QR_SIZE_HANGTAG) / 2;  // = tagX + 15
         const qrY = tagY + (item.price ? 70 : 55);
-        doc.image(itemQrBuffers[item.id], qrX, qrY, { width: QR_SIZE, height: QR_SIZE });
+        doc.image(itemQrBuffers[item.id], qrX, qrY, { width: QR_SIZE_HANGTAG, height: QR_SIZE_HANGTAG });
 
         // finda.sale (bottom)
         doc
@@ -964,7 +970,7 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
   const CELL_W = 189;   // Avery 5160: 2-5/8" = 189pt
   const CELL_H = 72;    // Avery 5160: 1" = 72pt
   const H_GAP = 9;      // Avery 5160: 1/8" gap between columns = 9pt
-  const QR_SIZE = 48;
+  const QR_SIZE_PRICE = QR_SIZE_LABEL;  // 48pt for price sheet labels
   const LEFT_MARGIN = 13.5;  // Avery 5160: 3/16" = 13.5pt
   const TOP_MARGIN = 36;     // Avery 5160: 1/2" = 36pt
 
@@ -1000,15 +1006,15 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
       .fillColor('#999999')
       .text('finda.sale', cellX + 58, cellY + 56, { width: 80, lineBreak: false });
 
-    // QR code — left side, 48×48
+    // QR code — left side, standardized label size
     const miscQrUrl = `${frontendUrl}/pos/${saleId}?action=add-misc&price=${prices[i].toFixed(2)}`;
     const miscQrBuffer = await QRCode.toBuffer(miscQrUrl, {
       type: 'png',
-      width: 200,
+      width: QR_SIZE_LABEL,
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     });
-    doc.image(miscQrBuffer, cellX + 4, cellY + 12, { width: QR_SIZE, height: QR_SIZE });
+    doc.image(miscQrBuffer, cellX + 4, cellY + 12, { width: QR_SIZE_PRICE, height: QR_SIZE_PRICE });
   }
 }
 
@@ -1043,24 +1049,24 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
     const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_full_kit`;
 
-    // Generate all QR codes upfront
+    // Generate all QR codes upfront with standardized sizes
     const qrYardSign = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 500,
+      width: QR_SIZE_LARGE,
       margin: 2,
       color: { dark: '#000000', light: '#ffffff' },
     });
 
     const qrDirectional = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 500,
+      width: QR_SIZE_LARGE,
       margin: 2,
       color: { dark: '#000000', light: '#ffffff' },
     });
 
     const qrTableTent = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 500,
+      width: QR_SIZE_LARGE,
       margin: 2,
       color: { dark: '#000000', light: '#ffffff' },
     });
@@ -1068,14 +1074,14 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
     // Generate QR codes for tear-off flyer (large + small)
     const qrTearOffLarge = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 500,
+      width: QR_SIZE_STANDARD,
       margin: 2,
       color: { dark: '#000000', light: '#ffffff' },
     });
 
     const qrTearOffSmall = await QRCode.toBuffer(saleUrl, {
       type: 'png',
-      width: 200,
+      width: 100,  // Small size for tear-off tabs
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     });
@@ -1085,7 +1091,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       `${frontendUrl}/sales/${saleId}?utm_source=qr_full_kit_checkin`,
       {
         type: 'png',
-        width: 500,
+        width: QR_SIZE_LARGE,
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
       }
@@ -1095,7 +1101,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       `${frontendUrl}/sales/${saleId}/treasure-hunt-qr?utm_source=qr_full_kit_hunt`,
       {
         type: 'png',
-        width: 500,
+        width: QR_SIZE_LARGE,
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
       }
@@ -1105,7 +1111,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       `${frontendUrl}/sales/${saleId}/photo-station?utm_source=qr_full_kit_photo`,
       {
         type: 'png',
-        width: 500,
+        width: QR_SIZE_LARGE,
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' },
       }
@@ -1258,9 +1264,9 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       ? `${fkSaleTypeStr}  ·  ${startDate} – ${endDate}`
       : `${startDate} – ${endDate}`;
 
-    const FK_QR_SIZE = 190;
-    const FK_QR_X_FRONT = (PANEL_W_FULL - FK_QR_SIZE) / 2;               // 58
-    const FK_QR_X_BACK  = PANEL_W_FULL + (PANEL_W_FULL - FK_QR_SIZE) / 2; // 364
+    const FK_QR_SIZE = QR_SIZE_STANDARD;  // 300pt for consistency
+    const FK_QR_X_FRONT = (PANEL_W_FULL - FK_QR_SIZE) / 2;               // 3
+    const FK_QR_X_BACK  = PANEL_W_FULL + (PANEL_W_FULL - FK_QR_SIZE) / 2; // 309
 
     for (let i = 0; i < 2; i++) {
       const yOffset = i * 396;
@@ -1639,10 +1645,10 @@ function drawSticker(
     .font('Courier')
     .text(`ID: ${item.id}`, stickerX, doc.y - 2, { width: contentW, align: 'left' });
 
-  // QR code in bottom-right corner (48×48 pixels)
-  const qrX = x + STICKER_W - MARGIN - 48;
-  const qrY = y + STICKER_H - MARGIN - 48;
-  doc.image(qrBuffer, qrX, qrY, { width: 48, height: 48 });
+  // QR code in bottom-right corner (standardized label size)
+  const qrX = x + STICKER_W - MARGIN - QR_SIZE_LABEL;
+  const qrY = y + STICKER_H - MARGIN - QR_SIZE_LABEL;
+  doc.image(qrBuffer, qrX, qrY, { width: QR_SIZE_LABEL, height: QR_SIZE_LABEL });
 
   // Border around sticker
   doc

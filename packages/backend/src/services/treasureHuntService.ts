@@ -125,7 +125,7 @@ export async function getTodayHunt(): Promise<any> {
       clue: generated.clue,
       category: generated.category,
       keywords: generated.keywords,
-      pointReward: 50,
+      pointReward: 3, // XP_AWARDS.TREASURE_HUNT_SCAN (D-XP-015)
     },
   });
 

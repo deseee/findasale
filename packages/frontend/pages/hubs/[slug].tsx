@@ -155,7 +155,7 @@ export default function HubDetailPage() {
           </div>
 
           {/* CTA */}
-          {user?.role === 'ORGANIZER' && (
+          {user?.roles?.includes('ORGANIZER') && (
             <div className="bg-sage-50 dark:bg-gray-800 rounded-lg p-6 border border-sage-200 dark:border-gray-700 text-center">
               <p className="text-gray-700 dark:text-gray-300 mb-4">Interested in joining this hub?</p>
               <Link

@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getTodayHunt, checkIfItemMatchesHunt, markFound } from '../services/treasureHuntService';
+import { XP_AWARDS } from '../services/xpService';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get('/today', async (req: AuthRequest, res: Response) => {
       id: hunt.id,
       clue: hunt.clue,
       category: hunt.category,
-      pointReward: hunt.pointReward,
+      pointReward: XP_AWARDS.TREASURE_HUNT_SCAN, // Always use current constant (D-XP-015), not stale DB value
       alreadyFound: !!found,
     });
   } catch (err) {

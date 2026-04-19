@@ -300,7 +300,7 @@ export const register = async (req: Request, res: Response) => {
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
     let organizerProfile = null;
-    if (user.role === 'ORGANIZER') {
+    if (user.role === 'ORGANIZER' || user.roles?.includes('ORGANIZER')) {
       organizerProfile = await prisma.organizer.findUnique({
         where: { userId: user.id }
       });
