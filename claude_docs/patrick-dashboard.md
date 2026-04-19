@@ -1,5 +1,41 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
+## S509 Summary (2026-04-19) — Full product audit complete, 2 P0s fixed, 15 findings queued for S510
+
+**2 bugs fixed inline. 15 more queued. Next session dispatches all of them in parallel.**
+
+### Fixed this session (already live):
+- **Return-to-Inventory prices wrong** — was dividing by 100. Fixed.
+- **Return-to-Inventory "Organizer not authenticated"** — was reading wrong auth field. Fixed.
+
+### What was found in the audit:
+
+**P1 — Fix next session:**
+- Messages reply box is there but invisible — it's only 37px tall at the very bottom with no visual border separating it from the chat. You can type if you know exactly where to look but most users won't find it.
+- Outgoing message bubble cuts off at the right edge of the screen (text truncated).
+- Flip report shows $1250 revenue + $625 avg sale price but also "0 items sold" — the stats contradict each other. Also generates a "Strong pricing power" recommendation from a $0 asking price.
+- Flip report shows a green ✅ next to "Low sell-through rate" — that's a negative insight, it should be a warning icon.
+
+**P2 — Fix next session:**
+- Treasure Hunt badge on homepage still shows "+50 XP" — should be 3 XP/scan and 15 XP/completion (locked decision S500).
+- Sold items are mixed in with unsold items on the sale detail page. You mentioned this during the walkthrough — they should sort to the bottom.
+- TEAMS upsell on the dashboard says "API access • White-label support" — those are Enterprise features, not TEAMS. Needs correct copy.
+- Live Activity shopper avatars are solid color blobs (no initials inside).
+- Sale detail right-side panel buttons get clipped at the right edge of the screen.
+- Flip report Category Breakdown table is empty even when the report shows revenue.
+- Efficiency Coach shows "Top 100%" which sounds good but may actually mean bottom percentile.
+
+**P3 — Low priority cleanup:**
+- Map toolbar: third button slightly clipped.
+- Collections + Flip report: 3-second loading skeleton before content appears.
+- Inventory empty state copy: "No items match your filters" even when there are literally zero items.
+- Bronze rank card: "Upgrade →" link text is confusing — rank is earned, not purchased.
+
+### Next session (S510):
+5 dev agents dispatched in parallel — messages, sale detail, dashboard copy, XP badge/flip report icons, P3 cleanup. Then sequential Chrome QA on each fix.
+
+---
+
 ## S508 Summary (2026-04-19) — Feature #300 TS repair complete, Railway build clean
 
 **3 targeted fixes. No new features — just making the build green.**

@@ -7,6 +7,41 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S509 (2026-04-19) — Full product walkthrough audit + 2 P0 inline fixes**
+
+Full Chrome QA walkthrough completed as Bob (organizer PRO, user2) across all major pages. Two P0 bugs caught and fixed inline at session start.
+
+**Fixed inline (2 files, pushed):**
+- `ReturnToInventoryPanel.tsx` — price display was `/100` (Item.price is Float in dollars, not cents)
+- `returnToInventoryController.ts` — auth read `req.organizer?.id` (never set); fixed to `req.user?.id` + `AuthRequest` type
+
+**Audit findings — dispatch pending (S510):**
+
+| P | Issue | Location |
+|---|-------|----------|
+| P1 | Messages reply bar: 37px tall, no separator, blends into background — functionally there but invisible to users | `/messages/[id]` |
+| P1 | Outgoing message bubble clips at right viewport edge — text truncated | `/messages/[id]` |
+| P1 | Flip report contradictory stats: $1250 revenue / 0 items sold / $0 avg asking / $625 avg sale price | `/organizer/flip-report/[id]` |
+| P1 | Flip report "Low sell-through" recommendation shows green ✅ icon instead of warning | `/organizer/flip-report/[id]` |
+| P2 | Treasure Hunt XP badge: shows +50 (locked decision S500: 3 XP scan / 15 XP completion) | Homepage |
+| P2 | Sale detail right-side action panel overflows viewport right edge | `/sales/[id]` |
+| P2 | Live Activity avatars render as solid color blobs — no initials | `/sales/[id]` |
+| P2 | Sold items not sorted to bottom of sale item list | `/sales/[id]` |
+| P2 | TEAMS upsell shows wrong features: "API access • White-label support" | `/organizer/dashboard` |
+| P2 | Flip report Category Breakdown table empty despite revenue showing | `/organizer/flip-report/[id]` |
+| P2 | Efficiency Coach "Top 100%" badge — misleading percentile label | `/organizer/dashboard` |
+| P3 | Map toolbar third button clipped at right edge | `/map` |
+| P3 | Collections/flip-report loading skeleton ~3s before content renders | Multiple |
+| P3 | Inventory empty state: "No items match your filters" when truly zero items | `/organizer/inventory` |
+| P3 | Bronze rank "Upgrade →" link text misleading (rank is earned, not purchased) | `/organizer/dashboard` |
+
+**Unverified:**
+- Return-to-inventory browser flow — Bob's ENDED sale has 0 items, panel doesn't appear. Need ENDED sale with unsold items to verify fix end-to-end.
+
+Full findings doc: `/sessions/elegant-fervent-einstein/qa-findings-audit-2026-04-19.md`
+
+---
+
 **S508 (2026-04-19) — Feature #300 TS repair: 3 remaining Railway build errors fixed**
 
 After S507 shipped the nullable `Item.saleId` migration, Railway's fresh Prisma client exposed 3 TypeScript errors that the stale VM client had hidden:
@@ -480,28 +515,68 @@ Railway build now clean. S507 Feature #300 is fully deployed.
 
 ---
 
-**Next Session — S502:**
+**Next Session — S510:**
 
-**Theme: Photo station feature build + treasure hunt 3-clue limit.**
+**Theme: Parallel bug dispatch — all S509 audit findings.**
 
-**Priority 1 — Push S501 (Patrick action):**
-See push block in patrick-dashboard.md. 3 code files + 2 wrap docs. S500 push block also pending if not yet pushed.
+**Session goal:** Dispatch all P1/P2 findings in parallel. Group by file ownership to avoid conflicts. P3s can batch together as a cleanup pass.
 
-**Priority 2 — Treasure hunt 3-clue limit:**
-- `treasureHuntQRController.ts` has 10-clue cap — update to 3
-- Already at correct XP rate (3 XP/scan from S500)
+**Parallel Batch A — Messages (sequential, same file):**
 
-**Priority 3 — Photo station feature build:**
-- New shopper page: `packages/frontend/pages/sales/[id]/photo-station.tsx`
-- New backend endpoint: `POST /api/sales/:saleId/photo-station/scan` — dedupe per user per sale, award 3 XP (TREASURE_HUNT_SCAN rate)
-- Update print kit photo station QR URL: `https://finda.sale/sales/${saleId}` → `https://finda.sale/sales/${saleId}/photo-station`
-- Architect: check if existing table handles dedup or if PhotoStationScan model needed
+Agent 1 — `findasale-dev`: Fix reply bar layout
+- File: `packages/frontend/pages/messages/[id].tsx`
+- Problem: Reply form container only 52px, same background as page, no visual separator
+- Fix: Add `border-t border-warm-200 dark:border-gray-700` top border, increase form min-height to ~72px, add `py-3 px-4` padding, ensure reply bar is visually distinct
+- Also fix: Outgoing message bubble clips right viewport edge — add `max-w-[75%]` and `break-words` to outgoing bubble container
+- TS check required before returning
 
-**Patrick manual actions:**
-1. Push S501 (push block below)
-2. Push S500 if not yet pushed
-3. Stripe Connect webhook (carry-forward P2 since S421)
-4. Delete root files: `finda-sale-landing.html`, `organizer-video-ad.html`, `The_True_Plan.md`
+**Parallel Batch B — Sale detail (same file, sequential within):**
+
+Agent 2 — `findasale-dev`: Fix sold item sort + action panel overflow + Live Activity avatars
+- File 1: `packages/frontend/pages/sales/[id].tsx`
+  - Sold items sort: items list should render SOLD/DONATED items at bottom — add client-side sort by status (AVAILABLE first, SOLD/DONATED last) or check if the API supports `orderBy` on status
+  - Action panel overflow: right-side panel has buttons clipping — investigate overflow, add `overflow-x-hidden` or constrain panel max-width
+  - Live Activity avatars: avatar circles rendering as blobs with no initials — find the avatar/initials component and debug why text isn't rendering (likely a z-index or color contrast issue)
+- TS check required before returning
+
+**Parallel Batch C — Dashboard upsell copy:**
+
+Agent 3 — `findasale-dev`: Fix TEAMS upsell copy on organizer dashboard
+- File: `packages/frontend/pages/organizer/dashboard.tsx`
+- Find the TEAMS upsell card ("Your Plan: PRO" → "Learn about TEAMS")
+- Replace "API access • White-label support" with correct TEAMS differentiators: "Multi-user workspace • Member roles • Shared sales management"
+- TS check required before returning
+
+**Parallel Batch D — XP badge + flip report icons:**
+
+Agent 4 — `findasale-dev`: Fix Treasure Hunt XP badge + flip report recommendation icons
+- File 1: Find homepage Treasure Hunt component (grep for "+50 Hunt Pass XP" or "Hunt Pass") — update to "3 XP per scan · 15 XP on completion" per S500 locked decision
+- File 2: `packages/frontend/pages/organizer/flip-report/[saleId].tsx` or flip report component — find where recommendations render with ✅ icons — change negative recommendations ("Low sell-through rate") to use an amber warning icon (⚠️ or equivalent) instead of green ✅
+- TS check required before returning
+
+**P3 Cleanup Batch (single agent after P1/P2 done):**
+
+Agent 5 — `findasale-dev`: P3 cleanup
+- Inventory empty state: `packages/frontend/pages/organizer/inventory.tsx` or similar — change "No items match your filters" to "No inventory items yet" when there are truly zero items (check if search/filter state is empty)
+- Bronze rank "Upgrade →" text: find organizer rank card on dashboard — change link text from "Upgrade →" to "View progress →" or "How to reach Silver →"
+- Map toolbar button clipping: find map page third button, add overflow/padding fix
+- TS check required before returning
+
+**Post-dispatch QA:**
+After all agents return, dispatch `findasale-qa` sequentially (one per feature, Chrome only):
+1. Messages reply bar — visible, usable, persists after send
+2. Sold items sort — SOLD items at bottom on sale detail
+3. TEAMS upsell copy — correct text on dashboard
+4. Treasure Hunt XP badge — correct values
+
+**Carry-forward:**
+- Return-to-inventory browser verify (need ENDED sale with unsold items)
+- Flip report data inconsistency (likely test data issue — investigate separately)
+- Efficiency Coach "Top 100%" label (may be intentional percentile display)
+
+**Patrick actions:**
+- No schema changes this session — no migration needed
+- No push.ps1 needed until dev agents return
 
 ---
 
