@@ -585,6 +585,241 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * GET /api/organizer/sales/:saleId/signs/tear-off
+ * Tear-off flyer: Portrait letter (612×792pt).
+ * Top half (~500pt): Green header bar, sale title, date range, address, large QR code (300pt), tagline
+ * Bottom half (~250pt): Dashed cut line + row of small tear-off tabs (each ~72pt wide with small QR, sale title, branding)
+ */
+export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: { select: { userId: true } } },
+    });
+
+    if (!sale) return res.status(404).json({ message: 'Sale not found.' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Not your sale.' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+    const saleUrl = `${frontendUrl}/sales/${saleId}?utm_source=qr_tear_off`;
+
+    // Generate large QR for top section
+    const qrLarge = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 500,
+      margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+
+    // Generate small QR for tabs (reuse for all tabs since same URL)
+    const qrSmall = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 200,
+      margin: 1,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const PDFDocument = require('pdfkit');
+
+    const doc = new PDFDocument({ size: 'LETTER', margin: 0 });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="tear-off-flyer-${saleId}.pdf"`);
+    doc.pipe(res);
+
+    // Format dates
+    const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const endDate = new Date(sale.endDate).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    const TOP_SECTION_HEIGHT = 500;
+    const CUT_LINE_Y = TOP_SECTION_HEIGHT;
+
+    // ── TOP SECTION (0 to 500pt) ──────────────────────────────────────────
+    // Green header bar
+    doc.rect(0, 0, PAGE_W, 60).fill('#16a34a');
+
+    // Sale title — white on green
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(28)
+      .fillColor('#ffffff')
+      .text(sale.title, PAGE_MARGIN, 12, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center', lineBreak: true });
+
+    // Sale type (if available) + date range — below green bar
+    const saleTypeLabel: Record<string, string> = {
+      ESTATE: 'Estate Sale', YARD: 'Yard Sale', AUCTION: 'Auction',
+      FLEA_MARKET: 'Flea Market', CONSIGNMENT: 'Consignment Sale',
+    };
+    const saleTypeStr = saleTypeLabel[sale.saleType ?? ''] ?? '';
+    const typeAndDate = saleTypeStr
+      ? `${saleTypeStr}  ·  ${startDate} – ${endDate}`
+      : `${startDate} – ${endDate}`;
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(16)
+      .fillColor('#1a1a2e')
+      .text(typeAndDate, PAGE_MARGIN, 75, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+
+    // Address
+    doc
+      .font('Helvetica')
+      .fontSize(14)
+      .fillColor('#444444')
+      .text(`${sale.address}`, PAGE_MARGIN, 100, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    doc
+      .fontSize(13)
+      .text(`${sale.city}, ${sale.state} ${sale.zip}`, PAGE_MARGIN, doc.y + 2, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // Large QR code — centered horizontally, positioned below address
+    const qrLargeSize = 300;
+    const qrLargeX = (PAGE_W - qrLargeSize) / 2;
+    const qrLargeY = 145;
+    doc.image(qrLarge, qrLargeX, qrLargeY, { width: qrLargeSize, height: qrLargeSize });
+
+    // Tagline below QR
+    doc
+      .font('Helvetica')
+      .fontSize(12)
+      .fillColor('#16a34a')
+      .text('Scan to browse & buy', PAGE_MARGIN, 460, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // finda.sale branding at bottom of top section
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(11)
+      .fillColor('#999999')
+      .text('finda.sale', PAGE_MARGIN, 485, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // ── DASHED CUT LINE (separates top from tear-off tabs) ──────────────────
+    const MARGIN_SIDE = 18;
+    doc
+      .moveTo(MARGIN_SIDE, CUT_LINE_Y)
+      .lineTo(PAGE_W - MARGIN_SIDE, CUT_LINE_Y)
+      .dash(4, { space: 3 })
+      .lineWidth(2)
+      .stroke('#999999')
+      .undash();
+
+    // ── TEAR-OFF TABS SECTION (500 to 792pt = 292pt available) ──────────────
+    // Calculate tab dimensions
+    // Page width = 612, side margins = 18 each → usable = 576pt
+    // Fit 8 tabs: 576 / 8 = 72pt per tab
+    const USABLE_WIDTH = PAGE_W - MARGIN_SIDE * 2;
+    const TABS_PER_ROW = 8;
+    const TAB_WIDTH = USABLE_WIDTH / TABS_PER_ROW; // = 72pt
+    const TAB_HEIGHT = 292;
+    const TAB_Y_START = CUT_LINE_Y + 5;
+
+    for (let i = 0; i < TABS_PER_ROW; i++) {
+      const tabX = MARGIN_SIDE + i * TAB_WIDTH;
+
+      // Vertical dashed cut line between tabs (except after last tab)
+      if (i > 0) {
+        doc
+          .moveTo(tabX, CUT_LINE_Y)
+          .lineTo(tabX, PAGE_H)
+          .dash(4, { space: 3 })
+          .lineWidth(1)
+          .stroke('#999999')
+          .undash();
+      }
+
+      // Small QR code — centered in tab, ~60pt
+      const qrSmallSize = 60;
+      const qrSmallX = tabX + (TAB_WIDTH - qrSmallSize) / 2;
+      const qrSmallY = TAB_Y_START + 15;
+      doc.image(qrSmall, qrSmallX, qrSmallY, { width: qrSmallSize, height: qrSmallSize });
+
+      // Sale title — truncated, tiny font (6pt), centered below QR
+      const titleText = sale.title.length > 12
+        ? sale.title.slice(0, 10) + '…'
+        : sale.title;
+      let textY = qrSmallY + qrSmallSize + 4;
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(5.5)
+        .fillColor('#1a1a2e')
+        .text(titleText, tabX + 2, textY, {
+          width: TAB_WIDTH - 4,
+          align: 'center',
+          lineBreak: false,
+        });
+
+      // Date range
+      textY += 9;
+      doc
+        .font('Helvetica')
+        .fontSize(4.5)
+        .fillColor('#444444')
+        .text(`${startDate} – ${endDate}`, tabX + 2, textY, {
+          width: TAB_WIDTH - 4,
+          align: 'center',
+          lineBreak: false,
+        });
+
+      // Address (city, state)
+      if (sale.city && sale.state) {
+        textY += 8;
+        doc
+          .fontSize(4.5)
+          .fillColor('#444444')
+          .text(`${sale.city}, ${sale.state}`, tabX + 2, textY, {
+            width: TAB_WIDTH - 4,
+            align: 'center',
+            lineBreak: false,
+          });
+      }
+
+      // finda.sale branding — tiny text (5pt) at bottom of tab
+      doc
+        .fontSize(5)
+        .fillColor('#999999')
+        .text('finda.sale', tabX + 2, PAGE_H - 20, {
+          width: TAB_WIDTH - 4,
+          align: 'center',
+          lineBreak: false,
+        });
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error('getTearOffFlyer error:', error);
+    res.status(500).json({ message: 'Failed to generate tear-off flyer.' });
+  }
+};
+
+/**
  * GET /api/organizer/sales/:saleId/signs/hang-tag
  * Item-specific hang tags. One tag per item: item title + price + QR code pointing to item.
  * 4 cols × 3 rows = 12 tags per page. Page-break every 12 items.
@@ -809,8 +1044,8 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
 /**
  * GET /api/organizer/sales/:saleId/signs/full-kit
  * Combined multi-section PDF: page 1 = yard sign, page 2 = directional signs,
- * page 3 = table tents, page 4 = check-in QR, page 5 = treasure hunt QR,
- * page 6 = photo station QR, pages 7+ = price sheet.
+ * page 3 = table tents, page 4 = tear-off flyer, page 5 = check-in QR, page 6 = treasure hunt QR,
+ * page 7 = photo station QR, pages 8+ = price sheet.
  * (Hang tags excluded — download separately from the QR Item Labels section.)
  */
 export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
@@ -856,6 +1091,21 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       type: 'png',
       width: 500,
       margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+
+    // Generate QR codes for tear-off flyer (large + small)
+    const qrTearOffLarge = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 500,
+      margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+
+    const qrTearOffSmall = await QRCode.toBuffer(saleUrl, {
+      type: 'png',
+      width: 200,
+      margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     });
 
@@ -1107,7 +1357,173 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       doc.rect(PANEL_W_FULL, yOffset, PANEL_W_FULL, TENT_H_FULL).lineWidth(1).stroke('#cccccc');
     }
 
-    // PAGE 4: Check-In / Virtual Queue QR
+    // PAGE 4: Tear-Off Flyer
+    // Top half: green header, sale info, large QR
+    // Bottom half: dashed cut line + tear-off tabs with small QRs
+    doc.addPage({ size: 'LETTER', margin: 0 });
+
+    const TEAR_OFF_TOP_HEIGHT = 500;
+    const TEAR_OFF_CUT_Y = TEAR_OFF_TOP_HEIGHT;
+
+    // Green header bar
+    doc.rect(0, 0, PAGE_W, 60).fill('#16a34a');
+
+    // Sale title — white on green
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(28)
+      .fillColor('#ffffff')
+      .text(sale.title, PAGE_MARGIN, 12, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center', lineBreak: true });
+
+    // Sale type + date range
+    const toSaleTypeLabel: Record<string, string> = {
+      ESTATE: 'Estate Sale', YARD: 'Yard Sale', AUCTION: 'Auction',
+      FLEA_MARKET: 'Flea Market', CONSIGNMENT: 'Consignment Sale',
+    };
+    const toSaleTypeStr = toSaleTypeLabel[sale.saleType ?? ''] ?? '';
+    const toTypeAndDate = toSaleTypeStr
+      ? `${toSaleTypeStr}  ·  ${startDate} – ${endDate}`
+      : `${startDate} – ${endDate}`;
+
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(16)
+      .fillColor('#1a1a2e')
+      .text(toTypeAndDate, PAGE_MARGIN, 75, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+
+    // Address
+    doc
+      .font('Helvetica')
+      .fontSize(14)
+      .fillColor('#444444')
+      .text(`${sale.address}`, PAGE_MARGIN, 100, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    doc
+      .fontSize(13)
+      .text(`${sale.city}, ${sale.state} ${sale.zip}`, PAGE_MARGIN, doc.y + 2, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // Large QR code
+    const tearOffQrSize = 300;
+    const tearOffQrX = (PAGE_W - tearOffQrSize) / 2;
+    const tearOffQrY = 145;
+    doc.image(qrTearOffLarge, tearOffQrX, tearOffQrY, { width: tearOffQrSize, height: tearOffQrSize });
+
+    // Tagline
+    doc
+      .font('Helvetica')
+      .fontSize(12)
+      .fillColor('#16a34a')
+      .text('Scan to browse & buy', PAGE_MARGIN, 460, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // finda.sale branding
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(11)
+      .fillColor('#999999')
+      .text('finda.sale', PAGE_MARGIN, 485, {
+        width: PAGE_W - PAGE_MARGIN * 2,
+        align: 'center',
+      });
+
+    // Dashed cut line
+    const TEAR_OFF_MARGIN_SIDE = 18;
+    doc
+      .moveTo(TEAR_OFF_MARGIN_SIDE, TEAR_OFF_CUT_Y)
+      .lineTo(PAGE_W - TEAR_OFF_MARGIN_SIDE, TEAR_OFF_CUT_Y)
+      .dash(4, { space: 3 })
+      .lineWidth(2)
+      .stroke('#999999')
+      .undash();
+
+    // Tear-off tabs
+    const TEAR_OFF_USABLE_WIDTH = PAGE_W - TEAR_OFF_MARGIN_SIDE * 2;
+    const TEAR_OFF_TABS_PER_ROW = 8;
+    const TEAR_OFF_TAB_WIDTH = TEAR_OFF_USABLE_WIDTH / TEAR_OFF_TABS_PER_ROW; // 72pt
+    const TEAR_OFF_TAB_HEIGHT = 292;
+    const TEAR_OFF_TAB_Y_START = TEAR_OFF_CUT_Y + 5;
+
+    for (let i = 0; i < TEAR_OFF_TABS_PER_ROW; i++) {
+      const tabX = TEAR_OFF_MARGIN_SIDE + i * TEAR_OFF_TAB_WIDTH;
+
+      // Vertical dashed cut lines between tabs
+      if (i > 0) {
+        doc
+          .moveTo(tabX, TEAR_OFF_CUT_Y)
+          .lineTo(tabX, PAGE_H)
+          .dash(4, { space: 3 })
+          .lineWidth(1)
+          .stroke('#999999')
+          .undash();
+      }
+
+      // Small QR code
+      const smallQrSize = 60;
+      const smallQrX = tabX + (TEAR_OFF_TAB_WIDTH - smallQrSize) / 2;
+      const smallQrY = TEAR_OFF_TAB_Y_START + 15;
+      doc.image(qrTearOffSmall, smallQrX, smallQrY, { width: smallQrSize, height: smallQrSize });
+
+      // Sale title (truncated)
+      const titleText = sale.title.length > 12
+        ? sale.title.slice(0, 10) + '…'
+        : sale.title;
+      let tabTextY = smallQrY + smallQrSize + 4;
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(5.5)
+        .fillColor('#1a1a2e')
+        .text(titleText, tabX + 2, tabTextY, {
+          width: TEAR_OFF_TAB_WIDTH - 4,
+          align: 'center',
+          lineBreak: false,
+        });
+
+      // Date range
+      tabTextY += 9;
+      doc
+        .font('Helvetica')
+        .fontSize(4.5)
+        .fillColor('#444444')
+        .text(`${startDate} – ${endDate}`, tabX + 2, tabTextY, {
+          width: TEAR_OFF_TAB_WIDTH - 4,
+          align: 'center',
+          lineBreak: false,
+        });
+
+      // Address (city, state)
+      if (sale.city && sale.state) {
+        tabTextY += 8;
+        doc
+          .fontSize(4.5)
+          .fillColor('#444444')
+          .text(`${sale.city}, ${sale.state}`, tabX + 2, tabTextY, {
+            width: TEAR_OFF_TAB_WIDTH - 4,
+            align: 'center',
+            lineBreak: false,
+          });
+      }
+
+      // finda.sale at bottom of tab
+      doc
+        .fontSize(5)
+        .fillColor('#999999')
+        .text('finda.sale', tabX + 2, PAGE_H - 20, {
+          width: TEAR_OFF_TAB_WIDTH - 4,
+          align: 'center',
+          lineBreak: false,
+        });
+    }
+
+    // PAGE 5: Check-In / Virtual Queue QR
+    // (was PAGE 4 before tear-off flyer was added)
     doc.addPage({ size: 'LETTER', margin: 0 });
     const qrSize_interactive = 500; // ~6.9 inches (matches yard sign)
     const qrX_interactive = (PAGE_W - qrSize_interactive) / 2;
@@ -1134,7 +1550,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // PAGE 5: Treasure Hunt QR
+    // PAGE 6: Treasure Hunt QR
     doc.addPage({ size: 'LETTER', margin: 0 });
 
     doc
@@ -1159,7 +1575,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // PAGE 6: Photo Station QR
+    // PAGE 7: Photo Station QR
     doc.addPage({ size: 'LETTER', margin: 0 });
 
     doc
@@ -1184,7 +1600,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // PAGE 7+: Price Sheet
+    // PAGE 8+: Price Sheet
     doc.addPage({ size: 'LETTER', margin: 0 });
     await renderPriceSheet(doc, saleId, sale.title, frontendUrl);
 
