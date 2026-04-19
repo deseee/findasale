@@ -363,7 +363,7 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
 
     if (!organizer.stripeSubscriptionId) {
       return res.json({
-        tier: 'SIMPLE',
+        tier: organizer.subscriptionTier,
         status: null,
         currentPeriodEnd: null,
         cancelAtPeriodEnd: false,

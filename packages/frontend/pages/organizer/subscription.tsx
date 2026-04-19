@@ -5,7 +5,6 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
 import { useOrganizerTier, type SubscriptionTier } from '../../hooks/useOrganizerTier';
-import UsageBar from '../../components/UsageBar';
 import DowngradePreviewModal from '../../components/DowngradePreviewModal';
 
 interface Subscription {
@@ -527,7 +526,11 @@ export default function SubscriptionPage() {
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Billing Interval</p>
                     <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
-                      {subscription.billingInterval || <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
+                      {subscription.billingInterval
+                        ? subscription.billingInterval
+                        : tier === 'TEAMS'
+                          ? <span className="text-gray-500 dark:text-gray-500 text-base">Organization billing</span>
+                          : <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
                     </p>
                   </div>
                   <div>
@@ -537,10 +540,11 @@ export default function SubscriptionPage() {
                         subscription.status === 'active' ? 'bg-green-500' :
                         subscription.status === 'past_due' ? 'bg-yellow-500' :
                         subscription.status === 'canceled' ? 'bg-gray-400' :
+                        !subscription.status && tier === 'TEAMS' ? 'bg-green-500' :
                         'bg-blue-500'
                       }`}></span>
                       <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
-                        {subscription.status || 'Unknown'}
+                        {subscription.status || (tier === 'TEAMS' ? 'Active' : 'Unknown')}
                       </p>
                     </div>
                   </div>
@@ -553,7 +557,9 @@ export default function SubscriptionPage() {
                             month: 'long',
                             day: 'numeric',
                           })
-                        : <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
+                        : tier === 'TEAMS'
+                          ? <span className="text-gray-500 dark:text-gray-500 text-base">Managed by organization</span>
+                          : <span className="text-gray-500 dark:text-gray-500 text-base">Unavailable</span>}
                     </p>
                   </div>
                 </div>
@@ -578,51 +584,33 @@ export default function SubscriptionPage() {
                 )}
               </div>
 
-              {/* Usage Stats Section */}
+              {/* Plan Limits Section */}
               {(tier === 'PRO' || tier === 'TEAMS') && (
                 <div className="p-8 border-t border-gray-200 dark:border-gray-700">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Usage Overview</h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Items per Sale */}
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Plan Limits</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
                     <div>
-                      <UsageBar
-                        label="Items per Sale Limit"
-                        current={0}
-                        limit={tier === 'PRO' ? 500 : 9999}
-                        unit="items"
-                        showPercent={false}
-                      />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        {tier === 'PRO'
-                          ? 'PRO: 500 items per sale'
-                          : 'TEAMS: Unlimited items per sale'}
-                      </p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">Items per sale</p>
+                      <p>{tier === 'PRO' ? '500' : 'Unlimited'}</p>
                     </div>
-
-                    {/* Photos per Item */}
                     <div>
-                      <UsageBar
-                        label="Photos per Item Limit"
-                        current={0}
-                        limit={tier === 'PRO' ? 10 : 9999}
-                        unit="photos"
-                        showPercent={false}
-                      />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        {tier === 'PRO'
-                          ? 'PRO: 10 photos per item'
-                          : 'TEAMS: Unlimited photos per item'}
-                      </p>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">Photos per item</p>
+                      <p>{tier === 'PRO' ? '10' : 'Unlimited'}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">Concurrent sales</p>
+                      <p>{tier === 'PRO' ? '3' : 'Unlimited'}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">Platform fee</p>
+                      <p>8%</p>
                     </div>
                   </div>
-
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-6">
-                    💡 Usage stats are computed from your sales data. Check your{' '}
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
+                    For detailed analytics, visit your{' '}
                     <Link href="/organizer/dashboard" className="text-sage-600 hover:text-sage-700 font-semibold">
                       dashboard
-                    </Link>
-                    {' '}for detailed analytics.
+                    </Link>.
                   </p>
                 </div>
               )}
@@ -633,13 +621,22 @@ export default function SubscriptionPage() {
                 <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-6">Plan Actions</h3>
 
                 <div className="space-y-4">
-                  <button
-                    onClick={handleManagePlan}
-                    disabled={managingPlan}
-                    className="block w-full text-center bg-sage-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-sage-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {managingPlan ? 'Opening Portal...' : 'Manage Plan'}
-                  </button>
+                  {subscription.billingInterval ? (
+                    <button
+                      onClick={handleManagePlan}
+                      disabled={managingPlan}
+                      className="block w-full text-center bg-sage-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-sage-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {managingPlan ? 'Opening Portal...' : 'Manage Plan'}
+                    </button>
+                  ) : (
+                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                      <p className="text-green-800 dark:text-green-200 text-sm">
+                        Your plan is managed by your organization admin. For billing changes, contact{' '}
+                        <a href="mailto:support@finda.sale" className="underline font-medium">support@finda.sale</a>.
+                      </p>
+                    </div>
+                  )}
 
                   <Link
                     href="/pricing"
