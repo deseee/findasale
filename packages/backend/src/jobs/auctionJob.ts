@@ -74,16 +74,16 @@ export const endAuctions = async () => {
 
         let stripePaymentIntentId: string | null = null;
 
-        if (item.sale.organizer.stripeConnectId) {
+        if (item.sale!.organizer.stripeConnectId) {
           try {
             const feeAmount = Math.round(price * 100 * feePercent);
             const paymentIntent = await stripe().paymentIntents.create({
               amount: Math.round(price * 100),
               currency: 'usd',
-              metadata: { itemId: item.id, saleId: item.sale.id, userId: highestBid.userId },
+              metadata: { itemId: item.id, saleId: item.sale!.id, userId: highestBid.userId },
               application_fee_amount: feeAmount,
-              on_behalf_of: item.sale.organizer.stripeConnectId,
-              transfer_data: { destination: item.sale.organizer.stripeConnectId },
+              on_behalf_of: item.sale!.organizer.stripeConnectId,
+              transfer_data: { destination: item.sale!.organizer.stripeConnectId },
             });
             stripePaymentIntentId = paymentIntent.id;
           } catch (err) {
@@ -98,7 +98,7 @@ export const endAuctions = async () => {
           data: {
             userId: highestBid.userId,
             itemId: item.id,
-            saleId: item.sale.id,
+            saleId: item.sale!.id,
             amount: price,
             platformFeeAmount,
             stripePaymentIntentId,
@@ -117,7 +117,7 @@ export const endAuctions = async () => {
           const monthlyRemaining = await checkMonthlyXpCap(highestBid.userId, 'AUCTION');
           if (monthlyRemaining > 0) {
             const xpToAward = Math.min(totalXp, monthlyRemaining);
-            await awardXp(highestBid.userId, 'AUCTION_WIN', xpToAward, { itemId: item.id, saleId: item.sale.id });
+            await awardXp(highestBid.userId, 'AUCTION_WIN', xpToAward, { itemId: item.id, saleId: item.sale!.id });
           }
         } catch (err) {
           console.error('[XP] Failed to award XP for auction win:', err);

@@ -53,7 +53,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
 
     // Feature #75: Check AI tag limit before processing
     const organizer = await prisma.organizer.findUnique({
-      where: { userId: item.sale.organizer.userId },
+      where: { userId: item.sale!.organizer.userId },
       select: { id: true, subscriptionTier: true }
     });
 

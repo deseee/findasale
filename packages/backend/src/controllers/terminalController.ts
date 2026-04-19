@@ -148,7 +148,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
           return res.status(404).json({ message: `Item not found` });
         }
         const item = dbItems[itemId];
-        if (item.sale.organizerId !== organizer.id) {
+        if (item.sale!.organizerId !== organizer.id) {
           return res.status(403).json({ message: `"${item.title}" does not belong to your sale` });
         }
         if (item.status !== 'AVAILABLE') {
@@ -178,7 +178,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     let saleId = '';
     for (const item of items) {
       if (item.itemId && dbItems[item.itemId]) {
-        saleId = dbItems[item.itemId].sale.id;
+        saleId = dbItems[item.itemId].sale!.id;
         break;
       }
     }
@@ -296,7 +296,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
     // Verify ownership — use first purchase with an item, or fall back to saleId check (misc-only carts)
     const ownerPurchase = purchases.find(p => p.item);
     if (ownerPurchase) {
-      if (ownerPurchase.item!.sale.organizerId !== organizer.id) {
+      if (ownerPurchase.item!.sale!.organizerId !== organizer.id) {
         return res.status(403).json({ message: 'You do not have permission to capture this payment' });
       }
     } else {

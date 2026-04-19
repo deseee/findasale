@@ -344,7 +344,7 @@ export const getItemById = async (req: Request, res: Response) => {
     };
 
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
-    const isOwner = authReq.user?.id === item.sale.organizer.userId;
+    const isOwner = authReq.user?.id === item.sale!.organizer.userId;
 
     // For everyone else, enforce public visibility rules: must be active.
     // Allow NULL draftStatus (legacy/seeded items pre-Rapidfire) and PUBLISHED items.
@@ -698,7 +698,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale.organizer.userId !== req.user.id) {
+    if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
@@ -907,7 +907,7 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale.organizer.userId !== req.user.id) {
+    if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
@@ -941,7 +941,7 @@ export const getBids = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    const isOrganizer = req.user?.id === item.sale.organizer.userId;
+    const isOrganizer = req.user?.id === item.sale!.organizer.userId;
 
     // Fetch all bids, ordered by amount DESC (most recent winning first)
     const bids = await prisma.bid.findMany({
@@ -1005,7 +1005,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     }
 
     // Prevent self-bidding
-    if (item.sale.organizer.userId === req.user.id) {
+    if (item.sale!.organizer.userId === req.user.id) {
       return res.status(403).json({ message: 'You cannot bid on your own items' });
     }
 
@@ -1139,7 +1139,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     }
 
     // Fire webhooks for bid placed (item.saleId! — auction items always have saleId by domain invariant)
-    fireWebhooks(item.sale.organizer.userId, 'bid.placed', {
+    fireWebhooks(item.sale!.organizer.userId, 'bid.placed', {
       itemId: item.id,
       saleId: item.saleId!,
       bidAmount: actualBidAmount,
@@ -1159,7 +1159,7 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
 
     // Notify organizer: "New bid of $[amount] on [item name]"
     createNotification(
-      item.sale.organizer.userId,
+      item.sale!.organizer.userId,
       'NEW_BID',
       'New Bid Received',
       `New bid of $${actualBidAmount.toFixed(2)} on ${item.title}`,
@@ -1204,7 +1204,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale.organizer.userId !== req.user.id) {
+    if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your item.' });
     }
 
@@ -1214,8 +1214,8 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
     }
 
     // Security: AI Tags Quota Enforcement (P0)
-    const organizerId = item.sale.organizer.id;
-    const tier = item.sale.organizer.subscriptionTier || 'SIMPLE';
+    const organizerId = item.sale!.organizer.id;
+    const tier = item.sale!.organizer.subscriptionTier || 'SIMPLE';
     const quotaStatus = await checkAiTagQuota(organizerId, tier);
 
     if (quotaStatus.exceeded) {
@@ -1262,7 +1262,7 @@ const getItemForOrganizer = async (id: string, userId: string) => {
     include: { sale: { include: { organizer: { select: { userId: true } } } } },
   });
   if (!item) return null;
-  if (item.sale.organizer.userId !== userId) return null;
+  if (item.sale!.organizer.userId !== userId) return null;
   return item;
 };
 
@@ -1407,7 +1407,7 @@ export const getItemDraftStatus = async (req: AuthRequest, res: Response) => {
     }
 
     // Auth: only the organizer who owns the sale can poll this item's draft status
-    const isOwner = req.user?.id === item.sale.organizer.userId;
+    const isOwner = req.user?.id === item.sale!.organizer.userId;
     if (!isOwner) {
       return res.status(404).json({ message: 'Item not found' });
     }
@@ -1460,7 +1460,7 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     }
 
     // Auth: only the organizer who owns the sale can publish items
-    if (item.sale.organizer.userId !== req.user.id) {
+    if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
@@ -1579,7 +1579,7 @@ export const holdAnalysis = async (req: AuthRequest, res: Response) => {
     }
 
     // Auth: only the organizer who owns the sale can hold analysis
-    if (item.sale.organizer.userId !== req.user.id) {
+    if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
@@ -1619,7 +1619,7 @@ export const releaseAnalysis = async (req: AuthRequest, res: Response) => {
       select: { id: true, draftStatus: true, sale: { select: { organizer: { select: { userId: true } } } } }
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
-    if (item.sale.organizer.userId !== req.user.id) return res.status(403).json({ message: 'Access denied.' });
+    if (item.sale!.organizer.userId !== req.user.id) return res.status(403).json({ message: 'Access denied.' });
     if (item.draftStatus !== 'DRAFT') return res.status(400).json({ message: 'Item is not in DRAFT status.' });
 
     // Remove from held set so that resetRapidDraftDebounce will work normally
@@ -1971,7 +1971,7 @@ export const closeAuctionEndpoint = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    if (item.sale.organizer.userId !== req.user.id) {
+    if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
     }
 
@@ -2121,7 +2121,7 @@ export const applyOrganizerDiscount = async (req: Request, res: Response) => {
     }
 
     // Verify organizer ownership
-    if (item.sale.organizer.userId !== authReq.user.id) {
+    if (item.sale!.organizer.userId !== authReq.user.id) {
       return res.status(403).json({ message: 'You do not own this item' });
     }
 
@@ -2196,7 +2196,7 @@ export const removeOrganizerDiscount = async (req: Request, res: Response) => {
     }
 
     // Verify organizer ownership
-    if (item.sale.organizer.userId !== authReq.user.id) {
+    if (item.sale!.organizer.userId !== authReq.user.id) {
       return res.status(403).json({ message: 'You do not own this item' });
     }
 

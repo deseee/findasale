@@ -134,8 +134,8 @@ export async function notifyWishlistMatches(itemId: string): Promise<void> {
             category: item.category,
             photoUrls: item.photoUrls,
           },
-          saleName: item.sale.title,
-          saleCity: item.sale.city || regionConfig.city,
+          saleName: item.sale!.title,
+          saleCity: item.sale!.city || regionConfig.city,
         }).catch((err: unknown) => {
           console.error(`[wishlistMatch] Failed to notify ${wishlist.user.email}:`, err);
         })

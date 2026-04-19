@@ -179,7 +179,7 @@ export const returnItemsToInventory = async (
         data: {
           userId: reservation.userId,
           type: 'RESERVATION_CANCELLED',
-          message: `A hold on "${item.title}" was released — the sale has ended.`,
+          body: `A hold on "${item.title}" was released — the sale has ended.`,
         },
       });
     }

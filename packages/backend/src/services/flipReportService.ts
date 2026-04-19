@@ -217,7 +217,7 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
   return {
     saleId,
     saleTitle: sale.title,
-    saleType: sale.type, // Feature #300: for ReturnToInventoryPanel pre-selection
+    saleType: sale.saleType, // Feature #300: for ReturnToInventoryPanel pre-selection
     saleStartDate: sale.startDate,
     saleEndDate: sale.endDate,
     sellThroughRate: Math.round(sellThroughRate * 100) / 100,

@@ -136,14 +136,14 @@ export const getItemsByTag = async (req: Request, res: Response) => {
     // Extract unique sales for summary
     const saleMap = new Map<string, any>();
     for (const item of items) {
-      if (!saleMap.has(item.sale.id)) {
-        saleMap.set(item.sale.id, {
-          id: item.sale.id,
-          title: item.sale.title,
-          city: item.sale.city,
-          state: item.sale.state,
-          startDate: item.sale.startDate,
-          endDate: item.sale.endDate,
+      if (!saleMap.has(item.sale!.id)) {
+        saleMap.set(item.sale!.id, {
+          id: item.sale!.id,
+          title: item.sale!.title,
+          city: item.sale!.city,
+          state: item.sale!.state,
+          startDate: item.sale!.startDate,
+          endDate: item.sale!.endDate,
         });
       }
     }
@@ -157,10 +157,10 @@ export const getItemsByTag = async (req: Request, res: Response) => {
       condition: item.condition,
       thumbnailUrl: item.photoUrls?.[0] || null,
       tags: item.tags,
-      saleId: item.sale.id,
-      saleTitle: item.sale.title,
-      city: item.sale.city,
-      state: item.sale.state,
+      saleId: item.sale!.id,
+      saleTitle: item.sale!.title,
+      city: item.sale!.city,
+      state: item.sale!.state,
       createdAt: item.createdAt,
     }));
 

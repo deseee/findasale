@@ -167,12 +167,12 @@ export const getSocialTemplate = async (req: AuthRequest, res: Response) => {
     }
 
     // Verify organizer ownership
-    if (item.sale.organizer.userId !== req.user.id) {
+    if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Not your item' });
     }
 
-    const city = item.sale.city || 'your area';
-    const saleDates = formatSaleDates(item.sale.startDate, item.sale.endDate);
+    const city = item.sale!.city || 'your area';
+    const saleDates = formatSaleDates(item.sale!.startDate, item.sale!.endDate);
     const price = formatPrice(item.price);
 
     // Generate post text
@@ -189,7 +189,7 @@ export const getSocialTemplate = async (req: AuthRequest, res: Response) => {
     const hashtags = generateHashtags(
       item.tags || [],
       item.category,
-      item.sale.city,
+      item.sale!.city,
       platform,
     );
 
