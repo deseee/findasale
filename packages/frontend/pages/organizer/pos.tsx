@@ -792,7 +792,7 @@ export default function POSPage() {
         if (soundEnabled) playSuccessChime();
         setPaymentStatus('idle');
         // Optionally refresh checklist or sale data here
-        queryClient.invalidateQueries(['organizer-checklist']);
+        queryClient.invalidateQueries({ queryKey: ['organizer-checklist'] });
       } else {
         setErrorMessage(res.data.message || 'Test transaction failed');
         setPaymentStatus('error');
