@@ -40,7 +40,7 @@ export async function recordChargebackIncident(
             where: { id: purchaseId },
             select: { item: { select: { saleId: true } } },
           })
-        )?.item?.saleId,
+        )?.item?.saleId ?? undefined,
       },
     });
 
