@@ -1,36 +1,41 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
-## S506 Summary (2026-04-19) — Feature #300 Architecture locked, Dev brief written
+## S507 Summary (2026-04-19) — Feature #300 Return-to-Inventory: SHIPPED
 
-**1 file changed (dev brief). No code changed this session — pure architecture + planning.**
+**27 files changed. Migration required before going live (see below).**
 
-### What was decided this session:
+### What shipped:
 
-**The item duplication problem is solved at the root.** You were right to push back on the copy-item approach. Here's what was wrong and what we're fixing:
+**The item duplication problem is permanently fixed.** Items no longer get copied when pulled into sales. One physical object = one database record, forever. When an item moves from inventory → sale → back to inventory, it's the same record the whole time — just a field update.
 
-**The problem:** `pullFromInventory()` was creating a full duplicate Item record every time an item was pulled into a sale. If you pulled the same lamp into 3 different sales, you'd have 4 records for that lamp in the database — the original plus 3 copies. This is wrong. A physical item is one thing.
+**Organizers can now return unsold items from the Flip Report page:**
+- Open any ended sale's Flip Report → scroll to bottom → "Return to Inventory" panel
+- Items are pre-selected by sale type (Estate = none pre-selected, all others = pre-selected)
+- Checkbox list, select all / deselect all
+- Click "Return N items to inventory" → they're immediately back in your inventory
+- Any items that were reserved or on a waitlist get automatically released (shoppers notified)
 
-**The fix (Option 3 — Nullable saleId):**
-- An item in inventory = `saleId: null`
-- An item in a sale = `saleId: <that sale's id>`
-- Same record, forever. Just a field update when it moves.
-- When returned from a sale: `saleId` → null, `lastSaleId` saves where it was (so Flip Report history still works)
+**eBay imports cleaned up** — imported items now go into inventory directly (no more invisible "container sale" workaround).
 
-**The dev brief is complete.** It's at `claude_docs/feature-notes/feature-300-return-to-inventory-dev-brief.md` and includes:
-- Full schema changes + migration SQL (with backfill for existing data)
-- `pullFromInventory()` rewrite (move instead of copy)
-- New `returnItemsToInventory()` function (handles reservation cancellation, waitlist cleanup, return tracking)
-- Flip Report union query fix (so returned items still show in post-sale analytics)
-- 50+ TypeScript break points mapped with exact fix for each
-- New endpoint: `POST /api/sales/:saleId/return-items`
-- New component: `ReturnToInventoryPanel` on the flip-report page
-- Implementation order + TypeScript check gate
+**Flip Report accuracy improved** — items you returned to inventory now correctly show in the "unsold" count, so your sell-through rate is accurate.
 
-### Next session:
+### ⚠️ YOU NEED TO RUN THE MIGRATION BEFORE THIS GOES LIVE
 
-**Dispatch `findasale-dev` with the brief.** This is the #1 priority — dev needs the schema change and all downstream TS fixes done in one batch to avoid a repair session.
+This feature requires a database schema change. After pushing the code, run this in PowerShell:
 
-After dev returns: Patrick runs the migration manually (instructions in the brief).
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+The migration is safe — it preserves all your existing data and backfills the new fields automatically.
+
+### QA needed after deploy:
+- Open an ended sale's Flip Report → confirm "Return to Inventory" panel appears
+- Select a few items → click Return → confirm they appear in `/organizer/inventory`
+- Pull an item into a new sale → confirm it moves (not copies) — item count should be consistent
 
 ---
 

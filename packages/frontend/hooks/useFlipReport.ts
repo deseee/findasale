@@ -24,6 +24,7 @@ export interface PricingInsights {
 export interface FlipReport {
   saleId: string;
   saleTitle: string;
+  saleType: string; // Feature #300
   saleStartDate: string;
   saleEndDate: string;
   sellThroughRate: number;

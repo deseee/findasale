@@ -11,27 +11,34 @@ export interface InventoryFilters {
 
 /**
  * Add an item to the organizer's inventory.
- * Sets inInventory=true and captures current values.
+ * Sets inInventory=true. saleId may be null for eBay-imported items.
+ * Feature #300: removed saleId-based ownership check — items may have no saleId.
  */
 export const addToInventory = async (itemId: string, organizerId: string) => {
   const item = await prisma.item.findUnique({ where: { id: itemId } });
   if (!item) throw new Error('Item not found');
 
-  // Verify ownership
-  const sale = await prisma.sale.findUnique({
-    where: { id: item.saleId },
-    select: { organizerId: true },
-  });
-
-  if (!sale || sale.organizerId !== organizerId) {
-    throw new Error('Unauthorized: item does not belong to this organizer');
+  // Verify ownership directly on item (saleId may be null for eBay-imported items)
+  if (item.organizerId !== organizerId) {
+    // Fallback: check via sale if organizerId not denormalized
+    if (item.saleId) {
+      const sale = await prisma.sale.findUnique({
+        where: { id: item.saleId },
+        select: { organizerId: true },
+      });
+      if (!sale || sale.organizerId !== organizerId) {
+        throw new Error('Unauthorized: item does not belong to this organizer');
+      }
+    } else {
+      throw new Error('Unauthorized: item does not belong to this organizer');
+    }
   }
 
   return prisma.item.update({
     where: { id: itemId },
     data: {
       inInventory: true,
-      libraryId: itemId, // Use item ID as library reference (can be normalized later)
+      libraryId: itemId, // self-referential — deprecated, keep for backward compat
     },
   });
 };
@@ -51,10 +58,9 @@ export const removeFromInventory = async (itemId: string) => {
 };
 
 /**
- * Pull an item from the inventory into a new sale.
- * Creates a copy of the inventory item with new saleId and optional price override.
- * Sets libraryId on the new item to link back to the inventory item.
- * Records price in ItemPriceHistory with changedBy='inventory_pulled'.
+ * Pull an item from the inventory into a sale.
+ * Feature #300: MOVE not COPY — updates saleId on existing item (no new record created).
+ * One item record per physical object, forever.
  */
 export const pullFromInventory = async (
   inventoryItemId: string,
@@ -62,21 +68,16 @@ export const pullFromInventory = async (
   organizerId: string,
   priceOverride?: number
 ) => {
-  // Verify inventory item exists and is in inventory
-  const inventoryItem = await prisma.item.findUnique({
-    where: { id: inventoryItemId },
-  });
+  const item = await prisma.item.findUnique({ where: { id: inventoryItemId } });
 
-  if (!inventoryItem || !inventoryItem.inInventory) {
+  if (!item || !item.inInventory) {
     throw new Error('Inventory item not found or not in inventory');
   }
 
-  // Verify ownership
-  if (inventoryItem.organizerId !== organizerId) {
+  if (item.organizerId !== organizerId) {
     throw new Error('Unauthorized: inventory item does not belong to this organizer');
   }
 
-  // Verify sale exists and belongs to organizer
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
     select: { organizerId: true },
@@ -86,63 +87,130 @@ export const pullFromInventory = async (
     throw new Error('Unauthorized: sale does not belong to this organizer');
   }
 
-  // Deduplication check: block if this inventory item is already in the target sale
-  const existing = await prisma.item.findFirst({
-    where: { saleId, libraryId: inventoryItemId, inInventory: false },
-    select: { id: true },
-  });
-  if (existing) {
+  // Dedup: item already pulled into this sale
+  if (item.saleId === saleId) {
     throw new Error('This item has already been pulled into this sale');
   }
 
-  // Create new item in the sale (copy from inventory item)
-  const newItem = await prisma.item.create({
+  // MOVE (update in place) — no copy created
+  const movedItem = await prisma.item.update({
+    where: { id: inventoryItemId },
     data: {
-      title: inventoryItem.title,
-      description: inventoryItem.description,
-      category: inventoryItem.category,
-      // Infer condition from conditionGrade if not explicitly set (eBay-imported items)
-      condition: inventoryItem.condition ?? (
-        inventoryItem.conditionGrade === 'S' ? 'NEW' :
-        inventoryItem.conditionGrade === 'D' ? 'PARTS_OR_REPAIR' :
-        inventoryItem.conditionGrade ? 'USED' :
-        null
-      ),
-      conditionGrade: inventoryItem.conditionGrade,
-      photoUrls: inventoryItem.photoUrls,
-      tags: inventoryItem.tags,
       saleId,
-      organizerId,
-      libraryId: inventoryItemId, // Link back to inventory item
-      inInventory: false, // New item is not in inventory, it's in a sale
-      price: priceOverride ?? inventoryItem.price,
+      inInventory: false,
+      lastSaleId: item.saleId ?? (item as any).lastSaleId, // preserve history
+      price: priceOverride ?? item.price,
       status: 'AVAILABLE',
-      isActive: true,
-      embedding: [], // required field — populated later by search indexer
     },
   });
 
-  // Record price in history with inventory_pulled reason
-  if (newItem.price) {
+  if (movedItem.price) {
     await prisma.itemPriceHistory.create({
       data: {
-        itemId: newItem.id,
-        price: newItem.price,
+        itemId: movedItem.id,
+        price: movedItem.price,
         changedBy: 'inventory_pulled',
-        note: `Pulled from inventory item ${inventoryItemId}`,
+        note: `Pulled to sale ${saleId}`,
       },
     });
   }
 
-  // Update inventory item to mark it as in a sale
-  await prisma.item.update({
-    where: { id: inventoryItemId },
-    data: {
-      // libraryId remains the same, but status can be updated if needed
-    },
+  return movedItem;
+};
+
+/**
+ * Return items from an ENDED sale back to the organizer's inventory.
+ * Feature #300: Sets saleId=null, inInventory=true, lastSaleId=oldSaleId.
+ * Skips SOLD, DONATED, INVOICE_ISSUED items.
+ * Cancels active reservations and notifies shoppers.
+ * Clears waitlists.
+ */
+export const returnItemsToInventory = async (
+  saleId: string,
+  itemIds: string[],
+  organizerId: string
+) => {
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    select: { organizerId: true, status: true },
   });
 
-  return newItem;
+  if (!sale || sale.organizerId !== organizerId) {
+    throw new Error('Unauthorized');
+  }
+
+  if (sale.status !== 'ENDED') {
+    throw new Error('Sale must be ENDED to return items to inventory');
+  }
+
+  const query =
+    itemIds.length > 0
+      ? { id: { in: itemIds }, saleId }
+      : { saleId, status: { notIn: ['SOLD', 'DONATED'] as const } };
+
+  const items = await prisma.item.findMany({ where: query });
+
+  let returned = 0;
+  const skipped: Array<{ id: string; title: string; reason: string }> = [];
+
+  for (const item of items) {
+    if (['SOLD', 'DONATED'].includes(item.status)) {
+      skipped.push({ id: item.id, title: item.title, reason: item.status });
+      continue;
+    }
+    if (item.status === 'INVOICE_ISSUED') {
+      skipped.push({ id: item.id, title: item.title, reason: 'INVOICE_ISSUED' });
+      continue;
+    }
+
+    // Cancel active reservation + notify shopper
+    const reservation = await prisma.itemReservation.findUnique({
+      where: { itemId: item.id },
+    });
+    if (
+      reservation &&
+      ['PENDING', 'CONFIRMED', 'HOLD_IN_CART'].includes(reservation.status)
+    ) {
+      await prisma.itemReservation.update({
+        where: { id: reservation.id },
+        data: { status: 'EXPIRED' },
+      });
+      await prisma.notification.create({
+        data: {
+          userId: reservation.userId,
+          type: 'RESERVATION_CANCELLED',
+          message: `A hold on "${item.title}" was released — the sale has ended.`,
+        },
+      });
+    }
+
+    // Clear waitlist
+    await prisma.itemWaitlist.deleteMany({ where: { itemId: item.id } });
+
+    // Return to inventory
+    await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        inInventory: true,
+        returnedToInventoryAt: new Date(),
+        saleId: null,
+        lastSaleId: item.saleId,
+      },
+    });
+
+    await prisma.itemPriceHistory.create({
+      data: {
+        itemId: item.id,
+        price: item.price ?? 0,
+        changedBy: 'returned_from_sale',
+        note: `Returned to inventory from sale ${saleId}`,
+      },
+    });
+
+    returned++;
+  }
+
+  return { returned, skipped };
 };
 
 /**

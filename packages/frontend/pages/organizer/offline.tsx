@@ -220,7 +220,7 @@ const OfflinePage = () => {
                           </span>
                         </div>
                         <p className="text-sm text-warm-600 dark:text-gray-300 mb-1">
-                          Sale: <span className="font-mono text-xs">{item.saleId.slice(0, 8)}</span>
+                          Sale: <span className="font-mono text-xs">{(item.saleId ?? 'inventory').slice(0, 8)}</span>
                         </p>
                         {item.itemId && (
                           <p className="text-sm text-warm-600 dark:text-gray-300 mb-1">

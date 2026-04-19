@@ -2951,6 +2951,12 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
       return;
     }
 
+    // Feature #300: eBay item may have null saleId (inventory item) — skip sale lookup
+    if (!item.saleId) {
+      console.warn(`eBay item ${itemId} has no saleId — skipping sale lookup`);
+      return;
+    }
+
     // Get organizer's eBay connection via the sale
     const sale = await prisma.sale.findUnique({
       where: { id: item.saleId },
@@ -3124,7 +3130,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             status: 'AVAILABLE',
             inInventory: true,
             organizerId: organizer.id,
-            saleId: containerSale!.id,
+            saleId: null,          // Feature #300: inventory items need no sale container
             ebayListingId: sku,
             conditionGrade,
             condition,
@@ -3287,7 +3293,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               status: 'AVAILABLE',
               inInventory: true,
               organizerId: organizer.id,
-              saleId: containerSale!.id,
+              saleId: null,          // Feature #300: inventory items need no sale container
               ebayListingId: ebayItemId,  // always store numeric eBay ItemID, not SKU
               conditionGrade,
               condition,

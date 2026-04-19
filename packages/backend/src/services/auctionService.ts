@@ -54,7 +54,8 @@ export async function closeAuction(itemId: string): Promise<void> {
         'AUCTION_CLOSED',
         `Auction closed with no bids`,
         `The auction for "${item.title}" ended with no bids.`,
-        `/organizer/sales/${item.saleId}`,
+        // item.saleId! — auction items always have saleId by domain invariant
+        `/organizer/sales/${item.saleId!}`,
         'OPERATIONAL'
       );
 
@@ -94,11 +95,12 @@ export async function closeAuction(itemId: string): Promise<void> {
           }
         ],
         success_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/purchase/success?sessionId={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/sales/${item.saleId}`,
+        // item.saleId! — auction items always have saleId by domain invariant
+        cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/sales/${item.saleId!}`,
         metadata: {
           itemId: item.id,
           winnerId: winnerId,
-          saleId: item.saleId,
+          saleId: item.saleId!,
           type: 'AUCTION_WINNER'
         }
       });
@@ -125,7 +127,8 @@ export async function closeAuction(itemId: string): Promise<void> {
       'AUCTION_WON',
       `You won "${item.title}"!`,
       `Congratulations! You won the auction with a bid of $${bidAmount.toFixed(2)}. ${checkoutCta}`,
-      checkoutUrl || `/sales/${item.saleId}`,
+      // item.saleId! — auction items always have saleId by domain invariant
+      checkoutUrl || `/sales/${item.saleId!}`,
       'OPERATIONAL'
     );
 
@@ -135,7 +138,7 @@ export async function closeAuction(itemId: string): Promise<void> {
       'AUCTION_CLOSED',
       `Auction closed: "${item.title}" sold`,
       `Winner: ${winnerName} (${winnerEmail}) - Final bid: $${bidAmount.toFixed(2)}. Payment link sent.`,
-      `/organizer/sales/${item.saleId}`,
+      `/organizer/sales/${item.saleId!}`,
       'OPERATIONAL'
     );
 

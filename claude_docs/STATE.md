@@ -7,16 +7,61 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S506 (2026-04-19) — Feature #300 Return-to-Inventory: Architecture decided, dev brief written**
+**S507 (2026-04-19) — Feature #300 Return-to-Inventory: Full implementation shipped**
 
-- **Architectural decision locked ✅:** Option 3 — nullable `Item.saleId` + `lastSaleId` anchor field. Patrick explicitly rejected copy-item approach: "absolutely not! why are we creating separate copies anyway."
-- **Root cause identified ✅:** `Item.saleId` required FK forces `pullFromInventory()` to create duplicate records. eBay import already worked around this with `isInventoryContainer` container sale. Option 3 eliminates both workarounds.
-- **Full downstream audit complete ✅:** 50+ TypeScript break points mapped across 15 backend files + 2 frontend files. All have documented exact fix.
-- **Dev brief written ✅:** `claude_docs/feature-notes/feature-300-return-to-inventory-dev-brief.md` — full schema, migration SQL, service rewrites, TypeScript fix map, new endpoint, new frontend component.
-- **Deferred to S507:** Dispatch `findasale-dev` with the brief. QA of S505 checklist test flows.
+- **Schema changes ✅:** `Item.saleId` → `String?`, `lastSaleId String?`, `returnedToInventoryAt DateTime?`, dropped `@@unique([saleId, sku])`
+- **Migration SQL ✅:** `20260419000001_nullable_sale_id_return_to_inventory` — backfills `lastSaleId` for inventory items, nulls saleId for eBay container items
+- **`pullFromInventory()` rewritten ✅:** MOVE pattern (update in place) — no more item duplication. One physical item = one DB record forever.
+- **`returnItemsToInventory()` added ✅:** Validates ENDED status, cancels reservations with shopper notification, clears waitlists, sets `saleId: null / inInventory: true / lastSaleId / returnedToInventoryAt`
+- **FlipReport union query ✅:** Now queries items in sale UNION returned items — complete sell-through picture
+- **eBay import cleaned up ✅:** Items now created with `saleId: null` directly; `isInventoryContainer` workaround no longer used in import path
+- **50+ TS break points fixed ✅:** 15 backend files + 2 frontend files. Three fix patterns: `!` assertion, `?? fallback`, early return.
+- **`POST /api/sales/:saleId/return-items` ✅:** New route, new controller, authenticated + requireOrganizer
+- **`ReturnToInventoryPanel.tsx` ✅:** Pre-selection by sale type, checkbox list, select-all toggle, success state with skipped items
+- **Wired into flip-report page ✅:** Panel renders below Recommendations when unsoldItems.length > 0; hidden from print
+- **TypeScript gate ✅:** 0 frontend errors. Backend errors are all pre-existing stale-Prisma-client warnings, none in new code.
 
-**S506 Files changed (1):**
-- `claude_docs/feature-notes/feature-300-return-to-inventory-dev-brief.md` — NEW: complete dev brief
+**⚠️ PATRICK MIGRATION REQUIRED (before push goes live):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**S507 Files changed (27):**
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260419000001_nullable_sale_id_return_to_inventory/migration.sql` — NEW
+- `packages/backend/src/services/itemInventoryService.ts`
+- `packages/backend/src/services/flipReportService.ts`
+- `packages/backend/src/controllers/returnToInventoryController.ts` — NEW
+- `packages/backend/src/routes/sales.ts`
+- `packages/backend/src/controllers/ebayController.ts`
+- `packages/backend/src/services/itemSearchService.ts`
+- `packages/backend/src/services/auctionService.ts`
+- `packages/backend/src/services/valuationService.ts`
+- `packages/backend/src/services/commandCenterService.ts`
+- `packages/backend/src/services/fraudService.ts`
+- `packages/backend/src/controllers/flashDealController.ts`
+- `packages/backend/src/controllers/reservationController.ts`
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/backend/src/controllers/posController.ts`
+- `packages/backend/src/controllers/bountyController.ts`
+- `packages/backend/src/controllers/exportController.ts`
+- `packages/backend/src/controllers/userController.ts`
+- `packages/backend/src/jobs/cleanupStaleDrafts.ts`
+- `packages/backend/src/routes/search.ts`
+- `packages/frontend/hooks/useFlipReport.ts`
+- `packages/frontend/pages/organizer/edit-item/[id].tsx`
+- `packages/frontend/pages/organizer/offline.tsx`
+- `packages/frontend/pages/organizer/flip-report/[saleId].tsx`
+- `packages/frontend/components/ReturnToInventoryPanel.tsx` — NEW
+
+**Needs QA (post-migration):**
+- Return items flow from flip-report page end-to-end
+- `pullFromInventory()` moves (not copies) — item count in sale matches expectation
+- FlipReport shows returned items in unsold count
+- eBay import creates items with saleId=null
 
 ---
 

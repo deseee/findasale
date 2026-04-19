@@ -586,7 +586,7 @@ export const exportOrganizer = async (
     ];
     const itemsRows = items.map((item: any) => [
       escapeCSV(item.id),
-      escapeCSV(item.saleId),
+      escapeCSV(item.saleId ?? ''),
       escapeCSV(item.title),
       escapeCSV(item.description),
       item.price ? item.price.toFixed(2) : '',

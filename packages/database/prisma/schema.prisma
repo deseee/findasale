@@ -717,8 +717,10 @@ model Item {
   reverseStartDate           DateTime?
   // Bulk operations: hide/show item from sale listing
   isActive                   Boolean                @default(true)
-  saleId                     String
-  sale                       Sale                   @relation(fields: [saleId], references: [id])
+  saleId                     String?               // Feature #300: nullable — inventory items have no sale
+  lastSaleId                 String?               // Feature #300: last sale item was in (for FlipReport union query)
+  returnedToInventoryAt      DateTime?             // Feature #300: timestamp when returned from a sale
+  sale                       Sale?                  @relation(fields: [saleId], references: [id])
   bids                       Bid[]
   maxBids                    MaxBidByUser[] // ADR-013 Phase 2: Proxy bidding
   purchases                  Purchase[]
@@ -838,7 +840,7 @@ model Item {
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
-  @@unique([saleId, sku])
+  // @@unique([saleId, sku]) -- Feature #300: removed — NULLs defeat compound unique in Postgres
   @@index([draftStatus])
   @@index([saleId, draftStatus])
   @@index([libraryId])

@@ -811,7 +811,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
               xpToAward,
               {
                 itemId: id,
-                saleId: item.saleId,
+                saleId: item.saleId ?? '',
                 description: `Condition rating S-D for item "${updatedItem.title}"`,
               }
             );
@@ -831,10 +831,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // If aiConfidence or estimatedValue was just updated, re-evaluate auto-flagging
     if ((aiConfidence !== undefined || estimatedValue !== undefined || price !== undefined) && !updatedItem.isHighValueLocked) {
       try {
-        const sale = await prisma.sale.findUnique({
+        const sale = updatedItem.saleId ? await prisma.sale.findUnique({
           where: { id: updatedItem.saleId },
           select: { autoFlagHighValue: true, highValueThresholdUSD: true }
-        });
+        }) : null;
 
         if (sale) {
           const shouldFlag = evaluateAutoHighValueFlag(
@@ -860,8 +860,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Feature #70: Emit price drop event if price was reduced
-    if (price !== undefined && item.price && updateData.price !== undefined && updateData.price < item.price) {
+    // Feature #70: Emit price drop event if price was reduced (skip-if-null: inventory items have no saleId)
+    if (price !== undefined && item.price && updateData.price !== undefined && updateData.price < item.price && item.saleId) {
       try {
         const io = getIO();
         pushEvent(io, item.saleId, {
@@ -1138,10 +1138,10 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Fire webhooks for bid placed
+    // Fire webhooks for bid placed (item.saleId! — auction items always have saleId by domain invariant)
     fireWebhooks(item.sale.organizer.userId, 'bid.placed', {
       itemId: item.id,
-      saleId: item.saleId,
+      saleId: item.saleId!,
       bidAmount: actualBidAmount,
       bidderId: req.user.id,
     }).catch(err => console.error('Webhook fire error:', err));
@@ -1280,9 +1280,9 @@ export const addItemPhoto = async (req: AuthRequest, res: Response) => {
     const item = await getItemForOrganizer(id, req.user.id);
     if (!item) return res.status(404).json({ message: 'Item not found or access denied' });
 
-    // Feature #75: Check photo limit before adding
+    // Feature #75: Check photo limit before adding (item.saleId! — photo upload only runs for sale items)
     const sale = await prisma.sale.findUnique({
-      where: { id: item.saleId },
+      where: { id: item.saleId! },
       include: { organizer: { select: { subscriptionTier: true } } }
     });
 
@@ -2137,8 +2137,9 @@ export const applyOrganizerDiscount = async (req: Request, res: Response) => {
     const discountAmount = (xpToSpend / 200) * 2;
 
     // Spend XP (creates transaction record, deducts from guildXp)
+    // item.saleId! — organizer discount path always operates on a sale item
     const spendSuccess = await spendXp(authReq.user.id, xpToSpend, 'ORGANIZER_ITEM_DISCOUNT', {
-      saleId: item.saleId,
+      saleId: item.saleId!,
       description: `Organizer discount on item "${item.title}"`,
     });
 

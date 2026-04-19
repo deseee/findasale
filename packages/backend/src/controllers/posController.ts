@@ -877,7 +877,7 @@ export const pullHoldsToCart = async (req: AuthRequest, res: Response) => {
 
     // Validate all reservations
     for (const hold of reservations) {
-      if (hold.item.saleId !== session.saleId) {
+      if ((hold.item.saleId ?? '') !== session.saleId) {
         return res.status(403).json({ message: 'Reservation does not belong to this session sale' });
       }
       if (!['PENDING', 'CONFIRMED'].includes(hold.status)) {
@@ -982,7 +982,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
 
     // Validate held items
     for (const heldItem of heldReservations) {
-      if (heldItem.item.saleId !== session.sale.id) {
+      if ((heldItem.item.saleId ?? '') !== session.sale.id) {
         return res.status(403).json({ message: 'Hold does not belong to this session sale' });
       }
       if (heldItem.status !== 'HOLD_IN_CART') {

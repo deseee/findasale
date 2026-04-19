@@ -178,9 +178,9 @@ router.get('/', async (req: Request, res: Response) => {
     if (type !== 'items' && q.length >= 2) {
       const saleIdsToFetch = new Set<string>();
 
-      // Get sale IDs from items that match the query
+      // Get sale IDs from items that match the query (skip null saleId — inventory items)
       if (itemSearchResult) {
-        itemSearchResult.data.forEach((item) => saleIdsToFetch.add(item.saleId));
+        itemSearchResult.data.forEach((item) => { if (item.saleId) saleIdsToFetch.add(item.saleId); });
       }
 
       // Get sale IDs from organizers whose names match the query

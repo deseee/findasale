@@ -174,7 +174,8 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       const sessionHolds = await prisma.itemReservation.count({
         where: {
           userId: req.user!.id,
-          item: { saleId: item.saleId },
+          // item.saleId! — reservation path only runs for items in active sales
+          item: { saleId: item.saleId! },
           status: { in: ['PENDING', 'CONFIRMED'] },
         },
       });
@@ -190,7 +191,8 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     let fraudFlags: string[] = [];
     if (holdSettings?.fraudCheckEnabled) {
       try {
-        const fraudResult = await calculateConfidenceScore(req.user!.id, itemId, item.saleId);
+        // item.saleId! — fraud check only runs for items in active sales (reservation path)
+        const fraudResult = await calculateConfidenceScore(req.user!.id, itemId, item.saleId!);
         fraudScore = fraudResult.score / 100; // normalize to 0.0-1.0
         fraudFlags = fraudResult.signals;
 
@@ -235,13 +237,13 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       return r;
     });
 
-    // Feature #70: Emit live feed event
+    // Feature #70: Emit live feed event (item.saleId! — reservation path only runs for sale items)
     try {
       const io = getIO();
-      pushEvent(io, item.saleId, {
+      pushEvent(io, item.saleId!, {
         type: 'HOLD_PLACED',
         itemTitle: item.title,
-        saleId: item.saleId,
+        saleId: item.saleId!,
         timestamp: new Date(),
       });
     } catch (err) {
@@ -251,7 +253,7 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     // Feature #17: Check for fraud (fire-and-forget)
     try {
       setImmediate(() => {
-        checkForFraud(req.user!.id, itemId, item.saleId).catch(err =>
+        checkForFraud(req.user!.id, itemId, item.saleId!).catch(err =>
           console.error('[fraud] Fraud check error:', err)
         );
       });
@@ -259,10 +261,10 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       console.warn('[fraud] Failed to trigger fraud check:', err);
     }
 
-    // Feature #14: Push sale status update
+    // Feature #14: Push sale status update (item.saleId! — reservation path always has a sale)
     try {
       const io = getIO();
-      await pushSaleStatus(io, item.saleId);
+      await pushSaleStatus(io, item.saleId!);
     } catch (err) {
       console.warn('[saleStatus] Failed to push status update:', err);
     }
@@ -293,14 +295,14 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
               channel: 'OPERATIONAL',
             },
           });
-          // Email alert
+          // Email alert (item.saleId! — reservation path always has a sale)
           setImmediate(() => {
             sendHoldPlacedAlert({
               organizerEmail: organizer.user.email,
               organizerName: organizer.user.name,
               itemTitle: item.title,
               saleTitle: sale?.title || 'Sale',
-              saleId: item.saleId,
+              saleId: item.saleId!,
             }).catch(err => console.warn('[alert] Failed to send hold placed email:', err));
           });
         }
@@ -345,9 +347,10 @@ export const cancelHold = async (req: AuthRequest, res: Response) => {
     });
 
     // Feature #70: Emit live feed event
-    if (item) {
+    if (item && item.saleId) {
       try {
         const io = getIO();
+        // item.saleId! — guarded by if (item && item.saleId) above
         pushEvent(io, item.saleId, {
           type: 'HOLD_RELEASED',
           itemTitle: item.title,
@@ -897,9 +900,10 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     }
 
     // Query ALL active reservations for this shopper at this sale
+    // reservation.item.saleId! — HoldInvoice path only runs for items in active sales
     const allShopperHolds = await prisma.itemReservation.findMany({
       where: {
-        item: { saleId: reservation.item.saleId },
+        item: { saleId: reservation.item.saleId! },
         userId: reservation.user.id,
         status: { in: ['PENDING', 'CONFIRMED'] },
       },
@@ -909,7 +913,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // Check for existing PENDING invoice for this shopper+sale combo
     const existingInvoice = await prisma.holdInvoice.findFirst({
       where: {
-        saleId: reservation.item.saleId,
+        saleId: reservation.item.saleId!,
         shopperUserId: reservation.user.id,
         status: 'PENDING',
       },
@@ -974,7 +978,8 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
             itemIds: bundledItemIds.join(','), // Comma-separated item IDs
             shopperId: reservation.user.id,
             organizerId: organizer.id,
-            saleId: reservation.item.saleId,
+            // reservation.item.saleId! — HoldInvoice path only runs for items in active sales
+            saleId: reservation.item.saleId!,
           },
           application_fee_amount: Math.round(totalPlatformFeeAmount * 100),
           transfer_data: {
@@ -997,7 +1002,8 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           reservationId: reservationId, // Store first reservation for backward compatibility
           shopperUserId: reservation.user.id,
           organizerUserId: organizer.id,
-          saleId: reservation.item.saleId,
+          // reservation.item.saleId! — HoldInvoice path only runs for items in active sales
+          saleId: reservation.item.saleId!,
           stripeSessionId: stripeSession.id,
           totalAmount: Math.round(totalAmount * 100),
           platformFeeAmount: Math.round(totalPlatformFeeAmount * 100),

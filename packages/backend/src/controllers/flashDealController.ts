@@ -30,6 +30,11 @@ export const createFlashDeal = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+    // Feature #300: Flash deals require item to be in an active sale
+    if (!item.saleId) {
+      return res.status(400).json({ message: 'Item is not in a sale — cannot create flash deal' });
+    }
+
     // Verify organizer owns this sale
     const sale = await prisma.sale.findUnique({
       where: { id: item.saleId },
