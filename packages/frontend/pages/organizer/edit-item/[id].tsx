@@ -164,7 +164,7 @@ const EditItemPage = () => {
     try {
       const fd = new FormData();
       fd.append('photos', photo.blob, 'capture.jpg');
-      fd.append('saleId', String(item.saleId));
+      if (item.saleId) fd.append('saleId', item.saleId);
       const res = await api.post('/upload/sale-photos', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       const urls: string[] = res.data?.urls || [];
       if (urls[0]) {

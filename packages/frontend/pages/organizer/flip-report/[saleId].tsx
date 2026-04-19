@@ -7,6 +7,7 @@ import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import { useFlipReport } from '../../../hooks/useFlipReport';
 import Skeleton from '../../../components/Skeleton';
 import TierGate from '../../../components/TierGate';
+import ReturnToInventoryPanel from '../../../components/ReturnToInventoryPanel';
 
 export default function FlipReportPage() {
   const router = useRouter();
@@ -214,6 +215,22 @@ export default function FlipReportPage() {
               ))}
             </ul>
           </div>
+
+          {/* Feature #300: Return to Inventory — show when there are unsold items */}
+          {flipReport.unsoldItems.length > 0 && (
+            <div className="mt-8 print:hidden">
+              <ReturnToInventoryPanel
+                saleId={flipReport.saleId}
+                saleType={flipReport.saleType}
+                unsoldItems={flipReport.unsoldItems.map((item) => ({
+                  id: item.id,
+                  title: item.title,
+                  price: item.askingPrice,
+                  category: item.category,
+                }))}
+              />
+            </div>
+          )}
 
           {/* Print Styles */}
           <style jsx>{`

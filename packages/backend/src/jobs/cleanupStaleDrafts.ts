@@ -45,7 +45,7 @@ export const cleanupStaleDrafts = async (): Promise<void> => {
     // Log all deletions for audit trail
     const deletionLog = staleDrafts.map(item => ({
       itemId: item.id,
-      saleId: item.saleId,
+      saleId: item.saleId ?? 'inventory',
       title: item.title,
     }));
 

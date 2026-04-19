@@ -190,7 +190,8 @@ export async function getCommandCenterSummary(
   });
   const reservations = Object.entries(
     activeHolds.reduce<Record<string, number>>((acc, r) => {
-      const sid = r.item.saleId;
+      const sid = r.item.saleId ?? '';
+      if (!sid) return acc; // skip inventory items (no saleId)
       acc[sid] = (acc[sid] ?? 0) + 1;
       return acc;
     }, {})

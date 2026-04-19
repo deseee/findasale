@@ -20,7 +20,8 @@ export async function generateValuation(itemId: string) {
     const comparables = await prisma.item.findMany({
       where: {
         category: item.category,
-        saleId: { not: item.saleId }, // Different sale
+        // Feature #300: conditional spread — item may have null saleId (inventory item)
+        ...(item.saleId ? { saleId: { not: item.saleId } } : {}), // Different sale
         purchases: {
           some: {
             status: 'PAID', // Sold

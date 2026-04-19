@@ -657,7 +657,7 @@ export const getUserQRData = async (req: Request, res: Response) => {
       itemId: hold.item.id,
       itemTitle: hold.item.title,
       price: hold.item.price,
-      saleId: hold.item.saleId,
+      saleId: hold.item.saleId ?? '',
       status: hold.status,
     }));
 

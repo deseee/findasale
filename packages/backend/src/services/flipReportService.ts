@@ -23,6 +23,7 @@ export interface PricingInsights {
 export interface FlipReport {
   saleId: string;
   saleTitle: string;
+  saleType: string; // Feature #300: needed by ReturnToInventoryPanel for pre-selection logic
   saleStartDate: Date;
   saleEndDate: Date;
   sellThroughRate: number; // percentage 0-100
@@ -46,13 +47,6 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
     include: {
-      items: {
-        include: {
-          purchases: {
-            where: { status: 'PAID' },
-          },
-        },
-      },
       purchases: {
         where: { status: 'PAID' },
       },
@@ -67,19 +61,33 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
     throw new Error('Unauthorized: you do not own this sale');
   }
 
+  // Feature #300: Union query — items still in the sale + items returned to inventory
+  // Returned items have saleId=null but lastSaleId=this sale's id
+  const [itemsInSale, returnedItems] = await Promise.all([
+    prisma.item.findMany({
+      where: { saleId },
+      include: { purchases: { where: { status: 'PAID' } } },
+    }),
+    prisma.item.findMany({
+      where: { lastSaleId: saleId, inInventory: true } as any,
+      include: { purchases: { where: { status: 'PAID' } } },
+    }),
+  ]);
+  const saleItems = [...itemsInSale, ...returnedItems];
+
   // ─── Compute Metrics ───
 
   // Sell-through rate: % of items sold
-  const totalItems = sale.items.length;
-  const soldItems = sale.items.filter((item) => item.status === 'SOLD');
+  const totalItems = saleItems.length;
+  const soldItems = saleItems.filter((item) => item.status === 'SOLD');
   const sellThroughRate = totalItems > 0 ? (soldItems.length / totalItems) * 100 : 0;
 
   // Total revenue: sum of PAID purchases
   const totalRevenue = sale.purchases.reduce((sum, p) => sum + p.amount, 0);
 
-  // Items sold / unsold counts
+  // Items sold / unsold counts (returned items count as unsold)
   const itemsSold = soldItems.length;
-  const itemsUnsold = sale.items.filter((item) => item.status === 'AVAILABLE' || item.status === 'RESERVED').length;
+  const itemsUnsold = saleItems.filter((item) => item.status === 'AVAILABLE' || item.status === 'RESERVED' || item.inInventory).length;
 
   // Top 5 performers: SOLD items sorted by finalPrice (descending)
   // finalPrice is the amount from the purchase
@@ -98,9 +106,9 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
 
   const topPerformers: TopPerformer[] = topPerformersRaw;
 
-  // Unsold items: AVAILABLE or RESERVED
-  const unsoldItemsRaw = sale.items
-    .filter((item) => item.status === 'AVAILABLE' || item.status === 'RESERVED')
+  // Unsold items: AVAILABLE, RESERVED, or returned to inventory
+  const unsoldItemsRaw = saleItems
+    .filter((item) => item.status === 'AVAILABLE' || item.status === 'RESERVED' || item.inInventory)
     .map((item) => ({
       id: item.id,
       title: item.title,
@@ -111,7 +119,7 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
   // Category breakdown
   const categoryMap = new Map<string, { total: number; sold: number; revenue: number }>();
 
-  sale.items.forEach((item) => {
+  saleItems.forEach((item) => {
     const cat = item.category || 'Other';
     const existing = categoryMap.get(cat) || { total: 0, sold: 0, revenue: 0 };
 
@@ -134,7 +142,7 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
 
   // Pricing insights
   // Average asking price: mean of all item prices (excluding null)
-  const itemsWithPrice = sale.items.filter((item) => item.price !== null && item.price !== undefined);
+  const itemsWithPrice = saleItems.filter((item) => item.price !== null && item.price !== undefined);
   const averageAskingPrice = itemsWithPrice.length > 0 ? itemsWithPrice.reduce((sum, item) => sum + (item.price || 0), 0) / itemsWithPrice.length : 0;
 
   // Average sale price: mean of all PAID purchase amounts
@@ -209,6 +217,7 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
   return {
     saleId,
     saleTitle: sale.title,
+    saleType: sale.type, // Feature #300: for ReturnToInventoryPanel pre-selection
     saleStartDate: sale.startDate,
     saleEndDate: sale.endDate,
     sellThroughRate: Math.round(sellThroughRate * 100) / 100,

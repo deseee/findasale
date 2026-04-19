@@ -59,7 +59,7 @@ export async function recordChargebackIncident(
     await prisma.fraudSignal.create({
       data: {
         userId: organizer.userId,
-        saleId: purchase.item.saleId,
+        saleId: purchase.item.saleId ?? undefined,
         itemId: purchase.itemId,
         signalType: 'CHARGEBACK_INCIDENT',
         confidenceScore: 95, // High confidence — Stripe confirmed
@@ -197,7 +197,8 @@ export async function checkChargebackCollusion(userId: string): Promise<void> {
       return;
     }
 
-    const saleIds = userBids.map((r) => r.bid.item.saleId);
+    // Filter out nulls — auction items always have saleId, but guard defensively
+    const saleIds = userBids.map((r) => r.bid.item.saleId).filter((id): id is string => id !== null);
 
     // For each IP the user has bid from, check if OTHER users also bid from same IP on SAME sales
     for (const record of userBids) {
@@ -276,7 +277,8 @@ export async function checkWinningBidVelocity(
         `[fraudService] Suspicious bid detected: item=${itemId}, bid=${winningBidAmount}, estValue=${valueToCheck}`
       );
 
-      // Create fraud signal
+      // Create fraud signal (item.saleId! — auction items always have saleId by domain invariant)
+      if (!item.saleId) return; // skip if item has no saleId (shouldn't happen for auction items)
       const sale = await prisma.sale.findUnique({
         where: { id: item.saleId },
         select: { organizerId: true },

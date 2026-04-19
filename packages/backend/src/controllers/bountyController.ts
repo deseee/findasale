@@ -165,7 +165,7 @@ export const fulfillBounty = async (req: AuthRequest, res: Response) => {
     // Optionally verify the item belongs to the same sale
     if (itemId) {
       const item = await prisma.item.findUnique({ where: { id: itemId }, select: { saleId: true } });
-      if (!item || item.saleId !== bounty.saleId) {
+      if (!item || !item.saleId || item.saleId !== bounty.saleId) {
         return res.status(400).json({ message: 'Item does not belong to this sale.' });
       }
     }

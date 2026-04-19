@@ -144,6 +144,8 @@ async function ftsSearch(params: {
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
+      AND i."inInventory" = false
+      AND i."saleId" IS NOT NULL
       AND (
         i."searchVector" @@ plainto_tsquery('english', $${idx + 1})
         OR o."businessName" ILIKE '%' || $${idx} || '%'
@@ -215,6 +217,8 @@ async function ilikeSearch(params: {
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
+      AND i."inInventory" = false
+      AND i."saleId" IS NOT NULL
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -268,6 +272,8 @@ async function filteredSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<Sea
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
+      AND i."inInventory" = false
+      AND i."saleId" IS NOT NULL
   `);
 
   idx = appendFilters(sqlParts, sqlParams, idx, { category, condition, saleId, priceMin, priceMax });
@@ -302,6 +308,8 @@ async function countFts(
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
+      AND i."inInventory" = false
+      AND i."saleId" IS NOT NULL
       AND (
         i."searchVector" @@ plainto_tsquery('english', $${idx})
         OR o."businessName" ILIKE '%' || $${idx} || '%'
@@ -334,6 +342,8 @@ async function countIlike(
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
+      AND i."inInventory" = false
+      AND i."saleId" IS NOT NULL
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -366,6 +376,8 @@ async function countFiltered(
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
+      AND i."inInventory" = false
+      AND i."saleId" IS NOT NULL
   `);
   appendFilters(sqlParts, sqlParams, idx, filters);
 
