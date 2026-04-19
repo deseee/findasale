@@ -763,6 +763,27 @@ const EditItemPage = () => {
               </p>
             </div>
 
+            {/* Legendary suggestion banner (shows when price >= $75 and not already legendary) */}
+            {parseFloat(formData.price) >= 75 && !formData.isLegendary && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl flex-shrink-0">⭐</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                      This item is priced at ${parseFloat(formData.price).toFixed(2)} — consider marking it Legendary to give Hunt Pass holders early access.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, isLegendary: true })}
+                    className="flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-bold py-1 px-3 rounded text-sm transition-colors"
+                  >
+                    Mark as Legendary
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Mark as Legendary toggle */}
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
               <div className="flex items-start gap-3">
