@@ -7,6 +7,32 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S512 (2026-04-19) — Email verification gate + QA security/tier gates + roadmap catch-up**
+
+QA security gate verified. Email verification feature built and deployed. Roadmap updated to v111.
+
+**QA verified this session:**
+- ✅ Email verification gate (Chrome-verified): amber banner fires for new unverified organizers (qatest_s512f@test.com); existing organizers (user2/Bob S.) see NO banner
+- ✅ No grace banner on user2 dashboard (correct — user2 is PRO not lapsed)
+- ✅ DowngradePreviewModal renders from /organizer/subscription (38 items, correct content)
+- ⚠️ pricing.tsx "Downgrade to Free" is a stub (P3 — early return with comment, no modal fires; proper flow is /organizer/subscription)
+
+**Email verification gate built (S512):**
+- `authController.ts` — `emailVerified: user.emailVerified` added to all 4 `jwt.sign` payloads (registration, OAuth, standard login, organizer-complete)
+- `AuthContext.tsx` — `emailVerified?: boolean` added to User interface; `emailVerified: payload.emailVerified ?? true` added to both `setUser` calls (useEffect load path + login() fresh path). `?? true` default preserves access for existing organizers with old JWTs.
+- `dashboard.tsx` — amber verification banner added after `<WorkspaceInvitationBanner />`, shown when `user?.emailVerified === false`
+- `Dockerfile.production` — cache-bust updated to `2026-04-19b` to force Railway rebuild (merge conflict resolved)
+
+**Files changed (4):**
+- `packages/backend/src/controllers/authController.ts`
+- `packages/frontend/components/AuthContext.tsx`
+- `packages/frontend/pages/organizer/dashboard.tsx`
+- `packages/backend/Dockerfile.production`
+
+**Roadmap:** Updated to v111 — header, #300 Chrome-verified, #301 Label Sheet Composer added, #302 Email Verification Gate added.
+
+---
+
 **S511 (2026-04-19) — Role fixes, eBay ended-sync, QR sizing, messages padding, treasure hunt XP**
 
 Parallel dispatch completed. All changes pushed in S511.
@@ -544,68 +570,25 @@ Railway build now clean. S507 Feature #300 is fully deployed.
 
 ---
 
-**Next Session — S510:**
+**Next Session — S513:**
 
-**Theme: Parallel bug dispatch — all S509 audit findings.**
+**Theme: Photo station build + QA S505 checklist test flows.**
 
-**Session goal:** Dispatch all P1/P2 findings in parallel. Group by file ownership to avoid conflicts. P3s can batch together as a cleanup pass.
+**Patrick actions before next session:**
+- Set `STRIPE_TEST_SECRET_KEY` on Railway (needed for checklist POS test flow)
+- Set `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY` on Vercel (needed for in-app payment test modal)
+- No migrations pending
 
-**Parallel Batch A — Messages (sequential, same file):**
+**Priority order:**
+1. **Photo station build (P1):** `/sales/[id]/photo-station.tsx` shopper page + backend scan endpoint. Print kit already has QR generating for photo station. XP: 5 for scan, 5 for social share.
+2. **QA S505 checklist test flows (P1):** After Stripe env vars set — test POS auto-check, online/auction checkout redirect, in-app payment modal. Chrome QA one flow at a time.
+3. **P3 stub fix:** `pricing.tsx` "Downgrade to Free" button is a stub (returns early, modal doesn't fire). Either wire DowngradePreviewModal or remove the button and point users to /organizer/subscription.
+4. **Lucky Roll #291:** Spec locked in S419. Architect ADR written. Never implemented. Consider dispatching findasale-dev once photo station is done.
 
-Agent 1 — `findasale-dev`: Fix reply bar layout
-- File: `packages/frontend/pages/messages/[id].tsx`
-- Problem: Reply form container only 52px, same background as page, no visual separator
-- Fix: Add `border-t border-warm-200 dark:border-gray-700` top border, increase form min-height to ~72px, add `py-3 px-4` padding, ensure reply bar is visually distinct
-- Also fix: Outgoing message bubble clips right viewport edge — add `max-w-[75%]` and `break-words` to outgoing bubble container
-- TS check required before returning
-
-**Parallel Batch B — Sale detail (same file, sequential within):**
-
-Agent 2 — `findasale-dev`: Fix sold item sort + action panel overflow + Live Activity avatars
-- File 1: `packages/frontend/pages/sales/[id].tsx`
-  - Sold items sort: items list should render SOLD/DONATED items at bottom — add client-side sort by status (AVAILABLE first, SOLD/DONATED last) or check if the API supports `orderBy` on status
-  - Action panel overflow: right-side panel has buttons clipping — investigate overflow, add `overflow-x-hidden` or constrain panel max-width
-  - Live Activity avatars: avatar circles rendering as blobs with no initials — find the avatar/initials component and debug why text isn't rendering (likely a z-index or color contrast issue)
-- TS check required before returning
-
-**Parallel Batch C — Dashboard upsell copy:**
-
-Agent 3 — `findasale-dev`: Fix TEAMS upsell copy on organizer dashboard
-- File: `packages/frontend/pages/organizer/dashboard.tsx`
-- Find the TEAMS upsell card ("Your Plan: PRO" → "Learn about TEAMS")
-- Replace "API access • White-label support" with correct TEAMS differentiators: "Multi-user workspace • Member roles • Shared sales management"
-- TS check required before returning
-
-**Parallel Batch D — XP badge + flip report icons:**
-
-Agent 4 — `findasale-dev`: Fix Treasure Hunt XP badge + flip report recommendation icons
-- File 1: Find homepage Treasure Hunt component (grep for "+50 Hunt Pass XP" or "Hunt Pass") — update to "3 XP per scan · 15 XP on completion" per S500 locked decision
-- File 2: `packages/frontend/pages/organizer/flip-report/[saleId].tsx` or flip report component — find where recommendations render with ✅ icons — change negative recommendations ("Low sell-through rate") to use an amber warning icon (⚠️ or equivalent) instead of green ✅
-- TS check required before returning
-
-**P3 Cleanup Batch (single agent after P1/P2 done):**
-
-Agent 5 — `findasale-dev`: P3 cleanup
-- Inventory empty state: `packages/frontend/pages/organizer/inventory.tsx` or similar — change "No items match your filters" to "No inventory items yet" when there are truly zero items (check if search/filter state is empty)
-- Bronze rank "Upgrade →" text: find organizer rank card on dashboard — change link text from "Upgrade →" to "View progress →" or "How to reach Silver →"
-- Map toolbar button clipping: find map page third button, add overflow/padding fix
-- TS check required before returning
-
-**Post-dispatch QA:**
-After all agents return, dispatch `findasale-qa` sequentially (one per feature, Chrome only):
-1. Messages reply bar — visible, usable, persists after send
-2. Sold items sort — SOLD items at bottom on sale detail
-3. TEAMS upsell copy — correct text on dashboard
-4. Treasure Hunt XP badge — correct values
-
-**Carry-forward:**
-- Return-to-inventory browser verify (need ENDED sale with unsold items)
-- Flip report data inconsistency (likely test data issue — investigate separately)
-- Efficiency Coach "Top 100%" label (may be intentional percentile display)
-
-**Patrick actions:**
-- No schema changes this session — no migration needed
-- No push.ps1 needed until dev agents return
+**Carry-forward QA (Blocked/Unverified Queue):**
+- #148 Sale Checklist plan page test buttons — needs STRIPE_TEST_SECRET_KEY
+- eBay ended-sync verified by code but not Chrome-tested end-to-end
+- HypeMeter widget — no team shopper data in test environment yet
 
 ---
 

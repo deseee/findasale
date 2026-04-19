@@ -1,5 +1,29 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
+## S512 Summary (2026-04-19) — Email verification gate shipped + QA security/tier gates ✅
+
+**4 files changed. Railway + Vercel both green. Roadmap updated to v111.**
+
+### What was verified:
+- ✅ Email verification gate: new organizers see amber "Check your inbox" banner on dashboard
+- ✅ Existing organizers (user2/Bob S.): NO banner — old JWT tokens handled correctly
+- ✅ DowngradePreviewModal: fires correctly from /organizer/subscription → Plan Actions
+- ✅ No grace banner on user2 dashboard (correct behavior)
+- ⚠️ pricing.tsx "Downgrade to Free" is a stub (P3) — button returns early with no modal. Real downgrade flow is at /organizer/subscription.
+
+### What was shipped:
+The email verification gate now works end-to-end. New organizers who register are automatically issued unverified JWTs — they see the amber banner until they verify. Existing organizers are unaffected (old tokens default to verified).
+
+### Patrick action required:
+**None** — no migrations, no env vars needed for this session's changes.
+
+### Next session (S513):
+1. Set `STRIPE_TEST_SECRET_KEY` on Railway + `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY` on Vercel
+2. Photo station build (shopper page + backend scan)
+3. QA S505 checklist test flows once env vars are set
+
+---
+
 ## S511 Summary (2026-04-19) — Role fixes, eBay ended-sync, QR sizing, message bar, TH XP badge ✅
 
 **12 files fixed and pushed. All parallel dev work complete.**
