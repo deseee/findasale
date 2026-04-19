@@ -1064,7 +1064,12 @@ const ReviewPage = () => {
                                 <span className="truncate">{item.category || 'Uncategorized'}</span>
                               </p>
                               {/* Status line — compact, single row */}
-                              {item.healthScore && (
+                              {item.draftStatus === 'PUBLISHED' ? (
+                                <p className="mt-1 text-xs font-semibold flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                                  <span>●</span>
+                                  <span>Published</span>
+                                </p>
+                              ) : item.healthScore && (
                                 <p className={`mt-1 text-xs font-semibold flex items-center gap-1 ${
                                   item.healthScore.grade === 'clear'
                                     ? 'text-green-600 dark:text-green-400'
