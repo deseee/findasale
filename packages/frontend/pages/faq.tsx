@@ -384,17 +384,21 @@ const organizerFAQs: FAQItem[] = [
     question: 'How do I test my payment setup before my sale starts?',
     answer: (
       <>
-        The fastest way is the POS Test Transaction. Open the{' '}
+        You have two ways to test payment flows:
+        <br /><br />
+        <strong>For POS (in-person card payments):</strong> Open the{' '}
         <Link href="/organizer/pos" className="text-amber-600 hover:underline">POS page</Link>,
         select your sale, and tap <strong>"Run $1.00 Test Transaction"</strong> in the Pre-Sale Test card.
         It sends a $1 charge through Stripe's test environment — no real money moves — and automatically
         checks off the POS task on your sale's progress checklist when it succeeds.
-        {' '}For a full pre-sale walkthrough including online checkout, QR code testing, and a day-before
-        checklist, see the{' '}
+        <br /><br />
+        <strong>For online checkout:</strong> Open your sale's Promote page and tap <strong>"Test Online Checkout"</strong> or <strong>"Test Auction Checkout"</strong> to get a test link and QR code. No real money moves and your inventory stays safe.
+        <br /><br />
+        For a full pre-sale walkthrough including all checkout methods and a day-before checklist, see the{' '}
         <Link href="/guide#before-you-go-live" className="text-amber-600 hover:underline">Before You Go Live</Link>{' '}
         section of the Organizer Guide.
         <br /><br />
-        <strong>Common reasons the test fails:</strong> Stripe account not fully onboarded (look for a
+        <strong>Common reasons tests fail:</strong> Stripe account not fully onboarded (look for a
         setup banner on your Earnings page), sale not yet published, or no items added. Still stuck?
         Contact support with your sale name and we'll help you get sorted before opening day.
       </>
@@ -404,15 +408,14 @@ const organizerFAQs: FAQItem[] = [
     question: 'What Stripe test card numbers should I use?',
     answer: (
       <>
-        Use these when testing checkout flows on FindA.Sale. Any future expiry date (e.g. 12/30) and
-        any 3-digit CVC work with all test cards.
+        Use these when clicking through the test checkout links on the Promote page. Any future expiry date (e.g. 12/30) and any 3-digit CVC work with all test cards.
         <br /><br />
         <strong>4242 4242 4242 4242</strong> — Payment succeeds<br />
         <strong>4000 0000 0000 0002</strong> — Payment is declined<br />
         <strong>4000 0025 0000 3155</strong> — Triggers an authentication step (3D Secure)
         <br /><br />
-        Test cards only work in test checkout flows. If a checkout is asking for a real card and you're
-        not expecting that, contact support.
+        Test cards only work in test checkout flows. Real checkouts will never ask for these numbers.
+        If you see a test card request when you&apos;re not testing, contact support.
       </>
     ),
   },

@@ -633,6 +633,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
     case 'payment_intent.succeeded': {
       const paymentIntent = event.data.object;
 
+      // Safety net: test-mode transactions must never deplete inventory
+      if (!event.livemode && paymentIntent.metadata?.isTestTransaction === 'true') {
+        console.log(`[test-checkout] Test PaymentIntent ${paymentIntent.id} — skipping inventory`);
+        break;
+      }
+
       // POS In-App Payment Request: check if this is a POS payment request
       if (paymentIntent.metadata?.source === 'pos_payment_request') {
         const requestId = paymentIntent.metadata.requestId;
@@ -1422,8 +1428,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
       break;
     }
     case 'checkout.session.completed': {
-      // #132: À La Carte Single-Sale Fee ($9.99)
       const session = event.data.object;
+
+      // Safety net: test-mode checkout sessions must never deplete inventory
+      if (!event.livemode || session.metadata?.isTestTransaction === 'true') {
+        console.log(`[test-checkout] Test checkout session ${session.id} completed — inventory preserved`);
+        break;
+      }
+
+      // #132: À La Carte Single-Sale Fee ($9.99)
       if (session.metadata?.type === 'ALA_CARTE' && session.metadata?.saleId) {
         await prisma.sale.update({
           where: { id: session.metadata.saleId },
@@ -2132,5 +2145,73 @@ export const testTransaction = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error('[test-transaction] error:', error);
     return res.status(500).json({ message: 'Test transaction failed', details: error.message });
+  }
+};
+
+export const testCheckoutSession = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const { saleId, type } = req.body as {
+      saleId?: string;
+      type?: 'standard' | 'auction';
+    };
+
+    if (!saleId || typeof saleId !== 'string') {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+    if (!type || !['standard', 'auction'].includes(type)) {
+      return res.status(400).json({ message: 'type must be standard or auction' });
+    }
+
+    // Verify sale ownership
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { organizer: true },
+    });
+    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    if (sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'You do not own this sale' });
+    }
+
+    const testStripe = getTestStripe();
+    const productName = type === 'auction' ? 'Test Auction Checkout — $1.00' : 'Test Online Checkout — $1.00';
+
+    const session = await testStripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: productName,
+            description: 'This is a test transaction. No real money moves and your inventory will not change.',
+          },
+          unit_amount: 100, // $1.00
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        isTestTransaction: 'true',
+        saleId,
+        organizerId: sale.organizer.id,
+        type,
+      },
+      success_url: `${process.env.FRONTEND_URL}/organizer/plan/${saleId}?testCheckout=success&type=${type}`,
+      cancel_url: `${process.env.FRONTEND_URL}/organizer/plan/${saleId}`,
+    });
+
+    // Generate QR code URL
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(session.url!)}`;
+
+    return res.status(200).json({
+      url: session.url,
+      qrCodeUrl,
+    });
+  } catch (error: any) {
+    console.error('[test-checkout-session] error:', error);
+    return res.status(500).json({ message: 'Test checkout session creation failed', details: error.message });
   }
 };

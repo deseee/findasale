@@ -8,6 +8,7 @@ import {
   recoverPaymentIntent,
   createCheckoutSession,
   testTransaction,
+  testCheckoutSession,
 } from '../controllers/stripeController';
 import { getAccountStatus } from '../controllers/stripeStatusController';
 import { getBalance, getPayoutSchedule, updatePayoutSchedule, createPayout, getEarningsBreakdown } from '../controllers/payoutController';
@@ -54,6 +55,7 @@ router.post('/terminal/cash-payment', authenticate, cashPayment);
 
 // Test harness — verify POS + payment flows without real money
 router.post('/test-transaction', authenticate, testTransaction);
+router.post('/test-checkout-session', authenticate, testCheckoutSession);
 
 // Webhook
 router.post('/webhook', webhookHandler);
