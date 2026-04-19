@@ -1,38 +1,36 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
-## S509 Summary (2026-04-19) — Full product audit complete, 2 P0s fixed, 15 findings queued for S510
+## S510 Summary (2026-04-19) — All S509 bugs fixed + Feature #300 fully verified ✅
 
-**2 bugs fixed inline. 15 more queued. Next session dispatches all of them in parallel.**
+**All 15 bugs from the S509 walkthrough are fixed and pushed. Feature #300 Return-to-Inventory is live and verified.**
 
-### Fixed this session (already live):
-- **Return-to-Inventory prices wrong** — was dividing by 100. Fixed.
-- **Return-to-Inventory "Organizer not authenticated"** — was reading wrong auth field. Fixed.
+### All S509 bugs fixed (now live):
+- Messages reply bar visible + outgoing bubbles no longer clipped
+- Flip report stats no longer contradict each other; recommendation icons correct (⚠️/✓/→)
+- SOLD items sort to bottom of sale detail page
+- TEAMS upsell copy corrected
+- Live Activity avatars now show initials
+- Sale detail panel overflow fixed
+- Map toolbar clipping fixed
+- Inventory empty state copy is context-aware
+- Dark mode labels fixed across FilterSidebar
+- Pricing page shows correct "Up to 12 team members" (D-007)
+- Shopper purchase history price/status no longer wraps awkwardly
+- Dashboard rank progress link added
 
-### What was found in the audit:
+### Feature #300 — Return to Inventory: ✅ VERIFIED
 
-**P1 — Fix next session:**
-- Messages reply box is there but invisible — it's only 37px tall at the very bottom with no visual border separating it from the chat. You can type if you know exactly where to look but most users won't find it.
-- Outgoing message bubble cuts off at the right edge of the screen (text truncated).
-- Flip report shows $1250 revenue + $625 avg sale price but also "0 items sold" — the stats contradict each other. Also generates a "Strong pricing power" recommendation from a $0 asking price.
-- Flip report shows a green ✅ next to "Low sell-through rate" — that's a negative insight, it should be a warning icon.
+Tested end-to-end as Alice on Downtown Downsizing Sale 21 (35 unsold items):
+1. Opened flip-report → Return to Inventory panel shows all 35 unsold items ✅
+2. Selected 2 items, clicked "Return 2 items to inventory" ✅
+3. Success state appeared with toast confirmation ✅
+4. DB confirmed: both items have `saleId=null`, `inInventory=true`, `lastSaleId` set ✅
+5. Backend API returns both items in `/organizer/inventory` ✅
 
-**P2 — Fix next session:**
-- Treasure Hunt badge on homepage still shows "+50 XP" — should be 3 XP/scan and 15 XP/completion (locked decision S500).
-- Sold items are mixed in with unsold items on the sale detail page. You mentioned this during the walkthrough — they should sort to the bottom.
-- TEAMS upsell on the dashboard says "API access • White-label support" — those are Enterprise features, not TEAMS. Needs correct copy.
-- Live Activity shopper avatars are solid color blobs (no initials inside).
-- Sale detail right-side panel buttons get clipped at the right edge of the screen.
-- Flip report Category Breakdown table is empty even when the report shows revenue.
-- Efficiency Coach shows "Top 100%" which sounds good but may actually mean bottom percentile.
+The 403 bug (fixed this session) was: the controller was passing the User ID to the service, but the service compares against the Organizer profile ID. Fixed with a DB lookup of the organizer profile before the service call.
 
-**P3 — Low priority cleanup:**
-- Map toolbar: third button slightly clipped.
-- Collections + Flip report: 3-second loading skeleton before content appears.
-- Inventory empty state copy: "No items match your filters" even when there are literally zero items.
-- Bronze rank card: "Upgrade →" link text is confusing — rank is earned, not purchased.
-
-### Next session (S510):
-5 dev agents dispatched in parallel — messages, sale detail, dashboard copy, XP badge/flip report icons, P3 cleanup. Then sequential Chrome QA on each fix.
+### Also fixed this session:
+- Inventory page was invisible to ADMIN users (role check was too strict — fixed to check roles array)
 
 ---
 

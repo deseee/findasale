@@ -7,38 +7,36 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
-**S509 (2026-04-19) — Full product walkthrough audit + 2 P0 inline fixes**
+**S510 (2026-04-19) — S509 bug queue dispatched + Feature #300 Chrome QA verified**
 
-Full Chrome QA walkthrough completed as Bob (organizer PRO, user2) across all major pages. Two P0 bugs caught and fixed inline at session start.
+All P1–P3 bugs from S509 walkthrough dispatched and pushed. Feature #300 return-to-inventory fully verified end-to-end.
 
-**Fixed inline (2 files, pushed):**
-- `ReturnToInventoryPanel.tsx` — price display was `/100` (Item.price is Float in dollars, not cents)
-- `returnToInventoryController.ts` — auth read `req.organizer?.id` (never set); fixed to `req.user?.id` + `AuthRequest` type
+**Dispatched and pushed (S510):**
+- `messages/[id].tsx` — reply bar padding + outgoing bubble `pr-2` (P1)
+- `flipReportService.ts` — contradictory stats fixed, `Recommendation` interface with type field (P1)
+- `flip-report/[saleId].tsx` — icon rendering: amber ⚠️ warning / green ✓ positive / gray → neutral (P1)
+- `useFlipReport.ts` — `Recommendation` interface, `recommendations: Recommendation[]`, `gcTime` (P1+P3)
+- `sales/[id].tsx` — overflow-hidden, SOLD sort to bottom, section order per D-006, sale type badge (P2)
+- `HypeMeter.tsx` — avatar initials + deterministic color hash (P2)
+- `dashboard.tsx` — TEAMS upsell copy, "View rank progress →" (P2)
+- `map.tsx` — `pr-4` toolbar container (P3)
+- `inventory.tsx` — filter-aware empty state copy (P3)
+- `FilterSidebar.tsx` — dark mode label color H-001 (P3)
+- `pricing.tsx` — "Up to 12 team members" D-007 (P3)
+- `shopper/history.tsx` — `whitespace-nowrap` on price/status (P2)
+- `trending.tsx` + `ItemCard.tsx` — dark mode placeholder (P2)
+- `returnToInventoryController.ts` — P0 fix: `req.user?.id` → organizer profile lookup (correct organizerId) (P0)
+- `inventory.tsx` — `role === 'ORGANIZER'` → `roles?.includes('ORGANIZER')` for ADMIN users (P2, this session)
 
-**Audit findings — dispatch pending (S510):**
+**Feature #300 Return-to-Inventory: ✅ CHROME VERIFIED**
+- Navigated to Downtown Downsizing Sale 21 flip-report as Alice (user1, ADMIN+ORGANIZER)
+- Selected Cordless Leaf Blower + T7 AMR Floor Scrubber, clicked "Return 2 items to inventory"
+- Success state: "✓ 2 items returned to inventory." + toast confirmed
+- DB: both items `saleId=null`, `lastSaleId` set, `inInventory=true` ✅
+- Backend `GET /api/item-inventory` returns both items (total: 2) when called with Alice's token ✅
+- Root cause of 403 fixed: controller now looks up `organizer.id` via DB instead of using JWT User ID directly
 
-| P | Issue | Location |
-|---|-------|----------|
-| P1 | Messages reply bar: 37px tall, no separator, blends into background — functionally there but invisible to users | `/messages/[id]` |
-| P1 | Outgoing message bubble clips at right viewport edge — text truncated | `/messages/[id]` |
-| P1 | Flip report contradictory stats: $1250 revenue / 0 items sold / $0 avg asking / $625 avg sale price | `/organizer/flip-report/[id]` |
-| P1 | Flip report "Low sell-through" recommendation shows green ✅ icon instead of warning | `/organizer/flip-report/[id]` |
-| P2 | Treasure Hunt XP badge: shows +50 (locked decision S500: 3 XP scan / 15 XP completion) | Homepage |
-| P2 | Sale detail right-side action panel overflows viewport right edge | `/sales/[id]` |
-| P2 | Live Activity avatars render as solid color blobs — no initials | `/sales/[id]` |
-| P2 | Sold items not sorted to bottom of sale item list | `/sales/[id]` |
-| P2 | TEAMS upsell shows wrong features: "API access • White-label support" | `/organizer/dashboard` |
-| P2 | Flip report Category Breakdown table empty despite revenue showing | `/organizer/flip-report/[id]` |
-| P2 | Efficiency Coach "Top 100%" badge — misleading percentile label | `/organizer/dashboard` |
-| P3 | Map toolbar third button clipped at right edge | `/map` |
-| P3 | Collections/flip-report loading skeleton ~3s before content renders | Multiple |
-| P3 | Inventory empty state: "No items match your filters" when truly zero items | `/organizer/inventory` |
-| P3 | Bronze rank "Upgrade →" link text misleading (rank is earned, not purchased) | `/organizer/dashboard` |
-
-**Unverified:**
-- Return-to-inventory browser flow — Bob's ENDED sale has 0 items, panel doesn't appear. Need ENDED sale with unsold items to verify fix end-to-end.
-
-Full findings doc: `/sessions/elegant-fervent-einstein/qa-findings-audit-2026-04-19.md`
+**Note on inventory page display:** Alice's JWT primary role is `ADMIN` not `ORGANIZER`, so the inventory page query was disabled by `role === 'ORGANIZER'` check. Fixed to `roles?.includes('ORGANIZER')`. Backend is correct.
 
 ---
 
