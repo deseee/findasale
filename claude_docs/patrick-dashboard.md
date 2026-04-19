@@ -1,4 +1,38 @@
-# Patrick's Dashboard — Week of April 18, 2026
+# Patrick's Dashboard — Week of April 19, 2026
+
+## S506 Summary (2026-04-19) — Feature #300 Architecture locked, Dev brief written
+
+**1 file changed (dev brief). No code changed this session — pure architecture + planning.**
+
+### What was decided this session:
+
+**The item duplication problem is solved at the root.** You were right to push back on the copy-item approach. Here's what was wrong and what we're fixing:
+
+**The problem:** `pullFromInventory()` was creating a full duplicate Item record every time an item was pulled into a sale. If you pulled the same lamp into 3 different sales, you'd have 4 records for that lamp in the database — the original plus 3 copies. This is wrong. A physical item is one thing.
+
+**The fix (Option 3 — Nullable saleId):**
+- An item in inventory = `saleId: null`
+- An item in a sale = `saleId: <that sale's id>`
+- Same record, forever. Just a field update when it moves.
+- When returned from a sale: `saleId` → null, `lastSaleId` saves where it was (so Flip Report history still works)
+
+**The dev brief is complete.** It's at `claude_docs/feature-notes/feature-300-return-to-inventory-dev-brief.md` and includes:
+- Full schema changes + migration SQL (with backfill for existing data)
+- `pullFromInventory()` rewrite (move instead of copy)
+- New `returnItemsToInventory()` function (handles reservation cancellation, waitlist cleanup, return tracking)
+- Flip Report union query fix (so returned items still show in post-sale analytics)
+- 50+ TypeScript break points mapped with exact fix for each
+- New endpoint: `POST /api/sales/:saleId/return-items`
+- New component: `ReturnToInventoryPanel` on the flip-report page
+- Implementation order + TypeScript check gate
+
+### Next session:
+
+**Dispatch `findasale-dev` with the brief.** This is the #1 priority — dev needs the schema change and all downstream TS fixes done in one batch to avoid a repair session.
+
+After dev returns: Patrick runs the migration manually (instructions in the brief).
+
+---
 
 ## S505 Summary (2026-04-18) — Tests moved off POS, checklist reorganized
 

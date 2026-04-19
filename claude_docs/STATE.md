@@ -7,6 +7,19 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S506 (2026-04-19) — Feature #300 Return-to-Inventory: Architecture decided, dev brief written**
+
+- **Architectural decision locked ✅:** Option 3 — nullable `Item.saleId` + `lastSaleId` anchor field. Patrick explicitly rejected copy-item approach: "absolutely not! why are we creating separate copies anyway."
+- **Root cause identified ✅:** `Item.saleId` required FK forces `pullFromInventory()` to create duplicate records. eBay import already worked around this with `isInventoryContainer` container sale. Option 3 eliminates both workarounds.
+- **Full downstream audit complete ✅:** 50+ TypeScript break points mapped across 15 backend files + 2 frontend files. All have documented exact fix.
+- **Dev brief written ✅:** `claude_docs/feature-notes/feature-300-return-to-inventory-dev-brief.md` — full schema, migration SQL, service rewrites, TypeScript fix map, new endpoint, new frontend component.
+- **Deferred to S507:** Dispatch `findasale-dev` with the brief. QA of S505 checklist test flows.
+
+**S506 Files changed (1):**
+- `claude_docs/feature-notes/feature-300-return-to-inventory-dev-brief.md` — NEW: complete dev brief
+
+---
+
 **S505 (2026-04-18) — Tests moved from POS to plan page, checklist stage reorganization**
 
 - **Test cards removed from POS ✅:** All test state vars, handlers, JSX cards, and TestCheckoutModal render block removed from `pos.tsx`. POS is now a clean cashier workspace.
@@ -831,6 +844,24 @@ Files (7):
 ---
 
 ## Next Session Priority
+
+**0. Feature #300 Return-to-Inventory — dispatch dev (P0, from S506):**
+Dev brief is complete at `claude_docs/feature-notes/feature-300-return-to-inventory-dev-brief.md`.
+Dispatch `findasale-dev` with the full brief. This is the top priority next session — do NOT start other work first.
+Schema migration required — follow §2 of the brief. Patrick runs the migration manually after push.
+
+**ALSO: QA S505 checklist test flows:**
+Deferred from S505. 4 test buttons on plan page need Chrome QA:
+- POS test → auto-checks `live_pos`
+- Online checkout → Stripe test session opens, returns, auto-checks
+- Auction checkout → same
+- In-app modal → Stripe Elements form, completes, auto-checks
+
+**S505 pending Patrick actions:**
+- Set env vars: `STRIPE_TEST_SECRET_KEY` (Railway) + `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY` (Vercel)
+- Run the S505 push block (if not yet done)
+
+---
 
 **1. Fix QR code sizing consistency across print kit (P1, from S502):**
 Patrick identified that QR codes are different sizes between interactive codes (on-screen), full-page print, and the individual label PDFs. All QR codes should be the same size. Files to audit:
