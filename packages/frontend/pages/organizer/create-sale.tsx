@@ -145,10 +145,14 @@ const CreateSalePage = () => {
 
     try {
       // Combine date + time and convert to UTC ISO string using browser's local timezone
+      // P1 fix: omit lat/lng when null — sending null fails Zod validation before tier check runs
+      const { lat, lng, ...restFormData } = formData;
       const payload = {
-        ...formData,
+        ...restFormData,
         startDate: formData.startDate ? new Date(`${formData.startDate}T${startTime}`).toISOString() : formData.startDate,
         endDate: formData.endDate ? new Date(`${formData.endDate}T${endTime}`).toISOString() : formData.endDate,
+        ...(lat !== null ? { lat } : {}),
+        ...(lng !== null ? { lng } : {}),
       };
       const response = await api.post('/sales', payload);
       const firstSaleUnlocked = response.data.achievements?.some(

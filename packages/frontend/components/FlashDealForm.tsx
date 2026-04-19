@@ -58,16 +58,16 @@ const FlashDealForm: React.FC<FlashDealFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 p-4 bg-warm-50 rounded-lg border border-warm-200">
-      <h3 className="text-lg font-semibold text-warm-900">Create Flash Deal</h3>
+    <form onSubmit={handleSubmit} className="space-y-4 p-4 bg-warm-50 dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
+      <h3 className="text-lg font-semibold text-warm-900 dark:text-white">Create Flash Deal</h3>
 
       {/* Item Select */}
       <div>
-        <label className="block text-sm font-medium text-warm-700 mb-1">Select Item</label>
+        <label className="block text-sm font-medium text-warm-700 dark:text-gray-200 mb-1">Select Item</label>
         <select
           value={selectedItemId}
           onChange={(e) => setSelectedItemId(e.target.value)}
-          className="w-full px-3 py-2 border border-warm-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600"
+          className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
         >
           <option value="">-- Choose an item --</option>
           {saleItems.map((item) => (
@@ -80,7 +80,7 @@ const FlashDealForm: React.FC<FlashDealFormProps> = ({
 
       {/* Discount % */}
       <div>
-        <label className="block text-sm font-medium text-warm-700 mb-1">Discount %</label>
+        <label className="block text-sm font-medium text-warm-700 dark:text-gray-200 mb-1">Discount %</label>
         <div className="flex flex-wrap gap-2">
           {DISCOUNT_OPTIONS.map((pct) => (
             <button
@@ -90,7 +90,7 @@ const FlashDealForm: React.FC<FlashDealFormProps> = ({
               className={`px-3 py-1 rounded-lg font-medium transition-colors ${
                 discountPct === pct
                   ? 'bg-amber-600 text-white'
-                  : 'bg-white border border-warm-300 text-warm-900 hover:border-amber-600'
+                  : 'bg-white dark:bg-gray-700 border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-200 hover:border-amber-600 dark:hover:border-amber-500'
               }`}
             >
               {pct}%
@@ -101,7 +101,7 @@ const FlashDealForm: React.FC<FlashDealFormProps> = ({
 
       {/* Duration */}
       <div>
-        <label className="block text-sm font-medium text-warm-700 mb-1">Duration</label>
+        <label className="block text-sm font-medium text-warm-700 dark:text-gray-200 mb-1">Duration</label>
         <div className="grid grid-cols-2 gap-2">
           {DURATION_OPTIONS.map((opt) => (
             <button
@@ -111,7 +111,7 @@ const FlashDealForm: React.FC<FlashDealFormProps> = ({
               className={`px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
                 durationMinutes === opt.minutes
                   ? 'bg-amber-600 text-white'
-                  : 'bg-white border border-warm-300 text-warm-900 hover:border-amber-600'
+                  : 'bg-white dark:bg-gray-700 border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-200 hover:border-amber-600 dark:hover:border-amber-500'
               }`}
             >
               {opt.label}
@@ -132,7 +132,7 @@ const FlashDealForm: React.FC<FlashDealFormProps> = ({
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 border border-warm-300 text-warm-700 rounded-lg hover:bg-warm-100 transition-colors"
+          className="px-4 py-2 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-300 rounded-lg hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
         >
           Cancel
         </button>

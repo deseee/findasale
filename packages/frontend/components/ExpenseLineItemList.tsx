@@ -89,7 +89,7 @@ export default function ExpenseLineItemList({ saleId, expenses }: ExpenseLineIte
           {expenses.map((expense) => (
             <div
               key={expense.id}
-              className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-750 rounded-lg"
+              className="flex items-center justify-between py-2 px-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-gray-900 dark:text-white">{expense.description}</p>
@@ -119,7 +119,7 @@ export default function ExpenseLineItemList({ saleId, expenses }: ExpenseLineIte
 
       {/* Add expense form */}
       {isAdding ? (
-        <form onSubmit={handleSubmit} className="bg-gray-50 dark:bg-gray-750 rounded-lg p-3 space-y-2">
+        <form onSubmit={handleSubmit} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <select
               value={newExpense.category}
