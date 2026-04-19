@@ -72,9 +72,9 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'pub_signs', stage: 'Pre-Sale', label: 'Neighborhood signs made and placed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_published', stage: 'Pre-Sale', label: 'Sale published', isAuto: true, autoCheck: (d) => d.sale.status === 'PUBLISHED' || d.sale.status === 'LIVE', link: '/organizer/edit-sale/{saleId}' },
   { id: 'pub_social', stage: 'Pre-Sale', label: 'Sale shared on social media', isAuto: false, link: '/organizer/promote/{saleId}' },
-  { id: 'pre_online_checkout', stage: 'Pre-Sale', label: 'Online checkout tested', isAuto: false, link: '/organizer/pos' },
-  { id: 'pre_auction_checkout', stage: 'Pre-Sale', label: 'Auction checkout tested', isAuto: false, link: '/organizer/pos' },
-  { id: 'pre_in_app_payment', stage: 'Pre-Sale', label: 'In-app payment tested', isAuto: false, link: '/organizer/pos' },
+  { id: 'pre_online_checkout', stage: 'Pre-Sale', label: 'Online checkout tested', isAuto: false, link: '/organizer/plan/{saleId}' },
+  { id: 'pre_auction_checkout', stage: 'Pre-Sale', label: 'Auction checkout tested', isAuto: false, link: '/organizer/plan/{saleId}' },
+  { id: 'pre_in_app_payment', stage: 'Pre-Sale', label: 'In-app payment tested', isAuto: false, link: '/organizer/plan/{saleId}' },
 
   // Stage 4: Live
   { id: 'live_internet', stage: 'Live', label: 'Internet connection tested', isAuto: false },
