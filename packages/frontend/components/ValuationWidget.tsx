@@ -42,7 +42,7 @@ export default function ValuationWidget({
         </p>
         <a
           href="/pricing"
-          className="inline-flex items-center px-4 py-1.5 border border-amber-500 text-amber-600 dark:text-amber-400 dark:border-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-xs font-medium rounded-full transition-colors"
+          className="inline-flex items-center px-3 py-1.5 border border-amber-500 text-amber-600 dark:text-amber-400 dark:border-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-xs font-medium rounded-lg transition-colors"
         >
           View Plans →
         </a>
@@ -86,7 +86,7 @@ export default function ValuationWidget({
             loadValuation();
           }}
           disabled={loading}
-          className="px-6 py-2.5 bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 text-white text-xs font-medium rounded-full transition-colors disabled:opacity-50"
+          className="px-6 py-2.5 bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
         >
           {loading ? 'Loading...' : 'Load Comparable Sales'}
         </button>
