@@ -99,6 +99,7 @@ interface Item {
   createdAt?: string;
   ebayListingId?: string; // eBay listing ID if pushed
   saleId?: string; // Sale ID for eBay push
+  isLegendary?: boolean; // Organizer marks item as Legendary
 }
 
 // Track which items should be pushed to eBay
@@ -1064,6 +1065,26 @@ const ReviewPage = () => {
                                 <span>·</span>
                                 <span className="truncate">{item.category ? decodeHtmlEntities(item.category) : 'Uncategorized'}</span>
                               </p>
+                              {/* Legendary suggestion chip */}
+                              {item.price != null && item.price >= 75 && !item.isLegendary && (
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-600 rounded-full px-2.5 py-1">
+                                  <span className="text-sm">⭐</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      updateItemMutation.mutate({
+                                        itemId: item.id,
+                                        updates: { isLegendary: true },
+                                      });
+                                    }}
+                                    disabled={updateItemMutation.isPending}
+                                    className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 transition-colors disabled:opacity-50"
+                                  >
+                                    Legendary?
+                                  </button>
+                                </div>
+                              )}
                               {/* Status line — compact, single row */}
                               {item.draftStatus === 'PUBLISHED' ? (
                                 <p className="mt-1 text-xs font-semibold flex items-center gap-1 text-blue-600 dark:text-blue-400">
