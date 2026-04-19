@@ -1502,6 +1502,20 @@ export default function POSPage() {
               >
                 {paymentStatus === 'processing' ? 'Running test…' : 'Run $1.00 Test Transaction'}
               </button>
+              <details className="mt-3">
+                <summary className="text-xs text-amber-700 dark:text-amber-400 cursor-pointer hover:underline select-none">
+                  What does this test?
+                </summary>
+                <div className="mt-2 text-xs text-warm-600 dark:text-warm-400 space-y-1.5 pl-1">
+                  <p>Sends a $1 charge through Stripe's test environment — no real money moves.</p>
+                  <p>Confirms your Stripe account is connected, fees are calculating correctly, and purchases are recording properly.</p>
+                  <p>When it succeeds, the <strong className="text-warm-700 dark:text-warm-300">"POS open and test transaction done"</strong> item on your sale checklist is automatically marked complete.</p>
+                  <p className="pt-1 font-medium text-warm-700 dark:text-warm-300">If it fails:</p>
+                  <p>Check for a Stripe setup banner on your Earnings page — onboarding must be complete before payments can process.</p>
+                  <p className="pt-1 font-medium text-warm-700 dark:text-warm-300">Test card numbers (for checkout testing):</p>
+                  <p><span className="font-mono">4242 4242 4242 4242</span> — succeeds &nbsp;·&nbsp; <span className="font-mono">4000 0000 0000 0002</span> — declines</p>
+                </div>
+              </details>
             </div>
           </div>
         </div>

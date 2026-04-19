@@ -271,6 +271,98 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'before-you-go-live',
+    title: 'Before You Go Live',
+    content: (
+      <div className="space-y-4">
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          You've added your items, set your prices, and printed your signs. Before you open the doors,
+          take 10 minutes to confirm every payment path is working. Nothing derails a sale morning faster
+          than a payment issue at the table.
+        </p>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">1. Confirm Your Stripe Account Is Ready</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Go to your <strong>Earnings</strong> page. If you see a yellow banner asking you to complete
+          Stripe setup, do that first — no payments will go through until onboarding is finished.
+          You're ready when there are no setup banners and your Earnings page shows a connected payout method.
+        </p>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">2. Run the POS Test Transaction</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Open the{' '}
+          <Link href="/organizer/pos" className="text-amber-600 hover:underline font-medium">POS page</Link>,
+          select your sale, and tap <strong>"Run $1.00 Test Transaction"</strong> in the Pre-Sale Test card.
+          This sends a $1 charge through Stripe's test environment — no real money moves. When it succeeds,
+          the "POS open and test transaction done" item on your progress checklist automatically marks itself complete.
+        </p>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          If the test fails, double-check your Stripe account is fully onboarded and try again.
+          Still failing? Contact support before your sale day.
+        </p>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">3. Test Online Checkout (if using self-checkout QR codes)</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          If shoppers will scan QR codes to buy items on their phones, test that flow before you print
+          your QR materials. Open your sale's public page, tap through to checkout on any priced item,
+          and use test card number <strong>4242 4242 4242 4242</strong> with any future expiry date and
+          any CVC. Confirm the purchase appears in your Earnings view.
+        </p>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">4. Walk Through the POS Flow Once</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Open the POS page and run a quick walkthrough: search for an item, add it to the cart, and
+          verify prices look right. You don't need to complete a real charge — you're just confirming
+          items load, prices are accurate, and the charge screen appears correctly.
+        </p>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Pre-Sale Checklist</h3>
+        <ul className="space-y-2 text-warm-700 dark:text-warm-300 mt-2">
+          {[
+            'Stripe account fully connected (no yellow banners)',
+            'POS test transaction completed — checklist task auto-checked',
+            'At least one item is priced and published',
+            'QR codes printed and tested (if using self-checkout)',
+            'Sale start time is correct (double-check timezone)',
+            'Sale is published and visible on the discovery feed',
+          ].map((item) => (
+            <li key={item} className="flex items-start gap-2">
+              <span className="mt-0.5 text-amber-600 font-bold">✓</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Test Card Numbers</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Use these when testing checkout flows. Any future expiry date and any 3-digit CVC work with all test cards.
+        </p>
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-sm text-warm-700 dark:text-warm-300 border-collapse">
+            <thead>
+              <tr className="border-b border-warm-200 dark:border-gray-700">
+                <th className="text-left py-2 pr-6 font-semibold">Card Number</th>
+                <th className="text-left py-2 font-semibold">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['4242 4242 4242 4242', 'Payment succeeds'],
+                ['4000 0000 0000 0002', 'Payment declined'],
+                ['4000 0025 0000 3155', 'Requires authentication step'],
+              ].map(([card, result]) => (
+                <tr key={card} className="border-b border-warm-100 dark:border-gray-800">
+                  <td className="py-2 pr-6 font-mono text-xs">{card}</td>
+                  <td className="py-2">{result}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ),
+  },
+  {
     id: 'tips',
     title: 'Tips for Success',
     content: (
