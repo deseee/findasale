@@ -76,7 +76,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           subscriptionStatus: payload.subscriptionStatus ?? null,
           onboardingComplete: payload.onboardingComplete ?? false,
           teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
-          createdAt: payload.createdAt
+          createdAt: payload.createdAt,
+          emailVerified: payload.emailVerified ?? true, // S512: default true for old tokens
         });
       } catch (e) {
         console.error('Failed to decode token', e);
@@ -110,7 +111,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscriptionStatus: payload.subscriptionStatus ?? null,
         onboardingComplete: payload.onboardingComplete ?? false,
         teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
-        createdAt: payload.createdAt
+        createdAt: payload.createdAt,
+        emailVerified: payload.emailVerified ?? true, // S512: default true for old tokens
       });
     } catch (e) {
       console.error('Failed to decode token', e);
