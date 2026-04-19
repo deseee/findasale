@@ -242,6 +242,7 @@ const OrganizerDashboard = () => {
           totalLifetime: number;
           currentSale: number;
           thisMonth: number;
+          mostRecentEndedSale: number;
         };
         items: {
           total: number;
@@ -1491,7 +1492,7 @@ const OrganizerDashboard = () => {
                   .filter((s: Sale) => s.status === 'ENDED')
                   .sort((a: Sale, b: Sale) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0];
                 if (!mostRecentEnded) return null;
-                const revenue = statsData?.revenue?.totalLifetime ?? 0;
+                const revenue = statsData?.revenue?.mostRecentEndedSale ?? 0;
                 const soldItems = statsData?.items?.sold ?? 0;
                 const totalItems = statsData?.items?.total ?? 0;
                 return (

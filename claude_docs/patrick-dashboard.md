@@ -1,5 +1,46 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
+## S515 Summary (2026-04-19) — Dashboard widgets QA (#230–#234), SIMPLE tier gate P1 fix ✅
+
+**9 files to push (S514 + S515 combined). Push block below.**
+
+### What was fixed:
+- **#249 SIMPLE concurrent sales gate (P1)** — Form was sending `lat: null`, which hit Zod 400 before the tier 409 check, making the amber block invisible. Fixed in `create-sale.tsx` to omit null lat/lng from POST body. Amber "Upgrade to PRO" block now shows correctly.
+
+### Dashboard widget QA results:
+- **#230 Who's Coming** ⚠️ — Empty state verified. Populated state UNVERIFIED (needs a shopper to save/favorite a test sale first).
+- **#231 High-Value Item Tracker** ✅ — Empty state and item with backend `isHighValue` flag both verified. Renders thumbnail, name, price, status chip.
+- **#232 Sale Pulse Widget** ⚠️ — Renders + "Boost visibility →" CTA → Ripples works. **P2 bug:** Views count shows 0 in Sale Pulse widget but 5 in Ripples for same sale. Different data sources.
+- **#233 Efficiency Coach** ✅ — Real data renders (compared to 14 organizers), tips expand/collapse works. P3: "Top 100%" chip label is confusing.
+- **#234 Post-Sale Momentum** ⚠️ — Card renders, Settle + Start Next Sale CTAs work. **P1 bug:** Revenue shown is all-time lifetime total ($1,279) instead of sale-specific revenue ($899.53). Dispatching fix.
+
+### P1 fix being dispatched:
+- **#234 PostSaleMomentumCard revenue** — change from `statsData.revenue.totalLifetime` to sale-specific revenue for the most recently ended sale.
+
+### Patrick actions required:
+1. **Run the push block below** (9 files — S514 + S515)
+2. **Stripe Connect webhook secret** — Stripe Dashboard → Developers → Webhooks → Connect webhook endpoint → copy signing secret → add `STRIPE_CONNECT_WEBHOOK_SECRET=whsec_[value]` to Railway env vars (P2, unresolved since S421)
+
+### Push block (S514 + S515 combined):
+```powershell
+git add packages/frontend/pages/organizer/create-sale.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/components/PriceResearchPanel.tsx
+git add packages/frontend/components/PriceSuggestion.tsx
+git add packages/frontend/components/ValuationWidget.tsx
+git add packages/frontend/components/FlashDealForm.tsx
+git add packages/frontend/components/ExpenseLineItemList.tsx
+git add packages/backend/src/controllers/earlyAccessController.ts
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S514+S515: legendary toggle, price research redesign, SIMPLE tier gate fix, dark mode P2s, earlyAccess req.user fix"
+.\push.ps1
+```
+
+---
+
 ## S513 Summary (2026-04-19) — Early access items page, photo station, POS fix, modal scroll fix, roadmap v112 ✅
 
 **7 files changed. Push block below — deploy before testing.**

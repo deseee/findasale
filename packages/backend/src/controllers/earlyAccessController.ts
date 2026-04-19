@@ -21,7 +21,7 @@ const VALID_CATEGORIES = [
  */
 export const getStatus = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = (req as any).user.id;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -101,7 +101,7 @@ export const getStatus = async (req: Request, res: Response) => {
  */
 export const activate = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = (req as any).user.id;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -212,7 +212,7 @@ export const activate = async (req: Request, res: Response) => {
  */
 export const getItems = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).userId;
+    const userId = (req as any).user.id;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }

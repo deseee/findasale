@@ -7,6 +7,64 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S515 (2026-04-19) — QA: dashboard widgets #230–#234, SIMPLE concurrent sales gate P1 fix**
+
+Chrome QA pass on 5 dashboard widgets + tier gate. Roadmap updated for #230–#234 and #249.
+
+**QA results:**
+- **#249 SIMPLE concurrent sales gate:** P1 found and fixed — form was sending `lat:null` which hit Zod 400 before tier 409 check. Fixed in `create-sale.tsx` to omit null lat/lng from POST body. Amber block + "Upgrade to PRO" CTA confirmed rendering correctly (screenshot evidence).
+- **#230 Who's Coming (Smart Buyer Intelligence):** ⚠️ Empty state only verified. Populated state UNVERIFIED (no shoppers on test sales).
+- **#231 High-Value Item Tracker:** ✅ Empty state and DB-flagged item both verified. Item renders with thumbnail, name, price, status chip.
+- **#232 Sale Pulse Widget:** ⚠️ Renders + "Boost visibility →" CTA → Ripples correctly. P2: Views count 0 in Sale Pulse but 5 in Ripples for same sale.
+- **#233 Efficiency Coach:** ✅ Real data renders (compared to 14 organizers), tips expand/collapse works. P3: "Top 100%" chip label confusing.
+- **#234 Post-Sale Momentum:** ⚠️ Card renders for user7 (Grace, State 3). Settle + Start Next Sale CTAs work. P1: Revenue shown is `statsData.revenue.totalLifetime` ($1,279) not sale-specific revenue ($899.53 per Settlement Hub).
+
+**Files changed (S515):**
+- `packages/frontend/pages/organizer/create-sale.tsx` — P1 lat/lng null fix
+- `claude_docs/strategy/roadmap.md` — #240 Human QA ✅, #249 Chr ⚠️, #230–#234 Chr updated
+
+**Carry-forward files (S514 — not yet pushed):**
+- `packages/frontend/pages/organizer/edit-item/[id].tsx` — Legendary toggle
+- `packages/backend/src/controllers/itemController.ts` — updateItem legendary fields
+- `packages/frontend/components/PriceResearchPanel.tsx` — Price Research Card redesign
+- `packages/frontend/components/PriceSuggestion.tsx` — sage green button
+- `packages/frontend/components/ValuationWidget.tsx` — sage green tier gate button
+- `packages/frontend/components/FlashDealForm.tsx` — dark mode P2 fix
+- `packages/frontend/components/ExpenseLineItemList.tsx` — dark mode P2 fix
+- `packages/backend/src/controllers/earlyAccessController.ts` — req.user.id fix (P1)
+
+---
+
+**S514 (2026-04-19) — Legendary item toggle, Price Research Card redesign, Stripe Connect root cause**
+
+Three parallel dev dispatches shipped:
+
+**Legendary item flag UI (Phase 2b):**
+- `edit-item/[id].tsx` — amber toggle added ("Mark as Legendary" + subtext about Sage+/Hunt Pass early access). Wired to form submit.
+- `itemController.ts` — `updateItem` now reads `isLegendary`, sets `legendaryPublishedAt` on first enable. `getItemById` now selects all 3 legendary fields.
+
+**Price Research Card redesign (per PRICE_RESEARCH_CARD_UX_SPEC.md):**
+- `PriceResearchPanel.tsx` — sections reordered (AI Estimate → Smart Pricing → eBay → Sales Comps → Community Appraisal), `border-t` dividers replaced with `py-3` spacing, Smart Estimate visible in collapsed state.
+- `PriceSuggestion.tsx` — sage green primary button (#4A7C59), `rounded-lg`, full-width.
+- `ValuationWidget.tsx` — tier gate button updated to sage green + `rounded-lg`.
+
+**Stripe Connect POS SOLD root cause (P2 since S421):**
+- Root cause: `STRIPE_CONNECT_WEBHOOK_SECRET` env var missing on Railway. Code is correct — fallback logic exists in `stripeController.ts`. No code change needed.
+- **Patrick action required:** Stripe Dashboard → Developers → Webhooks → Connect webhook endpoint → copy signing secret → add `STRIPE_CONNECT_WEBHOOK_SECRET=whsec_[value]` to Railway env vars.
+
+**priceBeforeMarkdown investigation:**
+- Already implemented on main paths (ItemCard, InventoryItemCard, items/[id].tsx). No visible bug.
+- Gap: 3 secondary endpoints (inspiration gallery, rare finds, drafts) missing the fields. P3.
+
+**Files changed (5):**
+- `packages/frontend/pages/organizer/edit-item/[id].tsx`
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/frontend/components/PriceResearchPanel.tsx`
+- `packages/frontend/components/PriceSuggestion.tsx`
+- `packages/frontend/components/ValuationWidget.tsx`
+
+---
+
 **S513 (2026-04-19) — Early access cache items page, photo station, S505 QA + POS Run Test fix**
 
 Built two new pages and completed S505 checklist test flow QA.
@@ -934,8 +992,12 @@ Files (7):
 
 ## Recent Sessions
 
+- **S515 (2026-04-19):** Chrome QA: #249 SIMPLE gate P1 fixed (lat/lng null → 400 before 409; fixed to omit null from POST body). #230 Who's Coming ⚠️ empty only. #231 High-Value ✅. #232 Sale Pulse ⚠️ P2 views mismatch. #233 Efficiency Coach ✅. #234 Post-Sale Momentum ⚠️ P1 lifetime revenue shown as sale revenue. Roadmap updated.
+- **S514 (2026-04-19):** Legendary item toggle (edit-item + itemController). Price Research Card redesign (sections reordered, sage green button). Stripe Connect P2 root cause: missing STRIPE_CONNECT_WEBHOOK_SECRET env var. Dark mode P2: FlashDealForm + ExpenseLineItemList. earlyAccessController req.user.id P1 fix. 8 files — NOT YET PUSHED.
+- **S513 (2026-04-19):** Early access cache items page + photo station page built. POS Run Test fix (body params). In-App modal scroll fix. live_pos isAuto removed. 7 files.
+- **S512 (2026-04-19):** Email verification gate built + Chrome-verified. DowngradePreviewModal verified. pricing.tsx Downgrade stub found (P3). 4 files.
+- **S511 (2026-04-19):** Role fixes (roles?.includes), eBay GetItem fix, QR sizes, messages padding, treasure hunt XP. smoke test: messages ✅, flip report ✅, sale type badge ✅. 12 files.
 - **S502 (2026-04-18):** Label Sheet Composer built end-to-end. 4 backend endpoints (cheatsheet, items-for-labels, label-batch, print). Full frontend page with useReducer, price chips, catalog search, live Avery 5160 preview, drag reorder. 3 bug fixes: PDF auth (blob fetch), export download (anchor+download attr), saved batch recall UI (localStorage scan + load/delete). Shared cheatsheet constant extracted. CTA links on print-kit + review pages. 7 files.
-- **S501 (2026-04-18):** PDFKit `margins: 0` root-cause fix (singular `margin: 0`). Directional signs QR swap. QR color standardized black. Price sheet +$7.50/$12.50/$25. Label HTML entity decode. Print preview condition badges + QR labels + empty last page fix. 3 files.
 - **S500 (2026-04-18):** XP economy full rebalance — 8 decision locks (D-XP-015 to D-XP-018). All backend XP constants updated. Flat purchase XP, referral 500 XP, haul post wired, challenge difficulty+XP wired. hunt-pass.tsx corrected. 8 files.
 - **S499 (2026-04-18):** Progress tracker task links audited + corrected (29 tasks). "Ready to Publish" → "Pre-Sale" throughout. Checkbox rendering + optimistic update fix. Print kit: 3 new QR sections. Photo station design. XP discrepancy found. 7 files.
 - **S498 (2026-04-17):** Time pickers on edit sale form. Inventory sort newest-first. Video opening frame branding. Sale checklist cache invalidation fix. Planner inclusive copy. Chat auto-scroll removed. 7 files.

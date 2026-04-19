@@ -174,6 +174,14 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       });
     });
 
+    // Find most recently ended sale — for PostSaleMomentumCard sale-specific revenue
+    const mostRecentEndedSale = [...sales]
+      .filter((s: any) => s.status === 'ENDED')
+      .sort((a: any, b: any) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0] ?? null;
+    const mostRecentEndedRevenue = mostRecentEndedSale
+      ? mostRecentEndedSale.purchases.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
+      : 0;
+
     // Find active sale (prefer PUBLISHED over DRAFT — match getDashboardState logic on frontend)
     const activeSale = sales.find(
       (s: any) => s.status === 'PUBLISHED'
@@ -246,6 +254,7 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
         totalLifetime,
         currentSale: activeSale?.purchases.reduce((sum: any, p: any) => sum + (Number(p.amount) || 0), 0) ?? 0,
         thisMonth,
+        mostRecentEndedSale: mostRecentEndedRevenue,
       },
       items: {
         total: totalItems,
