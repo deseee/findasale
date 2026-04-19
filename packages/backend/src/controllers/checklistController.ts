@@ -74,13 +74,12 @@ const ALL_TASKS: TaskDefinition[] = [
 
   // Stage 4: Live
   { id: 'live_internet', stage: 'Live', label: 'Internet connection tested', isAuto: false },
+  { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue/{saleId}' },
   { id: 'live_pos', stage: 'Live', label: 'POS open and test transaction done', isAuto: false, link: '/organizer/pos' },
   { id: 'live_float', stage: 'Live', label: 'Bills and coins ready for making change', isAuto: false },
-  { id: 'live_signs', stage: 'Live', label: 'Signs posted at property entrance', isAuto: false },
-  { id: 'live_qr_check', stage: 'Live', label: 'QR scan activity checked', isAuto: false, link: '/organizer/qr-codes' },
-  { id: 'live_queue', stage: 'Live', label: 'Virtual Queue active', isAuto: false, requiredTier: 'PRO', link: '/organizer/line-queue/{saleId}' },
   { id: 'live_helpers', stage: 'Live', label: 'Helpers briefed on their roles', isAuto: false },
   { id: 'live_first_sold', stage: 'Live', label: 'First item sold', isAuto: true, autoCheck: (d) => d.soldCount >= 1 },
+  { id: 'live_qr_check', stage: 'Live', label: 'QR scan activity checked', isAuto: false, link: '/organizer/qr-codes' },
 
   // Stage 5: Wrapping Up
   { id: 'wrap_signs_down', stage: 'Wrapping Up', label: 'Signs taken down', isAuto: false },
