@@ -166,6 +166,18 @@ export default function POSPage() {
   const [paymentLinkStatus, setPaymentLinkStatus] = useState<'idle' | 'generating' | 'waiting' | 'paid'>('idle');
   const [paymentLinkPollInterval, setPaymentLinkPollInterval] = useState<NodeJS.Timeout | null>(null);
 
+  // Test checkout state (online + auction)
+  const [onlineCheckoutStatus, setOnlineCheckoutStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [onlineCheckoutUrl, setOnlineCheckoutUrl] = useState<string | null>(null);
+  const [onlineCheckoutQr, setOnlineCheckoutQr] = useState<string | null>(null);
+
+  const [auctionCheckoutStatus, setAuctionCheckoutStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [auctionCheckoutUrl, setAuctionCheckoutUrl] = useState<string | null>(null);
+  const [auctionCheckoutQr, setAuctionCheckoutQr] = useState<string | null>(null);
+
+  // Test in-app payment state
+  const [inAppPaymentStatus, setInAppPaymentStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
   // Linked Shopper QR state (shopper account QR scan)
   const [linkedShopperData, setLinkedShopperData] = useState<any | null>(null);
   // Track the shopper userId for Send to Phone (set from QR scan or cart pull)
@@ -801,6 +813,86 @@ export default function POSPage() {
       console.error('[pos] Test transaction error:', err);
       setErrorMessage(err?.response?.data?.message || err?.message || 'Test transaction failed');
       setPaymentStatus('error');
+    }
+  };
+
+  const handleOnlineCheckout = async () => {
+    if (!selectedSaleId) {
+      showToast('Please select a sale first', 'error');
+      return;
+    }
+
+    setOnlineCheckoutStatus('loading');
+    try {
+      const res = await api.post('/stripe/test-checkout-session', {
+        saleId: selectedSaleId,
+        type: 'standard',
+      });
+      if (res.data?.checkoutUrl && res.data?.qrCodeUrl) {
+        setOnlineCheckoutUrl(res.data.checkoutUrl);
+        setOnlineCheckoutQr(res.data.qrCodeUrl);
+        setOnlineCheckoutStatus('ready');
+      } else {
+        setOnlineCheckoutStatus('error');
+        showToast('Failed to generate checkout session', 'error');
+      }
+    } catch (err: any) {
+      console.error('[pos] Online checkout test failed:', err);
+      setOnlineCheckoutStatus('error');
+      showToast(err?.response?.data?.message || 'Online checkout test failed', 'error');
+    }
+  };
+
+  const handleAuctionCheckout = async () => {
+    if (!selectedSaleId) {
+      showToast('Please select a sale first', 'error');
+      return;
+    }
+
+    setAuctionCheckoutStatus('loading');
+    try {
+      const res = await api.post('/stripe/test-checkout-session', {
+        saleId: selectedSaleId,
+        type: 'auction',
+      });
+      if (res.data?.checkoutUrl && res.data?.qrCodeUrl) {
+        setAuctionCheckoutUrl(res.data.checkoutUrl);
+        setAuctionCheckoutQr(res.data.qrCodeUrl);
+        setAuctionCheckoutStatus('ready');
+      } else {
+        setAuctionCheckoutStatus('error');
+        showToast('Failed to generate auction checkout session', 'error');
+      }
+    } catch (err: any) {
+      console.error('[pos] Auction checkout test failed:', err);
+      setAuctionCheckoutStatus('error');
+      showToast(err?.response?.data?.message || 'Auction checkout test failed', 'error');
+    }
+  };
+
+  const handleInAppPayment = async () => {
+    if (!selectedSaleId) {
+      showToast('Please select a sale first', 'error');
+      return;
+    }
+
+    setInAppPaymentStatus('loading');
+    try {
+      await api.post('/stripe/test-in-app-payment', { saleId: selectedSaleId });
+      setInAppPaymentStatus('success');
+
+      // Auto-check the checklist item
+      await api.patch(`/checklist/${selectedSaleId}`, {
+        itemId: 'pre_in_app_payment',
+        completed: true,
+      });
+
+      showToast('In-app payment verified!', 'success');
+      queryClient.invalidateQueries({ queryKey: ['organizer-checklist'] });
+    } catch (err: any) {
+      console.error('[pos] In-app payment test failed:', err);
+      setInAppPaymentStatus('error');
+      showToast(err?.response?.data?.message || 'In-app payment test failed', 'error');
     }
   };
 
@@ -1516,6 +1608,111 @@ export default function POSPage() {
                   <p><span className="font-mono">4242 4242 4242 4242</span> — succeeds &nbsp;·&nbsp; <span className="font-mono">4000 0000 0000 0002</span> — declines</p>
                 </div>
               </details>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Online Checkout Test Card */}
+      {selectedSaleId && (
+        <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🧪</span>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test Online Checkout</h3>
+              <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test the web checkout flow customers will use to buy from your sale.</p>
+              <button
+                onClick={handleOnlineCheckout}
+                disabled={onlineCheckoutStatus === 'loading'}
+                className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
+              >
+                {onlineCheckoutStatus === 'loading' ? 'Generating…' : 'Test Online Checkout'}
+              </button>
+              {onlineCheckoutStatus === 'error' && (
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
+              )}
+              {onlineCheckoutStatus === 'ready' && onlineCheckoutQr && onlineCheckoutUrl && (
+                <div className="mt-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <p className="text-xs text-warm-600 dark:text-warm-300 mb-2">
+                    Scan on your phone or click the link. Use card <strong>4242 4242 4242 4242</strong> — your inventory won't change.
+                  </p>
+                  <img src={onlineCheckoutQr} alt="QR Code" className="mb-2 w-32 h-32 mx-auto" />
+                  <a
+                    href={onlineCheckoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs font-semibold transition"
+                  >
+                    Open Checkout Link
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auction Checkout Test Card */}
+      {selectedSaleId && (
+        <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🧪</span>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test Auction Checkout</h3>
+              <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test the auction checkout flow if you're running an auction-style sale.</p>
+              <button
+                onClick={handleAuctionCheckout}
+                disabled={auctionCheckoutStatus === 'loading'}
+                className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
+              >
+                {auctionCheckoutStatus === 'loading' ? 'Generating…' : 'Test Auction Checkout'}
+              </button>
+              {auctionCheckoutStatus === 'error' && (
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
+              )}
+              {auctionCheckoutStatus === 'ready' && auctionCheckoutQr && auctionCheckoutUrl && (
+                <div className="mt-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
+                  <p className="text-xs text-warm-600 dark:text-warm-300 mb-2">
+                    Scan on your phone or click the link. Use card <strong>4242 4242 4242 4242</strong> — your inventory won't change.
+                  </p>
+                  <img src={auctionCheckoutQr} alt="QR Code" className="mb-2 w-32 h-32 mx-auto" />
+                  <a
+                    href={auctionCheckoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs font-semibold transition"
+                  >
+                    Open Checkout Link
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Payment Test Card */}
+      {selectedSaleId && (
+        <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🧪</span>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test In-App Payment</h3>
+              <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test in-app payment processing (if applicable to your sale type).</p>
+              {inAppPaymentStatus === 'success' ? (
+                <p className="text-sm font-semibold text-green-600 dark:text-green-400">✓ In-app payment verified</p>
+              ) : (
+                <button
+                  onClick={handleInAppPayment}
+                  disabled={inAppPaymentStatus === 'loading'}
+                  className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
+                >
+                  {inAppPaymentStatus === 'loading' ? 'Testing…' : 'Test In-App Payment'}
+                </button>
+              )}
+              {inAppPaymentStatus === 'error' && (
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
+              )}
             </div>
           </div>
         </div>
