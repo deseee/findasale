@@ -1,42 +1,27 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
-## S510 Summary (2026-04-19) — All S509 bugs fixed + Feature #300 fully verified ✅
+## S511 Summary (2026-04-19) — Role fixes, eBay ended-sync, QR sizing, message bar, TH XP badge ✅
 
-**All 15 bugs from the S509 walkthrough are fixed and pushed. Feature #300 Return-to-Inventory is live and verified.**
+**12 files fixed and pushed. All parallel dev work complete.**
 
-### All S509 bugs fixed (now live):
-- Messages reply bar visible + outgoing bubbles no longer clipped
-- Flip report stats no longer contradict each other; recommendation icons correct (⚠️/✓/→)
-- SOLD items sort to bottom of sale detail page
-- TEAMS upsell copy corrected
-- Live Activity avatars now show initials
-- Sale detail panel overflow fixed
-- Map toolbar clipping fixed
-- Inventory empty state copy is context-aware
-- Dark mode labels fixed across FilterSidebar
-- Pricing page shows correct "Up to 12 team members" (D-007)
-- Shopper purchase history price/status no longer wraps awkwardly
-- Dashboard rank progress link added
+### Fixed and pushed this session:
+- **5 role check fixes** — ADMIN+ORGANIZER users now pass all `role === 'ORGANIZER'` gates site-wide (BountyModal, authController JWT, hubs CTA, RippleIndicator, access-denied page)
+- **eBay ended-sync restored** — `GetMultipleItems` API was deprecated and silently failing. Replaced with individual `GetItem` calls. Auto-mark-sold from eBay is working again.
+- **QR sizing standardized** — 4-tier hierarchy across all print kit: labels (48px), hang tags (110px), standard (300px), large/full-page (500px)
+- **Messages reply bar raised** — `pb-safe` (did nothing on Android/desktop) replaced with `pb-6`. Bar no longer hugs the very bottom edge.
+- **Treasure Hunt XP badge fixed** — Homepage banner showed +50 XP (stale DB value). Now correctly shows +3 per D-XP-015. Route overridden to always use current XP constant.
 
-### Feature #300 — Return to Inventory: ✅ VERIFIED
+### Smoke test results (S510 fixes):
+- ✅ Messages reply bar: visible and working
+- ✅ Flip report icons: amber ⚠️ warning / gray → neutral rendering
+- ✅ Sale type badge: ESTATE badge on sale pages
+- ✅ Treasure Hunt XP: fixed this session (was +50)
 
-Tested end-to-end as Alice on Downtown Downsizing Sale 21 (35 unsold items):
-1. Opened flip-report → Return to Inventory panel shows all 35 unsold items ✅
-2. Selected 2 items, clicked "Return 2 items to inventory" ✅
-3. Success state appeared with toast confirmation ✅
-4. DB confirmed: both items have `saleId=null`, `inInventory=true`, `lastSaleId` set ✅
-5. Backend API returns both items in `/organizer/inventory` ✅
-
-The 403 bug (fixed this session) was: the controller was passing the User ID to the service, but the service compares against the Organizer profile ID. Fixed with a DB lookup of the organizer profile before the service call.
-
-### Also fixed this session:
-- Inventory page was invisible to ADMIN users (role check was too strict — fixed to check roles array)
-
-### Next session queue:
-1. **Smoke test** all S510 fixes in Chrome first
-2. **Role check batch** (5 files) — BountyModal, authController, hubs page, RippleIndicator, access-denied page
-3. **eBay ended-sync fix** — `GetMultipleItems` API deprecated, auto-mark-sold from eBay is silently broken
-4. **Treasure Hunt XP badge** — confirm it shows 3/15 XP not 50 XP
+### Next session:
+1. **QA S505 checklist test flows** — need `STRIPE_TEST_SECRET_KEY` (Railway) + `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY` (Vercel) set first
+2. **Photo station build** — shopper page + backend scan endpoint + 3-clue cap fix
+3. **Chrome QA security gates** (P1, carry from S489) — register new account, verify email gate
+4. **Chrome QA tier degradation** (P1, carry from S489) — SIMPLE user, DowngradePreviewModal
 
 ---
 

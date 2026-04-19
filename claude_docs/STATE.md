@@ -7,6 +7,37 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S511 (2026-04-19) — Role fixes, eBay ended-sync, QR sizing, messages padding, treasure hunt XP**
+
+Parallel dispatch completed. All changes pushed in S511.
+
+**Files changed (12):**
+- `packages/frontend/components/BountyModal.tsx` — `role === 'ORGANIZER'` → `roles?.includes('ORGANIZER')` (P2)
+- `packages/backend/src/controllers/authController.ts` — same role fix, ADMIN+ORGANIZER gets subscriptionTier in JWT (P2)
+- `packages/frontend/pages/hubs/[slug].tsx` — same role fix (P3)
+- `packages/frontend/components/RippleIndicator.tsx` — same role fix (P3)
+- `packages/frontend/pages/access-denied.tsx` — same role fix (P3)
+- `packages/backend/src/controllers/ebayController.ts` — `GetMultipleItems` (deprecated, failing silently) → individual `GetItem` calls per listing (P2)
+- `packages/backend/src/jobs/ebayEndedListingsSyncCron.ts` — comment update
+- `packages/backend/src/controllers/printKitController.ts` — QR sizes standardized: 4-tier hierarchy (48/110/300/500px)
+- `packages/backend/src/controllers/labelComposerController.ts` — QR_SIZE_LABEL constant
+- `packages/frontend/pages/messages/[id].tsx` — reply bar `py-4 pb-safe` → `pt-3 pb-6` (bar was too low)
+- `packages/backend/src/services/treasureHuntService.ts` — `pointReward: 50` → `pointReward: 3` (D-XP-015)
+- `packages/backend/src/routes/treasureHunt.ts` — response uses `XP_AWARDS.TREASURE_HUNT_SCAN` (3), not stale DB value; fixes existing records showing +50
+
+**Smoke test (S510 fixes):**
+- ✅ Messages reply bar: live and working (padding fixed inline this session)
+- ✅ Flip report icons: amber ⚠️ warning / gray → neutral rendering correctly
+- ✅ Sale type badge: ESTATE badge visible on sale pages
+- ✅ S510 push confirmed in GitHub (5 commits)
+- ✅ Treasure Hunt XP badge: fixed (was +50, now +3 per D-XP-015)
+- ⚠️ SOLD items sort: couldn't confirm (only 1 sold item on test sale, may have been in scroll gap)
+- ⚠️ HypeMeter: not rendered on Alice's dashboard (may require team shopper data)
+
+**Note on Railway 403 logs:** `/api/pos/sessions` and `/api/pos/holds` 403s are expected — Chrome QA was browsing Lakefront Estate Sale 15 which belongs to a different organizer. Ownership check correctly blocked Alice.
+
+---
+
 **S510 (2026-04-19) — S509 bug queue dispatched + Feature #300 Chrome QA verified**
 
 All P1–P3 bugs from S509 walkthrough dispatched and pushed. Feature #300 return-to-inventory fully verified end-to-end.
@@ -942,42 +973,21 @@ Files (7):
 
 ## Next Session Priority
 
-**0. Smoke test S510 fixes (mandatory first action):**
-Open Chrome, verify the S510 fixes are live: messages reply bar, flip report icons, SOLD items sorting, TEAMS copy, HypeMeter initials, inventory role check. Flag any that aren't working before starting new work.
+**0. Smoke test S511 fixes (mandatory first action):**
+S511 push complete. Verify these are live: messages reply bar padding (pb-6), treasure hunt XP badge (+3 not +50), role fixes for ADMIN+ORGANIZER users (5 files), eBay ended-sync active.
 
-**0a. Role check fixes — 5 files (P2/P3, from S510 health-scout audit):**
-Dispatch `findasale-dev` with all 5 in one batch (different files, no conflicts):
-- `BountyModal.tsx:49` — P2: `user?.role === 'ORGANIZER'` → `user?.roles?.includes('ORGANIZER')` (ADMIN users see bounty modal on own sales)
-- `authController.ts:303` — P2: `if (user.role === 'ORGANIZER')` → `if (user.role === 'ORGANIZER' || user.roles?.includes('ORGANIZER'))` (ADMIN+ORGANIZER users don't get subscriptionTier in JWT)
-- `hubs/[slug].tsx:158` — P3: same strict check → roles.includes pattern (ADMIN users miss hub CTA)
-- `RippleIndicator.tsx:33` — P3: `(session?.user as any)?.role === 'ORGANIZER'` → roles.includes (ADMIN organizer views not tracked)
-- `access-denied.tsx:9-10` — P3: both role === checks → roles.includes (ADMIN gets generic error message)
-
-**0b. eBay ended-sync `GetMultipleItems` deprecation fix (P2, from S510 Railway logs):**
-`GetMultipleItems` Trading API endpoint is deprecated and failing silently — eBay ended-sync is non-functional. Dispatch `findasale-dev` to fix the eBay service to use a supported endpoint.
-
-**0c. Treasure Hunt XP badge — verify or fix (P2, from S509 audit):**
-Badge on homepage still may show +50 XP (should be 3/scan, 15/completion per D-XP-015). Confirm in Chrome smoke test; dispatch fix if still wrong.
-
-**ALSO: QA S505 checklist test flows:**
-Deferred from S505. 4 test buttons on plan page need Chrome QA:
-- POS test → auto-checks `live_pos`
-- Online checkout → Stripe test session opens, returns, auto-checks
-- Auction checkout → same
-- In-app modal → Stripe Elements form, completes, auto-checks
-
-**S505 pending Patrick actions:**
-- Set env vars: `STRIPE_TEST_SECRET_KEY` (Railway) + `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY` (Vercel)
-- Run the S505 push block (if not yet done)
+**ALSO: QA S505 checklist test flows (blocked on Patrick env vars):**
+Deferred from S505. 4 test buttons on plan page need Chrome QA — requires env vars first:
+- Set `STRIPE_TEST_SECRET_KEY` (Railway) + `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY` (Vercel)
+- Then QA: POS test → auto-checks `live_pos`; Online/Auction checkout → Stripe test session; In-app modal → Stripe Elements form
 
 ---
 
-**1. Fix QR code sizing consistency across print kit (P1, from S502):**
-Patrick identified that QR codes are different sizes between interactive codes (on-screen), full-page print, and the individual label PDFs. All QR codes should be the same size. Files to audit:
-- `packages/backend/src/controllers/printKitController.ts` — interactive QR, full-page QR, directional signs QR, table tent QR, yard sign QR
-- `packages/backend/src/controllers/labelComposerController.ts` — label QR (48pt currently)
-- `packages/frontend/pages/organizer/print-kit/[saleId].tsx` — on-screen preview QR sizes
-Standardize all QR generation `width` params and PDF `doc.image()` render sizes. The label QR is 48pt (constrained by 1" label height). Full-page and interactive QRs should match each other.
+**1. Photo station + treasure hunt 3-clue limit (carry from S501, P1):**
+- Treasure hunt: update 10-clue cap → 3 in `treasureHuntQRController.ts`
+- Photo station shopper page: `pages/sales/[id]/photo-station.tsx`
+- Photo station backend: `POST /api/sales/:saleId/photo-station/scan` (3 XP, 1 per user per sale)
+- Update print kit photo station QR URL to point to the new page
 
 **2. Photo station + treasure hunt 3-clue limit (carry from S501):**
 - Treasure hunt: update 10-clue cap → 3 in `treasureHuntQRController.ts`
