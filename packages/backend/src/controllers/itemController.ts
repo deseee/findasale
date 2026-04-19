@@ -279,6 +279,9 @@ export const getItemById = async (req: Request, res: Response) => {
         conditionGrade: true,
         tags: true,
         qrEmbedEnabled: true,
+        isLegendary: true,
+        legendaryVisibleAt: true,
+        legendaryPublishedAt: true,
         rarity: true,
         priceBeforeMarkdown: true,
         markdownApplied: true,
@@ -656,7 +659,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -736,6 +739,17 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (listingType !== undefined) updateData.listingType = listingType;
     if (isAiTagged !== undefined) updateData.isAiTagged = isAiTagged === true || isAiTagged === 'true';
     if (qrEmbedEnabled !== undefined) updateData.qrEmbedEnabled = qrEmbedEnabled === true || qrEmbedEnabled === 'true';
+
+    // Handle Legendary toggle: set legendaryPublishedAt when toggling from false→true
+    if (isLegendary !== undefined) {
+      const newIsLegendary = isLegendary === true || isLegendary === 'true';
+      updateData.isLegendary = newIsLegendary;
+      if (newIsLegendary && !item.isLegendary) {
+        // Transitioning from false to true: set the publish timestamp
+        updateData.legendaryPublishedAt = new Date();
+      }
+    }
+
     if (draftStatus !== undefined) updateData.draftStatus = draftStatus; // Allow publish/unpublish via generic update
 
     // Feature #371: Handle high-value flag and AI analysis fields

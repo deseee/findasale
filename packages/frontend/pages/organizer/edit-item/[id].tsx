@@ -50,6 +50,7 @@ const EditItemPage = () => {
     listingType: 'FIXED',
     auctionEndTime: '',
     qrEmbedEnabled: true,
+    isLegendary: false,
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -269,6 +270,7 @@ const EditItemPage = () => {
         listingType: item.listingType || 'FIXED',
         auctionEndTime: item.auctionEndTime ? new Date(item.auctionEndTime).toISOString().slice(0, 16) : '',
         qrEmbedEnabled: item.qrEmbedEnabled !== false,
+        isLegendary: item.isLegendary === true,
       });
     }
   }, [item]);
@@ -759,6 +761,27 @@ const EditItemPage = () => {
               <p className="text-xs text-warm-500 dark:text-warm-400">
                 QR codes link to this item&apos;s page on FindA.Sale
               </p>
+            </div>
+
+            {/* Mark as Legendary toggle */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="isLegendary"
+                  checked={formData.isLegendary}
+                  onChange={(e) => setFormData({ ...formData, isLegendary: e.target.checked })}
+                  className="w-4 h-4 text-amber-600 bg-white border-warm-300 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer mt-1"
+                />
+                <div className="flex-1">
+                  <label htmlFor="isLegendary" className="text-sm font-bold text-amber-900 dark:text-amber-100 cursor-pointer block">
+                    Mark as Legendary
+                  </label>
+                  <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+                    Legendary items are shown early to high-rank shoppers (Sage+) and Hunt Pass subscribers for 4–12 hours before regular release.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* D-XP-003: Organizer Special Section */}

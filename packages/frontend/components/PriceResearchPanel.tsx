@@ -166,9 +166,16 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="w-full flex items-center justify-between px-4 py-3 hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors"
         >
-          <h3 className="font-fraunces font-semibold text-sm text-warm-900 dark:text-warm-100 flex items-center gap-2">
-            🔍 Price Research
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-fraunces font-semibold text-sm text-warm-900 dark:text-warm-100">
+              🔍 Price Research
+            </h3>
+            {isCollapsed && aiEstimate && (
+              <span className="text-xs text-blue-600 dark:text-blue-400">
+                🤖 Smart Estimate: ${aiEstimate.toFixed(2)}
+              </span>
+            )}
+          </div>
           <span className="text-warm-500 text-sm">
             {isCollapsed ? '▶' : '▼'}
           </span>
@@ -179,38 +186,36 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
         <div className="border-t border-warm-200 dark:border-gray-700 px-4 py-3 space-y-0">
           {/* Section 1: AI Smart Estimate (If Available) */}
           {aiEstimate && (
-            <>
-              <div className="py-3">
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                  <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1.5">
-                    🤖 Smart Estimate
-                  </p>
-                  <p className="text-lg font-bold text-blue-900 dark:text-blue-100 mb-2">
-                    ${aiEstimate.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mb-2.5">
-                    Based on title, category & condition
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onPriceSelect) {
-                        onPriceSelect(aiEstimate);
-                      } else {
-                        showToast(`Price set to $${aiEstimate.toFixed(2)}`, 'success');
-                      }
-                    }}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors"
-                  >
-                    Use This Price
-                  </button>
-                </div>
+            <div className="py-3">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1.5">
+                  🤖 Smart Estimate
+                </p>
+                <p className="text-lg font-bold text-blue-900 dark:text-blue-100 mb-2">
+                  ${aiEstimate.toFixed(2)}
+                </p>
+                <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                  Based on title, category & condition
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onPriceSelect) {
+                      onPriceSelect(aiEstimate);
+                    } else {
+                      showToast(`Price set to $${aiEstimate.toFixed(2)}`, 'success');
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  Use This Price
+                </button>
               </div>
-            </>
+            </div>
           )}
 
           {/* Section 2: Smart Pricing (One-Click AI Suggestion) */}
-          <div className="py-3 border-t border-warm-100 dark:border-gray-800">
+          <div className="py-3">
             <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
               ⚡ Get a Price Suggestion
             </p>
@@ -232,7 +237,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
           </div>
 
           {/* Section 3: eBay Market Comps (Real-World Sold Prices) */}
-          <div className="py-3 border-t border-warm-100 dark:border-gray-800">
+          <div className="py-3">
             <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
               💰 Search eBay Sold Listings
             </p>
@@ -243,9 +248,9 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
               type="button"
               onClick={handleGetPriceComps}
               disabled={compsLoading}
-              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors disabled:opacity-50"
+              className="px-3 py-1.5 border border-blue-400 dark:border-blue-500 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
             >
-              {compsLoading ? 'Searching...' : 'Search eBay'}
+              {compsLoading ? 'Searching...' : '💰 Search eBay'}
             </button>
 
             {compsData && (
@@ -278,7 +283,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                           }
                           showToast(`Price set to $${compsData.median.toFixed(2)}`, 'success');
                         }}
-                        className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs font-medium rounded-full transition-colors"
+                        className="px-3 py-1.5 bg-[#4A7C59] hover:bg-[#3d654a] dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-medium rounded-lg transition-colors"
                       >
                         Use ${compsData.median.toFixed(2)}
                       </button>
@@ -286,7 +291,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
                         href={`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(itemTitle)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-6 py-2.5 border border-gray-400 dark:border-gray-500 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium rounded-full transition-colors text-center"
+                        className="px-3 py-1.5 border border-gray-400 dark:border-gray-500 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-xs font-medium rounded-lg transition-colors text-center"
                       >
                         eBay ↗
                       </a>
@@ -298,9 +303,9 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
           </div>
 
           {/* Section 4: Sales Comps (PRO/TEAMS Only) */}
-          <div className="py-3 border-t border-warm-100 dark:border-gray-800">
+          <div className="py-3">
             <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
-              📊 Sales Comps (PRO Feature)
+              📊 Sales Comps
             </p>
             <p className="text-xs text-warm-500 dark:text-warm-400 mb-3">
               Compare against actual sales from FindA.Sale's network.
@@ -317,27 +322,27 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
           </div>
 
           {/* Section 5: Request Community Appraisal (Bottom, De-Emphasized) */}
-          <div className="py-3 border-t border-warm-100 dark:border-gray-800">
+          <div className="py-3">
             <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-1.5">
               🤝 Request Community Appraisal
             </p>
-            <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
+            <p className="text-xs text-warm-500 dark:text-warm-400 mb-3">
               Get crowdsourced estimates from experienced community members.
             </p>
             <div className="text-xs text-warm-600 dark:text-warm-400 mb-3 space-y-1">
-              <p>📸 3+ photos required (you've uploaded {photoUrls.length})</p>
-              <p>⏱️ Estimates arrive in 1–24 hrs</p>
+              <p>📸 Photos required (you've uploaded {photoUrls.length})</p>
+              <p>⏱️ Estimates arrive in 1–3 hours</p>
             </div>
             <button
               type="button"
               onClick={handleRequestAppraisal}
               disabled={appraisalSubmitting || photoUrls.length === 0}
-              className="px-6 py-2.5 bg-[#4A7C59] hover:bg-[#3d654a] disabled:bg-gray-400 dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-medium rounded-full transition-colors"
+              className="px-4 py-2.5 bg-[#4A7C59] hover:bg-[#3d654a] disabled:bg-gray-400 dark:bg-[#4A7C59] dark:hover:bg-[#3d654a] text-white text-xs font-medium rounded-lg transition-colors w-full"
             >
               {appraisalSubmitting
                 ? 'Submitting...'
                 : photoUrls.length === 0
-                ? 'Add Photos'
+                ? 'Add Photos to Request Appraisal'
                 : 'Request Appraisal'}
             </button>
           </div>
