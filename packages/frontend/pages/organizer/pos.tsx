@@ -178,6 +178,9 @@ export default function POSPage() {
   // Test in-app payment state
   const [inAppPaymentStatus, setInAppPaymentStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
+  // POS test done flag (separate from paymentStatus which is shared)
+  const [posTestDone, setPosTestDone] = useState(false);
+
   // Linked Shopper QR state (shopper account QR scan)
   const [linkedShopperData, setLinkedShopperData] = useState<any | null>(null);
   // Track the shopper userId for Send to Phone (set from QR scan or cart pull)
@@ -803,6 +806,7 @@ export default function POSPage() {
         showToast('Test transaction successful! live_pos task will auto-check.', 'success');
         if (soundEnabled) playSuccessChime();
         setPaymentStatus('idle');
+        setPosTestDone(true);
         // Optionally refresh checklist or sale data here
         queryClient.invalidateQueries({ queryKey: ['organizer-checklist'] });
       } else {
@@ -828,8 +832,8 @@ export default function POSPage() {
         saleId: selectedSaleId,
         type: 'standard',
       });
-      if (res.data?.checkoutUrl && res.data?.qrCodeUrl) {
-        setOnlineCheckoutUrl(res.data.checkoutUrl);
+      if (res.data?.url && res.data?.qrCodeUrl) {
+        setOnlineCheckoutUrl(res.data.url);
         setOnlineCheckoutQr(res.data.qrCodeUrl);
         setOnlineCheckoutStatus('ready');
       } else {
@@ -855,8 +859,8 @@ export default function POSPage() {
         saleId: selectedSaleId,
         type: 'auction',
       });
-      if (res.data?.checkoutUrl && res.data?.qrCodeUrl) {
-        setAuctionCheckoutUrl(res.data.checkoutUrl);
+      if (res.data?.url && res.data?.qrCodeUrl) {
+        setAuctionCheckoutUrl(res.data.url);
         setAuctionCheckoutQr(res.data.qrCodeUrl);
         setAuctionCheckoutStatus('ready');
       } else {
@@ -1579,142 +1583,181 @@ export default function POSPage() {
         )}
       </div>
 
-      {/* Pre-Sale Test Card */}
+      {/* Pre-Sale Test Cards — pending first, completed collapse to bottom */}
       {selectedSaleId && (
-        <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">🧪</span>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Pre-Sale Test</h3>
-              <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Verify your POS is working before the sale starts by running a $1.00 test transaction.</p>
-              <button
-                onClick={handleTestTransaction}
-                disabled={paymentStatus === 'processing'}
-                className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
-              >
-                {paymentStatus === 'processing' ? 'Running test…' : 'Run $1.00 Test Transaction'}
-              </button>
-              <details className="mt-3">
-                <summary className="text-xs text-amber-700 dark:text-amber-400 cursor-pointer hover:underline select-none">
-                  What does this test?
-                </summary>
-                <div className="mt-2 text-xs text-warm-600 dark:text-warm-400 space-y-1.5 pl-1">
-                  <p>Sends a $1 charge through Stripe's test environment — no real money moves.</p>
-                  <p>Confirms your Stripe account is connected, fees are calculating correctly, and purchases are recording properly.</p>
-                  <p>When it succeeds, the <strong className="text-warm-700 dark:text-warm-300">"POS open and test transaction done"</strong> item on your sale checklist is automatically marked complete.</p>
-                  <p className="pt-1 font-medium text-warm-700 dark:text-warm-300">If it fails:</p>
-                  <p>Check for a Stripe setup banner on your Earnings page — onboarding must be complete before payments can process.</p>
-                  <p className="pt-1 font-medium text-warm-700 dark:text-warm-300">Test card numbers (for checkout testing):</p>
-                  <p><span className="font-mono">4242 4242 4242 4242</span> — succeeds &nbsp;·&nbsp; <span className="font-mono">4000 0000 0000 0002</span> — declines</p>
-                </div>
-              </details>
-            </div>
-          </div>
-        </div>
-      )}
+        <div className="flex flex-col mb-2">
 
-      {/* Online Checkout Test Card */}
-      {selectedSaleId && (
-        <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">🧪</span>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test Online Checkout</h3>
-              <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test the web checkout flow customers will use to buy from your sale.</p>
-              <button
-                onClick={handleOnlineCheckout}
-                disabled={onlineCheckoutStatus === 'loading'}
-                className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
-              >
-                {onlineCheckoutStatus === 'loading' ? 'Generating…' : 'Test Online Checkout'}
-              </button>
-              {onlineCheckoutStatus === 'error' && (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
-              )}
-              {onlineCheckoutStatus === 'ready' && onlineCheckoutQr && onlineCheckoutUrl && (
-                <div className="mt-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <p className="text-xs text-warm-600 dark:text-warm-300 mb-2">
-                    Scan on your phone or click the link. Use card <strong>4242 4242 4242 4242</strong> — your inventory won't change.
-                  </p>
-                  <img src={onlineCheckoutQr} alt="QR Code" className="mb-2 w-32 h-32 mx-auto" />
+          {/* POS Test Transaction — pending */}
+          {!posTestDone && (
+            <div className="order-1 mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🧪</span>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Pre-Sale Test</h3>
+                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Verify your POS is working before the sale starts by running a $1.00 test transaction.</p>
+                  <button
+                    onClick={handleTestTransaction}
+                    disabled={paymentStatus === 'processing'}
+                    className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
+                  >
+                    {paymentStatus === 'processing' ? 'Running test…' : 'Run $1.00 Test Transaction'}
+                  </button>
+                  <details className="mt-3">
+                    <summary className="text-xs text-amber-700 dark:text-amber-400 cursor-pointer hover:underline select-none">
+                      What does this test?
+                    </summary>
+                    <div className="mt-2 text-xs text-warm-600 dark:text-warm-400 space-y-1.5 pl-1">
+                      <p>Sends a $1 charge through Stripe&apos;s test environment — no real money moves.</p>
+                      <p>Confirms your Stripe account is connected, fees are calculating correctly, and purchases are recording properly.</p>
+                      <p>When it succeeds, the <strong className="text-warm-700 dark:text-warm-300">&quot;POS open and test transaction done&quot;</strong> item on your sale checklist is automatically marked complete.</p>
+                      <p className="pt-1 font-medium text-warm-700 dark:text-warm-300">If it fails:</p>
+                      <p>Check for a Stripe setup banner on your Earnings page — onboarding must be complete before payments can process.</p>
+                      <p className="pt-1 font-medium text-warm-700 dark:text-warm-300">Test card numbers (for checkout testing):</p>
+                      <p><span className="font-mono">4242 4242 4242 4242</span> — succeeds &nbsp;·&nbsp; <span className="font-mono">4000 0000 0000 0002</span> — declines</p>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Online Checkout Test — pending */}
+          {onlineCheckoutStatus !== 'ready' && (
+            <div className="order-2 mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🧪</span>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test Online Checkout</h3>
+                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test the web checkout flow customers will use to buy from your sale.</p>
+                  <button
+                    onClick={handleOnlineCheckout}
+                    disabled={onlineCheckoutStatus === 'loading'}
+                    className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
+                  >
+                    {onlineCheckoutStatus === 'loading' ? 'Generating…' : 'Test Online Checkout'}
+                  </button>
+                  {onlineCheckoutStatus === 'error' && (
+                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Auction Checkout Test — pending */}
+          {auctionCheckoutStatus !== 'ready' && (
+            <div className="order-3 mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🧪</span>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test Auction Checkout</h3>
+                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test the auction checkout flow if you&apos;re running an auction-style sale.</p>
+                  <button
+                    onClick={handleAuctionCheckout}
+                    disabled={auctionCheckoutStatus === 'loading'}
+                    className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
+                  >
+                    {auctionCheckoutStatus === 'loading' ? 'Generating…' : 'Test Auction Checkout'}
+                  </button>
+                  {auctionCheckoutStatus === 'error' && (
+                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* In-App Payment Test — pending */}
+          {inAppPaymentStatus !== 'success' && (
+            <div className="order-4 mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl">🧪</span>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test In-App Payment</h3>
+                  <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test the checkout customers use when paying from your sale page or a shared cart.</p>
+                  <button
+                    onClick={handleInAppPayment}
+                    disabled={inAppPaymentStatus === 'loading'}
+                    className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
+                  >
+                    {inAppPaymentStatus === 'loading' ? 'Testing…' : 'Test In-App Payment'}
+                  </button>
+                  {inAppPaymentStatus === 'error' && (
+                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Completed cards — collapsed, sorted below pending ── */}
+
+          {/* POS test done */}
+          {posTestDone && (
+            <div className="order-10 mb-2 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 flex items-center gap-3">
+              <span className="text-green-500 dark:text-green-400 text-base font-bold">✓</span>
+              <span className="text-sm font-medium text-green-700 dark:text-green-300 flex-1">POS test transaction passed</span>
+            </div>
+          )}
+
+          {/* Online checkout done — keep QR accessible */}
+          {onlineCheckoutStatus === 'ready' && onlineCheckoutUrl && onlineCheckoutQr && (
+            <div className="order-11 mb-2 rounded-xl bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 overflow-hidden">
+              <details>
+                <summary className="px-4 py-3 cursor-pointer flex items-center gap-3 select-none">
+                  <span className="text-green-500 dark:text-green-400 text-base font-bold">✓</span>
+                  <span className="text-sm font-medium text-green-700 dark:text-green-300 flex-1">Online checkout link ready</span>
+                  <span className="text-xs text-green-600 dark:text-green-400">tap to scan / open ▾</span>
+                </summary>
+                <div className="px-4 pb-4 pt-1 flex flex-col items-center gap-2">
+                  <p className="text-xs text-green-700 dark:text-green-300 text-center">Use card <strong>4242 4242 4242 4242</strong> — inventory won&apos;t change.</p>
+                  <img src={onlineCheckoutQr} alt="Checkout QR" className="w-28 h-28" />
                   <a
                     href={onlineCheckoutUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs font-semibold transition"
+                    className="block text-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs font-semibold transition w-full"
                   >
                     Open Checkout Link
                   </a>
                 </div>
-              )}
+              </details>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Auction Checkout Test Card */}
-      {selectedSaleId && (
-        <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">🧪</span>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test Auction Checkout</h3>
-              <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test the auction checkout flow if you're running an auction-style sale.</p>
-              <button
-                onClick={handleAuctionCheckout}
-                disabled={auctionCheckoutStatus === 'loading'}
-                className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
-              >
-                {auctionCheckoutStatus === 'loading' ? 'Generating…' : 'Test Auction Checkout'}
-              </button>
-              {auctionCheckoutStatus === 'error' && (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
-              )}
-              {auctionCheckoutStatus === 'ready' && auctionCheckoutQr && auctionCheckoutUrl && (
-                <div className="mt-3 p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <p className="text-xs text-warm-600 dark:text-warm-300 mb-2">
-                    Scan on your phone or click the link. Use card <strong>4242 4242 4242 4242</strong> — your inventory won't change.
-                  </p>
-                  <img src={auctionCheckoutQr} alt="QR Code" className="mb-2 w-32 h-32 mx-auto" />
+          {/* Auction checkout done — keep QR accessible */}
+          {auctionCheckoutStatus === 'ready' && auctionCheckoutUrl && auctionCheckoutQr && (
+            <div className="order-12 mb-2 rounded-xl bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 overflow-hidden">
+              <details>
+                <summary className="px-4 py-3 cursor-pointer flex items-center gap-3 select-none">
+                  <span className="text-green-500 dark:text-green-400 text-base font-bold">✓</span>
+                  <span className="text-sm font-medium text-green-700 dark:text-green-300 flex-1">Auction checkout link ready</span>
+                  <span className="text-xs text-green-600 dark:text-green-400">tap to scan / open ▾</span>
+                </summary>
+                <div className="px-4 pb-4 pt-1 flex flex-col items-center gap-2">
+                  <p className="text-xs text-green-700 dark:text-green-300 text-center">Use card <strong>4242 4242 4242 4242</strong> — inventory won&apos;t change.</p>
+                  <img src={auctionCheckoutQr} alt="Auction QR" className="w-28 h-28" />
                   <a
                     href={auctionCheckoutUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-center bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs font-semibold transition"
+                    className="block text-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs font-semibold transition w-full"
                   >
-                    Open Checkout Link
+                    Open Auction Checkout Link
                   </a>
                 </div>
-              )}
+              </details>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* In-App Payment Test Card */}
-      {selectedSaleId && (
-        <div className="mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800 dark:to-gray-800 border border-amber-200 dark:border-gray-700">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">🧪</span>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Test In-App Payment</h3>
-              <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Test in-app payment processing (if applicable to your sale type).</p>
-              {inAppPaymentStatus === 'success' ? (
-                <p className="text-sm font-semibold text-green-600 dark:text-green-400">✓ In-app payment verified</p>
-              ) : (
-                <button
-                  onClick={handleInAppPayment}
-                  disabled={inAppPaymentStatus === 'loading'}
-                  className="w-full px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-sm font-semibold transition"
-                >
-                  {inAppPaymentStatus === 'loading' ? 'Testing…' : 'Test In-App Payment'}
-                </button>
-              )}
-              {inAppPaymentStatus === 'error' && (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">Test failed. Check console for details.</p>
-              )}
+          {/* In-app payment done */}
+          {inAppPaymentStatus === 'success' && (
+            <div className="order-13 mb-2 px-4 py-3 rounded-xl bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 flex items-center gap-3">
+              <span className="text-green-500 dark:text-green-400 text-base font-bold">✓</span>
+              <span className="text-sm font-medium text-green-700 dark:text-green-300 flex-1">In-app payment verified</span>
             </div>
-          </div>
+          )}
+
         </div>
       )}
 
