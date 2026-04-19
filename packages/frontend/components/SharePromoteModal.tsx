@@ -60,9 +60,19 @@ const getSaleTypeLabel = (saleType?: string): string => {
   return labels[saleType] || 'sale';
 };
 
-// Helper: generate comprehensive hashtag list covering all sale types
-const getAllSaleTypeHashtags = (): string => {
-  return '#yardsale #estatesale #garagesale #auction #fleamarket #consignment #findasale';
+// Helper: generate dynamic hashtags based on sale type
+const getHashtagsForSaleType = (saleType?: string): string => {
+  const hashtagMap: Record<string, string> = {
+    'ESTATE': '#estatesale #garagesale #findasale',
+    'YARD': '#yardsale #garagesale #findasale',
+    'AUCTION': '#auction #estatesale #findasale',
+    'FLEA_MARKET': '#fleamarket #yardsale #findasale',
+    'CONSIGNMENT': '#consignment #thrifting #findasale',
+    'CHARITY': '#charity #yardsale #findasale',
+    'BUSINESS_CORPORATE': '#corporate #businesssale #findasale',
+  };
+
+  return hashtagMap[saleType ?? ''] || '#garagesale #yardsale #estatesale #findasale';
 };
 
 const SharePromoteModal: React.FC<SharePromoteModalProps> = ({
@@ -101,7 +111,7 @@ Find amazing deals on quality items! ${itemCount ? `We have ${itemCount}+ items`
 📅 ${startDate} - ${endDate}
 🕐 ${time}
 
-${sale.tags && sale.tags.length > 0 ? `#${sale.tags.join(' #')} ` : ''}#LocalSales ${getAllSaleTypeHashtags()} #Bargains #ShoppingLocal
+${sale.tags && sale.tags.length > 0 ? `#${sale.tags.join(' #')} ` : ''}#LocalSales ${getHashtagsForSaleType(sale.saleType)} #Bargains #ShoppingLocal
 
 Don't miss out! Visit us today.`,
     },
@@ -196,7 +206,7 @@ See you there! 🛍️`,
 🗓️ ${startDate} - ${endDate}
 🔗 Link in bio → finda.sale
 
-${getAllSaleTypeHashtags()} #thrifting #vintagefinds #${sale.city}thrift #secondhand #estatefinds #thrifthaul`,
+${getHashtagsForSaleType(sale.saleType)} #thrifting #vintagefinds #${sale.city}thrift #secondhand #thrifthaul`,
     },
     pinterest: {
       title: 'Pinterest',
@@ -209,7 +219,7 @@ Discover unique vintage furniture, antiques, collectibles, and one-of-a-kind fin
 📍 ${address}
 🗓️ ${startDate} - ${endDate}
 
-${getAllSaleTypeHashtags()}
+${getHashtagsForSaleType(sale.saleType)}
 
 Find more ${saleTypeLabel}s near you → finda.sale`,
     },
@@ -217,7 +227,7 @@ Find more ${saleTypeLabel}s near you → finda.sale`,
       title: 'Threads',
       icon: '💬',
       description: 'Conversational style, minimal hashtags',
-      content: `Running an estate sale this weekend in ${sale.city} — ${sale.title}
+      content: `Running a ${saleTypeLabel} this weekend in ${sale.city} — ${sale.title}
 
 Lots of ${sale.title} items: furniture, vintage pieces, collectibles, and more. Everything must go.
 
@@ -230,7 +240,7 @@ Browse the inventory at finda.sale`,
       description: 'Neighbor-to-neighbor tone with local focus',
       content: `Neighbors — ${sale.title} this ${startDate} - ${endDate} at ${address}
 
-Estate sale open to the public. Items include furniture, household goods, collectibles, and more. Early arrival recommended.
+${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} open to the public. Items include furniture, household goods, collectibles, and more. Early arrival recommended.
 
 Full item list at finda.sale — search "${sale.city}"
 

@@ -1102,7 +1102,7 @@ Auto-generated caption includes `#estatesale` only. Should include multi-sale-ty
 - Device fingerprinting Phase 2 (FingerprintJS — defer until beta scale justifies)
 - Bounty redesign Phase 2
 - Flea Market Events full implementation (ADR-014 locked, not yet staffed)
-- Stripe Connect webhook config (items not marking SOLD after POS card payment — P2 since S421)
+- ~~Stripe Connect webhook config~~ — DONE S516: Patrick added STRIPE_CONNECT_WEBHOOK_SECRET to Railway.
 - Bounties dollars vs XP: open decision
 
 **Postponed QA queue:**
