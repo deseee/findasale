@@ -1,5 +1,6 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { returnItemsToInventory } from '../services/itemInventoryService';
+import { AuthRequest } from '../middleware/auth';
 
 /**
  * POST /api/sales/:saleId/return-items
@@ -7,11 +8,11 @@ import { returnItemsToInventory } from '../services/itemInventoryService';
  * Body: { itemIds?: string[] } — if empty, returns all eligible items.
  * Returns: { returned: number, skipped: Array<{ id, title, reason }> }
  */
-export const returnItemsToInventoryHandler = async (req: Request, res: Response) => {
+export const returnItemsToInventoryHandler = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params as { saleId: string };
     const { itemIds = [] } = req.body as { itemIds: string[] };
-    const organizerId = (req as any).organizer?.id;
+    const organizerId = req.user?.id;
 
     if (!organizerId) {
       return res.status(401).json({ error: 'Organizer not authenticated' });

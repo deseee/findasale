@@ -173,7 +173,7 @@ const ReturnToInventoryPanel: React.FC<ReturnToInventoryPanelProps> = ({
               </span>
               <span className="block text-xs text-warm-400 dark:text-gray-500">
                 {item.category ?? 'Uncategorized'}
-                {item.price != null ? ` · $${(item.price / 100).toFixed(2)}` : ''}
+                {item.price != null ? ` · $${item.price.toFixed(2)}` : ''}
               </span>
             </label>
           </li>
