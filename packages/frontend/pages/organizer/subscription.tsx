@@ -3,6 +3,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import api from '../../lib/api';
 import { useOrganizerTier, type SubscriptionTier } from '../../hooks/useOrganizerTier';
 import UsageBar from '../../components/UsageBar';
 import DowngradePreviewModal from '../../components/DowngradePreviewModal';
@@ -37,23 +38,10 @@ export default function SubscriptionPage() {
       return;
     }
     try {
-      const response = await fetch('/api/billing/subscription', {
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSubscription(data);
-      } else {
-        // If tier info is available, suppress error toast — page can still display tier details
-        if (!tier) {
-          showToast('Failed to load subscription', 'error');
-        }
-        console.warn('Failed to load subscription details, will show graceful fallback');
-      }
+      const response = await api.get('/billing/subscription');
+      setSubscription(response.data);
     } catch (error) {
       console.error('Error fetching subscription:', error);
-      // If tier info is available, suppress error toast — page can still display tier details
       if (!tier) {
         showToast('Failed to load subscription', 'error');
       }
@@ -65,21 +53,11 @@ export default function SubscriptionPage() {
   const handleCancel = async () => {
     setCanceling(true);
     try {
-      const response = await fetch('/api/billing/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (response.ok) {
-        const updated = await response.json();
-        setSubscription(updated);
-        setShowCancelConfirm(false);
-        showToast('Subscription canceled. Your plan will remain active until the end of the current period.', 'success');
-        // Refresh to get updated data
-        setTimeout(fetchSubscription, 1000);
-      } else {
-        showToast('Failed to cancel subscription', 'error');
-      }
+      const updated = await api.post('/billing/cancel');
+      setSubscription(updated.data);
+      setShowCancelConfirm(false);
+      showToast('Subscription canceled. Your plan will remain active until the end of the current period.', 'success');
+      setTimeout(fetchSubscription, 1000);
     } catch (error) {
       console.error('Error canceling subscription:', error);
       showToast('Failed to cancel subscription', 'error');
@@ -91,20 +69,11 @@ export default function SubscriptionPage() {
   const handleManagePlan = async () => {
     setManagingPlan(true);
     try {
-      const response = await fetch('/api/billing/portal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          showToast('Failed to open billing portal', 'error');
-        }
+      const data = await api.post('/billing/portal');
+      if (data.data?.url) {
+        window.location.href = data.data.url;
       } else {
-        showToast('Failed to access billing portal', 'error');
+        showToast('Failed to open billing portal', 'error');
       }
     } catch (error) {
       console.error('Error accessing billing portal:', error);
