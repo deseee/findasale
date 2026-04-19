@@ -105,12 +105,10 @@ const SalePlanPage = () => {
       }
       showToast('Failed to update task', 'error');
     },
-    onSuccess: (response) => {
-      // Use the PATCH response directly — it includes the full updated checklist
-      // Do NOT re-fetch: the GET returns stale data and would undo the optimistic update
-      if (response?.data) {
-        queryClient.setQueryData(['checklist', saleId], response.data);
-      }
+    onSuccess: () => {
+      // Invalidate so the GET re-fetches from the now-committed DB state.
+      // The optimistic update from onMutate stays visible until the refetch resolves.
+      queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
       showToast('Task updated', 'success');
     },
   });
