@@ -1,5 +1,30 @@
 # Patrick's Dashboard — Week of April 18, 2026
 
+## S505 Summary (2026-04-18) — Tests moved off POS, checklist reorganized
+
+**6 files changed. Push block below.**
+
+### What was done this session:
+
+**Test cards completely removed from POS** — The POS page is now a clean cashier workspace with no test UI. State was resetting on every navigation anyway so they weren't useful there.
+
+**Tests now live on the plan/checklist page** — Each of the 4 test tasks has an inline amber "Run Test" button that appears only when the task is incomplete. Because checklist state is stored in the DB, completion persists across sessions and navigation.
+
+- **POS test** (Live stage) — hits `/stripe/test-transaction`, auto-checks when a test purchase exists in DB
+- **Online checkout** (Live stage) — opens a real Stripe test checkout session, returns to plan page and auto-checks
+- **Auction checkout** (Live stage) — same as online but auction mode
+- **In-app payment** (Live stage) — opens a real Stripe Elements modal (exact UI your shoppers see), use test card `4242 4242 4242 4242`, auto-checks on success
+
+**Checklist stages reorganized** — Sale Published moved to Cataloging. The 3 checkout tests and POS test are all in Live now. Internet connection tested moved to Pre-Sale. Sale previewed on mobile moved to after Internet connection tested. Virtual Queue moved to after Bills and coins.
+
+### QA needed:
+- Plan page → Pre-Sale section → Run Test buttons visible on checkout tasks
+- Run POS test → verify live_pos auto-checks
+- Run online/auction checkout → verify redirect back works and item checks off
+- Open in-app modal → enter 4242 card → verify modal closes and item checks off
+
+---
+
 ## S504 Summary (2026-04-18) — Checklist bugs, task redesign, Stripe test harness
 
 **8 files changed. All pushed ✅. Migration deployed to Railway ✅.**

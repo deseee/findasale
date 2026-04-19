@@ -7,6 +7,31 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S505 (2026-04-18) — Tests moved from POS to plan page, checklist stage reorganization**
+
+- **Test cards removed from POS ✅:** All test state vars, handlers, JSX cards, and TestCheckoutModal render block removed from `pos.tsx`. POS is now a clean cashier workspace.
+- **TestCheckoutModal built ✅:** `components/TestCheckoutModal.tsx` — real Stripe Elements form for organizers to test in-app checkout as shoppers would experience it. Uses `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY`. Calls `POST /stripe/test-in-app-intent` on mount to get clientSecret. Shows test card hint (4242...). On success auto-checks `pre_in_app_payment`.
+- **`POST /stripe/test-in-app-intent` added ✅:** Backend creates $1 PaymentIntent via test Stripe, returns clientSecret for frontend Stripe.js to confirm (not pre-confirmed server-side — tests real shopper UI flow).
+- **Inline "Run Test" buttons on plan page ✅:** `plan/[saleId].tsx` now has handlers and inline amber "Run Test" buttons for `live_pos`, `pre_online_checkout`, `pre_auction_checkout`, `pre_in_app_payment`. State is DB-driven — persists across navigation. `handlePosTest` invalidates checklist query (not manual update — `live_pos` is auto).
+- **Checklist stage reorganization ✅:** `pub_published` → Cataloging. `pre_online_checkout`, `pre_auction_checkout`, `pre_in_app_payment` → Live (with links to `/organizer/plan/{saleId}`). `live_internet` → Pre-Sale.
+- **Checklist item reorder ✅:** Pre-Sale: `pub_preview` moved to after `live_internet`. Live: `live_queue` moved to after `live_float`.
+
+**S505 Files changed (6):**
+- `packages/frontend/pages/organizer/pos.tsx` — all test infrastructure removed
+- `packages/frontend/pages/organizer/plan/[saleId].tsx` — test infrastructure added (import, state, handlers, buttons, modal render)
+- `packages/frontend/components/TestCheckoutModal.tsx` — NEW: real Stripe Elements in-app payment test modal
+- `packages/backend/src/controllers/stripeController.ts` — testInAppIntent export added
+- `packages/backend/src/routes/stripe.ts` — POST /test-in-app-intent route added
+- `packages/backend/src/controllers/checklistController.ts` — stage moves + item reorder + plan page links
+
+**Needs QA:**
+- Plan page: Run Test buttons appear on uncompleted test tasks, disappear on completion
+- POS test → auto-checks live_pos on checklist
+- Online/auction checkout → Stripe test session opens, returns to plan page, auto-checks item
+- In-app modal → Stripe Elements form opens with test card hint, completes payment, auto-checks item
+
+---
+
 **S504 (2026-04-18) — Checklist bugs fixed, task redesign, Stripe test harness built**
 
 - **Tasks unchecking after toast fixed ✅:** Root cause: `SaleChecklist.items` stored as old array format `[{id, completed}]`. New code treated it as `{taskId: boolean}` map. Setting named property on an array is silently dropped by `JSON.stringify`. Fix: `Array.isArray(rawItems) ? {} : rawItems` coerces old data to empty object — first save writes correct map format.
