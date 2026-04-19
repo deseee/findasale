@@ -794,7 +794,7 @@ const OrganizerDashboard = () => {
                   <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: PRO</h3>
                   <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Scale with your team — TEAMS is $79/mo</p>
                   <p className="text-sm text-warm-700 dark:text-warm-300">
-                    <strong>TEAMS includes:</strong> Multi-user workspace • API access • White-label support
+                    <strong>TEAMS includes:</strong> Shared workspace • Team members • Collaboration tools
                   </p>
                 </div>
                 <Link href="/organizer/pricing" className="flex-shrink-0 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">

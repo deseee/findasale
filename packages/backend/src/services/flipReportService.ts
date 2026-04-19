@@ -20,6 +20,11 @@ export interface PricingInsights {
   priceDropRate: number; // percentage of items with price reductions
 }
 
+export interface Recommendation {
+  text: string;
+  type: 'positive' | 'warning' | 'neutral';
+}
+
 export interface FlipReport {
   saleId: string;
   saleTitle: string;
@@ -34,7 +39,7 @@ export interface FlipReport {
   unsoldItems: Array<{ id: string; title: string; askingPrice: number | null; category: string | null }>;
   categoryBreakdown: CategoryBreakdown[];
   pricingInsights: PricingInsights;
-  recommendations: string[];
+  recommendations: Recommendation[];
 }
 
 /**
@@ -63,13 +68,14 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
 
   // Feature #300: Union query — items still in the sale + items returned to inventory
   // Returned items have saleId=null but lastSaleId=this sale's id
+  // Only count SOLD items if they have PAID purchases
   const [itemsInSale, returnedItems] = await Promise.all([
     prisma.item.findMany({
       where: { saleId },
       include: { purchases: { where: { status: 'PAID' } } },
     }),
     prisma.item.findMany({
-      where: { lastSaleId: saleId, inInventory: true } as any,
+      where: { lastSaleId: saleId, status: 'SOLD' },
       include: { purchases: { where: { status: 'PAID' } } },
     }),
   ]);
@@ -77,17 +83,17 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
 
   // ─── Compute Metrics ───
 
-  // Sell-through rate: % of items sold
+  // Sell-through rate: % of items sold (only items with PAID purchases count as sold)
   const totalItems = saleItems.length;
-  const soldItems = saleItems.filter((item) => item.status === 'SOLD');
+  const soldItems = saleItems.filter((item) => item.status === 'SOLD' && item.purchases.length > 0);
   const sellThroughRate = totalItems > 0 ? (soldItems.length / totalItems) * 100 : 0;
 
   // Total revenue: sum of PAID purchases
   const totalRevenue = sale.purchases.reduce((sum, p) => sum + p.amount, 0);
 
-  // Items sold / unsold counts (returned items count as unsold)
+  // Items sold / unsold counts
   const itemsSold = soldItems.length;
-  const itemsUnsold = saleItems.filter((item) => item.status === 'AVAILABLE' || item.status === 'RESERVED' || item.inInventory).length;
+  const itemsUnsold = saleItems.filter((item) => item.status !== 'SOLD' || item.purchases.length === 0).length;
 
   // Top 5 performers: SOLD items sorted by finalPrice (descending)
   // finalPrice is the amount from the purchase
@@ -106,9 +112,9 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
 
   const topPerformers: TopPerformer[] = topPerformersRaw;
 
-  // Unsold items: AVAILABLE, RESERVED, or returned to inventory
+  // Unsold items: items without PAID purchases
   const unsoldItemsRaw = saleItems
-    .filter((item) => item.status === 'AVAILABLE' || item.status === 'RESERVED' || item.inInventory)
+    .filter((item) => item.status !== 'SOLD' || item.purchases.length === 0)
     .map((item) => ({
       id: item.id,
       title: item.title,
@@ -124,7 +130,8 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
     const existing = categoryMap.get(cat) || { total: 0, sold: 0, revenue: 0 };
 
     existing.total += 1;
-    if (item.status === 'SOLD') {
+    // Only count as sold if status is SOLD AND item has a PAID purchase
+    if (item.status === 'SOLD' && item.purchases.length > 0) {
       existing.sold += 1;
       const purchase = item.purchases[0];
       if (purchase) {
@@ -163,17 +170,29 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
 
   // ─── Generate Recommendations ───
 
-  const recommendations: string[] = [];
+  const recommendations: Recommendation[] = [];
 
   // Recommendation 1: Sell-through rate feedback
   if (sellThroughRate >= 90) {
-    recommendations.push('Excellent sell-through rate! Consider similar items in your next sale.');
+    recommendations.push({
+      text: 'Excellent sell-through rate! Consider similar items in your next sale.',
+      type: 'positive',
+    });
   } else if (sellThroughRate >= 70) {
-    recommendations.push('Strong sell-through rate. Your pricing strategy is working well.');
+    recommendations.push({
+      text: 'Strong sell-through rate. Your pricing strategy is working well.',
+      type: 'positive',
+    });
   } else if (sellThroughRate >= 50) {
-    recommendations.push('Consider reviewing your pricing or item descriptions to improve sell-through rate.');
+    recommendations.push({
+      text: 'Consider reviewing your pricing or item descriptions to improve sell-through rate.',
+      type: 'neutral',
+    });
   } else {
-    recommendations.push('Low sell-through rate. Review pricing, descriptions, and photos to increase sales.');
+    recommendations.push({
+      text: 'Low sell-through rate. Review pricing, descriptions, and photos to increase sales.',
+      type: 'warning',
+    });
   }
 
   // Recommendation 2: Category performance
@@ -182,32 +201,53 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
     const catRate = (bestCategory.sold / bestCategory.total) * 100;
     if (catRate >= 75) {
       const catName = (bestCategory.category || 'Other').toLowerCase();
-      recommendations.push(`Your ${catName} items sold exceptionally well — prioritize this category in future sales.`);
+      recommendations.push({
+        text: `Your ${catName} items sold exceptionally well — prioritize this category in future sales.`,
+        type: 'positive',
+      });
     }
   }
 
   // Recommendation 3: Price insights
   if (priceDropRate > 50) {
-    recommendations.push('Over half of your items sold below asking price. Consider adjusting your initial pricing strategy.');
+    recommendations.push({
+      text: 'Over half of your items sold below asking price. Consider adjusting your initial pricing strategy.',
+      type: 'warning',
+    });
   } else if (priceDropRate < 20 && averageSalePrice > averageAskingPrice) {
-    recommendations.push('Strong pricing power: items sold above asking price. Your market positioning is strong.');
+    recommendations.push({
+      text: 'Strong pricing power: items sold above asking price. Your market positioning is strong.',
+      type: 'positive',
+    });
   }
 
   // Recommendation 4: Revenue & volume feedback
   if (totalRevenue > 0 && itemsSold > 0) {
     const avgItemValue = totalRevenue / itemsSold;
     if (avgItemValue > 100) {
-      recommendations.push('High average item value. Focus on similar high-value items in future sales.');
+      recommendations.push({
+        text: 'High average item value. Focus on similar high-value items in future sales.',
+        type: 'positive',
+      });
     }
   }
 
   // Ensure at least 3 recommendations
   if (recommendations.length < 3) {
     if (recommendations.length === 1) {
-      recommendations.push('Keep track of which item categories perform best to refine your inventory selection.');
-      recommendations.push('Consider engaging with shoppers to gather feedback on pricing and presentation.');
+      recommendations.push({
+        text: 'Keep track of which item categories perform best to refine your inventory selection.',
+        type: 'neutral',
+      });
+      recommendations.push({
+        text: 'Consider engaging with shoppers to gather feedback on pricing and presentation.',
+        type: 'neutral',
+      });
     } else if (recommendations.length === 2) {
-      recommendations.push('Continuously refine your descriptions and photos based on shopper interest.');
+      recommendations.push({
+        text: 'Continuously refine your descriptions and photos based on shopper interest.',
+        type: 'neutral',
+      });
     }
   }
 
@@ -228,6 +268,9 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
     unsoldItems: unsoldItemsRaw,
     categoryBreakdown,
     pricingInsights,
-    recommendations,
+    recommendations: recommendations.map((rec) => ({
+      text: rec.text,
+      type: rec.type,
+    })),
   };
 }

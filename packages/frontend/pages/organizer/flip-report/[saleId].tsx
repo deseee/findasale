@@ -202,17 +202,30 @@ export default function FlipReportPage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Recommendations</h2>
             <ul className="space-y-3">
-              {flipReport.recommendations.map((rec, idx) => (
-                <li key={idx} className="flex gap-3">
-                  <span
-                    className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                    style={{ backgroundColor: '#8FB897' }}
-                  >
-                    ✓
-                  </span>
-                  <p className="text-gray-700 dark:text-gray-300">{rec}</p>
-                </li>
-              ))}
+              {flipReport.recommendations.map((rec, idx) => {
+                let iconBgColor = '#8FB897'; // default positive (sage green)
+                let icon = '✓';
+
+                if (rec.type === 'warning') {
+                  iconBgColor = '#F59E0B'; // amber/warning
+                  icon = '!';
+                } else if (rec.type === 'neutral') {
+                  iconBgColor = '#6B7280'; // gray
+                  icon = '→';
+                }
+
+                return (
+                  <li key={idx} className="flex gap-3">
+                    <span
+                      className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-white font-semibold text-sm"
+                      style={{ backgroundColor: iconBgColor }}
+                    >
+                      {icon}
+                    </span>
+                    <p className="text-gray-700 dark:text-gray-300">{rec.text}</p>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 

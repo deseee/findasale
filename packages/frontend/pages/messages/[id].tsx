@@ -148,7 +148,7 @@ const MessageThreadPage = () => {
         {messages.map((msg) => {
           const isMine = msg.sender.id === user.id;
           return (
-            <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id} className={`flex ${isMine ? 'justify-end pr-2' : 'justify-start'}`}>
               <div
                 className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-snug ${
                   isMine
@@ -170,7 +170,7 @@ const MessageThreadPage = () => {
       {/* Input */}
       <form
         onSubmit={handleSend}
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 p-3 pb-safe z-20"
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-warm-200 dark:border-gray-700 px-4 py-4 pb-safe z-20"
       >
         <div className="flex gap-2 items-end">
           <QuickReplyPicker onSelect={(text) => setBody(text)} />
@@ -186,7 +186,7 @@ const MessageThreadPage = () => {
               }}
               rows={1}
               placeholder="Type a message…"
-              className="flex-1 resize-none rounded-xl border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 dark:bg-gray-900 max-h-28 overflow-y-auto"
+              className="flex-1 resize-none rounded-xl border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 dark:bg-gray-900 max-h-28 overflow-y-auto"
             />
             <button
               type="submit"
