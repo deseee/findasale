@@ -770,25 +770,22 @@ export const getTearOffFlyer = async (req: AuthRequest, res: Response) => {
       const qrSmallY = TAB_Y_START + 8;
       doc.image(qrSmall, qrSmallX, qrSmallY, { width: qrSmallSize, height: qrSmallSize });
 
-      // Vertical text — rotated 90° CCW, each detail on its own line
-      const textAreaTop = qrSmallY + qrSmallSize + 8;
-      const textAreaHeight = PAGE_H - textAreaTop - 10;
+      // Vertical text — rotated 90° CCW, 4 lines centered under QR
+      const textStartY = qrSmallY + qrSmallSize + 6;
+      const lineHeight = 12; // 7pt font + 5pt gap
+      const textBlockHeight = tabTextLines.length * lineHeight;
+      // Center the text block in available space below QR
+      const availableSpace = PAGE_H - textStartY - 5;
+      const textOffsetY = textStartY + (availableSpace - textBlockHeight) / 2;
 
-      doc.save();
-      // Translate to bottom-left of text area, rotate -90° so text reads upward
-      doc.translate(tabX + TAB_WIDTH / 2 + 4, PAGE_H - 10);
-      doc.rotate(-90);
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(7)
-        .fillColor('#1a1a2e')
-        .text(tabTextLines.join('\n'), 0, 0, {
-          width: textAreaHeight,
-          align: 'left',
-          lineBreak: true,
-          lineGap: 28,
-        });
-      doc.restore();
+      tabTextLines.forEach((line, idx) => {
+        doc.save();
+        doc.translate(tabX + TAB_WIDTH / 2 + 3, textOffsetY + idx * lineHeight + lineHeight);
+        doc.rotate(-90);
+        doc.font('Helvetica-Bold').fontSize(7).fillColor('#1a1a2e')
+          .text(line, 0, 0, { lineBreak: false });
+        doc.restore();
+      });
     }
 
     doc.end();
@@ -1459,24 +1456,21 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       const smallQrY = TEAR_OFF_TAB_Y_START + 8;
       doc.image(qrTearOffSmall, smallQrX, smallQrY, { width: smallQrSize, height: smallQrSize });
 
-      // Vertical text — rotated 90° CCW, each detail on its own line
-      const fkTextAreaTop = smallQrY + smallQrSize + 8;
-      const fkTextAreaHeight = PAGE_H - fkTextAreaTop - 10;
+      // Vertical text — rotated 90° CCW, 4 lines centered under QR
+      const fkTextStartY = smallQrY + smallQrSize + 6;
+      const fkLineHeight = 12;
+      const fkTextBlockHeight = fkTabTextLines.length * fkLineHeight;
+      const fkAvailableSpace = PAGE_H - fkTextStartY - 5;
+      const fkTextOffsetY = fkTextStartY + (fkAvailableSpace - fkTextBlockHeight) / 2;
 
-      doc.save();
-      doc.translate(tabX + TEAR_OFF_TAB_WIDTH / 2 + 4, PAGE_H - 10);
-      doc.rotate(-90);
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(7)
-        .fillColor('#1a1a2e')
-        .text(fkTabTextLines.join('\n'), 0, 0, {
-          width: fkTextAreaHeight,
-          align: 'left',
-          lineBreak: true,
-          lineGap: 28,
-        });
-      doc.restore();
+      fkTabTextLines.forEach((line, idx) => {
+        doc.save();
+        doc.translate(tabX + TEAR_OFF_TAB_WIDTH / 2 + 3, fkTextOffsetY + idx * fkLineHeight + fkLineHeight);
+        doc.rotate(-90);
+        doc.font('Helvetica-Bold').fontSize(7).fillColor('#1a1a2e')
+          .text(line, 0, 0, { lineBreak: false });
+        doc.restore();
+      });
     }
 
     // PAGE 5: Check-In / Virtual Queue QR
