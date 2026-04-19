@@ -56,8 +56,6 @@ const ALL_TASKS: TaskDefinition[] = [
   { id: 'setup_dates', stage: 'Setup', label: 'Dates & hours confirmed', isAuto: true, autoCheck: (d) => !!d.sale.startDate, link: '/organizer/edit-sale/{saleId}' },
   { id: 'setup_location', stage: 'Setup', label: 'Address & location confirmed', isAuto: true, autoCheck: (d) => !!(d.sale.lat && d.sale.lng), link: '/organizer/edit-sale/{saleId}' },
   { id: 'setup_cover', stage: 'Setup', label: 'Cover photo uploaded', isAuto: true, autoCheck: (d) => d.sale.photoUrls.length > 0, link: '/organizer/edit-sale/{saleId}' },
-  { id: 'setup_photo_qr', stage: 'Pre-Sale', label: 'QR codes placed at photo stations', isAuto: false, link: '/organizer/print-kit/{saleId}' },
-
   // Stage 2: Cataloging
   { id: 'cat_rapidfire', stage: 'Cataloging', label: 'First items uploaded via Rapidfire', isAuto: true, autoCheck: (d) => d.itemCount >= 1, link: '/organizer/add-items/{saleId}' },
   { id: 'cat_tags', stage: 'Cataloging', label: 'Tags & categories reviewed', isAuto: false, link: '/organizer/add-items/{saleId}' },
@@ -66,8 +64,9 @@ const ALL_TASKS: TaskDefinition[] = [
 
   // Stage 3: Pre-Sale
   { id: 'pub_pricetags', stage: 'Pre-Sale', label: 'Price tags printed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
-  { id: 'pub_queue_qr', stage: 'Pre-Sale', label: 'Virtual Queue QR printed & posted', isAuto: false, requiredTier: 'PRO', link: '/organizer/print-kit/{saleId}' },
-  { id: 'pub_treasure', stage: 'Pre-Sale', label: 'Treasure Hunt clues printed & placed', isAuto: false, requiredTier: 'PRO', link: '/organizer/print-kit/{saleId}' },
+  { id: 'pub_queue_qr', stage: 'Pre-Sale', label: 'Check-in / Queue QR printed & posted', isAuto: false, link: '/organizer/print-kit/{saleId}' },
+  { id: 'pub_treasure', stage: 'Pre-Sale', label: 'Treasure Hunt clues printed & placed', isAuto: false, link: '/organizer/print-kit/{saleId}' },
+  { id: 'setup_photo_qr', stage: 'Pre-Sale', label: 'QR codes placed at photo stations', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_preview', stage: 'Pre-Sale', label: 'Sale previewed on mobile', isAuto: false, link: '/organizer/edit-sale/{saleId}' },
   { id: 'pub_signs', stage: 'Pre-Sale', label: 'Neighborhood signs made', isAuto: false, link: '/organizer/print-kit/{saleId}' },
   { id: 'pub_published', stage: 'Pre-Sale', label: 'Sale published', isAuto: true, autoCheck: (d) => d.sale.status === 'PUBLISHED' || d.sale.status === 'LIVE', link: '/organizer/edit-sale/{saleId}' },
