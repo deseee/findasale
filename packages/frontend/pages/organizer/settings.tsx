@@ -389,7 +389,7 @@ const OrganizerSettingsPage = () => {
 
                 {verStatus?.status === 'NONE' && (
                   <>
-                    {tier !== 'PRO' ? (
+                    {tier === 'SIMPLE' ? (
                       <div className="p-4 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
                         <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
                           Upgrade to PRO to request verification.

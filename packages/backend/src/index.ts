@@ -398,7 +398,7 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', authLimiter, authRoutes); // stricter rate limit on auth
-app.use('/api/auth/passkey', authLimiter, passkeyRoutes); // Feature #19: Passkey/WebAuthn routes
+app.use('/api/auth/passkey', passkeyRoutes); // Feature #19: Passkey/WebAuthn routes (authLimiter already applied via /api/auth mount above)
 app.use('/api/sales', saleRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/favorites', favoriteRoutes);

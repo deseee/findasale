@@ -77,7 +77,7 @@ const PasskeyManager: React.FC = () => {
 
       // Step 3: Send credential to server for verification and storage
       const completeResponse = await api.post(
-        '/api/auth/passkey/register/complete',
+        '/auth/passkey/register/complete',
         {
           id: credential.id,
           rawId: credential.rawId,
@@ -126,7 +126,7 @@ const PasskeyManager: React.FC = () => {
     );
   }
 
-  const passkeys = passkeyData?.passkeys || [];
+  const passkeys = passkeyData?.credentials || [];
 
   return (
     <div className="card p-6">
