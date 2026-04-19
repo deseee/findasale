@@ -5,7 +5,8 @@ import {
   requestVerification,
   getVerificationStatus,
   adminApproveVerification,
-  adminRejectVerification
+  adminRejectVerification,
+  getPendingOrganizers
 } from '../controllers/verificationController';
 
 const router = Router();
@@ -17,6 +18,10 @@ router.post('/request', authenticate, requireTier('PRO'), requestVerification);
 // GET /api/verification/status — organizer checks their status
 // Requires: auth
 router.get('/status', authenticate, getVerificationStatus);
+
+// GET /api/verification/admin/pending — admin gets pending verification requests
+// Requires: auth + admin
+router.get('/admin/pending', authenticate, requireAdmin, getPendingOrganizers);
 
 // POST /api/verification/admin/:organizerId/approve — admin approves verification
 router.post('/admin/:organizerId/approve', authenticate, requireAdmin, adminApproveVerification);

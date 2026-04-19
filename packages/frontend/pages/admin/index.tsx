@@ -303,7 +303,7 @@ const AdminDashboard = () => {
         )}
 
         {/* Quick Links */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <Link href="/admin/users" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900 transition">
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Manage Users</h3>
             <p className="text-warm-600 dark:text-warm-400 text-sm">View and manage all users, update roles</p>
@@ -314,6 +314,11 @@ const AdminDashboard = () => {
             <p className="text-warm-600 dark:text-warm-400 text-sm">View and delete sales, monitor activity</p>
           </Link>
 
+          <Link href="/admin/verification" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-green-50 dark:bg-green-900/20 border border-green-100 transition">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Verification</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm">Review pending organizer verifications</p>
+          </Link>
+
           <Link href="/admin/bid-review" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-red-50 dark:bg-red-900/20 border border-red-100 transition">
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Bid Review</h3>
             <p className="text-warm-600 dark:text-warm-400 text-sm">Monitor bid IP records for fraud</p>
@@ -322,6 +327,11 @@ const AdminDashboard = () => {
           <Link href="/admin/invites" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-amber-50 dark:bg-amber-900/20 border border-amber-100 transition">
             <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Beta Invites</h3>
             <p className="text-warm-600 dark:text-warm-400 text-sm">Generate and manage organizer invite codes</p>
+          </Link>
+
+          <Link href="/admin/feedback" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-blue-50 dark:bg-blue-900/20 border border-blue-100 transition">
+            <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Feedback</h3>
+            <p className="text-warm-600 dark:text-warm-400 text-sm">Review user feedback and survey responses</p>
           </Link>
 
           <Link href="/creator/dashboard" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-purple-50 dark:bg-purple-900/20 border border-purple-100 transition">
