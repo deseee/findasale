@@ -27,6 +27,7 @@ interface User {
   profileSlug?: string | null;
   collectorTitle?: string | null;
   purchasesVisible?: boolean;
+  emailVerified?: boolean; // S512: email verification gate
 }
 
 interface AuthContextType {
