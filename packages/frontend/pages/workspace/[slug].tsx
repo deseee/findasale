@@ -7,6 +7,7 @@ import Skeleton from '../../components/Skeleton';
 import { useAuth } from '../../components/AuthContext';
 import { useOrganizerActivityFeed } from '../../hooks/useOrganizerActivityFeed';
 import OrganizerActivityFeedCard from '../../components/OrganizerActivityFeedCard';
+import MorningBriefing from '../../components/MorningBriefing';
 
 interface WorkspaceMember {
   id: string;
@@ -81,6 +82,19 @@ export default function WorkspacePage() {
       return data as WorkspaceInternal;
     },
     enabled: !!slug && !authLoading && !!user,
+    retry: 1,
+  });
+
+  // Morning Briefing: fetch if workspace is loaded
+  const { data: briefingData } = useQuery({
+    queryKey: ['workspace-briefing', workspace?.id],
+    queryFn: async () => {
+      if (!workspace?.id) return null;
+      const { data } = await api.get(`/workspace/${workspace.id}/briefing`);
+      return data as { briefing: any };
+    },
+    enabled: !!workspace?.id,
+    refetchInterval: 60000, // Re-check every 60s in case sale enters briefing window
     retry: 1,
   });
 
@@ -253,6 +267,23 @@ export default function WorkspacePage() {
             </a>
           </div>
         </div>
+      </>
+    );
+  }
+
+  // Morning Briefing: if a qualifying sale exists, render briefing instead of dashboard
+  if (briefingData?.briefing) {
+    return (
+      <>
+        <Head>
+          <title>Day of — {workspace.name} | FindA.Sale</title>
+          <meta name="description" content={`Morning briefing for ${workspace.name}`} />
+        </Head>
+        <MorningBriefing
+          briefing={briefingData.briefing}
+          workspaceId={workspace.id}
+          workspaceName={workspace.name}
+        />
       </>
     );
   }

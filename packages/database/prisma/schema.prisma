@@ -191,9 +191,9 @@ model User {
   fraudSuspect      Boolean @default(false) // Flag: set true if 2+ accounts share same device fingerprint
 
   // Feature #XXX: First Sale Free PRO — Email Verification Gate
-  emailVerified           Boolean   @default(false) // Whether user has verified their email address
-  emailVerificationToken  String?   @unique // Random token for email verification link
-  emailVerifiedAt         DateTime? // Timestamp when email was verified
+  emailVerified          Boolean   @default(false) // Whether user has verified their email address
+  emailVerificationToken String?   @unique // Random token for email verification link
+  emailVerifiedAt        DateTime? // Timestamp when email was verified
 
   // Platform Safety #107-#114: Organizer Reputation & Suspension Tracking
   chargebackCount      Int               @default(0) // Total chargebacks on user's organizer account
@@ -331,15 +331,15 @@ model Organizer {
   organizerScore          OrganizerScore?
   // Feature #XXX: First Sale Free PRO — Security Gates
   firstSaleFreeProUsedAt  DateTime? // When organizer used their first-sale free PRO offer (null = not used yet)
-  aiTagsUsedThisMonth     Int       @default(0) // Count of AI tags used this calendar month
+  aiTagsUsedThisMonth     Int                    @default(0) // Count of AI tags used this calendar month
   aiTagsResetAt           DateTime? // When the monthly AI tag counter was last reset
   // Feature #75: eBay Push Quota Tracking — monthly limit enforcement
-  ebayPushesThisMonth     Int       @default(0) // Count of eBay pushes this calendar month
+  ebayPushesThisMonth     Int                    @default(0) // Count of eBay pushes this calendar month
   ebayPushesResetAt       DateTime? // When the monthly eBay push counter was last reset
   // Feature: Graceful Tier Degradation — grace period fields
   graceEndAt              DateTime? // When grace period expires (7 days from downgrade)
   graceTierBefore         String? // Tier before downgrade (PRO or TEAMS)
-  graceNotificationsCount Int       @default(0) // Count of grace period notifications sent (0-2)
+  graceNotificationsCount Int                    @default(0) // Count of grace period notifications sent (0-2)
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 }
@@ -645,6 +645,10 @@ model Sale {
   workspaceSaleChats          WorkspaceSaleChat[]      @relation("WorkspaceSaleChats")
   workspaceTasks              WorkspaceTask[]          @relation("WorkspaceTasks")
   workspaceAlerts             WorkspaceAlert[]         @relation("WorkspaceAlerts")
+  // Morning Briefing — day-of operational fields
+  cashFloat                   Int?                     @default(0) // Starting cash register amount (cents)
+  saleAssignments             SaleAssignment[]         @relation("SaleAssignments")
+  prepTasks                   PrepTask[]               @relation("SalePrepTasks")
   // eBay inventory import: hidden DRAFT container sale for organizer's inventory items
   isInventoryContainer        Boolean                  @default(false)
   createdAt                   DateTime                 @default(now())
@@ -717,9 +721,9 @@ model Item {
   reverseStartDate           DateTime?
   // Bulk operations: hide/show item from sale listing
   isActive                   Boolean                @default(true)
-  saleId                     String?               // Feature #300: nullable — inventory items have no sale
-  lastSaleId                 String?               // Feature #300: last sale item was in (for FlipReport union query)
-  returnedToInventoryAt      DateTime?             // Feature #300: timestamp when returned from a sale
+  saleId                     String? // Feature #300: nullable — inventory items have no sale
+  lastSaleId                 String? // Feature #300: last sale item was in (for FlipReport union query)
+  returnedToInventoryAt      DateTime? // Feature #300: timestamp when returned from a sale
   sale                       Sale?                  @relation(fields: [saleId], references: [id])
   bids                       Bid[]
   maxBids                    MaxBidByUser[] // ADR-013 Phase 2: Proxy bidding
@@ -800,7 +804,7 @@ model Item {
   ebayOfferId                String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
   ebayCategoryId             String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
   ebayCategoryName           String? // eBay leaf category name (e.g. "Guitar Amplifiers") — user-friendly display name for eBay category selected
-  ebayNeedsReview            Boolean               @default(false) // Set true when all category suggestions fail 25005 — organizer must set category manually
+  ebayNeedsReview            Boolean                @default(false) // Set true when all category suggestions fail 25005 — organizer must set category manually
   listedOnEbayAt             DateTime? // Timestamp when item was pushed to eBay
   // Feature #244 Phase 3: Post-sale eBay push — shipping classification
   ebayShippingClassification String                 @default("UNKNOWN") // SHIPPABLE | HEAVY_OVERSIZED | FRAGILE | UNKNOWN — auto-classified from category + tags
@@ -1798,24 +1802,24 @@ model ProcessedWebhookEvent {
 
 // Task #7: Shopper Referral Rewards — track reward transactions between referrers and referred users
 model ReferralReward {
-  id                    String                  @id @default(cuid())
-  referrerId            String
-  referrer              User                    @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
-  referredUserId        String
-  referredUser          User                    @relation("ReferralRewardsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
-  rewardType            String // "POINTS" | "CREDIT"
-  rewardValue           Float
-  awardedAt             DateTime                @default(now())
-  redeemedAt            DateTime?
-  createdAt             DateTime                @default(now())
-  deferredUntil         DateTime?
-  deferredReason        String? // "ACCOUNT_AGE_GATE" | "DEVICE_ABUSE" | "IP_VELOCITY"
-  deviceFraudScore      Int                     @default(0)
-  ipFraudScore          Int                     @default(0)
-  fraudReviewStatus     String                  @default("CLEAR") // "CLEAR" | "PENDING_REVIEW" | "APPROVED" | "REJECTED"
-  reviewedByAdminId     String?
-  reviewedAt            DateTime?
-  fraudSignals          ReferralFraudSignal[]
+  id                String                @id @default(cuid())
+  referrerId        String
+  referrer          User                  @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUserId    String
+  referredUser      User                  @relation("ReferralRewardsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+  rewardType        String // "POINTS" | "CREDIT"
+  rewardValue       Float
+  awardedAt         DateTime              @default(now())
+  redeemedAt        DateTime?
+  createdAt         DateTime              @default(now())
+  deferredUntil     DateTime?
+  deferredReason    String? // "ACCOUNT_AGE_GATE" | "DEVICE_ABUSE" | "IP_VELOCITY"
+  deviceFraudScore  Int                   @default(0)
+  ipFraudScore      Int                   @default(0)
+  fraudReviewStatus String                @default("CLEAR") // "CLEAR" | "PENDING_REVIEW" | "APPROVED" | "REJECTED"
+  reviewedByAdminId String?
+  reviewedAt        DateTime?
+  fraudSignals      ReferralFraudSignal[]
 
   @@unique([referrerId, referredUserId])
   @@index([referrerId])
@@ -1827,19 +1831,19 @@ model ReferralReward {
 
 // D-XP-004 Phase 1: Referral Fraud Gate — signals detection
 model ReferralFraudSignal {
-  id                String          @id @default(cuid())
+  id                String         @id @default(cuid())
   referralRewardId  String
-  referralReward    ReferralReward  @relation(fields: [referralRewardId], references: [id], onDelete: Cascade)
+  referralReward    ReferralReward @relation(fields: [referralRewardId], references: [id], onDelete: Cascade)
   referrerId        String
   referredUserId    String
   signalType        String // "DEVICE_ABUSE" | "IP_VELOCITY" | "ACCOUNT_AGE" | "SELF_REFERRAL"
-  confidenceScore   Int             @default(0)
+  confidenceScore   Int            @default(0)
   flags             String[]
-  reviewOutcome     String          @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  reviewOutcome     String         @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
   reviewedByAdminId String?
   reviewedAt        DateTime?
   notes             String?
-  createdAt         DateTime        @default(now())
+  createdAt         DateTime       @default(now())
 
   @@index([referrerId])
   @@index([referredUserId])
@@ -2004,21 +2008,21 @@ model OrganizerWorkspace {
 }
 
 model WorkspaceMember {
-  id          String             @id @default(cuid())
-  workspaceId String
-  organizerId String?
-  userId      String?
-  role        WorkspaceRole      @default(MEMBER)
-  invitedAt   DateTime           @default(now())
-  acceptedAt  DateTime?
+  id               String             @id @default(cuid())
+  workspaceId      String
+  organizerId      String?
+  userId           String?
+  role             WorkspaceRole      @default(MEMBER)
+  invitedAt        DateTime           @default(now())
+  acceptedAt       DateTime?
   // Feature: Graceful Tier Degradation — team member grace period
-  graceRemovedAt      DateTime? // When member access was revoked due to tier downgrade
-  memberGraceEndAt    DateTime? // When grace period expires for this member
-  accessRestored      Boolean   @default(false) // Whether member access was restored after grace period
-  workspace   OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  organizer   Organizer?         @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade)
-  user        User?              @relation("UserWorkspaceMemberships", fields: [userId], references: [id], onDelete: Cascade)
-  teamMember  TeamMember?
+  graceRemovedAt   DateTime? // When member access was revoked due to tier downgrade
+  memberGraceEndAt DateTime? // When grace period expires for this member
+  accessRestored   Boolean            @default(false) // Whether member access was restored after grace period
+  workspace        OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  organizer        Organizer?         @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade)
+  user             User?              @relation("UserWorkspaceMemberships", fields: [userId], references: [id], onDelete: Cascade)
+  teamMember       TeamMember?
 
   @@unique([workspaceId, organizerId])
   @@unique([workspaceId, userId])
@@ -3322,6 +3326,7 @@ model TeamMember {
   availability       TeamMemberAvailability?
   performances       TeamMemberPerformance[]
   leaderboardEntries WorkspaceLeaderboardEntry[]
+  saleAssignments    SaleAssignment[]            @relation("TeamMemberSaleAssignments")
   createdAt          DateTime                    @default(now())
   updatedAt          DateTime                    @updatedAt
 
@@ -3537,18 +3542,18 @@ model FeatureFlag {
   key            String   @unique // e.g. "hunt_pass_enabled", "ebay_push_enabled"
   description    String   @default("")
   enabled        Boolean  @default(false)
-  tierRestricted String?  // null = all tiers; "PRO", "TEAMS", etc. to restrict
+  tierRestricted String? // null = all tiers; "PRO", "TEAMS", etc. to restrict
   updatedAt      DateTime @updatedAt
-  updatedBy      String?  // admin user id who last toggled
+  updatedBy      String? // admin user id who last toggled
 }
 
 // PwaEvent — append-only event log for PWA analytics and install tracking (S483)
 model PwaEvent {
   id        String   @id @default(cuid())
-  eventType String   // "pwa_install_prompt", "pwa_installed", "pwa_opened", etc.
-  userId    String?  // null for anonymous events
-  sessionId String?  // browser session id
-  metadata  String?  // JSON blob for additional context
+  eventType String // "pwa_install_prompt", "pwa_installed", "pwa_opened", etc.
+  userId    String? // null for anonymous events
+  sessionId String? // browser session id
+  metadata  String? // JSON blob for additional context
   createdAt DateTime @default(now())
 
   @@index([eventType])
@@ -3558,20 +3563,20 @@ model PwaEvent {
 
 // OrganizerScore — expansion + churn signal scores, updated by daily cron (S483)
 model OrganizerScore {
-  id                  String    @id @default(cuid())
-  organizerId         String    @unique
-  organizer           Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(cuid())
+  organizerId        String    @unique
+  organizer          Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
   // Expansion signals (0–100 score, higher = more expansion-ready)
-  expansionScore      Float     @default(0)
-  expansionTier       String    @default("LOW")   // LOW | MEDIUM | HIGH | URGENT
-  expansionTopSignal  String?   // human-readable top trigger, e.g. "fee_savings_breakeven"
+  expansionScore     Float     @default(0)
+  expansionTier      String    @default("LOW") // LOW | MEDIUM | HIGH | URGENT
+  expansionTopSignal String? // human-readable top trigger, e.g. "fee_savings_breakeven"
   // Churn risk signals (0–100 score, higher = more at-risk)
-  churnScore          Float     @default(0)
-  churnBand           String    @default("GREEN") // GREEN | YELLOW | ORANGE | RED
-  churnTopSignal      String?   // human-readable top trigger, e.g. "no_login_14d"
-  scoredAt            DateTime  @default(now())
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  churnScore         Float     @default(0)
+  churnBand          String    @default("GREEN") // GREEN | YELLOW | ORANGE | RED
+  churnTopSignal     String? // human-readable top trigger, e.g. "no_login_14d"
+  scoredAt           DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([expansionTier])
   @@index([churnBand])
@@ -3579,15 +3584,56 @@ model OrganizerScore {
 
 // ApiUsageLog — persistent daily API call + cost tracking, replaces in-memory counters (S483)
 model ApiUsageLog {
-  id                  String   @id @default(cuid())
-  service             String   // "cloudinary", "google_vision", "anthropic", "ebay", "stripe", "resend"
-  dateKey             String   // "2026-04-16" ISO date
-  callCount           Int      @default(0)
-  estimatedCostCents  Int      @default(0)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  service            String // "cloudinary", "google_vision", "anthropic", "ebay", "stripe", "resend"
+  dateKey            String // "2026-04-16" ISO date
+  callCount          Int      @default(0)
+  estimatedCostCents Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@unique([service, dateKey])
   @@index([service])
   @@index([dateKey])
+}
+
+// Morning Briefing: SaleAssignment — per-sale team member day-of context
+model SaleAssignment {
+  id           String     @id @default(cuid())
+  saleId       String
+  sale         Sale       @relation("SaleAssignments", fields: [saleId], references: [id], onDelete: Cascade)
+  teamMemberId String
+  teamMember   TeamMember @relation("TeamMemberSaleAssignments", fields: [teamMemberId], references: [id], onDelete: Cascade)
+  role         String     @default("CREW") // "LEAD", "CREW", "CASHIER", "RUNNER", "PHOTOS"
+  ownsArea     String? // "Upstairs bedrooms", "Garage", etc.
+  status       String     @default("CONFIRMED") // "CONFIRMED", "EN_ROUTE", "ON_SITE", "RUNNING_LATE"
+  eta          DateTime?
+  lastSeenAt   DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([saleId, teamMemberId])
+  @@index([saleId])
+  @@index([teamMemberId])
+}
+
+// Morning Briefing: PrepTask — day-of operational checklist with urgency + assignment
+model PrepTask {
+  id              String    @id @default(cuid())
+  saleId          String
+  sale            Sale      @relation("SalePrepTasks", fields: [saleId], references: [id], onDelete: Cascade)
+  title           String
+  assigneeId      String? // TeamMember ID — nullable for unassigned
+  done            Boolean   @default(false)
+  doneAt          DateTime?
+  urgent          Boolean   @default(false)
+  sortOrder       Int       @default(0)
+  phase           String    @default("pre") // "pre" | "during" | "post"
+  checklistItemId String? // Links to SaleChecklist JSON item id for bi-directional sync
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([saleId])
+  @@index([saleId, done])
+  @@index([assigneeId])
 }

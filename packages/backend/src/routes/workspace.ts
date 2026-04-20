@@ -27,6 +27,12 @@ import {
   createWorkspaceTask,
   updateWorkspaceTask,
 } from '../controllers/workspaceController';
+import {
+  getBriefing,
+  updateStatus,
+  createPrepTask,
+  updatePrepTask,
+} from '../controllers/briefingController';
 
 const router = Router();
 
@@ -62,5 +68,11 @@ router.post('/:workspaceId/sales/:saleId/chat', authenticate, requireWorkspaceMe
 router.get('/:workspaceId/tasks', authenticate, requireWorkspaceMember(), getWorkspaceTasks);
 router.post('/:workspaceId/tasks', authenticate, requireWorkspaceMember(), createWorkspaceTask);
 router.patch('/:workspaceId/tasks/:taskId', authenticate, requireWorkspaceMember(), updateWorkspaceTask);
+
+// Morning Briefing endpoints
+router.get('/:workspaceId/briefing', authenticate, requireWorkspaceMember(), getBriefing);
+router.patch('/:workspaceId/briefing/status', authenticate, requireWorkspaceMember(), updateStatus);
+router.post('/:workspaceId/briefing/prep', authenticate, requireWorkspaceMember(), createPrepTask);
+router.patch('/:workspaceId/briefing/prep/:taskId', authenticate, requireWorkspaceMember(), updatePrepTask);
 
 export default router;
