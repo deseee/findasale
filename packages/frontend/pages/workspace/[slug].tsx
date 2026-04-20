@@ -384,17 +384,6 @@ export default function WorkspacePage() {
             </div>
           </div>
 
-          {/* Workspace Settings — below quick stats */}
-          {isOwner && (
-            <div className="mt-6">
-              <a
-                href="/organizer/workspace"
-                className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition"
-              >
-                Workspace Settings
-              </a>
-            </div>
-          )}
         </div>
 
         {/* Two-column layout for team and activity */}
@@ -776,6 +765,24 @@ export default function WorkspacePage() {
             </a>
           </div>
         </div>
+
+        {/* Workspace Settings */}
+        {isOwner && (
+          <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+              Workspace Settings
+            </h2>
+            <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+              Manage members, roles, and workspace configuration.
+            </p>
+            <a
+              href="/organizer/workspace"
+              className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition"
+            >
+              Workspace Settings
+            </a>
+          </div>
+        )}
       </div>
     </>
   );
