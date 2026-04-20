@@ -33,14 +33,13 @@ import { prisma } from '../lib/prisma';
  * TypeScript may show type errors until migration deploys — that's expected.
  * Bug #25 fix: Exclude only DRAFT status; show PENDING_REVIEW and PUBLISHED items.
  */
-// PUBLIC_ITEM_FILTER — Combines draftStatus check with grace-lock status
-// Excludes DRAFT items (actively being edited by organizers)
+// PUBLIC_ITEM_FILTER — Combines active status with grace-lock status
+// Excludes items marked as inactive (organizer Hide bulk action)
 // Excludes GRACE_LOCKED items (hidden from shoppers during grace period downgrade)
-// Excludes PRIVATE items (organizer is pricing, repairing, or holding for specific customer)
-// Includes PENDING_REVIEW and PUBLISHED items
+// Includes PENDING_REVIEW and PUBLISHED items that are marked isActive
 export const PUBLIC_ITEM_FILTER: Prisma.ItemWhereInput = {
+  isActive: true,
   status: { notIn: ['GRACE_LOCKED'] },
-  isPrivate: false, // Feature #XXX: Shop Mode — exclude private items
 };
 
 /**
