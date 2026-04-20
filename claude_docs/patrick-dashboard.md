@@ -1,5 +1,39 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
+## S518 Summary (2026-04-19) — P1/P2/P3 bug fixes dispatched ✅
+
+**4 files to push. Push block below.**
+
+### What was fixed:
+- **P1 #234 PostSaleMomentumCard** — Items Sold and Sell-Through % on the "Sale Complete" dashboard card now show sale-specific stats (not lifetime totals). Revenue was already correct.
+- **P2 Legendary chip (review page)** — "⭐ Legendary?" chip now correctly dismisses after click. Drafts endpoint was missing `isLegendary` in its SELECT — refetch now returns updated value.
+- **P3 priceBeforeMarkdown** — Now included in 3 secondary endpoints: inspiration gallery, rare finds, and drafts. Crossed-out prices will show correctly in those views.
+- **P3 Efficiency Coach label** — "Top 100%" (which read as bottom tier) changed to show the actual percentile rank. If you beat 90% of organizers, it now shows "Top 90%".
+- **P3 Pricing downgrade stub** — "Downgrade to Free" button on pricing page now navigates to `/organizer/subscription` instead of doing nothing.
+
+### Chrome QA this session:
+- ✅ Ripples page — confirmed working, no crash. Downtown Downsizing Sale 17 showing views/shares/activity.
+- ✅ Sale Complete card — $900 sale-specific revenue (correct, not $1,279 lifetime).
+- ⚠️ Sale Pulse views count — Grace has no active sale, can't compare Sale Pulse vs Ripples. Defer to next session with active sale.
+
+### Patrick actions required:
+1. **Run push block below** (4 files)
+2. No migrations needed this session
+
+### Push block (S518):
+```powershell
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/components/EfficiencyCoachingWidget.tsx
+git add packages/frontend/pages/pricing.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S518: PostSaleMomentumCard sale-specific stats, Legendary chip fix, priceBeforeMarkdown secondary endpoints, Efficiency Coach label, pricing downgrade stub"
+.\push.ps1
+```
+
+---
+
 ## S517 Summary (2026-04-19) — S516 QA pass, Ripples page P1 fix ✅
 
 **Push block below — 18 files total (S516 + S517 Ripples fix). Run this before anything else.**

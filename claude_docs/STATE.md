@@ -7,6 +7,30 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S518 (2026-04-19) — P1/P2/P3 bug fixes: PostSaleMomentumCard revenue, Legendary chip, priceBeforeMarkdown, Efficiency Coach label, pricing stub**
+
+Four parallel dev dispatches completed:
+
+- **P1 #234 PostSaleMomentumCard revenue (Agent A):** `dashboard.tsx` lines 65–76 (Sale interface `items` property added) + lines 1497–1499 (items sold + total now derived from `mostRecentEnded.items` array instead of global lifetime stats). Revenue was already correct (`statsData.revenue.mostRecentEndedSale`).
+- **P2 Legendary chip dismissal (Agent B):** `itemController.ts` getDraftItemsBySaleId SELECT — added `isLegendary: true` and `legendaryPublishedAt: true`. Chip refetch now returns updated field, dismisses correctly after click.
+- **P3 priceBeforeMarkdown secondary endpoints (Agent B):** `itemController.ts` — added `priceBeforeMarkdown: true` and `markdownApplied: true` to getDraftItemsBySaleId, getInspirationItems, and getRareFindsItems SELECT clauses.
+- **P3 Efficiency Coach "Top 100%" label (Agent C):** `EfficiencyCoachingWidget.tsx` line 51 — `Top {100 - data.percentileRank}%` → `Top {data.percentileRank}%`. Old formula was inverted (showing "Top 100%" when beat 0% of organizers). Now correctly reflects percentile rank.
+- **P3 pricing.tsx Downgrade stub (Agent C):** `pricing.tsx` lines 137–150 — stub `return;` replaced with `router.push('/organizer/subscription')`. Proper downgrade flow is on subscription page.
+
+**Chrome QA (S518):**
+- ✅ Ripples page — no crash (S517 hooks fix confirmed deployed). Sales list populates, activity trend chart renders (Grace: Downtown Downsizing Sale 17 + Lakefront Estate Sale 7).
+- ✅ Sale Complete card — $900 (sale-specific, not lifetime $1,279). Revenue fix confirmed working.
+- ⚠️ Sale Pulse vs Ripples views count — Grace has no active sale (State 3 only), Sale Pulse widget not shown. Cannot compare. S516 routes fix is code-confirmed (reads SaleRipple same as Ripples page). Re-verify next session with active sale.
+- ⚠️ UNVERIFIED — Efficiency Coach label change not yet deployed (needs push). Will confirm next session.
+
+**Files changed (S518):**
+- `packages/frontend/pages/organizer/dashboard.tsx`
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/frontend/components/EfficiencyCoachingWidget.tsx`
+- `packages/frontend/pages/pricing.tsx`
+
+---
+
 **S516 (2026-04-19) — Bump Post, Referral Fraud Gate, Legendary auto-suggest, polish + QA pass**
 
 Session dispatches shipped:

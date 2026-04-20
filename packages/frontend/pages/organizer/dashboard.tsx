@@ -73,6 +73,7 @@ interface Sale {
   city: string;
   state: string;
   description?: string;
+  items?: Array<{ id: string; title: string; price?: number; status: string; organizerDiscountAmount?: number }>;
 }
 
 const OrganizerDashboard = () => {
@@ -1493,15 +1494,16 @@ const OrganizerDashboard = () => {
                   .sort((a: Sale, b: Sale) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0];
                 if (!mostRecentEnded) return null;
                 const revenue = statsData?.revenue?.mostRecentEndedSale ?? 0;
-                const soldItems = statsData?.items?.sold ?? 0;
-                const totalItems = statsData?.items?.total ?? 0;
+                // Calculate sale-specific stats from mostRecentEnded.items, not global stats
+                const itemsSold = (mostRecentEnded.items as any[])?.filter((item: any) => item.status === 'SOLD').length ?? 0;
+                const totalItems = (mostRecentEnded.items as any[])?.length ?? 0;
                 return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <PostSaleMomentumCard
                       saleId={mostRecentEnded.id}
                       saleTitle={mostRecentEnded.title}
                       totalRevenue={revenue}
-                      itemsSold={soldItems}
+                      itemsSold={itemsSold}
                       totalItems={totalItems}
                     />
                     <EfficiencyCoachingWidget />

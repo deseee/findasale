@@ -1713,6 +1713,12 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         status: true,
         ebayListingId: true,
         listedOnEbayAt: true,
+        // Feature #91: Auto-Markdown (P3: Fix 2)
+        priceBeforeMarkdown: true,
+        markdownApplied: true,
+        // Phase 2b: Legendary early access (P2: Fix 1)
+        isLegendary: true,
+        legendaryPublishedAt: true,
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
@@ -1765,6 +1771,9 @@ export const getInspirationItems = async (req: Request, res: Response): Promise<
         category: true,
         ebayCategoryId: true,
         ebayCategoryName: true,
+        // Feature #91: Auto-Markdown (P3: Fix 2)
+        priceBeforeMarkdown: true,
+        markdownApplied: true,
         sale: {
           select: {
             id: true,
@@ -2060,6 +2069,9 @@ export const getRareFindsItems = async (req: AuthRequest, res: Response) => {
         isAiTagged: true,
         createdAt: true,
         updatedAt: true,
+        // Feature #91: Auto-Markdown (P3: Fix 2)
+        priceBeforeMarkdown: true,
+        markdownApplied: true,
         sale: {
           select: {
             id: true,
