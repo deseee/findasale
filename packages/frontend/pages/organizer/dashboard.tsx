@@ -1583,8 +1583,9 @@ const OrganizerDashboard = () => {
                 if (!mostRecentEnded) return null;
                 const revenue = statsData?.revenue?.mostRecentEndedSale ?? 0;
                 // Calculate sale-specific stats from mostRecentEnded.items, not global stats
-                const itemsSold = (mostRecentEnded.items as any[])?.filter((item: any) => item.status === 'SOLD').length ?? 0;
-                const totalItems = (mostRecentEnded.items as any[])?.length ?? 0;
+                const items = mostRecentEnded.items || [];
+                const itemsSold = items.filter((item: any) => item.status === 'SOLD').length;
+                const totalItems = items.length;
                 return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <PostSaleMomentumCard
