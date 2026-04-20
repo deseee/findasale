@@ -10,7 +10,7 @@
  * 6. How to Use (collapsible)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useQuery } from '@tanstack/react-query';
@@ -107,6 +107,8 @@ export default function PromotePage(): JSX.Element {
   // Share card state
   const [selectedTheme, setSelectedTheme] = useState('classic');
   const [selectedFormat, setSelectedFormat] = useState('square');
+  const [shareCardBlobUrl, setShareCardBlobUrl] = useState<string | null>(null);
+  const [shareCardLoading, setShareCardLoading] = useState(false);
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -141,6 +143,40 @@ export default function PromotePage(): JSX.Element {
       setItemCount(itemsData.length);
     }
   }, [itemsData]);
+
+  // Fetch share card image as blob URL with proper session credentials
+  useEffect(() => {
+    if (!saleId || !sale) return;
+    let cancelled = false;
+
+    setShareCardLoading(true);
+    setShareCardBlobUrl(null);
+
+    const url = `/api/share-card?saleId=${saleId}&theme=${selectedTheme}&format=${selectedFormat}&type=sale`;
+
+    fetch(url, { credentials: 'include' })
+      .then((r) => {
+        if (!r.ok) throw new Error(`Share card fetch failed: ${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => {
+        if (!cancelled) {
+          const blobUrl = URL.createObjectURL(blob);
+          setShareCardBlobUrl(blobUrl);
+        }
+      })
+      .catch((err) => {
+        console.error('Share card preview error:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setShareCardLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (shareCardBlobUrl) URL.revokeObjectURL(shareCardBlobUrl);
+    };
+  }, [saleId, sale, selectedTheme, selectedFormat]);
 
   // Loading state
   if (authLoading || saleLoading) {
@@ -393,9 +429,23 @@ export default function PromotePage(): JSX.Element {
     }
   };
 
-  const handleShareCardDownload = () => {
+  const handleShareCardDownload = async () => {
     const url = `/api/share-card?saleId=${saleId}&theme=${selectedTheme}&format=${selectedFormat}&type=sale`;
-    window.open(url, '_blank');
+    try {
+      const r = await fetch(url, { credentials: 'include' });
+      if (!r.ok) throw new Error(`Download failed: ${r.status}`);
+      const blob = await r.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `finda-sale-share-card-${selectedTheme}-${selectedFormat}.png`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+      showToast('Share card downloaded!', 'success');
+    } catch (err) {
+      console.error('Share card download error:', err);
+      showToast('Failed to download share card', 'error');
+    }
   };
 
   const handleShareCardCopy = async () => {
@@ -713,11 +763,16 @@ export default function PromotePage(): JSX.Element {
                 {sale && (
                   <div className="mb-6 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
                     <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">Preview</p>
-                    <img
-                      src={`/api/share-card?saleId=${saleId}&theme=${selectedTheme}&format=${selectedFormat}&type=sale`}
-                      alt="Share card preview"
-                      className="w-full max-w-xs rounded-lg"
-                    />
+                    {shareCardLoading && (
+                      <div className="w-full max-w-xs h-48 rounded-lg bg-warm-200 dark:bg-gray-600 animate-pulse" />
+                    )}
+                    {shareCardBlobUrl && (
+                      <img
+                        src={shareCardBlobUrl}
+                        alt="Share card preview"
+                        className="w-full max-w-xs rounded-lg"
+                      />
+                    )}
                   </div>
                 )}
 
