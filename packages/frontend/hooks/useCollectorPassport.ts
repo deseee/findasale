@@ -35,6 +35,7 @@ export interface PublicExplorerPassport {
   user: {
     id: string;
     name: string;
+    collectorTitle: string | null;
   };
 }
 
