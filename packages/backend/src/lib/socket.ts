@@ -83,6 +83,19 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
         socket.leave(`sale:${saleId}`);
       }
     });
+
+    // Morning Briefing — join/leave day-of-sale briefing room
+    socket.on('JOIN_BRIEFING', (saleId: unknown) => {
+      if (typeof saleId === 'string' && saleId.length > 0 && saleId.length < 128) {
+        socket.join(`briefing:${saleId}`);
+      }
+    });
+
+    socket.on('LEAVE_BRIEFING', (saleId: unknown) => {
+      if (typeof saleId === 'string') {
+        socket.leave(`briefing:${saleId}`);
+      }
+    });
   });
 
   return _io;
