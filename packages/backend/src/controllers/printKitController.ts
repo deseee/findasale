@@ -128,7 +128,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       justify-content: space-between;
       overflow: hidden;
     }
-    .label-title { font-size: 7pt; color: #1a1a2e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .label-title { font-size: 8pt; color: #1a1a2e; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .label-price { font-size: 14pt; font-weight: bold; color: #16a34a; line-height: 1; }
     .label-id { font-size: 5pt; color: #999999; }
   </style>
