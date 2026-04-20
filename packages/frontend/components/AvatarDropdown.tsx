@@ -562,6 +562,15 @@ const AvatarDropdown: React.FC = () => {
                     <span>Bounties</span>
                   </Link>
                   <Link
+                    href="/coupons"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    onClick={() => setIsOpen(false)}
+                    title="Generate and manage coupons for shoppers and your purchases"
+                  >
+                    <Ticket size={16} className="text-amber-500" />
+                    <span>Coupons</span>
+                  </Link>
+                  <Link
                     href="/organizer/print-inventory"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
