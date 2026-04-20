@@ -1,44 +1,47 @@
 # Patrick's Dashboard — Week of April 20, 2026
 
-## What Happened This Session (S526)
+## What Happened This Session (S527)
 
-Big bug-fix batch. 7 parallel dev agents ran simultaneously, fixing everything from the S525 QA backlog. Chrome MCP crashed before the verification pass — all fixes are in the UNVERIFIED queue and need a Chrome QA session next.
+Extended QA session. Worked through the UNTESTED backlog from STATE.md. S526 dev fixes are still LOCAL only — they need to be pushed before Chrome can verify them.
 
-## S526 — What Was Fixed
+## S527 — QA Results (UNTESTED Backlog)
 
-| # | Fix | How |
-|---|-----|-----|
-| #224 | rapid-capture 404 | Created redirect page → /organizer/sales |
-| W-5 | Workspace Create Sale link | Changed href to /organizer/create-sale |
-| #235 | DonationModal not working | Fixed API paths (singular/plural typo) |
-| #266 | "Explorer Profile" label | Renamed to "Collector Passport" in 4 files |
-| #200 | collectorTitle missing | Added to shopper public profile header |
-| #270 | Onboarding card missing | Built ExplorerGuildOnboardingCard, wired to shopper dashboard |
-| S518-D | Downgrade to Free button | Label updated on subscription page |
-| #228 | Receipt labels wrong | "Items Subtotal" + "Platform Fee (10%)" |
+| Page | Result | Notes |
+|------|--------|-------|
+| /neighborhoods/[slug] | ✅ | Pages load. S525 QA had wrong URL (singular vs plural) |
+| /cities + /city/[slug] | ✅ | P3: "Grand rapids" capitalization in heading/breadcrumb |
+| Organizer Profile | ✅ | /organizers/[slug] loads with sales list |
+| Calendar | ✅ | /calendar renders correctly |
+| Item Detail | ✅ | Photo, price, Buy It Now modal, all CTAs work |
+| Message Templates | ✅ | Create/Edit/Delete all work. P3: Delete has no confirmation |
+| Loyalty Passport | ✅ | Save persists on reload. P3: no success toast |
+| Virtual Line Queue | ✅ | Sale picker + queue manager render |
+| Admin Verification | ✅ | Approve/Reject queue loads with pending requests |
+| Sale Progress Checklist | ✅ | 6-stage timeline, real task data (9/39 tasks) |
+| Encyclopedia | ✅ | Search/filter/sort UI present, empty state proper |
+| QR Scan Analytics | ✅ | Stats + sales table + Print Labels CTAs |
+| Hunt Pass | ✅ | $4.99/mo, 1.5x XP, Upgrade CTA present |
+| Categories | ⚠️ P2 | &amp; HTML entities not decoded in names, broken first image |
+| Coupons (/organizer/coupons) | ❌ P2 | 404 — page not built yet |
+| Insights (/organizer/insights) | ✅ | Full analytics dashboard — 4 sales, $1,926 revenue, 8.7% conversion, items by category |
+| Sale Analytics (/organizer/sales/[id]/analytics) | ❌ P2 | Sale-specific drill-down — backend GET /api/insights/organizer/sale/:saleId returns 404 |
 
-## Not Bugs (confirmed this session)
-- **Photo station endpoint** — already fully wired. Was a false alarm in STATE.md.
-- **#251 priceBeforeMarkdown** — already implemented. Just needs a live item with `markdownApplied=true` to see it.
-- **#188 Neighborhood pages** — pages exist at `/neighborhoods/[slug]`. QA in S525 was testing the wrong URL (singular vs. plural).
+## S526 Fixes — Still LOCAL, Not Pushed
 
-## Decisions Made
-- S518-D: Build the Downgrade to Free button ✅
-- #188: No build needed, pages exist ✅
-- #200: CUID URL is correct per locked decision. Slug is a future XP-unlock feature, not a bug. ✅
+These are ready on your machine but need `.\push.ps1` before they go live:
 
-## What Needs to Happen Next (S527)
+| Fix | Status |
+|-----|--------|
+| #224 rapid-capture 404 | LOCAL — needs push |
+| W-5 Create Sale link | LOCAL — needs push |
+| #235 DonationModal | LOCAL — needs push |
+| #228 receipt labels | LOCAL — needs push |
+| #266 Collector Passport rename | LOCAL — needs push |
+| #200 collectorTitle on profile | LOCAL — needs push |
+| #270 INITIATE onboarding card | LOCAL — needs push |
+| S518-D Downgrade to Free button | LOCAL — needs push |
 
-**1. Push S526 changes** (push block below)
-
-**2. Chrome QA session** — verify all S526 fixes are working live:
-- #224, W-5, #235, #228, #266, #200, #270, S518-D
-- #188 /neighborhoods/ spot-check
-- Then continue UNTESTED backlog (18 items listed in STATE.md Blocked/Unverified Queue)
-
-**3. Backend Prisma stale client** — pre-existing TS errors in backend (not S526). Run `prisma generate` in packages/database to fix. Not blocking deploy.
-
-## Push Block
+## Push Block (Run This)
 
 ```powershell
 git add packages/frontend/pages/organizer/rapid-capture.tsx
@@ -56,6 +59,17 @@ git add packages/frontend/components/SettlementWizard.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "S526: Fix #224 #235 #228 #266 #200 #270 W-5 S518-D — bug batch + Collector Passport rename + onboarding card"
+git commit -m "S526+S527: Fix #224 #235 #228 #266 #200 #270 W-5 S518-D — bug batch + Collector Passport rename + doc updates"
 .\push.ps1
 ```
+
+## What Needs to Happen Next (S528)
+
+1. **Push** — run the block above
+2. **Chrome QA** — after deploy, verify all 8 S526 fixes are live
+3. **Dev dispatch** — fix new P2 bugs:
+   - Build organizer coupons page
+   - Fix categories HTML entity decode + broken image
+   - Fix TEAMS platform fee (shows 8%, should be 10%)
+   - Investigate sale-specific analytics (/organizer/sales/[id]/analytics vs /organizer/insights)
+4. **Backend Prisma** — run `prisma generate` in packages/database (pre-existing stale client, not blocking)

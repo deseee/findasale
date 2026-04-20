@@ -4,25 +4,41 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S526 — IN PROGRESS):** Bug fix batch + QA session. 7 parallel dev dispatches completed. 9 bugs fixed, 2 confirmed already implemented. QA running now.
+**Latest work (S527 — COMPLETE):** Extended QA session. UNTESTED backlog largely cleared. 2 new P2 bugs found. S526 dev fixes still LOCAL — not yet pushed/deployed.
 
-**S526 dev batch results:**
+**S527 QA results (UNTESTED backlog):**
+- ✅ #188 /neighborhoods/ — pages exist and load correctly (S525 QA had wrong URL)
+- ✅ /cities + /city/[slug] — loads, P3: "Grand rapids" capitalization in breadcrumb
+- ✅ Organizer Public Profile (/organizers/[slug]) — loads with sales list
+- ✅ Calendar (/calendar) — loads and renders
+- ✅ Item Detail (/items/[id]) — photo, price, Buy It Now modal, Cancel, all CTAs work
+- ✅ Message Templates (/organizer/message-templates) — full CRUD verified (Create/Edit/Delete); P3: Delete has no confirmation dialog
+- ✅ Loyalty Passport (/shopper/explorer-passport) — loads, save persists on reload; P3: no success toast
+- ✅ Virtual Line Queue (/organizer/line-queue) — sale picker + queue manager load correctly
+- ✅ Admin Verification Queue (/admin/verification) — loads with pending requests, Approve/Reject buttons present
+- ✅ Sale Progress Checklist (/organizer/plan/[saleId]) — 6-stage timeline, real task data loads
+- ✅ Encyclopedia (/encyclopedia) — search/filter/sort UI present, proper empty state
+- ✅ QR Scan Analytics (/organizer/qr-codes) — stats, sales table, Print Labels CTAs
+- ✅ Hunt Pass (/shopper/hunt-pass) — $4.99/mo, features listed, Upgrade CTA present
+- ⚠️ Categories (/categories) — &amp; HTML entities not decoded in category names, broken first image (P2)
+- ❌ Coupons organizer page — /organizer/coupons returns 404, no page built (P2)
+- ❌ Sale Analytics (/organizer/sales/[id]/analytics) — GET /api/insights/organizer/sale/:saleId returns 404, backend endpoint missing (P2)
+
+**S526 dev batch results (LOCAL ONLY — not yet pushed):**
 - ✅ #224 rapid-capture: redirect page created (`pages/organizer/rapid-capture.tsx` → /organizer/sales)
 - ✅ W-5 Create Sale link: workspace/[slug].tsx line 705 fixed to /organizer/create-sale
 - ✅ #235 DonationModal: API paths fixed (singular→plural `/organizers/`), feature now wired
-- ✅ Photo station endpoint: **already fully implemented** — was false P1 alarm, no code needed
 - ✅ #266 Collector Passport rename: "Explorer Profile" → "Collector Passport" across 4 files
 - ✅ #200 collectorTitle: added to collectorPassportService.ts select + profile/[userId].tsx display
 - ✅ #270 Onboarding Card: ExplorerGuildOnboardingCard built + wired to shopper dashboard (INITIATE only)
-- ✅ S518-D Downgrade to Free: button label updated on subscription.tsx (backend already existed)
+- ✅ S518-D Downgrade to Free: button label updated on subscription.tsx
 - ✅ #228 platform fee receipt: SettlementWizard.tsx labels fixed (Revenue→Items Subtotal, Commission→Platform Fee 10%)
-- ✅ #251 priceBeforeMarkdown: **already implemented** — requires live data with markdownApplied=true to display
-- ✅ Roadmap: S525 QA results written in (13 verified, ⚠️/❌ logged)
-- ✅ #188 note corrected: QA was testing /neighborhood/ (singular), correct is /neighborhoods/ (plural)
+- ✅ #251 priceBeforeMarkdown: already implemented — requires live item with markdownApplied=true to display
 
 **Active priorities:**
-- Push block ready (see Next Immediate Actions)
-- QA: verify fixes + UNTESTED backlog (in progress)
+- Push S526 changes (push block in Next Immediate Actions — Patrick needs to run .\push.ps1)
+- After push: Chrome QA to verify S526 fixes are live
+- Dispatch dev to fix new P2 bugs: Coupons page + Sale Analytics endpoint
 
 ## Schema & Infrastructure
 
@@ -48,10 +64,15 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - **#251 priceBeforeMarkdown (P2):** ✅ Already implemented — needs live item with markdownApplied=true to verify display.
 - **#228 Settlement receipt (P2):** ✅ FIXED S526 — SettlementWizard labels corrected. Pending Chrome QA.
 - **#266 Collector Passport rename (P2):** ✅ FIXED S526 — "Collector Passport" across 4 files. Pending Chrome QA.
-- **#188 Neighborhood Pages (P2):** ✅ FALSE ALARM — pages exist at /neighborhoods/[slug]. QA tested wrong URL. Spot-check pending.
-- **#200 Shopper Public Profiles (P2):** ✅ FIXED S526 — collectorTitle added to profile display. Slug deferred (CUID is correct per D-#200).
-- **W-5 Create Sale link (P3):** ✅ FIXED S526 — workspace/[slug].tsx updated. Pending Chrome QA.
+- **#188 Neighborhood Pages (P2):** ✅ Chrome-verified S527 — /neighborhoods and /neighborhoods/[slug] load correctly.
+- **#200 Shopper Public Profiles (P2):** ✅ FIXED S526 — collectorTitle added to profile display. Pending Chrome QA (S526 not pushed yet).
+- **W-5 Create Sale link (P3):** ✅ FIXED S526 — workspace/[slug].tsx updated. Pending Chrome QA (S526 not pushed yet).
 - **#277 Haul Posts nav (P3):** ✅ RESOLVED S525 — nav link confirmed in avatar dropdown → EXPLORE section.
+- **Coupons organizer page (P2):** ❌ NEW S527 — /organizer/coupons returns 404. No page built. Needs dev.
+- **Organizer Insights (P0):** ✅ Chrome-verified S527 — /organizer/insights loads with real data (revenue, conversion rate, items by category).
+- **Sale Analytics drill-down (P2):** ❌ NEW S527 — /organizer/sales/[id]/analytics fails. GET /api/insights/organizer/sale/:saleId returns 404. Backend endpoint missing. (General insights page works fine.)
+- **Categories &amp; entities (P2):** ⚠️ NEW S527 — HTML entities not decoded in category names, broken image on first category card.
+- **TEAMS platform fee display (P2):** ⚠️ S526 — subscription page shows 8% for TEAMS, should be 10%.
 
 ## QA Backlog
 
@@ -79,24 +100,18 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #224 rapid-capture redirect | Chrome crashed before QA | Chrome verify /organizer/rapid-capture → /organizer/sales | S526 |
-| W-5 Create Sale link | Chrome crashed before QA | Chrome verify workspace Create Sale → /organizer/create-sale | S526 |
-| #235 DonationModal | Chrome crashed before QA | Chrome verify charity close step in settlement wizard | S526 |
-| #228 receipt labels | Chrome crashed before QA | Chrome verify "Items Subtotal" + "Platform Fee (10%)" in receipt | S526 |
-| #266 Collector Passport rename | Chrome crashed before QA | Chrome verify nav shows "Collector Passport" not "Explorer Profile" | S526 |
-| #200 collectorTitle | Chrome crashed before QA | Chrome verify collectorTitle shows on /shoppers/[id] profile | S526 |
-| #270 INITIATE onboarding card | Chrome crashed before QA | Chrome verify card renders on shopper dashboard as INITIATE user | S526 |
-| S518-D Downgrade to Free | Chrome crashed before QA | Chrome verify button label on /organizer/subscription | S526 |
-| #188 /neighborhoods/ spot-check | S525 QA had wrong URL | Chrome verify /neighborhoods and /neighborhoods/[slug] load | S525 |
+| #224 rapid-capture redirect | S526 not pushed yet | Push S526, then Chrome verify /organizer/rapid-capture → /organizer/sales | S526 |
+| W-5 Create Sale link | S526 not pushed yet | Push S526, then Chrome verify workspace Create Sale → /organizer/create-sale | S526 |
+| #235 DonationModal | S526 not pushed yet | Push S526, then Chrome verify charity close step in settlement wizard | S526 |
+| #228 receipt labels | S526 not pushed yet | Push S526, then Chrome verify "Items Subtotal" + "Platform Fee (10%)" in receipt | S526 |
+| #266 Collector Passport rename | S526 not pushed yet | Push S526, then Chrome verify nav shows "Collector Passport" | S526 |
+| #200 collectorTitle | S526 not pushed yet | Push S526, then Chrome verify collectorTitle shows on /shoppers/[id] profile | S526 |
+| #270 INITIATE onboarding card | S526 not pushed yet | Push S526, then Chrome verify card renders on shopper dashboard as INITIATE user | S526 |
+| S518-D Downgrade to Free | S526 not pushed yet | Push S526, then Chrome verify button label on /organizer/subscription | S526 |
 | #251 priceBeforeMarkdown | Needs live data | Need item with markdownApplied=true to verify crossed-out display | S526 |
-| Organizer Public Profile | Not yet reached in QA | Chrome verify /organizers/[slug] loads with sales list | — |
-| Sale Detail shopper view | Not yet reached in QA | Chrome verify /sales/[id] items, prices, buy flow | — |
-| Category Browsing | Not yet reached in QA | Chrome verify /categories and /categories/[slug] | — |
-| City Pages | Not yet reached in QA | Chrome verify /cities and /city/[slug] | — |
-| Sale Calendar | Not yet reached in QA | Chrome verify /calendar page | — |
-| Message Templates | Not yet reached in QA | Chrome verify /organizer/message-templates CRUD | — |
-| Coupons | Not yet reached in QA | Chrome verify organizer coupon creation flow | — |
-| Loyalty Passport full page | Not yet reached in QA | Chrome verify /shopper/explorer-passport full content | — |
+| Sale Detail shopper view | Not yet QA'd | Chrome verify /sales/[id] items, prices, full buy flow | — |
+| Categories &amp; entity bug | Bug found S527 | Dev fix needed: HTML entity decode + broken image on /categories | S527 |
+| TEAMS platform fee 8% | Bug found S526 | Dev fix needed: subscription page shows 8%, should be 10% | S526 |
 
 ## File Organization
 
@@ -108,11 +123,9 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Immediate Actions (S526 — push + QA)
+## Next Immediate Actions (S528)
 
-**S526 dev batch complete. Push block ready. QA running in parallel.**
-
-**Files changed — push block:**
+**Step 1 — Push S526 (Patrick runs this from PowerShell):**
 ```powershell
 git add packages/frontend/pages/organizer/rapid-capture.tsx
 git add packages/frontend/pages/workspace/[slug].tsx
@@ -129,28 +142,28 @@ git add packages/frontend/components/SettlementWizard.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "S526: Fix #224 #235 #228 #266 #200 #270 W-5 S518-D — bug batch + Collector Passport rename"
+git commit -m "S526+S527: Fix #224 #235 #228 #266 #200 #270 W-5 S518-D — bug batch + Collector Passport rename + doc updates"
 .\push.ps1
 ```
 
-**Pending QA (Chrome verify after push — Chrome MCP crashed mid-session, all deferred):**
-- #224 rapid-capture redirect → /organizer/sales
-- W-5 Create Sale link → /organizer/create-sale in workspace
+**Step 2 — After push deploys: Chrome QA the 8 S526 fixes**
+- #224 /organizer/rapid-capture → should redirect to /organizer/sales
+- W-5 workspace Create Sale → should go to /organizer/create-sale
 - #235 DonationModal → settlement wizard charity close step
 - #228 receipt labels → "Items Subtotal" + "Platform Fee (10%)"
-- #266 Collector Passport rename → 4 files updated
-- #200 collectorTitle → shopper profile header
-- #270 INITIATE onboarding card → shopper dashboard
-- S518-D Downgrade to Free → subscription.tsx button label
-- #188 /neighborhoods/ spot-check (QA had wrong URL in S525)
-- #251 needs live item with markdownApplied=true to verify display
+- #266 Collector Passport → nav shows new label
+- #200 collectorTitle → shows on /shoppers/[id] profile
+- #270 INITIATE onboarding card → renders on shopper dashboard
+- S518-D Downgrade to Free → button label on /organizer/subscription
 
-**Decisions confirmed this session:**
-- S518-D: Build it ✅
-- #188: Pages exist at /neighborhoods/ — no build needed ✅
-- #200: CUID fine, slug deferred as future XP unlock ✅
-
+**Step 3 — Dispatch dev for new P2 bugs found in S527:**
+- Coupons organizer page (build /organizer/coupons)
+- Sale Analytics endpoint (build GET /api/insights/organizer/sale/:saleId)
+- Categories HTML entity decode + broken image
+- TEAMS platform fee shows 8% (should be 10%)
 ## Recent Sessions
+
+**S527 (2026-04-20, COMPLETE):** Extended QA session. Continued from S526 (context resumed after compression). Cleared most of UNTESTED backlog. Verified: #188 /neighborhoods ✅, /cities ✅, /city/[slug] ✅, Organizer Profile ✅, Calendar ✅, Item Detail ✅, Message Templates (CRUD) ✅, Loyalty Passport ✅, Virtual Line Queue ✅, Admin Verification Queue ✅, Sale Progress Checklist ✅, Encyclopedia ✅, QR Scan Analytics ✅, Hunt Pass ✅. New bugs: Coupons organizer page ❌ P2 (404), Sale Analytics ❌ P2 (backend 404), Categories ⚠️ P2 (HTML entities), TEAMS fee shows 8% ⚠️ P2. S526 dev fixes still local — not pushed.
 
 **S526 (2026-04-20, COMPLETE):** Bug fix batch. 7 parallel dev agents. Fixes: #224 redirect page, W-5 link fix, #235 DonationModal API paths (singular→plural), #266 rename 4 files, #200 collectorTitle on profile, #270 ExplorerGuildOnboardingCard (new component), S518-D downgrade label, #228 receipt labels. Non-issues: photo station already wired, #251 already implemented, #188 pages exist at /neighborhoods/ (QA had wrong URL). Roadmap S525 results written. Frontend TS: 0 errors. Backend TS errors: pre-existing stale Prisma client, not S526. Chrome MCP crashed before QA — all S526 fixes in UNVERIFIED queue for S527.
 
