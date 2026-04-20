@@ -15,7 +15,8 @@
  */
 
 import { ImageResponse } from 'next/og';
-import { NextApiRequest, NextApiResponse } from 'next';
+
+export const config = { runtime: 'edge' };
 
 // XP thresholds for theme locks
 const THEME_XP_THRESHOLDS: Record<string, number> = {
@@ -524,30 +525,43 @@ function renderHaul(
   );
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Get parameters from query
-  const saleId = req.query.saleId as string | undefined;
-  const theme = (req.query.theme as string) || 'classic';
-  const format = (req.query.format as string) || 'square';
+export default async function handler(req: Request) {
+  // Parse URL and get query parameters
+  const url = new URL(req.url);
+  const saleId = url.searchParams.get('saleId') || undefined;
+  const theme = url.searchParams.get('theme') || 'classic';
+  const format = url.searchParams.get('format') || 'square';
 
   // Validate parameters
   if (!saleId) {
-    return res.status(400).json({ error: 'saleId required' });
+    return new Response(JSON.stringify({ error: 'saleId required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   if (!DIMENSIONS[format]) {
-    return res.status(400).json({ error: 'Invalid format' });
+    return new Response(JSON.stringify({ error: 'Invalid format' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   if (!(theme in THEME_XP_THRESHOLDS)) {
-    return res.status(400).json({ error: 'Invalid theme' });
+    return new Response(JSON.stringify({ error: 'Invalid theme' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   try {
     // Authenticate via Authorization header (same pattern as all other frontend API routes)
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.get('authorization');
     if (!authHeader) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     // Fetch sale data from backend API
@@ -559,7 +573,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     if (!saleRes.ok) {
-      return res.status(404).json({ error: 'Sale not found' });
+      return new Response(JSON.stringify({ error: 'Sale not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     const sale = await saleRes.json();
@@ -614,15 +631,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         jsxContent = renderClassic(sale.title, address, sale.city, startDate, endDate, itemCount, photoDataUri, format);
     }
 
-    // Generate image using ImageResponse (Node.js runtime)
-    const image = new ImageResponse(jsxContent, { width, height });
-    const buffer = await image.arrayBuffer();
-
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.status(200).send(Buffer.from(buffer));
+    // Generate image using ImageResponse (Edge Runtime)
+    return new ImageResponse(jsxContent, { width, height });
   } catch (error) {
     console.error('Share card generation error:', error);
-    return res.status(500).json({ error: 'Failed to generate share card' });
+    return new Response(JSON.stringify({ error: 'Failed to generate share card' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
