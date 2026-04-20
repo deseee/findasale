@@ -68,6 +68,28 @@ export const getBriefing = async (req: AuthRequest, res: Response) => {
       return res.json({ briefing: null });
     }
 
+    // Auto-populate SaleAssignment from workspace TeamMembers if none exist yet
+    const existingAssignmentCount = await prisma.saleAssignment.count({ where: { saleId: sale.id } });
+    if (existingAssignmentCount === 0) {
+      const teamMembers = await prisma.teamMember.findMany({
+        where: {
+          workspaceMember: { workspaceId },
+        },
+        select: { id: true },
+      });
+      if (teamMembers.length > 0) {
+        await prisma.saleAssignment.createMany({
+          data: teamMembers.map((tm) => ({
+            saleId: sale.id,
+            teamMemberId: tm.id,
+            role: 'CREW',
+            status: 'CONFIRMED',
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
     // Aggregate briefing data in parallel
     const [rsvpCount, assignments, prepTasks, lastChatMessage] = await Promise.all([
       // RSVP count
