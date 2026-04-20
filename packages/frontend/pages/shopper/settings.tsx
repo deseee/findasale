@@ -430,7 +430,7 @@ function SettingsPage() {
                   profileSlug: profileSlug || null,
                   purchasesVisible,
                 })}
-                disabled={updateProfileMutation.isPending || (!user?.profileSlug && profileSlug && spendableXp < 1500)}
+                disabled={updateProfileMutation.isPending || (!user?.profileSlug && !!profileSlug && spendableXp < 1500)}
                 className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
               >
                 {updateProfileMutation.isPending ? 'Saving...' : 'Save Profile Settings'}
