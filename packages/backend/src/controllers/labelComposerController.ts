@@ -263,82 +263,132 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Batch not found or expired. Please regenerate.' });
     }
 
-    // Lazy-load PDFKit
-    const PDFDocument = (await import('pdfkit')).default;
-
-    const doc = new PDFDocument({
-      size: 'LETTER',
-      margin: 0, // singular — NOT 'margins' (PDFKit 0.15.2 bug, see S501)
-      autoFirstPage: true,
-    });
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="labels-${batchId}.pdf"`);
-    doc.pipe(res);
-
-    const totalPages = Math.ceil(batch.tags.length / LABELS_PER_PAGE);
     const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 
+    // Generate all QR codes upfront as data URLs
+    const qrDataUrls: string[] = [];
+    for (const tag of batch.tags) {
+      const qrUrl = `${FRONTEND_URL}/t/${tag.tagId}`;
+      const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+        type: 'image/png',
+        width: QR_SIZE_LABEL,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      qrDataUrls.push(qrDataUrl);
+    }
+
+    // Build HTML for all pages
+    let htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: letter; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Helvetica, Arial, sans-serif; }
+    .sheet {
+      width: 8.5in;
+      height: 11in;
+      padding: 0.5in 0.1875in 0in 0.1875in;
+      display: grid;
+      grid-template-columns: repeat(3, 2.625in);
+      grid-template-rows: repeat(10, 1in);
+      column-gap: 0.125in;
+      row-gap: 0;
+      page-break-after: always;
+    }
+    .label {
+      width: 2.625in;
+      height: 1in;
+      overflow: hidden;
+      padding: 0.07in 0.07in 0.06in 0.07in;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+    }
+    .label-qr {
+      width: 0.67in;
+      height: 0.67in;
+      flex-shrink: 0;
+      align-self: center;
+    }
+    .label-qr img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .label-text {
+      flex: 1;
+      padding-left: 0.08in;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+    .label-sale { font-size: 6pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .label-price { font-size: 16pt; font-weight: bold; color: #000; line-height: 1; }
+    .label-footer { display: flex; justify-content: space-between; }
+    .label-brand { font-size: 5pt; color: #999; }
+    .label-dates { font-size: 5pt; color: #999; }
+  </style>
+</head>
+<body>`;
+
+    const totalPages = Math.ceil(batch.tags.length / LABELS_PER_PAGE);
+
     for (let page = 0; page < totalPages; page++) {
-      if (page > 0) {
-        doc.addPage({ size: 'LETTER', margin: 0 });
-      }
+      htmlContent += '<div class="sheet">';
 
       const pageStart = page * LABELS_PER_PAGE;
       const pageEnd = Math.min(pageStart + LABELS_PER_PAGE, batch.tags.length);
 
       for (let i = pageStart; i < pageEnd; i++) {
         const tag = batch.tags[i];
-        const idx = i - pageStart;
-        const col = idx % COLS;
-        const row = Math.floor(idx / COLS);
-        const cellX = LEFT_MARGIN + col * (CELL_W + H_GAP);
-        const cellY = TOP_MARGIN + row * CELL_H;
-        // Progressive left correction: printer registration drifts right-ward across columns
-        const xPad = [0, 3, 6][col] ?? 0; // col 0 = none, col 1 = +3pt, col 2 = +6pt
+        const qrDataUrl = qrDataUrls[i];
 
-        // QR code — left side
-        const qrUrl = `${FRONTEND_URL}/t/${tag.tagId}`;
-        const qrBuffer = await QRCode.toBuffer(qrUrl, {
-          type: 'png',
-          width: QR_SIZE_LABEL,
-          margin: 1,
-          color: { dark: '#000000', light: '#ffffff' },
-        });
-        doc.image(qrBuffer, cellX + 4 + xPad, cellY + 12, { width: QR_SIZE_LABEL, height: QR_SIZE_LABEL });
-
-        // Sale name — top, tiny
-        doc
-          .font('Helvetica')
-          .fontSize(6)
-          .fillColor('#666666')
-          .text(batch.saleTitle, cellX + 58 + xPad, cellY + 5, { width: 123 - xPad, lineBreak: false });
-
-        // Price — large bold
-        const priceText = `$${tag.price.toFixed(2)}`;
-        doc
-          .font('Helvetica-Bold')
-          .fontSize(18)
-          .fillColor('#000000')
-          .text(priceText, cellX + 58 + xPad, cellY + 18, { width: 100, lineBreak: false });
-
-        // finda.sale wordmark — bottom left (pulled up for bottom breathing room)
-        doc
-          .font('Helvetica')
-          .fontSize(5)
-          .fillColor('#999999')
-          .text('finda.sale', cellX + 58 + xPad, cellY + 50, { width: 80, lineBreak: false });
-
-        // Date range — bottom right (right-anchored, no column shift)
-        doc
-          .font('Helvetica')
-          .fontSize(5)
-          .fillColor('#999999')
-          .text(batch.saleDates, cellX + 140, cellY + 50, { width: 45, align: 'right', lineBreak: false });
+        htmlContent += `
+          <div class="label">
+            <div class="label-qr">
+              <img src="${qrDataUrl}" alt="QR">
+            </div>
+            <div class="label-text">
+              <div class="label-sale">${batch.saleTitle}</div>
+              <div class="label-price">$${tag.price.toFixed(2)}</div>
+              <div class="label-footer">
+                <div class="label-brand">finda.sale</div>
+                <div class="label-dates">${batch.saleDates}</div>
+              </div>
+            </div>
+          </div>`;
       }
+
+      htmlContent += '</div>';
     }
 
-    doc.end();
+    htmlContent += '</body></html>';
+
+    // Use Puppeteer to render HTML to PDF
+    const puppeteer = await import('puppeteer');
+    const browser = await puppeteer.default.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    try {
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await page.pdf({
+        format: 'Letter',
+        printBackground: true,
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="labels-${batchId}.pdf"`);
+      res.end(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
   } catch (error) {
     console.error('printLabelBatch error:', error);
     if (!res.headersSent) {

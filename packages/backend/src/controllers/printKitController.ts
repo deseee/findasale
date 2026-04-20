@@ -64,94 +64,131 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Not your sale.' });
     }
 
-    // Lazy-load PDFDocument to avoid server crashes before rebuild
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const PDFDocument = require('pdfkit');
-
     const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
     const items = sale.items;
 
-    // Pre-generate all item QR codes
-    const itemQrBuffers: Buffer[] = [];
+    // Pre-generate all item QR codes as data URLs
+    const itemQrDataUrls: string[] = [];
     for (const item of items) {
       const itemUrl = `${frontendUrl}/items/${item.id}`;
-      itemQrBuffers.push(
-        await QRCode.toBuffer(itemUrl, {
-          type: 'png',
-          width: QR_SIZE_STANDARD,
-          margin: 1,
-          color: { dark: '#000000', light: '#ffffff' },
-        })
-      );
+      const qrDataUrl = await QRCode.toDataURL(itemUrl, {
+        type: 'image/png',
+        width: QR_SIZE_STANDARD,
+        margin: 1,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      itemQrDataUrls.push(qrDataUrl);
     }
 
-    // Create PDF document with LETTER size
-    // Page starts here — no cover page. autoFirstPage: true creates page 1
-    const doc = new PDFDocument({
-      size: 'LETTER',
-      margin: 0,
-      autoFirstPage: true,
-    });
+    // Build HTML for item stickers (Avery 5160 grid)
+    let stickerHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: letter; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Helvetica, Arial, sans-serif; }
+    .sheet {
+      width: 8.5in;
+      height: 11in;
+      padding: 0.5in 0.1875in 0in 0.1875in;
+      display: grid;
+      grid-template-columns: repeat(3, 2.625in);
+      grid-template-rows: repeat(10, 1in);
+      column-gap: 0.125in;
+      row-gap: 0;
+      page-break-after: always;
+    }
+    .label {
+      width: 2.625in;
+      height: 1in;
+      overflow: hidden;
+      padding: 0.07in 0.07in 0.06in 0.07in;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+    }
+    .label-qr {
+      width: 0.67in;
+      height: 0.67in;
+      flex-shrink: 0;
+      align-self: center;
+    }
+    .label-qr img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .label-text {
+      flex: 1;
+      padding-left: 0.08in;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+    .label-title { font-size: 7pt; color: #1a1a2e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .label-price { font-size: 14pt; font-weight: bold; color: #16a34a; line-height: 1; }
+    .label-id { font-size: 5pt; color: #999999; }
+  </style>
+</head>
+<body>`;
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="print-kit-${saleId}.pdf"`);
-    doc.pipe(res);
+    const STICKERS_PER_PAGE = 30;
+    const totalPages = Math.ceil(items.length / STICKERS_PER_PAGE);
 
-    // ── PAGES: Item Stickers (Avery 5160 grid) ──────────────
-    // Avery 5160 spec: 3 cols × 10 rows = 30 stickers per page
-    const STICKER_W = 189;  // 2.625 inches
-    const STICKER_H = 72;   // 1 inch
-    const COLS_STICKER = 3;
-    const ROWS_STICKER = 10;
-    const LEFT_MARGIN = 13.5; // Avery 5160: 3/16" = 13.5pt
-    const TOP_MARGIN = 36;    // Avery 5160: 1/2" = 36pt
-    const H_GAP = 9;          // Avery 5160: 1/8" column gutter = 9pt
-    const QR_SIZE = 48;
-    // Progressive left correction: printer registration drifts right-ward across columns
-    const COL_PAD = [0, 3, 6]; // col 0 = no correction, col 1 = +3pt, col 2 = +6pt
+    for (let page = 0; page < totalPages; page++) {
+      stickerHtml += '<div class="sheet">';
 
-    // For each item (index i):
-    for (let i = 0; i < items.length; i++) {
-      // Add page only when i > 0 && i % 30 === 0 (page 2+)
-      if (i > 0 && i % (COLS_STICKER * ROWS_STICKER) === 0) {
-        doc.addPage({ size: 'LETTER', margin: 0 });
+      const pageStart = page * STICKERS_PER_PAGE;
+      const pageEnd = Math.min(pageStart + STICKERS_PER_PAGE, items.length);
+
+      for (let i = pageStart; i < pageEnd; i++) {
+        const item = items[i];
+        const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'N/A';
+        const titleText = (item.title || '').slice(0, 32);
+        const qrDataUrl = itemQrDataUrls[i];
+
+        stickerHtml += `
+          <div class="label">
+            <div class="label-qr">
+              <img src="${qrDataUrl}" alt="QR">
+            </div>
+            <div class="label-text">
+              <div class="label-title">${titleText}</div>
+              <div class="label-price">${priceText}</div>
+              <div class="label-id">${item.id}</div>
+            </div>
+          </div>`;
       }
 
-      const col = i % COLS_STICKER;
-      const row = Math.floor((i % (COLS_STICKER * ROWS_STICKER)) / COLS_STICKER);
-      const sX = LEFT_MARGIN + col * (STICKER_W + H_GAP); // pitch = 198pt (2.75")
-      const sY = TOP_MARGIN + row * STICKER_H;
-      const xPad = COL_PAD[col] ?? 0;
-      const item = items[i];
-
-      // Item title (truncate to ~30 chars)
-      const titleText = (item.title || '').slice(0, 32);
-      doc
-        .font('Helvetica')
-        .fontSize(7)
-        .fillColor('#1a1a2e')
-        .text(titleText, sX + 58 + xPad, sY + 6, { width: 123 - xPad, lineBreak: false });
-
-      // Price
-      const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'N/A';
-      doc
-        .font('Helvetica-Bold')
-        .fontSize(14)
-        .fillColor('#16a34a')
-        .text(priceText, sX + 58 + xPad, sY + 20, { width: 100, lineBreak: false });
-
-      // Item ID — pulled up slightly for bottom breathing room
-      doc
-        .font('Helvetica')
-        .fontSize(5)
-        .fillColor('#999999')
-        .text(item.id, sX + 58 + xPad, sY + 44, { width: 123 - xPad, lineBreak: false });
-
-      // QR — left side, vertically centered
-      doc.image(itemQrBuffers[i], sX + 4 + xPad, sY + 12, { width: QR_SIZE, height: QR_SIZE });
+      stickerHtml += '</div>';
     }
 
-    doc.end();
+    stickerHtml += '</body></html>';
+
+    // Use Puppeteer to render item stickers to PDF
+    const puppeteer = await import('puppeteer');
+    const browserSticker = await puppeteer.default.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    try {
+      const pageSticker = await browserSticker.newPage();
+      await pageSticker.setContent(stickerHtml, { waitUntil: 'networkidle0' });
+      const pdfStickers = await pageSticker.pdf({
+        format: 'Letter',
+        printBackground: true,
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="print-kit-${saleId}.pdf"`);
+      res.end(pdfStickers);
+    } finally {
+      await browserSticker.close();
+    }
   } catch (error) {
     console.error('getPrintKit error:', error);
     res.status(500).json({ message: 'Failed to generate print kit.' });
@@ -965,10 +1002,137 @@ export const getHangTagKit = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * Helper: render price sheet content to a given document/page.
+ * Helper: render price sheet as HTML and return PDF buffer via Puppeteer.
+ * Used for standalone price sheet PDF generation.
  * Renders 3 cols × 10 rows = 30 cells (27 prices used).
  */
-async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, frontendUrl: string) {
+async function renderPriceSheet(saleId: string, saleTitle: string, frontendUrl: string): Promise<Buffer> {
+  const prices = CHEATSHEET_PRICES;
+
+  // Generate all QR codes as data URLs upfront
+  const priceQrDataUrls: string[] = [];
+  for (const price of prices) {
+    const miscQrUrl = `${frontendUrl}/pos/${saleId}?action=add-misc&price=${price.toFixed(2)}`;
+    const qrDataUrl = await QRCode.toDataURL(miscQrUrl, {
+      type: 'image/png',
+      width: QR_SIZE_LABEL,
+      margin: 1,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
+    priceQrDataUrls.push(qrDataUrl);
+  }
+
+  // Build HTML for price sheet
+  let priceHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: letter; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Helvetica, Arial, sans-serif; }
+    .sheet {
+      width: 8.5in;
+      height: 11in;
+      padding: 0.5in 0.1875in 0in 0.1875in;
+      display: grid;
+      grid-template-columns: repeat(3, 2.625in);
+      grid-template-rows: repeat(10, 1in);
+      column-gap: 0.125in;
+      row-gap: 0;
+      page-break-after: always;
+    }
+    .label {
+      width: 2.625in;
+      height: 1in;
+      overflow: hidden;
+      padding: 0.07in 0.07in 0.06in 0.07in;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+    }
+    .label-qr {
+      width: 0.67in;
+      height: 0.67in;
+      flex-shrink: 0;
+      align-self: center;
+    }
+    .label-qr img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .label-text {
+      flex: 1;
+      padding-left: 0.08in;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+    .label-sale { font-size: 6pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .label-price { font-size: 18pt; font-weight: bold; color: #1a1a2e; line-height: 1; }
+    .label-brand { font-size: 5pt; color: #999999; }
+  </style>
+</head>
+<body>`;
+
+  const LABELS_PER_PAGE = 30;
+  const totalPages = Math.ceil(prices.length / LABELS_PER_PAGE);
+
+  for (let page = 0; page < totalPages; page++) {
+    priceHtml += '<div class="sheet">';
+
+    const pageStart = page * LABELS_PER_PAGE;
+    const pageEnd = Math.min(pageStart + LABELS_PER_PAGE, prices.length);
+
+    for (let i = pageStart; i < pageEnd; i++) {
+      const price = prices[i];
+      const qrDataUrl = priceQrDataUrls[i];
+
+      priceHtml += `
+        <div class="label">
+          <div class="label-qr">
+            <img src="${qrDataUrl}" alt="QR">
+          </div>
+          <div class="label-text">
+            <div class="label-sale">${saleTitle}</div>
+            <div class="label-price">$${price.toFixed(2)}</div>
+            <div class="label-brand">finda.sale</div>
+          </div>
+        </div>`;
+    }
+
+    priceHtml += '</div>';
+  }
+
+  priceHtml += '</body></html>';
+
+  // Use Puppeteer to render to PDF
+  const puppeteer = await import('puppeteer');
+  const browser = await puppeteer.default.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(priceHtml, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'Letter',
+      printBackground: true,
+      margin: { top: '0', right: '0', bottom: '0', left: '0' },
+    });
+    return pdfBuffer;
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * Helper: append price sheet pages to an existing PDFDocument.
+ * Used internally by getFullSignKitPDF which still uses PDFKit.
+ */
+async function appendPriceSheetToPDF(doc: any, saleId: string, saleTitle: string, frontendUrl: string) {
   const prices = CHEATSHEET_PRICES;
   const COLS = 3;
   const CELL_W = 189;   // Avery 5160: 2-5/8" = 189pt
@@ -1557,7 +1721,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
 
     // PAGE 8+: Price Sheet
     doc.addPage({ size: 'LETTER', margin: 0 });
-    await renderPriceSheet(doc, saleId, sale.title, frontendUrl);
+    await appendPriceSheetToPDF(doc, saleId, sale.title, frontendUrl);
 
     doc.end();
   } catch (error) {
@@ -1593,18 +1757,12 @@ export const getPriceSheet = async (req: AuthRequest, res: Response) => {
 
     const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const PDFDocument = require('pdfkit');
+    // Use helper to render price sheet content as PDF
+    const pdfBuffer = await renderPriceSheet(saleId, sale.title, frontendUrl);
 
-    const doc = new PDFDocument({ size: 'LETTER', margin: 0, autoFirstPage: true });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="price-sheet-${saleId}.pdf"`);
-    doc.pipe(res);
-
-    // Use helper to render price sheet content
-    await renderPriceSheet(doc, saleId, sale.title, frontendUrl);
-
-    doc.end();
+    res.end(pdfBuffer);
   } catch (error) {
     console.error('getPriceSheet error:', error);
     res.status(500).json({ message: 'Failed to generate price sheet.' });

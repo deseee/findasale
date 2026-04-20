@@ -1,107 +1,11 @@
-// W2: Label printing — generates printer-ready PDF labels via pdfkit
+// W2: Label printing — generates printer-ready PDF labels via Puppeteer HTML→PDF
 // Single-item label: GET /api/items/:id/label
 // All items in a sale:  GET /api/sales/:saleId/labels
 
-import { Request, Response } from 'express';
-import PDFDocument from 'pdfkit';
+import { Response } from 'express';
 import QRCode from 'qrcode';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
-
-const LABEL_W = 288; // 4 inches @ 72 dpi
-const LABEL_H = 216; // 3 inches @ 72 dpi
-const MARGIN  = 16;
-
-async function drawLabel(
-  doc: PDFKit.PDFDocument,
-  item: { title: string; price: number | null; category: string | null; condition: string | null; id: string },
-  saleTitle: string,
-  qrBuffer: Buffer,
-  xOffset: number = MARGIN,
-  yOffset: number = MARGIN,
-) {
-  const startY = yOffset;
-  const startX = xOffset;
-
-  // QR column: right side, 72×72, vertically centred
-  const qrSize = 72;
-  const qrPad  = 14;
-  const qrX    = startX + LABEL_W - qrPad - qrSize;        // x ≈ 202
-  const qrY    = startY + Math.round((LABEL_H - qrSize) / 2); // y = 72, centred
-
-  // Text column: left of QR, 10pt left padding
-  const textX = startX + 10;
-  const textW = qrX - startX - 18;                         // ≈ 174 pts
-
-  // Vertically centre the content block in the label.
-  // Block composition (approximate): sale(8) + gap(10) + title(24) + gap(8) + price(26) + gap(8) + chips(10) + gap(10) + id(8) = 112pt
-  const BLOCK_H = 112;
-  const cs = startY + Math.round((LABEL_H - BLOCK_H) / 2); // content start ≈ y+52
-
-  // QR image
-  doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
-
-  // "Scan to view" under QR
-  doc
-    .fontSize(6)
-    .fillColor('#aaaaaa')
-    .font('Helvetica')
-    .text('Scan to view', qrX, qrY + qrSize + 4, { width: qrSize, align: 'center', lineBreak: false });
-
-  // Sale name
-  doc
-    .fontSize(7)
-    .fillColor('#888888')
-    .font('Helvetica')
-    .text(saleTitle, textX, cs, { width: textW, align: 'left', lineBreak: false });
-
-  // Item title
-  doc
-    .fontSize(13)
-    .fillColor('#111111')
-    .font('Helvetica-Bold')
-    .text(item.title, textX, cs + 18, { width: textW, height: 24, align: 'left' });
-
-  // Price
-  const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'Price on request';
-  doc
-    .fontSize(22)
-    .fillColor(item.price != null ? '#16a34a' : '#999999')
-    .font('Helvetica-Bold')
-    .text(priceText, textX, cs + 50, { width: textW, align: 'left', lineBreak: false });
-
-  // Category + condition
-  // Decode HTML entities and clean up eBay colon-separated category path
-  const decodeCategory = (raw: string | null): string | null => {
-    if (!raw) return null;
-    const decoded = raw.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
-    // Show last 2 segments of colon path for space reasons: "Dollars: Eisenhower (1971-78)"
-    const parts = decoded.split(':').map(s => s.trim()).filter(Boolean);
-    return parts.length > 2 ? parts.slice(-2).join(': ') : decoded;
-  };
-  const chips = [decodeCategory(item.category), item.condition].filter(Boolean).join('  ·  ');
-  if (chips) {
-    doc
-      .fontSize(8)
-      .fillColor('#555555')
-      .font('Helvetica')
-      .text(chips, textX, cs + 86, { width: textW, align: 'left', lineBreak: false });
-  }
-
-  // Item ID — positioned at fixed offset from content block bottom
-  doc
-    .fontSize(6)
-    .fillColor('#cccccc')
-    .font('Helvetica')
-    .text(`ID: ${item.id}`, textX, cs + 104, { width: textW, align: 'left', lineBreak: false });
-
-  // Outer border (drawn last so it sits on top of any bleed)
-  doc
-    .rect(startX + 1, startY + 1, LABEL_W - 2, LABEL_H - 2)
-    .lineWidth(0.5)
-    .strokeColor('#e0e0e0')
-    .stroke();
-}
 
 /**
  * GET /api/items/:id/label
@@ -125,21 +29,105 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
     // Generate QR code for item URL
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const itemUrl = `${frontendUrl}/items/${id}`;
-    const qrBuffer = await QRCode.toBuffer(itemUrl, {
-      type: 'png',
+    const qrDataUrl = await QRCode.toDataURL(itemUrl, {
+      type: 'image/png',
       width: 200,
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     });
 
-    const doc = new PDFDocument({ size: [LABEL_W, LABEL_H], margin: 0, autoFirstPage: true });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="label-${id}.pdf"`);
-    doc.pipe(res);
+    // Decode category helper
+    const decodeCategory = (raw: string | null): string | null => {
+      if (!raw) return null;
+      const decoded = raw.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+      const parts = decoded.split(':').map(s => s.trim()).filter(Boolean);
+      return parts.length > 2 ? parts.slice(-2).join(': ') : decoded;
+    };
+    const chips = [decodeCategory(item.category), item.condition].filter(Boolean).join('  ·  ');
 
-    await drawLabel(doc, item, item.sale!.title, qrBuffer);
+    // Build HTML for single label (4"×3")
+    const labelHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: 4in 3in; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
+    .label-container {
+      width: 4in;
+      height: 3in;
+      padding: 0.1in;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .label-text {
+      flex: 1;
+      padding-right: 0.1in;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .label-sale { font-size: 7pt; color: #888888; }
+    .label-title { font-size: 13pt; font-weight: bold; color: #111111; margin: 0.05in 0; }
+    .label-price { font-size: 22pt; font-weight: bold; color: #16a34a; margin: 0.05in 0; line-height: 1; }
+    .label-chips { font-size: 8pt; color: #555555; margin: 0.05in 0; }
+    .label-id { font-size: 6pt; color: #cccccc; }
+    .label-qr {
+      width: 0.9in;
+      height: 0.9in;
+      flex-shrink: 0;
+    }
+    .label-qr img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .label-scan { font-size: 6pt; color: #aaaaaa; text-align: center; margin-top: 0.02in; }
+  </style>
+</head>
+<body>
+  <div class="label-container">
+    <div class="label-text">
+      <div class="label-sale">${item.sale!.title}</div>
+      <div class="label-title">${item.title}</div>
+      <div class="label-price">$${item.price != null ? item.price.toFixed(2) : 'POA'}</div>
+      ${chips ? `<div class="label-chips">${chips}</div>` : ''}
+      <div class="label-id">ID: ${id}</div>
+    </div>
+    <div>
+      <div class="label-qr">
+        <img src="${qrDataUrl}" alt="QR">
+      </div>
+      <div class="label-scan">Scan</div>
+    </div>
+  </div>
+</body>
+</html>`;
 
-    doc.end();
+    // Use Puppeteer to render to PDF
+    const puppeteer = await import('puppeteer');
+    const browser = await puppeteer.default.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    try {
+      const page = await browser.newPage();
+      await page.setContent(labelHtml, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await page.pdf({
+        width: '4in',
+        height: '3in',
+        printBackground: true,
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="label-${id}.pdf"`);
+      res.end(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
   } catch (error) {
     console.error('getSingleItemLabel error:', error);
     res.status(500).json({ message: 'Failed to generate label.' });
@@ -173,76 +161,146 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No available items in this sale to label.' });
     }
 
-    // Generate all QR codes upfront (avoid async issues in render loop)
+    // Generate all QR codes as data URLs upfront
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const qrPromises = sale.items.map((item) =>
-      QRCode.toBuffer(`${frontendUrl}/items/${item.id}`, {
-        type: 'png',
+    const qrDataUrls: string[] = [];
+    for (const item of sale.items) {
+      const qrDataUrl = await QRCode.toDataURL(`${frontendUrl}/items/${item.id}`, {
+        type: 'image/png',
         width: 200,
         margin: 1,
         color: { dark: '#000000', light: '#ffffff' },
-      }),
-    );
-    const qrBuffers = await Promise.all(qrPromises);
-
-    const doc = new PDFDocument({ size: 'LETTER', margin: 0, autoFirstPage: false });
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="labels-${saleId}.pdf"`);
-    doc.pipe(res);
-
-    // 2×3 grid = 6 labels per page: 2 columns × 3 rows
-    const PAGE_W = 612; // 8.5 inches
-    const PAGE_H = 792; // 11 inches
-    const COLS = 2;
-    const ROWS = 3;
-    const MARGIN_X = (PAGE_W - COLS * LABEL_W) / 2;  // 18pt
-    const MARGIN_Y = (PAGE_H - ROWS * LABEL_H) / 2;  // 72pt
-
-    for (let i = 0; i < sale.items.length; i++) {
-      // Add new page every 6 items
-      if (i % (COLS * ROWS) === 0) {
-        doc.addPage({ size: 'LETTER', margin: 0 });
-      }
-
-      const gridIndex = i % (COLS * ROWS);
-      const col = gridIndex % COLS;
-      const row = Math.floor(gridIndex / COLS);
-      const x = MARGIN_X + col * LABEL_W;
-      const y = MARGIN_Y + row * LABEL_H;
-
-      await drawLabel(doc, sale.items[i], sale.title, qrBuffers[i], x, y);
-
-      // Add dashed cut lines between label cells
-      // Vertical line between columns (if not the rightmost column)
-      if (col === 0 && i < sale.items.length - 1) {
-        const cutX = MARGIN_X + LABEL_W;
-        const cutYStart = MARGIN_Y + row * LABEL_H;
-        const cutYEnd = cutYStart + LABEL_H;
-        doc
-          .moveTo(cutX, cutYStart)
-          .lineTo(cutX, cutYEnd)
-          .lineWidth(0.5)
-          .dash(3, { space: 2 })
-          .stroke('#cccccc')
-          .undash();
-      }
-
-      // Horizontal line between rows (if not the last row)
-      if (row < ROWS - 1 && i < sale.items.length - 1) {
-        const cutY = MARGIN_Y + (row + 1) * LABEL_H;
-        const cutXStart = MARGIN_X;
-        const cutXEnd = MARGIN_X + COLS * LABEL_W;
-        doc
-          .moveTo(cutXStart, cutY)
-          .lineTo(cutXEnd, cutY)
-          .lineWidth(0.5)
-          .dash(3, { space: 2 })
-          .stroke('#cccccc')
-          .undash();
-      }
+      });
+      qrDataUrls.push(qrDataUrl);
     }
 
-    doc.end();
+    // Decode category helper
+    const decodeCategory = (raw: string | null): string | null => {
+      if (!raw) return null;
+      const decoded = raw.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+      const parts = decoded.split(':').map(s => s.trim()).filter(Boolean);
+      return parts.length > 2 ? parts.slice(-2).join(': ') : decoded;
+    };
+
+    // Build HTML for 2×3 grid layout
+    let labelsHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: letter; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Helvetica, Arial, sans-serif; }
+    .page {
+      width: 8.5in;
+      height: 11in;
+      padding: 0.5in;
+      display: grid;
+      grid-template-columns: repeat(2, 4in);
+      grid-template-rows: repeat(3, 3in);
+      gap: 0.1in;
+      page-break-after: always;
+    }
+    .label {
+      width: 4in;
+      height: 3in;
+      padding: 0.1in;
+      border: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-sizing: border-box;
+    }
+    .label-text {
+      flex: 1;
+      padding-right: 0.1in;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .label-sale { font-size: 7pt; color: #888888; }
+    .label-title { font-size: 13pt; font-weight: bold; color: #111111; margin: 0.05in 0; }
+    .label-price { font-size: 22pt; font-weight: bold; color: #16a34a; margin: 0.05in 0; line-height: 1; }
+    .label-chips { font-size: 8pt; color: #555555; margin: 0.05in 0; }
+    .label-id { font-size: 6pt; color: #cccccc; }
+    .label-qr {
+      width: 0.9in;
+      height: 0.9in;
+      flex-shrink: 0;
+    }
+    .label-qr img {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .label-scan { font-size: 6pt; color: #aaaaaa; text-align: center; margin-top: 0.02in; }
+  </style>
+</head>
+<body>`;
+
+    const LABELS_PER_PAGE = 6;
+    const totalPages = Math.ceil(sale.items.length / LABELS_PER_PAGE);
+
+    for (let page = 0; page < totalPages; page++) {
+      labelsHtml += '<div class="page">';
+
+      const pageStart = page * LABELS_PER_PAGE;
+      const pageEnd = Math.min(pageStart + LABELS_PER_PAGE, sale.items.length);
+
+      for (let i = pageStart; i < pageEnd; i++) {
+        const item = sale.items[i];
+        const chips = [decodeCategory(item.category), item.condition].filter(Boolean).join('  ·  ');
+        const qrDataUrl = qrDataUrls[i];
+
+        labelsHtml += `
+          <div class="label">
+            <div class="label-text">
+              <div class="label-sale">${sale.title}</div>
+              <div class="label-title">${item.title}</div>
+              <div class="label-price">$${item.price != null ? item.price.toFixed(2) : 'POA'}</div>
+              ${chips ? `<div class="label-chips">${chips}</div>` : ''}
+              <div class="label-id">ID: ${item.id}</div>
+            </div>
+            <div>
+              <div class="label-qr">
+                <img src="${qrDataUrl}" alt="QR">
+              </div>
+              <div class="label-scan">Scan</div>
+            </div>
+          </div>`;
+      }
+
+      // Pad remaining slots with empty labels if not on last page
+      for (let i = pageEnd; i < pageStart + LABELS_PER_PAGE && page < totalPages - 1; i++) {
+        labelsHtml += '<div class="label"></div>';
+      }
+
+      labelsHtml += '</div>';
+    }
+
+    labelsHtml += '</body></html>';
+
+    // Use Puppeteer to render to PDF
+    const puppeteer = await import('puppeteer');
+    const browser = await puppeteer.default.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    try {
+      const page = await browser.newPage();
+      await page.setContent(labelsHtml, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await page.pdf({
+        format: 'Letter',
+        printBackground: true,
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="labels-${saleId}.pdf"`);
+      res.end(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
   } catch (error) {
     console.error('getSaleLabels error:', error);
     res.status(500).json({ message: 'Failed to generate labels.' });
