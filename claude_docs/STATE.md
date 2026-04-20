@@ -7,6 +7,63 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S520 (2026-04-20) — Shop Mode + Share & Promote overhaul**
+
+Two major feature areas shipped.
+
+**Share & Promote overhaul (Batch A — this session):**
+- `SharePromoteModal.tsx` — fixed garbage time bug (`format(parseISO(startDate),'h:mm a')` on Sale with no time component → removed time from all templates). Added "Spotlight Item" as 9th tab: item dropdown → tone/platform pills → AI post from existing `/social/:id/template` endpoint. Reordered tabs: social→nextdoor→neighborhood→threads→email→flyer→pinterest→tiktok→spotlight.
+- `promote/[saleId].tsx` — replaced in-page duplicate social generator with 4-card grid (Facebook honest export, Nextdoor inline copy, WhatsApp one-tap share). Removed ~130 lines of redundant UI.
+- `dashboard.tsx` — B1 teal "spread the word" banner on published sales (Copy Link + More Options →, dismissible + localStorage-persisted). B2 amber reminder banner day-of and day-before sale start.
+
+**Store hours + TEAMS copy (Batch B — this session):**
+- `packages/backend/src/routes/organizers.ts` — `pickupWindows` added to organizer public GET + PATCH schema + update handler
+- `packages/frontend/pages/organizer/storefront/[slug].tsx` — `pickupWindows` displayed as "Hours" section near bio/contact
+- `packages/frontend/pages/organizer/settings.tsx` — "Shop Hours" textarea added to profile tab
+- `packages/frontend/pages/pricing.tsx` — TEAMS description updated for resale shops; "Always-Live Storefront*", "Rotating inventory", "Shop Mode" bullets added
+
+**Shop Mode — full implementation (Batch C — this session):**
+- Schema: `Sale.isShopMode Boolean`, `Sale.shopAutoRenewDays Int?`, `Organizer.hasShopMode Boolean`, `Item.isPrivate Boolean` — migration `20260420002649_add_shop_mode`
+- `shopAutoRenewJob.ts` (NEW) — daily cron at 1AM UTC, auto-renews shop sales before expiry, moves unsold items, suppresses follower notifications for auto-renewals
+- `saleController.ts` — TEAMS-only gate for isShopMode, auto-calculates endDate, sets `hasShopMode` on organizer
+- `itemController.ts` — `isPrivate` on create/update
+- `itemQueries.ts` — `PUBLIC_ITEM_FILTER` includes `isPrivate: false`
+- `index.ts` — shopAutoRenewJob registered
+- `create-sale.tsx` — Event / Shop selector at top of form; shop path hides date fields, auto-sets 30-day endDate, TEAMS gate with upgrade prompt
+- `settings.tsx` — Shop Mode toggle (TEAMS-only), PATCHes organizer + active sale
+- `add-items/[saleId].tsx` — Private toggle on item edit modal, "Private" grey badge on item cards
+- `storefront/[slug].tsx` — "🟢 Always Open" replaces date display for shop mode sales
+
+**`isPrivate` is NOT tech debt** — existing hide mechanisms are time-based (`liveDropAt`, `earlyAccessUntil`) and review-based (`draftStatus`). `isPrivate` fills a genuinely different gap (organizer holds item indefinitely from shoppers while pricing/repairing). Plugs cleanly into `PUBLIC_ITEM_FILTER`.
+
+**Files changed (S520):**
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260420002649_add_shop_mode/migration.sql` (NEW)
+- `packages/backend/src/controllers/saleController.ts`
+- `packages/backend/src/controllers/itemController.ts`
+- `packages/backend/src/helpers/itemQueries.ts`
+- `packages/backend/src/jobs/shopAutoRenewJob.ts` (NEW)
+- `packages/backend/src/index.ts`
+- `packages/backend/src/routes/organizers.ts`
+- `packages/frontend/pages/organizer/create-sale.tsx`
+- `packages/frontend/pages/organizer/settings.tsx`
+- `packages/frontend/pages/organizer/storefront/[slug].tsx`
+- `packages/frontend/pages/organizer/promote/[saleId].tsx`
+- `packages/frontend/components/SharePromoteModal.tsx`
+- `packages/frontend/pages/organizer/dashboard.tsx`
+- `packages/frontend/pages/pricing.tsx`
+- `packages/frontend/pages/organizer/add-items/[saleId].tsx`
+
+**Migration required before Railway auto-deploy takes effect:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+---
+
 **S519 (2026-04-19) — Morning Briefing feature + workspace dashboard fixes**
 
 Built the full Morning Briefing day-of-sale view and fixed workspace dashboard issues.
@@ -1180,52 +1237,75 @@ Files (7):
 
 ## Next Session Priority
 
-**0. Patrick: run S518 push block (mandatory first action):**
+**0. Patrick: run S520 push block (mandatory first action):**
 ```powershell
-git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260420002649_add_shop_mode/migration.sql
+git add packages/backend/src/controllers/saleController.ts
 git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/components/EfficiencyCoachingWidget.tsx
+git add packages/backend/src/helpers/itemQueries.ts
+git add packages/backend/src/jobs/shopAutoRenewJob.ts
+git add packages/backend/src/index.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/organizer/create-sale.tsx
+git add packages/frontend/pages/organizer/settings.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/frontend/pages/organizer/storefront/[slug].tsx
+git add "packages/frontend/pages/organizer/promote/[saleId].tsx"
+git add packages/frontend/components/SharePromoteModal.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/frontend/pages/pricing.tsx
-git add packages/frontend/pages/workspace/[slug].tsx
-git add claude_docs/operations/qa-backlog.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S518: PostSaleMomentumCard sale-specific stats, Legendary chip fix, priceBeforeMarkdown endpoints, Efficiency Coach label, pricing stub, workspace chat empty state fix, QA backlog"
+git commit -m "S520: Shop Mode (auto-renew, private items, shop onboarding path), Share & Promote overhaul, store hours, TEAMS resale copy"
 .\push.ps1
 ```
 
-**1. Chrome QA — S518 hot items (after push deploys):**
-- S518-A: `/organizer/dashboard` State 3 → PostSaleMomentumCard → verify Items Sold + Sell-Through % are sale-specific (not lifetime)
-- S518-B: `/organizer/add-items/[saleId]/review` → click "⭐ Legendary?" chip on $75+ item → chip dismisses after click
-- S518-C: `/organizer/dashboard` → Efficiency Coach → "Top X%" shows actual percentile (not "Top 100%")
-- S518-D: `/pricing` → "Downgrade to Free" → navigates to `/organizer/subscription`
-- S518-E: `/workspace/test` → Team Communications shows chat tabs (not "Create a sale" empty state)
+**Then run migration (schema changed):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-**2. Workspace × Sale Command (new feature):**
-- Run Claude Design prompt (saved in patrick-dashboard.md) in Claude Design tool → get visual mockups
-- Feed mockups back → dispatch findasale-ux for full flow spec
-- Then dispatch findasale-dev for implementation
-- Checklist data available via `GET /api/sales/:saleId/checklist` — no new backend needed for read. Task ownership needs 1 new field.
+**1. Chrome QA — S520 hot items (after push + migration):**
+- Shop Mode toggle in Settings → TEAMS organizer → toggle appears, PATCHes correctly
+- Create sale → "Shop" path → date fields hidden, isShopMode=true on created sale
+- Storefront → shop mode sale → "🟢 Always Open" shows instead of dates; store hours visible if set
+- Item edit → Private toggle → item hidden from shoppers, "Private" badge in organizer view
+- Dashboard → published sale → B1 teal banner appears, Copy Link works, dismisses + persists
+- Dashboard → sale starting today → B2 amber banner appears
+- Promote page → 4-card grid (Facebook, Nextdoor, WhatsApp, Email) renders cleanly
+- SharePromoteModal → Spotlight tab → item dropdown + tone pills → post generates
 
-**3. Railway MCP — decide on removal:**
-Double-OAuth fires on every prompt. No Cowork-native replacement exists. Recommend removing plugin via Cowork settings. Railway auto-deploys on push; Railway dashboard covers logs.
+**2. Resale segment — next sprint (deferred from S520):**
+- Shopper messaging / "Contact Seller" (top churn risk per Customer Champion)
+- Shop analytics dashboard — continuous views/saves/top-categories (not per-sale Flip Report)
+- Inventory cleanup / auto-archive unsold items older than 60 days
+- Treasure Trails — shops claim physical location as trail stop
+- "Open Now" status indicator
 
-**4. QA backlog — work through hot items:**
-See `claude_docs/operations/qa-backlog.md` for full queue. Start with S518 hot items above, then S516 unverified items blocked on test conditions.
+**3. Workspace × Sale Command:**
+- Run Claude Design prompt (patrick-dashboard.md) in Claude Design tool → mockups → UX spec → dev dispatch
+
+**4. S518 carry-forward QA:**
+- PostSaleMomentumCard sale-specific revenue (S518-A)
+- Legendary chip dismissal (S518-B)
+- Efficiency Coach "Top X%" (S518-C)
+- Workspace chat tabs with past/ended sales (S518-E)
 
 **Carry-forward queue (lower priority):**
-- Bump Post feed sort (needs Architect sign-off before dev dispatch)
+- Bump Post feed sort (needs Architect sign-off)
 - Price Research Card redesign (`claude_docs/design/PRICE_RESEARCH_CARD_UX_SPEC.md`)
-- Brand audit copy: SharePromoteModal, homepage meta, organizer profile meta
-- Referral fraud gate (D-XP-004)
-- RankUpModal — built but not connected to AuthContext rank-change event
-- Legendary item flag — no organizer UI to mark items Legendary yet
+- RankUpModal — not connected to AuthContext rank-change event
+- Referral fraud gate observational period (D-XP-004, FRAUD_GATE_ACTIVE=false)
 
 **Deferred:**
-- Device fingerprinting Phase 2 (FingerprintJS — defer until beta scale justifies)
+- Device fingerprinting Phase 2 (defer until beta scale justifies)
 - Bounty redesign Phase 2
-- Flea Market Events full implementation (ADR-014 locked, not yet staffed)
-- ~~Stripe Connect webhook config~~ — DONE S516: Patrick added STRIPE_CONNECT_WEBHOOK_SECRET to Railway.
+- Flea Market Events / Market Hubs full implementation (ADR-014 — unlocks multi-location shop feature)
+- White-label MaaS for antique malls (Q4 2026+, contingent on resale segment proving out)
 - Bounties dollars vs XP: open decision
 
 **Postponed QA queue:**
