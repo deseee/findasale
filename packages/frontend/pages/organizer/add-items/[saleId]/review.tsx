@@ -247,7 +247,10 @@ const ReviewPage = () => {
       return await api.put(`/items/${payload.itemId}`, payload.updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+      // Explicitly use the current saleId from router to ensure proper query invalidation
+      if (saleId) {
+        queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+      }
     },
     onError: (error: any) => {
       const message = error.response?.data?.message || 'Failed to update item';
@@ -1067,7 +1070,7 @@ const ReviewPage = () => {
                               </p>
                               {/* Legendary suggestion chip */}
                               {item.price != null && item.price >= 75 && !item.isLegendary && (
-                                <div className="mt-1.5 inline-flex items-center gap-1.5 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-600 rounded-full px-2.5 py-1">
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-600 rounded-full px-2.5 py-1 transition-all">
                                   <span className="text-sm">⭐</span>
                                   <button
                                     type="button"
@@ -1079,10 +1082,17 @@ const ReviewPage = () => {
                                       });
                                     }}
                                     disabled={updateItemMutation.isPending}
-                                    className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 transition-colors disabled:opacity-50"
+                                    className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 transition-colors disabled:opacity-50 cursor-pointer"
                                   >
-                                    Legendary?
+                                    {updateItemMutation.isPending ? 'Setting...' : 'Legendary?'}
                                   </button>
+                                </div>
+                              )}
+                              {/* Legendary confirmation badge (shown after marked legendary) */}
+                              {item.price != null && item.price >= 75 && item.isLegendary && (
+                                <div className="mt-1.5 inline-flex items-center gap-1.5 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-600 rounded-full px-2.5 py-1">
+                                  <span className="text-sm">⭐</span>
+                                  <span className="text-xs font-semibold text-green-700 dark:text-green-300">Legendary</span>
                                 </div>
                               )}
                               {/* Status line — compact, single row */}

@@ -6,7 +6,6 @@ import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
 import { useOrganizerTier, type SubscriptionTier } from '../../hooks/useOrganizerTier';
 import DowngradePreviewModal from '../../components/DowngradePreviewModal';
-import HardwareSection from '../../components/HardwareSection';
 
 interface Subscription {
   status: string | null;
@@ -272,8 +271,6 @@ export default function SubscriptionPage() {
                       </div>
                     </li>
                   </ul>
-
-                  <HardwareSection />
 
                   <div className="flex gap-4">
                     <Link
