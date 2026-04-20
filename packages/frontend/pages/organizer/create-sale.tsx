@@ -42,6 +42,9 @@ const CreateSalePage = () => {
     lng: null as number | null,
     // B1: Sale type selector
     saleType: 'ESTATE',
+    // Feature #XXX: Shop Mode
+    isShopMode: false,
+    shopAutoRenewDays: 30,
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -146,11 +149,17 @@ const CreateSalePage = () => {
     try {
       // Combine date + time and convert to UTC ISO string using browser's local timezone
       // P1 fix: omit lat/lng when null — sending null fails Zod validation before tier check runs
-      const { lat, lng, ...restFormData } = formData;
+      const { lat, lng, isShopMode, shopAutoRenewDays, ...restFormData } = formData;
       const payload = {
         ...restFormData,
-        startDate: formData.startDate ? new Date(`${formData.startDate}T${startTime}`).toISOString() : formData.startDate,
-        endDate: formData.endDate ? new Date(`${formData.endDate}T${endTime}`).toISOString() : formData.endDate,
+        isShopMode,
+        shopAutoRenewDays,
+        startDate: isShopMode
+          ? new Date().toISOString() // Shop mode: use today
+          : formData.startDate ? new Date(`${formData.startDate}T${startTime}`).toISOString() : formData.startDate,
+        endDate: isShopMode
+          ? new Date(Date.now() + shopAutoRenewDays * 24 * 60 * 60 * 1000).toISOString() // Shop mode: auto-calculated on backend
+          : formData.endDate ? new Date(`${formData.endDate}T${endTime}`).toISOString() : formData.endDate,
         ...(lat !== null ? { lat } : {}),
         ...(lng !== null ? { lng } : {}),
       };
@@ -221,10 +230,43 @@ const CreateSalePage = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Feature #XXX: Shop Mode — Sale Type Selector (Event vs Shop) */}
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-lg border border-amber-200 dark:border-amber-700">
+              <h3 className="text-sm font-bold text-warm-900 dark:text-warm-100 mb-4">What are you setting up?</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Event Option */}
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, isShopMode: false }))}
+                  className={`p-4 border-2 rounded-lg transition-colors font-medium ${
+                    !formData.isShopMode
+                      ? 'border-amber-600 bg-amber-100 dark:bg-amber-900/40 text-warm-900 dark:text-warm-100'
+                      : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-400 hover:border-amber-400'
+                  }`}
+                >
+                  <div className="font-bold text-base">Event</div>
+                  <div className="text-xs mt-1 opacity-90">Estate sale, yard sale, auction, or pop-up</div>
+                </button>
+                {/* Shop Option */}
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, isShopMode: true }))}
+                  className={`p-4 border-2 rounded-lg transition-colors font-medium ${
+                    formData.isShopMode
+                      ? 'border-amber-600 bg-amber-100 dark:bg-amber-900/40 text-warm-900 dark:text-warm-100'
+                      : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-400 hover:border-amber-400'
+                  }`}
+                >
+                  <div className="font-bold text-base">Shop</div>
+                  <div className="text-xs mt-1 opacity-90">Resale store, antique dealer, consignment</div>
+                </button>
+              </div>
+            </div>
+
             {/* Basic Info */}
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <label htmlFor="title" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Sale Title</label>
+                <label htmlFor="title" className="block text-sm font-medium text-warm-700 dark:text-warm-300">{formData.isShopMode ? 'Shop Name' : 'Sale Title'}</label>
                 <Tooltip content="This is the first thing shoppers see. Be specific: 'Johnson Family Estate Sale' beats 'Estate Sale'. Include the neighborhood or street if public." />
               </div>
               <input
@@ -267,65 +309,76 @@ const CreateSalePage = () => {
               />
             </div>
 
-            {/* Dates */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label htmlFor="startDate" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Start Date</label>
-                  <Tooltip content="Set your start date to the first day items are available. Shoppers browse before doors open, so publish 3-5 days early." />
-                </div>
-                <input
-                  id="startDate"
-                  type="date"
-                  name="startDate"
-                  value={formData.startDate}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  min={new Date().toISOString().split('T')[0]}
-                  required
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-                {validationErrors.startDate && touchedFields.has('startDate') && (
-                  <p className="text-red-600 text-xs mt-1">{validationErrors.startDate}</p>
-                )}
-                <div className="mt-2">
-                  <label className="block text-xs font-medium text-warm-600 dark:text-warm-400 mb-1">Start Time</label>
+            {/* Dates — Hidden for Shop Mode */}
+            {!formData.isShopMode && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label htmlFor="startDate" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Start Date</label>
+                    <Tooltip content="Set your start date to the first day items are available. Shoppers browse before doors open, so publish 3-5 days early." />
+                  </div>
                   <input
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                    id="startDate"
+                    type="date"
+                    name="startDate"
+                    value={formData.startDate}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    min={new Date().toISOString().split('T')[0]}
+                    required={!formData.isShopMode}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                   />
+                  {validationErrors.startDate && touchedFields.has('startDate') && (
+                    <p className="text-red-600 text-xs mt-1">{validationErrors.startDate}</p>
+                  )}
+                  <div className="mt-2">
+                    <label className="block text-xs font-medium text-warm-600 dark:text-warm-400 mb-1">Start Time</label>
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                    />
+                  </div>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Times are in your local timezone.</p>
                 </div>
-                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Times are in your local timezone.</p>
-              </div>
-              <div>
-                <label htmlFor="endDate" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">End Date</label>
-                <input
-                  id="endDate"
-                  type="date"
-                  name="endDate"
-                  value={formData.endDate}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  min={new Date().toISOString().split('T')[0]}
-                  required
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                />
-                {validationErrors.endDate && touchedFields.has('endDate') && (
-                  <p className="text-red-600 text-xs mt-1">{validationErrors.endDate}</p>
-                )}
-                <div className="mt-2">
-                  <label className="block text-xs font-medium text-warm-600 dark:text-warm-400 mb-1">End Time</label>
+                <div>
+                  <label htmlFor="endDate" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">End Date</label>
                   <input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                    id="endDate"
+                    type="date"
+                    name="endDate"
+                    value={formData.endDate}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    min={new Date().toISOString().split('T')[0]}
+                    required={!formData.isShopMode}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                   />
+                  {validationErrors.endDate && touchedFields.has('endDate') && (
+                    <p className="text-red-600 text-xs mt-1">{validationErrors.endDate}</p>
+                  )}
+                  <div className="mt-2">
+                    <label className="block text-xs font-medium text-warm-600 dark:text-warm-400 mb-1">End Time</label>
+                    <input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 text-sm"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Shop Mode Info */}
+            {formData.isShopMode && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100">
+                  ✓ Your shop stays live automatically. Items you add are visible to shoppers immediately.
+                </p>
+              </div>
+            )}
 
             {/* Location */}
             <div>

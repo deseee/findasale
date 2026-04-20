@@ -46,6 +46,7 @@ interface Sale {
   zip: string;
   status: string;
   photoUrls: string[];
+  isShopMode?: boolean;
 }
 
 const OrganizerStorefront = () => {
@@ -340,15 +341,28 @@ const OrganizerStorefront = () => {
                         <p className="text-sm text-warm-600 dark:text-gray-400 mb-2">
                           {sale.city}, {sale.state}
                         </p>
-                        <div
-                          className="inline-block text-xs font-semibold px-3 py-1 rounded-full"
-                          style={{
-                            backgroundColor: brandKit.brandPrimaryColor || '#8FB897',
-                            color: 'white',
-                          }}
-                        >
-                          {dateStr}
-                        </div>
+                        {sale.isShopMode ? (
+                          <div className="flex flex-col gap-2">
+                            <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 w-fit">
+                              🟢 Always Open
+                            </div>
+                            {brandKit.pickupWindows && (
+                              <p className="text-xs text-warm-600 dark:text-gray-400 whitespace-pre-line">
+                                {brandKit.pickupWindows}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div
+                            className="inline-block text-xs font-semibold px-3 py-1 rounded-full"
+                            style={{
+                              backgroundColor: brandKit.brandPrimaryColor || '#8FB897',
+                              color: 'white',
+                            }}
+                          >
+                            {dateStr}
+                          </div>
+                        )}
                       </div>
                     </Link>
                   );
