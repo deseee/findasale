@@ -36,9 +36,11 @@ import { prisma } from '../lib/prisma';
 // PUBLIC_ITEM_FILTER — Combines draftStatus check with grace-lock status
 // Excludes DRAFT items (actively being edited by organizers)
 // Excludes GRACE_LOCKED items (hidden from shoppers during grace period downgrade)
+// Excludes PRIVATE items (organizer is pricing, repairing, or holding for specific customer)
 // Includes PENDING_REVIEW and PUBLISHED items
 export const PUBLIC_ITEM_FILTER: Prisma.ItemWhereInput = {
-  status: { notIn: ['GRACE_LOCKED'] }
+  status: { notIn: ['GRACE_LOCKED'] },
+  isPrivate: false, // Feature #XXX: Shop Mode — exclude private items
 };
 
 /**

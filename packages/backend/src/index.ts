@@ -198,6 +198,7 @@ import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
+import { scheduleShopAutoRenewCron } from './jobs/shopAutoRenewJob'; // Feature #XXX: Shop Mode auto-renewal
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -556,6 +557,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #91: Register auto-markdown cron
   scheduleMarkdownCron();
+
+  // Feature #XXX: Register shop auto-renewal cron (daily at 1 AM UTC)
+  scheduleShopAutoRenewCron();
 
   // Feature #244 Phase 3: Register eBay sold sync cron (every 15 minutes — polling fallback)
   startEbaySoldSyncCron();

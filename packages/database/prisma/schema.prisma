@@ -318,6 +318,8 @@ model Organizer {
   donations               SaleDonation[]
   // POS Upgrade: Open Cart sessions and payment links
   posSessions             POSSession[]
+  // Feature #XXX: Shop Mode — always-live storefronts for shops/antique dealers
+  hasShopMode             Boolean                @default(false)
   posPaymentLinks         POSPaymentLink[]
   // Feature #48: Treasure Trails — organizer-created discovery trails
   trails                  TreasureTrail[]        @relation("OrganizerTrails")
@@ -651,6 +653,9 @@ model Sale {
   prepTasks                   PrepTask[]               @relation("SalePrepTasks")
   // eBay inventory import: hidden DRAFT container sale for organizer's inventory items
   isInventoryContainer        Boolean                  @default(false)
+  // Feature #XXX: Shop Mode — always-live storefronts for shops/antique dealers
+  isShopMode                  Boolean                  @default(false)
+  shopAutoRenewDays           Int                      @default(30) // Days until auto-renewal (default 30)
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -841,6 +846,8 @@ model Item {
   // Feature: Graceful Tier Degradation — grace lock status
   graceLockedAt              DateTime? // When item was locked due to tier downgrade
   graceLockedReason          String? // Reason for grace lock (e.g., "items_over_limit")
+  // Feature #XXX: Shop Mode — Private inventory items
+  isPrivate                  Boolean                @default(false) // Hidden from shoppers (pricing, repairing, hold for customer)
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 

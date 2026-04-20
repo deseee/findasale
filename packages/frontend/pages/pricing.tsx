@@ -86,6 +86,8 @@ const TIERS: PricingTier[] = [
       'Everything in Pro, plus:',
       'Unlimited Items* — perfect for shops with 800+ pieces',
       'Unlimited sales*, Unlimited photos*, Unlimited auto tags*',
+      'Always-Live Storefront* — items stay listed until sold',
+      'Shop Mode — auto-renewing storefront for resale shops & antique dealers',
       'Rotating inventory — move items between sales, nothing lost',
       'Command Center — manage all sales at once',
       'Multi-user workspace — Up to 12 team members',
