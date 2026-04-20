@@ -372,7 +372,7 @@ Features fully shipped and verified by both Claude and Patrick. Compact format �
 | 243 | Smart Cart (Running Total) | SHO | SIMPLE | Chrome-verified S376. localStorage shopper cart, drawer, FAB, cross-sale switch. |
 | 140 | Sale Calendar View | BOTH | SIMPLE | Organizer + shopper views, events render, click → sale detail. |
 | 151 | Notification Inbox | BOTH | SIMPLE | In-app notification center with timestamps + navigation. |
-| 162 | Stripe Terminal POS (v2) | ORG | SIMPLE | Chrome-verified S406b+S407. Cash/QR/Reader/Invoice tiles. Multi-item + cash change calc. |
+| 162 | Stripe Terminal POS (v2) | ORG | SIMPLE | Chrome-verified S406b+S407. Cash/QR/Reader/Invoice tiles. Multi-item + cash change calc. ADR: `claude_docs/feature-notes/stripe-terminal-pos-adr.md`. Hardware guide (organizer-facing, PWA-compatible readers only): `claude_docs/guides/stripe-card-reader-hardware-guide.md`. |
 |  22 | Low-Bandwidth Mode (PWA) | BOTH | SIMPLE | Network API detection, LowBandwidthContext, image compression on slow networks. |
 |  65 | Organizer Mode Tiers (Simple/Pro/Teams) | ORG | PRO | S289+S290 tier infrastructure — SubscriptionTier enum, tierGate, requireTier, Stripe billing, Progressive Disclosure. |
 |  30 | AI Item Valuation & Comparables | ORG | PRO | S202: ValuationWidget (PRO-gated) on add-items. Suggestions + CTA. |
