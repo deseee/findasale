@@ -36,6 +36,7 @@
     "node-cron": "^3.0.2",
     "nodemon": "^2.0.22",
     "pdfkit": "^0.15.0",
+    "puppeteer": "^24.42.0",
     "qrcode": "^1.5.4",
     "rate-limit-redis": "^4.2.0",
     "redis": "^4.7.0",
