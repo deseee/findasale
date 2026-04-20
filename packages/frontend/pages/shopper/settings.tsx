@@ -21,19 +21,6 @@ const SALE_CATEGORIES = [
   'antiques', 'jewelry', 'books', 'tools', 'electronics', 'clothing', 'home', 'other'
 ];
 
-const COLLECTOR_TITLES = [
-  'Furniture Curator',
-  'Vintage Hunter',
-  'Antique Aficionado',
-  'Book Collector',
-  'Jewelry Hunter',
-  'Mid-Century Modernist',
-  'Kitchen Collector',
-  'Art Enthusiast',
-  'Tool Time',
-  'General Picker'
-];
-
 function SettingsPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
@@ -43,10 +30,10 @@ function SettingsPage() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [profileSlug, setProfileSlug] = useState<string>('');
-  const [collectorTitle, setCollectorTitle] = useState<string>('');
   const [purchasesVisible, setPurchasesVisible] = useState<boolean>(true);
   const [isFeedbackMenuOpen, setIsFeedbackMenuOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState<string>('');
+  const [spendableXp, setSpendableXp] = useState<number>(0);
 
   useEffect(() => {
     setMounted(true);
@@ -62,10 +49,26 @@ function SettingsPage() {
   useEffect(() => {
     if (user) {
       setProfileSlug(user.profileSlug || '');
-      setCollectorTitle(user.collectorTitle || '');
       setPurchasesVisible(user.purchasesVisible !== false);
     }
   }, [user]);
+
+  // Fetch XP profile data for slug unlock UI
+  const { data: xpProfile } = useQuery({
+    queryKey: ['xpProfile'],
+    queryFn: async () => {
+      const response = await api.get('/xp/profile');
+      return response.data;
+    },
+    enabled: !!user,
+  });
+
+  // Update spendable XP when profile loads
+  useEffect(() => {
+    if (xpProfile?.spendableXp !== undefined) {
+      setSpendableXp(xpProfile.spendableXp);
+    }
+  }, [xpProfile]);
 
   // Mutation for updating category interests
   const updateInterestsMutation = useMutation({
@@ -85,7 +88,7 @@ function SettingsPage() {
 
   // Mutation for updating profile settings
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { profileSlug?: string | null; collectorTitle?: string | null; purchasesVisible?: boolean }) => {
+    mutationFn: async (data: { profileSlug?: string | null; purchasesVisible?: boolean }) => {
       const response = await api.patch('/users/me', data);
       return response.data;
     },
@@ -361,33 +364,29 @@ function SettingsPage() {
             )}
 
             <div className="space-y-6">
-              {/* Collector Title */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">
-                  Collector Title (Optional)
-                </label>
-                <select
-                  value={collectorTitle}
-                  onChange={(e) => setCollectorTitle(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
-                >
-                  <option value="">Select a title...</option>
-                  {COLLECTOR_TITLES.map((title) => (
-                    <option key={title} value={title}>
-                      {title}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Show other shoppers what you collect
-                </p>
-              </div>
-
               {/* Profile Slug */}
               <div>
-                <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">
-                  Profile Slug (Optional)
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400">
+                    Custom Profile URL
+                  </label>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    user?.profileSlug
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                  }`}>
+                    {user?.profileSlug ? '✓ Unlocked — free to change' : '🔒 Costs 1500 XP to unlock'}
+                  </span>
+                </div>
+
+                {!user?.profileSlug && spendableXp < 1500 && (
+                  <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      Need {1500 - spendableXp} more XP to unlock your custom profile URL. You currently have {spendableXp} XP.
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-center">
                   <span className="text-gray-600 dark:text-gray-400 mr-2">findasale.com/shoppers/</span>
                   <input
@@ -396,7 +395,10 @@ function SettingsPage() {
                     onChange={(e) => setProfileSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                     placeholder="your-custom-url"
                     maxLength={50}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+                    disabled={!user?.profileSlug && spendableXp < 1500}
+                    className={`flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 ${
+                      !user?.profileSlug && spendableXp < 1500 ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   />
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -426,10 +428,9 @@ function SettingsPage() {
               <button
                 onClick={() => updateProfileMutation.mutate({
                   profileSlug: profileSlug || null,
-                  collectorTitle: collectorTitle || null,
                   purchasesVisible,
                 })}
-                disabled={updateProfileMutation.isPending}
+                disabled={updateProfileMutation.isPending || (!user?.profileSlug && profileSlug && spendableXp < 1500)}
                 className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2 px-6 rounded-lg transition-colors"
               >
                 {updateProfileMutation.isPending ? 'Saving...' : 'Save Profile Settings'}

@@ -23,6 +23,124 @@ const convertDecimalsToNumbers = (obj: any) => {
   return converted;
 };
 
+// ---------------------------------------------------------------------------
+// GET /api/insights/organizer/sale/:saleId
+// Per-sale analytics: item breakdown, revenue, shopper engagement, pickup slots.
+// ---------------------------------------------------------------------------
+export const getPerSaleAnalytics = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+    if (!saleId) {
+      return res.status(400).json({ message: 'saleId is required' });
+    }
+
+    // Verify the sale belongs to this organizer
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, organizerId: organizer.id },
+      select: { id: true, title: true },
+    });
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found or access denied' });
+    }
+
+    // Item counts by status
+    const items = await prisma.item.findMany({
+      where: { saleId },
+      select: {
+        id: true,
+        title: true,
+        price: true,
+        status: true,
+        favorites: { select: { id: true } },
+      },
+    });
+
+    const itemsSold = items.filter(i => i.status === 'SOLD').length;
+    const itemsAvailable = items.filter(i => i.status === 'AVAILABLE').length;
+    const itemsOnHold = items.filter(i => i.status === 'RESERVED' || i.status === 'AUCTION_ENDED').length;
+
+    // Revenue from PAID purchases for this sale
+    const purchases = await prisma.purchase.findMany({
+      where: { saleId, status: 'PAID' },
+      select: { amount: true, createdAt: true },
+    });
+    const totalRevenue = purchases.reduce((sum, p) => sum + p.amount, 0);
+    const purchaseCount = purchases.length;
+
+    // Top items by favorite count (top 10)
+    const topItems = items
+      .map(i => ({
+        id: i.id,
+        title: i.title,
+        price: i.price ? Number(i.price) : 0,
+        status: i.status,
+        favoriteCount: i.favorites.length,
+      }))
+      .sort((a, b) => b.favoriteCount - a.favoriteCount)
+      .slice(0, 10);
+
+    // Shopper engagement
+    const [wishlistCount, waitlistCount, uniqueVisitors] = await Promise.all([
+      prisma.favorite.count({ where: { saleId } }),
+      prisma.saleWaitlist.count({ where: { saleId } }),
+      prisma.saleSubscriber.count({ where: { saleId } }),
+    ]);
+
+    // Pickup appointments with booking count
+    const pickupSlots = await prisma.pickupSlot.findMany({
+      where: { saleId },
+      include: { bookings: { select: { id: true } } },
+      orderBy: { startsAt: 'asc' },
+    });
+    const pickupAppointments = pickupSlots.map(slot => ({
+      startsAt: slot.startsAt.toISOString(),
+      endsAt: slot.endsAt.toISOString(),
+      capacity: slot.capacity,
+      booked: slot.bookings.length,
+    }));
+
+    // Revenue timeline: group purchases by calendar date
+    const revenueByDate: Record<string, number> = {};
+    for (const p of purchases) {
+      const date = p.createdAt.toISOString().slice(0, 10); // YYYY-MM-DD
+      revenueByDate[date] = (revenueByDate[date] ?? 0) + p.amount;
+    }
+    const revenueTimeline = Object.entries(revenueByDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, revenue]) => ({ date, revenue }));
+
+    return res.json({
+      saleId: sale.id,
+      saleName: sale.title,
+      itemsSold,
+      itemsAvailable,
+      itemsOnHold,
+      totalItems: items.length,
+      totalRevenue,
+      purchaseCount,
+      topItems,
+      uniqueVisitors,
+      wishlistCount,
+      waitlistCount,
+      pickupAppointments,
+      revenueTimeline,
+    });
+  } catch (error) {
+    console.error('[insightsController] getPerSaleAnalytics error:', error);
+    return res.status(500).json({ message: 'Server error while fetching sale analytics' });
+  }
+};
+
 export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';

@@ -406,7 +406,6 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
         streakPoints: true,
         profileSlug: true,
         purchasesVisible: true,
-        collectorTitle: true,
         userBadges: {
           include: {
             badge: {
@@ -487,7 +486,6 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
       streakPoints: user.streakPoints,
       profileSlug: user.profileSlug,
       purchasesVisible: user.purchasesVisible,
-      collectorTitle: user.collectorTitle,
       totalPurchases: user._count.purchases,
       totalFavorites: user._count.favorites,
       totalWishlists: user._count.wishlists,

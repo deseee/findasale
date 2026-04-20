@@ -44,9 +44,9 @@ export const ActionBar: React.FC<ActionBarProps> = ({ className = '', onQrClick 
       href: '/shopper/history?view=gallery',
     },
     {
-      label: 'Explorer Passport',
+      label: 'Explorer Profile',
       icon: '🗺️',
-      href: '/shopper/explorer-passport',
+      href: '/shopper/explorer-profile',
     },
     {
       label: 'Rank Benefits',

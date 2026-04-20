@@ -25,6 +25,22 @@ const CATEGORY_ICONS: Record<string, string> = {
   other: '📦',
 };
 
+/** Decode HTML entities stored in DB category names (e.g. &amp; → &). */
+function decodeHTMLEntities(str: string): string {
+  if (typeof document !== 'undefined') {
+    const txt = document.createElement('textarea');
+    txt.innerHTML = str;
+    return txt.value;
+  }
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+}
+
 const CategoriesIndexPage = () => {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['item-categories'],
@@ -103,12 +119,14 @@ const CategoriesIndexPage = () => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {entries.map(([cat, count]) => {
-              const label = cat.charAt(0).toUpperCase() + cat.slice(1);
-              const icon = CATEGORY_ICONS[cat] ?? '📦';
+              const decoded = decodeHTMLEntities(cat);
+              const label = decoded.charAt(0).toUpperCase() + decoded.slice(1);
+              const iconKey = decoded.toLowerCase().trim();
+              const icon = CATEGORY_ICONS[iconKey] ?? CATEGORY_ICONS[cat.toLowerCase().trim()] ?? '📦';
               return (
                 <Link
                   key={cat}
-                  href={`/categories/${cat}`}
+                  href={`/categories/${encodeURIComponent(cat)}`}
                   className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col items-start gap-2 border border-warm-100 hover:border-amber-200"
                 >
                   <span className="text-3xl" role="img" aria-label={label}>

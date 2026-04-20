@@ -99,7 +99,7 @@ const ExplorerGuildOnboardingCard: React.FC<ExplorerGuildOnboardingCardProps> = 
         </p>
         <div className="space-y-2 text-xs text-gray-700 dark:text-gray-300">
           <div className="flex gap-2">
-            <span className="flex-shrink-0">+2 XP</span>
+            <span className="flex-shrink-0">+5 XP</span>
             <span>Visit a sale (check-in)</span>
           </div>
           <div className="flex gap-2">
@@ -107,7 +107,7 @@ const ExplorerGuildOnboardingCard: React.FC<ExplorerGuildOnboardingCardProps> = 
             <span>Scan a QR code</span>
           </div>
           <div className="flex gap-2">
-            <span className="flex-shrink-0">+25 XP</span>
+            <span className="flex-shrink-0">+10 XP</span>
             <span>Make a purchase</span>
           </div>
         </div>
