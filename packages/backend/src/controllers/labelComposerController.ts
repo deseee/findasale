@@ -294,6 +294,8 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
         const row = Math.floor(idx / COLS);
         const cellX = LEFT_MARGIN + col * (CELL_W + H_GAP);
         const cellY = TOP_MARGIN + row * CELL_H;
+        // Progressive left correction: printer registration drifts right-ward across columns
+        const xPad = [0, 3, 6][col] ?? 0; // col 0 = none, col 1 = +3pt, col 2 = +6pt
 
         // QR code — left side
         const qrUrl = `${FRONTEND_URL}/t/${tag.tagId}`;
@@ -303,14 +305,14 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
           margin: 1,
           color: { dark: '#000000', light: '#ffffff' },
         });
-        doc.image(qrBuffer, cellX + 4, cellY + 12, { width: QR_SIZE_LABEL, height: QR_SIZE_LABEL });
+        doc.image(qrBuffer, cellX + 4 + xPad, cellY + 12, { width: QR_SIZE_LABEL, height: QR_SIZE_LABEL });
 
         // Sale name — top, tiny
         doc
           .font('Helvetica')
           .fontSize(6)
           .fillColor('#666666')
-          .text(batch.saleTitle, cellX + 58, cellY + 5, { width: 123, lineBreak: false });
+          .text(batch.saleTitle, cellX + 58 + xPad, cellY + 5, { width: 123 - xPad, lineBreak: false });
 
         // Price — large bold
         const priceText = `$${tag.price.toFixed(2)}`;
@@ -318,21 +320,21 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
           .font('Helvetica-Bold')
           .fontSize(18)
           .fillColor('#000000')
-          .text(priceText, cellX + 58, cellY + 18, { width: 100, lineBreak: false });
+          .text(priceText, cellX + 58 + xPad, cellY + 18, { width: 100, lineBreak: false });
 
-        // finda.sale wordmark — bottom left
+        // finda.sale wordmark — bottom left (pulled up for bottom breathing room)
         doc
           .font('Helvetica')
           .fontSize(5)
           .fillColor('#999999')
-          .text('finda.sale', cellX + 58, cellY + 56, { width: 80, lineBreak: false });
+          .text('finda.sale', cellX + 58 + xPad, cellY + 50, { width: 80, lineBreak: false });
 
-        // Date range — bottom right
+        // Date range — bottom right (right-anchored, no column shift)
         doc
           .font('Helvetica')
           .fontSize(5)
           .fillColor('#999999')
-          .text(batch.saleDates, cellX + 140, cellY + 56, { width: 45, align: 'right', lineBreak: false });
+          .text(batch.saleDates, cellX + 140, cellY + 50, { width: 45, align: 'right', lineBreak: false });
       }
     }
 

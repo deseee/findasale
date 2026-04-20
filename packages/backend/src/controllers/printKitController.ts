@@ -107,6 +107,8 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
     const TOP_MARGIN = 36;    // Avery 5160: 1/2" = 36pt
     const H_GAP = 9;          // Avery 5160: 1/8" column gutter = 9pt
     const QR_SIZE = 48;
+    // Progressive left correction: printer registration drifts right-ward across columns
+    const COL_PAD = [0, 3, 6]; // col 0 = no correction, col 1 = +3pt, col 2 = +6pt
 
     // For each item (index i):
     for (let i = 0; i < items.length; i++) {
@@ -119,6 +121,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       const row = Math.floor((i % (COLS_STICKER * ROWS_STICKER)) / COLS_STICKER);
       const sX = LEFT_MARGIN + col * (STICKER_W + H_GAP); // pitch = 198pt (2.75")
       const sY = TOP_MARGIN + row * STICKER_H;
+      const xPad = COL_PAD[col] ?? 0;
       const item = items[i];
 
       // Item title (truncate to ~30 chars)
@@ -127,7 +130,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
         .font('Helvetica')
         .fontSize(7)
         .fillColor('#1a1a2e')
-        .text(titleText, sX + 58, sY + 6, { width: 123, lineBreak: false });
+        .text(titleText, sX + 58 + xPad, sY + 6, { width: 123 - xPad, lineBreak: false });
 
       // Price
       const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'N/A';
@@ -135,17 +138,17 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
         .font('Helvetica-Bold')
         .fontSize(14)
         .fillColor('#16a34a')
-        .text(priceText, sX + 58, sY + 20, { width: 100, lineBreak: false });
+        .text(priceText, sX + 58 + xPad, sY + 20, { width: 100, lineBreak: false });
 
-      // Item ID
+      // Item ID — pulled up slightly for bottom breathing room
       doc
         .font('Helvetica')
         .fontSize(5)
         .fillColor('#999999')
-        .text(item.id, sX + 58, sY + 46, { width: 123, lineBreak: false });
+        .text(item.id, sX + 58 + xPad, sY + 44, { width: 123 - xPad, lineBreak: false });
 
       // QR — left side, vertically centered
-      doc.image(itemQrBuffers[i], sX + 4, sY + 12, { width: QR_SIZE, height: QR_SIZE });
+      doc.image(itemQrBuffers[i], sX + 4 + xPad, sY + 12, { width: QR_SIZE, height: QR_SIZE });
     }
 
     doc.end();
@@ -975,6 +978,9 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
   const LEFT_MARGIN = 13.5;  // Avery 5160: 3/16" = 13.5pt
   const TOP_MARGIN = 36;     // Avery 5160: 1/2" = 36pt
 
+  // Progressive left correction: printer registration drifts right-ward across columns
+  const COL_PAD_PRICE = [0, 3, 6]; // col 0 = no correction, col 1 = +3pt, col 2 = +6pt
+
   for (let i = 0; i < prices.length; i++) {
     if (i > 0 && i % 30 === 0) {
       doc.addPage({ size: 'LETTER', margin: 0 });
@@ -984,13 +990,14 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
     const row = Math.floor((i % 30) / COLS);
     const cellX = LEFT_MARGIN + col * (CELL_W + H_GAP);
     const cellY = TOP_MARGIN + row * CELL_H;
+    const xPad = COL_PAD_PRICE[col] ?? 0;
 
     // Sale name — top, tiny
     doc
       .font('Helvetica')
       .fontSize(6)
       .fillColor('#666666')
-      .text(saleTitle, cellX + 58, cellY + 5, { width: 123, lineBreak: false });
+      .text(saleTitle, cellX + 58 + xPad, cellY + 5, { width: 123 - xPad, lineBreak: false });
 
     // Price — large bold
     const priceText = `$${prices[i].toFixed(2)}`;
@@ -998,14 +1005,14 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
       .font('Helvetica-Bold')
       .fontSize(18)
       .fillColor('#1a1a2e')
-      .text(priceText, cellX + 58, cellY + 18, { width: 100, lineBreak: false });
+      .text(priceText, cellX + 58 + xPad, cellY + 18, { width: 100, lineBreak: false });
 
-    // finda.sale — bottom left, tiny
+    // finda.sale — bottom left, tiny (pulled up for bottom breathing room)
     doc
       .font('Helvetica')
       .fontSize(5)
       .fillColor('#999999')
-      .text('finda.sale', cellX + 58, cellY + 56, { width: 80, lineBreak: false });
+      .text('finda.sale', cellX + 58 + xPad, cellY + 50, { width: 80, lineBreak: false });
 
     // QR code — left side, standardized label size
     const miscQrUrl = `${frontendUrl}/pos/${saleId}?action=add-misc&price=${prices[i].toFixed(2)}`;
@@ -1015,7 +1022,7 @@ async function renderPriceSheet(doc: any, saleId: string, saleTitle: string, fro
       margin: 1,
       color: { dark: '#000000', light: '#ffffff' },
     });
-    doc.image(miscQrBuffer, cellX + 4, cellY + 12, { width: QR_SIZE_PRICE, height: QR_SIZE_PRICE });
+    doc.image(miscQrBuffer, cellX + 4 + xPad, cellY + 12, { width: QR_SIZE_PRICE, height: QR_SIZE_PRICE });
   }
 }
 
