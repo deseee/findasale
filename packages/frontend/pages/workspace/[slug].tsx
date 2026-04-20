@@ -116,6 +116,9 @@ export default function WorkspacePage() {
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // View toggle: briefing vs dashboard
+  const [forceDashboard, setForceDashboard] = useState(false);
+
   // Tasks state
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -270,9 +273,6 @@ export default function WorkspacePage() {
       </>
     );
   }
-
-  // View toggle: briefing vs dashboard (state declared inline since hooks can't be conditional)
-  const [forceDashboard, setForceDashboard] = useState(false);
 
   // Morning Briefing: if a qualifying sale exists and user hasn't toggled away, render briefing
   if (briefingData?.briefing && !forceDashboard) {
