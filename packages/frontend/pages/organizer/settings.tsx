@@ -42,6 +42,7 @@ const OrganizerSettingsPage = () => {
   const [facebook, setFacebook] = useState('');
   const [instagram, setInstagram] = useState('');
   const [etsy, setEtsy] = useState('');
+  const [pickupWindows, setPickupWindows] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
@@ -121,6 +122,7 @@ const OrganizerSettingsPage = () => {
           setFacebook(response.data.facebook || '');
           setInstagram(response.data.instagram || '');
           setEtsy(response.data.etsy || '');
+          setPickupWindows(response.data.pickupWindows || '');
           setStripeConnected(response.data.stripeConnected || false);
         }
       } catch (error) {
@@ -240,6 +242,7 @@ const OrganizerSettingsPage = () => {
         facebook,
         instagram,
         etsy,
+        pickupWindows,
       });
       // Refetch organizer data to sync local state with backend
       const response = await api.get('/organizers/me');
@@ -250,6 +253,7 @@ const OrganizerSettingsPage = () => {
         setFacebook(response.data.facebook || '');
         setInstagram(response.data.instagram || '');
         setEtsy(response.data.etsy || '');
+        setPickupWindows(response.data.pickupWindows || '');
       }
       showToast('Profile updated', 'success');
       showSurvey('OG-5');
@@ -655,6 +659,17 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setEtsy(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://etsy.com/shop/yourshop"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Shop Hours</label>
+                  <textarea
+                    value={pickupWindows}
+                    onChange={(e) => setPickupWindows(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="e.g., Mon-Fri: 10am-5pm&#10;Sat: 9am-3pm&#10;Sun: Closed"
+                    rows={3}
                   />
                 </div>
 

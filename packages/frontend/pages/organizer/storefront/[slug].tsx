@@ -23,6 +23,7 @@ interface BrandKitData {
   facebook: string | null;
   instagram: string | null;
   etsy: string | null;
+  pickupWindows: string | null;
   brandLogoUrl: string | null;
   brandPrimaryColor: string | null;
   brandSecondaryColor: string | null;
@@ -78,6 +79,7 @@ const OrganizerStorefront = () => {
           facebook: orgData.facebook,
           instagram: orgData.instagram,
           etsy: orgData.etsy,
+          pickupWindows: orgData.pickupWindows,
           brandLogoUrl: orgData.brandLogoUrl,
           brandPrimaryColor: orgData.brandPrimaryColor,
           brandSecondaryColor: orgData.brandSecondaryColor,
@@ -187,6 +189,16 @@ const OrganizerStorefront = () => {
                 <p className="text-warm-700 dark:text-gray-300 mb-6">
                   {brandKit.bio || 'A professional sale organizer serving the Grand Rapids area.'}
                 </p>
+
+                {/* Shop Hours */}
+                {brandKit.pickupWindows && (
+                  <div className="mb-6 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
+                    <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-2">Hours</h3>
+                    <p className="text-sm text-warm-700 dark:text-gray-300 whitespace-pre-line">
+                      {brandKit.pickupWindows}
+                    </p>
+                  </div>
+                )}
 
                 {/* Social Links */}
                 <div className="space-y-3">

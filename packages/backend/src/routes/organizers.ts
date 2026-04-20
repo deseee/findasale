@@ -24,6 +24,7 @@ const organizerProfileSchema = z.object({
   facebook: z.string().optional(),
   instagram: z.string().optional(),
   etsy: z.string().optional(),
+  pickupWindows: z.string().optional().or(z.literal('')),
   brandLogoUrl: z.string().url().optional().or(z.literal('')),
   brandPrimaryColor: z.string().optional(),
   brandSecondaryColor: z.string().optional(),
@@ -283,7 +284,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, onboardingComplete, website, facebook, instagram, etsy, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor } = validatedData;
+    const { businessName, phone, bio, onboardingComplete, website, facebook, instagram, etsy, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -304,6 +305,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(facebook !== undefined && { facebook }),
         ...(instagram !== undefined && { instagram }),
         ...(etsy !== undefined && { etsy }),
+        ...(pickupWindows !== undefined && { pickupWindows }),
         ...(brandLogoUrl !== undefined && { brandLogoUrl }),
         ...(brandPrimaryColor !== undefined && { brandPrimaryColor }),
         ...(brandSecondaryColor !== undefined && { brandSecondaryColor }),
@@ -793,6 +795,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       phone: organizer.phone,
       address: organizer.address,
       reputationTier: organizer.reputationTier,
+      pickupWindows: organizer.pickupWindows,
       sales: organizer.sales,
       badges: organizer.user?.userBadges?.map((ub: any) => ({
         id: ub.badge.id,
