@@ -139,11 +139,11 @@ export default function PromotePage(): JSX.Element {
     return (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto px-4 py-8">
-          <Skeleton className="h-12 w-64 mb-4" />
-          <Skeleton className="h-6 w-96 mb-8" />
+          <div className="h-12 w-64 mb-4 animate-pulse bg-warm-200 dark:bg-gray-700 rounded" />
+          <div className="h-6 w-96 mb-8 animate-pulse bg-warm-200 dark:bg-gray-700 rounded" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-64 w-full" />
+              <div key={i} className="h-64 w-full animate-pulse bg-warm-200 dark:bg-gray-700 rounded" />
             ))}
           </div>
         </div>
@@ -277,13 +277,7 @@ export default function PromotePage(): JSX.Element {
 
   // Nextdoor post text (inline, no modal needed)
   const nextdoorText = sale
-    ? `Neighbors — ${sale.title} this ${new Date(sale.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(sale.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}
-
-Open to the public. ${itemCount > 0 ? `${itemCount}+ items` : 'Items'} include furniture, household goods, collectibles, and more. Early arrival recommended.
-
-Full item list at finda.sale — search "${sale.city}"
-
-Hope to see some familiar faces!`
+    ? `Neighbors — ${sale.title} this ${new Date(sale.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(sale.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}\n\nOpen to the public. ${itemCount > 0 ? `${itemCount}+ items` : 'Items'} include furniture, household goods, collectibles, and more. Early arrival recommended.\n\nFull item list at finda.sale — search "${sale.city}"\n\nHope to see some familiar faces!`
     : '';
 
   const copyNextdoorPost = async () => {
