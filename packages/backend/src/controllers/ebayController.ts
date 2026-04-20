@@ -3868,21 +3868,12 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
             continue; // Skip this item, proceed to next
           }
 
-          let ebayData: { Item?: { ItemID: string; ListingStatus: string } };
-          try {
-            ebayData = JSON.parse(ebayText);
-          } catch (parseErr) {
-            console.warn(`[eBay EndedSync] Failed to parse response for item ${item.ebayListingId}:`, parseErr);
+          // Extract ListingStatus from XML response (eBay Trading API returns XML)
+          const status = xmlVal(ebayText, 'ListingStatus') || '';
+          if (!status) {
+            console.warn(`[eBay EndedSync] No ListingStatus in response for ${item.ebayListingId}`);
             continue; // Skip this item, proceed to next
           }
-
-          const ebayItem = ebayData.Item;
-          if (!ebayItem) {
-            console.warn(`[eBay EndedSync] No Item in response for ${item.ebayListingId}`);
-            continue; // Skip this item, proceed to next
-          }
-
-          const status = ebayItem.ListingStatus || '';
           result.checked++;
 
           // If listing is ENDED or COMPLETED, clear the eBay fields
