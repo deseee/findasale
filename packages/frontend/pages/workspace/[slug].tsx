@@ -14,12 +14,17 @@ interface WorkspaceMember {
   organizerId: string;
   role: string;
   acceptedAt: string | null;
-  organizer: {
+  organizer?: {
     id: string;
     businessName: string;
     profilePhoto?: string;
     user?: { email: string };
-  };
+  } | null;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
 }
 
 interface WorkspaceSale {
@@ -327,23 +332,13 @@ export default function WorkspacePage() {
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">
-                {workspace.name}
-              </h1>
-              <p className="text-warm-600 dark:text-warm-400">
-                Team collaboration hub
-              </p>
-            </div>
-            {isOwner && (
-              <a
-                href={`/organizer/workspace`}
-                className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition whitespace-nowrap"
-              >
-                Workspace Settings
-              </a>
-            )}
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">
+              {workspace.name}
+            </h1>
+            <p className="text-warm-600 dark:text-warm-400">
+              Team collaboration hub
+            </p>
           </div>
 
           {/* Workspace Description */}
@@ -388,6 +383,18 @@ export default function WorkspacePage() {
               </p>
             </div>
           </div>
+
+          {/* Workspace Settings — below quick stats */}
+          {isOwner && (
+            <div className="mt-6">
+              <a
+                href="/organizer/workspace"
+                className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition"
+              >
+                Workspace Settings
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Two-column layout for team and activity */}
@@ -419,21 +426,24 @@ export default function WorkspacePage() {
               {/* Other Members */}
               {acceptedMembers.length > 0 ? (
                 <div className="space-y-4">
-                  {acceptedMembers.map((member) => (
-                    <div key={member.id} className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-warm-300 to-warm-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                        {(member.organizer?.businessName || member.organizer?.user?.email || '?')[0].toUpperCase()}
+                  {acceptedMembers.map((member) => {
+                    const memberName = member.organizer?.businessName || (member as any).user?.name || member.organizer?.user?.email || (member as any).user?.email || 'Team Member';
+                    return (
+                      <div key={member.id} className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-warm-300 to-warm-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                          {memberName[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm truncate">
+                            {memberName}
+                          </p>
+                          <p className="text-xs text-warm-600 dark:text-warm-400 capitalize">
+                            {member.role?.toLowerCase() ?? 'member'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm truncate">
-                          {member.organizer?.businessName || member.organizer?.user?.email || 'Team Member'}
-                        </p>
-                        <p className="text-xs text-warm-600 dark:text-warm-400 capitalize">
-                          {member.role?.toLowerCase() ?? 'member'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4 text-center">
