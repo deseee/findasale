@@ -7,6 +7,15 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S521 (2026-04-20) — Vercel build fix**
+
+Diagnosed and fixed the Vercel ERROR on all 4 S520 deployments. Single cause: `promote/[saleId].tsx` line 142 used `<Skeleton>` component without any import. No `Skeleton` component exists in the codebase. Fixed by replacing all 3 `<Skeleton>` usages in the loading state with inline `animate-pulse bg-warm-200 dark:bg-gray-700 rounded` divs (no import needed — pure Tailwind). Pushed via MCP. Vercel auto-deployed; build should be green.
+
+**File changed (S521):**
+- `packages/frontend/pages/organizer/promote/[saleId].tsx` — `<Skeleton>` → animate-pulse divs in loading state (MCP pushed)
+
+---
+
 **S520 (2026-04-20) — Shop Mode + Share & Promote overhaul**
 
 Two major feature areas shipped.
@@ -1169,6 +1178,9 @@ Files (7):
 
 ## Recent Sessions
 
+- **S521 (2026-04-20):** Vercel build fix. All 4 S520 deployments failed ERROR — single cause: `<Skeleton>` used without import in `promote/[saleId].tsx` loading state. No Skeleton component in codebase. Fixed with animate-pulse divs. MCP pushed. Vercel green.
+- **S520 (2026-04-20):** Shop Mode (auto-renewing storefront for TEAMS resale/antique shops — isShopMode, shopAutoRenewDays, hasShopMode schema + daily cron + create-sale fork + settings toggle + storefront "Always Open"). Share & Promote overhaul (time bug fix, Spotlight tab, dashboard B1/B2 banners, 4-card promote page). Store hours (pickupWindows editable + surfaced). TEAMS pricing copy updated for resale segment. isActive centralized in PUBLIC_ITEM_FILTER (hidden items no longer leak). 16 files + migration. Patrick pushed all commits.
+- **S519 (2026-04-19):** Morning Briefing feature + workspace dashboard fixes. SaleAssignment + PrepTask schema. Briefing detection endpoint. Full MorningBriefing.tsx component (mobile + desktop). Workspace member names fix, info card reorder, hooks crash fix. 8 files.
 - **S518 (2026-04-19):** P1/P2/P3 bug fixes: PostSaleMomentumCard sale-specific stats, Legendary chip SELECT fix, priceBeforeMarkdown on 3 secondary endpoints, Efficiency Coach percentile label fix, pricing.tsx downgrade stub → router.push. Workspace chat empty state fix (allSales not upcomingSales). QA backlog created. Workspace × Sale Command identified as planned feature (Patrick rejected "no integration needed"). Claude Design prompt written for workspace redesign. S518 push block pending Patrick.
 - **S515 (2026-04-19):** Chrome QA: #249 SIMPLE gate P1 fixed (lat/lng null → 400 before 409; fixed to omit null from POST body). #230 Who's Coming ⚠️ empty only. #231 High-Value ✅. #232 Sale Pulse ⚠️ P2 views mismatch. #233 Efficiency Coach ✅. #234 Post-Sale Momentum ⚠️ P1 lifetime revenue shown as sale revenue. Roadmap updated.
 - **S514 (2026-04-19):** Legendary item toggle (edit-item + itemController). Price Research Card redesign (sections reordered, sage green button). Stripe Connect P2 root cause: missing STRIPE_CONNECT_WEBHOOK_SECRET env var. Dark mode P2: FlashDealForm + ExpenseLineItemList. earlyAccessController req.user.id P1 fix. 8 files — NOT YET PUSHED.
@@ -1237,31 +1249,7 @@ Files (7):
 
 ## Next Session Priority
 
-**0. Patrick: run S520 push block (mandatory first action):**
-```powershell
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260420002649_add_shop_mode/migration.sql
-git add packages/backend/src/controllers/saleController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/helpers/itemQueries.ts
-git add packages/backend/src/jobs/shopAutoRenewJob.ts
-git add packages/backend/src/index.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/create-sale.tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add packages/frontend/pages/organizer/storefront/[slug].tsx
-git add "packages/frontend/pages/organizer/promote/[saleId].tsx"
-git add packages/frontend/components/SharePromoteModal.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/pricing.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S520: Shop Mode (auto-renew, private items, shop onboarding path), Share & Promote overhaul, store hours, TEAMS resale copy"
-.\push.ps1
-```
-
-**Then run migration (schema changed):**
+**0. Patrick: run S520 migration (push already done — schema changed):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -1269,7 +1257,16 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**1. Chrome QA — S520 hot items (after push + migration):**
+**1. FAQ/Support: Stripe card reader hardware for POS**
+Add a section to `/faq.tsx` (and/or a new support article) explaining:
+- Which Stripe card readers work with FindA.Sale POS (Stripe Reader M2, BBPOS WisePOS E, Stripe Reader S700)
+- How to order them from the Stripe Dashboard (stripe.com/terminal/hardware)
+- That they connect via Bluetooth or USB (M2 = Bluetooth, S700 = WiFi/LAN)
+- Price range ($59–$299 depending on model)
+- That the POS works on any phone/tablet browser — no dedicated hardware required, tap-to-pay is also supported
+- Dispatch `findasale-dev` to implement after Claude reviews existing faq.tsx content
+
+**2. Chrome QA — S520 hot items (after migration):**
 - Shop Mode toggle in Settings → TEAMS organizer → toggle appears, PATCHes correctly
 - Create sale → "Shop" path → date fields hidden, isShopMode=true on created sale
 - Storefront → shop mode sale → "🟢 Always Open" shows instead of dates; store hours visible if set

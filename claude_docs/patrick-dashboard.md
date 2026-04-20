@@ -1,13 +1,30 @@
 # Patrick's Dashboard — Week of April 20, 2026
 
+## S521 Summary (2026-04-20) — Vercel Build Fix
+
+**What happened:** All 4 S520 deployments errored. Single cause: dev agent used `<Skeleton>` in the promote page loading state without importing it — no Skeleton component exists in the codebase. Fixed with Tailwind `animate-pulse` divs (no import needed). MCP pushed. Vercel should be green.
+
+**No push block needed** — fix went out via MCP.
+
+---
+
 ## S520 Summary (2026-04-20) — Shop Mode + Share & Promote Overhaul
+
+**Push: ✅ Done** (Patrick pushed all commits this session)
+
+**Migration still needed:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
 ### What shipped:
 
 **Share & Promote:**
 - Time bug fixed in all share templates (was showing garbage like "10:01 PM" — Sale has no time field)
 - "Spotlight Item" tab added to SharePromoteModal — pick an item, choose tone + platform, get an AI post
-- Tabs reordered: Nextdoor and neighborhood first (highest value for local foot traffic)
 - Promote page: clean 4-card grid (Facebook export, Nextdoor copy, WhatsApp share, Email)
 - Dashboard: teal "spread the word" banner on published sales with Copy Link + dismiss. Amber reminder banner day-of and day-before.
 
@@ -22,38 +39,6 @@
 - Private items: toggle any item hidden from shoppers while keeping it in your organizer view ("Private" badge)
 - Storefronts in Shop Mode show "🟢 Always Open" instead of sale dates
 - Pricing page updated with resale shop language throughout
-
-### Push block (run this first):
-```powershell
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260420002649_add_shop_mode/migration.sql
-git add packages/backend/src/controllers/saleController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/backend/src/helpers/itemQueries.ts
-git add packages/backend/src/jobs/shopAutoRenewJob.ts
-git add packages/backend/src/index.ts
-git add packages/backend/src/routes/organizers.ts
-git add packages/frontend/pages/organizer/create-sale.tsx
-git add packages/frontend/pages/organizer/settings.tsx
-git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
-git add packages/frontend/pages/organizer/storefront/[slug].tsx
-git add "packages/frontend/pages/organizer/promote/[saleId].tsx"
-git add packages/frontend/components/SharePromoteModal.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/pricing.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S520: Shop Mode (auto-renew, private items, shop onboarding path), Share & Promote overhaul, store hours, TEAMS resale copy"
-.\push.ps1
-```
-
-### Then run migration (schema changed):
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
 
 ### Next sprint for resale segment:
 - Shopper messaging / "Contact Seller" (biggest churn risk for shop owners)
