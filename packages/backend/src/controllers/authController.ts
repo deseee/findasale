@@ -147,7 +147,8 @@ export const register = async (req: Request, res: Response) => {
           include: { organizer: true }
         });
 
-        if (referrer) {
+        // D-XP-004 Phase 2: Self-referral gate — prevent users from using their own referral code
+        if (referrer && (referrer.id !== newUser.id && referrer.email !== email)) {
           // Create referral record atomically
           await tx.referral.create({
             data: {

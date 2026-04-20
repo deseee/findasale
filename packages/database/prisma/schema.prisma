@@ -1798,21 +1798,52 @@ model ProcessedWebhookEvent {
 
 // Task #7: Shopper Referral Rewards — track reward transactions between referrers and referred users
 model ReferralReward {
-  id             String    @id @default(cuid())
-  referrerId     String
-  referrer       User      @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
-  referredUserId String
-  referredUser   User      @relation("ReferralRewardsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
-  rewardType     String // "POINTS" | "CREDIT"
-  rewardValue    Float
-  awardedAt      DateTime  @default(now())
-  redeemedAt     DateTime?
-  createdAt      DateTime  @default(now())
+  id                    String                  @id @default(cuid())
+  referrerId            String
+  referrer              User                    @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUserId        String
+  referredUser          User                    @relation("ReferralRewardsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+  rewardType            String // "POINTS" | "CREDIT"
+  rewardValue           Float
+  awardedAt             DateTime                @default(now())
+  redeemedAt            DateTime?
+  createdAt             DateTime                @default(now())
+  deferredUntil         DateTime?
+  deferredReason        String? // "ACCOUNT_AGE_GATE" | "DEVICE_ABUSE" | "IP_VELOCITY"
+  deviceFraudScore      Int                     @default(0)
+  ipFraudScore          Int                     @default(0)
+  fraudReviewStatus     String                  @default("CLEAR") // "CLEAR" | "PENDING_REVIEW" | "APPROVED" | "REJECTED"
+  reviewedByAdminId     String?
+  reviewedAt            DateTime?
+  fraudSignals          ReferralFraudSignal[]
 
   @@unique([referrerId, referredUserId])
   @@index([referrerId])
   @@index([referredUserId])
   @@index([awardedAt])
+  @@index([deferredUntil])
+  @@index([fraudReviewStatus])
+}
+
+// D-XP-004 Phase 1: Referral Fraud Gate — signals detection
+model ReferralFraudSignal {
+  id                String          @id @default(cuid())
+  referralRewardId  String
+  referralReward    ReferralReward  @relation(fields: [referralRewardId], references: [id], onDelete: Cascade)
+  referrerId        String
+  referredUserId    String
+  signalType        String // "DEVICE_ABUSE" | "IP_VELOCITY" | "ACCOUNT_AGE" | "SELF_REFERRAL"
+  confidenceScore   Int             @default(0)
+  flags             String[]
+  reviewOutcome     String          @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  reviewedByAdminId String?
+  reviewedAt        DateTime?
+  notes             String?
+  createdAt         DateTime        @default(now())
+
+  @@index([referrerId])
+  @@index([referredUserId])
+  @@index([reviewOutcome])
 }
 
 // #18: Post Performance Analytics — track social link clicks with UTM parameters

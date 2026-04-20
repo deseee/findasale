@@ -12,6 +12,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../components/AuthContext';
 import BecomeOrganizerModal from '../components/BecomeOrganizerModal';
+import DowngradePreviewModal from '../components/DowngradePreviewModal';
 import PremiumCTA from '../components/PremiumCTA';
 import TierComparisonTable from '../components/TierComparisonTable';
 import TooltipHelper from '../components/TooltipHelper';
@@ -102,6 +103,9 @@ const PricingPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [cancelledMessage, setCancelledMessage] = useState<string | null>(null);
   const [showBecomeOrganizerModal, setShowBecomeOrganizerModal] = useState(false);
+  const [showDowngradePreview, setShowDowngradePreview] = useState(false);
+  const [downgradePreview, setDowngradePreview] = useState<any>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Handle cancelled checkout redirect
   useEffect(() => {
@@ -130,9 +134,19 @@ const PricingPage = () => {
       return;
     }
 
-    // Free tier: no checkout needed
+    // Downgrade to free: fetch preview first
     if (tier.id === 'SIMPLE') {
-      // In a real scenario, you'd downgrade here
+      setLoadingPreview(true);
+      try {
+        const res = await api.get('/billing/downgrade-preview');
+        setDowngradePreview(res.data);
+      } catch (err: any) {
+        console.error('Downgrade preview error:', err);
+        setDowngradePreview(null);
+      } finally {
+        setLoadingPreview(false);
+        setShowDowngradePreview(true);
+      }
       return;
     }
 
@@ -191,6 +205,20 @@ const PricingPage = () => {
     }
 
     return `Upgrade to ${tier.name}`;
+  };
+
+  const handleDowngradeConfirm = async () => {
+    try {
+      setLoading('SIMPLE');
+      await api.post('/billing/downgrade');
+      // Refresh user to show new tier
+      router.replace(router.asPath);
+    } catch (err: any) {
+      console.error('Downgrade error:', err);
+      setError(err.response?.data?.message || 'Failed to downgrade. Please try again.');
+    } finally {
+      setLoading(null);
+    }
   };
 
   return (
@@ -657,6 +685,21 @@ const PricingPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Downgrade Preview Modal */}
+      <DowngradePreviewModal
+        isOpen={showDowngradePreview}
+        onClose={() => setShowDowngradePreview(false)}
+        preview={{
+          currentTier: downgradePreview?.currentTier || user?.organizerTier || 'PRO',
+          itemsHidden: downgradePreview?.itemsHidden ?? 0,
+          photosAffected: downgradePreview?.photosAffected ?? 0,
+          graceEndDate: downgradePreview?.graceEndDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          teamMembersLosing: downgradePreview?.teamMembersLosing ?? 0,
+          totalItems: downgradePreview?.totalItems ?? 0,
+        }}
+        onConfirm={handleDowngradeConfirm}
+      />
 
       {/* Become Organizer Modal */}
       <BecomeOrganizerModal

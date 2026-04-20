@@ -35,6 +35,10 @@ import {
   sendBroadcast,
   getRecipientsPreview,
 } from '../controllers/adminBroadcastController';
+import {
+  listFraudSignals,
+  reviewFraudSignal,
+} from '../controllers/referralController';
 
 const router = express.Router();
 
@@ -83,5 +87,9 @@ router.get('/feature-flags', getFeatureFlags);
 router.post('/feature-flags', createFeatureFlag);
 router.patch('/feature-flags/:id', updateFeatureFlag);
 router.delete('/feature-flags/:id', deleteFeatureFlag);
+
+// D-XP-004 Phase 5: Referral fraud review endpoints
+router.get('/referral-fraud-signals', listFraudSignals);
+router.patch('/referral-fraud-signals/:signalId/review', reviewFraudSignal);
 
 export default router;
