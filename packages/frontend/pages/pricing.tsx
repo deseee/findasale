@@ -71,6 +71,7 @@ const TIERS: PricingTier[] = [
       'Data exports (Accounting, Mailings, + more)',
       'Weekly email digest',
       '24/7 support assistant + help center',
+      'Stripe Terminal card reader compatible (reader sold separately, not required)',
     ],
   },
   {
@@ -86,6 +87,7 @@ const TIERS: PricingTier[] = [
       'Unlimited sales*, Unlimited Items*',
       'Unlimited photos*, Unlimited auto tags*',
       'Command Center — manage all sales at once',
+      'Retail Mode — always-live storefront for resale shops & antique dealers',
       'Multi-user workspace — Includes 5 team members',
       'Extra members: $20/mo',
       'Team roles & permissions',
