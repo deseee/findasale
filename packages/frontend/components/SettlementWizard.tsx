@@ -230,12 +230,12 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Settlement Receipt</h3>
             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-2 mb-4">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Revenue</span>
+                <span className="text-gray-600 dark:text-gray-400">Items Subtotal</span>
                 <span className="text-gray-900 dark:text-white">${(settlement?.totalRevenue ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Commission</span>
-                <span className="text-blue-600 dark:text-blue-400">${(settlement?.platformFeeAmount ?? 0).toFixed(2)}</span>
+                <span className="text-gray-600 dark:text-gray-400">Platform Fee (10%)</span>
+                <span className="text-blue-600 dark:text-blue-400">-${(settlement?.platformFeeAmount ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Expenses</span>

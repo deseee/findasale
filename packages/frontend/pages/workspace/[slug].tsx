@@ -702,7 +702,7 @@ export default function WorkspacePage() {
             </a>
 
             <a
-              href="/organizer/dashboard"
+              href="/organizer/create-sale"
               className="block bg-amber-50 dark:bg-gray-700 hover:bg-amber-100 dark:hover:bg-gray-600 border border-amber-200 dark:border-gray-600 rounded-lg p-4 transition text-center"
             >
               <p className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Create Sale</p>

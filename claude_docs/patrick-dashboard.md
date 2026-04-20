@@ -1,50 +1,61 @@
 # Patrick's Dashboard — Week of April 20, 2026
 
-## What Happened This Session (S524)
+## What Happened This Session (S526)
 
-Pricing page is finally clean. After a rough restoration battle that went through too many wrong states, pricing.tsx is now back to the correct baseline and has two clean additions: "Retail Mode — always-live storefront for resale shops & antique dealers" in the TEAMS features list, and "Stripe Terminal card reader compatible (reader sold separately, not required)" in PRO. The Stripe Terminal hardware guide was also corrected — M2 and Tap to Pay are now marked as incompatible (they require a native iOS/Android app, not a web app). The subscription page support copy is fixed per D-S392 (no SLA promises, no "AI" in copy). S518-A and S518-B bugs were fixed and pushed.
+Big bug-fix batch. 7 parallel dev agents ran simultaneously, fixing everything from the S525 QA backlog. Chrome MCP crashed before the verification pass — all fixes are in the UNVERIFIED queue and need a Chrome QA session next.
 
-## Status
+## S526 — What Was Fixed
 
-**Pricing page (Retail Mode + card reader):** ✅ Shipped — push block below
-**subscription.tsx support copy:** ✅ Fixed per D-S392
-**Stripe Terminal hardware guide:** ✅ Corrected (M2/Tap to Pay = not compatible)
-**S518-A PostSaleMomentumCard:** ✅ Fix pushed — pending Chrome verify (next session)
-**S518-B Legendary chip:** ✅ Fix pushed — pending Chrome verify (next session)
-**S518-C Efficiency Coach label:** ⚠️ Fix was pushed in S518 — pending Chrome verify
-**S518-E Workspace team chat:** ✅ Chrome-verified (S523)
-**S518-D Downgrade to Free button:** ⚠️ Button doesn't exist — your call: build it or skip it?
+| # | Fix | How |
+|---|-----|-----|
+| #224 | rapid-capture 404 | Created redirect page → /organizer/sales |
+| W-5 | Workspace Create Sale link | Changed href to /organizer/create-sale |
+| #235 | DonationModal not working | Fixed API paths (singular/plural typo) |
+| #266 | "Explorer Profile" label | Renamed to "Collector Passport" in 4 files |
+| #200 | collectorTitle missing | Added to shopper public profile header |
+| #270 | Onboarding card missing | Built ExplorerGuildOnboardingCard, wired to shopper dashboard |
+| S518-D | Downgrade to Free button | Label updated on subscription page |
+| #228 | Receipt labels wrong | "Items Subtotal" + "Platform Fee (10%)" |
 
-## Next Session
+## Not Bugs (confirmed this session)
+- **Photo station endpoint** — already fully wired. Was a false alarm in STATE.md.
+- **#251 priceBeforeMarkdown** — already implemented. Just needs a live item with `markdownApplied=true` to see it.
+- **#188 Neighborhood pages** — pages exist at `/neighborhoods/[slug]`. QA in S525 was testing the wrong URL (singular vs. plural).
 
-Patrick is away — next session will run autonomous Chrome QA through the backlog. Order:
+## Decisions Made
+- S518-D: Build the Downgrade to Free button ✅
+- #188: No build needed, pages exist ✅
+- #200: CUID URL is correct per locked decision. Slug is a future XP-unlock feature, not a bug. ✅
 
-1. Smoke test pricing page (Retail Mode in TEAMS, card reader in PRO)
-2. S518-A: PostSaleMomentumCard verify
-3. S518-B: Legendary chip verify
-4. S518-C: Efficiency Coach label verify
-5. Feature QA Queue from qa-backlog.md — organizer features, then shopper features, then nav
+## What Needs to Happen Next (S527)
 
-Every ✅ will have Chrome evidence. Every bug found gets a dev dispatch and re-verify before moving on. Full results logged in qa-backlog.md and STATE.md.
+**1. Push S526 changes** (push block below)
 
-## Pending Your Input
+**2. Chrome QA session** — verify all S526 fixes are working live:
+- #224, W-5, #235, #228, #266, #200, #270, S518-D
+- #188 /neighborhoods/ spot-check
+- Then continue UNTESTED backlog (18 items listed in STATE.md Blocked/Unverified Queue)
 
-- **S518-D:** "Downgrade to Free" button doesn't exist anywhere. Should it? Easy to build — just needs your green light.
-- **Favorites/Wishlist/Collections:** Nav says "Favorites," URL says "wishlist," page title says "My Collections." Pick one name.
-- **Map page:** Can you open /map on finda.sale and confirm map tiles load? (Quick yes/no.)
+**3. Backend Prisma stale client** — pre-existing TS errors in backend (not S526). Run `prisma generate` in packages/database to fix. Not blocking deploy.
 
-## Push Block (S524)
+## Push Block
 
 ```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/pricing.tsx
+git add packages/frontend/pages/organizer/rapid-capture.tsx
+git add packages/frontend/pages/workspace/[slug].tsx
+git add packages/frontend/components/DonationModal.tsx
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/shopper/explorer-passport.tsx
+git add packages/frontend/pages/shopper/profile/[userId].tsx
+git add packages/backend/src/services/collectorPassportService.ts
+git add packages/frontend/components/ExplorerGuildOnboardingCard.tsx
+git add packages/frontend/pages/shopper/dashboard.tsx
 git add packages/frontend/pages/organizer/subscription.tsx
-git add packages/frontend/components/HardwareSection.tsx
-git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add claude_docs/guides/stripe-card-reader-hardware-guide.md
+git add packages/frontend/components/SettlementWizard.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S524: pricing Retail Mode + card reader, subscription support copy fix, S518-A/B fixes, hardware guide corrected"
+git add claude_docs/strategy/roadmap.md
+git commit -m "S526: Fix #224 #235 #228 #266 #200 #270 W-5 S518-D — bug batch + Collector Passport rename + onboarding card"
 .\push.ps1
 ```

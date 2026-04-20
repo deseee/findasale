@@ -42,6 +42,7 @@ interface PublicProfile {
   user: {
     id: string;
     name: string;
+    collectorTitle: string | null;
   };
 }
 
@@ -62,7 +63,7 @@ export default function ShopperProfilePage() {
     return (
       <>
         <Head>
-          <title>Explorer Profile - FindA.Sale</title>
+          <title>Collector Passport - FindA.Sale</title>
         </Head>
         <div className="max-w-3xl mx-auto py-8 px-4">
           <div className="animate-pulse space-y-4">
@@ -128,6 +129,11 @@ export default function ShopperProfilePage() {
               <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                 {profile.user.name}
               </h1>
+              {profile.user.collectorTitle && (
+                <p className="text-lg text-[#8fb897] font-semibold mb-2">
+                  {profile.user.collectorTitle}
+                </p>
+              )}
               <p className="text-gray-600 dark:text-gray-400 mb-4">
                 Joined {joinDate}
               </p>

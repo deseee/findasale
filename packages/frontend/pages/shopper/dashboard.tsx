@@ -43,6 +43,7 @@ import PointsBadge from '../../components/PointsBadge';
 import MyTeamsCard from '../../components/MyTeamsCard';
 import RankHeroSection from '../../components/RankHeroSection';
 import ActionBar from '../../components/ActionBar';
+import ExplorerGuildOnboardingCard from '../../components/ExplorerGuildOnboardingCard';
 
 const ShopperDashboard = () => {
   const router = useRouter();
@@ -53,6 +54,7 @@ const ShopperDashboard = () => {
   const [referralLink, setReferralLink] = useState<string | null>(null);
   const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(true);
+  const [hasSeenGuildOnboarding, setHasSeenGuildOnboarding] = useState(false);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
@@ -77,6 +79,14 @@ const ShopperDashboard = () => {
     const dismissed = localStorage.getItem('referral_cta_dismissed');
     if (dismissed) {
       setIsReferralDismissed(true);
+    }
+  }, []);
+
+  // Load Explorer's Guild onboarding state from localStorage
+  useEffect(() => {
+    const seen = localStorage.getItem('explorer_guild_onboarded');
+    if (seen) {
+      setHasSeenGuildOnboarding(true);
     }
   }, []);
 
@@ -332,6 +342,13 @@ const ShopperDashboard = () => {
               <Skeleton className="h-64" />
             )}
           </div>
+
+          {/* 1b. Explorer's Guild Onboarding Card (for INITIATE users) */}
+          {xpProfile && xpProfile.explorerRank === 'INITIATE' && !hasSeenGuildOnboarding && (
+            <ExplorerGuildOnboardingCard
+              onDismiss={() => setHasSeenGuildOnboarding(true)}
+            />
+          )}
 
           {/* 2. Action buttons row (Browse Sales, Collections, Purchase History, Treasure Trails, My QR) */}
           <ActionBar className="mb-8" onQrClick={() => setQrOpen(!qrOpen)} />

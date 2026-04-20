@@ -121,7 +121,7 @@ function ExplorerPassportPage() {
   return (
     <>
       <Head>
-        <title>Explorer Profile - FindA.Sale</title>
+        <title>Collector Passport - FindA.Sale</title>
       </Head>
 
       <div className="max-w-5xl mx-auto py-8 px-4 dark:bg-gray-900 dark:text-warm-100">
@@ -129,7 +129,7 @@ function ExplorerPassportPage() {
           <div className="mb-10">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">Explorer Profile 🗺️</h1>
+                <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">Collector Passport 🗺️</h1>
                 {passport && (
                   <div className="bg-[#8fb897] text-white rounded-full px-4 py-2 font-semibold">
                     {passport.totalFinds} finds
@@ -298,7 +298,7 @@ function ExplorerPassportPage() {
                   No matches yet
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-500 max-w-md mx-auto">
-                  Matches are sales featuring items that match your Explorer Profile interests. Complete your profile to start seeing recommendations.
+                  Matches are sales featuring items that match your Collector Passport interests. Complete your profile to start seeing recommendations.
                 </p>
               </div>
             ) : (
