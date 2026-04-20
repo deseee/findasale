@@ -194,17 +194,18 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
     .page {
       width: 8.5in;
       height: 11in;
-      padding: 0.5in;
+      padding: 1in 0.25in;
       display: grid;
       grid-template-columns: repeat(2, 4in);
       grid-template-rows: repeat(3, 3in);
-      gap: 0.1in;
+      column-gap: 0;
+      row-gap: 0;
       page-break-after: always;
     }
     .label {
       width: 4in;
       height: 3in;
-      padding: 0.1in;
+      padding: 0.15in;
       border: 1px solid #e0e0e0;
       display: flex;
       align-items: center;
