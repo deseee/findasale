@@ -42,7 +42,10 @@ async function fetchImageAsDataUri(url: string): Promise<string> {
     const res = await fetch(url);
     if (!res.ok) return '';
     const buffer = await res.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    const base64 = btoa(binary);
     const mimeType = res.headers.get('content-type') || 'image/jpeg';
     return `data:${mimeType};base64,${base64}`;
   } catch {
@@ -80,6 +83,7 @@ function renderClassic(
       {format === 'story' && photoUrl && (
         <div
           style={{
+            display: 'flex',
             position: 'absolute',
             top: 0,
             left: 0,
@@ -96,6 +100,7 @@ function renderClassic(
       {/* Amber line */}
       <div
         style={{
+          display: 'flex',
           height: 4,
           backgroundColor: '#d97706',
           width: '100%',
@@ -132,8 +137,10 @@ function renderClassic(
         </div>
 
         {/* Title */}
-        <h1
+        <div
           style={{
+            display: 'flex',
+            flexDirection: 'column',
             fontSize: format === 'story' ? '32px' : '48px',
             fontWeight: 'bold',
             color: '#1a1a1a',
@@ -142,20 +149,22 @@ function renderClassic(
           }}
         >
           {saleTitle.substring(0, 50)}
-        </h1>
+        </div>
 
         {/* Details */}
         <div
           style={{
+            display: 'flex',
+            flexDirection: 'column',
             fontSize: '18px',
             color: '#4b5563',
             lineHeight: '1.6',
             marginBottom: '20px',
           }}
         >
-          <div>📍 {address}</div>
-          <div>📅 {startDate} - {endDate}</div>
-          {itemCount > 0 && <div>📦 {itemCount} items</div>}
+          <div style={{ display: 'flex' }}>Location: {address}</div>
+          <div style={{ display: 'flex' }}>Date: {startDate} - {endDate}</div>
+          {itemCount > 0 && <div style={{ display: 'flex' }}>Items: {itemCount}</div>}
         </div>
       </div>
 
@@ -209,6 +218,8 @@ function renderVintage(
       {/* Outer border */}
       <div
         style={{
+          display: 'flex',
+          flexDirection: 'column',
           border: '8px solid #d97706',
           padding: '30px',
           maxWidth: '500px',
@@ -217,11 +228,13 @@ function renderVintage(
         }}
       >
         {/* Decorative line */}
-        <div style={{ height: '2px', backgroundColor: '#d97706', marginBottom: '20px' }} />
+        <div style={{ display: 'flex', height: '2px', backgroundColor: '#d97706', marginBottom: '20px' }} />
 
         {/* Title */}
-        <h1
+        <div
           style={{
+            display: 'flex',
+            flexDirection: 'column',
             fontSize: '36px',
             fontWeight: 'normal',
             color: '#2d1a0e',
@@ -230,32 +243,35 @@ function renderVintage(
           }}
         >
           {saleTitle.substring(0, 40)}
-        </h1>
+        </div>
 
         {/* Decorative line */}
-        <div style={{ height: '2px', backgroundColor: '#d97706', marginBottom: '20px' }} />
+        <div style={{ display: 'flex', height: '2px', backgroundColor: '#d97706', marginBottom: '20px' }} />
 
         {/* Details */}
         <div
           style={{
+            display: 'flex',
+            flexDirection: 'column',
             fontSize: '14px',
             color: '#2d1a0e',
             lineHeight: '1.8',
             marginBottom: '15px',
           }}
         >
-          <div>{startDate.toUpperCase()}</div>
-          <div>{address}</div>
-          {itemCount > 0 && <div>{itemCount} quality items</div>}
+          <div style={{ display: 'flex' }}>{startDate.toUpperCase()}</div>
+          <div style={{ display: 'flex' }}>{address}</div>
+          {itemCount > 0 && <div style={{ display: 'flex' }}>{itemCount} quality items</div>}
         </div>
 
         {/* Decorative line */}
-        <div style={{ height: '2px', backgroundColor: '#d97706' }} />
+        <div style={{ display: 'flex', height: '2px', backgroundColor: '#d97706' }} />
       </div>
 
       {/* Footer */}
       <div
         style={{
+          display: 'flex',
           marginTop: '20px',
           fontSize: '12px',
           color: '#2d1a0e',
@@ -295,10 +311,12 @@ function renderBold(
       }}
     >
       {/* Main content */}
-      <div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
         {/* Title - ALL CAPS */}
-        <h1
+        <div
           style={{
+            display: 'flex',
+            flexDirection: 'column',
             fontSize: '56px',
             fontWeight: 900,
             color: 'white',
@@ -309,11 +327,12 @@ function renderBold(
           }}
         >
           {saleTitle.substring(0, 40).toUpperCase()}
-        </h1>
+        </div>
 
         {/* Amber horizontal rule */}
         <div
           style={{
+            display: 'flex',
             height: '3px',
             backgroundColor: '#d97706',
             width: '100px',
@@ -324,6 +343,8 @@ function renderBold(
         {/* Details */}
         <div
           style={{
+            display: 'flex',
+            flexDirection: 'column',
             fontSize: '20px',
             color: '#fbbf24',
             lineHeight: '1.8',
@@ -331,18 +352,19 @@ function renderBold(
             letterSpacing: '1px',
           }}
         >
-          <div>{startDate.toUpperCase()} – {endDate.toUpperCase()}</div>
-          <div>📍 {address}</div>
+          <div style={{ display: 'flex' }}>{startDate.toUpperCase()} – {endDate.toUpperCase()}</div>
+          <div style={{ display: 'flex' }}>Location: {address}</div>
         </div>
 
         {/* Amber dots */}
-        <div style={{ fontSize: '20px', color: '#d97706', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', fontSize: '20px', color: '#d97706', marginBottom: '20px' }}>
           ● ● ●
         </div>
 
         {/* FindA.Sale */}
         <div
           style={{
+            display: 'flex',
             fontSize: '14px',
             color: 'white',
             fontWeight: 'bold',
@@ -387,6 +409,7 @@ function renderPhotoFullBleed(
       {/* Gradient overlay */}
       <div
         style={{
+          display: 'flex',
           position: 'absolute',
           bottom: 0,
           left: 0,
@@ -398,9 +421,11 @@ function renderPhotoFullBleed(
       />
 
       {/* Content */}
-      <div style={{ position: 'relative', zIndex: 2 }}>
-        <h1
+      <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 2 }}>
+        <div
           style={{
+            display: 'flex',
+            flexDirection: 'column',
             fontSize: '48px',
             fontWeight: 'bold',
             color: 'white',
@@ -408,13 +433,13 @@ function renderPhotoFullBleed(
           }}
         >
           {saleTitle.substring(0, 40)}
-        </h1>
+        </div>
 
-        <div style={{ fontSize: '18px', color: 'white', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', fontSize: '18px', color: 'white', marginBottom: '10px' }}>
           {startDate} - {endDate}
         </div>
 
-        <div style={{ fontSize: '16px', color: '#fbbf24' }}>finda.sale</div>
+        <div style={{ display: 'flex', fontSize: '16px', color: '#fbbf24' }}>finda.sale</div>
       </div>
     </div>
   );
@@ -447,8 +472,10 @@ function renderHaul(
       }}
     >
       {/* Header */}
-      <h1
+      <div
         style={{
+          display: 'flex',
+          flexDirection: 'column',
           fontSize: '32px',
           fontWeight: 'bold',
           color: '#1a1a2e',
@@ -457,7 +484,7 @@ function renderHaul(
         }}
       >
         Finds from {saleTitle.substring(0, 30)}
-      </h1>
+      </div>
 
       {/* Item grid — flexbox rows (Satori does not support CSS Grid) */}
       <div
@@ -513,6 +540,7 @@ function renderHaul(
       {/* Footer */}
       <div
         style={{
+          display: 'flex',
           marginTop: '20px',
           fontSize: '12px',
           color: '#1a1a2e',
