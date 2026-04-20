@@ -95,6 +95,7 @@ const TIERS: PricingTier[] = [
       'Team roles & permissions',
       'Webhooks - Connect your systems',
       'Market Hubs - Multi-vendor events',
+      'Community forum + support assistant + help center',
     ],
   },
 ];
@@ -472,6 +473,18 @@ const PricingPage = () => {
                         </div>
                       ))}
                     </div>
+
+                    {/* Hardware Callout for TEAMS Tier */}
+                    {tier.id === 'TEAMS' && (
+                      <div className="mt-6 pt-6 border-t border-warm-200 dark:border-gray-700">
+                        <p className="text-sm text-warm-700 dark:text-warm-300 mb-2">
+                          <span className="font-semibold">Stripe Terminal card readers</span> available from $299
+                        </p>
+                        <p className="text-xs text-warm-600 dark:text-warm-400">
+                          Accept card payments at checkout. Order direct from Stripe.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

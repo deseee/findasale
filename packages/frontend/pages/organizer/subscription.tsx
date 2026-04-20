@@ -6,6 +6,7 @@ import { useToast } from '../../components/ToastContext';
 import api from '../../lib/api';
 import { useOrganizerTier, type SubscriptionTier } from '../../hooks/useOrganizerTier';
 import DowngradePreviewModal from '../../components/DowngradePreviewModal';
+import HardwareSection from '../../components/HardwareSection';
 
 interface Subscription {
   status: string | null;
@@ -152,8 +153,8 @@ export default function SubscriptionPage() {
                       <p className="text-sm text-amber-700 dark:text-amber-300">Flip Report shows exactly what sold and what didn't.</p>
                     </div>
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">24/7 support</p>
-                      <p className="text-sm text-amber-700 dark:text-amber-300">AI-powered support assistant whenever you need help.</p>
+                      <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">24/7 support assistant</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">Help center + support assistant whenever you need help.</p>
                     </div>
                   </div>
 
@@ -266,11 +267,13 @@ export default function SubscriptionPage() {
                     <li className="flex items-start">
                       <span className="text-green-600 mr-3 mt-0.5">✓</span>
                       <div>
-                        <p className="font-semibold text-gray-900 dark:text-gray-100">Priority Support</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">24-hour response time</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">Community Forum + Support Assistant + Help Center</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Community engagement and continuous support access</p>
                       </div>
                     </li>
                   </ul>
+
+                  <HardwareSection />
 
                   <div className="flex gap-4">
                     <Link
@@ -465,8 +468,8 @@ export default function SubscriptionPage() {
                     <p className="text-sm text-amber-700 dark:text-amber-300">Flip Report shows exactly what sold and what didn't.</p>
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
-                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">24/7 support</p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">AI-powered support assistant whenever you need help.</p>
+                    <p className="font-semibold text-amber-900 dark:text-amber-100 mb-1">24/7 support assistant</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">Help center + support assistant whenever you need help.</p>
                   </div>
                 </div>
 
