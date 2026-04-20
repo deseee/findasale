@@ -117,7 +117,8 @@ function renderClassic(
         {/* Sale type pill */}
         <div
           style={{
-            display: 'inline-block',
+            display: 'flex',
+            alignSelf: 'flex-start',
             backgroundColor: '#d97706',
             color: 'white',
             padding: '6px 12px',
@@ -125,7 +126,6 @@ function renderClassic(
             fontSize: '12px',
             fontWeight: 'bold',
             marginBottom: '20px',
-            width: 'fit-content',
           }}
         >
           SALE
@@ -172,7 +172,7 @@ function renderClassic(
           color: '#d97706',
         }}
       >
-        <span>finda.sale</span>
+        <div style={{ display: 'flex' }}>finda.sale</div>
       </div>
     </div>
   );
