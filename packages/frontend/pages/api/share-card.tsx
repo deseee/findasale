@@ -15,12 +15,8 @@
  */
 
 import { ImageResponse } from 'next/og';
-import { NextRequest } from 'next/server';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { getSession } from 'next-auth/react';
-
-export const config = {
-  runtime: 'edge',
-};
 
 // XP thresholds for theme locks
 const THEME_XP_THRESHOLDS: Record<string, number> = {
@@ -529,46 +525,30 @@ function renderHaul(
   );
 }
 
-export default async function handler(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-
-  // Get parameters
-  const saleId = searchParams.get('saleId');
-  const theme = searchParams.get('theme') || 'classic';
-  const format = searchParams.get('format') || 'square';
-  const type = searchParams.get('type') || 'sale';
-  const itemId = searchParams.get('itemId');
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Get parameters from query
+  const saleId = req.query.saleId as string | undefined;
+  const theme = (req.query.theme as string) || 'classic';
+  const format = (req.query.format as string) || 'square';
 
   // Validate parameters
   if (!saleId) {
-    return new Response(JSON.stringify({ error: 'saleId required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(400).json({ error: 'saleId required' });
   }
 
   if (!DIMENSIONS[format]) {
-    return new Response(JSON.stringify({ error: 'Invalid format' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(400).json({ error: 'Invalid format' });
   }
 
-  if (!THEME_XP_THRESHOLDS[theme]) {
-    return new Response(JSON.stringify({ error: 'Invalid theme' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  if (!(theme in THEME_XP_THRESHOLDS)) {
+    return res.status(400).json({ error: 'Invalid theme' });
   }
 
   try {
     // Get session to verify authentication
     const session = await getSession({ req });
     if (!session) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return res.status(401).json({ error: 'Unauthorized' });
     }
 
     // Fetch sale data from backend API
@@ -580,24 +560,16 @@ export default async function handler(req: NextRequest) {
     });
 
     if (!saleRes.ok) {
-      return new Response(JSON.stringify({ error: 'Sale not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return res.status(404).json({ error: 'Sale not found' });
     }
 
     const sale = await saleRes.json();
 
-    // Check XP gate (user must have sufficient XP)
+    // Check XP gate
     const requiredXp = THEME_XP_THRESHOLDS[theme] || 0;
-    if ((session as any).guildXp === undefined || (session as any).guildXp < requiredXp) {
-      return new Response(
-        JSON.stringify({ error: 'xp_required', threshold: requiredXp }),
-        {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+    const userXp = (session as any).guildXp ?? 0;
+    if (userXp < requiredXp) {
+      return res.status(403).json({ error: 'xp_required', threshold: requiredXp });
     }
 
     // Format dates
@@ -618,7 +590,6 @@ export default async function handler(req: NextRequest) {
     let photoDataUri = null;
     if (sale.photos && sale.photos.length > 0) {
       const photoUrl = sale.photos[0];
-      // Add watermark if Cloudinary URL
       const watermarkedUrl = photoUrl.includes('cloudinary')
         ? `${photoUrl}/l_text:Arial_20:FindA.Sale,co_white,o_50,g_south_east,x_10,y_10`
         : photoUrl;
@@ -632,86 +603,31 @@ export default async function handler(req: NextRequest) {
     let jsxContent;
     switch (theme) {
       case 'vintage':
-        jsxContent = renderVintage(
-          sale.title,
-          address,
-          sale.city,
-          startDate,
-          endDate,
-          itemCount,
-          photoDataUri,
-          format
-        );
+        jsxContent = renderVintage(sale.title, address, sale.city, startDate, endDate, itemCount, photoDataUri, format);
         break;
       case 'bold':
-        jsxContent = renderBold(
-          sale.title,
-          address,
-          sale.city,
-          startDate,
-          endDate,
-          itemCount,
-          photoDataUri,
-          format
-        );
+        jsxContent = renderBold(sale.title, address, sale.city, startDate, endDate, itemCount, photoDataUri, format);
         break;
       case 'photo-fullbleed':
-        jsxContent = renderPhotoFullBleed(
-          sale.title,
-          address,
-          sale.city,
-          startDate,
-          endDate,
-          itemCount,
-          photoDataUri,
-          format
-        );
+        jsxContent = renderPhotoFullBleed(sale.title, address, sale.city, startDate, endDate, itemCount, photoDataUri, format);
         break;
       case 'haul':
-        jsxContent = renderHaul(
-          sale.title,
-          address,
-          sale.city,
-          startDate,
-          endDate,
-          itemCount,
-          photoDataUri,
-          format
-        );
+        jsxContent = renderHaul(sale.title, address, sale.city, startDate, endDate, itemCount, photoDataUri, format);
         break;
       case 'classic':
       default:
-        jsxContent = renderClassic(
-          sale.title,
-          address,
-          sale.city,
-          startDate,
-          endDate,
-          itemCount,
-          photoDataUri,
-          format
-        );
+        jsxContent = renderClassic(sale.title, address, sale.city, startDate, endDate, itemCount, photoDataUri, format);
     }
 
-    // Generate image using ImageResponse
-    const image = new ImageResponse(jsxContent, {
-      width,
-      height,
-    });
-
-    // Return as image
+    // Generate image using ImageResponse (Node.js runtime)
+    const image = new ImageResponse(jsxContent, { width, height });
     const buffer = await image.arrayBuffer();
-    return new Response(buffer, {
-      headers: {
-        'Content-Type': 'image/png',
-        'Cache-Control': 'public, max-age=3600',
-      },
-    });
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(200).send(Buffer.from(buffer));
   } catch (error) {
     console.error('Share card generation error:', error);
-    return new Response(JSON.stringify({ error: 'Failed to generate share card' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(500).json({ error: 'Failed to generate share card' });
   }
 }
