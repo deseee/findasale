@@ -1,5 +1,51 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
+## S517 Summary (2026-04-19) — S516 QA pass, Ripples page P1 fix ✅
+
+**Push block below — 18 files total (S516 + S517 Ripples fix). Run this before anything else.**
+
+### QA results (all S516 work):
+- ✅ **Dashboard SIMPLE card** — "Command Center" is gone. Copy reads: "500+ items per sale • Advanced analytics • Brand Kit"
+- ✅ **SharePromoteModal hashtags** — Dynamic per sale type. Estate Sale → `#estatesale #garagesale #findasale`. 6 sale types mapped + default.
+- ✅ **Legendary amber banner (edit-item)** — Shows on items ≥$75. "Mark as Legendary" button dismisses banner instantly. Toggle wired correctly.
+- ⚠️ **Legendary chip (review page)** — Chip renders on high-value items ✅. Click fires backend mutation (confirmed via query refetch). Chip doesn't visually dismiss after click — P2, backend likely accepts it but GET response may not return updated field. Won't block shipping, investigate next session.
+- ❌→✅ **Ripples page CRASH** — Page was completely broken (React error #310 — hooks called after conditional returns). Fixed and included in push block below.
+- ⚠️ **Sale Pulse views count** — Couldn't verify because Ripples page was broken. Re-test next session now that it's fixed.
+- ⚠️ **UNVERIFIED** — RankUpModal no-timer, Pricing downgrade, Bump Post feed sort. All need specific test conditions (rank-up trigger, PRO account to downgrade, active boost).
+
+### Patrick actions required:
+1. **Run push block below** (18 files — S516 + S517)
+2. **Migration already applied** — `20260419000002_referral_fraud_gate` was run last session ✅
+3. **FRAUD_GATE_ACTIVE flip** — After 48–72 hours of signals in Railway logs, flip `FRAUD_GATE_ACTIVE = true` in `packages/backend/src/services/referralFraudService.ts` and push. Currently in observational mode only.
+
+### Push block (S516 + S517 combined):
+```powershell
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/components/SharePromoteModal.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/components/RankUpModal.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId]/review.tsx"
+git add packages/backend/src/services/discoveryService.ts
+git add packages/database/prisma/schema.prisma
+git add "packages/database/prisma/migrations/20260419000002_referral_fraud_gate/migration.sql"
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/referralController.ts
+git add packages/backend/src/services/referralFraudService.ts
+git add packages/backend/src/jobs/referralRewardAgeGateJob.ts
+git add packages/backend/src/index.ts
+git add packages/backend/src/routes/admin.ts
+git add packages/frontend/pages/pricing.tsx
+git add packages/frontend/pages/organizer/ripples.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S516+S517: Bump Post sort, Referral Fraud Gate (observational), Legendary auto-suggest, Ripples hooks fix, SIMPLE card polish, hashtag fix, RankUp timer removed"
+.\push.ps1
+```
+
+---
+
 ## S515 Summary (2026-04-19) — Dashboard widgets QA (#230–#234), SIMPLE tier gate P1 fix ✅
 
 **9 files to push (S514 + S515 combined). Push block below.**

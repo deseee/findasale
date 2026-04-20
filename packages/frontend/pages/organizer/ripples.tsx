@@ -62,13 +62,10 @@ export default function RipplesPage() {
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [trendHours, setTrendHours] = useState(24);
 
-  if (authLoading) return null;
-  if (!user || !user.roles?.includes('ORGANIZER')) {
-    router.push('/login');
-    return null;
-  }
+  const isAuthorized = !authLoading && !!user?.roles?.includes('ORGANIZER');
 
   // Fetch organizer's sales with ripple summaries
+  // Hooks must be called unconditionally — auth guard applied via `enabled`
   const {
     data: salesWithRipples,
     isLoading: loadingSales,
@@ -105,6 +102,7 @@ export default function RipplesPage() {
 
       return withRipples.sort((a, b) => b.totalRipples - a.totalRipples);
     },
+    enabled: isAuthorized,
   });
 
   // Fetch trend data for selected sale
@@ -120,7 +118,7 @@ export default function RipplesPage() {
       });
       return res.data;
     },
-    enabled: !!selectedSaleId,
+    enabled: isAuthorized && !!selectedSaleId,
   });
 
   // Set initial selected sale
@@ -129,6 +127,13 @@ export default function RipplesPage() {
       setSelectedSaleId(salesWithRipples[0].saleId);
     }
   }, [salesWithRipples, selectedSaleId]);
+
+  // Auth guards — after all hooks
+  if (authLoading) return null;
+  if (!user || !user.roles?.includes('ORGANIZER')) {
+    router.push('/login');
+    return null;
+  }
 
   const selectedSale = salesWithRipples?.find((s) => s.saleId === selectedSaleId);
 

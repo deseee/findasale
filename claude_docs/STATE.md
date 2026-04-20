@@ -7,6 +7,62 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S516 (2026-04-19) — Bump Post, Referral Fraud Gate, Legendary auto-suggest, polish + QA pass**
+
+Session dispatches shipped:
+- **Sale Pulse views P2:** `routes/organizers.ts` — was reading deprecated `qrScanCount`, now reads `SaleRipple` table (same source as Ripples page)
+- **SharePromoteModal hashtags:** Dynamic per sale type + `#findasale` on all. Also fixed threads/nextdoor hardcoded "estate sale" strings.
+- **Dashboard SIMPLE upgrade copy:** Removed "Command Center" from PRO feature list on SIMPLE card
+- **RankUpModal:** Removed 8-second auto-dismiss timer — modal now requires explicit close. Dark mode already correct.
+- **Legendary auto-suggest:** Amber banner on edit-item when price ≥$75 + "⭐ Legendary?" chip on review page. Manual toggle preserved, prompt drives adoption.
+- **Bump Post feed sort:** `discoveryService.ts` — ACTIVE SALE_BUMP boosts get +500 score in both anon and logged-in paths. Floats above all organic (max organic ~85).
+- **Referral Fraud Gate D-XP-004 (all 5 phases, observational):**
+  - Phase 1: Schema — `ReferralReward` fraud fields + new `ReferralFraudSignal` model + migration `20260419000002_referral_fraud_gate`
+  - Phase 2: Self-referral gate in `authController.ts` — silently skips own-code referrals
+  - Phase 3: `referralFraudService.ts` (new) — device abuse + velocity scoring. `FRAUD_GATE_ACTIVE = false` (observational only)
+  - Phase 4: Account age gate in `stripeController.ts` + daily `referralRewardAgeGateJob.ts` cron
+  - Phase 5: Admin review endpoints in `referralController.ts` + `routes/admin.ts`
+- **pricing.tsx Downgrade stub fixed:** DowngradePreviewModal now properly wired with preview API + confirm flow
+- **Stripe Connect webhook:** Patrick confirmed `STRIPE_CONNECT_WEBHOOK_SECRET` added to Railway — items now mark SOLD after card POS payment (P2 resolved since S421)
+- **Advisory Board:** Legendary design — manual + $75 auto-suggest (9+1/3 abstain/0 against)
+- **Architect ADR:** Bump Post feed sort — Option A approved
+
+**Migration run:** `20260419000002_referral_fraud_gate` ✅ applied to Railway
+
+**Chrome QA results (S516 — completed S517):**
+- ✅ Dashboard SIMPLE upgrade card — "Command Center" removed. Copy: "500+ items per sale • Advanced analytics • Brand Kit"
+- ✅ Post-Sale Momentum — $900 showing (sale-specific, not lifetime). CTAs present.
+- ✅ SharePromoteModal hashtags — `getHashtagsForSaleType()` live. Estate→`#estatesale #garagesale #findasale`, 6 sale types covered + default.
+- ✅ Legendary amber banner (edit-item) — renders at ≥$75 items. "Mark as Legendary" button dismisses banner and checks the toggle. Confirmed via ref-click.
+- ⚠️ Legendary chip (review page) — chip renders for all 14 high-value items. Mutation fires on click (GET re-fetch observed via onSuccess invalidation). Chip does NOT dismiss visually after click. Backend accepts `isLegendary` (line 662 in itemController). Possible: GET `/items/drafts` response missing updated field, or early seeder data. P2 — flag for investigation.
+- ❌ P1 NEW BUG — Ripples page: React error #310 (hooks called after conditional returns). Entire `/organizer/ripples` page crashes. **Fixed in `ripples.tsx` (S517) — hooks reordered, `enabled` guards added. Needs push.**
+- ⚠️ UNVERIFIED — RankUpModal dark mode + no auto-dismiss: can't trigger rank-up artificially in QA.
+- ⚠️ UNVERIFIED — Pricing downgrade flow (pricing.tsx): Grace is SIMPLE, can't test downgrade.
+- ⚠️ UNVERIFIED — Bump Post boosted feed sort: needs active SALE_BUMP boost to verify +500 score.
+- ⚠️ UNVERIFIED — Sale Pulse vs Ripples views count: Ripples page was broken during QA. Fix now shipped; re-test next session.
+
+**Files changed (S516 + S517 Ripples fix):**
+- `packages/backend/src/routes/organizers.ts`
+- `packages/frontend/components/SharePromoteModal.tsx`
+- `packages/frontend/pages/organizer/dashboard.tsx`
+- `packages/frontend/components/RankUpModal.tsx`
+- `packages/frontend/pages/organizer/edit-item/[id].tsx`
+- `packages/frontend/pages/organizer/add-items/[saleId]/review.tsx`
+- `packages/backend/src/services/discoveryService.ts`
+- `packages/database/prisma/schema.prisma`
+- `packages/database/prisma/migrations/20260419000002_referral_fraud_gate/migration.sql` (NEW)
+- `packages/backend/src/controllers/authController.ts`
+- `packages/backend/src/controllers/stripeController.ts`
+- `packages/backend/src/controllers/referralController.ts`
+- `packages/backend/src/services/referralFraudService.ts` (NEW)
+- `packages/backend/src/jobs/referralRewardAgeGateJob.ts` (NEW)
+- `packages/backend/src/index.ts`
+- `packages/backend/src/routes/admin.ts`
+- `packages/frontend/pages/pricing.tsx`
+- `packages/frontend/pages/organizer/ripples.tsx` **(S517 fix — hooks reordered)**
+
+---
+
 **S515 (2026-04-19) — QA: dashboard widgets #230–#234, SIMPLE concurrent sales gate P1 fix**
 
 Chrome QA pass on 5 dashboard widgets + tier gate. Roadmap updated for #230–#234 and #249.
