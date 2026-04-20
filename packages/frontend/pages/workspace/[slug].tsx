@@ -465,11 +465,11 @@ export default function WorkspacePage() {
                 Team Communications
               </h2>
 
-              {workspace.upcomingSales && workspace.upcomingSales.length > 0 ? (
+              {allSales.length > 0 ? (
                 <>
                   {/* Sale Tabs */}
                   <div className="flex gap-2 mb-4 overflow-x-auto border-b border-warm-200 dark:border-gray-700">
-                    {workspace.upcomingSales.map((sale) => (
+                    {allSales.map((sale) => (
                       <button
                         key={sale.id}
                         onClick={() => setSelectedSaleId(sale.id)}
