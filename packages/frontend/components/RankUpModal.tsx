@@ -33,11 +33,6 @@ const RANK_BENEFITS: Record<ExplorerRank, string[]> = {
 
 export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => {
   useEffect(() => {
-    // Auto-dismiss after 8 seconds
-    const timer = setTimeout(() => {
-      onDismiss();
-    }, 8000);
-
     // Close on Escape key
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -48,7 +43,6 @@ export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => 
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [onDismiss]);
