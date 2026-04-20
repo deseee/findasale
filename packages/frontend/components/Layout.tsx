@@ -521,7 +521,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
             <Link href="/shopper/explorer-passport" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your collector journey, badges, and discovery history">
               <Award size={16} className="text-indigo-500" />
-              <span>Explorer Profile</span>
+              <span>Collector Passport</span>
             </Link>
             <Link href="/shopper/haul-posts" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Share your latest hauls with the community">
               <Camera size={16} className="text-indigo-500" />
@@ -1241,7 +1241,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                           <Compass size={14} className="inline mr-2 text-indigo-500" /> My Trails
                         </Link>
                         <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Profile
+                          <Award size={14} className="inline mr-2 text-indigo-500" /> Collector Passport
                         </Link>
                         <Link href="/shopper/haul-posts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Camera size={14} className="inline mr-2 text-indigo-500" /> Haul Posts
@@ -1423,7 +1423,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <Map size={14} className="inline mr-2 text-indigo-500" /> Treasure Trails
                     </Link>
                     <Link href="/shopper/explorer-passport" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                      <Award size={14} className="inline mr-2 text-indigo-500" /> Explorer Profile
+                      <Award size={14} className="inline mr-2 text-indigo-500" /> Collector Passport
                     </Link>
                     <Link href="/shopper/haul-posts" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Camera size={14} className="inline mr-2 text-indigo-500" /> Haul Posts

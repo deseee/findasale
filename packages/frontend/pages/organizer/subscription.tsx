@@ -665,7 +665,7 @@ export default function SubscriptionPage() {
                       disabled={loadingPreview}
                       className="block w-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 py-3 px-4 rounded-lg font-semibold hover:bg-amber-100 transition border border-amber-200 dark:border-amber-800 disabled:opacity-50"
                     >
-                      {loadingPreview ? 'Loading...' : 'Downgrade to SIMPLE'}
+                      {loadingPreview ? 'Loading...' : 'Downgrade to Free'}
                     </button>
                   )}
 

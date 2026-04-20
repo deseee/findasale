@@ -962,7 +962,7 @@ const AvatarDropdown: React.FC = () => {
                     title="Your collector journey, badges, and discovery history"
                   >
                     <Award size={16} className="text-indigo-500" />
-                    <span>Explorer Profile</span>
+                    <span>Collector Passport</span>
                   </Link>
                   <Link
                     href="/shopper/haul-posts"
