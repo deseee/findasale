@@ -153,8 +153,12 @@ export default function PromotePage(): JSX.Element {
     setShareCardBlobUrl(null);
 
     const url = `/api/share-card?saleId=${saleId}&theme=${selectedTheme}&format=${selectedFormat}&type=sale`;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-    fetch(url, { credentials: 'include' })
+    fetch(url, {
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((r) => {
         if (!r.ok) throw new Error(`Share card fetch failed: ${r.status}`);
         return r.blob();
@@ -431,8 +435,12 @@ export default function PromotePage(): JSX.Element {
 
   const handleShareCardDownload = async () => {
     const url = `/api/share-card?saleId=${saleId}&theme=${selectedTheme}&format=${selectedFormat}&type=sale`;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     try {
-      const r = await fetch(url, { credentials: 'include' });
+      const r = await fetch(url, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!r.ok) throw new Error(`Download failed: ${r.status}`);
       const blob = await r.blob();
       const blobUrl = URL.createObjectURL(blob);

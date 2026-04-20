@@ -16,7 +16,6 @@
 
 import { ImageResponse } from 'next/og';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getSession } from 'next-auth/react';
 
 // XP thresholds for theme locks
 const THEME_XP_THRESHOLDS: Record<string, number> = {
@@ -545,9 +544,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get session to verify authentication (server-side, reads cookie directly)
-    const session = await getSession({ req });
-    if (!session) {
+    // Authenticate via Authorization header (same pattern as all other frontend API routes)
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -555,7 +554,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     const saleRes = await fetch(`${apiUrl}/sales/${saleId}`, {
       headers: {
-        Authorization: `Bearer ${(session as any).backendJwt}`,
+        Authorization: authHeader,
       },
     });
 
@@ -565,12 +564,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const sale = await saleRes.json();
 
-    // Check XP gate
-    const requiredXp = THEME_XP_THRESHOLDS[theme] || 0;
-    const userXp = (session as any).guildXp ?? 0;
-    if (userXp < requiredXp) {
-      return res.status(403).json({ error: 'xp_required', threshold: requiredXp });
-    }
+    // XP gate deferred — guildXp not available via Authorization header auth
+    // TODO: fetch user XP from backend when endpoint is available
 
     // Format dates
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', {
