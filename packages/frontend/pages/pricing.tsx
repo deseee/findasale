@@ -72,7 +72,6 @@ const TIERS: PricingTier[] = [
       'Data exports (Accounting, Mailings, + more)',
       'Weekly email digest',
       '24/7 support assistant + help center',
-      'Stripe Terminal card readers from $299 — no reader required to take card payments',
     ],
   },
   {
@@ -87,7 +86,9 @@ const TIERS: PricingTier[] = [
       'Everything in Pro, plus:',
       'Unlimited Items* — perfect for shops with 800+ pieces',
       'Unlimited sales*, Unlimited photos*, Unlimited auto tags*',
-      'Shop Mode — always-live, rotating storefront for resale shops & antique dealers',
+      'Always-Live Storefront* — items stay listed until sold',
+      'Shop Mode — auto-renewing storefront for resale shops & antique dealers',
+      'Rotating inventory — move items between sales, nothing lost',
       'Command Center — manage all sales at once',
       'Multi-user workspace — Up to 12 team members',
       'Extra members: $20/mo',
@@ -471,18 +472,6 @@ const PricingPage = () => {
                         </div>
                       ))}
                     </div>
-
-                    {/* Hardware Callout for TEAMS Tier */}
-                    {tier.id === 'TEAMS' && (
-                      <div className="mt-6 pt-6 border-t border-warm-200 dark:border-gray-700">
-                        <p className="text-sm text-warm-700 dark:text-warm-300 mb-2">
-                          <span className="font-semibold">Stripe Terminal card readers</span> available from $299
-                        </p>
-                        <p className="text-xs text-warm-600 dark:text-warm-400">
-                          Accept card payments at checkout. Order direct from Stripe.
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </div>
               );
