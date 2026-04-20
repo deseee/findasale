@@ -319,7 +319,17 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
             }
           }
         },
-        members: true,
+        members: {
+          select: {
+            id: true,
+            organizerId: true,
+            userId: true,
+            role: true,
+            acceptedAt: true,
+            organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } },
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
         settings: {
           select: {
             description: true
@@ -349,7 +359,14 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
       ownerUserId,
       ownerId: workspace.ownerId,  // Organizer ID for messaging
       description,
-      members: workspace.members.map((m: any) => ({ id: m.id, organizerId: m.organizerId, role: m.role, acceptedAt: m.acceptedAt })),
+      members: workspace.members.map((m: any) => ({
+        id: m.id,
+        organizerId: m.organizerId,
+        role: m.role,
+        acceptedAt: m.acceptedAt,
+        organizer: m.organizer ? { id: m.organizer.id, businessName: m.organizer.businessName, profilePhoto: m.organizer.profilePhoto, user: m.organizer.user } : null,
+        user: m.user ? { id: m.user.id, name: m.user.name, email: m.user.email } : null,
+      })),
       upcomingSales: upcomingSales.map((s: any) => ({ id: s.id, title: s.title, startDate: s.startDate, endDate: s.endDate, city: s.city })),
       pastSales: pastSales.map((s: any) => ({ id: s.id, title: s.title, startDate: s.startDate, endDate: s.endDate, city: s.city }))
     });
