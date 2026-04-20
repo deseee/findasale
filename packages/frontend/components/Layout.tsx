@@ -345,6 +345,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Trophy size={16} className="text-amber-500" />
               <span>Bounties</span>
             </Link>
+            <Link href="/coupons" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Generate and manage coupons for shoppers and your purchases">
+              <Ticket size={16} className="text-amber-500" />
+              <span>Coupons</span>
+            </Link>
             <Link href="/organizer/reputation" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your organizer rating and trust score">
               <Star size={16} className="text-amber-500" />
               <span>Reputation</span>
