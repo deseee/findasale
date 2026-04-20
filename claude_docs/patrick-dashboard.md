@@ -1,75 +1,43 @@
-# Patrick's Dashboard — Week of April 20, 2026
+# Patrick's Dashboard — S528 Complete
 
-## What Happened This Session (S527)
+## What Shipped This Session
 
-Extended QA session. Worked through the UNTESTED backlog from STATE.md. S526 dev fixes are still LOCAL only — they need to be pushed before Chrome can verify them.
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Unified /coupons page | ✅ Live | Cross-role. Organizer (50 XP → $1-off) + Shopper (3 tiers: 100/200/500 XP). /organizer/coupons redirects there. |
+| Per-sale analytics endpoint | ✅ Live | GET /api/insights/organizer/sale/:saleId now returns data |
+| Categories HTML entities | ✅ Live | &amp; and other entities decode correctly in category names |
+| Explorer Profile rename | ✅ Live | "Collector Passport" → "Explorer Profile". New URL: /shopper/explorer-profile. Old URL auto-redirects. |
+| collectorTitle removed | ✅ Live | Deprecated and deleted from schema, backend, frontend. Migration deployed. |
+| profileSlug XP gate | ✅ Live | First-time custom URL slug costs 1500 XP. Free to change after. |
+| SettlementWizard fee label | ✅ Live | "Platform Fee (10%)" → shows organizer's actual rate (8% for PRO/TEAMS) |
+| Onboarding card XP values | ✅ Live | Check-in: 2→5 XP. Purchase: 25→10 XP. |
+| Platform fees | ✅ Locked | PRO=8%, TEAMS=8%. The "TEAMS should be 10%" bug entry was wrong. |
 
-## S527 — QA Results (UNTESTED Backlog)
+## Needs Chrome QA Next Session
 
-| Page | Result | Notes |
-|------|--------|-------|
-| /neighborhoods/[slug] | ✅ | Pages load. S525 QA had wrong URL (singular vs plural) |
-| /cities + /city/[slug] | ✅ | P3: "Grand rapids" capitalization in heading/breadcrumb |
-| Organizer Profile | ✅ | /organizers/[slug] loads with sales list |
-| Calendar | ✅ | /calendar renders correctly |
-| Item Detail | ✅ | Photo, price, Buy It Now modal, all CTAs work |
-| Message Templates | ✅ | Create/Edit/Delete all work. P3: Delete has no confirmation |
-| Loyalty Passport | ✅ | Save persists on reload. P3: no success toast |
-| Virtual Line Queue | ✅ | Sale picker + queue manager render |
-| Admin Verification | ✅ | Approve/Reject queue loads with pending requests |
-| Sale Progress Checklist | ✅ | 6-stage timeline, real task data (9/39 tasks) |
-| Encyclopedia | ✅ | Search/filter/sort UI present, empty state proper |
-| QR Scan Analytics | ✅ | Stats + sales table + Print Labels CTAs |
-| Hunt Pass | ✅ | $4.99/mo, 1.5x XP, Upgrade CTA present |
-| Categories | ⚠️ P2 | &amp; HTML entities not decoded in names, broken first image |
-| Coupons (/organizer/coupons) | ❌ P2 | 404 — page not built yet |
-| Insights (/organizer/insights) | ✅ | Full analytics dashboard — 4 sales, $1,926 revenue, 8.7% conversion, items by category |
-| Sale Analytics (/organizer/sales/[id]/analytics) | ❌ P2 | Sale-specific drill-down — backend GET /api/insights/organizer/sale/:saleId returns 404 |
+- `/coupons` — log in as shopper, generate a coupon. Log in as organizer, generate a code.
+- `/shopper/explorer-profile` — verify loads, nav shows "Explorer Profile", old /shopper/explorer-passport redirects
+- Per-sale analytics — verify /organizer/sales/[id]/analytics returns data
+- SettlementWizard receipt step — verify fee label shows 8% (not hardcoded 10%)
+- Onboarding card — verify +5 XP and +10 XP values show correctly
+- #235 DonationModal — charity close step in settlement wizard (live since S526, unverified)
+- #224 rapid-capture — /organizer/rapid-capture → /organizer/sales redirect
 
-## S526 Fixes — Still LOCAL, Not Pushed
+## Known Issue
 
-These are ready on your machine but need `.\push.ps1` before they go live:
+- `/organizer/insights` shows "failed to load" in browser — pre-existing, not caused by S528. Needs Railway log investigation next session.
 
-| Fix | Status |
-|-----|--------|
-| #224 rapid-capture 404 | LOCAL — needs push |
-| W-5 Create Sale link | LOCAL — needs push |
-| #235 DonationModal | LOCAL — needs push |
-| #228 receipt labels | LOCAL — needs push |
-| #266 Collector Passport rename | LOCAL — needs push |
-| #200 collectorTitle on profile | LOCAL — needs push |
-| #270 INITIATE onboarding card | LOCAL — needs push |
-| S518-D Downgrade to Free button | LOCAL — needs push |
+## Key Decisions Locked This Session
 
-## Push Block (Run This)
+- PRO and TEAMS both have **8% platform fee** — do not change
+- collectorTitle is **gone** — do not rebuild
+- profileSlug costs **1500 XP** first time, free after
+- Coupons live at **/coupons** (not under /organizer or /shopper)
+- Explorer Profile is the **permanent name** for what was Collector Passport
 
-```powershell
-git add packages/frontend/pages/organizer/rapid-capture.tsx
-git add packages/frontend/pages/workspace/[slug].tsx
-git add packages/frontend/components/DonationModal.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/pages/shopper/explorer-passport.tsx
-git add packages/frontend/pages/shopper/profile/[userId].tsx
-git add packages/backend/src/services/collectorPassportService.ts
-git add packages/frontend/components/ExplorerGuildOnboardingCard.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git add packages/frontend/pages/organizer/subscription.tsx
-git add packages/frontend/components/SettlementWizard.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S526+S527: Fix #224 #235 #228 #266 #200 #270 W-5 S518-D — bug batch + Collector Passport rename + doc updates"
-.\push.ps1
-```
+## Next Session Priorities
 
-## What Needs to Happen Next (S528)
-
-1. **Push** — run the block above
-2. **Chrome QA** — after deploy, verify all 8 S526 fixes are live
-3. **Dev dispatch** — fix new P2 bugs:
-   - Build organizer coupons page
-   - Fix categories HTML entity decode + broken image
-   - Fix TEAMS platform fee (shows 8%, should be 10%)
-   - Investigate sale-specific analytics (/organizer/sales/[id]/analytics vs /organizer/insights)
-4. **Backend Prisma** — run `prisma generate` in packages/database (pre-existing stale client, not blocking)
+1. Investigate /organizer/insights runtime error (Railway logs)
+2. Chrome QA the S528 features above
+3. Chrome QA remaining S526 items (#235, #224, #270)
