@@ -758,7 +758,7 @@ const OrganizerDashboard = () => {
                   <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: SIMPLE</h3>
                   <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Unlock more features — PRO is just $29/mo</p>
                   <p className="text-sm text-warm-700 dark:text-warm-300">
-                    <strong>PRO includes:</strong> 500+ items per sale • Advanced analytics • Brand Kit • Command Center
+                    <strong>PRO includes:</strong> 500+ items per sale • Advanced analytics • Brand Kit
                   </p>
                 </div>
                 <Link href="/organizer/pricing" className="flex-shrink-0 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
