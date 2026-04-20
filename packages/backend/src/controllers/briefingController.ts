@@ -175,6 +175,8 @@ export const getBriefing = async (req: AuthRequest, res: Response) => {
         teamMemberId: a.teamMemberId,
         name,
         role: a.role,
+        teamRole: a.teamMember.role || 'MEMBER',
+        department: a.teamMember.department || null,
         ownsArea: a.ownsArea,
         status: a.status,
         eta: a.eta,

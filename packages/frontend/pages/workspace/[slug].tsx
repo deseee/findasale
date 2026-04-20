@@ -271,8 +271,11 @@ export default function WorkspacePage() {
     );
   }
 
-  // Morning Briefing: if a qualifying sale exists, render briefing instead of dashboard
-  if (briefingData?.briefing) {
+  // View toggle: briefing vs dashboard (state declared inline since hooks can't be conditional)
+  const [forceDashboard, setForceDashboard] = useState(false);
+
+  // Morning Briefing: if a qualifying sale exists and user hasn't toggled away, render briefing
+  if (briefingData?.briefing && !forceDashboard) {
     return (
       <>
         <Head>
@@ -283,6 +286,7 @@ export default function WorkspacePage() {
           briefing={briefingData.briefing}
           workspaceId={workspace.id}
           workspaceName={workspace.name}
+          onExitBriefing={() => setForceDashboard(true)}
         />
       </>
     );
@@ -305,13 +309,21 @@ export default function WorkspacePage() {
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Workspace Header */}
-        <div className="mb-8">
+        <div className="mb-8 flex items-center justify-between">
           <a
             href="/organizer/dashboard"
-            className="text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 text-sm font-medium mb-4 inline-block"
+            className="text-sage-600 dark:text-sage-400 hover:text-sage-700 dark:hover:text-sage-300 text-sm font-medium inline-block"
           >
             ← Back to Dashboard
           </a>
+          {briefingData?.briefing && forceDashboard && (
+            <button
+              onClick={() => setForceDashboard(false)}
+              className="text-sm font-medium px-4 py-2 rounded-full bg-sage-600 text-white hover:bg-sage-700 transition"
+            >
+              Back to Day-of Briefing
+            </button>
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">

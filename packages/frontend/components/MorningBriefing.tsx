@@ -28,6 +28,8 @@ interface TeamMemberInfo {
   teamMemberId: string;
   name: string;
   role: string;
+  teamRole: string;
+  department: string | null;
   ownsArea: string | null;
   status: string;
   eta: string | null;
@@ -66,6 +68,7 @@ interface MorningBriefingProps {
   briefing: BriefingData;
   workspaceId: string;
   workspaceName: string;
+  onExitBriefing?: () => void;
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -96,6 +99,36 @@ const STATUS_LABELS: Record<string, string> = {
   EN_ROUTE: 'En route',
   RUNNING_LATE: 'Running late',
   CONFIRMED: 'Confirmed',
+};
+
+// ── Weather approximation (Grand Rapids, MI by month) ─────────────────────
+
+function getApproxWeather(dateStr: string): { tempHigh: number; condition: string; icon: string } | null {
+  const month = new Date(dateStr).getMonth();
+  const data: Record<number, { tempHigh: number; condition: string; icon: string }> = {
+    0: { tempHigh: 31, condition: 'Cold & snowy', icon: '❄️' },
+    1: { tempHigh: 34, condition: 'Cold & snowy', icon: '❄️' },
+    2: { tempHigh: 45, condition: 'Chilly', icon: '🌥️' },
+    3: { tempHigh: 58, condition: 'Cool', icon: '🌤️' },
+    4: { tempHigh: 70, condition: 'Mild', icon: '☀️' },
+    5: { tempHigh: 79, condition: 'Warm', icon: '☀️' },
+    6: { tempHigh: 83, condition: 'Hot', icon: '☀️' },
+    7: { tempHigh: 81, condition: 'Warm', icon: '⛅' },
+    8: { tempHigh: 74, condition: 'Pleasant', icon: '🌤️' },
+    9: { tempHigh: 61, condition: 'Cool', icon: '🍂' },
+    10: { tempHigh: 47, condition: 'Chilly', icon: '🌥️' },
+    11: { tempHigh: 34, condition: 'Cold', icon: '❄️' },
+  };
+  return data[month] || null;
+}
+
+// ── Team role labels ──────────────────────────────────────────────────────
+
+const TEAM_ROLE_LABELS: Record<string, string> = {
+  MANAGER: 'Manager',
+  MEMBER: 'Member',
+  VIEWER: 'Viewer',
+  OWNER: 'Owner',
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -144,36 +177,30 @@ function Countdown({ startDate }: { startDate: string }) {
 
   if (countdown.state === 'open') {
     return (
-      <div style={{ textAlign: 'center', padding: '24px 0' }}>
-        <div style={{ fontFamily: 'Fraunces, serif', fontSize: 48, fontWeight: 500, color: COLORS.sage, letterSpacing: -1 }}>
+      <div className="text-center py-6">
+        <div className="font-serif text-5xl font-medium text-sage-600 dark:text-sage-400" style={{ letterSpacing: -1 }}>
           {countdown.label}
         </div>
       </div>
     );
   }
 
-  // Split into number + unit pairs for styling
   const parts = countdown.label.split(' ');
   return (
-    <div style={{ padding: '24px 0' }}>
-      <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: 2, color: '#6B7670', textTransform: 'uppercase' as const, marginBottom: 8 }}>
+    <div className="py-6">
+      <div className="text-xs font-medium tracking-widest text-gray-500 dark:text-gray-400 uppercase mb-2">
         Doors open in
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' as const }}>
+      <div className="flex items-baseline gap-1.5 flex-wrap">
         {parts.map((part, i) => {
           const isNum = /^\d+$/.test(part);
           return (
             <span
               key={i}
-              style={{
-                fontFamily: isNum ? 'Fraunces, serif' : 'Inter, sans-serif',
-                fontSize: isNum ? 80 : 20,
-                fontWeight: isNum ? 500 : 400,
-                fontStyle: isNum ? 'normal' : 'italic',
-                color: isNum ? COLORS.ink : '#6B7670',
-                letterSpacing: isNum ? -3 : 0,
-                lineHeight: 1,
-              }}
+              className={isNum
+                ? 'font-serif text-[80px] font-medium text-warm-900 dark:text-warm-100 leading-none'
+                : 'font-sans text-xl italic text-gray-500 dark:text-gray-400 leading-none'}
+              style={isNum ? { letterSpacing: -3 } : undefined}
             >
               {part}
             </span>
@@ -184,30 +211,24 @@ function Countdown({ startDate }: { startDate: string }) {
   );
 }
 
-function VitalsStrip({ rsvpCount, cashFloat }: { rsvpCount: number; cashFloat: number | null }) {
+function VitalsStrip({ rsvpCount, cashFloat, startDate }: { rsvpCount: number; cashFloat: number | null; startDate: string }) {
+  const weather = getApproxWeather(startDate);
+  const weatherLabel = weather ? `${weather.icon} ${weather.tempHigh}°F` : '--°F';
   const pills = [
-    { label: '--°F', sublabel: 'Weather' },
+    { label: weatherLabel, sublabel: weather?.condition || 'Weather' },
     { label: String(rsvpCount), sublabel: 'RSVPs' },
     { label: formatCashFloat(cashFloat), sublabel: 'Cash float' },
   ];
 
   return (
-    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const, margin: '16px 0' }}>
+    <div className="flex gap-2.5 flex-wrap my-4">
       {pills.map((pill) => (
         <div
           key={pill.sublabel}
-          style={{
-            background: COLORS.card,
-            border: `1px solid ${COLORS.line}`,
-            borderRadius: 10,
-            padding: '10px 16px',
-            flex: '1 1 0',
-            minWidth: 90,
-            textAlign: 'center' as const,
-          }}
+          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 flex-1 min-w-[90px] text-center"
         >
-          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 22, fontWeight: 500, color: COLORS.ink }}>{pill.label}</div>
-          <div style={{ fontSize: 11, color: '#6B7670', marginTop: 2 }}>{pill.sublabel}</div>
+          <div className="font-serif text-[22px] font-medium text-warm-900 dark:text-warm-100">{pill.label}</div>
+          <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{pill.sublabel}</div>
         </div>
       ))}
     </div>
@@ -217,103 +238,136 @@ function VitalsStrip({ rsvpCount, cashFloat }: { rsvpCount: number; cashFloat: n
 function PrepThermometer({
   tasks,
   onToggle,
+  onAddTask,
 }: {
   tasks: PrepTaskInfo[];
   onToggle: (taskId: string, currentDone: boolean) => void;
+  onAddTask: (title: string, urgent: boolean) => void;
 }) {
-  if (tasks.length === 0) {
-    return (
-      <div style={{ padding: '16px 0', color: '#6B7670', fontSize: 14, fontStyle: 'italic' }}>
-        No prep tasks yet
-      </div>
-    );
-  }
+  const [showAdd, setShowAdd] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newUrgent, setNewUrgent] = useState(false);
+
+  const handleSubmit = () => {
+    if (!newTitle.trim()) return;
+    onAddTask(newTitle.trim(), newUrgent);
+    setNewTitle('');
+    setNewUrgent(false);
+    setShowAdd(false);
+  };
 
   const doneCount = tasks.filter((t) => t.done).length;
   const urgentIncomplete = tasks.filter((t) => t.urgent && !t.done);
   const nonUrgentIncomplete = tasks.filter((t) => !t.urgent && !t.done);
 
   return (
-    <div style={{ margin: '20px 0' }}>
-      {/* Section heading */}
-      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 500, color: COLORS.ink, marginBottom: 12 }}>
-        Prep
-      </div>
-
-      {/* Segmented bar */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-        {tasks.map((task) => {
-          let bg: string;
-          let border: string | undefined;
-          if (task.done) {
-            bg = COLORS.sage;
-            border = undefined;
-          } else if (task.urgent) {
-            bg = 'rgba(197,99,74,0.22)';
-            border = `1.5px solid rgba(197,99,74,0.5)`;
-          } else {
-            bg = 'rgba(30,42,36,0.07)';
-            border = undefined;
-          }
-          return (
-            <div
-              key={task.id}
-              style={{
-                flex: 1,
-                height: 14,
-                borderRadius: 3,
-                background: bg,
-                border: border || 'none',
-              }}
-              title={task.title}
-            />
-          );
-        })}
-      </div>
-
-      {/* Fraction */}
-      <div style={{ fontSize: 13, color: '#6B7670', marginBottom: 16 }}>
-        {doneCount} of {tasks.length} ready
-      </div>
-
-      {/* Urgent incomplete panel */}
-      {urgentIncomplete.length > 0 && (
-        <div
-          style={{
-            background: 'rgba(197,99,74,0.08)',
-            border: `1px solid rgba(197,99,74,0.25)`,
-            borderRadius: 12,
-            padding: '14px 16px',
-            marginBottom: 12,
-          }}
+    <div className="my-5">
+      {/* Section heading + add button */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-serif text-lg font-medium text-warm-900 dark:text-warm-100">
+          Prep
+        </div>
+        <button
+          onClick={() => setShowAdd(!showAdd)}
+          className="text-sm font-medium px-3 py-1.5 rounded-full border border-sage-500 dark:border-sage-400 text-sage-600 dark:text-sage-400 hover:bg-sage-50 dark:hover:bg-sage-900/20 transition"
         >
-          <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.coral, marginBottom: 10, textTransform: 'uppercase' as const, letterSpacing: 1 }}>
-            Before doors open
+          {showAdd ? 'Cancel' : '+ Add task'}
+        </button>
+      </div>
+
+      {/* Add task form */}
+      {showAdd && (
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-4">
+          <input
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
+            placeholder="Task name..."
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm outline-none focus:ring-2 focus:ring-sage-500 mb-3"
+            autoFocus
+          />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newUrgent}
+                onChange={(e) => setNewUrgent(e.target.checked)}
+                className="accent-coral-500"
+              />
+              Urgent (before doors open)
+            </label>
+            <button
+              onClick={handleSubmit}
+              disabled={!newTitle.trim()}
+              className="px-4 py-2 rounded-full bg-sage-600 text-white text-sm font-medium disabled:opacity-50 hover:bg-sage-700 transition"
+            >
+              Add
+            </button>
           </div>
-          {urgentIncomplete.map((task) => (
-            <TaskRow key={task.id} task={task} onToggle={onToggle} />
-          ))}
         </div>
       )}
 
-      {/* Non-urgent incomplete */}
-      {nonUrgentIncomplete.length > 0 && (
-        <div style={{ opacity: 0.6 }}>
-          {nonUrgentIncomplete.map((task) => (
-            <TaskRow key={task.id} task={task} onToggle={onToggle} />
-          ))}
+      {tasks.length === 0 && !showAdd && (
+        <div className="py-4 text-gray-500 dark:text-gray-400 text-sm italic">
+          No prep tasks yet — tap &quot;+ Add task&quot; to get started
         </div>
       )}
 
-      {/* Done tasks (collapsed) */}
-      {doneCount > 0 && (
-        <div style={{ opacity: 0.4, marginTop: 8 }}>
-          {tasks
-            .filter((t) => t.done)
-            .map((task) => (
-              <TaskRow key={task.id} task={task} onToggle={onToggle} />
+      {tasks.length > 0 && (
+        <>
+          {/* Segmented bar */}
+          <div className="flex gap-1 mb-2">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                className={`flex-1 h-3.5 rounded-sm ${
+                  task.done
+                    ? 'bg-sage-500 dark:bg-sage-600'
+                    : task.urgent
+                    ? 'bg-red-200 dark:bg-red-900/30 border border-red-300 dark:border-red-700'
+                    : 'bg-gray-200 dark:bg-gray-700'
+                }`}
+                title={task.title}
+              />
             ))}
-        </div>
+          </div>
+
+          {/* Fraction */}
+          <div className="text-[13px] text-gray-500 dark:text-gray-400 mb-4">
+            {doneCount} of {tasks.length} ready
+          </div>
+
+          {/* Urgent incomplete panel */}
+          {urgentIncomplete.length > 0 && (
+            <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3.5 mb-3">
+              <div className="text-[13px] font-semibold text-red-600 dark:text-red-400 mb-2.5 uppercase tracking-wider">
+                Before doors open
+              </div>
+              {urgentIncomplete.map((task) => (
+                <TaskRow key={task.id} task={task} onToggle={onToggle} />
+              ))}
+            </div>
+          )}
+
+          {/* Non-urgent incomplete */}
+          {nonUrgentIncomplete.length > 0 && (
+            <div className="opacity-60">
+              {nonUrgentIncomplete.map((task) => (
+                <TaskRow key={task.id} task={task} onToggle={onToggle} />
+              ))}
+            </div>
+          )}
+
+          {/* Done tasks (collapsed) */}
+          {doneCount > 0 && (
+            <div className="opacity-40 mt-2">
+              {tasks.filter((t) => t.done).map((task) => (
+                <TaskRow key={task.id} task={task} onToggle={onToggle} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -321,35 +375,19 @@ function PrepThermometer({
 
 function TaskRow({ task, onToggle }: { task: PrepTaskInfo; onToggle: (id: string, done: boolean) => void }) {
   return (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '8px 0',
-        cursor: 'pointer',
-        minHeight: 44,
-      }}
-    >
+    <label className="flex items-center gap-2.5 py-2 cursor-pointer min-h-[44px]">
       <input
         type="checkbox"
         checked={task.done}
         onChange={() => onToggle(task.id, task.done)}
-        style={{ width: 20, height: 20, accentColor: COLORS.sage, cursor: 'pointer', flexShrink: 0 }}
+        className="w-5 h-5 accent-sage-600 cursor-pointer flex-shrink-0"
         aria-label={`Mark "${task.title}" as ${task.done ? 'incomplete' : 'complete'}`}
       />
-      <span
-        style={{
-          fontSize: 14,
-          color: COLORS.ink,
-          textDecoration: task.done ? 'line-through' : 'none',
-          flex: 1,
-        }}
-      >
+      <span className={`text-sm text-warm-900 dark:text-warm-100 flex-1 ${task.done ? 'line-through' : ''}`}>
         {task.title}
       </span>
       {task.urgent && !task.done && (
-        <span style={{ fontSize: 11, color: COLORS.coral, fontWeight: 600 }}>URGENT</span>
+        <span className="text-[11px] text-red-600 dark:text-red-400 font-semibold">URGENT</span>
       )}
     </label>
   );
@@ -371,8 +409,8 @@ function TeamRoster({
   onStatusUpdate: (status: string) => void;
 }) {
   return (
-    <div style={{ margin: '20px 0' }}>
-      <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 500, color: COLORS.ink, marginBottom: 12 }}>
+    <div className="my-5">
+      <div className="font-serif text-lg font-medium text-warm-900 dark:text-warm-100 mb-3">
         Team
       </div>
       {team.map((member, idx) => (
@@ -380,12 +418,12 @@ function TeamRoster({
           key={member.id}
           member={member}
           colorIndex={idx}
-          isSelf={false /* TODO: match by userId when available */}
+          isSelf={false}
           onStatusUpdate={onStatusUpdate}
         />
       ))}
       {team.length === 0 && (
-        <div style={{ color: '#6B7670', fontSize: 14, fontStyle: 'italic', padding: '8px 0' }}>
+        <div className="text-gray-500 dark:text-gray-400 text-sm italic py-2">
           No team assignments yet
         </div>
       )}
@@ -406,64 +444,45 @@ function TeamCard({
 }) {
   const avatarColor = AVATAR_COLORS[colorIndex % AVATAR_COLORS.length];
   const statusColor = STATUS_COLORS[member.status] || COLORS.purple;
+  const roleLabel = TEAM_ROLE_LABELS[member.teamRole] || member.teamRole;
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '12px 0',
-        borderBottom: `1px solid ${COLORS.line}`,
-      }}
-    >
+    <div className="flex items-center gap-3 py-3 border-b border-gray-200 dark:border-gray-700">
       {/* Avatar */}
       <div
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          background: avatarColor,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
+        className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+        style={{ background: avatarColor }}
       >
-        <span style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 500, color: '#fff' }}>
+        <span className="font-serif text-xl font-medium text-white">
           {member.avatarInitial}
         </span>
       </div>
 
       {/* Info */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: COLORS.ink }}>{member.name}</span>
-          <span style={{ fontSize: 12, color: '#6B7670' }}>{member.role}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[15px] font-semibold text-warm-900 dark:text-warm-100">{member.name}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{roleLabel}</span>
+          {member.department && (
+            <span className="text-xs text-gray-400 dark:text-gray-500">· {member.department}</span>
+          )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-          {/* Status dot */}
+        <div className="flex items-center gap-1.5 mt-0.5">
           <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: statusColor,
-              display: 'inline-block',
-              flexShrink: 0,
-            }}
+            className="w-2 h-2 rounded-full inline-block flex-shrink-0"
+            style={{ background: statusColor }}
           />
-          <span style={{ fontSize: 13, color: statusColor, fontWeight: 500 }}>
+          <span className="text-[13px] font-medium" style={{ color: statusColor }}>
             {STATUS_LABELS[member.status] || member.status}
           </span>
           {member.status === 'EN_ROUTE' && member.eta && (
-            <span style={{ fontSize: 12, color: '#6B7670' }}>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               · ETA {new Date(member.eta).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
             </span>
           )}
         </div>
         {member.ownsArea && (
-          <div style={{ fontSize: 12, color: '#6B7670', marginTop: 2 }}>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             Owns: {member.ownsArea}
           </div>
         )}
@@ -471,22 +490,11 @@ function TeamCard({
 
       {/* Message button */}
       <button
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          border: `1px solid ${COLORS.line}`,
-          background: 'transparent',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
+        className="w-11 h-11 rounded-full border border-gray-200 dark:border-gray-600 bg-transparent cursor-pointer flex items-center justify-center flex-shrink-0 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
         aria-label={`Message ${member.name}`}
         title={`Message ${member.name}`}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={COLORS.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-warm-900 dark:text-warm-100">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
       </button>
@@ -536,44 +544,20 @@ function ChatPanel({
     }
   };
 
-  const containerStyle: React.CSSProperties = isSheet
-    ? {
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        background: COLORS.paper,
-        display: 'flex',
-        flexDirection: 'column',
-      }
-    : {
-        background: COLORS.card,
-        border: `1px solid ${COLORS.line}`,
-        borderRadius: 12,
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        minHeight: 300,
-      };
-
   return (
-    <div style={containerStyle}>
+    <div className={isSheet
+      ? 'fixed inset-0 z-[1000] bg-warm-50 dark:bg-gray-900 flex flex-col'
+      : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl flex flex-col h-full min-h-[300px]'
+    }>
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 16px',
-          borderBottom: `1px solid ${COLORS.line}`,
-        }}
-      >
-        <span style={{ fontFamily: 'Fraunces, serif', fontSize: 16, fontWeight: 500, color: COLORS.ink }}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <span className="font-serif text-base font-medium text-warm-900 dark:text-warm-100">
           Team Chat
         </span>
         {isSheet && onClose && (
           <button
             onClick={onClose}
-            style={{ width: 44, height: 44, border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 20, color: COLORS.ink }}
+            className="w-11 h-11 border-none bg-transparent cursor-pointer text-xl text-warm-900 dark:text-warm-100"
             aria-label="Close chat"
           >
             ✕
@@ -582,72 +566,42 @@ function ChatPanel({
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+      <div className="flex-1 overflow-y-auto px-4 py-3">
         {(!chatData?.messages || chatData.messages.length === 0) && (
-          <div style={{ color: '#6B7670', fontSize: 14, fontStyle: 'italic', textAlign: 'center', padding: 24 }}>
+          <div className="text-gray-500 dark:text-gray-400 text-sm italic text-center py-6">
             No messages yet — say something!
           </div>
         )}
         {chatData?.messages?.map((msg) => (
-          <div key={msg.id} style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink }}>{msg.organizer.businessName}</span>
-              <span style={{ fontSize: 11, color: '#6B7670' }}>
+          <div key={msg.id} className="mb-3">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[13px] font-semibold text-warm-900 dark:text-warm-100">{msg.organizer.businessName}</span>
+              <span className="text-[11px] text-gray-500 dark:text-gray-400">
                 {new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
               </span>
             </div>
-            <div style={{ fontSize: 14, color: COLORS.ink, marginTop: 2 }}>{msg.content}</div>
+            <div className="text-sm text-warm-900 dark:text-warm-200 mt-0.5">{msg.content}</div>
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Composer */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          padding: '12px 16px',
-          borderTop: `1px solid ${COLORS.line}`,
-          background: COLORS.card,
-        }}
-      >
+      <div className="flex gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <input
           type="text"
           value={messageInput}
           onChange={(e) => setMessageInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           placeholder="Type a message..."
-          style={{
-            flex: 1,
-            padding: '10px 14px',
-            borderRadius: 22,
-            border: `1px solid ${COLORS.line}`,
-            background: COLORS.paper,
-            fontSize: 14,
-            color: COLORS.ink,
-            outline: 'none',
-            minHeight: 44,
-          }}
+          className="flex-1 px-3.5 py-2.5 rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm text-warm-900 dark:text-warm-100 outline-none focus:ring-2 focus:ring-sage-500 min-h-[44px]"
           disabled={isSending}
           aria-label="Chat message"
         />
         <button
           onClick={handleSend}
           disabled={isSending || !messageInput.trim()}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: '50%',
-            border: 'none',
-            background: COLORS.sage,
-            cursor: isSending || !messageInput.trim() ? 'default' : 'pointer',
-            opacity: isSending || !messageInput.trim() ? 0.5 : 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
+          className="w-11 h-11 rounded-full border-none bg-sage-600 cursor-pointer flex items-center justify-center flex-shrink-0 disabled:opacity-50 hover:bg-sage-700 transition"
           aria-label="Send message"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -668,24 +622,18 @@ function StatusButtons({ currentStatus, onUpdate }: { currentStatus: string; onU
   ];
 
   return (
-    <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' as const }}>
+    <div className="flex gap-2 my-3 flex-wrap">
       {buttons.map((btn) => {
         const isActive = currentStatus === btn.status;
         return (
           <button
             key={btn.status}
             onClick={() => onUpdate(btn.status)}
+            className="px-4 py-2.5 rounded-full text-sm font-semibold cursor-pointer min-h-[44px] transition-all duration-150"
             style={{
-              padding: '10px 18px',
-              borderRadius: 22,
               border: `2px solid ${btn.color}`,
               background: isActive ? btn.color : 'transparent',
               color: isActive ? '#fff' : btn.color,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              minHeight: 44,
-              transition: 'all 0.15s ease',
             }}
             aria-label={`Set status to ${btn.label}`}
             aria-pressed={isActive}
@@ -700,7 +648,7 @@ function StatusButtons({ currentStatus, onUpdate }: { currentStatus: string; onU
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function MorningBriefing({ briefing, workspaceId, workspaceName }: MorningBriefingProps) {
+export default function MorningBriefing({ briefing, workspaceId, workspaceName, onExitBriefing }: MorningBriefingProps) {
   const { user } = useAuth();
   const [team, setTeam] = useState(briefing.team);
   const [tasks, setTasks] = useState(briefing.prep.tasks);
@@ -795,6 +743,25 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName }
     [workspaceId, sale.id, myStatus]
   );
 
+  // Add prep task
+  const handleAddTask = useCallback(
+    async (title: string, urgent: boolean) => {
+      try {
+        const { data } = await api.post(`/workspace/${workspaceId}/briefing/prep`, {
+          saleId: sale.id,
+          title,
+          urgent,
+        });
+        if (data.task) {
+          setTasks((prev) => [...prev, data.task]);
+        }
+      } catch (err) {
+        console.error('Error creating prep task:', err);
+      }
+    },
+    [workspaceId, sale.id]
+  );
+
   const doneCount = tasks.filter((t) => t.done).length;
   const fullAddress = formatAddress(sale);
 
@@ -804,40 +771,38 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName }
   // We use a simple approach: render both layouts, wrap in responsive divs
 
   return (
-    <div style={{ background: COLORS.paper, minHeight: '100vh', color: COLORS.ink }}>
+    <div className="bg-warm-50 dark:bg-gray-900 min-h-screen text-warm-900 dark:text-warm-100">
       {/* ── Desktop Layout ── */}
-      <div className="hidden lg:block" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 32px' }}>
+      <div className="hidden lg:block max-w-[1280px] mx-auto px-8">
         {/* Header */}
-        <div style={{ padding: '24px 0 16px', borderBottom: `1px solid ${COLORS.line}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="py-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
             <div>
-              <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: 2, color: '#6B7670', textTransform: 'uppercase' as const }}>
+              <div className="text-xs font-medium tracking-widest text-gray-500 dark:text-gray-400 uppercase">
                 FindA.Sale · Day of
               </div>
-              <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 32, fontWeight: 500, color: COLORS.ink, margin: '4px 0' }}>
+              <h1 className="font-serif text-[32px] font-medium text-warm-900 dark:text-warm-100 my-1">
                 {sale.title}
               </h1>
               <a
                 href={mapsUrl(sale)}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ fontSize: 14, color: COLORS.sage, textDecoration: 'underline' }}
+                className="text-sm text-sage-600 dark:text-sage-400 underline"
               >
                 {fullAddress}
               </a>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div
-                style={{
-                  background: COLORS.card,
-                  border: `1px solid ${COLORS.line}`,
-                  borderRadius: 20,
-                  padding: '6px 14px',
-                  fontSize: 13,
-                  color: COLORS.ink,
-                  fontWeight: 500,
-                }}
-              >
+            <div className="flex items-center gap-3">
+              {onExitBriefing && (
+                <button
+                  onClick={onExitBriefing}
+                  className="text-sm font-medium px-4 py-2 rounded-full border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                >
+                  Dashboard view
+                </button>
+              )}
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-3.5 py-1.5 text-[13px] text-warm-900 dark:text-warm-100 font-medium">
                 {team.length} team member{team.length !== 1 ? 's' : ''}
               </div>
             </div>
@@ -845,28 +810,28 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName }
         </div>
 
         {/* Two-column layout */}
-        <div style={{ display: 'flex', gap: 32, paddingTop: 24 }}>
+        <div className="flex gap-8 pt-6">
           {/* Left column — morning read */}
-          <div style={{ flex: '0 0 58%', minWidth: 0 }}>
+          <div className="flex-[0_0_58%] min-w-0">
             <Countdown startDate={sale.startDate} />
-            <VitalsStrip rsvpCount={briefing.rsvpCount} cashFloat={sale.cashFloat} />
+            <VitalsStrip rsvpCount={briefing.rsvpCount} cashFloat={sale.cashFloat} startDate={sale.startDate} />
 
             {/* My status */}
-            <div style={{ margin: '16px 0' }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: '#6B7670', marginBottom: 4 }}>Your status</div>
+            <div className="my-4">
+              <div className="text-[13px] font-medium text-gray-500 dark:text-gray-400 mb-1">Your status</div>
               <StatusButtons currentStatus={myStatus} onUpdate={handleStatusUpdate} />
             </div>
 
-            <PrepThermometer tasks={tasks} onToggle={handleToggleTask} />
+            <PrepThermometer tasks={tasks} onToggle={handleToggleTask} onAddTask={handleAddTask} />
 
             {/* Footer */}
-            <div style={{ padding: '32px 0 24px', textAlign: 'right' as const }}>
-              <span style={{ fontStyle: 'italic', color: '#6B7670', fontSize: 14 }}>Good luck today!</span>
+            <div className="py-8 text-right">
+              <span className="italic text-gray-500 dark:text-gray-400 text-sm">Good luck today!</span>
             </div>
           </div>
 
           {/* Right column — live room */}
-          <div style={{ flex: '0 0 38%', minWidth: 0, display: 'flex', flexDirection: 'column' as const, gap: 16 }}>
+          <div className="flex-[0_0_38%] min-w-0 flex flex-col gap-4">
             <TeamRoster
               team={team}
               currentUserId={user?.id}
@@ -877,7 +842,7 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName }
             />
 
             {/* Persistent chat panel */}
-            <div style={{ flex: 1, minHeight: 350 }}>
+            <div className="flex-1 min-h-[350px]">
               <ChatPanel workspaceId={workspaceId} saleId={sale.id} />
             </div>
           </div>
@@ -885,13 +850,23 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName }
       </div>
 
       {/* ── Mobile Layout ── */}
-      <div className="block lg:hidden" style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px', paddingBottom: 80 }}>
+      <div className="block lg:hidden max-w-[600px] mx-auto px-4 pb-20">
         {/* Top bar */}
-        <div style={{ padding: '16px 0 12px' }}>
-          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: 2, color: '#6B7670', textTransform: 'uppercase' as const }}>
-            FindA.Sale · Day of
+        <div className="pt-4 pb-3">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-medium tracking-widest text-gray-500 dark:text-gray-400 uppercase">
+              FindA.Sale · Day of
+            </div>
+            {onExitBriefing && (
+              <button
+                onClick={onExitBriefing}
+                className="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              >
+                Dashboard
+              </button>
+            )}
           </div>
-          <h1 style={{ fontFamily: 'Fraunces, serif', fontSize: 24, fontWeight: 500, color: COLORS.ink, margin: '4px 0' }}>
+          <h1 className="font-serif text-2xl font-medium text-warm-900 dark:text-warm-100 my-1">
             {sale.title}
           </h1>
         </div>
@@ -901,29 +876,21 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName }
           href={mapsUrl(sale)}
           target="_blank"
           rel="noopener noreferrer"
-          style={{
-            display: 'block',
-            fontSize: 14,
-            color: COLORS.sage,
-            textDecoration: 'underline',
-            padding: '6px 0 16px',
-            minHeight: 44,
-            lineHeight: '32px',
-          }}
+          className="block text-sm text-sage-600 dark:text-sage-400 underline py-1.5 pb-4 min-h-[44px] leading-8"
         >
           {fullAddress}
         </a>
 
         <Countdown startDate={sale.startDate} />
-        <VitalsStrip rsvpCount={briefing.rsvpCount} cashFloat={sale.cashFloat} />
+        <VitalsStrip rsvpCount={briefing.rsvpCount} cashFloat={sale.cashFloat} startDate={sale.startDate} />
 
         {/* My status */}
-        <div style={{ margin: '12px 0' }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: '#6B7670', marginBottom: 4 }}>Your status</div>
+        <div className="my-3">
+          <div className="text-[13px] font-medium text-gray-500 dark:text-gray-400 mb-1">Your status</div>
           <StatusButtons currentStatus={myStatus} onUpdate={handleStatusUpdate} />
         </div>
 
-        <PrepThermometer tasks={tasks} onToggle={handleToggleTask} />
+        <PrepThermometer tasks={tasks} onToggle={handleToggleTask} onAddTask={handleAddTask} />
         <TeamRoster
           team={team}
           currentUserId={user?.id}
@@ -934,29 +901,14 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName }
         />
 
         {/* Footer */}
-        <div style={{ padding: '32px 0 16px', textAlign: 'center' as const }}>
-          <span style={{ fontStyle: 'italic', color: '#6B7670', fontSize: 14 }}>Good luck today!</span>
+        <div className="py-8 text-center">
+          <span className="italic text-gray-500 dark:text-gray-400 text-sm">Good luck today!</span>
         </div>
 
         {/* Chat FAB (mobile) */}
         <button
           onClick={() => setChatOpen(true)}
-          style={{
-            position: 'fixed',
-            bottom: 20,
-            right: 20,
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
-            background: COLORS.sage,
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(30,42,36,0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-          }}
+          className="fixed bottom-5 right-5 w-14 h-14 rounded-full bg-sage-600 border-none cursor-pointer shadow-lg flex items-center justify-center z-[100] hover:bg-sage-700 transition"
           aria-label="Open team chat"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -966,23 +918,8 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName }
 
         {/* Last message preview badge */}
         {briefing.lastChatMessage && !chatOpen && (
-          <div
-            style={{
-              position: 'fixed',
-              bottom: 82,
-              right: 16,
-              background: COLORS.card,
-              border: `1px solid ${COLORS.line}`,
-              borderRadius: 12,
-              padding: '8px 12px',
-              maxWidth: 220,
-              fontSize: 12,
-              color: COLORS.ink,
-              boxShadow: '0 2px 8px rgba(30,42,36,0.1)',
-              zIndex: 99,
-            }}
-          >
-            <span style={{ fontWeight: 600 }}>{briefing.lastChatMessage.author}: </span>
+          <div className="fixed bottom-[82px] right-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 max-w-[220px] text-xs text-warm-900 dark:text-warm-100 shadow-md z-[99]">
+            <span className="font-semibold">{briefing.lastChatMessage.author}: </span>
             {briefing.lastChatMessage.content.length > 60
               ? briefing.lastChatMessage.content.slice(0, 60) + '…'
               : briefing.lastChatMessage.content}
