@@ -134,19 +134,9 @@ const PricingPage = () => {
       return;
     }
 
-    // Downgrade to free: fetch preview first
+    // Downgrade to free: redirect to subscription page where downgrade is properly handled
     if (tier.id === 'SIMPLE') {
-      setLoadingPreview(true);
-      try {
-        const res = await api.get('/billing/downgrade-preview');
-        setDowngradePreview(res.data);
-      } catch (err: any) {
-        console.error('Downgrade preview error:', err);
-        setDowngradePreview(null);
-      } finally {
-        setLoadingPreview(false);
-        setShowDowngradePreview(true);
-      }
+      router.push('/organizer/subscription');
       return;
     }
 

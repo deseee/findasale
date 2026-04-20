@@ -48,7 +48,7 @@ export default function EfficiencyCoachingWidget() {
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Efficiency Coach</h3>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${percentileColor}`}>
-          Top {100 - data.percentileRank}%
+          Top {data.percentileRank}%
         </span>
       </div>
 
