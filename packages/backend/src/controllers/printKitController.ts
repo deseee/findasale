@@ -103,8 +103,9 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
     const STICKER_H = 72;   // 1 inch
     const COLS_STICKER = 3;
     const ROWS_STICKER = 10;
-    const LEFT_MARGIN = 13;
-    const TOP_MARGIN = 36;
+    const LEFT_MARGIN = 13.5; // Avery 5160: 3/16" = 13.5pt
+    const TOP_MARGIN = 36;    // Avery 5160: 1/2" = 36pt
+    const H_GAP = 9;          // Avery 5160: 1/8" column gutter = 9pt
     const QR_SIZE = 48;
 
     // For each item (index i):
@@ -116,7 +117,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
 
       const col = i % COLS_STICKER;
       const row = Math.floor((i % (COLS_STICKER * ROWS_STICKER)) / COLS_STICKER);
-      const sX = LEFT_MARGIN + col * STICKER_W;
+      const sX = LEFT_MARGIN + col * (STICKER_W + H_GAP); // pitch = 198pt (2.75")
       const sY = TOP_MARGIN + row * STICKER_H;
       const item = items[i];
 
