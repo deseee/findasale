@@ -1,10 +1,14 @@
 /**
+ * DEPRECATED S522 — Content moved inline to promote/[saleId].tsx
+ *
  * Share & Promote Modal
  *
  * Feature #131: Share & Promote Templates (Option B — Expand)
  * Provides organizers with multiple pre-templated formats for promoting their sales.
  * S520: Overhauled — fixed time bug, reordered tabs, added Spotlight Item tab,
  * added items prop, removed garbage time display.
+ *
+ * TODO: Pending Patrick confirmation before removal.
  */
 
 import React, { useState, useEffect } from 'react';
