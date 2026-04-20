@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-04-19b
+# cache-bust: 2026-04-20a
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
@@ -12,6 +12,10 @@ WORKDIR /app
 
 # --- deps stage ---
 FROM base AS deps
+
+# Skip Puppeteer Chrome download — we use system Chromium in the runner stage
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Copy workspace manifests first for caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -43,7 +47,12 @@ RUN cd packages/backend && npx tsc || true
 # --- runner stage ---
 FROM node:20-slim AS runner
 
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL (Prisma) + Chromium (Puppeteer label printing)
+RUN apt-get update -y && apt-get install -y \
+  openssl \
+  chromium \
+  && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
 
 WORKDIR /app
@@ -61,8 +70,14 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
 
 ENV NODE_ENV=production
+# Puppeteer: use system Chromium instead of bundled binary
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "req
+  CMD node -e "require('http').get('http://localhost:3001/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
+CMD ["node", "packages/backend/dist/index.js"]
