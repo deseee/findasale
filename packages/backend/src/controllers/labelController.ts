@@ -70,7 +70,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
       justify-content: center;
     }
     .label-sale { font-size: 7pt; color: #888888; }
-    .label-title { font-size: 13pt; font-weight: bold; color: #111111; margin: 0.05in 0; }
+    .label-title { font-size: 16pt; font-weight: bold; color: #111111; margin: 0.05in 0; }
     .label-price { font-size: 22pt; font-weight: bold; color: #16a34a; margin: 0.05in 0; line-height: 1; }
     .label-chips { font-size: 8pt; color: #555555; margin: 0.05in 0; }
     .label-id { font-size: 6pt; color: #cccccc; }
@@ -219,7 +219,7 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
       justify-content: center;
     }
     .label-sale { font-size: 7pt; color: #888888; }
-    .label-title { font-size: 13pt; font-weight: bold; color: #111111; margin: 0.05in 0; }
+    .label-title { font-size: 16pt; font-weight: bold; color: #111111; margin: 0.05in 0; }
     .label-price { font-size: 22pt; font-weight: bold; color: #16a34a; margin: 0.05in 0; line-height: 1; }
     .label-chips { font-size: 8pt; color: #555555; margin: 0.05in 0; }
     .label-id { font-size: 6pt; color: #cccccc; }
