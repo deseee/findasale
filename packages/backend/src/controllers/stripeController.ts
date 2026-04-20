@@ -17,6 +17,7 @@ import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, markHuntPassCancellation } from '../services/xpService'; // Explorer's Guild XP awards
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
+import { evaluateReferralFraud, getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '../services/referralFraudService'; // D-XP-004: Referral Fraud Gate
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
@@ -938,13 +939,71 @@ export const webhookHandler = async (req: Request, res: Response) => {
           try {
             const purchaseCount = await prisma.purchase.count({ where: { userId: purchase.userId } });
             if (purchaseCount === 1) {
-              // This is their first purchase — award referral first-purchase XP bonus
-              awardXp(purchase.userId, 'REFERRAL_FIRST_PURCHASE', XP_AWARDS.REFERRAL_FIRST_PURCHASE, {
-                saleId: purchase.saleId ?? undefined,
-                description: 'First purchase referral bonus'
-              }).catch(err =>
-                console.error('[XP] Failed to award first-purchase referral XP:', err)
-              );
+              // This is their first purchase — check referral reward eligibility
+              try {
+                const referralReward = await prisma.referralReward.findFirst({
+                  where: { referredUserId: purchase.userId }
+                });
+
+                if (referralReward) {
+                  const referrer = await prisma.user.findUnique({
+                    where: { id: referralReward.referrerId }
+                  });
+
+                  if (referrer) {
+                    // D-XP-004 Phase 3: Evaluate referral fraud (observational)
+                    const fraudEval = await evaluateReferralFraud(
+                      referralReward.referrerId,
+                      purchase.userId,
+                      referralReward.id
+                    );
+
+                    // D-XP-004 Phase 4: Account age gate
+                    const ageDays = getAccountAgeDays(
+                      await prisma.user.findUnique({
+                        where: { id: purchase.userId },
+                        select: { createdAt: true }
+                      }).then(u => u?.createdAt || new Date())
+                    );
+
+                    if (ageDays < MIN_ACCOUNT_AGE_DAYS) {
+                      // Defer the reward: too young
+                      const deferUntilDate = new Date();
+                      deferUntilDate.setDate(
+                        deferUntilDate.getDate() + (MIN_ACCOUNT_AGE_DAYS - ageDays)
+                      );
+
+                      await prisma.referralReward.update({
+                        where: { id: referralReward.id },
+                        data: {
+                          deferredUntil: deferUntilDate,
+                          deferredReason: 'ACCOUNT_AGE_GATE'
+                        }
+                      });
+
+                      console.log(
+                        `[referralReward] Deferred XP award for referrer ${referralReward.referrerId} (account age gate, ${ageDays}/${MIN_ACCOUNT_AGE_DAYS} days)`
+                      );
+                    } else if (referralReward.fraudReviewStatus === 'CLEAR') {
+                      // Account is old enough and fraud status is clear — award XP to referrer
+                      awardXp(referralReward.referrerId, 'REFERRAL_FIRST_PURCHASE', XP_AWARDS.REFERRAL_FIRST_PURCHASE, {
+                        saleId: purchase.saleId ?? undefined,
+                        description: 'First purchase referral bonus'
+                      }).catch(err =>
+                        console.error('[XP] Failed to award first-purchase referral XP:', err)
+                      );
+                    } else {
+                      // Fraud review pending — defer until reviewed
+                      console.log(
+                        `[referralReward] Deferred XP award for referrer ${referralReward.referrerId} (fraud review pending)`
+                      );
+                    }
+                  }
+                }
+              } catch (fraudCheckErr) {
+                console.error('[referralReward] Fraud check failed, deferring caution:', fraudCheckErr);
+                // On error, defer to be safe
+              }
             }
           } catch (err) {
             console.error('[XP] Failed to check first-purchase referral:', err);

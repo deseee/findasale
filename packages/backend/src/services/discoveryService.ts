@@ -107,10 +107,16 @@ export async function getPersonalizedFeed(
         const distance = haversineDistance(userLat, userLng, sale.lat!, sale.lng!);
       const dayOffset = Math.max(0, (sale.startDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
       const recencyBonus = Math.max(0, 5 - dayOffset); // 5 pts if today, 0 if 5+ days away
+      let score = recencyBonus + (distance < 25 ? 3 : 0); // Slight bonus for proximity
+
+      // +500 if active SALE_BUMP boost
+      if (sale.boost?.status === 'ACTIVE' && sale.boost?.boostType === 'SALE_BUMP') {
+        score += 500;
+      }
 
         return {
           ...sale,
-          score: recencyBonus + (distance < 25 ? 3 : 0), // Slight bonus for proximity
+          score,
         };
       });
 
@@ -180,6 +186,11 @@ export async function getPersonalizedFeed(
       if (distance < 25) {
         score += 15;
       }
+    }
+
+    // +500 if active SALE_BUMP boost
+    if (sale.boost?.status === 'ACTIVE' && sale.boost?.boostType === 'SALE_BUMP') {
+      score += 500;
     }
 
     return { ...sale, score };

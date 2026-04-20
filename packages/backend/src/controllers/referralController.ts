@@ -118,3 +118,148 @@ export const claimReward = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to claim reward' });
   }
 };
+
+/**
+ * D-XP-004 Phase 5: Admin endpoints for referral fraud review
+ */
+
+// GET /api/admin/referral-fraud-signals
+// Paginated list of referral fraud signals, filterable by review outcome
+// Admin-only endpoint
+export const listFraudSignals = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Admin check is done via middleware in routes/admin.ts
+    const { outcome = 'PENDING', page = 1, limit = 50 } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit as string) || 50));
+    const offset = (pageNum - 1) * limitNum;
+
+    const signals = await prisma.referralFraudSignal.findMany({
+      where: outcome && outcome !== 'ALL' ? { reviewOutcome: outcome as string } : {},
+      include: {
+        referralReward: {
+          select: {
+            id: true,
+            referrerId: true,
+            referredUserId: true,
+            fraudReviewStatus: true,
+            deviceFraudScore: true,
+            ipFraudScore: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limitNum
+    });
+
+    const total = await prisma.referralFraudSignal.count({
+      where: outcome && outcome !== 'ALL' ? { reviewOutcome: outcome as string } : {}
+    });
+
+    res.json({
+      signals,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (error) {
+    console.error('[admin] Error listing fraud signals:', error);
+    res.status(500).json({ message: 'Failed to list fraud signals' });
+  }
+};
+
+// PATCH /api/admin/referral-fraud-signals/:signalId/review
+// Review a fraud signal and decide: APPROVED or REJECTED
+// Admin-only endpoint
+export const reviewFraudSignal = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Admin check is done via middleware in routes/admin.ts
+    const { signalId } = req.params;
+    const { outcome, notes } = req.body;
+
+    // Validate outcome
+    if (!['APPROVED', 'REJECTED'].includes(outcome)) {
+      return res.status(400).json({ message: 'Invalid outcome. Must be APPROVED or REJECTED.' });
+    }
+
+    // Get the signal
+    const signal = await prisma.referralFraudSignal.findUnique({
+      where: { id: signalId },
+      include: { referralReward: { select: { id: true, referrerId: true } } }
+    });
+
+    if (!signal) {
+      return res.status(404).json({ message: 'Signal not found' });
+    }
+
+    // Update the signal
+    const updated = await prisma.referralFraudSignal.update({
+      where: { id: signalId },
+      data: {
+        reviewOutcome: outcome,
+        reviewedByAdminId: req.user.id,
+        reviewedAt: new Date(),
+        notes
+      }
+    });
+
+    // If APPROVED, also update the referral reward status and trigger deferred XP award if applicable
+    if (outcome === 'APPROVED') {
+      await prisma.referralReward.update({
+        where: { id: signal.referralReward.id },
+        data: { fraudReviewStatus: 'APPROVED' }
+      });
+
+      // If there's a deferred reward with DEVICE_ABUSE reason, we can now award XP
+      const reward = await prisma.referralReward.findUnique({
+        where: { id: signal.referralReward.id }
+      });
+
+      if (reward && reward.deferredReason === 'DEVICE_ABUSE') {
+        // Award XP to referrer now that fraud is cleared
+        const { awardXp, XP_AWARDS } = await import('../services/xpService');
+        awardXp(reward.referrerId, 'REFERRAL_FIRST_PURCHASE', XP_AWARDS.REFERRAL_FIRST_PURCHASE, {
+          description: 'First purchase referral bonus (approved by admin)'
+        }).catch(err =>
+          console.error('[admin] Failed to award deferred XP:', err)
+        );
+
+        // Clear deferred status
+        await prisma.referralReward.update({
+          where: { id: reward.id },
+          data: {
+            deferredUntil: null,
+            deferredReason: null,
+            fraudReviewStatus: 'APPROVED'
+          }
+        });
+      }
+    } else {
+      // REJECTED: mark as rejected
+      await prisma.referralReward.update({
+        where: { id: signal.referralReward.id },
+        data: { fraudReviewStatus: 'REJECTED' }
+      });
+    }
+
+    res.json({
+      message: `Signal ${outcome.toLowerCase()}`,
+      signal: updated
+    });
+  } catch (error) {
+    console.error('[admin] Error reviewing fraud signal:', error);
+    res.status(500).json({ message: 'Failed to review signal' });
+  }
+};
