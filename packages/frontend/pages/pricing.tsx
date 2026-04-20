@@ -12,7 +12,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../components/AuthContext';
 import BecomeOrganizerModal from '../components/BecomeOrganizerModal';
-import DowngradePreviewModal from '../components/DowngradePreviewModal';
 import PremiumCTA from '../components/PremiumCTA';
 import TierComparisonTable from '../components/TierComparisonTable';
 import TooltipHelper from '../components/TooltipHelper';
@@ -79,18 +78,15 @@ const TIERS: PricingTier[] = [
     name: 'TEAMS',
     price: 79,
     period: 'per month',
-    description: 'For organizers running unlimited sales, shops managing rotating inventory, and teams across multiple locations.',
+    description: 'For organizers who need unlimited items and teams running sales at multiple locations.',
     featured: false,
     stripePrice: process.env.NEXT_PUBLIC_STRIPE_TEAMS_PRICE_ID || 'price_1TDUQtLTUdEUnHOTCEoNL6oz',
     features: [
       'Everything in Pro, plus:',
-      'Unlimited Items* — perfect for shops with 800+ pieces',
-      'Unlimited sales*, Unlimited photos*, Unlimited auto tags*',
-      'Always-Live Storefront* — items stay listed until sold',
-      'Shop Mode — auto-renewing storefront for resale shops & antique dealers',
-      'Rotating inventory — move items between sales, nothing lost',
+      'Unlimited sales*, Unlimited Items*',
+      'Unlimited photos*, Unlimited auto tags*',
       'Command Center — manage all sales at once',
-      'Multi-user workspace — Up to 12 team members',
+      'Multi-user workspace — Includes 5 team members',
       'Extra members: $20/mo',
       'Team roles & permissions',
       'Webhooks - Connect your systems',
@@ -106,9 +102,6 @@ const PricingPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [cancelledMessage, setCancelledMessage] = useState<string | null>(null);
   const [showBecomeOrganizerModal, setShowBecomeOrganizerModal] = useState(false);
-  const [showDowngradePreview, setShowDowngradePreview] = useState(false);
-  const [downgradePreview, setDowngradePreview] = useState<any>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Handle cancelled checkout redirect
   useEffect(() => {
@@ -137,9 +130,9 @@ const PricingPage = () => {
       return;
     }
 
-    // Downgrade to free: redirect to subscription page where downgrade is properly handled
+    // Free tier: no checkout needed
     if (tier.id === 'SIMPLE') {
-      router.push('/organizer/subscription');
+      // In a real scenario, you'd downgrade here
       return;
     }
 
@@ -198,20 +191,6 @@ const PricingPage = () => {
     }
 
     return `Upgrade to ${tier.name}`;
-  };
-
-  const handleDowngradeConfirm = async () => {
-    try {
-      setLoading('SIMPLE');
-      await api.post('/billing/downgrade');
-      // Refresh user to show new tier
-      router.replace(router.asPath);
-    } catch (err: any) {
-      console.error('Downgrade error:', err);
-      setError(err.response?.data?.message || 'Failed to downgrade. Please try again.');
-    } finally {
-      setLoading(null);
-    }
   };
 
   return (
@@ -678,21 +657,6 @@ const PricingPage = () => {
           </div>
         </div>
       </div>
-
-      {/* Downgrade Preview Modal */}
-      <DowngradePreviewModal
-        isOpen={showDowngradePreview}
-        onClose={() => setShowDowngradePreview(false)}
-        preview={{
-          currentTier: downgradePreview?.currentTier || user?.organizerTier || 'PRO',
-          itemsHidden: downgradePreview?.itemsHidden ?? 0,
-          photosAffected: downgradePreview?.photosAffected ?? 0,
-          graceEndDate: downgradePreview?.graceEndDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          teamMembersLosing: downgradePreview?.teamMembersLosing ?? 0,
-          totalItems: downgradePreview?.totalItems ?? 0,
-        }}
-        onConfirm={handleDowngradeConfirm}
-      />
 
       {/* Become Organizer Modal */}
       <BecomeOrganizerModal
