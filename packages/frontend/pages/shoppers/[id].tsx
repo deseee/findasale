@@ -43,7 +43,6 @@ interface ShopperProfile {
   badges: Badge[];
   profileSlug?: string;
   purchasesVisible: boolean;
-  collectorTitle?: string;
   purchases?: Purchase[];
 }
 
@@ -98,11 +97,6 @@ const ShopperProfilePage = () => {
           <div className="flex items-start justify-between mb-6">
             <div className="flex-1">
               <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-100 mb-2">{profile.name}</h1>
-              {profile.collectorTitle && (
-                <p className="text-amber-600 dark:text-amber-400 font-medium text-sm mb-2 inline-block bg-amber-50 dark:bg-amber-900 px-3 py-1 rounded-full">
-                  {profile.collectorTitle}
-                </p>
-              )}
               <p className="text-warm-600 dark:text-gray-400 text-sm">Member since {memberSince}</p>
             </div>
             <div className="text-right">

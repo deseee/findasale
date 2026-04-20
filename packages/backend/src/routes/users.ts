@@ -13,7 +13,7 @@ import {
 import { getBrandFollows, addBrandFollow, removeBrandFollow } from '../controllers/brandFollowController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { spendXp } from '../services/xpService';
+import { spendXp, getSpendableXp } from '../services/xpService';
 import { getRankProgressInfo, getRankBenefits, RANK_NAMES } from '../utils/rankUtils';
 
 const router = Router();
@@ -274,20 +274,6 @@ router.patch('/me/interests', authenticate, async (req: AuthRequest, res: Respon
   }
 });
 
-// Curated collector titles for Task #200: Shopper Public Profiles
-const VALID_COLLECTOR_TITLES = [
-  'Furniture Curator',
-  'Vintage Hunter',
-  'Antique Aficionado',
-  'Book Collector',
-  'Jewelry Hunter',
-  'Mid-Century Modernist',
-  'Kitchen Collector',
-  'Art Enthusiast',
-  'Tool Time',
-  'General Picker'
-];
-
 // Update user's notification preferences and profile settings
 router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -295,18 +281,11 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { notificationPrefs, profileSlug, purchasesVisible, collectorTitle, teamsOnboardingComplete } = req.body;
+    const { notificationPrefs, profileSlug, purchasesVisible, teamsOnboardingComplete } = req.body;
 
     // Validate notification preferences if provided
     if (notificationPrefs && typeof notificationPrefs !== 'object') {
       return res.status(400).json({ message: 'notificationPrefs must be an object' });
-    }
-
-    // Validate collector title if provided
-    if (collectorTitle && !VALID_COLLECTOR_TITLES.includes(collectorTitle)) {
-      return res.status(400).json({
-        message: 'Invalid collector title. Must be one of: ' + VALID_COLLECTOR_TITLES.join(', ')
-      });
     }
 
     // Validate profile slug if provided (alphanumeric, dash, underscore)
@@ -314,6 +293,42 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         message: 'Profile slug can only contain letters, numbers, dashes, and underscores'
       });
+    }
+
+    // XP-gate for profileSlug: check if user is setting a slug for the first time
+    if (profileSlug !== undefined && profileSlug) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { profileSlug: true, guildXp: true },
+      });
+
+      if (currentUser && !currentUser.profileSlug) {
+        // User does not have a slug yet — this is the first time
+        // Check spendable XP
+        const spendable = await getSpendableXp(req.user.id);
+        const XP_COST = 1500;
+
+        if (spendable < XP_COST) {
+          const shortfall = XP_COST - spendable;
+          return res.status(400).json({
+            message: `Setting a custom profile slug requires ${XP_COST} XP. You need ${shortfall} more XP.`,
+            xpNeeded: shortfall,
+            spendableXp: spendable,
+          });
+        }
+
+        // Spend the XP
+        const spendSuccess = await spendXp(req.user.id, XP_COST, 'PROFILE_SLUG_UNLOCK', {
+          description: `Set custom profile slug: ${profileSlug}`,
+        });
+
+        if (!spendSuccess) {
+          return res.status(400).json({
+            message: 'Failed to spend XP. Please try again.',
+          });
+        }
+      }
+      // If user already has a slug, allow free update (no XP cost)
     }
 
     const updateData: any = {};
@@ -325,9 +340,6 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
     if (purchasesVisible !== undefined) {
       updateData.purchasesVisible = purchasesVisible;
-    }
-    if (collectorTitle !== undefined) {
-      updateData.collectorTitle = collectorTitle || null;
     }
     if (teamsOnboardingComplete !== undefined) {
       updateData.teamsOnboardingComplete = teamsOnboardingComplete;
@@ -344,8 +356,8 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         notificationPrefs: true,
         profileSlug: true,
         purchasesVisible: true,
-        collectorTitle: true,
         teamsOnboardingComplete: true,
+        guildXp: true,
       }
     });
 

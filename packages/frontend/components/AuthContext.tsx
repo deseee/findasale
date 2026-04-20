@@ -25,7 +25,6 @@ interface User {
   createdAt?: string;
   verificationStatus?: string;
   profileSlug?: string | null;
-  collectorTitle?: string | null;
   purchasesVisible?: boolean;
   emailVerified?: boolean; // S512: email verification gate
 }

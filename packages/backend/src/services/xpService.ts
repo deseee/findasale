@@ -570,7 +570,7 @@ export async function isXpExpiryExempt(userId: string): Promise<boolean> {
 
 /**
  * Get user's XP profile for dashboard display
- * Returns: { guildXp, explorerRank, rankProgress: { currentXp, nextRankXp, nextRank } }
+ * Returns: { guildXp, spendableXp, explorerRank, huntPassActive, huntPassExpiry, rankProgress }
  */
 export async function getUserXpProfile(userId: string) {
   try {
@@ -589,9 +589,11 @@ export async function getUserXpProfile(userId: string) {
     if (!user) return null;
 
     const progress = getRankProgress(user.guildXp);
+    const spendable = await getSpendableXp(userId);
 
     return {
       guildXp: user.guildXp,
+      spendableXp: spendable,
       explorerRank: user.explorerRank,
       huntPassActive: user.huntPassActive,
       huntPassExpiry: user.huntPassExpiry,
