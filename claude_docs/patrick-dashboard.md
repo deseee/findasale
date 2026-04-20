@@ -1,61 +1,50 @@
 # Patrick's Dashboard — Week of April 20, 2026
 
-## What Happened This Week (S523)
+## What Happened This Session (S524)
 
-Share card is fully working. It was a tough one — the bug went through 5 fixes before landing: wrong auth library, wrong auth pattern (the app uses localStorage JWT everywhere, not NextAuth cookies), missing Edge Runtime (ImageResponse requires it), Satori CSS violations across all 6 render functions, and Buffer API not available in Edge Runtime. All resolved. The share card now renders correctly, theme/format switching works, and download delivers a real PNG. Also fixed: eBay EndedSync was crashing on XML error responses from eBay — now gracefully skips with xmlVal instead of JSON.parse.
+Pricing page is finally clean. After a rough restoration battle that went through too many wrong states, pricing.tsx is now back to the correct baseline and has two clean additions: "Retail Mode — always-live storefront for resale shops & antique dealers" in the TEAMS features list, and "Stripe Terminal card reader compatible (reader sold separately, not required)" in PRO. The Stripe Terminal hardware guide was also corrected — M2 and Tap to Pay are now marked as incompatible (they require a native iOS/Android app, not a web app). The subscription page support copy is fixed per D-S392 (no SLA promises, no "AI" in copy). S518-A and S518-B bugs were fixed and pushed.
 
 ## Status
 
-**Share card:** ✅ Chrome-verified. Download works.
-**eBay EndedSync XML crash:** ✅ Fixed and deployed.
-**S518-D downgrade button:** ✅ Verified.
-**S518-E workspace team chat:** ✅ Verified.
-**S518-C efficiency coach:** ⚠️ Shows "Top 0%" — could be correct for test data (0% sell-through). Needs real organizer data to confirm.
-**QA backlog:** 30+ features still pending. S518-A/B timed out in Chrome — retry next session.
+**Pricing page (Retail Mode + card reader):** ✅ Shipped — push block below
+**subscription.tsx support copy:** ✅ Fixed per D-S392
+**Stripe Terminal hardware guide:** ✅ Corrected (M2/Tap to Pay = not compatible)
+**S518-A PostSaleMomentumCard:** ✅ Fix pushed — pending Chrome verify (next session)
+**S518-B Legendary chip:** ✅ Fix pushed — pending Chrome verify (next session)
+**S518-C Efficiency Coach label:** ⚠️ Fix was pushed in S518 — pending Chrome verify
+**S518-E Workspace team chat:** ✅ Chrome-verified (S523)
+**S518-D Downgrade to Free button:** ⚠️ Button doesn't exist — your call: build it or skip it?
 
-## Next Session Priority
+## Next Session
 
-**P0 — TEAMS subscription page:** Two things needed:
-1. Fix support copy — current page likely shows wrong SLA language. Correct copy per locked decision: "community forum + support assistant + help center" (no SLA promises, no "AI" in copy)
-2. Add credit card hardware section — surface that organizers can order a Stripe Terminal card reader for in-person POS. Show options, link to order, explain POS integration.
+Patrick is away — next session will run autonomous Chrome QA through the backlog. Order:
 
-HIGH (fix before your next demo):
-- Search filters are completely invisible in dark mode — white text on white background, unreadable
-- Sale detail page: items are buried at the very bottom again (after Reviews and Map), violating the layout order we locked months ago
-- Pricing page says Teams includes "5 team members" — should say 12 (locked decision D-007)
+1. Smoke test pricing page (Retail Mode in TEAMS, card reader in PRO)
+2. S518-A: PostSaleMomentumCard verify
+3. S518-B: Legendary chip verify
+4. S518-C: Efficiency Coach label verify
+5. Feature QA Queue from qa-backlog.md — organizer features, then shopper features, then nav
 
-All three are already queued for dev dispatch.
+Every ✅ will have Chrome evidence. Every bug found gets a dev dispatch and re-verify before moving on. Full results logged in qa-backlog.md and STATE.md.
 
-MEDIUM (needs your input on one):
-- Purchase history: Price and status badges clip/truncate at desktop width
-- Trending page: missing-photo placeholders look harsh in dark mode
-- Map page: tiles may be blank on load — **can you open /map in your browser and confirm whether you see a real map?** The audit tool couldn't tell if it was a real bug.
-- **Favorites/Wishlist/Collections: the feature has three different names depending on where you click.** Nav says "Favorites," the URL says "wishlist," the page title says "My Collections." Pick one name and the agents will make it consistent everywhere. Options: Favorites (simplest), Wishlist (descriptive), Collections (most brandable). Your call.
+## Pending Your Input
 
-**Brand drift audit (April 14):** ~22 active violations still in the codebase, mostly copy that says "estate sale" when it should name all sale types. The worst is the Share & Promote modal — it generates social post templates that say "Running an estate sale this weekend" even for garage sales and auctions. This has been flagged 3 audit cycles in a row. Easy fix queued for dev.
+- **S518-D:** "Downgrade to Free" button doesn't exist anywhere. Should it? Easy to build — just needs your green light.
+- **Favorites/Wishlist/Collections:** Nav says "Favorites," URL says "wishlist," page title says "My Collections." Pick one name.
+- **Map page:** Can you open /map on finda.sale and confirm map tiles load? (Quick yes/no.)
 
-## Pending Decisions
+## Push Block (S524)
 
-No items currently marked PENDING in the decisions log. All prior decisions are locked or resolved.
-
-**Your input needed this week:**
-- What should the Favorites/Wishlist/Collections feature be called? (see above)
-- Can you confirm the map page renders correctly in your browser?
-
-## Beta Tester Impact
-
-What's better: organizers on TEAMS can now keep their storefront live continuously without re-publishing each sale. The Share & Promote page is much more useful — quick-share tiles, flyer cards, and spotlighted items all in one place. Shoppers on the leaderboard and shopper dashboard are working correctly.
-
-What's still rough: share card image download is broken (401 error), sale items are buried at the bottom of sale detail pages, and search filters disappear in dark mode — all three of these are things beta testers will hit immediately.
-
-## This Week's Priority
-
-1. **Fix the share card 401** — this is the unresolved bug from the last session and blocks the biggest new feature from being usable
-2. **Dispatch the 3 HIGH audit findings** — search dark mode, sale detail section reorder, and the Teams pricing copy fix are all small changes that make the site look polished
-3. **QA backlog** — 30+ features have been waiting for browser verification since S518; need to work through these so you know what's actually working before showing beta testers
-
-## Action Items for Patrick
-
-- [ ] Open `/map` on finda.sale in your browser — do map tiles load? Just needs a quick yes/no
-- [ ] Pick a name for the Favorites feature: **Favorites**, **Wishlist**, or **Collections**
-- [ ] If you haven't pushed the S522 wrap commit yet, run the push block from the previous session notes (removes `share-card.ts`, adds `share-card.tsx`)
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/pricing.tsx
+git add packages/frontend/pages/organizer/subscription.tsx
+git add packages/frontend/components/HardwareSection.tsx
+git add packages/frontend/pages/organizer/add-items/[saleId]/review.tsx
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add claude_docs/guides/stripe-card-reader-hardware-guide.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S524: pricing Retail Mode + card reader, subscription support copy fix, S518-A/B fixes, hardware guide corrected"
+.\push.ps1
+```
