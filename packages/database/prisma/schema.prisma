@@ -846,8 +846,6 @@ model Item {
   // Feature: Graceful Tier Degradation — grace lock status
   graceLockedAt              DateTime? // When item was locked due to tier downgrade
   graceLockedReason          String? // Reason for grace lock (e.g., "items_over_limit")
-  // Feature #XXX: Shop Mode — Private inventory items
-  isPrivate                  Boolean                @default(false) // Hidden from shoppers (pricing, repairing, hold for customer)
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 

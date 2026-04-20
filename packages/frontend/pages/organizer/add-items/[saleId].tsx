@@ -276,7 +276,6 @@ const emptyForm = {
   shippingPrice: '',
   tags: [] as string[], // Feature #42: Voice-to-tag support
   photoUrls: [] as string[],
-  isPrivate: false,
 };
 
 const AddItemsDetailPage = () => {
@@ -1607,24 +1606,6 @@ const AddItemsDetailPage = () => {
                     </div>
                   </div>
 
-                  {/* Private Item Toggle */}
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <label className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={formData.isPrivate}
-                        onChange={(e) => setFormData({ ...formData, isPrivate: e.target.checked })}
-                        className="w-4 h-4 rounded"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-warm-900 dark:text-gray-100">Private — hidden from shoppers</p>
-                        <p className="text-xs text-warm-600 dark:text-gray-400">
-                          Use for items you're pricing, repairing, or holding for a specific customer.
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-
                   {/* Conditional: Reverse Auction Fields */}
                   {formData.listingType === 'REVERSE_AUCTION' && (
                     <div className="grid grid-cols-3 gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
@@ -2186,11 +2167,6 @@ const AddItemsDetailPage = () => {
                             }`}>
                               {draftStatus === 'PUBLISHED' ? 'Live' : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
                             </span>
-                            {item.isPrivate && (
-                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                Private
-                              </span>
-                            )}
                           </div>
                           <button
                             type="button"
