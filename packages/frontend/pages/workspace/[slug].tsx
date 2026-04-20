@@ -331,61 +331,6 @@ export default function WorkspacePage() {
           )}
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">
-              {workspace.name}
-            </h1>
-            <p className="text-warm-600 dark:text-warm-400">
-              Team collaboration hub
-            </p>
-          </div>
-
-          {/* Workspace Description */}
-          {workspace.description && (
-            <div className="mb-6 bg-warm-50 dark:bg-gray-700 rounded-lg p-6">
-              <h3 className="text-sm font-semibold text-warm-600 dark:text-warm-400 mb-2">
-                About This Workspace
-              </h3>
-              <p className="text-warm-900 dark:text-warm-100 leading-relaxed">
-                {workspace.description}
-              </p>
-            </div>
-          )}
-
-          {/* Workspace Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
-              <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Team Members</p>
-              <p className="text-2xl font-bold text-warm-900 dark:text-warm-100 mt-1">
-                {acceptedMembers.length}
-              </p>
-            </div>
-
-            <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
-              <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Workspace Owner</p>
-              <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mt-1 truncate">
-                {workspace.ownerName || 'Unknown'}
-              </p>
-            </div>
-
-            <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
-              <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Created</p>
-              <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mt-1">
-                {createdDate}
-              </p>
-            </div>
-
-            <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
-              <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Workspace ID</p>
-              <p className="text-xs font-mono text-warm-900 dark:text-warm-100 mt-1 truncate">
-                {workspace.id}
-              </p>
-            </div>
-          </div>
-
-        </div>
-
         {/* Two-column layout for team and activity */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Team Members Section - Left Column (spans 1) */}
@@ -766,23 +711,70 @@ export default function WorkspacePage() {
           </div>
         </div>
 
-        {/* Workspace Settings */}
-        {isOwner && (
-          <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
-              Workspace Settings
-            </h2>
-            <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
-              Manage members, roles, and workspace configuration.
-            </p>
-            <a
-              href="/organizer/workspace"
-              className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition"
-            >
-              Workspace Settings
-            </a>
+        {/* Workspace Info & Settings */}
+        <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">
+                {workspace.name}
+              </h1>
+              <p className="text-warm-600 dark:text-warm-400">
+                Team collaboration hub
+              </p>
+            </div>
+            {isOwner && (
+              <a
+                href={`/organizer/workspace`}
+                className="inline-block bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold py-2 px-6 rounded-lg transition whitespace-nowrap"
+              >
+                Workspace Settings
+              </a>
+            )}
           </div>
-        )}
+
+          {/* Workspace Description */}
+          {workspace.description && (
+            <div className="mb-6 bg-warm-50 dark:bg-gray-700 rounded-lg p-6">
+              <h3 className="text-sm font-semibold text-warm-600 dark:text-warm-400 mb-2">
+                About This Workspace
+              </h3>
+              <p className="text-warm-900 dark:text-warm-100 leading-relaxed">
+                {workspace.description}
+              </p>
+            </div>
+          )}
+
+          {/* Workspace Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
+              <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Team Members</p>
+              <p className="text-2xl font-bold text-warm-900 dark:text-warm-100 mt-1">
+                {acceptedMembers.length}
+              </p>
+            </div>
+
+            <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
+              <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Workspace Owner</p>
+              <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mt-1 truncate">
+                {workspace.ownerName || 'Unknown'}
+              </p>
+            </div>
+
+            <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
+              <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Created</p>
+              <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mt-1">
+                {createdDate}
+              </p>
+            </div>
+
+            <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4">
+              <p className="text-sm text-warm-600 dark:text-warm-400 font-medium">Workspace ID</p>
+              <p className="text-xs font-mono text-warm-900 dark:text-warm-100 mt-1 truncate">
+                {workspace.id}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </>
   );
