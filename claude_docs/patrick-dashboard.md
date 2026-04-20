@@ -1,24 +1,40 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
-## S518 Summary (2026-04-19) — P1/P2/P3 bug fixes dispatched ✅
-
-**4 files to push. Push block below.**
+## S518 Summary (2026-04-19) — Bug fixes + Workspace design brief ✅
 
 ### What was fixed:
-- **P1 #234 PostSaleMomentumCard** — Items Sold and Sell-Through % on the "Sale Complete" dashboard card now show sale-specific stats (not lifetime totals). Revenue was already correct.
-- **P2 Legendary chip (review page)** — "⭐ Legendary?" chip now correctly dismisses after click. Drafts endpoint was missing `isLegendary` in its SELECT — refetch now returns updated value.
-- **P3 priceBeforeMarkdown** — Now included in 3 secondary endpoints: inspiration gallery, rare finds, and drafts. Crossed-out prices will show correctly in those views.
-- **P3 Efficiency Coach label** — "Top 100%" (which read as bottom tier) changed to show the actual percentile rank. If you beat 90% of organizers, it now shows "Top 90%".
-- **P3 Pricing downgrade stub** — "Downgrade to Free" button on pricing page now navigates to `/organizer/subscription` instead of doing nothing.
+- **P1 #234 PostSaleMomentumCard** — Items Sold and Sell-Through % now show sale-specific stats (not lifetime totals).
+- **P2 Legendary chip (review page)** — "⭐ Legendary?" chip dismisses after click. Drafts endpoint was missing `isLegendary` in SELECT.
+- **P3 priceBeforeMarkdown** — Now in 3 secondary endpoints: inspiration gallery, rare finds, drafts.
+- **P3 Efficiency Coach label** — Fixed inverted formula. "Top 100%" was showing for worst performers. Now shows actual percentile.
+- **P3 Pricing downgrade stub** — "Downgrade to Free" now navigates to `/organizer/subscription`.
+- **Workspace chat empty state** — `/workspace/test` was showing "Create a sale" even with existing sales. Fixed to check all sales, not just upcoming.
 
 ### Chrome QA this session:
-- ✅ Ripples page — confirmed working, no crash. Downtown Downsizing Sale 17 showing views/shares/activity.
-- ✅ Sale Complete card — $900 sale-specific revenue (correct, not $1,279 lifetime).
-- ⚠️ Sale Pulse views count — Grace has no active sale, can't compare Sale Pulse vs Ripples. Defer to next session with active sale.
+- ✅ Ripples page — no crash, Downtown Downsizing Sale 17 loading correctly.
+- ✅ Sale Complete card — $900 sale-specific revenue (correct).
+- ⚠️ Sale Pulse vs Ripples — Grace has no active sale, can't compare. Defer.
 
-### Patrick actions required:
-1. **Run push block below** (4 files)
-2. No migrations needed this session
+### Workspace × Sale Command (new design work):
+The workspace page looks like a settings dashboard, not a tool for running a live sale. Identified as a planned feature. Claude Design prompt is ready to paste — see below.
+
+### Claude Design prompt (paste into Claude Design):
+> It's 7am Saturday. An estate sale opens in two hours. Three team members just texted "on my way." The organizer opens this workspace on their phone to figure out: who's doing what, what's been prepped, and what's about to fall through the cracks.
+>
+> Right now this page looks like a settings dashboard. Nobody's running a sale from this. Redesign it as something you'd actually pull up in a parking lot before a chaotic morning.
+>
+> Brand: FindA.Sale. Sage green, warm, friendly. Not corporate. These are people selling grandma's furniture, not managing a SaaS team.
+>
+> The page needs to feel like a morning briefing, not a control panel. Sale status front and center. Checklist progress visible at a glance without tapping anything. Team members showing what they own. Chat accessible in one thumb reach.
+>
+> Surprise me with the layout. Don't just stack the existing cards in a different order — rethink what this page is *for* on the day of a sale.
+>
+> *(Attach the workspace screenshot when submitting)*
+
+### Patrick actions:
+1. **Run push block below** — S518 fixes
+2. **Railway MCP** — consider removing the plugin (double-OAuth fires every prompt, no Cowork replacement exists)
+3. **Claude Design** — paste the prompt above + attach the workspace screenshot → bring back the output next session
 
 ### Push block (S518):
 ```powershell
@@ -26,9 +42,11 @@ git add packages/frontend/pages/organizer/dashboard.tsx
 git add packages/backend/src/controllers/itemController.ts
 git add packages/frontend/components/EfficiencyCoachingWidget.tsx
 git add packages/frontend/pages/pricing.tsx
+git add packages/frontend/pages/workspace/[slug].tsx
+git add claude_docs/operations/qa-backlog.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S518: PostSaleMomentumCard sale-specific stats, Legendary chip fix, priceBeforeMarkdown secondary endpoints, Efficiency Coach label, pricing downgrade stub"
+git commit -m "S518: PostSaleMomentumCard sale-specific stats, Legendary chip fix, priceBeforeMarkdown endpoints, Efficiency Coach label, pricing stub, workspace chat empty state fix, QA backlog"
 .\push.ps1
 ```
 

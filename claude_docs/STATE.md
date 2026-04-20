@@ -23,11 +23,22 @@ Four parallel dev dispatches completed:
 - ⚠️ Sale Pulse vs Ripples views count — Grace has no active sale (State 3 only), Sale Pulse widget not shown. Cannot compare. S516 routes fix is code-confirmed (reads SaleRipple same as Ripples page). Re-verify next session with active sale.
 - ⚠️ UNVERIFIED — Efficiency Coach label change not yet deployed (needs push). Will confirm next session.
 
+**Workspace bug fix (S518b):**
+- **Team Communications empty state:** `workspace/[slug].tsx` lines 468, 472 — condition was checking `workspace.upcomingSales` only; test workspace had only past/ended sales. Changed to `allSales` (same array already used by Tasks dropdown). Chat tabs now render for all sales.
+- **Tasks vs. Checklist:** Separate by design but integration IS needed. Workspace Tasks = freeform team assignment. Sale Progress Tracker = /organizer/plan/[saleId]. Patrick pushed back on "no integration needed" — a team running a live sale needs checklist status visible from the workspace without leaving it. **Workspace × Sale Command integration is a planned feature (see Next Session).**
+
+**QA backlog created:** `claude_docs/operations/qa-backlog.md` — full structured queue with Hot/Unverified/Workspace/Feature sections.
+
+**Workspace × Sale Command — design session (S518 tail):**
+Patrick rejected "no integration needed" and asked for creative UX thinking. Claude Design prompt written (ready to paste into Claude Design tool). The brief: it's 7am Saturday, 3 crew members arriving, organizer pulls up workspace on phone — current page reads like a settings dashboard, not a war room. Prompt asks Claude Design to redesign around the day-of operational moment: sale stage front and center, checklist progress visible at a glance, team ownership surfaced, chat in one thumb reach. **UX spec and dev dispatch pending — blocked on Claude Design output first.**
+
 **Files changed (S518):**
 - `packages/frontend/pages/organizer/dashboard.tsx`
 - `packages/backend/src/controllers/itemController.ts`
 - `packages/frontend/components/EfficiencyCoachingWidget.tsx`
 - `packages/frontend/pages/pricing.tsx`
+- `packages/frontend/pages/workspace/[slug].tsx` (workspace chat empty state fix)
+- `claude_docs/operations/qa-backlog.md` (NEW)
 
 ---
 
@@ -1072,6 +1083,7 @@ Files (7):
 
 ## Recent Sessions
 
+- **S518 (2026-04-19):** P1/P2/P3 bug fixes: PostSaleMomentumCard sale-specific stats, Legendary chip SELECT fix, priceBeforeMarkdown on 3 secondary endpoints, Efficiency Coach percentile label fix, pricing.tsx downgrade stub → router.push. Workspace chat empty state fix (allSales not upcomingSales). QA backlog created. Workspace × Sale Command identified as planned feature (Patrick rejected "no integration needed"). Claude Design prompt written for workspace redesign. S518 push block pending Patrick.
 - **S515 (2026-04-19):** Chrome QA: #249 SIMPLE gate P1 fixed (lat/lng null → 400 before 409; fixed to omit null from POST body). #230 Who's Coming ⚠️ empty only. #231 High-Value ✅. #232 Sale Pulse ⚠️ P2 views mismatch. #233 Efficiency Coach ✅. #234 Post-Sale Momentum ⚠️ P1 lifetime revenue shown as sale revenue. Roadmap updated.
 - **S514 (2026-04-19):** Legendary item toggle (edit-item + itemController). Price Research Card redesign (sections reordered, sage green button). Stripe Connect P2 root cause: missing STRIPE_CONNECT_WEBHOOK_SECRET env var. Dark mode P2: FlashDealForm + ExpenseLineItemList. earlyAccessController req.user.id P1 fix. 8 files — NOT YET PUSHED.
 - **S513 (2026-04-19):** Early access cache items page + photo station page built. POS Run Test fix (body params). In-App modal scroll fix. live_pos isAuto removed. 7 files.
@@ -1139,36 +1151,38 @@ Files (7):
 
 ## Next Session Priority
 
-**0. Patrick: push S513 + smoke test (mandatory first action):**
-Run commit block below. After Railway/Vercel deploy, open plan page → expand Live → click POS "Run Test" → confirm success toast (not error). Then verify `live_pos` auto-checks on reload.
-
+**0. Patrick: run S518 push block (mandatory first action):**
 ```powershell
-git add packages/frontend/pages/shopper/early-access-cache/items.tsx
-git add packages/frontend/pages/sales/[id]/photo-station.tsx
-git add "packages/frontend/pages/organizer/plan/[saleId].tsx"
-git add packages/frontend/components/TestCheckoutModal.tsx
-git add packages/backend/src/controllers/checklistController.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/backend/src/controllers/itemController.ts
+git add packages/frontend/components/EfficiencyCoachingWidget.tsx
+git add packages/frontend/pages/pricing.tsx
+git add packages/frontend/pages/workspace/[slug].tsx
+git add claude_docs/operations/qa-backlog.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S513: photo station page, early-access-cache items page, POS Run Test fix, modal scroll fix, live_pos isAuto removed, roadmap v112"
+git commit -m "S518: PostSaleMomentumCard sale-specific stats, Legendary chip fix, priceBeforeMarkdown endpoints, Efficiency Coach label, pricing stub, workspace chat empty state fix, QA backlog"
 .\push.ps1
 ```
 
-**1. Patrick: manually verify In-App Payment Run Test (⚠️ UNVERIFIED — MCP can't reach Stripe iframe):**
-Open `/organizer/plan/{saleId}`, expand Live, click In-App Payment "Run Test". Type `4242 4242 4242 4242`, any future expiry, any 3-digit CVC. Confirm "In-app payment flow verified" success state + `pre_in_app_payment` auto-checks.
+**1. Chrome QA — S518 hot items (after push deploys):**
+- S518-A: `/organizer/dashboard` State 3 → PostSaleMomentumCard → verify Items Sold + Sell-Through % are sale-specific (not lifetime)
+- S518-B: `/organizer/add-items/[saleId]/review` → click "⭐ Legendary?" chip on $75+ item → chip dismisses after click
+- S518-C: `/organizer/dashboard` → Efficiency Coach → "Top X%" shows actual percentile (not "Top 100%")
+- S518-D: `/pricing` → "Downgrade to Free" → navigates to `/organizer/subscription`
+- S518-E: `/workspace/test` → Team Communications shows chat tabs (not "Create a sale" empty state)
 
-**2. Treasure hunt 3-clue limit (carry from S501, P1):**
-Update 10-clue cap → 3 in `treasureHuntQRController.ts`
+**2. Workspace × Sale Command (new feature):**
+- Run Claude Design prompt (saved in patrick-dashboard.md) in Claude Design tool → get visual mockups
+- Feed mockups back → dispatch findasale-ux for full flow spec
+- Then dispatch findasale-dev for implementation
+- Checklist data available via `GET /api/sales/:saleId/checklist` — no new backend needed for read. Task ownership needs 1 new field.
 
-**3. Chrome QA — security gates smoke test (P1, carry from S489):**
-Register a new test account → verify email gate fires. Verify existing organizers are NOT blocked.
+**3. Railway MCP — decide on removal:**
+Double-OAuth fires on every prompt. No Cowork-native replacement exists. Recommend removing plugin via Cowork settings. Railway auto-deploys on push; Railway dashboard covers logs.
 
-**4. Chrome QA — tier degradation smoke test (P1, carry from S489):**
-As existing organizer (user2 SIMPLE), confirm no grace banner. Check DowngradePreviewModal renders from upgrade page.
-
-**5. SharePromoteModal caption hashtag fix (P3):**
-Auto-generated caption includes `#estatesale` only. Should include multi-sale-type hashtags per D-001.
+**4. QA backlog — work through hot items:**
+See `claude_docs/operations/qa-backlog.md` for full queue. Start with S518 hot items above, then S516 unverified items blocked on test conditions.
 
 **Carry-forward queue (lower priority):**
 - Bump Post feed sort (needs Architect sign-off before dev dispatch)
