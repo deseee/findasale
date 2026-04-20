@@ -1,5 +1,34 @@
 # Patrick's Dashboard — Week of April 19, 2026
 
+## S519 Summary (2026-04-19) — Morning Briefing + Workspace Dashboard Fixes
+
+### What shipped:
+- **Morning Briefing** — full day-of-sale view with team roster, prep tasks, weather, chat, real-time status updates. Auto-populates team from workspace members. Briefing/dashboard toggle.
+- **Workspace team names fixed** — members now show real names instead of "Team Member" with "?" avatars.
+- **Workspace info card moved** — entire card (name, description, stats, settings button) now sits below Quick Actions.
+- **React hooks crash fixed** — useState after early return caused "Something went wrong" on workspace page.
+
+### Vercel stuck:
+The latest deployment (commit `34fc04b`) was stuck in INITIALIZING. Your next push should trigger a fresh build that supersedes it.
+
+### Push block (S519):
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/workspace/[slug].tsx
+git add packages/backend/src/controllers/workspaceController.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S519: workspace info card below Quick Actions, team member names fix, STATE+dashboard wrap"
+.\push.ps1
+```
+
+### Next session:
+- Verify Vercel deployment landed (morning briefing + workspace dashboard changes)
+- Chrome QA: morning briefing with qualifying sale, workspace dashboard team names
+- Continue from QA backlog
+
+---
+
 ## S518 Summary (2026-04-19) — Bug fixes + Workspace design brief ✅
 
 ### What was fixed:

@@ -7,6 +7,35 @@ Historical detail: `claude_docs/COMPLETED_PHASES.md`
 
 ## Current Work
 
+**S519 (2026-04-19) — Morning Briefing feature + workspace dashboard fixes**
+
+Built the full Morning Briefing day-of-sale view and fixed workspace dashboard issues.
+
+**Morning Briefing (Feature #236):**
+- Schema: SaleAssignment + PrepTask models, cashFloat on Sale
+- Backend: briefing detection endpoint (12h window around startDate), real-time socket events for prep check-offs and team status updates, auto-populate SaleAssignment from workspace TeamMembers
+- Frontend: full responsive MorningBriefing.tsx (mobile single-scroll with chat sheet, desktop two-column with persistent chat panel), dark mode, weather vitals, team role display, prep task creation UI, briefing/dashboard view toggle
+- PrepTask syncs back to SaleChecklist via optional checklistItemId link
+
+**Workspace dashboard fixes:**
+- Team member names: `getPublicWorkspace` was returning bare member IDs (`members: true`). Added explicit select with organizer/user relations so names display properly instead of "Team Member" with "?" avatars
+- Workspace info card: moved entire card (name, description, stats, settings button) from top of page to below Quick Actions per Patrick request
+- React hooks crash fix: `forceDashboard` useState was after early returns, moved above them
+
+**Vercel deployment note:** Latest deploy was stuck in INITIALIZING state. Patrick may need to push a trivial commit to trigger fresh build.
+
+**Files changed:**
+- `packages/backend/src/controllers/briefingController.ts` (NEW)
+- `packages/backend/src/routes/workspace.ts` (briefing routes added)
+- `packages/frontend/components/MorningBriefing.tsx` (NEW)
+- `packages/frontend/components/WeatherStrip.tsx` (NEW)
+- `packages/frontend/pages/workspace/[slug].tsx` (briefing integration + dashboard fixes + card reorder)
+- `packages/backend/src/controllers/workspaceController.ts` (member relations in getPublicWorkspace)
+- `packages/database/prisma/schema.prisma` (SaleAssignment, PrepTask, cashFloat)
+- `packages/database/prisma/migrations/` (briefing migration)
+
+---
+
 **S518 (2026-04-19) — P1/P2/P3 bug fixes: PostSaleMomentumCard revenue, Legendary chip, priceBeforeMarkdown, Efficiency Coach label, pricing stub**
 
 Four parallel dev dispatches completed:
