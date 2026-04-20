@@ -16,7 +16,8 @@
 
 import { ImageResponse } from 'next/og';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getSession } from 'next-auth/react';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from './auth/[...nextauth]';
 
 // XP thresholds for theme locks
 const THEME_XP_THRESHOLDS: Record<string, number> = {
@@ -545,8 +546,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get session to verify authentication
-    const session = await getSession({ req });
+    // Get session to verify authentication (server-side, reads cookie directly)
+    const session = await getServerSession(req, res, authOptions);
     if (!session) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
