@@ -119,6 +119,7 @@ const OrganizerDashboard = () => {
     return localStorage.getItem('dashboard_otherSalesExpanded') === 'true';
   });
   const [welcomedWorkspace, setWelcomedWorkspace] = useState<string | null>(null);
+  const [dismissedSharePrompts, setDismissedSharePrompts] = useState<Set<string>>(new Set());
   const hasAutoExpandedOtherSales = useRef(false);
 
   useEffect(() => {
@@ -329,6 +330,32 @@ const OrganizerDashboard = () => {
       router.replace(router.pathname, undefined, { shallow: true });
     }
   }, [router.query.upgrade, user?.organizerTier, router, showToast]);
+
+  // Load dismissed share prompt IDs from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const dismissed = new Set<string>();
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('share-prompt-dismissed-') && localStorage.getItem(key) === 'true') {
+        dismissed.add(key.replace('share-prompt-dismissed-', ''));
+      }
+    }
+    setDismissedSharePrompts(dismissed);
+  }, []);
+
+  // Helper: is a date string today or tomorrow?
+  const isDateToday = (dateStr: string): boolean => {
+    const d = new Date(dateStr);
+    const today = new Date();
+    return d.toDateString() === today.toDateString();
+  };
+  const isDateTomorrow = (dateStr: string): boolean => {
+    const d = new Date(dateStr);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return d.toDateString() === tomorrow.toDateString();
+  };
 
   // Handle sale cloning
   const handleCloneSale = async (saleId: string) => {
@@ -1075,6 +1102,67 @@ const OrganizerDashboard = () => {
                       </button>
                     )}
                   </div>
+
+                  {/* B1: Post-publish share nudge */}
+                  {activeSale.status === 'PUBLISHED' && !dismissedSharePrompts.has(activeSale.id) && (
+                    <div className="mt-3 flex items-center justify-between gap-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg px-4 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">📣</span>
+                        <p className="text-sm font-medium text-teal-900 dark:text-teal-100 truncate">Your sale is live — spread the word!</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(`${window.location.origin}/sales/${activeSale.id}`);
+                              showToast('Sale link copied!', 'success');
+                            } catch {
+                              showToast('Could not copy link', 'error');
+                            }
+                          }}
+                          className="text-xs px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-full font-semibold transition-colors"
+                        >
+                          Copy Link
+                        </button>
+                        <Link
+                          href={`/organizer/promote/${activeSale.id}`}
+                          className="text-xs px-3 py-1 bg-white dark:bg-gray-800 border border-teal-300 dark:border-teal-600 text-teal-700 dark:text-teal-300 rounded-full font-semibold hover:bg-teal-50 dark:hover:bg-teal-900/40 transition-colors"
+                        >
+                          More Options →
+                        </Link>
+                        <button
+                          onClick={() => {
+                            const next = new Set(dismissedSharePrompts);
+                            next.add(activeSale.id);
+                            setDismissedSharePrompts(next);
+                            localStorage.setItem(`share-prompt-dismissed-${activeSale.id}`, '1');
+                          }}
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-0.5"
+                          aria-label="Dismiss"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* B2: Sale-day sharing reminder */}
+                  {activeSale.status === 'PUBLISHED' && (isDateToday(activeSale.startDate) || isDateTomorrow(activeSale.startDate)) && (
+                    <div className="mt-2 flex items-center justify-between gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">{isDateToday(activeSale.startDate) ? '🗓️' : '⏰'}</span>
+                        <p className="text-sm font-medium text-amber-900 dark:text-amber-100 truncate">
+                          {isDateToday(activeSale.startDate) ? 'Your sale starts today — post in neighborhood groups for more foot traffic.' : 'Sale tomorrow — a quick share now drives morning shoppers.'}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/organizer/promote/${activeSale.id}`}
+                        className="flex-shrink-0 text-xs px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-full font-semibold transition-colors"
+                      >
+                        Share Now →
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Compact Holds Summary */}
                   <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">

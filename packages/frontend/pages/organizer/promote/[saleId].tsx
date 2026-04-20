@@ -13,7 +13,6 @@ import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import api from '../../../lib/api';
 import Link from 'next/link';
-import Skeleton from '../../../components/Skeleton';
 import SharePromoteModal from '../../../components/SharePromoteModal';
 
 interface Item {
@@ -93,15 +92,6 @@ const ExportCard: React.FC<ExportCardProps> = ({
   );
 };
 
-interface SocialTemplate {
-  text: string;
-  hashtags: string[];
-  charCount: number;
-  overLimit: boolean;
-  platformLimit: number;
-  photoUrl: string | null;
-}
-
 export default function PromotePage(): JSX.Element {
   const router = useRouter();
   const { saleId } = router.query;
@@ -109,11 +99,6 @@ export default function PromotePage(): JSX.Element {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [itemCount, setItemCount] = useState(0);
-  const [selectedItemId, setSelectedItemId] = useState<string>('');
-  const [selectedTone, setSelectedTone] = useState<'casual' | 'professional' | 'friendly'>('casual');
-  const [selectedPlatform, setSelectedPlatform] = useState<'instagram' | 'facebook'>('instagram');
-  const [socialTemplate, setSocialTemplate] = useState<SocialTemplate | null>(null);
-  const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -146,49 +131,8 @@ export default function PromotePage(): JSX.Element {
   React.useEffect(() => {
     if (itemsData) {
       setItemCount(itemsData.length);
-      // Auto-select first item if not yet selected
-      if (!selectedItemId && itemsData.length > 0) {
-        setSelectedItemId(itemsData[0].id);
-      }
     }
-  }, [itemsData, selectedItemId]);
-
-  // Fetch social template when item, tone, or platform changes
-  React.useEffect(() => {
-    const fetchTemplate = async () => {
-      if (!selectedItemId) return;
-      try {
-        setLoadingTemplate(true);
-        const response = await api.get(
-          `/social/${selectedItemId}/template?tone=${selectedTone}&platform=${selectedPlatform}`
-        );
-        setSocialTemplate(response.data as SocialTemplate);
-      } catch (error) {
-        console.error('Failed to fetch social template:', error);
-        setSocialTemplate(null);
-        showToast('Failed to generate social template', 'error');
-      } finally {
-        setLoadingTemplate(false);
-      }
-    };
-
-    if (selectedItemId && selectedTone && selectedPlatform) {
-      fetchTemplate();
-    }
-  }, [selectedItemId, selectedTone, selectedPlatform, showToast]);
-
-  // Copy full post (text + hashtags) to clipboard
-  const copyFullPost = async () => {
-    if (!socialTemplate) return;
-    try {
-      const fullPost = `${socialTemplate.text}\n\n${socialTemplate.hashtags.join(' ')}`;
-      await navigator.clipboard.writeText(fullPost);
-      showToast('Post copied to clipboard!', 'success');
-    } catch (error) {
-      console.error('Failed to copy:', error);
-      showToast('Failed to copy to clipboard', 'error');
-    }
-  };
+  }, [itemsData]);
 
   // Loading state
   if (authLoading || saleLoading) {
@@ -331,6 +275,45 @@ export default function PromotePage(): JSX.Element {
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
+  // Nextdoor post text (inline, no modal needed)
+  const nextdoorText = sale
+    ? `Neighbors — ${sale.title} this ${new Date(sale.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(sale.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}
+
+Open to the public. ${itemCount > 0 ? `${itemCount}+ items` : 'Items'} include furniture, household goods, collectibles, and more. Early arrival recommended.
+
+Full item list at finda.sale — search "${sale.city}"
+
+Hope to see some familiar faces!`
+    : '';
+
+  const copyNextdoorPost = async () => {
+    try {
+      await navigator.clipboard.writeText(nextdoorText);
+      showToast('Copied! Open Nextdoor and paste in your neighborhood feed.', 'success');
+    } catch {
+      showToast('Failed to copy', 'error');
+    }
+  };
+
+  // WhatsApp share
+  const whatsappMessage = sale
+    ? `Check out ${sale.title}! ${new Date(sale.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}–${new Date(sale.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at ${sale.address}, ${sale.city}. Browse items at: ${typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale'}/sales/${sale.id}`
+    : '';
+
+  const handleWhatsAppShare = async () => {
+    const isMobile = /iPhone|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    } else {
+      try {
+        await navigator.clipboard.writeText(whatsappMessage);
+        showToast('Link copied! Paste it into WhatsApp on your phone.', 'success');
+      } catch {
+        showToast('Failed to copy', 'error');
+      }
+    }
+  };
+
   const downloadEstatesalesCSV = () =>
     downloadFile(`${apiBase}/export/${saleId}/estatesales-csv`, `sale-${saleId}-estatesales.csv`);
 
@@ -411,7 +394,7 @@ export default function PromotePage(): JSX.Element {
           )}
 
           {/* Export cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
             <ExportCard
               icon="📋"
               title="EstateSales.NET"
@@ -426,9 +409,9 @@ export default function PromotePage(): JSX.Element {
             <ExportCard
               icon="👥"
               title="Facebook Marketplace"
-              description="Reach millions of local buyers. JSON data — copy and paste into Facebook Marketplace"
-              buttonText="Export & Download"
-              secondaryButtonText="Copy to Clipboard"
+              description="Your item data formatted for Facebook Marketplace. Download the file, then open Facebook Marketplace and create listings using the details inside."
+              buttonText="Download Data"
+              secondaryButtonText="Copy Item Data"
               onClick={downloadFacebookJSON}
               onSecondary={copyFacebookJSON}
               loading={loading}
@@ -444,138 +427,37 @@ export default function PromotePage(): JSX.Element {
               onSecondary={copyCraigslistText}
               loading={loading}
             />
+
+            <ExportCard
+              icon="🏡"
+              title="Nextdoor"
+              description="Share with neighbors directly. Copy a ready-to-paste post for your local Nextdoor feed."
+              buttonText="Copy Post"
+              secondaryButtonText="Open Nextdoor"
+              onClick={copyNextdoorPost}
+              onSecondary={async () => {
+                await copyNextdoorPost();
+                window.open('https://nextdoor.com/news_feed/', '_blank');
+              }}
+              loading={false}
+            />
           </div>
 
-          {/* Social Template Section */}
-          <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-12">
-            <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-6">Create Social Posts</h2>
-
-            {/* Item Picker */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">Select Item</label>
-              <select
-                value={selectedItemId}
-                onChange={(e) => setSelectedItemId(e.target.value)}
-                className="w-full border border-warm-200 dark:border-gray-700 rounded-lg px-4 py-2 bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-amber-600"
-              >
-                <option value="">Choose an item...</option>
-                {itemsData.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title} {item.price ? `— $${item.price}` : ''}
-                  </option>
-                ))}
-              </select>
+          {/* WhatsApp quick-share */}
+          <div className="flex items-center justify-between bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg px-6 py-4 mb-12">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💬</span>
+              <div>
+                <p className="font-semibold text-warm-900 dark:text-warm-100">Share via WhatsApp</p>
+                <p className="text-sm text-warm-700 dark:text-warm-300">Send your sale link to buyers and regulars</p>
+              </div>
             </div>
-
-            {selectedItemId && (
-              <>
-                {/* Tone Selector */}
-                <div className="mb-6">
-                  <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">Tone</label>
-                  <div className="flex gap-3">
-                    {(['casual', 'professional', 'friendly'] as const).map((tone) => (
-                      <button
-                        key={tone}
-                        onClick={() => setSelectedTone(tone)}
-                        className={`px-4 py-2 rounded-full font-medium transition ${
-                          selectedTone === tone
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
-                        }`}
-                      >
-                        {tone.charAt(0).toUpperCase() + tone.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Platform Selector */}
-                <div className="mb-6">
-                  <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-3">Platform</label>
-                  <div className="flex gap-3">
-                    {(['instagram', 'facebook'] as const).map((platform) => (
-                      <button
-                        key={platform}
-                        onClick={() => setSelectedPlatform(platform)}
-                        className={`px-4 py-2 rounded-full font-medium transition ${
-                          selectedPlatform === platform
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-200'
-                        }`}
-                      >
-                        {platform.charAt(0).toUpperCase() + platform.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Social Template Preview */}
-                {loadingTemplate ? (
-                  <div className="space-y-4">
-                    <Skeleton className="h-20 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                  </div>
-                ) : socialTemplate ? (
-                  <div className="bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg p-6 space-y-4">
-                    {/* Preview Image */}
-                    {socialTemplate.photoUrl && (
-                      <div className="mb-4">
-                        <img
-                          src={socialTemplate.photoUrl}
-                          alt="Item preview"
-                          className="w-full max-w-xs rounded-lg object-cover max-h-48"
-                        />
-                      </div>
-                    )}
-
-                    {/* Post Text */}
-                    <div>
-                      <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-2">Post Text</p>
-                      <p className="text-warm-900 dark:text-warm-100 leading-relaxed whitespace-pre-wrap">{socialTemplate.text}</p>
-                    </div>
-
-                    {/* Hashtags */}
-                    <div>
-                      <p className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-2">Hashtags</p>
-                      <div className="flex flex-wrap gap-2">
-                        {socialTemplate.hashtags.map((tag) => (
-                          <button
-                            key={tag}
-                            onClick={() => {
-                              navigator.clipboard.writeText(tag);
-                              showToast(`${tag} copied!`, 'success');
-                            }}
-                            className="bg-warm-100 dark:bg-gray-700 text-warm-900 dark:text-warm-100 px-3 py-1 rounded-full text-sm hover:bg-warm-200 dark:hover:bg-gray-600 transition cursor-pointer"
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Character Count */}
-                    <div className="flex items-center justify-between pt-4 border-t border-warm-200 dark:border-gray-700">
-                      <div>
-                        <p className="text-sm text-warm-700 dark:text-warm-300">
-                          Characters: <span className={socialTemplate.overLimit ? 'text-red-600 font-semibold' : 'text-warm-900 dark:text-warm-100 font-semibold'}>
-                            {socialTemplate.charCount} / {socialTemplate.platformLimit}
-                          </span>
-                        </p>
-                        {socialTemplate.overLimit && (
-                          <p className="text-xs text-red-600 mt-1">⚠️ Post exceeds platform limit</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={copyFullPost}
-                        className="bg-amber-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-amber-700 transition"
-                      >
-                        Copy Full Post
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            )}
+            <button
+              onClick={handleWhatsAppShare}
+              className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition whitespace-nowrap"
+            >
+              Share on WhatsApp
+            </button>
           </div>
 
           {/* Help section */}
@@ -599,13 +481,11 @@ export default function PromotePage(): JSX.Element {
               <div>
                 <h4 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">👥 Facebook Marketplace</h4>
                 <ol className="list-decimal list-inside space-y-1">
-                  <li>Click "Export & Download" to save the JSON file</li>
-                  <li>Go to Facebook Marketplace (on Facebook.com or Facebook app)</li>
+                  <li>Click "Download Data" to save the item data file</li>
+                  <li>Open Facebook Marketplace on Facebook.com or the app</li>
                   <li>Click "Create" → "List an item"</li>
-                  <li>
-                    You'll need to manually create listings, but the data is ready to copy/paste
-                  </li>
-                  <li>Photos are already included and watermarked</li>
+                  <li>Use the item details in the file to fill in each listing manually</li>
+                  <li>Your watermarked photo URLs are included in the file</li>
                 </ol>
               </div>
 
@@ -649,6 +529,7 @@ export default function PromotePage(): JSX.Element {
             endDate: sale.endDate,
           }}
           itemCount={itemCount}
+          items={itemsData}
           isOpen={showShareModal}
           onClose={() => setShowShareModal(false)}
         />
