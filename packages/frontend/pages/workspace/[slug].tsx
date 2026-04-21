@@ -127,6 +127,8 @@ export default function WorkspacePage() {
 
   // Tasks state
   const [showQuickPickerModal, setShowQuickPickerModal] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   // Auto-select first upcoming sale if available
   useEffect(() => {
@@ -200,6 +202,34 @@ export default function WorkspacePage() {
     } catch (error) {
       console.error('Error updating task:', error);
     }
+  };
+
+  // Handle starting inline edit of task title
+  const handleStartEditingTitle = (task: WorkspaceTask) => {
+    setEditingTaskId(task.id);
+    setEditingTitle(task.title);
+  };
+
+  // Handle saving edited task title
+  const handleSaveTaskTitle = async () => {
+    if (!workspace?.id || !editingTaskId || !editingTitle.trim()) return;
+
+    try {
+      await api.patch(`/workspace/${workspace.id}/tasks/${editingTaskId}`, {
+        title: editingTitle.trim(),
+      });
+      setEditingTaskId(null);
+      setEditingTitle('');
+      await refetchTasks();
+    } catch (error) {
+      console.error('Error saving task title:', error);
+    }
+  };
+
+  // Handle canceling edit
+  const handleCancelEditingTitle = () => {
+    setEditingTaskId(null);
+    setEditingTitle('');
   };
 
   // Redirect to login if not authenticated
@@ -537,13 +567,29 @@ export default function WorkspacePage() {
                 )}
               </div>
 
+              {/* Task Status Legend */}
+              <div className="mb-4 flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full border-2 border-warm-300 dark:border-gray-600" />
+                  <span className="text-warm-600 dark:text-warm-400">Pending</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-amber-500" />
+                  <span className="text-warm-600 dark:text-warm-400">In Progress</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <span className="text-warm-600 dark:text-warm-400">Complete</span>
+                </div>
+              </div>
+
               {/* Task List */}
               {tasksLoading ? (
                 <Skeleton className="h-32" />
               ) : tasksData?.tasks && tasksData.tasks.length > 0 ? (
                 <div className="space-y-3">
                   {tasksData.tasks.map((task) => (
-                    <div key={task.id} className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 hover:bg-warm-50 dark:hover:bg-gray-700/50 transition">
+                    <div key={task.id} className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 hover:bg-warm-50 dark:hover:bg-gray-700/50 transition group">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
@@ -558,9 +604,45 @@ export default function WorkspacePage() {
                               }`}
                               title={`Status: ${task.status}`}
                             />
-                            <h3 className={`font-semibold text-sm ${task.status === 'COMPLETED' ? 'line-through text-warm-500 dark:text-warm-500' : 'text-warm-900 dark:text-warm-100'}`}>
-                              {task.title}
-                            </h3>
+                            {editingTaskId === task.id ? (
+                              <div className="flex items-center gap-1 flex-1">
+                                <input
+                                  type="text"
+                                  value={editingTitle}
+                                  onChange={(e) => setEditingTitle(e.target.value)}
+                                  className="flex-1 px-2 py-1 border border-sage-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500"
+                                  autoFocus
+                                  onKeyPress={(e) => e.key === 'Enter' && handleSaveTaskTitle()}
+                                />
+                                <button
+                                  onClick={handleSaveTaskTitle}
+                                  className="flex-shrink-0 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-bold text-sm"
+                                  title="Save"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  onClick={handleCancelEditingTitle}
+                                  className="flex-shrink-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-bold text-sm"
+                                  title="Cancel"
+                                >
+                                  ✗
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 flex-1">
+                                <h3 className={`font-semibold text-sm ${task.status === 'COMPLETED' ? 'line-through text-warm-500 dark:text-warm-500' : 'text-warm-900 dark:text-warm-100'}`}>
+                                  {task.title}
+                                </h3>
+                                <button
+                                  onClick={() => handleStartEditingTitle(task)}
+                                  className="flex-shrink-0 text-warm-400 dark:text-warm-500 hover:text-warm-600 dark:hover:text-warm-300 opacity-0 group-hover:opacity-100 transition text-xs"
+                                  title="Edit title"
+                                >
+                                  ✎
+                                </button>
+                              </div>
+                            )}
                           </div>
                           <div className="flex flex-wrap gap-2 items-center mt-2">
                             <span className="text-xs bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 px-2 py-1 rounded">

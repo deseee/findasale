@@ -1058,18 +1058,23 @@ export const updateWorkspaceTask = async (req: AuthRequest, res: Response) => {
     if (task.workspaceId !== workspaceId) return res.status(403).json({ message: 'Task does not belong to this workspace' });
 
     // Check permissions
-    const isOwner = task.workspace.ownerId === organizerId;
-    const member = task.workspace.members[0];
-    const isAdmin = member?.role === 'ADMIN';
-    const isAssignee = task.assignedTo === organizerId;
+    // Find the requesting user's workspace membership
+    const requestingOrganizerId = req.user?.organizerProfile?.id;
+    const membership = task.workspace.members.find(
+      (m: any) => m.organizerId === requestingOrganizerId
+    );
+    const memberRole = membership?.role;
 
-    // Assignees can only update status; others need admin/manager role
-    if (!isOwner && !isAdmin && !isAssignee) {
+    const isOwner = task.workspace.ownerId === requestingOrganizerId;
+    const isAdminOrManager = memberRole === 'ADMIN' || memberRole === 'MANAGER';
+    const isAssignee = task.assignedTo === requestingOrganizerId;
+
+    if (!isOwner && !isAdminOrManager && !isAssignee) {
       return res.status(403).json({ message: 'Insufficient permissions to update task' });
     }
 
-    // If not owner/admin, can only update own status
-    if (!isOwner && !isAdmin && isAssignee && (title || description || dueAt || assignedToId)) {
+    // Assignees can only update status; others can update all fields
+    if (!isOwner && !isAdminOrManager && isAssignee && (title || description || dueAt || assignedToId)) {
       return res.status(403).json({ message: 'Assignees can only update task status' });
     }
 
