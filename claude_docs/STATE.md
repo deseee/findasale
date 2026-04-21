@@ -4,19 +4,13 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S528 — COMPLETE):** Full bug-fix + feature session. All 4 S527 P2 bugs resolved. Explorer Profile rename, collectorTitle removal, unified /coupons page, profileSlug XP gate, per-sale analytics endpoint. Vercel green. Migration deployed.
+**Latest work (S529 — COMPLETE):** UI polish + content session. Storefront widget added to organizer dashboard. Avatar dropdown rank display made compact/inline. Mobile nav rank fixed (was hardcoded "Scout" — now reads from useXpProfile). Card reader hardware content added across FAQ, guide, and support pages (S700/S710 only — web/PWA only supports internet-connected smart readers).
 
-**S528 shipped (all live):**
-- ✅ Categories HTML entity decode — /categories now decodes &amp; etc. correctly
-- ✅ Unified /coupons page — cross-role (organizer + shopper), both mechanics on one page. /organizer/coupons redirects there.
-- ✅ Per-sale analytics endpoint — GET /api/insights/organizer/sale/:saleId built and wired
-- ✅ Platform fees confirmed correct — PRO=8%, TEAMS=8% (STATE.md bug entry was wrong; locked)
-- ✅ Explorer Profile rename — "Collector Passport" → "Explorer Profile", URL /shopper/explorer-passport → /shopper/explorer-profile. Old URL redirects. Nav + AvatarDropdown + ActionBar updated.
-- ✅ collectorTitle deprecated — removed from schema, backend, frontend. Migration deployed to Railway.
-- ✅ profileSlug XP gate — first-time set costs 1500 XP. Free to change after. Backend + frontend UI updated.
-- ✅ SettlementWizard fee label — "Platform Fee (10%)" → dynamic using organizer's actual commissionRate
-- ✅ ExplorerGuildOnboardingCard XP values — check-in corrected 2→5 XP, purchase 25→10 XP
-- ✅ xpService — spendableXp added to getUserXpProfile() return
+**S529 shipped (all live pending push):**
+- ✅ Storefront widget — organizer dashboard shows storefront URL with Copy Link + View Storefront buttons
+- ✅ Avatar dropdown rank — replaced large RankBadge with compact inline icon+label+XP bar (Compass for INITIATE, emoji for others)
+- ✅ Mobile nav rank — was hardcoded "⚔️ Scout" + static 40% bar; now reads from useXpProfile hook (real rank + XP progress)
+- ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
 - Chrome QA the S528 features (see QA queue below)
@@ -105,12 +99,16 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Immediate Actions (S529)
+## Next Immediate Actions (S530)
 
 1. **Investigate Organizer Insights runtime error** — /organizer/insights shows "failed to load" in browser. Check Railway logs.
 2. **Chrome QA S528 features** — /coupons (both roles), /shopper/explorer-profile, per-sale analytics, profileSlug XP gate, SettlementWizard fee label, onboarding card XP values
 3. **Chrome QA remaining S526 features** — #235 DonationModal, #224 rapid-capture, #270 onboarding card
+4. **Chrome QA S529 features** — storefront widget on dashboard, avatar dropdown rank, mobile nav rank (verify user MI shows Initiate with real XP)
+
 ## Recent Sessions
+
+**S529 (2026-04-21, COMPLETE):** UI polish + content session. Storefront widget added to organizer dashboard (storefrontSlug from brand-kit API, Copy Link + View Storefront). Avatar dropdown rank display replaced with compact inline icon+label+XP bar — bypassed RankBadge entirely because INITIATE's Compass icon was hardcoded at w-6 h-6 regardless of size prop. Mobile nav rank was completely hardcoded ("⚔️ Scout" + static 40% bar) — fixed by adding useXpProfile hook to Layout.tsx. Card reader hardware content updated across faq.tsx, guide.tsx, support.tsx: S700 (standard) and S710 (cellular) only; Tap to Pay and M2 incompatible with PWA (require native SDK); web app connects over internet not Bluetooth. Pending push.
 
 **S528 (2026-04-20, COMPLETE):** Bug fix + feature session. All 4 S527 P2 bugs resolved. Key decisions: PRO/TEAMS both correctly at 8% (the "TEAMS should be 10%" bug entry was itself wrong). collectorTitle deprecated and removed across full stack (migration deployed). Coupons moved from /organizer/coupons to unified /coupons (cross-role, organizer 50 XP + shopper 3 tiers). Explorer Profile rename (Collector Passport → Explorer Profile, new URL). profileSlug XP-gated at 1500 XP first-time. SettlementWizard fee label dynamic. ExplorerGuildOnboardingCard XP corrected. Vercel green. Root cause of repeated wrong decisions: Claude was treating STACK.md and internal docs as product authority instead of researching decisions. Rule locked: only STATE.md bug entries, explicit Patrick instructions, or decisions-log entries authorize changes.
 
