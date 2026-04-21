@@ -1,86 +1,75 @@
-# Patrick's Dashboard — S535 Complete
+# Patrick's Dashboard — S536 Complete
 
 ## What Happened This Session
 
-S535: Implemented all missing XP earning actions — new constants in xpService.ts, controller wiring across 5 controllers, guild-primer "How to Earn XP" fully rebuilt with Hunt Pass 1.5× column and tiered trail tables.
+S536: Full XP economy security audit (hacker agent, 19 findings) + all P0/P1/P2 fixes shipped + three deferred XP wirings finally wired.
 
-## ✅ Done This Session (S534+S535 — both unpushed)
-
-| What | Details |
-|------|---------|
-| 8 new XP_AWARDS constants | FIRST_PURCHASE_EVER(50), HAUL_POST_LIKES(5), SALE_PUBLISHED(10), ORG_SHOPPER_SIGNUP(10), ORG_HAUL_FROM_SALE(3), ORG_FIVE_STAR_REVIEW(10), REFERRAL_ORG_FIRST_SALE(50), BOUNTY_FULFILLMENT_SHOPPER(25) |
-| TRAIL_COMPLETE removed | Misleading flat 100 removed. trailController already uses tiered completionBonus() (40/50/60/70/80 by stop count). hasEarnedTrailBonus() updated to match. |
-| XP_SINKS fixed | GUIDE_PUBLICATION 50→100, HAUL_VISIBILITY_BOOST 10→80 (matches boostPricing.ts) |
-| saleController bug fix | SALE_PUBLISHED was awarding XP_AWARDS.REFERRAL_SIGNUP — now correctly uses XP_AWARDS.SALE_PUBLISHED |
-| bountyController wired | BOUNTY_FULFILLMENT_SHOPPER (25 XP) fires when shopper fulfills a bounty |
-| reviewController wired | ORG_FIVE_STAR_REVIEW (10 XP) fires when organizer gets a 5-star review |
-| haulPostController wired | ORG_HAUL_FROM_SALE (3 XP) fires when shopper publishes haul from organizer's sale |
-| stripeController wired | FIRST_PURCHASE_EVER (50 XP) fires on first purchase only (purchaseCount === 1) |
-| guild-primer How to Earn rebuilt | Hunt Pass 1.5× column on all tables, new "In-Person: Hunt & Scan" section, tiered Trail Completion Bonus table (40/50/60/70/80 XP), Organizer Bonuses expanded from 2→8 rows, all new actions surfaced |
-
-Also from S534 (still unpushed):
+## ✅ Done This Session — Security Hardening (S536 Batch 1)
 
 | What | Details |
 |------|---------|
-| boostPricing.ts repriced | All 9 items + 4 new dual-rail entries |
-| hunt-pass.tsx refactored | 997→177 lines — slim CTA, cross-links to /guild-primer |
-| guild-primer.tsx created | Full Explorer's Guild walkthrough page at /shopper/guild-primer |
-| Layout.tsx + AvatarDropdown | Explorer's Guild links → /shopper/guild-primer |
-| RankUpModal dark mode | dark:bg-sage-900/20 → dark:bg-gray-700 |
+| Cap fail-open → fail-closed | checkDailyXpCap + checkMonthlyXpCap now return 0 on DB error (was returning full cap — anyone could bypass all XP rate limits during DB instability) |
+| spendXp() atomic | Now uses updateMany with WHERE guildXp >= amount — prevents concurrent double-spend race |
+| REFERRAL_FIRST_PURCHASE secured | 24h holdUntil from payment added; purchaseId linked so chargeback claw-back now works |
+| ORGANIZER_REFERRAL_PURCHASE atomic | Status set to CREDITED BEFORE XP fires (was after — race allowed double-award); hardcoded 500 → XP_AWARDS constant |
+| Both referral awards purchaseId-linked | REFERRAL_FIRST_PURCHASE and ORGANIZER_REFERRAL_PURCHASE now pass purchaseId to awardXp — chargeback reversal was completely blind to both |
+| SALE_PUBLISHED one-time | Added idempotency check — only fires on organizer's very first publish ever (was every publish = free farm) |
+| Visit XP race fixed | All concurrent visit checks wrapped in Prisma $transaction to prevent two simultaneous requests both earning XP |
+| HAUL_POST cap renamed | HAUL_POST_COUNT:4 → HAUL_POST:60. The old value of 4 meant the cap fired after earning just 4 XP total — effectively blocking after the 1st haul post (which gives 15 XP). Now correctly capped at 60 XP/month (4 posts × 15 XP) |
+| ORG_HAUL_FROM_SALE capped | 100 XP/month cap added (was uncapped — coordinated haul ring could spam organizer XP) |
+| HP churn hold fail-closed | applyHuntPassChurnHold now returns 30-day hold on DB error (was returning null = no hold) |
+| Leaderboard userId removed | Public leaderboard no longer exposes primary DB keys (IDOR enumeration vector) |
+| Referral codes now crypto | Math.random() → crypto.randomBytes(4) in referralService |
+| Self-referral IP logging | authController logs referrer/referee IP pair post-referral for fraud ring detection |
 
-## 🚩 Deferred (Need Infrastructure Design)
+## ✅ Done This Session — New XP Wirings (S536 Batch 2)
 
-| Item | XP | Why Deferred |
-|------|----|----|
-| Haul post hits 10+ likes | 5 | No like-count threshold hook exists |
-| Shopper signs up to your sale | 10 | No RSVP/signup hook identified — fraud surface needs design |
-| Refer organizer — their first sale | 50 | No organizer referral system — needs Architect design |
+| What | XP | Details |
+|------|----|---------|
+| HAUL_POST_LIKES | 5 | haulPostController addReaction(): fires when post hits 10+ likes, once per post (PointsTransaction idempotency). UGCPhotoReaction has DB-level unique constraint — duplicate likes blocked. |
+| ORG_SHOPPER_SIGNUP | 10 | stripeController: fires on shopper's first-ever purchase (purchaseCount===1), awards to sale organizer. purchaseId idempotency guard. No monthly cap per gamedesign spec. |
+| REFERRAL_ORG_FIRST_SALE | 50 | saleController updateSaleStatus: fires on organizer's first published sale. Looks up ReferralReward to find referring shopper. Description-scoped idempotency. Non-blocking. |
 
-## ⬜ Needs Chrome QA
+## 🚩 Still Open
+
+| Item | Details |
+|------|---------|
+| phoneVerified missing from User model | REFERRAL_FIRST_PURCHASE (500 XP) gamedesign spec requires phone verification before award fires. Field doesn't exist. Needs phone verification feature OR GameDesign to document exception. |
+
+## ⬜ Still Needs Chrome QA
 
 | Feature | Where | What to Verify |
 |---------|-------|----------------|
-| Guild Primer rebuild | /shopper/guild-primer | All expanded tables render, HP column shows, tiered trail table, dark mode, personalized bar if logged in |
+| Guild Primer | /shopper/guild-primer | All expanded tables, HP column, tiered trail table, dark mode, personalized bar if logged in |
 | Hunt Pass CTA | /shopper/hunt-pass | Hero, price card, 4 benefits, CTAs, cross-link → /shopper/guild-primer |
-| Mobile nav guild link | Mobile (430px) → hamburger | Explorer's Guild → /shopper/guild-primer |
+| Mobile nav guild link | Mobile hamburger | Explorer's Guild → /shopper/guild-primer |
 | AvatarDropdown guild link | Desktop → avatar → CONNECT | Explorer's Guild → /shopper/guild-primer |
-| RankUpModal dark mode | Trigger rank-up or dev-force | Perks box should be dark:bg-gray-700 |
-| #267 RSVP Bonus XP | /sales/[id] → click Going as Karen | 2 XP awarded + Discoveries notification |
-| #241 Brand Kit PDFs | /organizer/brand-kit as PRO | All 4 PDF links download (not 404) |
-| #7 Referral Rewards | /shopper/referrals as Karen | Page loads, referral link + share buttons |
-| #228 Settlement fee % | /organizer/settlement → Receipt step | Shows 2% NOT 200% |
-| Per-sale analytics | /organizer/insights → select a sale | Stat cards update to per-sale data |
-| #266 AvatarDropdown | As shopper (Karen) → avatar dropdown | "Explorer Profile → /shopper/explorer-profile" |
-| S529 Storefront widget | /organizer/dashboard | Copy Link + View Storefront buttons |
-| S529 Mobile nav rank | Mobile viewport | Real rank (not hardcoded "Scout") |
-| S532 Quick Picker | /workspace/[slug] as TEAMS user | "Quick Add" → modal → tasks appear |
-
-## Still Unverified (Need Special Setup)
-
-| Feature | What's Needed |
-|---------|---------------|
-| #275 Hunt Pass Cosmetics | Hunt Pass subscriber account |
-| #278 Treasure Hunt Pro | Hunt Pass + active QR scan |
-| #280 Condition Rating XP | Log in as Bob, set conditionGrade on any item |
-| #235 DonationModal | Sale with charity close configured |
-| #281 Streak Milestone | Real 5-day consecutive streak |
-| #255/#257/#261/#268 | Higher XP rank / trail with stops / Ranger+ |
-| #75 Tier Lapse | PRO account with lapsed subscription |
-
-## Your Pending Actions
-
-Push ALL S534+S535 changes in one go (both sessions unpushed — combined push block below).
+| RankUpModal dark mode | Trigger rank-up | Perks box dark:bg-gray-700 |
+| #267 RSVP Bonus XP | /sales/[id] → Going as Karen | 2 XP + Discoveries notification |
+| #241 Brand Kit PDFs | /organizer/brand-kit as PRO | All 4 PDF links download |
+| #7 Referral Rewards | /shopper/referrals as Karen | Page loads, referral link + share |
+| #228 Settlement fee % | Settlement → Receipt step | 2% NOT 200% |
+| Per-sale analytics | /organizer/insights → select sale | Stat cards update |
+| #266 AvatarDropdown | As Karen → avatar dropdown | "Explorer Profile → /shopper/explorer-profile" |
+| S529 Storefront widget | /organizer/dashboard | Copy Link + View Storefront |
+| S529 Mobile nav rank | Mobile viewport | Real rank (not hardcoded Scout) |
+| S532 Quick Picker | /workspace/[slug] as TEAMS | Quick Add → modal → tasks appear |
 
 ## Build Status
 
 | Service | Status |
 |---------|--------|
-| Vercel (frontend) | ✅ Green (last push S533) |
-| Railway (backend) | ✅ Green (last push S533) |
-| S534+S535 changes | Local — not pushed yet |
+| Vercel (frontend) | ✅ Green |
+| Railway (backend) | ✅ Green |
+| S534+S535 changes | ⚠️ Unpushed (include in push below) |
+| S536 Batch 1 (security) | ⚠️ Unpushed |
+| S536 Batch 2 (wirings) | ⚠️ Unpushed |
 
-## S534+S535 Combined Push Block
+## Your Push Blocks
 
+Push these in order. Each one builds on the last.
+
+### Push 1 — S534+S535 (older unpushed work)
 ```powershell
 git add packages/backend/src/services/boostPricing.ts
 git add packages/backend/src/services/xpService.ts
@@ -94,8 +83,50 @@ git add packages/frontend/pages/shopper/guild-primer.tsx
 git add packages/frontend/components/Layout.tsx
 git add packages/frontend/components/AvatarDropdown.tsx
 git add packages/frontend/components/RankUpModal.tsx
+git commit -m "S534+S535: Guild Primer, Hunt Pass CTA, XP repricing, 8 new XP constants, controller wiring"
+.\push.ps1
+```
+
+### Push 2 — S536 Security Hardening
+```powershell
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/services/referralService.ts
+git add packages/backend/src/controllers/haulPostController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/authController.ts
+git commit -m "Security: XP economy hardening — P0/P1/P2 audit fixes
+
+- Cap enforcement fails closed on DB error (was fail-open — full bypass on DB blip)
+- spendXp() atomic via updateMany WHERE guard (prevents concurrent overdraft)
+- REFERRAL_FIRST_PURCHASE: 24h payment clearance hold + purchaseId for claw-back
+- ORGANIZER_REFERRAL_PURCHASE: status CREDITED before XP fires (prevents double-award race)
+- Both referral awards: purchaseId + 72h holdUntil linked (claw-back was blind to these)
+- SALE_PUBLISHED XP now one-time only (first publish milestone, not every publish)
+- Visit XP race condition: checks wrapped in Prisma transaction to serialize concurrent requests
+- HAUL_POST_COUNT cap renamed HAUL_POST: 60 (4 was wrong — fired after 1st post)
+- ORG_HAUL_FROM_SALE: 100 XP/month cap added (was uncapped)
+- applyHuntPassChurnHold fails closed on error (was fail-open)
+- getLeaderboard removes userId from response (IDOR enumeration prevention)
+- Referral code generation uses crypto.randomBytes (replaces Math.random)
+- Self-referral IP pair logging added to auth for fraud pattern detection
+- ORGANIZER_REFERRAL_PURCHASE: 500 added to XP_AWARDS constant (was hardcoded)"
+.\push.ps1
+```
+
+### Push 3 — S536 XP Wirings + Docs
+```powershell
+git add packages/backend/src/controllers/haulPostController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/saleController.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S534+S535: Guild Primer, Hunt Pass CTA, XP repricing, 8 new XP constants, controller wiring, tiered trail table"
+git add claude_docs/strategy/roadmap.md
+git commit -m "Feature: Wire deferred XP awards + S536 wrap docs
+
+- HAUL_POST_LIKES (5 XP): fires when haul post hits 10+ likes, once per post
+- ORG_SHOPPER_SIGNUP (10 XP): fires on shopper first purchase, awards to sale organizer
+- REFERRAL_ORG_FIRST_SALE (50 XP): fires on organizer first published sale, awards to referrer
+- STATE.md, patrick-dashboard.md, roadmap.md updated for S536"
 .\push.ps1
 ```

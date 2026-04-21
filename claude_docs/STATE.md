@@ -4,7 +4,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S532 — COMPLETE):** Multi-track session. (1) Loyalty page XP audit: 4 stale values corrected (VISIT 2→5 XP, PURCHASE 25→10 XP, coupon "20 XP"→"100–500 XP", Rarity Boost description updated). (2) Brand drift cleanup: 11 files fixed (D-001 inclusive sale-type copy in meta tags, FAQ, email-digest, guide, promote, encyclopedia; D-002 dark mode `dark:bg-gray-800` on 12 modal containers). (3) Vercel build fix: `sales/[id].tsx:891` undefined-index guard. (4) Quick Picker Task Modal: new TEAMS feature — `taskTemplates.ts` util (5 categories, 20+ tasks), `useTaskTemplates` hook, `QuickPickerTaskModal.tsx` component, `getTaskTemplates` controller + route, workspace slug page wired with "Quick Add" button. (5) Retail competitive analysis: research doc created, corrected (retail mode IS fully built S520), 3 gaps identified (Consignor Portal, Color-tagged Discounts, Multi-Location), parity/premium pricing strategy confirmed. (6) Roadmap v116: #309 Consignor Portal & Payouts, #310 Color-tagged Discount Rules, #311 Multi-Location Inventory View added. Vercel and Railway both green at wrap.
+**Latest work (S536 — COMPLETE):** Full XP economy security audit (19 findings, hacker agent) + all P0/P1/P2 fixes dispatched + three deferred XP wirings shipped. Security fixes: cap fail-open→fail-closed (2 caps), spendXp atomic updateMany, REFERRAL_FIRST_PURCHASE 24h hold + purchaseId, ORGANIZER_REFERRAL_PURCHASE atomic ordering + constant, both referral awards purchaseId linked (chargeback claw-back now works), SALE_PUBLISHED one-time only, HAUL_POST_COUNT cap renamed HAUL_POST:60 (was breaking after 1st post), ORG_HAUL_FROM_SALE cap 100/month, HP churn hold fail-closed, leaderboard userId removed, Math.random→crypto in referralService, IP pair logging for self-referral detection. New wirings: HAUL_POST_LIKES (5 XP at 10+ likes, once per post, idempotency via PointsTransaction), ORG_SHOPPER_SIGNUP (10 XP to organizer on shopper's first purchase, purchaseId idempotency), REFERRAL_ORG_FIRST_SALE (50 XP to shopper referrer on referred organizer's first published sale). Notable schema finding: `phoneVerified` field does not exist on User — REFERRAL_FIRST_PURCHASE phone gate from gamedesign spec is not yet enforced.
 
 **S530 QA results — full session (documented in qa-backlog.md):**
 - ✅ Verified: Explorer Profile page + redirect, #270 onboarding card, shopper /coupons (3 tiers), profileSlug XP gate, #200 shopper public profile (collectorTitle gone), S529 avatar dropdown rank (live!), #224 rapid-capture redirect, #259 Hunt Pass page accuracy, #279 Rare Finds Pass, #282 Explorer Profile Completion XP (+50 XP confirmed)
@@ -127,17 +127,32 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S536)
+## Next Session (S537)
 
-**S536 priority queue:**
-1. **Chrome QA — Guild Primer** — verify /shopper/guild-primer: all expanded sections render correctly, Hunt Pass column visible, tiered trail table, dark mode, personalized bar when logged in, cross-link to /hunt-pass.
-2. **Chrome QA — Hunt Pass slim CTA** — verify /shopper/hunt-pass hero, price card, 4 benefits, CTAs, cross-link to /guild-primer.
-3. **Chrome QA backlog** — S531/S529/S532 fixes (see QA Backlog section and blocked/unverified queue).
-4. **Deferred XP wiring** — HAUL_POST_LIKES (needs like-count threshold hook), ORG_SHOPPER_SIGNUP (needs RSVP hook design), REFERRAL_ORG_FIRST_SALE (needs organizer referral system design — Architect decision needed).
+**S537 priority queue:**
+1. **Push S536 changes** — two push blocks provided: (a) security hardening batch (6 files), (b) XP wirings batch (3 files). Both must be pushed before Chrome QA.
+2. **Chrome QA — Guild Primer** — verify /shopper/guild-primer: all sections render, Hunt Pass column, tiered trail table, dark mode, personalized XP bar when logged in, cross-link to /hunt-pass.
+3. **Chrome QA — Hunt Pass slim CTA** — verify /shopper/hunt-pass: hero, price card, 4 benefits, CTAs, cross-link to /guild-primer.
+4. **Chrome QA backlog** — S531/S529/S532 fixes (blocked/unverified queue).
+5. **Phone verification feature** — `phoneVerified` field missing from User model. REFERRAL_FIRST_PURCHASE (500 XP) gamedesign spec requires phone gate. Either build phone verification or get explicit gamedesign exception documented.
 
-**Patrick actions:** Push S534+S535 changes (see push block in patrick-dashboard.md).
+**Patrick actions:**
+- Push security hardening batch (push block from S536 above — 6 files)
+- Push XP wirings batch (push block from S536 above — 3 files)
 
 ## Current Work
+
+**S536 COMPLETE — XP economy security audit + hardening + deferred wirings:**
+- ✅ Hacker audit: 19 findings (2 P0, 8 P1, 9 P2) across full XP economy
+- ✅ xpService.ts: cap fail-open→fail-closed, spendXp atomic, HAUL_POST cap fix, HP churn hold fail-closed, ORG_HAUL_FROM_SALE cap, leaderboard userId removed, ORGANIZER_REFERRAL_PURCHASE constant added
+- ✅ stripeController.ts: REFERRAL_FIRST_PURCHASE 24h hold + purchaseId, ORGANIZER_REFERRAL_PURCHASE atomic (status CREDITED before award), both referral awards purchaseId + holdUntil
+- ✅ saleController.ts: SALE_PUBLISHED one-time idempotency guard, visit XP race condition fixed (Prisma $transaction wrap)
+- ✅ referralService.ts: Math.random → crypto.randomBytes
+- ✅ authController.ts: IP pair logging for self-referral detection
+- ✅ haulPostController.ts: HAUL_POST_LIKES wired (5 XP at 10+ likes, once per post; UGCPhotoReaction unique constraint confirmed)
+- ✅ stripeController.ts: ORG_SHOPPER_SIGNUP wired (10 XP to organizer on shopper's first purchase, purchaseId idempotency)
+- ✅ saleController.ts: REFERRAL_ORG_FIRST_SALE wired (50 XP to shopper referrer on organizer's first published sale)
+- 🚩 OPEN: `phoneVerified` field does not exist on User model — REFERRAL_FIRST_PURCHASE gamedesign phone gate not enforced. Needs phone verification feature first.
 
 **S535 COMPLETE — XP implementation: missing constants + controller wiring + guild-primer rebuild:**
 - ✅ xpService.ts: 8 new XP_AWARDS constants added (FIRST_PURCHASE_EVER:50, HAUL_POST_LIKES:5, SALE_PUBLISHED:10, ORG_SHOPPER_SIGNUP:10, ORG_HAUL_FROM_SALE:3, ORG_FIVE_STAR_REVIEW:10, REFERRAL_ORG_FIRST_SALE:50, BOUNTY_FULFILLMENT_SHOPPER:25)
@@ -166,6 +181,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - 🔲 Chrome QA for all S534 changes (pending).
 
 ## Recent Sessions
+
+**S536 (2026-04-21, COMPLETE):** XP economy security audit + hardening + deferred wirings. Hacker agent ran full audit — 19 findings (2 P0, 8 P1, 9 P2). All dispatched in parallel (4 fix agents + 3 wiring agents). Key fixes: cap checks now fail-closed (return 0 not full cap on DB error), spendXp atomic via updateMany WHERE guard, REFERRAL_FIRST_PURCHASE gets 24h holdUntil + purchaseId for claw-back, ORGANIZER_REFERRAL_PURCHASE status-CREDITED-before-award (atomic), both referral XP awards now linked to purchaseId (chargeback reversal was blind to them before), SALE_PUBLISHED one-time milestone (no more publish/unpublish farm), HAUL_POST cap renamed HAUL_POST:60 (old value of 4 was firing after the first 15-XP post), ORG_HAUL_FROM_SALE capped at 100/month, leaderboard no longer exposes userId, referral codes now use crypto.randomBytes. Three deferred XP wirings shipped: HAUL_POST_LIKES (5 XP, once per post at 10+ likes), ORG_SHOPPER_SIGNUP (10 XP to organizer on shopper's first purchase), REFERRAL_ORG_FIRST_SALE (50 XP to shopper referrer on organizer's first published sale). Open gap: phoneVerified not on User model — REFERRAL_FIRST_PURCHASE phone gate not yet enforced.
 
 **S535 (2026-04-21, COMPLETE):** XP implementation + guild-primer rebuild. Added 8 new XP_AWARDS constants to xpService.ts. Removed misleading TRAIL_COMPLETE:100 flat constant (trailController already uses tiered completionBonus() returning 40-80 XP). Fixed XP_SINKS stale values (GUIDE_PUBLICATION 50→100, HAUL_VISIBILITY_BOOST 10→80). Wired BOUNTY_FULFILLMENT_SHOPPER into bountyController, ORG_FIVE_STAR_REVIEW into reviewController, ORG_HAUL_FROM_SALE into haulPostController, FIRST_PURCHASE_EVER into stripeController, fixed SALE_PUBLISHED bug in saleController. Rebuilt guild-primer "How to Earn XP" with Hunt Pass 1.5× column on all tables, tiered trail completion table, new Hunt & Scan section, expanded Organizer Bonuses to 8 rows. Deferred: HAUL_POST_LIKES (no hook), ORG_SHOPPER_SIGNUP (no RSVP hook), REFERRAL_ORG_FIRST_SALE (no org referral system).
 
