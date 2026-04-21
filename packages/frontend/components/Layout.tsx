@@ -62,6 +62,7 @@ import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import useUnreadMessages from '../hooks/useUnreadMessages';
+import useXpProfile from '../hooks/useXpProfile';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
@@ -90,6 +91,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const { data: unreadMessages } = useUnreadMessages(!!user);
+  const { data: xpProfile } = useXpProfile(isClient && !!user);
   // Derived role flags — must be after isClient declaration
   const isOrganizer = isClient && user?.roles?.includes('ORGANIZER');
   const isUser = isClient && user?.roles?.includes('USER');
@@ -888,12 +890,34 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <div className="px-3 py-2 mb-1 border-b border-warm-200 dark:border-gray-700">
                     <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">{user.name || user.email}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">⚔️ Scout</span>
-                      <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full max-w-[100px] overflow-hidden">
-                        <div className="h-full bg-indigo-500" style={{ width: '40%' }} />
+                    {xpProfile && (
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          {xpProfile.explorerRank === 'INITIATE' ? (
+                            <Compass className="w-3.5 h-3.5 text-blue-500" />
+                          ) : (
+                            <span className="text-sm leading-none">
+                              {xpProfile.explorerRank === 'SCOUT' ? '🔍' : xpProfile.explorerRank === 'RANGER' ? '🎯' : xpProfile.explorerRank === 'SAGE' ? '✨' : '👑'}
+                            </span>
+                          )}
+                          <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                            {xpProfile.explorerRank.charAt(0) + xpProfile.explorerRank.slice(1).toLowerCase()}
+                          </span>
+                        </div>
+                        {xpProfile.rankProgress && (
+                          <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full max-w-[100px] overflow-hidden">
+                            <div
+                              className="h-full bg-indigo-500"
+                              style={{
+                                width: xpProfile.rankProgress.nextRank
+                                  ? `${Math.min((xpProfile.rankProgress.currentXp / xpProfile.rankProgress.nextRankXp) * 100, 100)}%`
+                                  : '100%',
+                              }}
+                            />
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
