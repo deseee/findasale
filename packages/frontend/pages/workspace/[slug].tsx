@@ -127,8 +127,16 @@ export default function WorkspacePage() {
 
   // Tasks state
   const [showQuickPickerModal, setShowQuickPickerModal] = useState(false);
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
+  const [editPanelTaskId, setEditPanelTaskId] = useState<string | null>(null);
+  const [assignDropdownTaskId, setAssignDropdownTaskId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<{
+    title: string;
+    description: string;
+    dueAt: string;
+    assignedToId: string;
+  }>({ title: '', description: '', dueAt: '', assignedToId: '' });
+  const [deleteConfirmTaskId, setDeleteConfirmTaskId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Auto-select first upcoming sale if available
   useEffect(() => {
@@ -204,32 +212,72 @@ export default function WorkspacePage() {
     }
   };
 
-  // Handle starting inline edit of task title
-  const handleStartEditingTitle = (task: WorkspaceTask) => {
-    setEditingTaskId(task.id);
-    setEditingTitle(task.title);
+
+  // Handle opening expanded edit panel
+  const handleOpenEditPanel = (task: WorkspaceTask) => {
+    setEditPanelTaskId(task.id);
+    setEditFormData({
+      title: task.title,
+      description: task.description || '',
+      dueAt: task.dueAt ? new Date(task.dueAt).toISOString().split('T')[0] : '',
+      assignedToId: task.assignedTo ? task.assignedTo : '',
+    });
+    setDeleteError(null);
   };
 
-  // Handle saving edited task title
-  const handleSaveTaskTitle = async () => {
-    if (!workspace?.id || !editingTaskId || !editingTitle.trim()) return;
+  // Handle quick assign (inline dropdown)
+  const handleQuickAssign = async (taskId: string, memberId: string) => {
+    if (!workspace?.id) return;
 
     try {
-      await api.patch(`/workspace/${workspace.id}/tasks/${editingTaskId}`, {
-        title: editingTitle.trim(),
+      await api.patch(`/workspace/${workspace.id}/tasks/${taskId}`, {
+        assignedToId: memberId || undefined,
       });
-      setEditingTaskId(null);
-      setEditingTitle('');
+      setAssignDropdownTaskId(null);
       await refetchTasks();
     } catch (error) {
-      console.error('Error saving task title:', error);
+      console.error('Error assigning task:', error);
     }
   };
 
-  // Handle canceling edit
-  const handleCancelEditingTitle = () => {
-    setEditingTaskId(null);
-    setEditingTitle('');
+  // Handle saving expanded edit panel
+  const handleSaveEditPanel = async () => {
+    if (!workspace?.id || !editPanelTaskId || !editFormData.title.trim()) return;
+
+    try {
+      await api.patch(`/workspace/${workspace.id}/tasks/${editPanelTaskId}`, {
+        title: editFormData.title.trim(),
+        description: editFormData.description.trim() || undefined,
+        dueAt: editFormData.dueAt ? new Date(editFormData.dueAt).toISOString() : undefined,
+        assignedToId: editFormData.assignedToId || undefined,
+      });
+      setEditPanelTaskId(null);
+      await refetchTasks();
+    } catch (error) {
+      console.error('Error saving task:', error);
+      setDeleteError('Failed to save task');
+    }
+  };
+
+  // Handle canceling expanded edit panel
+  const handleCancelEditPanel = () => {
+    setEditPanelTaskId(null);
+    setEditFormData({ title: '', description: '', dueAt: '', assignedToId: '' });
+    setDeleteError(null);
+  };
+
+  // Handle deleting a task
+  const handleDeleteTask = async (taskId: string) => {
+    if (!workspace?.id) return;
+
+    try {
+      await api.delete(`/workspace/${workspace.id}/tasks/${taskId}`);
+      setDeleteConfirmTaskId(null);
+      await refetchTasks();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      setDeleteError('Failed to delete task');
+    }
   };
 
   // Redirect to login if not authenticated
@@ -589,78 +637,213 @@ export default function WorkspacePage() {
               ) : tasksData?.tasks && tasksData.tasks.length > 0 ? (
                 <div className="space-y-3">
                   {tasksData.tasks.map((task) => (
-                    <div key={task.id} className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 hover:bg-warm-50 dark:hover:bg-gray-700/50 transition group">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <button
-                              onClick={() => handleToggleTaskStatus(task)}
-                              className={`flex-shrink-0 w-5 h-5 rounded-full border-2 transition ${
-                                task.status === 'COMPLETED'
-                                  ? 'bg-green-500 border-green-500'
-                                  : task.status === 'IN_PROGRESS'
-                                  ? 'bg-amber-500 border-amber-500'
-                                  : 'border-warm-300 dark:border-gray-600 hover:border-warm-400'
-                              }`}
-                              title={`Status: ${task.status}`}
+                    <div key={task.id}>
+                      {editPanelTaskId === task.id ? (
+                        // Edit Panel
+                        <div className="border border-sage-300 dark:border-sage-600 rounded-lg p-4 bg-sage-50 dark:bg-gray-700/50 space-y-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-warm-600 dark:text-warm-400 mb-1">
+                              Title *
+                            </label>
+                            <input
+                              type="text"
+                              value={editFormData.title}
+                              onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                              className="w-full px-3 py-2 border border-sage-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500"
+                              maxLength={200}
                             />
-                            {editingTaskId === task.id ? (
-                              <div className="flex items-center gap-1 flex-1">
-                                <input
-                                  type="text"
-                                  value={editingTitle}
-                                  onChange={(e) => setEditingTitle(e.target.value)}
-                                  className="flex-1 px-2 py-1 border border-sage-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500"
-                                  autoFocus
-                                  onKeyPress={(e) => e.key === 'Enter' && handleSaveTaskTitle()}
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-warm-600 dark:text-warm-400 mb-1">
+                              Description (max 300)
+                            </label>
+                            <textarea
+                              value={editFormData.description}
+                              onChange={(e) =>
+                                setEditFormData({
+                                  ...editFormData,
+                                  description: e.target.value.slice(0, 300),
+                                })
+                              }
+                              className="w-full px-3 py-2 border border-sage-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500 resize-none"
+                              rows={2}
+                            />
+                            <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                              {editFormData.description.length}/300
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-warm-600 dark:text-warm-400 mb-1">
+                              Due Date
+                            </label>
+                            <input
+                              type="date"
+                              value={editFormData.dueAt}
+                              onChange={(e) => setEditFormData({ ...editFormData, dueAt: e.target.value })}
+                              className="w-full px-3 py-2 border border-sage-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-warm-600 dark:text-warm-400 mb-1">
+                              Assignee
+                            </label>
+                            <select
+                              value={editFormData.assignedToId}
+                              onChange={(e) => setEditFormData({ ...editFormData, assignedToId: e.target.value })}
+                              className="w-full px-3 py-2 border border-sage-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 text-sm focus:outline-none focus:ring-2 focus:ring-sage-500"
+                            >
+                              <option value="">Unassigned</option>
+                              {acceptedMembers.map((member) => {
+                                const memberName = member.organizer?.businessName || member.user?.name || member.organizer?.user?.email || 'Team Member';
+                                return (
+                                  <option key={member.id} value={member.id}>
+                                    {memberName}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+
+                          {deleteError && (
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2">
+                              <p className="text-xs text-red-600 dark:text-red-400">{deleteError}</p>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={handleCancelEditPanel}
+                              className="px-3 py-2 border border-warm-300 dark:border-gray-600 rounded text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-gray-600 text-sm font-medium transition"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleSaveEditPanel}
+                              className="px-3 py-2 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white text-sm font-medium rounded transition"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        // Task Card
+                        <div className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 hover:bg-warm-50 dark:hover:bg-gray-700/50 transition group">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <button
+                                  onClick={() => handleToggleTaskStatus(task)}
+                                  className={`flex-shrink-0 w-5 h-5 rounded-full border-2 transition ${
+                                    task.status === 'COMPLETED'
+                                      ? 'bg-green-500 border-green-500'
+                                      : task.status === 'IN_PROGRESS'
+                                      ? 'bg-amber-500 border-amber-500'
+                                      : 'border-warm-300 dark:border-gray-600 hover:border-warm-400'
+                                  }`}
+                                  title={`Status: ${task.status}`}
                                 />
-                                <button
-                                  onClick={handleSaveTaskTitle}
-                                  className="flex-shrink-0 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-bold text-sm"
-                                  title="Save"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  onClick={handleCancelEditingTitle}
-                                  className="flex-shrink-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-bold text-sm"
-                                  title="Cancel"
-                                >
-                                  ✗
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 flex-1">
-                                <h3 className={`font-semibold text-sm ${task.status === 'COMPLETED' ? 'line-through text-warm-500 dark:text-warm-500' : 'text-warm-900 dark:text-warm-100'}`}>
+                                <h3 className={`font-semibold text-sm flex-1 ${task.status === 'COMPLETED' ? 'line-through text-warm-500 dark:text-warm-500' : 'text-warm-900 dark:text-warm-100'}`}>
                                   {task.title}
                                 </h3>
                                 <button
-                                  onClick={() => handleStartEditingTitle(task)}
+                                  onClick={() => handleOpenEditPanel(task)}
                                   className="flex-shrink-0 text-warm-400 dark:text-warm-500 hover:text-warm-600 dark:hover:text-warm-300 opacity-0 group-hover:opacity-100 transition text-xs"
-                                  title="Edit title"
+                                  title="Edit task"
                                 >
                                   ✎
                                 </button>
+                                <button
+                                  onClick={() => setDeleteConfirmTaskId(task.id)}
+                                  className="flex-shrink-0 text-rose-400 dark:text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 opacity-0 group-hover:opacity-100 transition text-xs"
+                                  title="Delete task"
+                                >
+                                  🗑
+                                </button>
                               </div>
-                            )}
+                              <div className="flex flex-wrap gap-2 items-center mt-2">
+                                <span className="text-xs bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 px-2 py-1 rounded">
+                                  {task.sale.title}
+                                </span>
+
+                                {/* Assignee Chip - Always Visible */}
+                                <div className="relative">
+                                  {task.assignedToInfo ? (
+                                    <button
+                                      onClick={() => setAssignDropdownTaskId(assignDropdownTaskId === task.id ? null : task.id)}
+                                      className="text-xs bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 px-2 py-1 rounded hover:bg-sage-200 dark:hover:bg-sage-900/50 transition flex items-center gap-1"
+                                    >
+                                      <span className="font-bold">{task.assignedToInfo.businessName.charAt(0).toUpperCase()}</span>
+                                      <span>{task.assignedToInfo.businessName}</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => setAssignDropdownTaskId(assignDropdownTaskId === task.id ? null : task.id)}
+                                      className="text-xs border border-dashed border-warm-400 dark:border-warm-500 text-warm-600 dark:text-warm-400 px-2 py-1 rounded hover:border-warm-500 transition"
+                                    >
+                                      + Assign
+                                    </button>
+                                  )}
+
+                                  {/* Inline Assignee Dropdown */}
+                                  {assignDropdownTaskId === task.id && (
+                                    <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg shadow-lg z-10 min-w-max">
+                                      <button
+                                        onClick={() => handleQuickAssign(task.id, '')}
+                                        className="block w-full text-left px-3 py-2 text-xs text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-600 transition"
+                                      >
+                                        Unassigned
+                                      </button>
+                                      {acceptedMembers.map((member) => {
+                                        const memberName = member.organizer?.businessName || member.user?.name || member.organizer?.user?.email || 'Team Member';
+                                        return (
+                                          <button
+                                            key={member.id}
+                                            onClick={() => handleQuickAssign(task.id, member.id)}
+                                            className="block w-full text-left px-3 py-2 text-xs text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-600 transition border-t border-warm-200 dark:border-gray-600"
+                                          >
+                                            {memberName}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {task.dueAt && (
+                                  <span className="text-xs text-warm-600 dark:text-warm-400">
+                                    Due: {new Date(task.dueAt).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex flex-wrap gap-2 items-center mt-2">
-                            <span className="text-xs bg-warm-100 dark:bg-gray-700 text-warm-700 dark:text-warm-300 px-2 py-1 rounded">
-                              {task.sale.title}
-                            </span>
-                            {task.assignedToInfo && (
-                              <span className="text-xs bg-sage-100 dark:bg-sage-900/30 text-sage-700 dark:text-sage-300 px-2 py-1 rounded">
-                                {task.assignedToInfo.businessName}
-                              </span>
-                            )}
-                            {task.dueAt && (
-                              <span className="text-xs text-warm-600 dark:text-warm-400">
-                                Due: {new Date(task.dueAt).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
+
+                          {deleteConfirmTaskId === task.id && (
+                            <div className="mt-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 flex items-center justify-between">
+                              <p className="text-xs text-red-700 dark:text-red-300 font-medium">
+                                Delete this task?
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setDeleteConfirmTaskId(null)}
+                                  className="px-2 py-1 text-xs border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTask(task.id)}
+                                  className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition"
+                                >
+                                  Yes, Delete
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -26,6 +26,7 @@ import {
   getWorkspaceTasks,
   createWorkspaceTask,
   updateWorkspaceTask,
+  deleteWorkspaceTask,
   getTaskTemplates,
 } from '../controllers/workspaceController';
 import {
@@ -70,6 +71,7 @@ router.get('/:workspaceId/tasks', authenticate, requireWorkspaceMember(), getWor
 router.get('/:workspaceId/tasks/templates', authenticate, requireWorkspaceMember(), getTaskTemplates);
 router.post('/:workspaceId/tasks', authenticate, requireWorkspaceMember(), createWorkspaceTask);
 router.patch('/:workspaceId/tasks/:taskId', authenticate, requireWorkspaceMember(), updateWorkspaceTask);
+router.delete('/:workspaceId/tasks/:taskId', authenticate, requireWorkspaceMember(), deleteWorkspaceTask);
 
 // Morning Briefing endpoints
 router.get('/:workspaceId/briefing', authenticate, requireWorkspaceMember(), getBriefing);
