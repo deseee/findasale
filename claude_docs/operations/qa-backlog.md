@@ -1,5 +1,5 @@
 # QA Backlog — FindA.Sale
-**Last updated:** S530 (2026-04-21)
+**Last updated:** S530 wrap (2026-04-21)
 
 ---
 
@@ -15,6 +15,11 @@
 | #200 | Shopper public profile | ✅ | /shoppers/[userId] loads Karen's profile. No collectorTitle field. DB confirms column removed. ss_0375t806k |
 | S529 | Avatar dropdown rank | ✅ | Dropdown shows compact "Initiate" + 30 XP progress bar. Confirmed live on production. ss_8776p61an |
 | #224 | rapid-capture redirect | ✅ | /organizer/rapid-capture correctly redirects to /organizer/sales. ss_0476cyovv |
+| #259 | Hunt Pass Page Accuracy | ✅ | /shopper/hunt-pass shows "1.5×" throughout, XP matrix table with correct multiplier math, "6-Hour Early Access to Flash Deals" copy confirmed. |
+| #279 | Rare Finds Pass | ✅ | /shopper/rare-finds loads, rarity filters (All / Common / Rare / Very Rare / Ultra Rare) present, empty state correct. |
+| #282 | Explorer Profile Completion XP | ✅ | Karen at 30 XP. Filled specialty + category + keyword in /shopper/explorer-profile. Dashboard confirmed 80 / 500 XP. +50 XP one-time award fires correctly. |
+| #223 | Organizer Guidance Tooltips (partial) | ⚠️ | /organizer/pricing — TooltipHelper present on all 3 tier name columns (SIMPLE, PRO, TEAMS), content correct. Holds page Grandmaster copy UNVERIFIED (holds list empty — no test data). |
+| #272 | Post-Purchase Share | ⚠️ | /shopper/loot-log/[id] shows "Share Your Find!" button. navigator.share wired. Desktop automation cannot trigger native Share dialog — dialog appearance unverifiable. Mechanism present; UX outcome unverified. |
 
 ## ❌ Bugs Found S530
 
@@ -23,6 +28,9 @@
 | #266 | Avatar dropdown nav link | P2 | Dropdown shows "My Profile → /organizer/profile" instead of "Explorer Profile → /shopper/explorer-profile". S528 rename not applied to AvatarDropdown. Fix: update the nav link label and href in the dropdown component. |
 | #228 | SettlementWizard fee label | P1 | Receipt step shows "Platform Fee (200%)" — decimal-to-percent formatting bug. $25/$1250 = 2% but renders as 200%. S528 fix introduced the regression. Fix: check the % calculation in Receipt step — likely multiplying decimal by 100 twice. ss_4284srfjk |
 | per-sale | Analytics filter (S528) | P1 | /organizer/insights per-sale filter shows identical data for "All Sales" and any individual sale selection. Subtitle updates but all 8 stat cards show same numbers. Endpoint exists but data is not scoped. (Pre-compaction finding) |
+| #241 | Brand Kit PDF generators | P1 | All 4 PDF download buttons on /organizer/brand-kit link to /api/brand-kit/organizer/[type] — all return 404. UI is fully built (Business Cards, Letterhead, Social Headers, Yard Sign buttons present). Backend endpoints don't exist. |
+| #7 | Shopper Referral Rewards | P1 | /shopper/referrals → 404. /shopper/referral → 404. No referral link anywhere on shopper dashboard or nav. Feature page does not exist despite being in backlog as shipped. |
+| #267 | RSVP Bonus XP | P0 | RSVP XP not firing. Clicked "📅 Going" on Downtown Downsizing Sale 17 as Karen (confirmed no Hunt Pass). No Discoveries notification in /shopper/notifications after click. XP went from 80→85 (+5) — does not match expected 2 XP. Source of +5 XP unexplained. RSVP award mechanism broken. ss_9247vqrq4 |
 
 ## 🔔 DECISION NEEDED — S530
 
@@ -39,6 +47,15 @@
 | S529 mobile nav rank | Pending push + requires mobile viewport | Push S529, resize to mobile, verify Layout.tsx reads real rank from useXpProfile |
 | S529 card reader content | Pending push | Push S529, then verify /faq, /organizer/guide, /support pages show S700/S710 hardware info |
 | Organizer Insights error | Bob loads fine; error is user-specific | Test as Alice (user1@example.com) — the original "failed to load" reporter |
+| #275 Hunt Pass Cosmetics | Karen (user11) does not have Hunt Pass — sees "Upgrade to Hunt Pass" | Need Hunt Pass subscriber account to verify amber avatar ring + 🏆 leaderboard badge |
+| #278 Treasure Hunt Pro | Requires Hunt Pass subscriber | Need Hunt Pass account + active QR scan to verify +10% XP bonus |
+| #280 Condition Rating XP | Session ended before organizer switch | Login as Bob (user2), set conditionGrade on any item, verify +3 XP fires |
+| #281 Streak Milestone XP | Requires 5 consecutive daily visits | Needs real multi-day streak — cannot simulate in automation |
+| #255 Rank-Up Notifications | Requires XP threshold crossing | Karen needs ~415 more XP to reach Scout; cannot artificially trigger |
+| #257 Scout Hold Duration | Karen is INITIATE (85 XP) | Needs Scout+ account to test 45-min hold duration |
+| #268 Trail Completion XP | Karen's trail has 0 stops | Need trail with all stops completed to trigger 100 XP once-only award |
+| #261 Treasure Hunt XP Rank Multiplier | Requires QR scan at active sale | Need Ranger+ account + live QR scan |
+| #75 Tier Lapse Logic | Needs organizer with lapsed PRO subscription | No lapsed test account available |
 
 ---
 
@@ -126,44 +143,44 @@ Priority: P0 (blocker) → P1 (must ship) → P2 (polish) → P3 (minor)
 | # | Feature | Tier | Where | What to verify |
 |---|---------|------|-------|----------------|
 | 235 | Charity Close + Tax Receipt PDF | PRO | /organizer/settlement/[saleId] | DonationModal 3-step wizard, PRO gate upsell CTA, receipt step in SettlementWizard | ❌ S525 — no DonationModal found anywhere in wizard |
-| 241 | Brand Kit Expansion | PRO | /organizer/brand-kit or similar | 4 PDF generators (biz cards, letterhead, social headers, branded yard sign), PRO gate | Pending |
+| 241 | Brand Kit Expansion | PRO | /organizer/brand-kit or similar | 4 PDF generators (biz cards, letterhead, social headers, branded yard sign), PRO gate | ❌ S530 — P1, UI present, all 4 PDF endpoints (/api/brand-kit/organizer/[type]) return 404 |
 | 242 | QR/Barcode Item Labels | SIMPLE | /organizer/edit-item/[id] | Print Label button present, QR codes link to correct item pages | ✅ S525 |
 | 249 | SIMPLE Concurrent Sales Gate | SIMPLE | /organizer/create-sale | As SIMPLE with 1 active sale, create a 2nd → amber block + Upgrade CTA appears | ✅ S525 |
 | 228 | Settlement Hub | SIMPLE | /organizer/settlement/[saleId] | Full wizard: expenses, client payout, platform fee line visible, dark mode | ⚠️ S525 — wizard flow ✅, platform fee missing from receipt |
 | 253 | SettlementWizard Transfer ID | SIMPLE | Settlement wizard receipt step | clientPayoutStripeTransferId displayed + failure reason banner | UNVERIFIED — needs Stripe Connect |
 | 264 | Tier Progress Widget | SIMPLE/PRO | /organizer/dashboard | SIMPLE sees PRO pitch; PRO sees TEAMS pitch; TEAMS: widget hidden | ✅ S525 |
 | 224 | Camera Flow Enhancement | SIMPLE | /organizer/rapid-capture | Lighting tiers, shot guidance copy, AI confidence copy on PreviewModal | ✅ S530 — redirect to /organizer/sales works |
-| 223 | Organizer Guidance Tooltips | ALL | /organizer/pricing, /organizer/holds | TooltipHelper on tier names, Grandmaster copy on holds | Pending |
+| 223 | Organizer Guidance Tooltips | ALL | /organizer/pricing, /organizer/holds | TooltipHelper on tier names, Grandmaster copy on holds | ⚠️ S530 — pricing tooltips ✅ all tiers; holds Grandmaster copy UNVERIFIED (empty holds page) |
 | 75 | Tier Lapse Logic | PRO | Dashboard when subscription lapsed | Lapse banner, features suspend, re-sub restores | Pending |
 
 ### Shopper Features
 
 | # | Feature | Tier | Where | What to verify |
 |---|---------|------|-------|----------------|
-| 7 | Shopper Referral Rewards | FREE | /shopper/referrals | Referral link displays, WhatsApp/SMS/Twitter/Email/copy share buttons, stats |
+| 7 | Shopper Referral Rewards | FREE | /shopper/referrals | Referral link displays, WhatsApp/SMS/Twitter/Email/copy share buttons, stats | ❌ S530 — P1, page doesn't exist (/shopper/referrals → 404), no dashboard link |
 | 251 | Crossed-Out Price (priceBeforeMarkdown) | SIMPLE | Any item card or detail | Set priceBeforeMarkdown on item → crossed-out original price appears | ❌ S525 — set $65 in DB, item detail shows flat $45.00, no strikethrough |
 | 252 | Verified Purchase Badge | FREE | Sale item reviews | Submit review as shopper who purchased item → ✓ Verified Purchase badge shows | ✅ S525 — "Verified Purchase" text rendered on Karen's review (confirmed via page text + JS rect) |
 | 254 | Hunt Pass 1.5x XP Multiplier | PAID_ADDON | Purchase as Hunt Pass subscriber | XP awarded is 1.5× standard; hunt-pass.tsx shows 1.5× everywhere | Pending |
 | 255 | Rank-Up Notifications | FREE | Notifications after rank-up | Earn enough XP to rank up → congratulatory notification appears | Pending — needs XP trigger |
 | 256 | Referral Signup XP | FREE | Sign up with referral code | Referrer gets 20 XP notification; first purchase gives referrer 30 XP | Pending |
 | 257 | Scout Hold Duration | FREE | Hold as Scout rank user | Hold shows 45 min (not 30) | Pending |
-| 259 | Hunt Pass Page Accuracy | PAID_ADDON | /shopper/hunt-pass | "1.5×" everywhere, XP matrix table present, flash deals say "6 hours early" | Pending |
+| 259 | Hunt Pass Page Accuracy | PAID_ADDON | /shopper/hunt-pass | "1.5×" everywhere, XP matrix table present, flash deals say "6 hours early" | ✅ S530 |
 | 261 | Treasure Hunt XP Rank Multiplier | FREE | Scan QR as Ranger+ | ~38 XP for Ranger (1.5×), ~44 for Sage, ~50 for Grandmaster | Pending |
-| 267 | RSVP Bonus XP | FREE | RSVP to a sale | 2 XP awarded; cap 10 XP/month | Pending |
+| 267 | RSVP Bonus XP | FREE | RSVP to a sale | 2 XP awarded; cap 10 XP/month | ❌ S530 — P0, award not firing; no Discoveries notification; XP delta unexplained |
 | 268 | Trail Completion XP | FREE | Complete all stops on a trail | 100 XP once-only awarded | Pending |
 | 269 | Legendary Flash Deal Gating | FREE/PAID | Flash deal starting <6h | Initiate: hidden; Sage+/Hunt Pass: visible | Pending |
 | 270 | Explorer's Guild Onboarding Card | FREE | /shopper/dashboard (new/Initiate) | Dismissible card for INITIATE rank; dismiss persists (localStorage) | ✅ S530 — card renders for Karen (INITIATE), XP values correct |
-| 272 | Post-Purchase Share Your Haul | FREE | /checkout-success or /purchases/[id] | "Share Your Haul" section renders, Web Share API works | Pending |
+| 272 | Post-Purchase Share Your Haul | FREE | /checkout-success or /purchases/[id] | "Share Your Haul" section renders, Web Share API works | ⚠️ S530 — button present on /shopper/loot-log/[id], navigator.share wired; desktop dialog unverifiable |
 | 273 | Rank Achievement Share | FREE | /shopper/notifications | Share button on rank-type notifications | Pending |
 | 274 | Trail Completion Share | FREE | /shopper/trails/[trailId] | Celebration + share button after all stops scanned | Pending |
-| 275 | Hunt Pass Cosmetic Add-ons | PAID_ADDON | Avatar, leaderboard, hunt-pass page | Amber ring on avatar, 🏆 badge on leaderboard | Pending |
+| 275 | Hunt Pass Cosmetic Add-ons | PAID_ADDON | Avatar, leaderboard, hunt-pass page | Amber ring on avatar, 🏆 badge on leaderboard | UNVERIFIED S530 — Karen has no Hunt Pass (confirmed "Upgrade to Hunt Pass" shown) |
 | 276 | Brand Follow | FREE | /shopper/dashboard Brands tab | BrandFollowManager renders, follow/unfollow works | ✅ S525 |
 | 277 | Haul Posts | FREE | /shopper/haul-posts + /shopper/haul-posts/create | Feed page, create page, like/unlike, nav link present | ⚠️ S525 — feed/create/like ✅, nav link missing from all nav locations |
 | 278 | Treasure Hunt Pro (Hunt Pass) | PAID_ADDON | QR scan as Hunt Pass subscriber | +10% XP bonus, 150 daily cap | Pending |
-| 279 | Rare Finds Pass | PAID_ADDON | /shopper/rare-finds | Early visibility filter, RareFindsFeed widget on dashboard | Pending |
+| 279 | Rare Finds Pass | PAID_ADDON | /shopper/rare-finds | Early visibility filter, RareFindsFeed widget on dashboard | ✅ S530 — page loads, rarity filters present, empty state correct |
 | 280 | Condition Rating XP | SIMPLE | Set condition grade on item | 3 XP awarded once per item when conditionGrade first set | Pending |
 | 281 | Streak Milestone XP | FREE | Visit 5+ consecutive days | 5/10/20 XP at 5/10/20-day streaks | Pending |
-| 282 | Collector Passport Completion XP | FREE | Fill specialties+categories+keywords | 50 XP once-only | Pending |
+| 282 | Collector Passport Completion XP | FREE | Fill specialties+categories+keywords | 50 XP once-only | ✅ S530 — Karen 30→80 XP after filling specialty+category+keyword |
 
 ### Navigation / Core
 
