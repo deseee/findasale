@@ -360,19 +360,17 @@ const sections: Section[] = [
           </table>
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-8">Optional: Physical Card Reader</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          FindA.Sale's POS works with two Stripe Terminal smart readers: the <strong>Stripe Reader S700</strong> and
-          the <strong>Stripe Reader S710</strong> (which adds cellular connectivity for locations without reliable Wi-Fi).
-          Both accept chip, swipe, and contactless payments including Apple Pay and Google Pay.
-          Order directly from Stripe at{' '}
+          FindA.Sale's POS supports two Stripe Terminal smart readers: the <strong>Stripe Reader S700</strong> and
+          the <strong>Stripe Reader S710</strong>. The S710 adds cellular connectivity — a good choice for outdoor
+          venues or anywhere Wi-Fi is spotty. Both accept chip, swipe, and contactless payments including Apple Pay
+          and Google Pay. Order at{' '}
           <a href="https://stripe.com/terminal" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline font-medium">stripe.com/terminal</a>.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed mt-3">
-          <strong>No hardware? Use Tap to Pay.</strong> Supported iPhones and Android phones can accept
-          contactless payments directly — no extra device needed. A solid option if you run one or two sales a year.
-        </p>
-        <p className="text-warm-700 dark:text-warm-300 leading-relaxed mt-3">
-          Either way, your Stripe account must be fully onboarded before in-person card payments will process.
-          If you're ordering a reader, allow a few days for delivery and add reader setup to your pre-sale checklist.
+          Because FindA.Sale is a web app, readers connect over the internet rather than Bluetooth — your venue
+          needs a working Wi-Fi or cellular connection. Your Stripe account must be fully onboarded before
+          in-person card payments will process. If you're ordering a reader, allow a few days for delivery and
+          add reader setup to your pre-sale checklist.
         </p>
         </div>
       </div>
