@@ -46,7 +46,7 @@ interface Sale {
   zip: string;
   status: string;
   photoUrls: string[];
-  isShopMode?: boolean;
+  isRetailMode?: boolean;
 }
 
 const OrganizerStorefront = () => {
@@ -341,7 +341,7 @@ const OrganizerStorefront = () => {
                         <p className="text-sm text-warm-600 dark:text-gray-400 mb-2">
                           {sale.city}, {sale.state}
                         </p>
-                        {sale.isShopMode ? (
+                        {sale.isRetailMode ? (
                           <div className="flex flex-col gap-2">
                             <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 w-fit">
                               🟢 Always Open

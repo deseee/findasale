@@ -2,40 +2,40 @@ import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 
 /**
- * Feature #XXX: Shop Mode Auto-Renewal Job
+ * Feature #XXX: Retail Mode Auto-Renewal Job
  *
- * Runs daily. Auto-renews shop mode sales that are nearing expiration.
+ * Runs daily. Auto-renews retail mode sales that are nearing expiration.
  * For each sale where:
- *   - isShopMode = true
+ *   - isRetailMode = true
  *   - status = 'PUBLISHED'
- *   - endDate is within shopAutoRenewDays days from now
- *   - No future shop sale already exists for this organizer
+ *   - endDate is within retailAutoRenewDays days from now
+ *   - No future retail sale already exists for this organizer
  *
  * Creates a new Sale with:
- *   - Same title, description, city, address, saleType, organizerId, isShopMode=true, shopAutoRenewDays
+ *   - Same title, description, city, address, saleType, organizerId, isRetailMode=true, retailAutoRenewDays
  *   - status='PUBLISHED'
- *   - startDate=today, endDate=today+shopAutoRenewDays
+ *   - startDate=today, endDate=today+retailAutoRenewDays
  *
  * Moves all items (except SOLD/DONATED) from old sale to new sale, updates lastSaleId.
  * Sets old sale status to 'ENDED'.
- * Does NOT send follower notifications for auto-renewed shop sales.
+ * Does NOT send follower notifications for auto-renewed retail sales.
  *
- * Logs: [shopAutoRenew] Renewed sale ${oldSale.id} → ${newSale.id} for organizer ${organizerId}
+ * Logs: [retailAutoRenew] Renewed sale ${oldSale.id} → ${newSale.id} for organizer ${organizerId}
  */
 
-export const shopAutoRenew = async (): Promise<void> => {
+export const retailAutoRenew = async (): Promise<void> => {
   try {
     const now = new Date();
 
-    // Query: find all shop mode sales that are:
+    // Query: find all retail mode sales that are:
     // - published, not ended
-    // - nearing expiration (endDate is within shopAutoRenewDays days from now)
-    const shopSalesNeedingRenewal = await prisma.sale.findMany({
+    // - nearing expiration (endDate is within retailAutoRenewDays days from now)
+    const retailSalesNeedingRenewal = await prisma.sale.findMany({
       where: {
-        isShopMode: true,
+        isRetailMode: true,
         status: 'PUBLISHED',
         endDate: {
-          lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000), // within 30 days from now (worst case shopAutoRenewDays)
+          lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000), // within 30 days from now (worst case retailAutoRenewDays)
           gte: now, // not already ended
         },
       },
@@ -60,20 +60,20 @@ export const shopAutoRenew = async (): Promise<void> => {
       },
     });
 
-    if (shopSalesNeedingRenewal.length === 0) {
-      console.log(`[shopAutoRenew] No shop sales needing renewal (checked at ${now.toISOString()})`);
+    if (retailSalesNeedingRenewal.length === 0) {
+      console.log(`[retailAutoRenew] No retail sales needing renewal (checked at ${now.toISOString()})`);
       return;
     }
 
-    console.log(`[shopAutoRenew] Found ${shopSalesNeedingRenewal.length} sale(s) needing renewal`);
+    console.log(`[retailAutoRenew] Found ${retailSalesNeedingRenewal.length} sale(s) needing renewal`);
 
-    for (const oldSale of shopSalesNeedingRenewal) {
+    for (const oldSale of retailSalesNeedingRenewal) {
       try {
-        // Check if a future shop sale already exists for this organizer
-        const futureShopSale = await prisma.sale.findFirst({
+        // Check if a future retail sale already exists for this organizer
+        const futureRetailSale = await prisma.sale.findFirst({
           where: {
             organizerId: oldSale.organizerId,
-            isShopMode: true,
+            isRetailMode: true,
             status: 'PUBLISHED',
             startDate: {
               gt: oldSale.endDate,
@@ -81,10 +81,10 @@ export const shopAutoRenew = async (): Promise<void> => {
           },
         });
 
-        if (futureShopSale) {
+        if (futureRetailSale) {
           console.log(
-            `[shopAutoRenew] Skipping renewal for sale ${oldSale.id} — ` +
-            `future shop sale ${futureShopSale.id} already exists for organizer ${oldSale.organizerId}`
+            `[retailAutoRenew] Skipping renewal for sale ${oldSale.id} — ` +
+            `future retail sale ${futureRetailSale.id} already exists for organizer ${oldSale.organizerId}`
           );
           continue;
         }
@@ -92,7 +92,7 @@ export const shopAutoRenew = async (): Promise<void> => {
         // Calculate new dates
         const newStartDate = new Date(oldSale.endDate.getTime() + 1000); // Start right after old sale ends
         const newEndDate = new Date(
-          newStartDate.getTime() + oldSale.shopAutoRenewDays * 24 * 60 * 60 * 1000
+          newStartDate.getTime() + oldSale.retailAutoRenewDays * 24 * 60 * 60 * 1000
         );
 
         // Create new sale
@@ -106,8 +106,8 @@ export const shopAutoRenew = async (): Promise<void> => {
             zip: oldSale.zip,
             saleType: oldSale.saleType,
             organizerId: oldSale.organizerId,
-            isShopMode: true,
-            shopAutoRenewDays: oldSale.shopAutoRenewDays,
+            isRetailMode: true,
+            retailAutoRenewDays: oldSale.retailAutoRenewDays,
             status: 'PUBLISHED',
             startDate: newStartDate,
             endDate: newEndDate,
@@ -142,7 +142,7 @@ export const shopAutoRenew = async (): Promise<void> => {
           });
 
           console.log(
-            `[shopAutoRenew] Moved ${oldSale.items.length} item(s) from old sale ${oldSale.id} to new sale ${newSale.id}`
+            `[retailAutoRenew] Moved ${oldSale.items.length} item(s) from old sale ${oldSale.id} to new sale ${newSale.id}`
           );
         }
 
@@ -153,29 +153,29 @@ export const shopAutoRenew = async (): Promise<void> => {
         });
 
         console.log(
-          `[shopAutoRenew] Renewed sale ${oldSale.id} → ${newSale.id} for organizer ${oldSale.organizerId} ` +
+          `[retailAutoRenew] Renewed sale ${oldSale.id} → ${newSale.id} for organizer ${oldSale.organizerId} ` +
           `(${oldSale.items.length} items moved, new end date: ${newEndDate.toISOString()})`
         );
       } catch (error) {
-        console.error(`[shopAutoRenew] Error renewing sale ${oldSale.id}:`, error);
+        console.error(`[retailAutoRenew] Error renewing sale ${oldSale.id}:`, error);
       }
     }
 
-    console.log(`[shopAutoRenew] Shop auto-renewal job completed`);
+    console.log(`[retailAutoRenew] Retail auto-renewal job completed`);
   } catch (error) {
-    console.error('[shopAutoRenew] Fatal error:', error);
+    console.error('[retailAutoRenew] Fatal error:', error);
   }
 };
 
 /**
- * Register the shop auto-renewal cron job.
+ * Register the retail auto-renewal cron job.
  * Schedule: Daily at 1 AM UTC (configurable via env var if needed).
  * Cron pattern: '0 1 * * *' = every day at 01:00 UTC
  */
-export const scheduleShopAutoRenewCron = (): void => {
+export const scheduleRetailAutoRenewCron = (): void => {
   cron.schedule('0 1 * * *', () => {
-    console.log('[shopAutoRenew] Running scheduled shop auto-renewal job...');
-    shopAutoRenew();
+    console.log('[retailAutoRenew] Running scheduled retail auto-renewal job...');
+    retailAutoRenew();
   });
-  console.log('[shopAutoRenew] Scheduled shop auto-renewal job registered (daily at 01:00 UTC)');
+  console.log('[retailAutoRenew] Scheduled retail auto-renewal job registered (daily at 01:00 UTC)');
 };
