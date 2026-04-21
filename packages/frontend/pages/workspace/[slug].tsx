@@ -8,6 +8,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useOrganizerActivityFeed } from '../../hooks/useOrganizerActivityFeed';
 import OrganizerActivityFeedCard from '../../components/OrganizerActivityFeedCard';
 import MorningBriefing from '../../components/MorningBriefing';
+import QuickPickerTaskModal from '../../components/QuickPickerTaskModal';
 
 interface WorkspaceMember {
   id: string;
@@ -130,6 +131,7 @@ export default function WorkspacePage() {
   const [newTaskSaleId, setNewTaskSaleId] = useState<string>('');
   const [newTaskAssignee, setNewTaskAssignee] = useState<string>('');
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [showQuickPickerModal, setShowQuickPickerModal] = useState(false);
 
   // Auto-select first upcoming sale if available
   useEffect(() => {
@@ -554,12 +556,20 @@ export default function WorkspacePage() {
                   Tasks & Assignments
                 </h2>
                 {(isOwner || workspace.members.some((m) => m.acceptedAt && ['ADMIN', 'MANAGER'].includes(m.role))) && (
-                  <button
-                    onClick={() => setShowAddTask(!showAddTask)}
-                    className="px-3 py-1 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold text-sm rounded-lg transition"
-                  >
-                    + Add Task
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowQuickPickerModal(true)}
+                      className="px-3 py-1 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold text-sm rounded-lg transition"
+                    >
+                      Quick Add
+                    </button>
+                    <button
+                      onClick={() => setShowAddTask(!showAddTask)}
+                      className="px-3 py-1 bg-warm-200 hover:bg-warm-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold text-sm rounded-lg transition"
+                    >
+                      + Add Task
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -775,6 +785,17 @@ export default function WorkspacePage() {
             </div>
           </div>
         </div>
+
+        {/* Quick Picker Modal */}
+        {workspace && (
+          <QuickPickerTaskModal
+            workspaceId={workspace.id}
+            saleId={selectedSaleId || undefined}
+            isOpen={showQuickPickerModal}
+            onClose={() => setShowQuickPickerModal(false)}
+            onTaskCreated={refetchTasks}
+          />
+        )}
       </div>
     </>
   );
