@@ -671,9 +671,12 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 shadow-header dark:shadow-gray-800/50">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-12 lg:h-16">
-            <Link href="/" className="text-xl lg:text-2xl flex-shrink-0 text-gray-900 dark:text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800 }}>
-              Find<span className="text-amber-600">A.</span>Sale
-            </Link>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Link href="/" className="text-xl lg:text-2xl text-gray-900 dark:text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800 }}>
+                Find<span className="text-amber-600">A.</span>Sale
+              </Link>
+              <span className="text-[10px] font-bold tracking-wider uppercase bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 px-1.5 py-0.5 rounded self-start mt-1">Beta</span>
+            </div>
 
             {/* Desktop nav */}
             <nav className="hidden lg:flex items-center space-x-4" aria-label="Main navigation">
@@ -855,7 +858,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       >
         {/* Drawer header */}
         <div className="flex items-center justify-between px-4 h-12 border-b border-warm-200 dark:border-gray-700">
-          <span className="text-lg text-gray-900 dark:text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800 }}>Find<span className="text-amber-600">A.</span>Sale</span>
+          <div className="flex items-center gap-2">
+            <span className="text-lg text-gray-900 dark:text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800 }}>Find<span className="text-amber-600">A.</span>Sale</span>
+            <span className="text-[10px] font-bold tracking-wider uppercase bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 px-1.5 py-0.5 rounded self-start mt-0.5">Beta</span>
+          </div>
           <button
             onClick={() => setMenuOpen(false)}
             aria-label="Close menu"
