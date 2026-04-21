@@ -48,7 +48,7 @@ import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
 import MyTeamsCard from '../../components/MyTeamsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
-import { Clock, ShoppingCart, Megaphone, Pencil, Eye } from 'lucide-react';
+import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Copy, Store } from 'lucide-react';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -843,6 +843,43 @@ const OrganizerDashboard = () => {
                 </div>
                 <Link href="/organizer/pricing" className="flex-shrink-0 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
                   Learn about TEAMS
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Storefront Widget */}
+          {storefrontSlug && isClient && (
+            <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
+                  <Store className="w-5 h-5 text-green-700 dark:text-green-400" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide">Your Storefront</p>
+                  <p className="text-sm font-medium text-warm-900 dark:text-warm-100 truncate max-w-[200px] sm:max-w-xs">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/organizer/storefront/${storefrontSlug}` : `/organizer/storefront/${storefrontSlug}`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 sm:ml-auto flex-shrink-0">
+                <button
+                  onClick={async () => {
+                    const url = `${window.location.origin}/organizer/storefront/${storefrontSlug}`;
+                    await navigator.clipboard.writeText(url);
+                    showToast('Storefront link copied!', 'success');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-warm-200 hover:bg-warm-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy Link
+                </button>
+                <Link
+                  href={`/organizer/storefront/${storefrontSlug}`}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  View Storefront
                 </Link>
               </div>
             </div>
