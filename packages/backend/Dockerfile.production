@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-04-20a
+# cache-bust: 2026-04-21a
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
@@ -65,19 +65,4 @@ COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_mod
 COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=builder /app/packages/backend/package.json ./packages/backend/
-COPY --from=builder /app/packages/database/package.json ./packages/database/
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/pnpm-workspace.yaml ./
-
-ENV NODE_ENV=production
-# Puppeteer: use system Chromium instead of bundled binary
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-
-EXPOSE 3001
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
-
-CMD ["node", "packages/backend/dist/index.js"]
+COPY --from=builder /app/packages/database/package.jso
