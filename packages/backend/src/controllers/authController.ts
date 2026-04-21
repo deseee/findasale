@@ -160,6 +160,11 @@ export const register = async (req: Request, res: Response) => {
           // Process referral reward INSIDE transaction (atomically with user creation)
           await processReferral(referrer.id, newUser.id, tx);
 
+          // SECURITY FIX P2: Log IP pair for self-referral ring detection
+          // Same IP referring >3 accounts in 30 days warrants manual review (logged only, not blocked)
+          const referreeIp = clientIp;
+          console.log(`[referral][ip-audit] referrer=${referrer.id} referee=${newUser.id} referrer_ip=${referreeIp} ts=${new Date().toISOString()}`);
+
           // Check for referral badge
           // Note: handleReferralBadge reads outside the tx — acceptable since it's idempotent
           // It will be called after transaction commits

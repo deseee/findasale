@@ -994,8 +994,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       );
                     } else if (referralReward.fraudReviewStatus === 'CLEAR') {
                       // Account is old enough and fraud status is clear — award XP to referrer
+                      // P0 Security Fix: Add 24h payment clearance hold per gamedesign spec
+                      const referralXpHoldUntil = new Date(purchase.createdAt.getTime() + 24 * 60 * 60 * 1000);
                       awardXp(referralReward.referrerId, 'REFERRAL_FIRST_PURCHASE', XP_AWARDS.REFERRAL_FIRST_PURCHASE, {
                         saleId: purchase.saleId ?? undefined,
+                        purchaseId: purchase.id, // P0 Security Fix: link for chargeback claw-back
+                        holdUntil: referralXpHoldUntil, // P0 Security Fix: 24h clearance hold per gamedesign spec
                         description: 'First purchase referral bonus'
                       }).catch(err =>
                         console.error('[XP] Failed to award first-purchase referral XP:', err)
@@ -1042,20 +1046,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
               });
 
               if (externalPurchaseCount >= 1) {
-                // Referee has made at least one valid external purchase — award 500 XP to referrer
-                awardXp(organizerReferral.referrerId, 'ORGANIZER_REFERRAL_PURCHASE', 500, {
-                  saleId: purchase.saleId ?? undefined,
-                  description: 'Referred organizer completed external purchase'
-                }).catch(err =>
-                  console.error('[XP] Failed to award organizer referral XP:', err)
-                );
-
-                // Mark OrganizerReferral as CREDITED (one-time award per referral)
+                // Referee has made at least one valid external purchase — award XP to referrer
+                // P0 Security Fix: Update status FIRST (idempotency gate), then award XP
+                // If status update fails, retry is safe (still PENDING). If award fails, next webhook retry is safe (status already CREDITED).
                 await prisma.organizerReferral.update({
                   where: { refereeId: purchase.userId },
                   data: { status: 'CREDITED' }
+                });
+
+                // Only after status is committed do we fire the XP award
+                awardXp(organizerReferral.referrerId, 'ORGANIZER_REFERRAL_PURCHASE', XP_AWARDS.ORGANIZER_REFERRAL_PURCHASE, {
+                  saleId: purchase.saleId ?? undefined,
+                  purchaseId: purchase.id, // P0 Security Fix: link for chargeback claw-back
+                  holdUntil: new Date(Date.now() + 72 * 60 * 60 * 1000), // P0 Security Fix: 72h chargeback hold
+                  description: 'Referred organizer completed external purchase'
                 }).catch(err =>
-                  console.error('[referral] Failed to mark organizer referral as credited:', err)
+                  console.error('[XP] Failed to award organizer referral XP:', err)
                 );
               }
             }
