@@ -71,11 +71,12 @@ No silent library substitutions.
 
 ## Fee Structure
 
-- **Rate:** 10% flat — all item types (FIXED, AUCTION, REVERSE_AUCTION, LIVE_DROP, POS)
-- **All-in with Stripe (~3.2%):** ~13.2% — competitive with Etsy, well below eBay/MaxSold
-- **Implementation:** `FeeStructure` DB table (single row, rate configurable without code deploy)
-- **Tier/subscription discounts:** deferred — revisit after beta data collected
-- **Locked:** 2026-03-10. Do not change without Patrick approval.
+- **Default rate:** 10% — SIMPLE tier + ALA CARTE purchases (all item types: FIXED, AUCTION, REVERSE_AUCTION, LIVE_DROP, POS)
+- **Discounted rate:** 8% — PRO and TEAMS tiers (confirmed correct S528; stored as `Organizer.commissionRate`)
+- **Source of truth:** `Organizer.commissionRate` field (not FeeStructure DB table — that table holds the base rate only)
+- **All-in with Stripe (~3.2%):** ~13.2% (SIMPLE) / ~11.2% (PRO/TEAMS) — competitive with Etsy, well below eBay/MaxSold
+- **Shopper:** never pays platform fee — organizer absorbs it from Stripe Connect payout
+- **Locked:** 2026-03-10 (base structure). PRO/TEAMS 8% rate confirmed S527-S528. Do not change without Patrick approval.
 
 ---
 

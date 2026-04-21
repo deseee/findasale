@@ -41,3 +41,20 @@
 1. Investigate /organizer/insights runtime error (Railway logs)
 2. Chrome QA the S528 features above
 3. Chrome QA remaining S526 items (#235, #224, #270)
+
+---
+
+## ⚠️ Brand Drift Alert — 2026-04-21
+
+**Weekly brand audit completed.** Two items fixed since last week (SharePromoteModal templates now dynamic ✅, subscription.tsx copy fixed ✅). But ~17 violations remain open.
+
+**New finding this cycle: 12 modal components missing dark mode** — BidModal, BulkCategoryModal, BulkOperationErrorModal, BulkPhotoModal, BulkPriceModal, BulkStatusModal, BulkTagModal, CheckoutModal, HoldButton modal, HuntPassModal, ItemSearchResults card + skeleton, ActivityFeed — all show white in dark mode. Organizers using dark mode at night get blinded by these.
+
+**Highest priority remaining (copy fixes — all string substitutions):**
+- `pages/sales/[id].tsx:881` — Nextdoor share still hardcodes "estate sale" for all sale types (P1, 1-line fix)
+- `pages/index.tsx:266,268,274,285` — all 4 homepage meta tags omit flea markets (P1)
+- `pages/organizers/[id].tsx:84` — organizer profile meta says "Estate sales by..." (P1)
+
+Full details: `claude_docs/audits/brand-drift-2026-04-21.md`
+
+**Suggested dispatch:** One `findasale-dev` call for Batches 1–3+5 (~17 copy fixes), one separate call for Batch 4 (12 modal dark mode fixes).
