@@ -28,6 +28,7 @@ import {
   updateWorkspaceTask,
   deleteWorkspaceTask,
   getTaskTemplates,
+  addTeamSeat,
 } from '../controllers/workspaceController';
 import {
   getBriefing,
@@ -46,6 +47,7 @@ router.get('/invite/validate/:token', validateInviteToken);
 router.post('/', authenticate, requireTier('TEAMS'), createWorkspace);
 router.get('/', authenticate, getMyWorkspace);
 router.post('/invite', authenticate, requireTier('TEAMS'), inviteMember);
+router.post('/add-seat', authenticate, requireTier('TEAMS'), addTeamSeat);
 router.post('/invite/accept/:token', authenticate, acceptMagicLinkInvite);
 router.post('/accept', authenticate, acceptInvite);
 router.get('/invitations/pending', authenticate, getPendingInvitations);
