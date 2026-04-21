@@ -1191,3 +1191,81 @@ export const getTaskTemplates = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Failed to load task templates' });
   }
 };
+
+/**
+ * POST /workspace/add-seat
+ * Add an additional team member seat via Stripe subscription item
+ * TEAMS tier only, real Stripe charge
+ */
+export const addTeamSeat = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: {
+        subscriptionTier: true,
+        stripeSubscriptionId: true,
+        isEnterpriseAccount: true,
+      },
+    });
+
+    if (!organizer) return res.status(404).json({ message: 'Organizer not found' });
+    if (organizer.subscriptionTier !== 'TEAMS') {
+      return res.status(403).json({ message: 'Additional seats are only available for TEAMS tier organizers' });
+    }
+    if (organizer.isEnterpriseAccount) {
+      return res.status(403).json({ message: 'Enterprise accounts have unlimited seats' });
+    }
+    if (!organizer.stripeSubscriptionId) {
+      return res.status(400).json({ message: 'No active subscription found. Please contact support.' });
+    }
+
+    // Stripe seat price ID from environment
+    const STRIPE_TEAMS_SEAT_PRICE_ID = process.env.STRIPE_TEAMS_SEAT_PRICE_ID;
+    if (!STRIPE_TEAMS_SEAT_PRICE_ID) {
+      console.error('[add-seat] STRIPE_TEAMS_SEAT_PRICE_ID is not configured');
+      return res.status(500).json({ message: 'Seat pricing is not configured. Please contact support.' });
+    }
+
+    // Add subscription item for additional seat to Stripe
+    const { getStripe } = await import('../utils/stripe');
+    const stripe = getStripe();
+
+    try {
+      const subscriptionItem = await stripe.subscriptionItems.create({
+        subscription: organizer.stripeSubscriptionId,
+        price: STRIPE_TEAMS_SEAT_PRICE_ID,
+        quantity: 1,
+      });
+
+      console.log(`[add-seat] Added seat for organizer ${organizerId}, subscription_item: ${subscriptionItem.id}`);
+
+      // Return the new seat limit
+      return res.json({
+        success: true,
+        seatAdded: true,
+        baseSeatLimit: 5,
+        message: 'Additional seat added successfully. You can now invite more team members.',
+      });
+    } catch (stripeError: any) {
+      console.error('[add-seat] Stripe error:', stripeError);
+      let message = 'Failed to add seat to subscription';
+
+      if (stripeError.type === 'StripeInvalidRequestError') {
+        if (stripeError.message?.includes('No such subscription')) {
+          message = 'Subscription not found. Please contact support.';
+        } else if (stripeError.message?.includes('No such price')) {
+          message = 'Seat pricing not found. Please contact support.';
+        }
+      }
+
+      return res.status(400).json({ message });
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error adding team seat:', error);
+    return res.status(500).json({ message: 'Failed to add team seat' });
+  }
+};

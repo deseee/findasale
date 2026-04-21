@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import TeamSeatUpsellModal from './TeamSeatUpsellModal';
 
 interface InviteeWithRole {
   email: string;
@@ -28,6 +29,10 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
   const [invitees, setInvitees] = useState<InviteeWithRole[]>([]);
   const [tempEmail, setTempEmail] = useState('');
   const [tempRole, setTempRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
+
+  // Upsell Modal state
+  const [showSeatUpsellModal, setShowSeatUpsellModal] = useState(false);
+  const [pendingInviteForUpsell, setPendingInviteForUpsell] = useState<InviteeWithRole | null>(null);
 
   const handleAddInvitee = () => {
     if (!tempEmail.trim()) {
@@ -106,10 +111,22 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
 
       // Step 2: Invite members
       for (const invitee of invitees) {
-        await api.post('/workspace/invite', {
-          email: invitee.email,
-          role: invitee.role,
-        });
+        try {
+          await api.post('/workspace/invite', {
+            email: invitee.email,
+            role: invitee.role,
+          });
+        } catch (inviteErr: any) {
+          const errorCode = inviteErr.response?.data?.code;
+          if (errorCode === 'MEMBER_CAP_EXCEEDED') {
+            // Show upsell modal and stop processing
+            setIsLoading(false);
+            setPendingInviteForUpsell(invitee);
+            setShowSeatUpsellModal(true);
+            return; // Exit early — don't mark onboarding as complete yet
+          }
+          throw inviteErr; // Re-throw other errors
+        }
       }
 
       // Step 3: Mark teams onboarding as complete
@@ -128,6 +145,32 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
     } catch (error: any) {
       console.error('Error completing TEAMS onboarding:', error);
       const msg = error.response?.data?.message || error.response?.data?.error || 'Failed to setup workspace';
+      showToast(msg, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpsellSuccess = async () => {
+    // After seat upsell succeeds, retry completing the onboarding
+    setIsLoading(true);
+    try {
+      // Mark teams onboarding as complete
+      await api.patch('/users/me', {
+        teamsOnboardingComplete: true,
+      });
+
+      showToast('TEAMS workspace setup complete!', 'success');
+
+      // Redirect to workspace management page
+      if (onComplete) {
+        onComplete();
+      }
+      // Always navigate to workspace page after completion
+      router.push('/organizer/workspace');
+    } catch (error: any) {
+      console.error('Error completing TEAMS onboarding after upsell:', error);
+      const msg = error.response?.data?.message || error.response?.data?.error || 'Failed to complete setup';
       showToast(msg, 'error');
     } finally {
       setIsLoading(false);
@@ -353,6 +396,14 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
           </div>
         </div>
       </div>
+
+      {/* Team Seat Upsell Modal */}
+      <TeamSeatUpsellModal
+        isOpen={showSeatUpsellModal}
+        onClose={() => setShowSeatUpsellModal(false)}
+        onSuccess={handleUpsellSuccess}
+        pendingInvite={pendingInviteForUpsell || undefined}
+      />
     </div>
   );
 };
