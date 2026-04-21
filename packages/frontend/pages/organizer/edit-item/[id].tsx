@@ -19,6 +19,7 @@ import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 3
 import PriceResearchPanel from '../../../components/PriceResearchPanel';
 import ItemPriceHistoryChart from '../../../components/ItemPriceHistoryChart';
+import LocationSelector from '../../../components/LocationSelector';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
@@ -51,6 +52,9 @@ const EditItemPage = () => {
     auctionEndTime: '',
     qrEmbedEnabled: true,
     isLegendary: false,
+    tagColor: '',
+    // Feature #311: Multi-Location Inventory View
+    locationId: null as string | null,
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -271,6 +275,9 @@ const EditItemPage = () => {
         auctionEndTime: item.auctionEndTime ? new Date(item.auctionEndTime).toISOString().slice(0, 16) : '',
         qrEmbedEnabled: item.qrEmbedEnabled !== false,
         isLegendary: item.isLegendary === true,
+        tagColor: item.tagColor || '',
+        // Feature #311: Multi-Location Inventory View
+        locationId: item.locationId || null,
       });
     }
   }, [item]);
@@ -497,6 +504,14 @@ const EditItemPage = () => {
               placeholder="Search and select an eBay category..."
             />
 
+            {/* Feature #311: Multi-Location Inventory View */}
+            <LocationSelector
+              value={formData.locationId}
+              onChange={(locationId) => setFormData({ ...formData, locationId })}
+              label="Location"
+              placeholder="Select a location (optional)"
+            />
+
             <div>
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
                 Condition
@@ -580,6 +595,36 @@ const EditItemPage = () => {
                     </button>
                   </span>
                 ))}
+              </div>
+            </div>
+
+            {/* Feature #310: Tag Color for discount rules */}
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                Tag Color
+              </label>
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={formData.tagColor}
+                    onChange={(e) =>
+                      setFormData({ ...formData, tagColor: e.target.value })
+                    }
+                    placeholder="e.g., #EF4444 or red"
+                    className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                    Used for color-coded discount rules
+                  </p>
+                </div>
+                {formData.tagColor && (
+                  <div
+                    className="w-10 h-10 rounded-lg border-2 border-warm-300 dark:border-gray-500 flex-shrink-0"
+                    style={{ backgroundColor: formData.tagColor }}
+                    title="Color preview"
+                  />
+                )}
               </div>
             </div>
 

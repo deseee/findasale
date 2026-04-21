@@ -16,6 +16,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import Tooltip from '../../components/Tooltip';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
+import LocationSelector from '../../components/LocationSelector';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -43,6 +44,8 @@ const CreateSalePage = () => {
     // B1: Sale type selector
     saleType: 'ESTATE',
     retailAutoRenewDays: 30,
+    // Feature #311: Multi-Location Inventory View
+    locationId: null as string | null,
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -161,7 +164,10 @@ const CreateSalePage = () => {
         ...(lat !== null ? { lat } : {}),
         ...(lng !== null ? { lng } : {}),
       };
-      const response = await api.post('/sales', payload);
+      const response = await api.post('/sales', {
+        ...payload,
+        ...(formData.locationId ? { locationId: formData.locationId } : {}),
+      });
       const firstSaleUnlocked = response.data.achievements?.some(
         (a: { key: string }) => a.key === 'FIRST_SALE_CREATED'
       );
@@ -468,6 +474,14 @@ const CreateSalePage = () => {
                 <option value="Grandville" />
               </datalist>
             </div>
+
+            {/* Feature #311: Multi-Location Inventory View */}
+            <LocationSelector
+              value={formData.locationId}
+              onChange={(locationId) => setFormData({ ...formData, locationId })}
+              label="Location"
+              placeholder="Select a location (optional)"
+            />
 
             {/* B1: Sale Type Selector */}
             <div>

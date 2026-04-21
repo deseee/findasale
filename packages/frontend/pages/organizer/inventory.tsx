@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import InventoryItemCard from '../../components/InventoryItemCard';
@@ -9,6 +9,7 @@ import { SkeletonCard } from '../../components/SkeletonCards';
 import { Search, Filter } from 'lucide-react';
 import EmptyState from '../../components/EmptyState';
 import api from '../../lib/api';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 
 interface PullModalState {
   isOpen: boolean;
@@ -30,12 +31,16 @@ interface HistoryModalState {
 const InventoryPage: React.FC = () => {
   const router = useRouter();
   const { user } = useAuth();
+  const { canAccess } = useOrganizerTier();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [conditionFilter, setConditionFilter] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [statusFilter, setStatusFilter] = useState('AVAILABLE');
+  // Feature #311: Multi-Location Inventory View
+  const [locationFilter, setLocationFilter] = useState('');
+  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
 
   const [pullModal, setPullModal] = useState<PullModalState>({ isOpen: false });
   const [historyModal, setHistoryModal] = useState<HistoryModalState>({ isOpen: false });
@@ -51,6 +56,22 @@ const InventoryPage: React.FC = () => {
   const { inventoryItems, loading, isRemovingFromInventory, isPullingFromInventory, removeFromInventory, pullFromInventory, getPriceHistory } =
     useInventory(user?.roles?.includes('ORGANIZER') ? user?.id : undefined);
 
+  // Fetch locations for filter
+  useEffect(() => {
+    if (canAccess('TEAMS')) {
+      const fetchLocations = async () => {
+        try {
+          const res = await api.get('/locations');
+          setLocations(res.data || []);
+        } catch (error) {
+          console.error('Failed to fetch locations:', error);
+          setLocations([]);
+        }
+      };
+      fetchLocations();
+    }
+  }, [canAccess]);
+
   // Filter items
   const filteredItems = useMemo(() => {
     return inventoryItems.filter((item) => {
@@ -60,6 +81,8 @@ const InventoryPage: React.FC = () => {
       const matchesMinPrice = !minPrice || (item.price && item.price >= parseFloat(minPrice));
       const matchesMaxPrice = !maxPrice || (item.price && item.price <= parseFloat(maxPrice));
       const matchesStatus = !statusFilter || item.status === statusFilter;
+      // Feature #311: Multi-Location Inventory View
+      const matchesLocation = !locationFilter || item.locationId === locationFilter;
 
       return (
         matchesSearch &&
@@ -67,10 +90,11 @@ const InventoryPage: React.FC = () => {
         matchesCondition &&
         matchesMinPrice &&
         matchesMaxPrice &&
-        matchesStatus
+        matchesStatus &&
+        matchesLocation
       );
     });
-  }, [inventoryItems, searchQuery, categoryFilter, conditionFilter, minPrice, maxPrice, statusFilter]);
+  }, [inventoryItems, searchQuery, categoryFilter, conditionFilter, minPrice, maxPrice, statusFilter, locationFilter]);
 
   const handlePullClick = (itemId: string, itemTitle: string) => {
     setPullModal({ isOpen: true, inventoryItemId: itemId, itemTitle });
@@ -210,6 +234,18 @@ const InventoryPage: React.FC = () => {
                   <option value="SOLD">Sold</option>
                 </select>
               </div>
+              {/* Feature #311: Multi-Location Inventory View */}
+              {locations.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Location</label>
+                  <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100">
+                    <option value="">All Locations</option>
+                    {locations.map(loc => (
+                      <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div>
