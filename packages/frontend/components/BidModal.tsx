@@ -55,10 +55,10 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-md p-6"
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-warm-900 mb-1">Place a Bid</h2>
+        <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-1">Place a Bid</h2>
         <p className="text-sm text-warm-500 mb-4 line-clamp-2">{item.title}</p>
 
         <div className="flex justify-between text-sm text-warm-600 mb-4">

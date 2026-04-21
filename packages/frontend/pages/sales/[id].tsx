@@ -878,7 +878,19 @@ const SaleDetailPage = () => {
                 <button
                   onClick={() => {
                     if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.clipboard) {
-                      const postText = `Check out this estate sale on FindA.Sale!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
+                        const getSaleTypeLabel = (saleType?: string): string => {
+                        const labels: Record<string, string> = {
+                          ESTATE: 'estate sale',
+                          YARD: 'yard sale',
+                          AUCTION: 'auction',
+                          FLEA_MARKET: 'flea market',
+                          CONSIGNMENT: 'consignment sale',
+                          CHARITY: 'charity sale',
+                          BUSINESS_CORPORATE: 'corporate sale',
+                        };
+                        return labels[saleType] || 'sale';
+                      };
+                      const postText = `Check out this ${getSaleTypeLabel(sale.saleType)} on FindA.Sale!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
                       navigator.clipboard.writeText(postText);
                       showToast('Post text copied to clipboard! Paste it into Nextdoor.', 'success');
                     } else {

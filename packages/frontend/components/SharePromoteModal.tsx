@@ -65,7 +65,7 @@ interface TemplateContent {
 }
 
 const getSaleTypeLabel = (saleType?: string): string => {
-  if (!saleType) return 'estate sale';
+  if (!saleType) return 'sale';
   const labels: Record<string, string> = {
     ESTATE: 'estate sale',
     YARD: 'yard sale',

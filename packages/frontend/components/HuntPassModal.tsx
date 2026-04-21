@@ -40,9 +40,9 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
-          <h2 className="text-xl font-bold text-warm-900">Upgrade to Hunt Pass</h2>
+          <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100">Upgrade to Hunt Pass</h2>
           <button
             onClick={onClose}
             className="text-warm-400 hover:text-warm-600 text-2xl leading-none"

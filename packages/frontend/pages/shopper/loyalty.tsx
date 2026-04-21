@@ -288,14 +288,14 @@ function LoyaltyPage() {
                 <span className="text-2xl">🚪</span>
                 <div>
                   <p className="font-semibold text-gray-900 dark:text-warm-100">Walk-in Visit</p>
-                  <p className="text-gray-600 dark:text-gray-400">+2 XP per check-in</p>
+                  <p className="text-gray-600 dark:text-gray-400">+5 XP per check-in</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <span className="text-2xl">🛒</span>
                 <div>
                   <p className="font-semibold text-gray-900 dark:text-warm-100">Make a Purchase</p>
-                  <p className="text-gray-600 dark:text-gray-400">+25 XP per transaction</p>
+                  <p className="text-gray-600 dark:text-gray-400">+10 XP per transaction</p>
                 </div>
               </div>
             </div>
@@ -317,7 +317,7 @@ function LoyaltyPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">Cost</p>
-                      <p className="text-xl font-bold text-blue-700 dark:text-blue-400">20 XP</p>
+                      <p className="text-xl font-bold text-blue-700 dark:text-blue-400">100–500 XP</p>
                     </div>
                   </div>
 
@@ -358,7 +358,7 @@ function LoyaltyPage() {
                   </div>
 
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Spend XP to boost the rarity score of a sale you love. Items will be more visible in discovery and searches!
+                    Spend XP to boost your odds of finding a Legendary item at one sale. +2% Legendary find odds!
                   </p>
 
                   <button

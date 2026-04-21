@@ -28,9 +28,9 @@ const BulkOperationErrorModal: React.FC<BulkOperationErrorModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl max-h-[80vh] overflow-y-auto border-l-4 border-l-red-600">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl max-h-[80vh] overflow-y-auto border-l-4 border-l-red-600">
         {/* Header */}
-        <h3 className="text-lg font-bold text-red-900 mb-2">{title}</h3>
+        <h3 className="text-lg font-bold text-red-900 dark:text-red-400 mb-2">{title}</h3>
 
         {/* Message */}
         <p className="text-warm-700 mb-4 text-sm">{message}</p>

@@ -38,7 +38,7 @@ export default function EmailDigestPreview() {
 
   // Mock data for preview
   const mockDigest: DigestPreviewData = {
-    businessName: user?.name || 'Your Estate Sales',
+    businessName: user?.name || 'Your Sales',
     totalItemsSold: 12,
     totalRevenue: 450.75,
     newFollowers: 3,
@@ -50,7 +50,7 @@ export default function EmailDigestPreview() {
       { title: 'Set of Decorative Vases', price: 28.00 },
     ],
     upcomingSales: [
-      { title: 'Estate Sale - Downtown', startDate: 'Mar 8 - Mar 10' },
+      { title: 'Weekend Yard Sale - Eastown', startDate: 'Mar 8 - Mar 10' },
       { title: 'Spring Clearance - Eastown', startDate: 'Mar 15 - Mar 17' },
     ],
   };

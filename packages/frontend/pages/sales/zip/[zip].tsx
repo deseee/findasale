@@ -28,7 +28,7 @@ const ZipCodePage = () => {
     <>
       <Head>
         <title>Sales in {zip} - FindA.Sale</title>
-        <meta name="description" content={`Find estate sales in ZIP code ${zip}`} />
+        <meta name="description" content={`Find sales in ZIP code ${zip} - browse estate sales, garage sales, auctions, and flea markets`} />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-6xl mx-auto px-4 py-8">

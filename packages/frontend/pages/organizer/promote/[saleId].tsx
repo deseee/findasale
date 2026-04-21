@@ -608,7 +608,7 @@ export default function PromotePage(): JSX.Element {
                 <div className="text-4xl mb-3">📋</div>
                 <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">EstateSales.NET</h3>
                 <p className="text-warm-700 dark:text-warm-300 text-sm mb-4">
-                  CSV spreadsheet for dedicated estate sale hunters
+                  CSV for EstateSales.NET — reaches dedicated estate sale shoppers
                 </p>
                 <div className="flex gap-3">
                   <button
