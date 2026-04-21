@@ -52,8 +52,8 @@ const OrganizerSettingsPage = () => {
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
   const [isFeedbackMenuOpen, setIsFeedbackMenuOpen] = useState(false);
-  const [hasShopMode, setHasShopMode] = useState(false);
-  const [shopModeLoading, setShopModeLoading] = useState(false);
+  const [hasRetailMode, setHasRetailMode] = useState(false);
+  const [retailModeLoading, setRetailModeLoading] = useState(false);
   const { highContrast, setHighContrast } = useTheme();
   const queryClient = useQueryClient();
 
@@ -126,7 +126,7 @@ const OrganizerSettingsPage = () => {
           setEtsy(response.data.etsy || '');
           setPickupWindows(response.data.pickupWindows || '');
           setStripeConnected(response.data.stripeConnected || false);
-          setHasShopMode(response.data.hasShopMode || false);
+          setHasRetailMode(response.data.hasRetailMode || false);
         }
       } catch (error) {
         console.error('Failed to fetch organizer data:', error);
@@ -377,22 +377,22 @@ const OrganizerSettingsPage = () => {
                 )}
               </div>
 
-              {/* Shop Mode Section — TEAMS only */}
+              {/* Retail Mode Section — TEAMS only */}
               {tier === 'TEAMS' && (
                 <div className="card p-6">
-                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Shop Mode</h2>
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Retail Mode</h2>
                   <div className="space-y-4">
                     <label className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={hasShopMode}
+                        checked={hasRetailMode}
                         onChange={async (e) => {
                           const newValue = e.target.checked;
-                          setHasShopMode(newValue);
-                          setShopModeLoading(true);
+                          setHasRetailMode(newValue);
+                          setRetailModeLoading(true);
                           try {
-                            // Update organizer hasShopMode
-                            await api.patch('/organizers/me', { hasShopMode: newValue });
+                            // Update organizer hasRetailMode
+                            await api.patch('/organizers/me', { hasRetailMode: newValue });
 
                             // If enabling, also update active sale
                             if (newValue) {
@@ -401,22 +401,22 @@ const OrganizerSettingsPage = () => {
                                 const salesResponse = await api.get('/organizers/me/sales');
                                 const activeSale = salesResponse.data?.find((s: any) => s.status === 'ACTIVE' || s.status === 'PUBLISHED');
                                 if (activeSale) {
-                                  await api.patch(`/sales/${activeSale.id}`, { isShopMode: true });
+                                  await api.patch(`/sales/${activeSale.id}`, { isRetailMode: true });
                                 }
                               } catch {
                                 // Sale update failed but organizer updated — OK to continue
                               }
                             }
 
-                            showToast(newValue ? 'Shop Mode enabled' : 'Shop Mode disabled', 'success');
+                            showToast(newValue ? 'Retail Mode enabled' : 'Retail Mode disabled', 'success');
                           } catch (error: any) {
-                            setHasShopMode(!newValue); // Revert on error
-                            showToast(error.response?.data?.message || 'Failed to update Shop Mode', 'error');
+                            setHasRetailMode(!newValue); // Revert on error
+                            showToast(error.response?.data?.message || 'Failed to update Retail Mode', 'error');
                           } finally {
-                            setShopModeLoading(false);
+                            setRetailModeLoading(false);
                           }
                         }}
-                        disabled={shopModeLoading}
+                        disabled={retailModeLoading}
                         className="w-4 h-4 rounded"
                       />
                       <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">
@@ -424,7 +424,7 @@ const OrganizerSettingsPage = () => {
                       </span>
                     </label>
                     <p className="text-sm text-warm-600 dark:text-gray-400">
-                      Your shop auto-renews every 30 days. Items stay listed until you mark them sold.
+                      Your retail store auto-renews every 30 days. Items stay listed until you mark them sold.
                     </p>
                     <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                       <p className="text-xs text-amber-800 dark:text-amber-200">

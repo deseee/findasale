@@ -95,9 +95,9 @@ const saleCreateSchema = z.object({
   treasureHuntEnabled: z.boolean().optional(),
   treasureHuntCompletionBadge: z.boolean().optional(),
   holdsEnabled: z.boolean().optional(),  // Feature #121: allow organizer to disable holds per-sale
-  // Feature #XXX: Shop Mode
-  isShopMode: z.boolean().optional().default(false),
-  shopAutoRenewDays: z.number().int().min(1).max(365).optional().default(30),
+  // Feature #XXX: Retail Mode
+  isRetailMode: z.boolean().optional().default(false),
+  retailAutoRenewDays: z.number().int().min(1).max(365).optional().default(30),
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();
@@ -437,19 +437,19 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       organizer = organizerProfile;
     }
 
-    // Feature #XXX: Shop Mode — TEAMS tier only
-    if (saleData.isShopMode && (!organizer || (organizer.subscriptionTier as string) !== 'TEAMS' && (organizer.subscriptionTier as string) !== 'ENTERPRISE')) {
+    // Feature #XXX: Retail Mode — TEAMS tier only
+    if (saleData.isRetailMode && (!organizer || (organizer.subscriptionTier as string) !== 'TEAMS' && (organizer.subscriptionTier as string) !== 'ENTERPRISE')) {
       return res.status(403).json({
-        message: 'Shop Mode requires TEAMS tier',
-        code: 'SHOP_MODE_REQUIRES_TEAMS',
+        message: 'Retail Mode requires TEAMS tier',
+        code: 'RETAIL_MODE_REQUIRES_TEAMS',
         upgradeUrl: '/pricing'
       });
     }
 
-    // Feature #XXX: Shop Mode — auto-calculate endDate
-    if (saleData.isShopMode) {
+    // Feature #XXX: Retail Mode — auto-calculate endDate
+    if (saleData.isRetailMode) {
       const startDate = new Date(saleData.startDate);
-      const renewDays = saleData.shopAutoRenewDays || 30;
+      const renewDays = saleData.retailAutoRenewDays || 30;
       const calculatedEndDate = new Date(startDate.getTime() + renewDays * 24 * 60 * 60 * 1000);
       saleData.endDate = calculatedEndDate.toISOString();
     }
@@ -506,11 +506,11 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       data: { ...saleData, organizerId, status: 'DRAFT' }
     });
 
-    // Feature #XXX: Update organizer hasShopMode flag if creating first shop mode sale
-    if (saleData.isShopMode && organizer) {
+    // Feature #XXX: Update organizer hasRetailMode flag if creating first retail mode sale
+    if (saleData.isRetailMode && organizer) {
       await prisma.organizer.update({
         where: { id: organizerId },
-        data: { hasShopMode: true }
+        data: { hasRetailMode: true }
       });
     }
 
