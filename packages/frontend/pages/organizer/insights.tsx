@@ -166,7 +166,7 @@ const OrganizerInsightsPage = () => {
       }
 
       const response = await api.get(url);
-      return response.data as Insights;
+      return response.data as PerformanceMetrics;
     },
     enabled: !!selectedSaleId && !!user?.id,
     staleTime: 5 * 60 * 1000,
@@ -396,40 +396,22 @@ const OrganizerInsightsPage = () => {
             <>
               {/* Per-Sale Metrics Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                {/* Total Items */}
-                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                    Total Items
-                  </p>
-                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{metricsData.totalItems}</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Listed</p>
-                </div>
-
-                {/* Items Sold */}
-                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                    Items Sold
-                  </p>
-                  <p className="text-3xl font-bold text-green-600 dark:text-green-500">{metricsData.totalItemsSold}</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Completed</p>
-                </div>
-
                 {/* Total Revenue */}
                 <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
                   <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                     Total Revenue
                   </p>
-                  <p className="text-3xl font-bold text-green-700 dark:text-green-500">${metricsData.totalRevenue.toFixed(2)}</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{metricsData.totalItemsSold} sold</p>
+                  <p className="text-3xl font-bold text-green-700 dark:text-green-500">${metricsData.metrics.revenue.total.toFixed(2)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Gross sales</p>
                 </div>
 
-                {/* Available Items */}
+                {/* Net Revenue */}
                 <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
                   <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                    Available Items
+                    Net Revenue
                   </p>
-                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-500">{metricsData.totalItemsAvailable}</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Not yet sold</p>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-500">${metricsData.metrics.revenue.organiserNetRevenue.toFixed(2)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">After platform fee</p>
                 </div>
 
                 {/* Conversion Rate */}
@@ -438,9 +420,27 @@ const OrganizerInsightsPage = () => {
                     Conversion Rate
                   </p>
                   <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
-                    {metricsData.totalItems > 0 ? ((metricsData.totalItemsSold / metricsData.totalItems) * 100).toFixed(1) : '0.0'}%
+                    {(metricsData.metrics.purchasingMetrics.conversionRate * 100).toFixed(1)}%
                   </p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Items sold ratio</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Favorited → purchased</p>
+                </div>
+
+                {/* Unique Buyers */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Unique Buyers
+                  </p>
+                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-500">{metricsData.metrics.purchasingMetrics.totalUniqueBuyers}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">This sale</p>
+                </div>
+
+                {/* Avg Cart Value */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Avg Cart Value
+                  </p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${metricsData.metrics.purchasingMetrics.averageCartValue.toFixed(2)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Per buyer</p>
                 </div>
               </div>
             </>
