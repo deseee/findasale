@@ -25,7 +25,7 @@ interface Consignor {
   commissionRate: string | number; // Decimal from Prisma
   notes: string | null;
   portalToken: string;
-  items: Array<{ id: string; title: string; price: string | number }>;
+  items: Array<{ id: string; title: string; price: string | number; status: string }>;
   payouts: Array<{
     id: string;
     totalSales: string | number;
