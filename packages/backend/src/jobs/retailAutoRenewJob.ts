@@ -6,13 +6,13 @@ import { prisma } from '../lib/prisma';
  *
  * Runs daily. Auto-renews retail mode sales that are nearing expiration.
  * For each sale where:
- *   - isRetailMode = true
+ *   - saleType = 'RETAIL'
  *   - status = 'PUBLISHED'
  *   - endDate is within retailAutoRenewDays days from now
  *   - No future retail sale already exists for this organizer
  *
  * Creates a new Sale with:
- *   - Same title, description, city, address, saleType, organizerId, isRetailMode=true, retailAutoRenewDays
+ *   - Same title, description, city, address, saleType, organizerId, saleType='RETAIL', retailAutoRenewDays
  *   - status='PUBLISHED'
  *   - startDate=today, endDate=today+retailAutoRenewDays
  *
@@ -32,7 +32,7 @@ export const retailAutoRenew = async (): Promise<void> => {
     // - nearing expiration (endDate is within retailAutoRenewDays days from now)
     const retailSalesNeedingRenewal = await prisma.sale.findMany({
       where: {
-        isRetailMode: true,
+        saleType: 'RETAIL',
         status: 'PUBLISHED',
         endDate: {
           lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000), // within 30 days from now (worst case retailAutoRenewDays)
@@ -73,7 +73,7 @@ export const retailAutoRenew = async (): Promise<void> => {
         const futureRetailSale = await prisma.sale.findFirst({
           where: {
             organizerId: oldSale.organizerId,
-            isRetailMode: true,
+            saleType: 'RETAIL',
             status: 'PUBLISHED',
             startDate: {
               gt: oldSale.endDate,
@@ -104,9 +104,8 @@ export const retailAutoRenew = async (): Promise<void> => {
             address: oldSale.address,
             state: oldSale.state,
             zip: oldSale.zip,
-            saleType: oldSale.saleType,
+            saleType: 'RETAIL',
             organizerId: oldSale.organizerId,
-            isRetailMode: true,
             retailAutoRenewDays: oldSale.retailAutoRenewDays,
             status: 'PUBLISHED',
             startDate: newStartDate,

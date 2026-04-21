@@ -564,6 +564,7 @@ const EditSalePage = () => {
                 <option value="AUCTION">Auction</option>
                 <option value="FLEA_MARKET">Flea Market</option>
                 <option value="CONSIGNMENT">Consignment</option>
+                <option value="RETAIL">Retail Store</option>
               </select>
             </div>
 
@@ -588,49 +589,61 @@ const EditSalePage = () => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Date</label>
-                <input
-                  type="date"
-                  name="startDate"
-                  value={formData.startDate}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
-                <input
-                  type="date"
-                  name="endDate"
-                  value={formData.endDate}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                />
-              </div>
-            </div>
+            {formData.saleType !== 'RETAIL' && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Date</label>
+                    <input
+                      type="date"
+                      name="startDate"
+                      value={formData.startDate}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Date</label>
+                    <input
+                      type="date"
+                      name="endDate"
+                      value={formData.endDate}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Time</label>
-                <input
-                  type="time"
-                  value={formData.startTime}
-                  onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Start Time</label>
+                    <input
+                      type="time"
+                      value={formData.startTime}
+                      onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Time</label>
+                    <input
+                      type="time"
+                      value={formData.endTime}
+                      onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {formData.saleType === 'RETAIL' && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100">
+                  ✓ Your retail store stays live automatically. Items stay listed until marked sold.
+                </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">End Time</label>
-                <input
-                  type="time"
-                  value={formData.endTime}
-                  onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
-                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
-                />
-              </div>
-            </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Address</label>

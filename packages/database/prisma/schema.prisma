@@ -317,8 +317,6 @@ model Organizer {
   donations               SaleDonation[]
   // POS Upgrade: Open Cart sessions and payment links
   posSessions             POSSession[]
-  // Feature #XXX: Retail Mode — always-live storefronts for shops/antique dealers
-  hasRetailMode             Boolean                @default(false)
   posPaymentLinks         POSPaymentLink[]
   // Feature #48: Treasure Trails — organizer-created discovery trails
   trails                  TreasureTrail[]        @relation("OrganizerTrails")
@@ -652,9 +650,9 @@ model Sale {
   prepTasks                   PrepTask[]               @relation("SalePrepTasks")
   // eBay inventory import: hidden DRAFT container sale for organizer's inventory items
   isInventoryContainer        Boolean                  @default(false)
-  // Feature #XXX: Retail Mode — always-live storefronts for shops/antique dealers
-  isRetailMode                  Boolean                  @default(false)
-  retailAutoRenewDays           Int                      @default(30) // Days until auto-renewal (default 30)
+  // Feature #XXX: Retail Mode — saleType='RETAIL' indicates always-live storefront
+  // Auto-renewal: if saleType='RETAIL' and sale is nearing expiration, a new sale is auto-created
+  retailAutoRenewDays           Int                      @default(30) // Days until auto-renewal (default 30) — used only when saleType='RETAIL'
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 

@@ -331,6 +331,7 @@ export default function PromotePage(): JSX.Element {
       CONSIGNMENT: 'consignment sale',
       CHARITY: 'charity sale',
       BUSINESS_CORPORATE: 'corporate sale',
+      RETAIL: 'retail store',
     };
     return labels[saleType || ''] || 'sale';
   };
@@ -344,6 +345,7 @@ export default function PromotePage(): JSX.Element {
       CONSIGNMENT: '#consignment #thrifting #findasale',
       CHARITY: '#charity #yardsale #findasale',
       BUSINESS_CORPORATE: '#corporate #businesssale #findasale',
+      RETAIL: '#retail #resale #findasale',
     };
     return hashtagMap[saleType ?? ''] || '#garagesale #yardsale #estatesale #findasale';
   };
