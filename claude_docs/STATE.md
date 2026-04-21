@@ -127,17 +127,30 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S535)
+## Next Session (S536)
 
-**S535 priority queue:**
-1. **Chrome QA — Guild Primer + Hunt Pass slim CTA** — verify /shopper/guild-primer and /shopper/hunt-pass render correctly, all sections complete, dark mode OK, cross-link works.
-2. **Chrome QA — #309/#310/#311** (new features from S533): consignors, color-rules, locations — verify as TEAMS organizer end-to-end.
-3. **Chrome QA backlog** — S531/S529/S532 fixes (see QA Backlog section).
-4. **xpService.ts XP_SINKS sync** — GUIDE_PUBLICATION (50→100) and HAUL_VISIBILITY_BOOST (10→80) are stale vs boostPricing.ts. Deduction amounts don't match displayed prices. Fix before these items go live.
+**S536 priority queue:**
+1. **Chrome QA — Guild Primer** — verify /shopper/guild-primer: all expanded sections render correctly, Hunt Pass column visible, tiered trail table, dark mode, personalized bar when logged in, cross-link to /hunt-pass.
+2. **Chrome QA — Hunt Pass slim CTA** — verify /shopper/hunt-pass hero, price card, 4 benefits, CTAs, cross-link to /guild-primer.
+3. **Chrome QA backlog** — S531/S529/S532 fixes (see QA Backlog section and blocked/unverified queue).
+4. **Deferred XP wiring** — HAUL_POST_LIKES (needs like-count threshold hook), ORG_SHOPPER_SIGNUP (needs RSVP hook design), REFERRAL_ORG_FIRST_SALE (needs organizer referral system design — Architect decision needed).
 
-**Patrick actions:** Push S534 changes (see push block below).
+**Patrick actions:** Push S534+S535 changes (see push block in patrick-dashboard.md).
 
 ## Current Work
+
+**S535 COMPLETE — XP implementation: missing constants + controller wiring + guild-primer rebuild:**
+- ✅ xpService.ts: 8 new XP_AWARDS constants added (FIRST_PURCHASE_EVER:50, HAUL_POST_LIKES:5, SALE_PUBLISHED:10, ORG_SHOPPER_SIGNUP:10, ORG_HAUL_FROM_SALE:3, ORG_FIVE_STAR_REVIEW:10, REFERRAL_ORG_FIRST_SALE:50, BOUNTY_FULFILLMENT_SHOPPER:25)
+- ✅ xpService.ts: TRAIL_COMPLETE:100 removed — was misleading flat constant. trailController uses tiered completionBonus() from placesService.ts (3→40, 4→50, 5→60, 6→70, 7→80 XP). hasEarnedTrailBonus() updated to check 'TRAIL_COMPLETION' type.
+- ✅ xpService.ts: XP_SINKS stale values fixed — GUIDE_PUBLICATION 50→100, HAUL_VISIBILITY_BOOST 10→80 (matches boostPricing.ts)
+- ✅ saleController.ts: SALE_PUBLISHED bug fixed — was awarding XP_AWARDS.REFERRAL_SIGNUP instead of XP_AWARDS.SALE_PUBLISHED
+- ✅ bountyController.ts: BOUNTY_FULFILLMENT_SHOPPER (25 XP) wired — awards to shopper when bounty fulfilled
+- ✅ reviewController.ts: ORG_FIVE_STAR_REVIEW (10 XP) wired — awards to organizer when they receive 5-star review
+- ✅ haulPostController.ts: ORG_HAUL_FROM_SALE (3 XP) wired — awards to sale organizer when shopper hauls from their event
+- ✅ stripeController.ts: FIRST_PURCHASE_EVER (50 XP) wired — one-time, awards when purchaseCount === 1 after finalization
+- ✅ guild-primer.tsx "How to Earn XP" section rebuilt: HP 1.5× column on all tables, tiered Treasure Trail table (40/50/60/70/80), new "In-Person: Hunt & Scan" section, Organizer Bonuses expanded to 8 rows, all new XP actions surfaced
+- 🔲 DEFERRED: HAUL_POST_LIKES (no like-count threshold hook), ORG_SHOPPER_SIGNUP (no RSVP hook found — complex fraud surface), REFERRAL_ORG_FIRST_SALE (no organizer referral system — needs phase design)
+- 🔲 Chrome QA: guild-primer rebuild + all S534 items still pending
 
 **S534 COMPLETE — Guild Primer + Hunt Pass CTA + XP repricing:**
 - ✅ boostPricing.ts repriced: all 9 existing items updated, 4 new dual-rail entries added (CUSTOM_MAP_PIN, TREASURE_TRAIL_SPONSOR, EARLY_ACCESS_BOOST, LISTINGS_EXTENSION)
@@ -153,6 +166,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - 🔲 Chrome QA for all S534 changes (pending).
 
 ## Recent Sessions
+
+**S535 (2026-04-21, COMPLETE):** XP implementation + guild-primer rebuild. Added 8 new XP_AWARDS constants to xpService.ts. Removed misleading TRAIL_COMPLETE:100 flat constant (trailController already uses tiered completionBonus() returning 40-80 XP). Fixed XP_SINKS stale values (GUIDE_PUBLICATION 50→100, HAUL_VISIBILITY_BOOST 10→80). Wired BOUNTY_FULFILLMENT_SHOPPER into bountyController, ORG_FIVE_STAR_REVIEW into reviewController, ORG_HAUL_FROM_SALE into haulPostController, FIRST_PURCHASE_EVER into stripeController, fixed SALE_PUBLISHED bug in saleController. Rebuilt guild-primer "How to Earn XP" with Hunt Pass 1.5× column on all tables, tiered trail completion table, new Hunt & Scan section, expanded Organizer Bonuses to 8 rows. Deferred: HAUL_POST_LIKES (no hook), ORG_SHOPPER_SIGNUP (no RSVP hook), REFERRAL_ORG_FIRST_SALE (no org referral system).
 
 **S534 (2026-04-21, COMPLETE):** XP repricing + Guild Primer + Hunt Pass slim CTA. boostPricing.ts fully repriced (9 items updated, 4 new dual-rail: CUSTOM_MAP_PIN, TREASURE_TRAIL_SPONSOR, EARLY_ACCESS_BOOST, LISTINGS_EXTENSION). xpService.ts XP_SINKS updated for 4 items. hunt-pass.tsx refactored from 997→177 lines (slim CTA only, cross-links to /shopper/guild-primer). New guild-primer.tsx page created: full Guild walkthrough with personalized XP bar, 5 rank accordion cards, How to Earn XP (5 subsections, 19 actions, corrected values), XP Sinks (6 subsections), Seasonal Adventures, Prestige Layer, FAQ, CTAs. Layout.tsx + AvatarDropdown.tsx Explorer's Guild links updated /loyalty→/guild-primer. RankUpModal dark mode fixed. Hunt Pass cross-link card dark mode fixed. Flagged: xpService.ts XP_SINKS stale for GUIDE_PUBLICATION + HAUL_VISIBILITY_BOOST vs boostPricing.ts.
 

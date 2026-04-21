@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { recalculateShopperRating } from '../services/reputationService';
+import { awardXp, XP_AWARDS } from '../services/xpService';
 
 // POST /api/reviews — authenticated shoppers only, one review per sale
 export const createReview = async (req: AuthRequest, res: Response) => {
@@ -105,6 +106,17 @@ export const createReview = async (req: AuthRequest, res: Response) => {
     recalculateShopperRating(sale.organizer.id).catch((err) => {
       console.error('[reviewController] Error updating shopperRating:', err);
     });
+
+    // Award XP to organizer if review is 5-star (after approval moderation clears)
+    // For APPROVED reviews, award immediately; for PENDING, we'd need async approval webhook
+    if (ratingNum === 5 && moderationStatus === 'APPROVED') {
+      awardXp(sale.organizer.userId, 'ORG_FIVE_STAR_REVIEW', XP_AWARDS.ORG_FIVE_STAR_REVIEW, {
+        saleId,
+        description: '5-star review received'
+      }).catch((err) => {
+        console.error('[reviewController] XP award failed:', err);
+      });
+    }
 
     return res.status(201).json(review);
   } catch (error) {

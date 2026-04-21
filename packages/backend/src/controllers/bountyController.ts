@@ -187,6 +187,14 @@ export const fulfillBounty = async (req: AuthRequest, res: Response) => {
       'OPERATIONAL'
     );
 
+    // Award XP to the bounty creator (shopper) for the bounty being fulfilled
+    // Only applies to shopper-first bounties (no saleId), which don't pay cash rewards
+    if (!bounty.saleId) {
+      awardXp(bounty.userId, 'BOUNTY_FULFILLMENT_SHOPPER', XP_AWARDS.BOUNTY_FULFILLMENT_SHOPPER, {
+        description: 'Bounty fulfilled'
+      }).catch(err => console.error('[bountyController] XP award failed:', err));
+    }
+
     return res.json(updated);
   } catch (error) {
     console.error('fulfillBounty error:', error);

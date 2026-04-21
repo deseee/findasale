@@ -208,7 +208,7 @@ const GuildPrimerPage = () => {
               How to Earn XP
             </h2>
             <p className="text-warm-600 dark:text-warm-400 mb-8">
-              XP isn't a grind. You earn it by doing what you already love.
+              XP isn't a grind. You earn it by doing what you already love. Hunt Pass subscribers earn 1.5× XP on every action.
             </p>
 
             {/* Archetype Cards */}
@@ -258,7 +258,8 @@ const GuildPrimerPage = () => {
                   <thead>
                     <tr className="bg-warm-100 dark:bg-gray-700">
                       <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Action</th>
-                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">Base XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-purple-600 dark:text-purple-300">⭐ Hunt Pass</th>
                       <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
                     </tr>
                   </thead>
@@ -266,37 +267,20 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Sale visit</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Once per unique sale per day — no cap</td>
-                    </tr>
-                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">RSVP to a sale</td>
-                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">2</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Max 10 RSVPs/month</td>
-                    </tr>
-                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Photo Station scan</td>
-                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per scan at organizer photo stations</td>
-                    </tr>
-                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt clue scan</td>
-                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">3</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per QR clue found — each clue once</td>
-                    </tr>
-                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt completion</td>
-                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">15</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Bonus for finding all clues</td>
-                    </tr>
-                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Trail complete</td>
-                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time per trail — all QR stops found</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Comeback bonus</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">20</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">30</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time — returning after 2+ weeks away</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">RSVP to a sale</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">2</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">3</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Max 10 RSVPs/month</td>
                     </tr>
                   </tbody>
                 </table>
@@ -311,25 +295,41 @@ const GuildPrimerPage = () => {
                   <thead>
                     <tr className="bg-warm-100 dark:bg-gray-700">
                       <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Action</th>
-                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">Base XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-purple-600 dark:text-purple-300">⭐ Hunt Pass</th>
                       <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">First purchase ever</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">75</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time milestone — first purchase on platform</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Purchase</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">10</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">15</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Flat rate per completed transaction</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Auction win</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">20</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">30</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Flat bonus for competitive wins</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Item review</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per review left on a purchased item</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Fulfill a bounty</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">25</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">37</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">When you deliver on an organizer's find request</td>
                     </tr>
                   </tbody>
                 </table>
@@ -344,7 +344,8 @@ const GuildPrimerPage = () => {
                   <thead>
                     <tr className="bg-warm-100 dark:bg-gray-700">
                       <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Action</th>
-                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">Base XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-purple-600 dark:text-purple-300">⭐ Hunt Pass</th>
                       <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
                     </tr>
                   </thead>
@@ -352,21 +353,31 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Haul post</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">15</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">In-app haul documentation — max 4/month</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">22</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">In-app haul documentation — max 4/month earn XP</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Haul post hits 10+ likes</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Once per haul post when it reaches 10 likes</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Social share</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Share a sale or find externally — honor system</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Share a sale externally — honor system</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Community valuation</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Price opinion on an item — max 20/month</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Appraisal selected</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">20</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">30</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Seller chooses your valuation — max 5/day</td>
                     </tr>
                   </tbody>
@@ -382,7 +393,8 @@ const GuildPrimerPage = () => {
                   <thead>
                     <tr className="bg-warm-100 dark:bg-gray-700">
                       <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Action</th>
-                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">Base XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-purple-600 dark:text-purple-300">⭐ Hunt Pass</th>
                       <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
                     </tr>
                   </thead>
@@ -390,42 +402,131 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">7-day streak bonus</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">150</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Active week completion — once/month</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">30-day anniversary</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">250</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">375</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Active month milestone — once/month</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Explorer Profile complete</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time — fill out specialties, categories, keywords</td>
-                    </tr>
-                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Challenge completion</td>
-                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">10–50</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Varies by challenge difficulty</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">75</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time — specialties, categories, and keywords filled</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral — friend signs up</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">20</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">30</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Awarded when referred user creates an account</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral — friend's first purchase</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">500</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">750</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">The big payout — when they actually buy</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral — organizer's first sale</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">75</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">When your referred organizer goes live with a sale</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
 
+            {/* In-Person: Hunt & Scan */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">In-Person: Hunt & Scan</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-warm-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Action</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">Base XP</th>
+                      <th className="px-4 py-3 text-right font-semibold text-purple-600 dark:text-purple-300">⭐ Hunt Pass</th>
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Photo Station scan</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per scan at organizer photo stations</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt clue scan</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">3</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">4</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per QR clue found — each clue once</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt completion</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">15</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">22</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Bonus for finding all clues</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Treasure Trail tiered completion table */}
+              <div className="mt-6">
+                <h4 className="text-base font-semibold text-warm-900 dark:text-warm-100 mb-2">Treasure Trail Completion Bonus</h4>
+                <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">
+                  Completion bonus scales with the number of stops — earned once per trail. More stops = bigger reward.
+                </p>
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-warm-100 dark:bg-gray-700">
+                        <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Stops Completed</th>
+                        <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">Base XP</th>
+                        <th className="px-4 py-3 text-right font-semibold text-purple-600 dark:text-purple-300">⭐ Hunt Pass</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                      <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                        <td className="px-4 py-3 text-warm-900 dark:text-warm-100">3 stops</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">40</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">60</td>
+                      </tr>
+                      <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                        <td className="px-4 py-3 text-warm-900 dark:text-warm-100">4 stops</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">75</td>
+                      </tr>
+                      <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                        <td className="px-4 py-3 text-warm-900 dark:text-warm-100">5 stops</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">60</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">90</td>
+                      </tr>
+                      <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                        <td className="px-4 py-3 text-warm-900 dark:text-warm-100">6 stops</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">70</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">105</td>
+                      </tr>
+                      <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                        <td className="px-4 py-3 text-warm-900 dark:text-warm-100">7+ stops</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">80</td>
+                        <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">120</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
             {/* Organizer Bonuses */}
             <div className="mb-4">
               <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Organizer Bonuses</h3>
-              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">Running sales earns XP too — organizers are part of the Guild.</p>
+              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">Running sales earns XP too — organizers are full members of the Guild. Hunt Pass 1.5× applies here too.</p>
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -442,9 +543,34 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time milestone bonus</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Sale published</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">10</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Each time a sale goes live</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Shopper signs up to your sale</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">10</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per new shopper signup or RSVP</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Haul post published from your sale</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">3</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">When a shopper hauls from your event</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Shopper completes your Treasure Trail</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">15</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per unique shopper who finishes your trail</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Receive 5-star review</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">10</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per verified 5-star rating from a shopper</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Shopper condition rating received</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per rating a shopper submits on your items — max 50/month</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per rating submitted on your items — max 50/month</td>
                     </tr>
                   </tbody>
                 </table>

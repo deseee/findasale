@@ -723,7 +723,7 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
           }).catch(() => {});
 
           // Award XP for publishing a sale
-          awardXp(org.userId, 'SALE_PUBLISHED', XP_AWARDS.REFERRAL_SIGNUP, { saleId: updated.id }).catch(err =>
+          awardXp(org.userId, 'SALE_PUBLISHED', XP_AWARDS.SALE_PUBLISHED, { saleId: updated.id }).catch(err =>
             console.error('[XP] Failed to award XP for sale published:', err)
           );
         }

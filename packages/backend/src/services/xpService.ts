@@ -64,7 +64,9 @@ export const XP_AWARDS = {
 
   // Collections and challenges
   COLLECTOR_PASSPORT_COMPLETE: 50, // One-time: passport complete (specialties + categories + keywords all non-empty)
-  TRAIL_COMPLETE: 100, // One-time per trail: all QR codes found
+  // Trail completion XP is tiered by stop count — see completionBonus() in lib/placesService.ts
+  // 3 stops→40, 4→50, 5→60, 6→70, 7+→80 XP. Trailing constant removed to avoid confusion.
+  // trailController uses 'TRAIL_COMPLETION' as transaction type
 
   // Auctions (wins only — D-XP-009: flat 20 XP, value multiplier eliminated)
   AUCTION_WIN: 20, // Flat XP per auction win — competitive transaction (D-XP-009, was 10+bonus)
@@ -72,6 +74,24 @@ export const XP_AWARDS = {
   // Referrals
   REFERRAL_SIGNUP: 20,
   REFERRAL_FIRST_PURCHASE: 500, // Referrer earns when friend's first purchase clears (D-XP-004, was 30)
+
+  // First-time buyer milestone
+  FIRST_PURCHASE_EVER: 50,      // One-time: shopper's very first purchase on platform
+
+  // Haul engagement
+  HAUL_POST_LIKES: 5,           // When shopper's haul post hits 10+ likes (once per post)
+
+  // Organizer XP — earned by organizer based on community activity
+  SALE_PUBLISHED: 10,           // Each time organizer publishes a sale
+  ORG_SHOPPER_SIGNUP: 10,       // When a new shopper signs up to organizer's sale
+  ORG_HAUL_FROM_SALE: 3,        // When a shopper publishes a haul from organizer's sale
+  ORG_FIVE_STAR_REVIEW: 10,     // When organizer receives a 5-star review
+
+  // Referral — organizer side
+  REFERRAL_ORG_FIRST_SALE: 50,  // Referrer earns when referred organizer posts first sale
+
+  // Bounties
+  BOUNTY_FULFILLMENT_SHOPPER: 25, // Shopper earns for fulfilling a bounty request
 };
 
 // XP sink costs (per spec Decision 7 — gamedesign S417 full sink table)
@@ -87,9 +107,9 @@ export const XP_SINKS = {
   COUPON_CLAIM_SHOPPER: 100,   // Shopper spends for $1 off any purchase (1 XP = $0.01, gamedesign S418)
   RARITY_BOOST: 15,            // Shopper gets +2% legendary odds for one sale
   HUNT_PASS_DISCOUNT: 100,     // Shopper gets $1 off Hunt Pass subscription (1 XP = $0.01, gamedesign S418)
-  HAUL_VISIBILITY_BOOST: 10,   // Shopper bumps haul post to top of local feed for 2h (D-XP-013, was 25)
+  HAUL_VISIBILITY_BOOST: 80,   // Shopper bumps haul post to top of local feed for 2h (D-XP-013, was 10)
   SEASONAL_CHALLENGE_ACCESS: 250, // Shopper unlocks seasonal challenge tier (gamedesign S418)
-  GUIDE_PUBLICATION: 50,       // Shopper publishes a collection guide (raised from 30)
+  GUIDE_PUBLICATION: 100,      // Shopper publishes a collection guide (raised from 50)
 
   // Cosmetic sinks (permanent — Sage+ only) — D-XP-005 repricing
   CUSTOM_USERNAME_COLOR: 1000,  // Permanent color on username (D-XP-005: 1,000 XP)
@@ -704,7 +724,7 @@ export async function hasEarnedTrailBonus(userId: string, trailId: string): Prom
     const existing = await prisma.pointsTransaction.findFirst({
       where: {
         userId,
-        type: 'TRAIL_COMPLETE',
+        type: 'TRAIL_COMPLETION', // Match the actual type used by trailController
         description: { contains: trailId },
       },
     });
