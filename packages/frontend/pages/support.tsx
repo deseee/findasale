@@ -221,6 +221,20 @@ const FAQ_DATA = [
 
   // Integrations & Webhooks FAQs
   {
+    id: 'pos-hardware-1',
+    category: 'In-Person Payments',
+    question: 'Can I use a physical card reader at my sale?',
+    answer:
+      'Yes. FindA.Sale\'s POS works with Stripe Terminal card readers. The most popular option for estate sales and yard sales is the Stripe Reader M2 (~$59) — a compact Bluetooth reader that accepts chip cards and contactless payments (Apple Pay, Google Pay, tap cards). Order from stripe.com/terminal. Once it arrives, pair it via Bluetooth and it will appear as a payment option inside your FindA.Sale POS cart. Your Stripe account must be fully onboarded before card readers will process payments.',
+  },
+  {
+    id: 'pos-hardware-2',
+    category: 'In-Person Payments',
+    question: 'Do I need to buy hardware to accept cards in person?',
+    answer:
+      'No — if you have a supported iPhone or Android device, you can use Tap to Pay directly in the FindA.Sale POS without any extra hardware. Tap to Pay turns your phone into a contactless card reader and accepts Apple Pay, Google Pay, and contactless cards. It\'s a good option for organizers who run one or two sales a year and don\'t want to invest in a dedicated reader. For higher-volume events, the Stripe Reader M2 (~$59) is more ergonomic and also supports chip and swipe in addition to tap.',
+  },
+  {
     id: 'integrations-1',
     category: 'Integrations & Webhooks',
     question: 'How do I connect FindA.Sale to Zapier?',
