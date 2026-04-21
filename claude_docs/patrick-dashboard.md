@@ -62,5 +62,5 @@ None blocking next session.
 | Service | Status |
 |---------|--------|
 | Vercel (frontend) | ✅ Green |
-| Railway (backend) | 🔄 Rebuilding (Dockerfile fix) — should go green shortly |
-| Last push | S533 — Dockerfile fix + Phase 2 backend (pending Patrick push below) |
+| Railway (backend) | ✅ Green |
+| Last push | S533 — #309/#310/#311 full stack (schema + backend + frontend). Vercel + Railway both green. |

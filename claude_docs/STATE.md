@@ -125,10 +125,10 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 ## Next Session (S534)
 
 **S534 priority queue:**
-1. **Phase 3 frontend** — Dispatch D (Consignor pages), E (Color-tag rules + item editor picker), F (Locations pages + inventory filter). All three parallel. ADR §Dev Instructions Phase 3 has full specs.
-2. **Chrome QA S531/S529/S532 fixes** — deferred to off-peak (see QA backlog).
+1. **Chrome QA — #309/#310/#311** (new features): consignors, color-rules, locations — verify as TEAMS organizer end-to-end.
+2. **Chrome QA backlog** — S531/S529/S532 fixes (see QA Backlog section).
 
-**Patrick actions:** None blocking Phase 3. Phase 3 can start immediately next session.
+**Patrick actions:** None blocking. QA can start immediately next session.
 
 ## Current Work
 
@@ -142,7 +142,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
   - `locationController.ts` + `routes/locations.ts` — CRUD + transfer + inventory filter
   - `itemController.ts` — `getEffectivePrice` helper + effectivePrice/tagColor on item listings
   - All three wired into `index.ts`
-- 🔲 Phase 3 frontend (Dispatch D/E/F) — next session or Patrick's call
+- ✅ Phase 3 frontend (Dispatch D/E/F): consignors.tsx, color-rules.tsx, locations.tsx, ConsignorPayoutModal, ColorKeyLegend, LocationSelector, portal/[token].tsx, AvatarDropdown wired, edit-item + create-sale + inventory updated. Vercel green.
+- 🔲 Chrome QA for all three features (pending tonight)
 - ⏳ Phase 2 (backend controllers): blocked until migration deployed.
 
 ## Recent Sessions
