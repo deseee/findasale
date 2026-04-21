@@ -4,7 +4,13 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S529 — COMPLETE):** UI polish + content session. Storefront widget added to organizer dashboard. Avatar dropdown rank display made compact/inline. Mobile nav rank fixed (was hardcoded "Scout" — now reads from useXpProfile). Card reader hardware content added across FAQ, guide, and support pages (S700/S710 only — web/PWA only supports internet-connected smart readers).
+**Latest work (S530 — COMPLETE):** Pure QA discovery run. No code changes. Full Chrome QA of S528/S526 backlog. qa-backlog.md updated with all findings.
+
+**S530 QA results (documented in qa-backlog.md):**
+- ✅ Verified: Explorer Profile page + redirect, #270 onboarding card (XP values correct), shopper /coupons (3 tiers), profileSlug XP gate, #200 shopper public profile (collectorTitle gone), S529 avatar dropdown rank (live!), #224 rapid-capture redirect
+- ❌ New bugs: AvatarDropdown nav link still "My Profile → /organizer/profile" (P2); SettlementWizard fee label shows "200%" not "2%" (P1 regression from S528); per-sale analytics filter not scoping data (P1)
+- DECISION NEEDED: /coupons organizer "Shopper Discount Codes" section visible to PRO — Patrick says TEAMS-only
+- UNVERIFIED: #235 DonationModal (no charity-close test data), S529 storefront widget + mobile nav + card reader content (S529 pending push)
 
 **S529 shipped (all live pending push):**
 - ✅ Storefront widget — organizer dashboard shows storefront URL with Copy Link + View Storefront buttons
@@ -76,18 +82,15 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| /coupons unified page | Built S528, not Chrome-verified | Log in as shopper → verify 3 tiers + generate. Log in as organizer → verify 50 XP section | S528 |
-| Explorer Profile rename | Built S528, not Chrome-verified | Chrome verify /shopper/explorer-profile loads, nav shows "Explorer Profile", old URL redirects | S528 |
-| Per-sale analytics endpoint | Built S528, not Chrome-verified | Chrome verify /organizer/sales/[id]/analytics returns data | S528 |
-| profileSlug XP gate | Built S528, not Chrome-verified | Chrome verify settings page shows 1500 XP cost, deducts on save | S528 |
-| SettlementWizard dynamic fee | Built S528, not Chrome-verified | Chrome verify receipt step shows correct organizer fee % (8% for PRO/TEAMS) | S528 |
-| ExplorerGuildOnboardingCard XP | Fixed S528, not Chrome-verified | Chrome verify card shows +5 XP check-in, +10 XP purchase | S528 |
-| #235 DonationModal | Live (S526), not Chrome-verified | Chrome verify charity close step in settlement wizard | S526 |
-| #224 rapid-capture redirect | Live (S526), not Chrome-verified | Chrome verify /organizer/rapid-capture → /organizer/sales | S526 |
-| #270 INITIATE onboarding card | Live (S526), not Chrome-verified | Chrome verify card renders on shopper dashboard as INITIATE user | S526 |
-| #200 shopper profile | collectorTitle removed S528 | Chrome verify /shoppers/[id] no longer shows stale title field | S528 |
+| AvatarDropdown nav link | S528 rename not applied to dropdown | Fix: update "My Profile" label + href to "Explorer Profile" → /shopper/explorer-profile | S530 |
+| SettlementWizard fee % | P1 regression: "200%" shown instead of "2%" | Fix decimal-to-percent formatting in Receipt step | S530 |
+| Per-sale analytics filter | P1: filter doesn't scope data | All stat cards show same numbers regardless of sale selection | S528 |
+| S529 storefront widget | Pending push | Push S529, verify /organizer/dashboard shows Copy Link + View Storefront | S529 |
+| S529 mobile nav rank | Pending push | Push S529, test mobile viewport, verify Layout.tsx reads real rank | S529 |
+| S529 card reader content | Pending push | Push S529, verify /faq, /guide, /support show S700/S710 hardware content | S529 |
+| #235 DonationModal | No charity-close test data | Need sale with charity close configured to reach DonationModal | S526 |
 | #251 priceBeforeMarkdown | Needs live data | Need item with markdownApplied=true to verify crossed-out display | S526 |
-| Organizer Insights runtime | Pre-existing error | Check Railway logs — /organizer/insights "failed to load" in browser | S528 |
+| Organizer Insights runtime | User-specific error | Test as Alice (user1) — Bob loads fine, error must be account-specific | S528 |
 
 ## File Organization
 
@@ -99,14 +102,19 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Immediate Actions (S530)
+## Next Immediate Actions (S531)
 
-1. **Investigate Organizer Insights runtime error** — /organizer/insights shows "failed to load" in browser. Check Railway logs.
-2. **Chrome QA S528 features** — /coupons (both roles), /shopper/explorer-profile, per-sale analytics, profileSlug XP gate, SettlementWizard fee label, onboarding card XP values
-3. **Chrome QA remaining S526 features** — #235 DonationModal, #224 rapid-capture, #270 onboarding card
-4. **Chrome QA S529 features** — storefront widget on dashboard, avatar dropdown rank, mobile nav rank (verify user MI shows Initiate with real XP)
+1. **Push S529** — storefront widget, avatar dropdown rank (confirmed working!), mobile nav rank, card reader content. Patrick: run `.\push.ps1` after S529 commits.
+2. **Fix AvatarDropdown nav link** — "My Profile → /organizer/profile" should be "Explorer Profile → /shopper/explorer-profile". Dispatch findasale-dev.
+3. **Fix SettlementWizard fee label (P1)** — Receipt step shows "200%" instead of "2%". Decimal-to-percent formatting bug introduced in S528. Dispatch findasale-dev.
+4. **Fix per-sale analytics filter (P1)** — stat cards show identical data regardless of sale selection. Dispatch findasale-dev.
+5. **DECISION: /coupons organizer tier gate** — Patrick: should "Shopper Discount Codes" section be TEAMS-only, or stay on PRO?
+6. **Investigate Organizer Insights error** — Test as Alice (user1@example.com). Bob loads fine; error is user-specific.
+7. **#235 DonationModal** — UNVERIFIED. Need sale with charity close configured for test.
 
 ## Recent Sessions
+
+**S530 (2026-04-21, COMPLETE):** Pure QA discovery session. No code changes. Chrome QA of S528/S526/S529 backlog. 8 items verified ✅: Explorer Profile page/redirect, #270 onboarding card, shopper /coupons, profileSlug XP gate, #200 public profile (collectorTitle confirmed removed), S529 avatar dropdown rank (live!), #224 rapid-capture redirect. 3 bugs found: AvatarDropdown "My Profile" label/href wrong (P2), SettlementWizard "200%" fee label (P1 regression from S528), per-sale analytics filter not scoping data (P1). Decision needed: /coupons organizer section tier gate (PRO vs TEAMS-only). qa-backlog.md updated with all S530 findings.
 
 **S529 (2026-04-21, COMPLETE):** UI polish + content session. Storefront widget added to organizer dashboard (storefrontSlug from brand-kit API, Copy Link + View Storefront). Avatar dropdown rank display replaced with compact inline icon+label+XP bar — bypassed RankBadge entirely because INITIATE's Compass icon was hardcoded at w-6 h-6 regardless of size prop. Mobile nav rank was completely hardcoded ("⚔️ Scout" + static 40% bar) — fixed by adding useXpProfile hook to Layout.tsx. Card reader hardware content updated across faq.tsx, guide.tsx, support.tsx: S700 (standard) and S710 (cellular) only; Tap to Pay and M2 incompatible with PWA (require native SDK); web app connects over internet not Bluetooth. Pending push.
 
