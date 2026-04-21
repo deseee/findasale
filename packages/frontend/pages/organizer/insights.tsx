@@ -166,7 +166,7 @@ const OrganizerInsightsPage = () => {
       }
 
       const response = await api.get(url);
-      return response.data as PerformanceMetrics;
+      return response.data as Insights;
     },
     enabled: !!selectedSaleId && !!user?.id,
     staleTime: 5 * 60 * 1000,
@@ -410,7 +410,7 @@ const OrganizerInsightsPage = () => {
                   <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                     Items Sold
                   </p>
-                  <p className="text-3xl font-bold text-green-600 dark:text-green-500">{metricsData.itemsSold}</p>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-500">{metricsData.totalItemsSold}</p>
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Completed</p>
                 </div>
 
@@ -420,7 +420,7 @@ const OrganizerInsightsPage = () => {
                     Total Revenue
                   </p>
                   <p className="text-3xl font-bold text-green-700 dark:text-green-500">${metricsData.totalRevenue.toFixed(2)}</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{metricsData.purchaseCount} purchases</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{metricsData.totalItemsSold} sold</p>
                 </div>
 
                 {/* Available Items */}
@@ -428,7 +428,7 @@ const OrganizerInsightsPage = () => {
                   <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
                     Available Items
                   </p>
-                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-500">{metricsData.itemsAvailable}</p>
+                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-500">{metricsData.totalItemsAvailable}</p>
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Not yet sold</p>
                 </div>
 
@@ -438,7 +438,7 @@ const OrganizerInsightsPage = () => {
                     Conversion Rate
                   </p>
                   <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
-                    {metricsData.totalItems > 0 ? ((metricsData.itemsSold / metricsData.totalItems) * 100).toFixed(1) : '0.0'}%
+                    {metricsData.totalItems > 0 ? ((metricsData.totalItemsSold / metricsData.totalItems) * 100).toFixed(1) : '0.0'}%
                   </p>
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Items sold ratio</p>
                 </div>
