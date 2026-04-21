@@ -115,6 +115,23 @@ const isItemVisibleToUser = (
   return true;
 };
 
+// Feature #310: Helper to calculate effective price after applying active discount rules
+// Returns null if item has no price, otherwise returns price with discount applied
+function getEffectivePrice(
+  item: { price: any; tagColor: string | null },
+  activeRules: Array<{ tagColor: string; discountPercent: any; activeFrom: Date | null; activeTo: Date | null }>
+): number | null {
+  if (!item.price) return null;
+  const now = new Date();
+  const rule = activeRules.find(r =>
+    r.tagColor === item.tagColor &&
+    (!r.activeFrom || r.activeFrom <= now) &&
+    (!r.activeTo || r.activeTo >= now)
+  );
+  if (!rule) return Number(item.price);
+  return Number(item.price) * (1 - Number(rule.discountPercent) / 100);
+}
+
 // Simulated image upload function - replace with your actual upload logic
 const uploadImages = async (files: Express.Multer.File[]): Promise<string[]> => {
   // Example: upload to Cloudinary and return URLs
@@ -429,11 +446,33 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
         highValueThreshold: true,
         highValueSource: true,
         isHighValueLocked: true,
+        tagColor: true, // Feature #310: Color-tagged discount rules
         createdAt: true,
         updatedAt: true,
         // Exclude embedding (binary) and tags (may not exist in prod yet) for lighter response
       }
     });
+
+    // Feature #310: Pre-fetch active discount rules for this workspace (via sale)
+    // Get workspace from sale's organizer
+    let activeRules: Array<{ tagColor: string; discountPercent: any; activeFrom: Date | null; activeTo: Date | null }> = [];
+    if (items.length > 0) {
+      const sale = await prisma.sale.findUnique({
+        where: { id: saleId as string },
+        select: { organizerId: true },
+      });
+      if (sale) {
+        const workspace = await prisma.organizerWorkspace.findFirst({
+          where: { organizerId: sale.organizerId },
+        });
+        if (workspace) {
+          activeRules = await prisma.discountRule.findMany({
+            where: { workspaceId: workspace.id },
+            select: { tagColor: true, discountPercent: true, activeFrom: true, activeTo: true },
+          });
+        }
+      }
+    }
 
     // Fetch active boosts for these items
     const itemIds = items.map(item => item.id);
@@ -492,6 +531,9 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
       return {
         ...rest,
         boost: boostsByItemId[item.id] ?? null,
+        // Feature #310: Add effective price after discount (if any rule applies)
+        effectivePrice: getEffectivePrice(item, activeRules),
+        tagColor: item.tagColor ?? null,
       };
     });
 
@@ -1719,11 +1761,24 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         // Phase 2b: Legendary early access (P2: Fix 1)
         isLegendary: true,
         legendaryPublishedAt: true,
+        tagColor: true, // Feature #310: Color-tagged discount rules
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
     });
+
+    // Feature #310: Pre-fetch active discount rules for this workspace
+    let activeRules: Array<{ tagColor: string; discountPercent: any; activeFrom: Date | null; activeTo: Date | null }> = [];
+    const workspace = await prisma.organizerWorkspace.findFirst({
+      where: { organizerId: req.user.id },
+    });
+    if (workspace) {
+      activeRules = await prisma.discountRule.findMany({
+        where: { workspaceId: workspace.id },
+        select: { tagColor: true, discountPercent: true, activeFrom: true, activeTo: true },
+      });
+    }
 
     // Sprint 1: Compute health score for each item
     const itemsWithHealth = items.map(item => ({
@@ -1737,6 +1792,9 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         conditionGrade: item.conditionGrade, // #64
         category: item.category ?? undefined,
       }),
+      // Feature #310: Add effective price after discount (if any rule applies)
+      effectivePrice: getEffectivePrice(item, activeRules),
+      tagColor: item.tagColor ?? null,
     }));
 
     res.json(itemsWithHealth);

@@ -106,6 +106,7 @@ import hubRoutes from './routes/hubs';                  // Feature #40+#44: Sale
 import voiceRoutes from './routes/voice';                // Feature #42: Voice-to-tag extraction
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
 import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
+import consignorRoutes from './routes/consignors';       // Feature #309: Consignor Portal & Payouts
 import healthRoutes from './routes/health';              // Feature #20: Proactive Degradation Mode
 import nudgeRoutes from './routes/nudges';                // Feature 61: Near-Miss Nudges
 import socialProofRoutes from './routes/socialProof';     // Feature 67: Social Proof Notifications
@@ -162,6 +163,8 @@ import ebayRoutes from './routes/ebay';                       // eBay Marketplac
 import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay Taxonomy, Catalog, AI Suggest
 import luckyRollRoutes from './routes/lucky-roll';             // Phase 2b: Lucky Roll — weekly XP gacha
 import crewsRoutes from './routes/crews';                       // Phase 2a: Explorer's Guild — Crew Creation
+import discountRuleRoutes from './routes/discountRules';        // Feature #310: Color-tagged Discount Rules
+import locationRoutes from './routes/locations';                 // #311: Multi-Location Inventory View
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -454,6 +457,7 @@ app.use('/api/tags', tagRouter);                                 // Sprint 3: Ta
 app.use(hubRoutes);                                              // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 app.use('/api/voice', voiceRoutes);                              // Feature #42: Voice-to-tag extraction
 app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
+app.use('/api/consignors', consignorRoutes);                     // Feature #309: Consignor Portal & Payouts
 app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
 app.use('/api/nudges', nudgeRoutes);                             // Feature 61: Near-Miss Nudges
 app.use('/api/social-proof', socialProofRoutes);                 // Feature 67: Social Proof Notifications
@@ -506,6 +510,8 @@ app.use('/api/ebay', ebayRoutes);                                          // eB
 app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Phase C: eBay Taxonomy + Catalog + AI Suggest
 app.use('/api/lucky-roll', luckyRollRoutes);                               // Phase 2b: Lucky Roll — weekly XP gacha
 app.use('/api/crews', crewsRoutes);                                        // Phase 2a: Explorer's Guild — Crew Creation
+app.use('/api/discount-rules', discountRuleRoutes);                         // Feature #310: Color-tagged Discount Rules
+app.use('/api/locations', locationRoutes);                                   // #311: Multi-Location Inventory View
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
