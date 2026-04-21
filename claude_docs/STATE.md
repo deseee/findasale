@@ -125,15 +125,19 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 ## Next Session (S533)
 
 **S533 priority queue:**
-1. **Chrome QA S531 fixes** (6 items in Blocked/Unverified Queue). Run sequentially one at a time.
-2. **Chrome QA S529 features** — storefront widget, mobile nav rank, card reader content.
-3. **Chrome QA S532 features** — Quick Picker Task Modal (workspace page, TEAMS workspace), brand drift fixes spot-check.
-4. **Investigate Organizer Insights runtime error** — Test as Alice (user1@example.com). Bob loads fine; error is user-specific. Check Railway logs.
-5. **Retail gap roadmap items** (#309 Consignor Portal, #310 Color-tagged Discounts, #311 Multi-Location) — ready for Architect spec dispatch and dev planning.
+1. **Chrome QA S531/S529/S532 fixes** — deferred to tonight (off-peak).
+2. **Retail gap backend dispatch** — Phase 2 (3 parallel controller dispatches) after migration deploys.
 
-**Patrick actions (none blocking S533):**
-- ⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway (still outstanding)
-- ⚠️ Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway
+**Patrick actions (blocking Phase 2):**
+- Run migration after push: `cd packages\database` → set DATABASE_URL → `npx prisma migrate deploy` → `npx prisma generate`
+
+## Current Work
+
+**S533 in progress:**
+- ✅ Insights runtime fix: `insightsController.ts` — ADMIN users were getting 403 because controller's inline check didn't include ADMIN role (unlike requireOrganizer middleware). Fixed both `getOrganizerInsights` and `getPerSaleAnalytics`.
+- ✅ Architect spec: ADR written for #309/#310/#311 — `claude_docs/feature-notes/ADR-retail-gap-309-310-311.md`
+- ✅ Schema phase (Phase 1): `schema.prisma` updated + migration SQL created. 4 new models (Consignor, ConsignorPayout, DiscountRule, Location). Item.consignorId FK migrated User→Consignor. Item.tagColor, Item.locationId, Sale.locationId added. Awaiting Patrick push + migrate deploy.
+- ⏳ Phase 2 (backend controllers): blocked until migration deployed.
 
 ## Recent Sessions
 

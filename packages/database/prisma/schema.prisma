@@ -136,8 +136,7 @@ model User {
   appraisalResponses           AppraisalResponse[]    @relation("AppraisalResponses")
   appraisalAIRequests          AppraisalAIRequest[]   @relation("AppraisalAIRequests")
   appraisalDisputes            AppraisalDispute[]     @relation("AppraisalDisputes")
-  // Feature #70: Consignment — pre-wire inverse relation for consigned items
-  consignedItems               Item[]                 @relation("ConsignedItems")
+  // Feature #70: Consignment — inverse relation removed S533 (consignorId now FKs Consignor model, not User)
   // Platform Safety #94: Same-IP Bidder Detection
   bidIpRecords                 BidIpRecord[]          @relation("BidIpRecords")
   // Feature #51: Sale Ripples — social proof activity
@@ -212,6 +211,9 @@ model User {
   feedbackSuppressions FeedbackSuppression[]
   firstSalePublished   Boolean               @default(false) // For OG-1 trigger gate
   lastSurveyShownAt    DateTime? // For session/cooldown logic
+
+  // #311: Multi-Location — locations managed by this user
+  managedLocations Location[] @relation("LocationManager")
 
   // Phase 2b: Boost Purchase — XP or Stripe promotional boosts
   boostPurchases BoostPurchase[]
@@ -653,6 +655,11 @@ model Sale {
   // Feature #XXX: Retail Mode — saleType='RETAIL' indicates always-live storefront
   // Auto-renewal: if saleType='RETAIL' and sale is nearing expiration, a new sale is auto-created
   retailAutoRenewDays           Int                      @default(30) // Days until auto-renewal (default 30) — used only when saleType='RETAIL'
+  // #311: Multi-Location Inventory (TEAMS)
+  locationId                  String?
+  location                    Location?                @relation("LocationSales", fields: [locationId], references: [id], onDelete: SetNull)
+  // #309: Consignor Portal payouts linked to this sale
+  consignorPayouts            ConsignorPayout[]        @relation("ConsignorPayouts")
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -660,6 +667,7 @@ model Sale {
   @@index([prelaunchAt])
   @@index([lifecycleStage])
   @@index([organizerId, status, endDate]) // Feature #249: Concurrent Sales Gate optimization
+  @@index([locationId]) // #311: Multi-Location filter
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
@@ -771,10 +779,15 @@ model Item {
   donatedItems               DonatedItem[]
   // Feature #46: Treasure Typology Classifier — collector category classification
   typology                   ItemTypology?
-  // Feature #70: Consignment — operator-consigned items with split payout
-  consignorId                String? // Optional: consignor user ID (nullable for future Consignor table)
-  consignmentSplitPct        Decimal? // Optional: percentage split for consignor (e.g., 0.70 = 70%)
-  consignor                  User?                  @relation("ConsignedItems", fields: [consignorId], references: [id])
+  // Feature #70 / #309: Consignment — consignorId now FKs Consignor model (migrated S533 from User pre-wire)
+  consignorId                String? // FK to Consignor model (TEAMS)
+  consignmentSplitPct        Decimal? // Legacy split pct field — superseded by Consignor.commissionRate
+  consignor                  Consignor?             @relation("ConsignorItems", fields: [consignorId], references: [id], onDelete: SetNull)
+  // #310: Color-tagged Discount Rules (TEAMS)
+  tagColor                   String? // Hex or label e.g. "#EF4444" — ties to active DiscountRule
+  // #311: Multi-Location Inventory (TEAMS)
+  locationId                 String?
+  location                   Location?              @relation("LocationItems", fields: [locationId], references: [id], onDelete: SetNull)
   // Feature #81: Persistent Inventory — items that recur across sales
   persistentInventory        Boolean                @default(false) // Pre-wire: persistent inventory feature activation
   isPersistent               Boolean                @default(false)
@@ -854,6 +867,9 @@ model Item {
   @@index([isHighValue])
   @@index([ebayListingId])
   @@index([isLegendary, legendaryVisibleAt]) // Phase 2b: Legendary early access query optimization
+  @@index([locationId]) // #311: Multi-Location filter
+  @@index([consignorId]) // #309: Consignor item lookup
+  @@index([tagColor]) // #310: Discount rule color tag lookup
 }
 
 // Camera Workflow v2: Photo model for multi-photo support (forward-looking schema)
@@ -2007,6 +2023,10 @@ model OrganizerWorkspace {
   leaderboard      WorkspaceLeaderboardEntry[] @relation("WorkspaceLeaderboard")
   revenueSnapshots WorkspaceRevenueSnapshot[]  @relation("WorkspaceRevenueSnapshots")
   alerts           WorkspaceAlert[]            @relation("WorkspaceAlerts")
+  // Retail gap features (TEAMS)
+  consignors       Consignor[]                 @relation("WorkspaceConsignors")
+  discountRules    DiscountRule[]              @relation("WorkspaceDiscountRules")
+  locations        Location[]                  @relation("WorkspaceLocations")
 }
 
 model WorkspaceMember {
@@ -3638,4 +3658,88 @@ model PrepTask {
   @@index([saleId])
   @@index([saleId, done])
   @@index([assigneeId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Retail Gap Features — TEAMS tier only (#309, #310, #311) — S533
+// ─────────────────────────────────────────────────────────────────────────────
+
+// #309: Consignor Portal & Payouts
+// Consignors are third-parties who drop items at an organizer's sale and receive
+// a commission split. Portal URL is token-gated (no login required).
+model Consignor {
+  id             String             @id @default(cuid())
+  workspaceId    String
+  workspace      OrganizerWorkspace @relation("WorkspaceConsignors", fields: [workspaceId], references: [id], onDelete: Cascade)
+  name           String
+  email          String?
+  phone          String?
+  commissionRate Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
+  notes          String?            @db.Text
+  portalToken    String             @unique @default(cuid()) // capability URL token — permanent for MVP
+  items          Item[]             @relation("ConsignorItems")
+  payouts        ConsignorPayout[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([workspaceId])
+  @@index([portalToken])
+}
+
+// #309: Payout record — created when organizer runs a payout for a consignor
+model ConsignorPayout {
+  id               String     @id @default(cuid())
+  consignorId      String
+  consignor        Consignor  @relation(fields: [consignorId], references: [id], onDelete: Cascade)
+  saleId           String?    // null = all-sales payout
+  sale             Sale?      @relation("ConsignorPayouts", fields: [saleId], references: [id], onDelete: SetNull)
+  totalSales       Decimal    @db.Decimal(10, 2) // sum of sold item prices for this consignor
+  commissionAmount Decimal    @db.Decimal(10, 2) // totalSales * commissionRate / 100
+  netPayout        Decimal    @db.Decimal(10, 2) // = commissionAmount (extensible for future deductions)
+  method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER"
+  paidAt           DateTime?
+  notes            String?
+  createdAt        DateTime   @default(now())
+
+  @@index([consignorId])
+  @@index([saleId])
+}
+
+// #310: Color-tagged Discount Rules
+// Organizer assigns a color tag to items; matching active rule sets effectivePrice.
+// Price resolution is query-time in itemController — not cached on Item.
+model DiscountRule {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  workspace       OrganizerWorkspace @relation("WorkspaceDiscountRules", fields: [workspaceId], references: [id], onDelete: Cascade)
+  tagColor        String             // hex e.g. "#EF4444" or named label e.g. "red"
+  label           String             // human label e.g. "25% Off — Red Tag"
+  discountPercent Decimal            @db.Decimal(5, 2) // e.g. 25.00
+  activeFrom      DateTime?          // null = always active
+  activeTo        DateTime?          // null = no expiry
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([workspaceId])
+  @@index([workspaceId, tagColor]) // for fast rule lookup at item-list time
+}
+
+// #311: Multi-Location Inventory View
+// Locations represent physical stores/warehouses within a TEAMS workspace.
+// Items and Sales can be assigned to a location for filtered inventory views.
+model Location {
+  id          String             @id @default(cuid())
+  workspaceId String
+  workspace   OrganizerWorkspace @relation("WorkspaceLocations", fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  address     String?
+  phone       String?
+  managerId   String?            // User.id of the manager for this location
+  manager     User?              @relation("LocationManager", fields: [managerId], references: [id], onDelete: SetNull)
+  sales       Sale[]             @relation("LocationSales")
+  items       Item[]             @relation("LocationItems")
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([workspaceId])
 }
