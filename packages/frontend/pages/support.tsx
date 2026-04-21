@@ -225,14 +225,14 @@ const FAQ_DATA = [
     category: 'In-Person Payments',
     question: 'Can I use a physical card reader at my sale?',
     answer:
-      'Yes. FindA.Sale\'s POS works with two Stripe Terminal smart readers: the Stripe Reader S700 and the Stripe Reader S710 (which adds cellular connectivity for locations without reliable Wi-Fi). Both accept chip, swipe, and contactless payments including Apple Pay and Google Pay. Order from stripe.com/terminal. Your Stripe account must be fully onboarded before card readers will process payments.',
+      'Yes. FindA.Sale\'s POS supports two Stripe Terminal smart readers: the Stripe Reader S700 and the Stripe Reader S710 (the S710 adds cellular connectivity for venues without reliable Wi-Fi). Both accept chip, swipe, and contactless payments including Apple Pay and Google Pay. Because FindA.Sale is a web app, the reader connects over the internet — a working Wi-Fi or cellular connection at your venue is required. Order from stripe.com/terminal. Your Stripe account must be fully onboarded before any in-person card payments will process.',
   },
   {
     id: 'pos-hardware-2',
     category: 'In-Person Payments',
-    question: 'Do I need to buy hardware to accept cards in person?',
+    question: 'Which card readers are compatible with FindA.Sale?',
     answer:
-      'No — if you have a supported iPhone or Android device, you can use Tap to Pay directly in the FindA.Sale POS without any extra hardware. Tap to Pay accepts Apple Pay, Google Pay, and contactless cards. It\'s a good option for organizers who run one or two sales a year. For higher-volume events or more reliable processing, the Stripe Reader S700 or S710 are the compatible hardware options.',
+      'FindA.Sale\'s web-based POS is compatible with the Stripe Reader S700 and Stripe Reader S710 only. Other Stripe readers (including mobile Bluetooth readers) require a native app and are not supported. The S710 is worth considering if your sale venue has unreliable Wi-Fi, since it includes a cellular connection. Both readers are available at stripe.com/terminal.',
   },
   {
     id: 'integrations-1',

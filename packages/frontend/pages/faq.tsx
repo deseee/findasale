@@ -573,15 +573,15 @@ const organizerFAQs: FAQItem[] = [
     question: 'Can I use a physical card reader at my sale?',
     answer: (
       <>
-        Yes. FindA.Sale's POS works with two Stripe Terminal smart readers: the <strong>Stripe Reader S700</strong> and
-        the <strong>Stripe Reader S710</strong> (cellular). Both accept chip, swipe, and contactless payments
-        (Apple Pay, Google Pay, tap cards) and connect over Wi-Fi. Order directly from Stripe at{' '}
+        Yes. FindA.Sale's POS supports two Stripe Terminal smart readers: the <strong>Stripe Reader S700</strong> and
+        the <strong>Stripe Reader S710</strong>. The S710 adds cellular connectivity — useful for outdoor venues or
+        locations where Wi-Fi isn't reliable. Both accept chip, swipe, and contactless payments including Apple Pay
+        and Google Pay. Order directly from Stripe at{' '}
         <a href="https://stripe.com/terminal" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">stripe.com/terminal</a>.
         <br /><br />
-        If you'd rather not purchase hardware, <strong>Tap to Pay</strong> lets you use a supported iPhone or Android
-        phone as a contactless reader with no extra device — a good option if you run only a few sales per year.
-        <br /><br />
-        Both options require your Stripe account to be fully onboarded before your sale. See{' '}
+        Because FindA.Sale is a web app, readers connect over the internet rather than Bluetooth — so a working
+        Wi-Fi or cellular connection at your venue is required. Your Stripe account must also be fully onboarded
+        before the reader will process payments. See{' '}
         <Link href="/organizer/pos" className="text-amber-600 hover:underline">your POS page</Link> to
         connect a reader once it arrives.
       </>
