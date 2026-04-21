@@ -26,6 +26,7 @@ import {
   getWorkspaceTasks,
   createWorkspaceTask,
   updateWorkspaceTask,
+  getTaskTemplates,
 } from '../controllers/workspaceController';
 import {
   getBriefing,
@@ -66,6 +67,7 @@ router.post('/:workspaceId/sales/:saleId/chat', authenticate, requireWorkspaceMe
 
 // Workspace Tasks endpoints
 router.get('/:workspaceId/tasks', authenticate, requireWorkspaceMember(), getWorkspaceTasks);
+router.get('/:workspaceId/tasks/templates', authenticate, requireWorkspaceMember(), getTaskTemplates);
 router.post('/:workspaceId/tasks', authenticate, requireWorkspaceMember(), createWorkspaceTask);
 router.patch('/:workspaceId/tasks/:taskId', authenticate, requireWorkspaceMember(), updateWorkspaceTask);
 

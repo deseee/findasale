@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { TIER_LIMITS } from '../constants/tierLimits';
+import { TASK_TEMPLATES } from '../utils/taskTemplates';
 
 export const createWorkspace = async (req: AuthRequest, res: Response) => {
   try {
@@ -1110,5 +1111,15 @@ export const updateWorkspaceTask = async (req: AuthRequest, res: Response) => {
     Sentry.captureException(error);
     console.error('Error updating workspace task:', error);
     return res.status(500).json({ message: 'Failed to update task' });
+  }
+};
+
+export const getTaskTemplates = async (req: Request, res: Response) => {
+  try {
+    return res.json({ templates: TASK_TEMPLATES });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('getTaskTemplates error:', error);
+    return res.status(500).json({ error: 'Failed to load task templates' });
   }
 };
