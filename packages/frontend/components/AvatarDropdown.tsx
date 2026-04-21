@@ -816,6 +816,33 @@ const AvatarDropdown: React.FC = () => {
                         <Store size={16} className="text-gray-400" />
                         <span>Market Hubs</span>
                       </Link>
+                      <Link
+                        href="/organizer/color-rules"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Color-tagged discount rules — TEAMS"
+                      >
+                        <Palette size={16} className="text-gray-400" />
+                        <span>Discount Rules</span>
+                      </Link>
+                      <Link
+                        href="/organizer/consignors"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Manage consignors and payouts — TEAMS"
+                      >
+                        <DollarSign size={16} className="text-gray-400" />
+                        <span>Consignors</span>
+                      </Link>
+                      <Link
+                        href="/organizer/locations"
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                        onClick={() => setIsOpen(false)}
+                        title="Manage multiple inventory locations — TEAMS"
+                      >
+                        <MapPin size={16} className="text-gray-400" />
+                        <span>Locations</span>
+                      </Link>
                     </>
                   )}
                 </>

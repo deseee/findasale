@@ -52,6 +52,7 @@ import LocationMap from '../../components/LocationMap';
 import SocialProofBadge from '../../components/SocialProofBadge';
 import { useSaleSocialProof } from '../../hooks/useSocialProof';
 import BountyModal from '../../components/BountyModal';
+import ColorKeyLegend from '../../components/ColorKeyLegend'; // Feature #310: Color-tagged discount rules
 
 
 interface Sale {
@@ -91,6 +92,7 @@ interface Sale {
     title: string;
     description: string;
     price: number;
+    effectivePrice?: number | null; // Feature #310: Price after discount rules applied
     auctionStartPrice: number;
     currentBid: number;
     bidIncrement: number;
@@ -1038,6 +1040,13 @@ const SaleDetailPage = () => {
           {/* Feature #85: Treasure Hunt QR Summary */}
           {sale.items.length > 0 && <HuntSummary saleId={sale.id} />}
 
+          {/* Feature #310: Color Discount Key Legend */}
+          <ColorKeyLegend
+            saleId={id as string}
+            itemsExist={sale.items.length > 0}
+            isOrganizerView={isOrganizer}
+          />
+
           {sale.items.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-warm-600 dark:text-gray-400 mb-4">No items listed for this sale yet.</p>
@@ -1189,9 +1198,23 @@ const SaleDetailPage = () => {
                     ) : (
                       /* Regular sale item */
                       <div className="flex justify-between items-center">
-                        <span className="font-bold text-amber-600 dark:text-amber-400">
-                          {formatPrice(item.price)}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          {/* Feature #310: Show effectivePrice if different from regular price */}
+                          {item.effectivePrice && item.effectivePrice !== item.price ? (
+                            <>
+                              <span className="text-sm line-through text-gray-400 dark:text-gray-500">
+                                {formatPrice(item.price)}
+                              </span>
+                              <span className="font-bold text-green-600 dark:text-green-400">
+                                {formatPrice(item.effectivePrice)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="font-bold text-amber-600 dark:text-amber-400">
+                              {formatPrice(item.price)}
+                            </span>
+                          )}
+                        </div>
                         {item.currentBid && (
                           <span className="text-sm bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
                             Current bid: {formatPrice(item.currentBid)}
