@@ -2,6 +2,7 @@ import '../styles/globals.css';
 import type { AppProps } from 'next/app';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SessionProvider, useSession, signOut } from 'next-auth/react';
 import api from '../lib/api';
@@ -235,8 +236,14 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
   // Support per-page layouts via getLayout function
   const getLayout = (Component as any).getLayout || ((page: React.ReactNode) => <Layout>{page}</Layout>);
 
+  // Canonical URL: strip query params, always point to finda.sale (non-www)
+  const canonicalUrl = `https://finda.sale${router.asPath.split('?')[0]}`;
+
   return (
     <SessionProvider session={session}>
+      <Head>
+        <link rel="canonical" href={canonicalUrl} />
+      </Head>
       <ToastProvider>
         <AuthProvider>
           <DegradationProvider>

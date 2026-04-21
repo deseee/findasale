@@ -144,6 +144,13 @@ const nextConfig = {
   // Route aliases for backwards compatibility
   async redirects() {
     return [
+      // Canonical domain: redirect www → non-www (fixes Google "duplicate without canonical")
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.finda.sale' }],
+        destination: 'https://finda.sale/:path*',
+        permanent: true,
+      },
       { source: '/create-sale', destination: '/organizer/create-sale', permanent: true },
       { source: '/manage-sales', destination: '/organizer/sales', permanent: true },
       { source: '/organizer/manage-sales', destination: '/organizer/sales', permanent: true },

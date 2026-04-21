@@ -156,7 +156,8 @@ Any session that modifies `schema.prisma` or adds a migration SQL file **MUST** 
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+# Get DATABASE_URL from Railway dashboard → findasale-db service → Variables tab
+$env:DATABASE_URL="[Railway DATABASE_URL — copy from Railway dashboard, never paste here]"
 npx prisma migrate deploy   # applies SQL to Railway DB, records in _prisma_migrations
 npx prisma generate         # regenerates TypeScript client with new fields
 ```
