@@ -4,7 +4,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S531 — IN PROGRESS):** 6 parallel dev fixes dispatched. P0 RSVP XP fixed. P1: Brand Kit PDFs, Referral Rewards page, SettlementWizard fee %, per-sale analytics filter. P2: AvatarDropdown nav link. Pending push + QA.
+**Latest work (S531 — COMPLETE):** 6 parallel dev fixes shipped + Vercel insights.tsx type fix. All green. P0: #267 RSVP XP routes registered + DISCOVERY notification added. P1: #241 Brand Kit PDFs (optionalAuthenticate), #7 Referral Rewards page created, SettlementWizard fee % (double-multiply removed), per-sale analytics filter (PerformanceMetrics type + correct field paths). P2: #266 AvatarDropdown role-conditional nav link. All fixes pushed and live. QA queued in qa-backlog.md.
 
 **S530 QA results — full session (documented in qa-backlog.md):**
 - ✅ Verified: Explorer Profile page + redirect, #270 onboarding card, shopper /coupons (3 tiers), profileSlug XP gate, #200 shopper public profile (collectorTitle gone), S529 avatar dropdown rank (live!), #224 rapid-capture redirect, #259 Hunt Pass page accuracy, #279 Rare Finds Pass, #282 Explorer Profile Completion XP (+50 XP confirmed)
@@ -15,7 +15,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - LOCKED (S531): /coupons organizer "Shopper Discount Codes" section — NOT TEAMS-only. Available to all organizer tiers. Frontend: `{isOrganizer && (`, backend: `requireOrganizer` only. No code change needed.
 - UNVERIFIED: #235 DonationModal, S529 storefront/mobile nav/card reader (pending push), #275 Hunt Pass Cosmetics (Karen has no Hunt Pass), #278/#280/#281/#255/#257/#268/#261/#75 (various test data blockers), Organizer Insights as Alice
 
-**S529 shipped (all live pending push):**
+**S529 shipped (all live — push confirmed S531 init):**
 - ✅ Storefront widget — organizer dashboard shows storefront URL with Copy Link + View Storefront buttons
 - ✅ Avatar dropdown rank — replaced large RankBadge with compact inline icon+label+XP bar (Compass for INITIATE, emoji for others)
 - ✅ Mobile nav rank — was hardcoded "⚔️ Scout" + static 40% bar; now reads from useXpProfile hook (real rank + XP progress)
@@ -67,19 +67,18 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## QA Backlog
 
-**Immediate verify (fixes just deployed):**
-- S518-A: PostSaleMomentumCard — /organizer/dashboard as Alice (ended sale) — items Sold + Sell-Through % show sale-specific counts
-- S518-B: Legendary chip — /organizer/add-items/[saleId]/review — chip dismisses visually after click on $75+ item
-- S518-C: Efficiency Coach label — /organizer/dashboard — shows real percentile (not "Top 100%")
-- S518-E: Workspace team chat — /workspace/test — chat tabs appear (already verified S523 ✅)
+**S531 fixes — all pending Chrome QA (see qa-backlog.md §S531):**
+1. #267 RSVP XP — RSVP to a sale, verify 2 XP + Discoveries notification
+2. #241 Brand Kit PDFs — /organizer/brand-kit, verify all 4 PDF links download (not 404)
+3. #7 Referral Rewards — /shopper/referrals loads, referral link + share buttons + stats
+4. #228 SettlementWizard fee — Receipt step shows correct % (2%, not 200%)
+5. Per-sale analytics — select sale on /organizer/insights, verify stat cards update
+6. #266 AvatarDropdown — as shopper, verify "Explorer Profile → /shopper/explorer-profile"
 
-**Full QA queue (run autonomously next session):**
-See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
-1. S528 new features: /coupons (both roles), /shopper/explorer-profile, per-sale analytics, profileSlug XP gate UI
-2. S526 pending: #235 DonationModal, #224 rapid-capture redirect, #270 onboarding card
-3. Organizer Insights runtime error — investigate /organizer/insights "failed to load"
-4. Organizer features: (#241, #242, #249, #264)
-5. Shopper features (#251, #252, #267, #268, #272, #276)
+**S529 features — all live, pending Chrome QA:**
+- Storefront widget on /organizer/dashboard (Copy Link + View Storefront)
+- Mobile nav rank (real rank from useXpProfile, not hardcoded Scout)
+- Card reader content on /faq, /guide, /support (S700/S710 only)
 
 **Blocked/Deferred:**
 - HypeMeter widget (needs team shopper test data)
@@ -91,15 +90,15 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #267 RSVP XP + Notifications | Fixed S531 — pending Chrome QA | Push S531, verify RSVP awards XP + Discoveries notification appears | S531 |
-| #241 Brand Kit PDFs | Fixed S531 — pending Chrome QA | Push S531, verify all 4 PDF download links work for PRO organizer | S531 |
-| #7 Shopper Referral Rewards | Fixed S531 — pending Chrome QA | Push S531, verify /shopper/referrals loads, shows referral code + stats | S531 |
-| SettlementWizard fee % | Fixed S531 — pending Chrome QA | Push S531, verify fee shows correct % in Receipt step | S531 |
-| Per-sale analytics filter | Fixed S531 — pending Chrome QA | Push S531, select a sale from filter, verify stat cards update | S531 |
-| AvatarDropdown nav link | Fixed S531 — pending Chrome QA | Push S531, verify shopper avatar dropdown shows "Explorer Profile" → /shopper/explorer-profile | S531 |
-| S529 storefront widget | Pending push | Push S529, verify /organizer/dashboard shows Copy Link + View Storefront | S529 |
-| S529 mobile nav rank | Pending push | Push S529, test mobile viewport, verify Layout.tsx reads real rank | S529 |
-| S529 card reader content | Pending push | Push S529, verify /faq, /guide, /support show S700/S710 hardware content | S529 |
+| #267 RSVP XP + Notifications | Fixed S531 — pending Chrome QA | Verify RSVP awards 2 XP + Discoveries notification appears | S531 |
+| #241 Brand Kit PDFs | Fixed S531 — pending Chrome QA | Verify all 4 PDF download links work for PRO organizer (not 404) | S531 |
+| #7 Shopper Referral Rewards | Fixed S531 — pending Chrome QA | Verify /shopper/referrals loads, shows referral code + stats | S531 |
+| SettlementWizard fee % | Fixed S531 — pending Chrome QA | Verify Receipt step shows correct % (2%, not 200%) | S531 |
+| Per-sale analytics filter | Fixed S531 — pending Chrome QA | Select a sale from filter on /organizer/insights, verify stat cards update | S531 |
+| AvatarDropdown nav link | Fixed S531 — pending Chrome QA | As shopper, verify avatar dropdown shows "Explorer Profile" → /shopper/explorer-profile | S531 |
+| S529 storefront widget | Pushed — pending Chrome QA | Verify /organizer/dashboard shows Copy Link + View Storefront buttons | S529 |
+| S529 mobile nav rank | Pushed — mobile viewport required | Test mobile viewport, verify rank reads from useXpProfile (not hardcoded Scout) | S529 |
+| S529 card reader content | Pushed — pending Chrome QA | Verify /faq, /guide, /support show S700/S710 hardware only (no Tap to Pay, no M2) | S529 |
 | #235 DonationModal | No charity-close test data | Need sale with charity close configured to reach DonationModal | S526 |
 | #251 priceBeforeMarkdown | Needs live data | Need item with markdownApplied=true to verify crossed-out display | S526 |
 | Organizer Insights runtime | User-specific error | Test as Alice (user1) — Bob loads fine, error must be account-specific | S528 |
@@ -123,22 +122,21 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Immediate Actions (S531)
+## Next Session (S532)
 
-**S531 completed fixes (pending push):**
-- ✅ #267 RSVP Bonus XP (P0) — routes + notification fixed
-- ✅ #241 Brand Kit PDFs (P1) — optionalAuthenticate fix
-- ✅ #7 Shopper Referral Rewards (P1) — page created
-- ✅ SettlementWizard fee % (P1) — double-multiply removed
-- ✅ Per-sale analytics filter (P1) — conditional display fixed
-- ✅ AvatarDropdown nav link (P2) — role-conditional fixed
+**S532 priority queue:**
+1. **Chrome QA S531 fixes** (6 items — see QA Backlog above). Run sequentially one at a time (Chrome concurrency rule).
+2. **Chrome QA S529 features** — storefront widget, mobile nav rank, card reader content.
+3. **Investigate Organizer Insights runtime error** — Test as Alice (user1@example.com). Bob loads fine; error is user-specific. Check Railway logs.
+4. **Brand drift cleanup** — 17 violations open (see `claude_docs/audits/brand-drift-2026-04-21.md`). Highest priority: `pages/sales/[id].tsx:881` hardcodes "estate sale", homepage meta tags omit flea markets.
 
-**Remaining queue (S532):**
-1. **Investigate Organizer Insights error** — Test as Alice (user1@example.com). Bob loads fine; error is user-specific. (Different from per-sale filter bug — this is a runtime crash.)
-2. **Chrome QA S531 fixes** — after push: RSVP XP, Brand Kit PDFs, Referral Rewards page, SettlementWizard fee, per-sale analytics, AvatarDropdown
-3. **Chrome QA S529 features** — storefront widget, mobile nav rank, card reader content
+**Patrick actions (none blocking S532):**
+- ⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway (still outstanding)
+- ⚠️ Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway
 
 ## Recent Sessions
+
+**S531 (2026-04-21, COMPLETE):** Bug fix session. 6 parallel fixes dispatched + Vercel build crisis resolved (2 iterations). P0 fixed: #267 RSVP Bonus XP — RSVP routes were never registered in sales.ts Express router; DISCOVERY notification was missing from rsvpController. P1 fixed: #241 Brand Kit PDFs — `authenticate` middleware on routes called via `<a href>` (browser sends no auth header); swapped to `optionalAuthenticate`. #7 Shopper Referral Rewards — created pages/shopper/referrals.tsx using existing useReferral hook. SettlementWizard fee % — backend returns commissionRate as integer (8=8%), frontend was doing ×100 again; removed double-multiply. Per-sale analytics filter — stat cards always read aggregate `insights`; fixed to conditionally show PerformanceMetrics when saleId selected; also fixed stale `Insights` type cast and incorrect field names (5 edits to insights.tsx). P2 fixed: #266 AvatarDropdown — hardcoded to organizer profile for all users; made role-conditional. Vercel errors: (1) pnpm lockfile mismatch from Agent 2 downgrading typescript ^5.1.3→^5.0.0; (2) wrong TS type cast introduced by per-sale fix agent; (3) remaining PerformanceMetrics field errors (dateRange, cacheExpiry, metrics.*) not caught in first fix pass. All 3 resolved. Decision locked: /coupons organizer section NOT TEAMS-only. All 6 fixes live. QA queued.
 
 **S530 (2026-04-21, COMPLETE):** Extended QA discovery session (ran through compaction). No code changes. Full Chrome QA across S528/S526 backlog + Explorer's Guild / shopper XP feature backlog. 10 items verified ✅: Explorer Profile page/redirect, #270 onboarding card, shopper /coupons, profileSlug XP gate, #200 public profile, S529 avatar dropdown rank, #224 rapid-capture, #259 Hunt Pass page accuracy, #279 Rare Finds Pass, #282 Explorer Profile Completion XP (+50 confirmed). 2 partial ⚠️: #223 tooltips (pricing ✅, holds UNVERIFIED), #272 post-purchase share (button present, dialog unverifiable desktop). 6 bugs found: #267 RSVP Bonus XP (P0, not firing), #241 Brand Kit PDFs (P1, 4 endpoints 404), #7 Referral Rewards (P1, page doesn't exist), AvatarDropdown nav link (P2), SettlementWizard "200%" fee (P1), per-sale analytics filter (P1). 10 items UNVERIFIED (Hunt Pass required, multi-day streak, lapsed sub, etc.). Decision needed: /coupons organizer section tier gate.
 
@@ -153,14 +151,6 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 **S525 (2026-04-20, COMPLETE):** Autonomous QA session. Full Chrome backlog run. 18 features verified. S518-A/B/C ✅. Organizer: #242✅ #249✅ #264✅ #228⚠️ #235❌ #224❌. Shopper: #276✅ #277✅ #252✅ #270❌ #251❌. Nav/Core: #64✅ #49✅ #200⚠️ #266❌ #188❌. Workspace: W-2✅ W-3✅ W-5⚠️. 10 bugs found and logged in qa-backlog.md. No code dispatched — bugs queued for next session.
 
 **S524 (2026-04-20):** Pricing page P0. Extended restoration battle — pricing.tsx went through 5+ incorrect states before landing on `fdb9c9e6` baseline restore. Final state: clean TEAMS card with "Retail Mode" line added, PRO card with card reader note added. Stripe Terminal hardware guide corrected (M2/Tap to Pay = incompatible with PWA). subscription.tsx support copy fixed per D-S392. S518-A (PostSaleMomentumCard unsafe cast) and S518-B (Legendary chip stale saleId mutation) both fixed.
-
-**S523 (2026-04-19):** Share card 401 fully resolved (5-fix deep-dive: auth library, auth pattern, Edge Runtime, Satori CSS, Buffer). Share card ✅ Chrome-verified. eBay EndedSync XML crash fixed. S518-D and S518-E verified.
-
-**S522 (prior):** Share card initial investigation. Auth pattern mismatch identified. Multiple attempted fixes.
-
-**S518 (prior):** PostSaleMomentumCard sale-specific stats, Legendary chip, priceBeforeMarkdown secondary endpoints, Efficiency Coach label, pricing downgrade stub.
-
-**S516 (prior):** Bump Post feed sort, Referral Fraud Gate D-XP-004 (all 5 phases, observational), pricing.tsx downgrade stub fixed.
 
 ## Historical Reference
 

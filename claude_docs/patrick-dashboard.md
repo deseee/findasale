@@ -1,92 +1,64 @@
-# Patrick's Dashboard — S530 Complete
+# Patrick's Dashboard — S531 Complete
 
 ## What Happened This Session
 
-S530 was a pure QA session — no code changes. We ran Chrome QA across the full backlog including the Explorer's Guild / shopper XP feature backlog.
+S531 was a bug fix session. 6 parallel fixes dispatched + 2 rounds of Vercel build fixes. All green. Vercel and Railway both live.
 
-## Decision Needed From You
+## ✅ Fixed This Session (S531)
 
-**Before S531 dev work begins:** Should the "Shopper Discount Codes" section on `/coupons` be **TEAMS-only** or stay on **PRO**? You said TEAMS-only last session — just needs confirmation to dispatch the fix.
+| # | Bug | Root Cause | Fix |
+|---|-----|-----------|-----|
+| #267 | RSVP Bonus XP not firing | RSVP routes were never registered in Express router (sales.ts). Controller existed, routes were dead. | Registered 5 RSVP routes in sales.ts. Added DISCOVERY notification dispatch on RSVP creation. |
+| #241 | Brand Kit PDFs all 404 | Routes used `authenticate` middleware, but browser `<a href>` links don't send auth headers. | Swapped to `optionalAuthenticate`. PRO tier gate stays in controller. |
+| #7 | /shopper/referrals → 404 | Page simply didn't exist despite backend being wired. | Created pages/shopper/referrals.tsx using existing useReferral hook + backend endpoints. |
+| #228 | SettlementWizard shows "200%" fee | Backend returns commissionRate as integer (8 = 8%). Frontend was multiplying ×100 again. | Removed the double-multiply in SettlementWizard Receipt step. |
+| per-sale | Analytics filter ignored selection | Stat cards always read aggregate `insights` object regardless of selectedSaleId. Also had wrong TS type (Insights instead of PerformanceMetrics). | Fixed conditional display + corrected TS cast + fixed all field references (metrics.revenue.total, purchasingMetrics.*, etc.). |
+| #266 | AvatarDropdown "My Profile" for shoppers | Hardcoded to organizer profile path for all users. | Made role-conditional: organizers → "My Profile" / /organizer/profile; shoppers → "Explorer Profile" / /shopper/explorer-profile. |
 
-## ✅ Verified Working (S530)
+## ⬜ Needs Chrome QA (S532 First Priority)
 
-| Feature | Notes |
-|---------|-------|
-| #259 Hunt Pass page | 1.5× throughout, XP matrix table correct, "6-hour early access" copy confirmed |
-| #279 Rare Finds Pass | Page loads, rarity filters work, empty state correct |
-| #282 Explorer Profile Completion XP | Karen 30→80 XP after filling specialty+category+keyword — +50 confirmed |
-| #270 Onboarding card | Renders for INITIATE Karen, XP values correct (+5 check-in, +10 purchase) |
-| #224 Rapid-capture redirect | /organizer/rapid-capture → /organizer/sales works |
-| Explorer Profile page + redirect | /shopper/explorer-profile ✅, old URL redirects ✅ |
-| Shopper /coupons (3 tiers) | Standard/Premium/Deluxe tiers render correctly |
-| #200 Public profile | collectorTitle fully removed from DB and UI |
-| S529 Avatar dropdown rank | Compact rank display confirmed live on production |
+Run these in sequence (one at a time — Chrome concurrency rule):
 
-## ❌ Bugs Found This Session
+| # | Feature | Where | What to Verify |
+|---|---------|-------|----------------|
+| #267 | RSVP Bonus XP | /sales/[id] → click Going as Karen | 2 XP awarded + Discoveries notification appears |
+| #241 | Brand Kit PDFs | /organizer/brand-kit as PRO organizer | All 4 PDF links download (not 404) |
+| #7 | Referral Rewards | /shopper/referrals as Karen | Page loads, referral link shows, share buttons present |
+| #228 | Settlement fee % | /organizer/settlement → Receipt step | Shows 2% (or correct %) NOT 200% |
+| per-sale | Analytics filter | /organizer/insights → select a sale | Stat cards update to per-sale data |
+| #266 | AvatarDropdown | As shopper (Karen) → avatar dropdown | Shows "Explorer Profile → /shopper/explorer-profile" |
+| S529 | Storefront widget | /organizer/dashboard | Copy Link + View Storefront buttons appear |
+| S529 | Mobile nav rank | Layout.tsx on mobile viewport | Real rank shows (not hardcoded "Scout") |
+| S529 | Card reader content | /faq, /guide, /support | S700/S710 only. No Tap to Pay. No M2. |
 
-### P0 (blocker)
-| Bug | Location | What's Wrong |
-|-----|----------|--------------|
-| **#267 RSVP Bonus XP not firing** | /sales/[id] → click Going | No Discoveries notification. XP delta after click is unexplained (+5 instead of 2). Award mechanism broken in backend. |
-
-### P1 (must fix before beta)
-| Bug | Location | What's Wrong |
-|-----|----------|--------------|
-| **#241 Brand Kit PDF generators** | /organizer/brand-kit | All 4 PDF download buttons hit /api/brand-kit/organizer/[type] → 404. UI is complete. Backend routes missing entirely. |
-| **#7 Shopper Referral Rewards** | /shopper/referrals | Page doesn't exist — 404. No referral link anywhere on shopper dashboard. Feature was marked shipped but the page isn't there. |
-| **SettlementWizard fee label** | /organizer/settlement → Receipt step | Shows "Platform Fee (200%)" — should be "2%". S528 regression. |
-| **Per-sale analytics filter** | /organizer/insights | All 8 stat cards show identical data regardless of sale selection. |
-
-### P2
-| Bug | Location | What's Wrong |
-|-----|----------|--------------|
-| **AvatarDropdown nav link** | Avatar dropdown → My Profile | Still shows "My Profile → /organizer/profile". Should be "Explorer Profile → /shopper/explorer-profile". |
-
-## ⚠️ Partial
-- **#223 Organizer Guidance Tooltips** — pricing page tooltips ✅ all tiers. Holds page Grandmaster copy UNVERIFIED (no holds test data).
-- **#272 Post-Purchase Share** — "Share Your Find!" button present on /shopper/loot-log/[id]. Can't verify native Share dialog in desktop automation.
-
-## Still Needs Push (S529)
-
-S529 code is committed locally — Patrick, run `.\push.ps1` to get these live:
-- Storefront widget on organizer dashboard
-- Mobile nav rank (was hardcoded "Scout")
-- Card reader content updates (S700/S710 only)
-
-## Next Session Dev Queue (S531)
-
-Dispatch in parallel after you confirm the coupons TEAMS gate decision:
-
-1. **Fix #267 RSVP Bonus XP (P0)** — investigate xpService RSVP handler
-2. **Fix #241 Brand Kit PDF endpoints (P1)** — build missing backend routes
-3. **Fix #7 Referral Rewards page (P1)** — /shopper/referrals page missing
-4. **Fix SettlementWizard fee % (P1)** — decimal formatting bug in Receipt step
-5. **Fix per-sale analytics filter (P1)** — endpoint not scoping data by saleId
-6. **Fix AvatarDropdown nav link (P2)** — rename + href update
-7. **Fix /coupons tier gate (P2)** — gate "Shopper Discount Codes" section to TEAMS (pending your confirmation)
-
-After dev: Chrome QA each fix + verify S529 storefront/mobile rank after push.
-
-## UNVERIFIED Queue (need special setup)
+## Still Unverified (Need Special Setup)
 
 | Feature | What's Needed |
 |---------|---------------|
-| #275 Hunt Pass Cosmetics | Need Hunt Pass subscriber account |
-| #278 Treasure Hunt Pro | Need Hunt Pass + active QR scan |
-| #280 Condition Rating XP | Login as Bob, set conditionGrade on item |
-| #235 DonationModal | Need sale with charity close configured |
-| Organizer Insights error | Test as Alice (user1@example.com) |
-| #281/#255/#257/#268/#261 | Multi-day streak, higher rank, trail with stops |
-| #75 Tier Lapse Logic | Need lapsed PRO subscription account |
-| S529 storefront/mobile/card reader | Pending push |
+| #275 Hunt Pass Cosmetics | Hunt Pass subscriber account |
+| #278 Treasure Hunt Pro | Hunt Pass + active QR scan |
+| #280 Condition Rating XP | Log in as Bob, set conditionGrade on any item |
+| #235 DonationModal | Sale with charity close configured |
+| Organizer Insights error | Test as Alice (user1@example.com) — Bob loads fine |
+| #281 Streak Milestone | Real 5-day consecutive streak |
+| #255/#257/#261/#268 | Higher XP rank / trail with stops / Ranger+ |
+| #75 Tier Lapse | PRO account with lapsed subscription |
 
----
+## Next Session (S532)
 
-## ⚠️ Brand Drift (carry-over from S529)
+1. Chrome QA all 9 items above (S531 fixes + S529 features)
+2. Investigate Organizer Insights runtime error (Alice)
+3. Brand drift cleanup — 17 violations open
 
-~17 violations remain open. Highest priority:
-- `pages/sales/[id].tsx:881` — Nextdoor share hardcodes "estate sale" (P1)
-- `pages/index.tsx:266,268,274,285` — homepage meta tags omit flea markets (P1)
-- 12 modal components missing dark mode (P2)
+## Your Pending Actions
 
-Full details: `claude_docs/audits/brand-drift-2026-04-21.md`
+- ⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway
+- ⚠️ Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway
+
+## Build Status
+
+| Service | Status |
+|---------|--------|
+| Vercel (frontend) | ✅ Green — commit 5ebe70e |
+| Railway (backend) | ✅ Live |
+| Database | ✅ Railway PostgreSQL — no pending migrations |
