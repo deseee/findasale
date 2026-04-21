@@ -1,45 +1,43 @@
-# Patrick's Dashboard — S533 Complete
+# Patrick's Dashboard — S534 Complete
 
 ## What Happened This Session
 
-S533: Insights Alice fix, Dockerfile truncation repair (Railway unblocked), retail gap #309–#311 Phase 1 schema (already pushed + migrated) + Phase 2 backend (all 3 controllers done, zero TS errors). Phase 3 frontend ready to dispatch next session.
+S534: XP economy repricing, new Explorer's Guild primer page, Hunt Pass refactored to slim CTA, all nav links updated to point to /shopper/guild-primer, dark mode fixes.
 
-## ✅ Done This Session (S533)
+## ✅ Done This Session (S534)
 
 | What | Details |
 |------|---------|
-| Insights Alice fix | insightsController.ts — ADMIN users got 403 because controller's inline role check excluded ADMIN. Fixed both getOrganizerInsights and getPerSaleAnalytics. |
-| Dockerfile.production repair | Line 68 was truncated (package.jso) — missing dest arg + 3 missing runner stage lines (ENV, EXPOSE, CMD). Fixed + pushed via MCP. Railway build resumed. |
-| #309 Consignor Portal — backend | consignorController.ts + routes/consignors.ts: CRUD, payout calculation (SOLD items × commissionRate), public portal endpoint (no auth, token-based) |
-| #310 Color-tagged Discounts — backend | discountRuleController.ts + routes/discountRules.ts: CRUD, TEAMS-gated. itemController.ts updated with getEffectivePrice() helper + effectivePrice/tagColor on item listing responses |
-| #311 Multi-Location — backend | locationController.ts + routes/locations.ts: CRUD, transfer endpoint (bulk Item.locationId update), inventory filter, delete guard (409 if items/sales assigned) |
-| index.ts wired | All 3 route sets imported and registered |
+| boostPricing.ts repriced | All 9 existing items updated. 4 new dual-rail entries: CUSTOM_MAP_PIN ($10), TREASURE_TRAIL_SPONSOR ($1.50), EARLY_ACCESS_BOOST ($2), LISTINGS_EXTENSION ($2.50) |
+| xpService.ts XP_SINKS updated | CUSTOM_MAP_PIN 500→1000, EARLY_ACCESS_BOOST 75→200, TREASURE_TRAIL_SPONSOR 100→150, LISTINGS_EXTENSION 100→250 |
+| Hunt Pass slim CTA | hunt-pass.tsx refactored: 997→177 lines. Hero, price card, 4 benefits, CTAs, cross-link to /shopper/guild-primer. Dark mode fix on cross-link card. |
+| Guild Primer (NEW PAGE) | /shopper/guild-primer: full Explorer's Guild walkthrough. Personalized XP bar (logged-in), 5 rank accordion cards, How to Earn XP (5 subsections, 19 actions, correct values), XP Sinks (6 subsections, all S534 repriced), Seasonal Adventures, Prestige Layer, FAQ. |
+| How to Earn XP fixed | Was: 8-row flat table with 3 wrong values. Now: 5 categorized subsections. Fixed: Referral (50→split 20+500), Auction win (15→20), Weekly streak (25→100). Added 11 missing actions. |
+| Nav links updated | Layout.tsx mobile nav (×2) + AvatarDropdown: Explorer's Guild now → /shopper/guild-primer |
+| RankUpModal dark mode | "New Perks Unlocked" box: dark:bg-sage-900/20 → dark:bg-gray-700 |
 
-## 🔲 Phase 3 Frontend — Next Session
+## 🚩 Flagged for Next Session
 
-Three parallel dispatches. ADR at `claude_docs/feature-notes/ADR-retail-gap-309-310-311.md` §Dev Instructions Phase 3 has full specs.
+xpService.ts XP_SINKS has stale values: GUIDE_PUBLICATION (50, should be 100) and HAUL_VISIBILITY_BOOST (10, should be 80). XP deductions won't match displayed prices for those two items. Fix before they go live.
 
-| Dispatch | What |
-|---------|------|
-| D — Consignor pages | pages/organizer/consignors.tsx (list + create/edit modal + payout button), ConsignorPayoutModal.tsx, pages/consignor/portal/[token].tsx (public, no auth) |
-| E — Color-tag pages | pages/organizer/color-rules.tsx (CRUD + swatch preview), TagColorPicker in item editor, ColorKeyLegend on sale detail page, effectivePrice strikethrough on item cards |
-| F — Location pages | pages/organizer/locations.tsx (CRUD + transfer modal), LocationSelector on create-sale + item editor, location filter on inventory page |
+## ⬜ Needs Chrome QA
 
-## ⬜ Needs Chrome QA (Deferred to Tonight)
-
-| # | Feature | Where | What to Verify |
-|---|---------|-------|----------------|
-| #267 | RSVP Bonus XP | /sales/[id] → click Going as Karen | 2 XP awarded + Discoveries notification appears |
-| #241 | Brand Kit PDFs | /organizer/brand-kit as PRO organizer | All 4 PDF links download (not 404) |
-| #7 | Referral Rewards | /shopper/referrals as Karen | Page loads, referral link shows, share buttons present |
-| #228 | Settlement fee % | /organizer/settlement → Receipt step | Shows 2% NOT 200% |
-| per-sale | Analytics filter | /organizer/insights → select a sale | Stat cards update to per-sale data |
-| #266 | AvatarDropdown | As shopper (Karen) → avatar dropdown | Shows "Explorer Profile → /shopper/explorer-profile" |
-| S529 | Storefront widget | /organizer/dashboard | Copy Link + View Storefront buttons appear |
-| S529 | Mobile nav rank | Layout.tsx on mobile viewport | Real rank (not hardcoded "Scout") |
-| S529 | Card reader content | /faq, /guide, /support | S700/S710 only. No Tap to Pay. No M2. |
-| S532 | Quick Picker | /workspace/[slug] as TEAMS user | "Quick Add" button opens modal, select tasks, submit, tasks appear |
-| S533 | Insights Alice | /organizer/insights as Alice (user1) | Should now load (ADMIN fix) |
+| Feature | Where | What to Verify |
+|---------|-------|----------------|
+| Guild Primer | /shopper/guild-primer | All sections render, dark mode, personalized bar if logged in, cross-link to /hunt-pass |
+| Hunt Pass CTA | /shopper/hunt-pass | Hero, price card, 4 benefits, CTAs, cross-link → /shopper/guild-primer |
+| Mobile nav guild link | Mobile (430px) → hamburger | Explorer's Guild → /shopper/guild-primer (not /loyalty) |
+| AvatarDropdown guild link | Desktop → avatar → CONNECT | Explorer's Guild → /shopper/guild-primer |
+| RankUpModal dark mode | Trigger rank-up or dev-force | Perks box should be dark:bg-gray-700 |
+| #267 RSVP Bonus XP | /sales/[id] → click Going as Karen | 2 XP awarded + Discoveries notification |
+| #241 Brand Kit PDFs | /organizer/brand-kit as PRO | All 4 PDF links download (not 404) |
+| #7 Referral Rewards | /shopper/referrals as Karen | Page loads, referral link + share buttons |
+| #228 Settlement fee % | /organizer/settlement → Receipt step | Shows 2% NOT 200% |
+| Per-sale analytics | /organizer/insights → select a sale | Stat cards update to per-sale data |
+| #266 AvatarDropdown | As shopper (Karen) → avatar dropdown | "Explorer Profile → /shopper/explorer-profile" |
+| S529 Storefront widget | /organizer/dashboard | Copy Link + View Storefront buttons |
+| S529 Mobile nav rank | Mobile viewport | Real rank (not hardcoded "Scout") |
+| S532 Quick Picker | /workspace/[slug] as TEAMS user | "Quick Add" → modal → tasks appear |
 
 ## Still Unverified (Need Special Setup)
 
@@ -55,12 +53,28 @@ Three parallel dispatches. ADR at `claude_docs/feature-notes/ADR-retail-gap-309-
 
 ## Your Pending Actions
 
-None blocking next session.
+Push S534 changes (see push block below).
 
 ## Build Status
 
 | Service | Status |
 |---------|--------|
-| Vercel (frontend) | ✅ Green |
-| Railway (backend) | ✅ Green |
-| Last push | S533 — #309/#310/#311 full stack (schema + backend + frontend). Vercel + Railway both green. |
+| Vercel (frontend) | ✅ Green (last push S533) |
+| Railway (backend) | ✅ Green (last push S533) |
+| S534 changes | Local — not pushed yet |
+
+## S534 Push Block
+
+```powershell
+git add packages/backend/src/services/boostPricing.ts
+git add packages/backend/src/services/xpService.ts
+git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add packages/frontend/pages/shopper/guild-primer.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/RankUpModal.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S534: Guild Primer page, Hunt Pass slim CTA, XP repricing, nav links, dark mode fixes"
+.\push.ps1
+```

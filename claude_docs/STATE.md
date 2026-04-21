@@ -111,6 +111,11 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #268 Trail Completion XP | Karen's trail has 0 stops | Need trail with all stops completed | S530 |
 | #261 Treasure Hunt XP Rank Multiplier | Needs QR scan | Ranger+ account + live sale QR scan | S530 |
 | #75 Tier Lapse Logic | No lapsed test account | Need PRO organizer with lapsed subscription | S530 |
+| Guild Primer (/shopper/guild-primer) | New page — pending Chrome QA | Verify all sections render, dark mode, personalized bar (logged in), cross-link to /hunt-pass | S534 |
+| Hunt Pass slim CTA (/shopper/hunt-pass) | Refactored — pending Chrome QA | Verify hero, price card, 4 benefits, CTA buttons, cross-link to /guild-primer | S534 |
+| Layout.tsx mobile nav guild link | Updated — pending Chrome QA | Mobile hamburger: Explorer's Guild should link to /shopper/guild-primer not /loyalty | S534 |
+| AvatarDropdown guild link | Updated — pending Chrome QA | CONNECT section: Explorer's Guild → /shopper/guild-primer | S534 |
+| RankUpModal dark mode | Fixed — pending Chrome QA | "New Perks Unlocked" box should use dark:bg-gray-700 (not too-light sage) | S534 |
 
 ## File Organization
 
@@ -122,31 +127,34 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S534)
+## Next Session (S535)
 
-**S534 priority queue:**
-1. **Chrome QA — #309/#310/#311** (new features): consignors, color-rules, locations — verify as TEAMS organizer end-to-end.
-2. **Chrome QA backlog** — S531/S529/S532 fixes (see QA Backlog section).
+**S535 priority queue:**
+1. **Chrome QA — Guild Primer + Hunt Pass slim CTA** — verify /shopper/guild-primer and /shopper/hunt-pass render correctly, all sections complete, dark mode OK, cross-link works.
+2. **Chrome QA — #309/#310/#311** (new features from S533): consignors, color-rules, locations — verify as TEAMS organizer end-to-end.
+3. **Chrome QA backlog** — S531/S529/S532 fixes (see QA Backlog section).
+4. **xpService.ts XP_SINKS sync** — GUIDE_PUBLICATION (50→100) and HAUL_VISIBILITY_BOOST (10→80) are stale vs boostPricing.ts. Deduction amounts don't match displayed prices. Fix before these items go live.
 
-**Patrick actions:** None blocking. QA can start immediately next session.
+**Patrick actions:** Push S534 changes (see push block below).
 
 ## Current Work
 
-**S533 COMPLETE — retail gap Phase 1 + 2 shipped:**
-- ✅ Insights runtime fix: `insightsController.ts` — ADMIN users were getting 403; fixed both controllers.
-- ✅ Dockerfile.production truncation fixed + Railway unblocked (cache-bust pushed via MCP).
-- ✅ Schema Phase 1: `schema.prisma` + migration `20260421000000_retail_gap_309_310_311` pushed + deployed by Patrick. 4 new models: Consignor, ConsignorPayout, DiscountRule, Location.
-- ✅ Phase 2 backend (3 parallel dispatches, zero TS errors):
-  - `consignorController.ts` + `routes/consignors.ts` — CRUD + payout logic + public portal endpoint
-  - `discountRuleController.ts` + `routes/discountRules.ts` — CRUD, TEAMS-gated
-  - `locationController.ts` + `routes/locations.ts` — CRUD + transfer + inventory filter
-  - `itemController.ts` — `getEffectivePrice` helper + effectivePrice/tagColor on item listings
-  - All three wired into `index.ts`
-- ✅ Phase 3 frontend (Dispatch D/E/F): consignors.tsx, color-rules.tsx, locations.tsx, ConsignorPayoutModal, ColorKeyLegend, LocationSelector, portal/[token].tsx, AvatarDropdown wired, edit-item + create-sale + inventory updated. Vercel green.
-- 🔲 Chrome QA for all three features (pending tonight)
-- ⏳ Phase 2 (backend controllers): blocked until migration deployed.
+**S534 COMPLETE — Guild Primer + Hunt Pass CTA + XP repricing:**
+- ✅ boostPricing.ts repriced: all 9 existing items updated, 4 new dual-rail entries added (CUSTOM_MAP_PIN, TREASURE_TRAIL_SPONSOR, EARLY_ACCESS_BOOST, LISTINGS_EXTENSION)
+- ✅ xpService.ts XP_SINKS repriced: CUSTOM_MAP_PIN 500→1000, EARLY_ACCESS_BOOST 75→200, TREASURE_TRAIL_SPONSOR 100→150, LISTINGS_EXTENSION 100→250
+- ✅ hunt-pass.tsx refactored to slim CTA (177 lines): header/hero, price card, 4 core benefits, CTA buttons, cross-link to /shopper/guild-primer
+- ✅ guild-primer.tsx created (NEW — /shopper/guild-primer): complete Explorer's Guild walkthrough. Hero + personalized XP progress bar, 5 rank cards (accordion), How to Earn XP (5 categorized subsections — full data from xpService.ts), XP Sinks (6 subsections), Seasonal Adventures, Prestige Layer, FAQ, CTAs.
+- ✅ How to Earn XP section fixed: 8-row flat table → 5 categorized subsections with all 19 XP-earning actions at correct values. Fixed: Referral (50→split: 20 signup + 500 first purchase), Auction win (15→20), Weekly streak (25→100).
+- ✅ Layout.tsx: Explorer's Guild links updated /shopper/loyalty → /shopper/guild-primer in mobile nav (lines 1310, 1492). Duplicate link removed.
+- ✅ AvatarDropdown.tsx: Explorer's Guild link updated /shopper/loyalty → /shopper/guild-primer (line 1083).
+- ✅ RankUpModal.tsx: "New Perks Unlocked" box dark mode fix (dark:bg-sage-900/20 → dark:bg-gray-700).
+- ✅ hunt-pass.tsx cross-link card dark mode fix (bg-sage-50 dark:bg-sage-900/20 → bg-white dark:bg-gray-800).
+- 🚩 FLAGGED: xpService.ts XP_SINKS has stale values for GUIDE_PUBLICATION (50, should be 100) and HAUL_VISIBILITY_BOOST (10, should be 80) — deductions don't match boostPricing.ts. Fix next session.
+- 🔲 Chrome QA for all S534 changes (pending).
 
 ## Recent Sessions
+
+**S534 (2026-04-21, COMPLETE):** XP repricing + Guild Primer + Hunt Pass slim CTA. boostPricing.ts fully repriced (9 items updated, 4 new dual-rail: CUSTOM_MAP_PIN, TREASURE_TRAIL_SPONSOR, EARLY_ACCESS_BOOST, LISTINGS_EXTENSION). xpService.ts XP_SINKS updated for 4 items. hunt-pass.tsx refactored from 997→177 lines (slim CTA only, cross-links to /shopper/guild-primer). New guild-primer.tsx page created: full Guild walkthrough with personalized XP bar, 5 rank accordion cards, How to Earn XP (5 subsections, 19 actions, corrected values), XP Sinks (6 subsections), Seasonal Adventures, Prestige Layer, FAQ, CTAs. Layout.tsx + AvatarDropdown.tsx Explorer's Guild links updated /loyalty→/guild-primer. RankUpModal dark mode fixed. Hunt Pass cross-link card dark mode fixed. Flagged: xpService.ts XP_SINKS stale for GUIDE_PUBLICATION + HAUL_VISIBILITY_BOOST vs boostPricing.ts.
 
 **S532 (2026-04-21, COMPLETE):** Multi-track session. Loyalty XP audit (4 stale values corrected in shopper/loyalty.tsx). Brand drift batch (11 files — D-001 inclusive copy + D-002 dark mode modals, brand-drift-2026-04-21.md). Vercel build fix (sales/[id].tsx:891 undefined-index guard). Quick Picker Task Modal shipped (taskTemplates.ts util, useTaskTemplates hook, QuickPickerTaskModal.tsx, backend templates endpoint, workspace/[slug].tsx wired). Retail competitive analysis research doc created (retail-mode-competitive-analysis-2026-04-21.md — corrected: retail mode fully built S520, pricing strategy parity/premium vs Ricochet). Roadmap v116: #309–#311 retail gap features added. All pushes green. Vercel + Railway both green at wrap.
 
