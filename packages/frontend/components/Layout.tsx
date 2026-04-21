@@ -547,7 +547,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Target size={16} className="text-indigo-500" />
               <span>Bounty Board</span>
             </Link>
-            <Link href="/shopper/loyalty" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+            <Link href="/shopper/guild-primer" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Star size={16} className="text-indigo-500" />
               <span>Explorer's Guild</span>
             </Link>
@@ -567,11 +567,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="2x XP, early access to sales, and exclusive badges — $4.99/mo">
               <Ticket size={16} className="text-amber-500" />
               <span>Hunt Pass</span>
-            </Link>
-
-            <Link href="/shopper/guild-primer" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-sage-600 dark:hover:text-sage-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Learn ranks, earning paths, seasonal adventures, and how the XP system works">
-              <Compass size={16} className="text-sage-600 dark:text-sage-400" />
-              <span>Explorer's Guild</span>
             </Link>
 
             <SectionHeader icon={Award} label="Hunt Exclusives" color="amber" />
