@@ -951,13 +951,21 @@ export const getWorkspaceTasks = async (req: AuthRequest, res: Response) => {
       tasks.map(async (task: any) => {
         let assigneeInfo = null;
         if (task.assignedTo) {
-          const member = workspace.members.find((m: any) => m.organizerId === task.assignedTo);
+          // assignedTo now stores WorkspaceMember.id instead of organizerId
+          const member = workspace.members.find((m: any) => m.id === task.assignedTo);
           if (member) {
-            const organizer = await prisma.organizer.findUnique({
-              where: { id: member.organizerId as string },
-              select: { businessName: true },
-            });
-            assigneeInfo = { id: member.organizerId as string, businessName: organizer?.businessName ?? '' };
+            // Get the member's name from organizer or user
+            let businessName = 'Team Member';
+            if (member.organizer?.businessName) {
+              businessName = member.organizer.businessName;
+            } else if (member.user?.name) {
+              businessName = member.user.name;
+            } else if (member.organizer?.user?.email) {
+              businessName = member.organizer.user.email;
+            } else if (member.user?.email) {
+              businessName = member.user.email;
+            }
+            assigneeInfo = { id: member.id, businessName };
           }
         }
         return {
@@ -1067,7 +1075,8 @@ export const updateWorkspaceTask = async (req: AuthRequest, res: Response) => {
 
     const isOwner = task.workspace.ownerId === requestingOrganizerId;
     const isAdminOrManager = memberRole === 'ADMIN' || memberRole === 'MANAGER';
-    const isAssignee = task.assignedTo === requestingOrganizerId;
+    // Check if the requesting user is the assignee (task.assignedTo is now a WorkspaceMember.id)
+    const isAssignee = membership && task.assignedTo === membership.id;
 
     if (!isOwner && !isAdminOrManager && !isAssignee) {
       return res.status(403).json({ message: 'Insufficient permissions to update task' });
@@ -1127,6 +1136,49 @@ export const updateWorkspaceTask = async (req: AuthRequest, res: Response) => {
     Sentry.captureException(error);
     console.error('Error updating workspace task:', error);
     return res.status(500).json({ message: 'Failed to update task' });
+  }
+};
+
+export const deleteWorkspaceTask = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId, taskId } = req.params;
+    const organizerId = req.user?.organizerProfile?.id;
+
+    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!workspaceId || !taskId) return res.status(400).json({ message: 'Workspace ID and Task ID required' });
+
+    // Fetch the task
+    const task = await prisma.workspaceTask.findUnique({
+      where: { id: taskId },
+      include: { workspace: { include: { members: { where: { organizerId } } } } },
+    });
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+    if (task.workspaceId !== workspaceId) return res.status(403).json({ message: 'Task does not belong to this workspace' });
+
+    // Check permissions
+    const requestingOrganizerId = req.user?.organizerProfile?.id;
+    const membership = task.workspace.members.find(
+      (m: any) => m.organizerId === requestingOrganizerId
+    );
+    const memberRole = membership?.role;
+
+    const isOwner = task.workspace.ownerId === requestingOrganizerId;
+    const isAdminOrManager = memberRole === 'ADMIN' || memberRole === 'MANAGER';
+
+    if (!isOwner && !isAdminOrManager) {
+      return res.status(403).json({ message: 'Insufficient permissions to delete task' });
+    }
+
+    // Delete task
+    await prisma.workspaceTask.delete({
+      where: { id: taskId },
+    });
+
+    return res.status(204).send();
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error deleting workspace task:', error);
+    return res.status(500).json({ message: 'Failed to delete task' });
   }
 };
 
