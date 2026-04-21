@@ -33,6 +33,7 @@ import { createAlaCarteCheckout } from '../controllers/stripeController'; // #13
 import { getApproachNotes, updateApproachNotes, sendApproachNotification } from '../controllers/arrivalController'; // Feature #84: Approach Notes
 import { exportSaleToEbay } from '../controllers/ebayController'; // Feature #244: eBay CSV export
 import { returnItemsToInventoryHandler } from '../controllers/returnToInventoryController'; // Feature #300: Return to Inventory
+import { toggleSaleRSVP, removeRSVP, getRSVPCount, getMyRSVPStatus, getRSVPAttendees } from '../controllers/rsvpController'; // Feature #154: Sale RSVP
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -106,6 +107,13 @@ router.get('/:saleId/ebay-export', authenticate, requireOrganizer, exportSaleToE
 
 // Feature #300: Return to Inventory — return unsold items from ENDED sale to inventory
 router.post('/:saleId/return-items', authenticate, requireOrganizer, returnItemsToInventoryHandler);
+
+// Feature #154: Sale RSVP — shoppers can RSVP to attend a sale
+router.post('/:id/rsvp', authenticate, toggleSaleRSVP); // Toggle RSVP for current user + award XP + trigger notification
+router.delete('/:id/rsvp', authenticate, removeRSVP); // Remove RSVP for current user
+router.get('/:id/rsvp/count', getRSVPCount); // Get count of people going (public)
+router.get('/:id/rsvp/mine', authenticate, getMyRSVPStatus); // Check if current user has RSVP'd
+router.get('/:id/rsvp/attendees', getRSVPAttendees); // Get list of attendees (names only, for organizer/public modal)
 
 // Feature #51: Sale Ripples — social proof activity tracking
 router.use('/:saleId/ripples', rippleRoutes);

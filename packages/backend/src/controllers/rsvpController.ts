@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
 import { awardXp, checkMonthlyXpCap, XP_AWARDS } from '../services/xpService';
+import { createNotification } from '../services/notificationService';
 
 // POST /sales/:id/rsvp — add/toggle RSVP for current user
 export const toggleSaleRSVP = async (req: AuthRequest, res: Response) => {
@@ -56,6 +57,21 @@ export const toggleSaleRSVP = async (req: AuthRequest, res: Response) => {
       } catch (error) {
         console.error('[rsvpController] Failed to award RSVP XP:', error);
         // Non-blocking: continue if XP award fails
+      }
+
+      // Send DISCOVERY notification (Feature #154)
+      try {
+        await createNotification(
+          req.user.id,
+          'RSVP_CONFIRMED',
+          'Going to this sale!',
+          `You've RSVP'd to ${sale.title}. You'll get a reminder on sale day.`,
+          `/sales/${saleId}`,
+          'DISCOVERY'
+        );
+      } catch (error) {
+        console.error('[rsvpController] Failed to create notification:', error);
+        // Non-blocking: continue if notification fails
       }
 
       res.json({ message: 'RSVP added', isGoing: true, rsvp });

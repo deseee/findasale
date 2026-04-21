@@ -307,90 +307,147 @@ const OrganizerInsightsPage = () => {
             )}
           </div>
 
-          {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* Total Sales */}
-            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                Total Sales
-              </p>
-              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalSalesCount}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">All time</p>
-            </div>
+          {/* Show per-sale metrics if a sale is selected, otherwise aggregate metrics */}
+          {!selectedSaleId ? (
+            <>
+              {/* Key Metrics Cards — Aggregate Data */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* Total Sales */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Total Sales
+                  </p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalSalesCount}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">All time</p>
+                </div>
 
-            {/* Active Sales */}
-            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                Active Sales
-              </p>
-              <p className="text-3xl font-bold text-amber-600 dark:text-amber-500">{insights.activeSalesCount}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Currently live</p>
-            </div>
+                {/* Active Sales */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Active Sales
+                  </p>
+                  <p className="text-3xl font-bold text-amber-600 dark:text-amber-500">{insights.activeSalesCount}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Currently live</p>
+                </div>
 
-            {/* Items Listed */}
-            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                Items Listed
-              </p>
-              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalItems}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">All items</p>
-            </div>
+                {/* Items Listed */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Items Listed
+                  </p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalItems}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">All items</p>
+                </div>
 
-            {/* Items Sold */}
-            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                Items Sold
-              </p>
-              <p className="text-3xl font-bold text-green-600 dark:text-green-500">{insights.totalItemsSold}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Completed sales</p>
-            </div>
+                {/* Items Sold */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Items Sold
+                  </p>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-500">{insights.totalItemsSold}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Completed sales</p>
+                </div>
 
-            {/* Total Revenue */}
-            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                Total Revenue
-              </p>
-              <p className="text-3xl font-bold text-green-700 dark:text-green-500">${insights.totalRevenue.toFixed(2)}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">From sold items</p>
-            </div>
-          </div>
+                {/* Total Revenue */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Total Revenue
+                  </p>
+                  <p className="text-3xl font-bold text-green-700 dark:text-green-500">${insights.totalRevenue.toFixed(2)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">From sold items</p>
+                </div>
+              </div>
 
-          {/* Secondary Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Conversion Rate */}
-            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                Conversion Rate
-              </p>
-              <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{insights.conversionRate.toFixed(1)}%</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
-                {insights.totalItems > 0
-                  ? `${insights.totalItemsSold} of ${insights.totalItems} items sold`
-                  : 'No items yet'}
-              </p>
-            </div>
+              {/* Secondary Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Conversion Rate */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Conversion Rate
+                  </p>
+                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{insights.conversionRate.toFixed(1)}%</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
+                    {insights.totalItems > 0
+                      ? `${insights.totalItemsSold} of ${insights.totalItems} items sold`
+                      : 'No items yet'}
+                  </p>
+                </div>
 
-            {/* Available Items */}
-            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                Available Items
-              </p>
-              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalItemsAvailable}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Not yet sold</p>
-            </div>
+                {/* Available Items */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Available Items
+                  </p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{insights.totalItemsAvailable}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Not yet sold</p>
+                </div>
 
-            {/* Average Item Price */}
-            <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
-              <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
-                Avg Item Price
-              </p>
-              <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${insights.avgItemPrice.toFixed(2)}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Average price</p>
-            </div>
-          </div>
+                {/* Average Item Price */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Avg Item Price
+                  </p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">${insights.avgItemPrice.toFixed(2)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Average price</p>
+                </div>
+              </div>
+            </>
+          ) : metricsData ? (
+            <>
+              {/* Per-Sale Metrics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* Total Items */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Total Items
+                  </p>
+                  <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{metricsData.totalItems}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Listed</p>
+                </div>
 
-          {/* Items by Category */}
-          {insights.categoryBreakdown.length > 0 && (
+                {/* Items Sold */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Items Sold
+                  </p>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-500">{metricsData.itemsSold}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Completed</p>
+                </div>
+
+                {/* Total Revenue */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Total Revenue
+                  </p>
+                  <p className="text-3xl font-bold text-green-700 dark:text-green-500">${metricsData.totalRevenue.toFixed(2)}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">{metricsData.purchaseCount} purchases</p>
+                </div>
+
+                {/* Available Items */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Available Items
+                  </p>
+                  <p className="text-3xl font-bold text-blue-600 dark:text-blue-500">{metricsData.itemsAvailable}</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Not yet sold</p>
+                </div>
+
+                {/* Conversion Rate */}
+                <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
+                  <p className="text-warm-600 dark:text-warm-400 text-xs font-semibold uppercase tracking-wide mb-2">
+                    Conversion Rate
+                  </p>
+                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+                    {metricsData.totalItems > 0 ? ((metricsData.itemsSold / metricsData.totalItems) * 100).toFixed(1) : '0.0'}%
+                  </p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">Items sold ratio</p>
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {/* Items by Category — only show when viewing aggregate data */}
+          {!selectedSaleId && insights.categoryBreakdown.length > 0 && (
             <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Items by Category</h3>
               <div className="space-y-4">
@@ -418,8 +475,8 @@ const OrganizerInsightsPage = () => {
             </div>
           )}
 
-          {/* Top Items Table */}
-          {insights.topItems.length > 0 && (
+          {/* Top Items Table — only show when viewing aggregate data */}
+          {!selectedSaleId && insights.topItems.length > 0 && (
             <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Top Items (by price)</h3>
               <div className="overflow-x-auto">
@@ -461,8 +518,8 @@ const OrganizerInsightsPage = () => {
             </div>
           )}
 
-          {/* Empty State */}
-          {insights.totalItems === 0 && (
+          {/* Empty State — only show when viewing aggregate data */}
+          {!selectedSaleId && insights.totalItems === 0 && (
             <div className="card p-12 text-center dark:bg-gray-800 dark:border-gray-700">
               <p className="text-warm-600 dark:text-warm-400 mb-4">No items listed yet.</p>
               <Link
