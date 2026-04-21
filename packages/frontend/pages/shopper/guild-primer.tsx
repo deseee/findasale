@@ -617,7 +617,7 @@ const GuildPrimerPage = () => {
                 },
                 {
                   q: 'Can I lose my rank?',
-                  a: 'No. XP never disappears. At annual reset (Jan 1), Grandmasters drop to Sage -- everyone else stays put.',
+                  a: 'At the annual reset (January 1st), everyone drops one tier — Grandmaster becomes Sage, Sage becomes Ranger, Ranger becomes Scout, Scout becomes Initiate. Your XP resets to the floor of your new rank. The soft floor means you can never drop more than one tier. One exception: if you reached Grandmaster, your free Hunt Pass stays with you for life.',
                 },
                 {
                   q: "What's the fastest path to Scout?",
