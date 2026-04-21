@@ -137,7 +137,7 @@ const HuntPassPage = () => {
           </div>
 
           {/* Explorer's Guild Cross-Link */}
-          <div className="mb-12 bg-sage-50 dark:bg-sage-900/20 border border-sage-200 dark:border-sage-700 rounded-lg p-6">
+          <div className="mb-12 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
             <p className="text-warm-900 dark:text-warm-100">
               Want to understand ranks, earning paths, and seasonal adventures?{' '}
               <Link href="/shopper/guild-primer" className="font-semibold text-sage-700 dark:text-sage-300 hover:text-sage-800 dark:hover:text-sage-200 underline">
