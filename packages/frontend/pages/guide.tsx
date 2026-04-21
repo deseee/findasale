@@ -360,21 +360,19 @@ const sections: Section[] = [
           </table>
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-8">Optional: Physical Card Reader</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          FindA.Sale's POS supports <strong>Stripe Terminal</strong> card readers for in-person chip, swipe, and contactless payments.
-          Order hardware directly from Stripe at{' '}
+          FindA.Sale's POS works with two Stripe Terminal smart readers: the <strong>Stripe Reader S700</strong> and
+          the <strong>Stripe Reader S710</strong> (which adds cellular connectivity for locations without reliable Wi-Fi).
+          Both accept chip, swipe, and contactless payments including Apple Pay and Google Pay.
+          Order directly from Stripe at{' '}
           <a href="https://stripe.com/terminal" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline font-medium">stripe.com/terminal</a>.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed mt-3">
-          <strong>Stripe Reader M2 (~$59)</strong> is the go-to choice for mobile events — small, Bluetooth, accepts chip + tap-to-pay (Apple Pay, Google Pay, contactless cards).
-          Pair it with your phone or tablet before your sale opens and it will show up as a payment option in the POS cart.
-        </p>
-        <p className="text-warm-700 dark:text-warm-300 leading-relaxed mt-3">
-          <strong>No hardware? Use Tap to Pay.</strong> Supported iPhones and Android phones can act as a contactless reader
-          with no additional device. Ideal for organizers who run one or two sales a year and don't want to invest in hardware.
+          <strong>No hardware? Use Tap to Pay.</strong> Supported iPhones and Android phones can accept
+          contactless payments directly — no extra device needed. A solid option if you run one or two sales a year.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed mt-3">
           Either way, your Stripe account must be fully onboarded before in-person card payments will process.
-          Add card reader setup to your pre-sale checklist if you plan to take cards at the door.
+          If you're ordering a reader, allow a few days for delivery and add reader setup to your pre-sale checklist.
         </p>
         </div>
       </div>
