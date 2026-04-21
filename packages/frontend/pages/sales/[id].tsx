@@ -888,7 +888,7 @@ const SaleDetailPage = () => {
                           CHARITY: 'charity sale',
                           BUSINESS_CORPORATE: 'corporate sale',
                         };
-                        return labels[saleType] || 'sale';
+                        return (saleType ? labels[saleType] : undefined) || 'sale';
                       };
                       const postText = `Check out this ${getSaleTypeLabel(sale.saleType)} on FindA.Sale!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
                       navigator.clipboard.writeText(postText);
