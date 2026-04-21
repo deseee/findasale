@@ -89,6 +89,7 @@ export const XP_AWARDS = {
 
   // Referral — organizer side
   REFERRAL_ORG_FIRST_SALE: 50,  // Referrer earns when referred organizer posts first sale
+  ORGANIZER_REFERRAL_PURCHASE: 500,  // Referrer organizer earns when referred organizer makes external purchase
 
   // Bounties
   BOUNTY_FULFILLMENT_SHOPPER: 25, // Shopper earns for fulfilling a bounty request
@@ -130,7 +131,8 @@ export const XP_SINKS = {
 export const MONTHLY_XP_CAPS = {
   // VISIT cap removed — D-XP-014: no daily/monthly cap, only once per unique sale per day
   AUCTION: 100,
-  HAUL_POST_COUNT: 4,         // D-XP-008: max 4 haul posts earn XP per calendar month (60 XP max)
+  HAUL_POST: 60,              // D-XP-008: max 4 haul posts earn XP per calendar month (4 × 15 XP = 60 XP max)
+  ORG_HAUL_FROM_SALE: 100,    // Organizer earns max 100 XP/month from shoppers posting hauls (~33 hauls max)
   RSVP: 10,                   // Max 10 XP from RSVPs per calendar month
   CONDITION_RATING: 50,       // Organizer earns max 50 XP/month from condition submissions
   COMMUNITY_VALUATION: 100,   // Max 100 XP/month from price opinions (20 valuations × 5 XP)
@@ -246,11 +248,8 @@ export async function checkDailyXpCap(
     const remaining = Math.max(0, cap - awarded);
     return remaining;
   } catch (error) {
-    console.error(
-      `[xpService] Failed to check daily cap for ${type}:`,
-      error
-    );
-    return cap; // Return full cap on error (fail open)
+    console.error('[xpService][SECURITY] Cap check failed — failing closed:', error);
+    return 0; // Fail closed: return 0 on error to block awards
   }
 }
 
@@ -288,11 +287,8 @@ export async function checkMonthlyXpCap(
     const remaining = Math.max(0, cap - awarded);
     return remaining;
   } catch (error) {
-    console.error(
-      `[xpService] Failed to check monthly cap for ${type}:`,
-      error
-    );
-    return cap; // Return full cap on error (fail open)
+    console.error('[xpService][SECURITY] Cap check failed — failing closed:', error);
+    return 0; // Fail closed: return 0 on error to block awards
   }
 }
 
@@ -447,22 +443,24 @@ export async function spendXp(
   }
 ): Promise<boolean> {
   try {
-    // P0 Exploit Fix: Check spendable XP (not total guildXp)
-    const spendable = await getSpendableXp(userId);
-
-    if (spendable < amount) {
-      return false; // Insufficient spendable XP
-    }
-
-    // Deduct XP
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
+    // Atomic check-and-decrement: WHERE clause prevents overdraft
+    const result = await prisma.user.updateMany({
+      where: {
+        id: userId,
+        guildXp: { gte: amount }, // Only succeeds if balance is sufficient
+      },
       data: {
-        guildXp: {
-          decrement: amount,
-        },
+        guildXp: { decrement: amount },
       },
     });
+
+    if (result.count === 0) {
+      return false; // Insufficient balance (atomic check failed)
+    }
+
+    // Fetch updated user for rank recalculation
+    const updatedUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!updatedUser) return false;
 
     // Create negative transaction record
     await prisma.pointsTransaction.create({
@@ -502,7 +500,6 @@ export async function getLeaderboard(limit: number = 50) {
         guildXp: { gt: 0 },
       },
       select: {
-        id: true,
         name: true,
         guildXp: true,
         explorerRank: true,
@@ -515,7 +512,6 @@ export async function getLeaderboard(limit: number = 50) {
 
     const entries = topUsers.map((user, index) => ({
       rank: index + 1,
-      userId: user.id,
       userName: user.name,
       guildXp: user.guildXp,
       explorerRank: user.explorerRank,
@@ -797,7 +793,8 @@ export async function applyHuntPassChurnHold(
       `[xpService] Failed to check Hunt Pass churn hold for user ${userId}:`,
       error
     );
-    return null; // Fail open: no hold
+    // Fail closed: apply a 30-day hold from now so user cannot spend until DB recovers
+    return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   }
 }
 

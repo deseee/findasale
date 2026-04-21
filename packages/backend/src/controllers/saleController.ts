@@ -722,9 +722,23 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
             channel: 'OPERATIONAL',
           }).catch(() => {});
 
-          // Award XP for publishing a sale
-          awardXp(org.userId, 'SALE_PUBLISHED', XP_AWARDS.SALE_PUBLISHED, { saleId: updated.id }).catch(err =>
-            console.error('[XP] Failed to award XP for sale published:', err)
+          // Award XP for publishing a sale — one-time only (first sale published milestone)
+          prisma.pointsTransaction.findFirst({
+            where: {
+              userId: org.userId,
+              type: 'SALE_PUBLISHED',
+            },
+          }).then((existingSalePublishedXp) => {
+            if (!existingSalePublishedXp) {
+              awardXp(org.userId, 'SALE_PUBLISHED', XP_AWARDS.SALE_PUBLISHED, {
+                saleId: updated.id,
+                description: 'First sale published milestone'
+              }).catch(err =>
+                console.error('[XP] Failed to award SALE_PUBLISHED XP:', err)
+              );
+            }
+          }).catch(err =>
+            console.error('[XP] Failed to check SALE_PUBLISHED XP eligibility:', err)
           );
         }
       }).catch(() => {});
@@ -1402,21 +1416,68 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Check if user already recorded a visit to this sale today (prevent duplicate visits)
+    // Award visit XP with daily and monthly caps
+    const { awardXp, checkDailyXpCap, XP_AWARDS } = await import('../services/xpService');
+
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
-    const alreadyVisitedToday = await prisma.pointsTransaction.findFirst({
-      where: {
-        userId,
-        type: 'VISIT',
-        saleId,
-        createdAt: {
-          gte: today,
+
+    // Use transaction to serialize visit checks for this user — prevents race condition
+    // where two concurrent requests both see "not visited yet" before either creates the record
+    const xpResult = await prisma.$transaction(async (tx) => {
+      // Check if user already recorded a visit to this sale today (prevent duplicate visits)
+      const alreadyVisitedToday = await tx.pointsTransaction.findFirst({
+        where: {
+          userId,
+          type: 'VISIT',
+          saleId,
+          createdAt: {
+            gte: today,
+          },
         },
-      },
+      });
+
+      if (alreadyVisitedToday) {
+        return null; // Already visited, will return early below
+      }
+
+      // Check daily cap (max 2 unique sales per day)
+      const visitCountToday = await tx.pointsTransaction.count({
+        where: {
+          userId,
+          type: 'VISIT',
+          createdAt: { gte: today },
+        },
+      });
+
+      if (visitCountToday >= 2) {
+        return 'daily_cap'; // Daily cap reached
+      }
+
+      // Check monthly cap (max 100 XP from visits)
+      const monthStart = new Date();
+      monthStart.setUTCHours(0, 0, 0, 0);
+      monthStart.setDate(1);
+      const monthlyVisitXp = await tx.pointsTransaction.aggregate({
+        where: {
+          userId,
+          type: 'VISIT',
+          createdAt: { gte: monthStart },
+        },
+        _sum: { points: true },
+      });
+      const visitedXpThisMonth = monthlyVisitXp._sum.points || 0;
+
+      if (visitedXpThisMonth >= 100) {
+        return 'monthly_cap'; // Monthly cap reached
+      }
+
+      // All checks passed within the transaction, eligible to award XP
+      return 'proceed';
     });
 
-    if (alreadyVisitedToday) {
+    // Handle transaction result outside the transaction block
+    if (xpResult === null) {
       res.status(200).json({
         message: 'Sale already visited today.',
         guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
@@ -1424,19 +1485,7 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Award visit XP with daily and monthly caps
-    const { awardXp, checkDailyXpCap, XP_AWARDS } = await import('../services/xpService');
-
-    // Check daily cap (max 2 unique sales per day)
-    const visitCountToday = await prisma.pointsTransaction.count({
-      where: {
-        userId,
-        type: 'VISIT',
-        createdAt: { gte: today },
-      },
-    });
-
-    if (visitCountToday >= 2) {
+    if (xpResult === 'daily_cap') {
       res.status(200).json({
         message: 'Daily visit XP limit reached (2 sales per day).',
         guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
@@ -1444,21 +1493,7 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Check monthly cap (max 100 XP from visits)
-    const monthStart = new Date();
-    monthStart.setUTCHours(0, 0, 0, 0);
-    monthStart.setDate(1);
-    const monthlyVisitXp = await prisma.pointsTransaction.aggregate({
-      where: {
-        userId,
-        type: 'VISIT',
-        createdAt: { gte: monthStart },
-      },
-      _sum: { points: true },
-    });
-    const visitedXpThisMonth = monthlyVisitXp._sum.points || 0;
-
-    if (visitedXpThisMonth >= 100) {
+    if (xpResult === 'monthly_cap') {
       res.status(200).json({
         message: 'Monthly visit XP limit reached (100 XP per month).',
         guildXp: (await prisma.user.findUnique({ where: { id: userId }, select: { guildXp: true } }))?.guildXp,
@@ -1466,9 +1501,10 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const xpResult = await awardXp(userId, 'VISIT', XP_AWARDS.VISIT, { saleId, description: `Visited sale: ${sale.title}` });
+    // Award XP (outside transaction to avoid long lock hold)
+    const awardResult = await awardXp(userId, 'VISIT', XP_AWARDS.VISIT, { saleId, description: `Visited sale: ${sale.title}` });
 
-    if (!xpResult) {
+    if (!awardResult) {
       res.status(500).json({ message: 'Failed to award XP.' });
       return;
     }
@@ -1485,9 +1521,9 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
 
     res.json({
       message: 'Visit recorded. XP awarded!',
-      guildXp: xpResult.newXp,
-      explorerRank: xpResult.newRank,
-      rankIncreased: xpResult.rankIncreased,
+      guildXp: awardResult.newXp,
+      explorerRank: awardResult.newRank,
+      rankIncreased: awardResult.rankIncreased,
     });
   } catch (error) {
     console.error('Record visit error:', error);

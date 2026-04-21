@@ -76,7 +76,7 @@ export const createHaulPost = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    if (monthlyCount < MONTHLY_XP_CAPS.HAUL_POST_COUNT) {
+    if (monthlyCount < MONTHLY_XP_CAPS.HAUL_POST) {
       await awardXp((req as any).user.id, 'HAUL_POST', XP_AWARDS.HAUL_POST, {
         description: `Haul post created (id: ${haul.id})`,
       }).catch(err => console.error('[HaulPost] XP award failed:', err));

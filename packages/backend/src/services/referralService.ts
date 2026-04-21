@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 
 const REWARD_POINTS_PER_REFERRAL = 50;
@@ -22,8 +23,8 @@ export const generateReferralCode = async (userId: string): Promise<string> => {
       return user.referralCode;
     }
 
-    // Generate alphanumeric code: 8 characters
-    const code = Math.random().toString(36).substring(2, 10).toUpperCase();
+    // Generate cryptographically secure 8-character hex code
+    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
 
     // Ensure uniqueness
     const existing = await prisma.user.findUnique({
