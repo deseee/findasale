@@ -3,20 +3,45 @@ import api from '../lib/api';
 import { useTaskTemplates, TaskTemplateCategory, TaskTemplate } from '../hooks/useTaskTemplates';
 import Skeleton from './Skeleton';
 
+interface Member {
+  id: string;
+  organizerId: string;
+  role: string;
+  acceptedAt: string | null;
+  organizer?: {
+    id: string;
+    businessName: string;
+    profilePhoto?: string;
+    user?: { email: string };
+  } | null;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+}
+
+interface Sale {
+  id: string;
+  title: string;
+}
+
 interface QuickPickerTaskModalProps {
   workspaceId: string;
-  saleId?: string;
   isOpen: boolean;
   onClose: () => void;
   onTaskCreated: () => void;
+  sales?: Sale[];
+  members?: Member[];
 }
 
 const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
   workspaceId,
-  saleId,
   isOpen,
   onClose,
   onTaskCreated,
+  sales = [],
+  members = [],
 }: QuickPickerTaskModalProps) => {
   const { data, isLoading, isError } = useTaskTemplates(workspaceId);
   const [selectedCategory, setSelectedCategory] = useState<string>('setup');
@@ -25,6 +50,8 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [customTaskTitle, setCustomTaskTitle] = useState('');
   const [useCustom, setUseCustom] = useState(false);
+  const [selectedSaleId, setSelectedSaleId] = useState<string>('');
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('');
 
   const templates = data?.templates || [];
   const currentCategory = templates.find((cat: TaskTemplateCategory) => cat.id === selectedCategory);
@@ -50,7 +77,7 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
   };
 
   const handleSubmit = async (): Promise<void> => {
-    if (!saleId || (selectedTasks.size === 0 && !useCustom)) return;
+    if (!selectedSaleId || (selectedTasks.size === 0 && !useCustom)) return;
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -62,15 +89,21 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
       }
 
       for (const taskTitle of tasksToCreate) {
-        await api.post(`/workspace/${workspaceId}/tasks`, {
+        const payload: any = {
           title: taskTitle,
-          saleId,
-        });
+          saleId: selectedSaleId,
+        };
+        if (selectedAssigneeId) {
+          payload.assignedToId = selectedAssigneeId;
+        }
+        await api.post(`/workspace/${workspaceId}/tasks`, payload);
       }
 
       setSelectedTasks(new Set());
       setCustomTaskTitle('');
       setUseCustom(false);
+      setSelectedSaleId('');
+      setSelectedAssigneeId('');
       onTaskCreated();
       onClose();
     } catch (err: any) {
@@ -119,6 +152,47 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
           </div>
         ) : (
           <>
+            {/* Sale Selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                Which sale? <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedSaleId}
+                onChange={(e) => setSelectedSaleId(e.target.value)}
+                className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+              >
+                <option value="">Select a sale...</option>
+                {sales.map((sale) => (
+                  <option key={sale.id} value={sale.id}>
+                    {sale.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Assignee Selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                Assign to
+              </label>
+              <select
+                value={selectedAssigneeId}
+                onChange={(e) => setSelectedAssigneeId(e.target.value)}
+                className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+              >
+                <option value="">Unassigned</option>
+                {members.map((member) => {
+                  const memberName = member.organizer?.businessName || member.user?.name || member.user?.email || 'Team Member';
+                  return (
+                    <option key={member.id} value={member.organizerId}>
+                      {memberName}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
             {/* Category Pills */}
             <div className="mb-6">
               <p className="text-xs font-semibold text-warm-600 dark:text-warm-400 mb-3 uppercase">
@@ -238,6 +312,7 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
                 onClick={handleSubmit}
                 disabled={
                   isSubmitting ||
+                  !selectedSaleId ||
                   (selectedTasks.size === 0 && !useCustom) ||
                   (useCustom && !customTaskTitle.trim())
                 }
@@ -254,6 +329,21 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
                 ? 's'
                 : ''}{' '}
               selected
+              {selectedSaleId && (
+                <>
+                  {' — '}
+                  {sales.find((s) => s.id === selectedSaleId)?.title}
+                  {selectedAssigneeId && (
+                    <>
+                      {' — '}
+                      {members.find((m) => m.organizerId === selectedAssigneeId)?.organizer?.businessName ||
+                        members.find((m) => m.organizerId === selectedAssigneeId)?.user?.name ||
+                        'Assigned'}
+                    </>
+                  )}
+                  {!selectedAssigneeId && ' — Unassigned'}
+                </>
+              )}
             </p>
           </>
         )}

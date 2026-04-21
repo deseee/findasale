@@ -126,11 +126,6 @@ export default function WorkspacePage() {
   const [forceDashboard, setForceDashboard] = useState(false);
 
   // Tasks state
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskSaleId, setNewTaskSaleId] = useState<string>('');
-  const [newTaskAssignee, setNewTaskAssignee] = useState<string>('');
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [showQuickPickerModal, setShowQuickPickerModal] = useState(false);
 
   // Auto-select first upcoming sale if available
@@ -187,29 +182,6 @@ export default function WorkspacePage() {
       console.error('Error sending message:', error);
     } finally {
       setIsSending(false);
-    }
-  };
-
-  // Handle creating a task
-  const handleCreateTask = async () => {
-    if (!newTaskTitle.trim() || !newTaskSaleId || !workspace?.id) return;
-
-    setIsCreatingTask(true);
-    try {
-      await api.post(`/workspace/${workspace.id}/tasks`, {
-        title: newTaskTitle,
-        saleId: newTaskSaleId,
-        assignedToId: newTaskAssignee || null,
-      });
-      setNewTaskTitle('');
-      setNewTaskSaleId('');
-      setNewTaskAssignee('');
-      setShowAddTask(false);
-      await refetchTasks();
-    } catch (error) {
-      console.error('Error creating task:', error);
-    } finally {
-      setIsCreatingTask(false);
     }
   };
 
@@ -556,80 +528,14 @@ export default function WorkspacePage() {
                   Tasks & Assignments
                 </h2>
                 {(isOwner || workspace.members.some((m) => m.acceptedAt && ['ADMIN', 'MANAGER'].includes(m.role))) && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowQuickPickerModal(true)}
-                      className="px-3 py-1 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold text-sm rounded-lg transition"
-                    >
-                      Quick Add
-                    </button>
-                    <button
-                      onClick={() => setShowAddTask(!showAddTask)}
-                      className="px-3 py-1 bg-warm-200 hover:bg-warm-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold text-sm rounded-lg transition"
-                    >
-                      + Add Task
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setShowQuickPickerModal(true)}
+                    className="px-4 py-2 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold text-sm rounded-lg transition"
+                  >
+                    + Add Task
+                  </button>
                 )}
               </div>
-
-              {/* Add Task Form */}
-              {showAddTask && (
-                <div className="bg-warm-50 dark:bg-gray-700 rounded-lg p-4 mb-4 space-y-3">
-                  <input
-                    type="text"
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder="Task title..."
-                    maxLength={200}
-                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-500 dark:placeholder-warm-400 focus:outline-none focus:ring-2 focus:ring-sage-500"
-                  />
-                  <select
-                    value={newTaskSaleId}
-                    onChange={(e) => setNewTaskSaleId(e.target.value)}
-                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
-                  >
-                    <option value="">Select a sale...</option>
-                    {allSales.map((sale) => (
-                      <option key={sale.id} value={sale.id}>
-                        {sale.title}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={newTaskAssignee}
-                    onChange={(e) => setNewTaskAssignee(e.target.value)}
-                    className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
-                  >
-                    <option value="">Assign to...</option>
-                    {acceptedMembers.map((member) => (
-                      <option key={member.id} value={member.organizerId}>
-                        {member.organizer?.businessName || member.organizer?.user?.email || 'Team Member'}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleCreateTask}
-                      disabled={isCreatingTask || !newTaskTitle.trim() || !newTaskSaleId}
-                      className="flex-1 px-3 py-2 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white font-semibold rounded-lg transition disabled:opacity-50"
-                    >
-                      Create
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowAddTask(false);
-                        setNewTaskTitle('');
-                        setNewTaskSaleId('');
-                        setNewTaskAssignee('');
-                      }}
-                      className="flex-1 px-3 py-2 bg-warm-200 hover:bg-warm-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-warm-900 dark:text-warm-100 font-semibold rounded-lg transition"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Task List */}
               {tasksLoading ? (
@@ -790,10 +696,11 @@ export default function WorkspacePage() {
         {workspace && (
           <QuickPickerTaskModal
             workspaceId={workspace.id}
-            saleId={selectedSaleId || undefined}
             isOpen={showQuickPickerModal}
             onClose={() => setShowQuickPickerModal(false)}
             onTaskCreated={refetchTasks}
+            sales={allSales}
+            members={acceptedMembers}
           />
         )}
       </div>
