@@ -3824,13 +3824,14 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
       return result;
     }
 
-    // Batch listings in groups of 20 for rate limiting
+    // Phase 3 optimization: Batch GetItem calls in concurrent requests (groups of 20)
+    // Instead of sequential API calls, fire all GetItem requests in parallel per batch
     const batchSize = 20;
     for (let i = 0; i < activeListings.length; i += batchSize) {
       const batch = activeListings.slice(i, i + batchSize);
 
-      // Call GetItem individually for each listing in the batch
-      for (const item of batch) {
+      // Build Promise array for concurrent API calls
+      const getItemPromises = batch.map(async (item) => {
         try {
           // Build Trading API XML request for single item
           const requestXml = `<?xml version="1.0" encoding="utf-8"?>
@@ -3851,11 +3852,13 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
             body: requestXml,
           });
 
+          trackEbayCall(); // Track each GetItem call against daily limit
+
           if (!ebayResponse.ok) {
             console.warn(
               `[eBay EndedSync] Trading API HTTP error ${ebayResponse.status} for item ${item.ebayListingId}`
             );
-            continue; // Skip this item, proceed to next
+            return { item, status: null, error: `HTTP ${ebayResponse.status}` };
           }
 
           const ebayText = await ebayResponse.text();
@@ -3865,59 +3868,81 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
           if (ack && ack !== 'Success' && ack !== 'Warning') {
             const errMsg = xmlVal(ebayText, 'LongMessage') || xmlVal(ebayText, 'ShortMessage') || 'Unknown error';
             console.warn(`[eBay EndedSync] GetItem ${item.ebayListingId}: ${ack} — ${errMsg}`);
-            continue; // Skip this item, proceed to next
+            return { item, status: null, error: `${ack}: ${errMsg}` };
           }
 
           // Extract ListingStatus from XML response (eBay Trading API returns XML)
           const status = xmlVal(ebayText, 'ListingStatus') || '';
           if (!status) {
             console.warn(`[eBay EndedSync] No ListingStatus in response for ${item.ebayListingId}`);
-            continue; // Skip this item, proceed to next
+            return { item, status: null, error: 'No ListingStatus in response' };
           }
-          result.checked++;
 
-          // If listing is ENDED or COMPLETED, clear the eBay fields
-          if (status === 'Ended' || status === 'Completed') {
-            console.log(
-              `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing status = ${status}`
-            );
-
-            // Clear eBay fields
-            await prisma.item.update({
-              where: { id: item.id },
-              data: {
-                ebayListingId: null,
-                listedOnEbayAt: null,
-                ebayOfferId: null,
-              },
-            });
-
-            // Create notification
-            await prisma.notification.create({
-              data: {
-                userId: organizer.userId,
-                type: 'SALE_UPDATE',
-                title: 'eBay listing ended',
-                body: `"${item.title}" listing ended on eBay. You can re-push this item.`,
-                link: `/organizer/sales/${item.saleId}`,
-                notificationChannel: 'IN_APP',
-              },
-            });
-
-            result.ended++;
-            result.itemsEnded.push({
-              id: item.id,
-              title: item.title,
-              ebayListingId: item.ebayListingId || '',
-            });
-          }
+          return { item, status, error: null };
         } catch (error) {
           console.error(`[eBay EndedSync] Error checking item ${item.ebayListingId}:`, error);
-          // Continue to next item
+          return { item, status: null, error: String(error) };
+        }
+      });
+
+      // Execute all GetItem calls in parallel (concurrent batch)
+      const batchResults = await Promise.all(getItemPromises);
+
+      // Process results and update DB for ended listings
+      for (const { item, status, error } of batchResults) {
+        if (error) {
+          continue; // Skip items with errors
+        }
+
+        if (!status) {
+          continue; // Status should never be null here if error is null, but safe guard
+        }
+
+        result.checked++;
+
+        // If listing is ENDED or COMPLETED, clear the eBay fields
+        if (status === 'Ended' || status === 'Completed') {
+          console.log(
+            `[eBay EndedSync] Item ${item.id} ("${item.title}"): listing status = ${status}`
+          );
+
+          // Clear eBay fields
+          await prisma.item.update({
+            where: { id: item.id },
+            data: {
+              ebayListingId: null,
+              listedOnEbayAt: null,
+              ebayOfferId: null,
+            },
+          });
+
+          // Create notification
+          await prisma.notification.create({
+            data: {
+              userId: organizer.userId,
+              type: 'SALE_UPDATE',
+              title: 'eBay listing ended',
+              body: `"${item.title}" listing ended on eBay. You can re-push this item.`,
+              link: `/organizer/sales/${item.saleId}`,
+              notificationChannel: 'IN_APP',
+            },
+          });
+
+          result.ended++;
+          result.itemsEnded.push({
+            id: item.id,
+            title: item.title,
+            ebayListingId: item.ebayListingId || '',
+          });
         }
       }
 
-      console.log(`[eBay EndedSync] Batch processed: ${batch.length} items checked`);
+      console.log(`[eBay EndedSync] Batch of ${batch.length} items processed, ${batchResults.filter(r => r.status).length} API calls succeeded`);
+
+      // Small delay between batches to respect rate limits and give eBay some breathing room
+      if (i + batchSize < activeListings.length) {
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms between batches
+      }
     }
 
     console.log(
