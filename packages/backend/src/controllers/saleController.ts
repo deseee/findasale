@@ -740,6 +740,44 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
           }).catch(err =>
             console.error('[XP] Failed to check SALE_PUBLISHED XP eligibility:', err)
           );
+
+          // REFERRAL_ORG_FIRST_SALE: Award 50 XP to the shopper who referred this organizer
+          // Fires when the organizer publishes their first sale
+          try {
+            // Check if this is the organizer's first published sale
+            prisma.sale.count({
+              where: {
+                organizerId: updated.organizerId,
+                status: 'PUBLISHED',
+              },
+            }).then((publishedSaleCount) => {
+              if (publishedSaleCount === 1) {
+                // This is their first published sale — find the shopper who referred this organizer
+                prisma.referralReward.findFirst({
+                  where: { referredUserId: org.userId },
+                }).then((referralReward) => {
+                  if (referralReward) {
+                    // Idempotency: only award once — check if referrer already got REFERRAL_ORG_FIRST_SALE
+                    prisma.pointsTransaction.findFirst({
+                      where: {
+                        userId: referralReward.referrerId,
+                        type: 'REFERRAL_ORG_FIRST_SALE',
+                      },
+                    }).then((alreadyAwarded) => {
+                      if (!alreadyAwarded) {
+                        awardXp(referralReward.referrerId, 'REFERRAL_ORG_FIRST_SALE', XP_AWARDS.REFERRAL_ORG_FIRST_SALE, {
+                          saleId: updated.id,
+                          description: `Referred organizer first sale: ${org.userId}`,
+                        }).catch(err => console.error('[XP] Failed to award REFERRAL_ORG_FIRST_SALE:', err));
+                      }
+                    }).catch(err => console.error('[XP] Failed to check REFERRAL_ORG_FIRST_SALE eligibility:', err));
+                  }
+                }).catch(err => console.error('[XP] Failed to find referral reward:', err));
+              }
+            }).catch(err => console.error('[XP] Failed to count published sales:', err));
+          } catch (err) {
+            console.error('[XP] Failed to check REFERRAL_ORG_FIRST_SALE eligibility:', err);
+          }
         }
       }).catch(() => {});
 
