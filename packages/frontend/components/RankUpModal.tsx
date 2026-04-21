@@ -151,7 +151,7 @@ export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => 
           </p>
 
           {/* Top Benefits Preview */}
-          <div className="bg-sage-50 dark:bg-sage-900/20 rounded-lg p-4 mb-6 border border-sage-200 dark:border-sage-900/40">
+          <div className="bg-sage-50 dark:bg-gray-700 rounded-lg p-4 mb-6 border border-sage-200 dark:border-gray-600">
             <p className="text-xs font-semibold text-sage-700 dark:text-sage-300 mb-2">
               New Perks Unlocked:
             </p>
