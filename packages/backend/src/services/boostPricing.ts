@@ -23,48 +23,48 @@ export interface BoostPriceEntry {
  */
 export const BOOST_PRICING: Record<string, BoostPriceEntry> = {
   SALE_BUMP: {
-    xpCost: 50,
-    stripeAmountCents: 50,
+    xpCost: 100,
+    stripeAmountCents: 100,
     durationDays: 0,          // 1 hour bump, implemented as 0.042 days — backend handles as 1-hour window
     cashRailAvailable: true,
     label: 'Sale Bump',
     description: 'Push your sale to the top of search and map results for 1 hour.',
   },
   HAUL_VISIBILITY: {
-    xpCost: 25,
-    stripeAmountCents: 25,
+    xpCost: 80,
+    stripeAmountCents: 80,
     durationDays: 7,
     cashRailAvailable: true,
     label: 'Haul Visibility Boost',
     description: 'Boost your haul post to the top of the Loot Legend feed for 7 days.',
   },
   BOUNTY_VISIBILITY: {
-    xpCost: 15,
-    stripeAmountCents: 15,
+    xpCost: 50,
+    stripeAmountCents: 50,
     durationDays: 7,
     cashRailAvailable: true,
     label: 'Bounty Visibility Boost',
     description: 'Increase your missing-item bounty visibility to organizers for 7 days.',
   },
   EVENT_SPONSORSHIP: {
-    xpCost: 500,
-    stripeAmountCents: 500,
+    xpCost: 1000,
+    stripeAmountCents: 1000,
     durationDays: 7,
     cashRailAvailable: true,
     label: 'Event Sponsorship (7-day)',
     description: 'Exclusive featured placement on sale discovery, exclusive bounties, and high visibility for 7 days.',
   },
   EVENT_SPONSORSHIP_14D: {
-    xpCost: 1000,
-    stripeAmountCents: 1000,
+    xpCost: 1800,
+    stripeAmountCents: 1800,
     durationDays: 14,
     cashRailAvailable: true,
     label: 'Event Sponsorship (14-day)',
     description: 'Exclusive featured placement and high visibility for 14 days.',
   },
   WISHLIST_NOTIFICATION: {
-    xpCost: 30,
-    stripeAmountCents: 30,
+    xpCost: 100,
+    stripeAmountCents: 100,
     durationDays: 30,
     cashRailAvailable: true,
     label: 'Wishlist Notification Boost',
@@ -79,20 +79,52 @@ export const BOOST_PRICING: Record<string, BoostPriceEntry> = {
     description: 'Unlock the premium seasonal challenge tier for the current season (~90 days).',
   },
   GUIDE_PUBLICATION: {
-    xpCost: 50,
-    stripeAmountCents: 50,
+    xpCost: 100,
+    stripeAmountCents: 100,
     durationDays: 0,          // permanent
     cashRailAvailable: true,
     label: 'Guide Publication',
     description: 'Publish a collection guide to the FindA.Sale Encyclopedia.',
   },
   RARITY_BOOST: {
-    xpCost: 15,
-    stripeAmountCents: 15,
+    xpCost: 50,
+    stripeAmountCents: 50,
     durationDays: 999,        // sale duration — expires when target sale ends
     cashRailAvailable: true,
     label: 'Rarity Boost',
     description: 'Get +2% Legendary item rarity odds for a specific sale.',
+  },
+  CUSTOM_MAP_PIN: {
+    xpCost: 1000,
+    stripeAmountCents: 1000,
+    durationDays: 0,          // permanent
+    cashRailAvailable: true,
+    label: 'Custom Map Pin',
+    description: 'Customize your sale\'s map icon with an emoji or short icon. Permanent.',
+  },
+  TREASURE_TRAIL_SPONSOR: {
+    xpCost: 150,
+    stripeAmountCents: 150,
+    durationDays: 0,          // per trail, permanent until removed
+    cashRailAvailable: true,
+    label: 'Treasure Trail Sponsor',
+    description: 'Add a scavenger hunt trail to your sale for shoppers to complete.',
+  },
+  EARLY_ACCESS_BOOST: {
+    xpCost: 200,
+    stripeAmountCents: 200,
+    durationDays: 7,
+    cashRailAvailable: true,
+    label: 'Early Access Boost',
+    description: 'Feature your presale 1 week early with extra visibility to shoppers.',
+  },
+  LISTINGS_EXTENSION: {
+    xpCost: 250,
+    stripeAmountCents: 250,
+    durationDays: 30,
+    cashRailAvailable: true,
+    label: 'Listings Extension',
+    description: 'Add 10 more item listings beyond your plan limit for 30 days. ($0.25/listing)',
   },
 };
 

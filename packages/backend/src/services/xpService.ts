@@ -78,9 +78,9 @@ export const XP_AWARDS = {
 export const XP_SINKS = {
   // Organizer sinks
   COUPON_GENERATE: 50,         // Organizer generates $1-off coupon for shoppers
-  EARLY_ACCESS_BOOST: 75,      // Organizer presale visibility bump
+  EARLY_ACCESS_BOOST: 200,     // Organizer presale visibility bump
   BOUNTY_VISIBILITY_BOOST: 15, // Organizer increases fulfillment odds (raised from 5)
-  LISTINGS_EXTENSION: 100,     // Organizer extends listing tier (avoids $2.99 upgrade)
+  LISTINGS_EXTENSION: 250,     // Organizer extends listing tier (avoids $2.99 upgrade)
   EVENT_SPONSORSHIP: 500,      // Organizer gets exclusive bounties + high visibility (gamedesign S418)
 
   // Shopper sinks
@@ -96,11 +96,11 @@ export const XP_SINKS = {
   CUSTOM_FRAME_BADGE: 2500,     // Permanent profile frame badge (D-XP-005: 2,500 XP)
 
   // Phase 2c: New XP Sinks
-  CUSTOM_MAP_PIN: 500,          // Organizer customizes sale map icon with emoji (D-XP-012, was 75)
+  CUSTOM_MAP_PIN: 1000,         // Organizer customizes sale map icon with emoji (D-XP-012, was 75)
   PROFILE_SHOWCASE_SLOT_2: 250,  // Shopper unlocks 2nd profile showcase slot — Bronze (D-XP-005: 250 XP)
   PROFILE_SHOWCASE_SLOT_3: 350, // Shopper unlocks 3rd profile showcase slot — Silver (D-XP-005: 350 XP)
   PROFILE_SHOWCASE_SLOT_GOLD: 500, // Shopper unlocks 4th profile showcase slot — Gold (D-XP-005: 500 XP)
-  TREASURE_TRAIL_SPONSOR: 100,  // Organizer pays to create a Treasure Trail
+  TREASURE_TRAIL_SPONSOR: 150,  // Organizer pays to create a Treasure Trail
 
   // Phase 2a Social Retention: Explorer's Guild
   CREW_CREATION: 500,   // Shopper creates a named collector crew (S420)
