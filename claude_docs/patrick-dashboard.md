@@ -1,21 +1,22 @@
-# Patrick's Dashboard — S531 Complete
+# Patrick's Dashboard — S532 Complete
 
 ## What Happened This Session
 
-S531 was a bug fix session. 6 parallel fixes dispatched + 2 rounds of Vercel build fixes. All green. Vercel and Railway both live.
+S532 was a multi-track session: loyalty XP audit, brand drift cleanup (11 files), Vercel build fix, Quick Picker Task Modal (new TEAMS feature), retail competitive analysis + roadmap planning.
 
-## ✅ Fixed This Session (S531)
+## ✅ Done This Session (S532)
 
-| # | Bug | Root Cause | Fix |
-|---|-----|-----------|-----|
-| #267 | RSVP Bonus XP not firing | RSVP routes were never registered in Express router (sales.ts). Controller existed, routes were dead. | Registered 5 RSVP routes in sales.ts. Added DISCOVERY notification dispatch on RSVP creation. |
-| #241 | Brand Kit PDFs all 404 | Routes used `authenticate` middleware, but browser `<a href>` links don't send auth headers. | Swapped to `optionalAuthenticate`. PRO tier gate stays in controller. |
-| #7 | /shopper/referrals → 404 | Page simply didn't exist despite backend being wired. | Created pages/shopper/referrals.tsx using existing useReferral hook + backend endpoints. |
-| #228 | SettlementWizard shows "200%" fee | Backend returns commissionRate as integer (8 = 8%). Frontend was multiplying ×100 again. | Removed the double-multiply in SettlementWizard Receipt step. |
-| per-sale | Analytics filter ignored selection | Stat cards always read aggregate `insights` object regardless of selectedSaleId. Also had wrong TS type (Insights instead of PerformanceMetrics). | Fixed conditional display + corrected TS cast + fixed all field references (metrics.revenue.total, purchasingMetrics.*, etc.). |
-| #266 | AvatarDropdown "My Profile" for shoppers | Hardcoded to organizer profile path for all users. | Made role-conditional: organizers → "My Profile" / /organizer/profile; shoppers → "Explorer Profile" / /shopper/explorer-profile. |
+| What | Details |
+|------|---------|
+| Loyalty XP values corrected | shopper/loyalty.tsx: VISIT 2→5 XP, PURCHASE 25→10 XP, coupon display updated to 100–500 XP tiers, Rarity Boost description fixed |
+| Brand drift batch (D-001) | 11 files: homepage meta tags now include flea markets, sales/[id].tsx Nextdoor share text dynamic, SharePromoteModal fallback→"sale", FAQ, guide, email-digest, promote, encyclopedia — all fixed |
+| Dark mode modal gap (D-002) | 12 modal components: ActivityFeed, BidModal, Bulk*Modals (6), CheckoutModal, HoldButton, HuntPassModal, ItemSearchResults all got `dark:bg-gray-800`. organizers/[id].tsx dark variants + empty state CTA. |
+| Vercel build fix | sales/[id].tsx:891 — `labels[saleType]` with undefined saleType caused TypeScript error. Fixed with null guard. |
+| Quick Picker Task Modal | New TEAMS feature. 5 categories (Setup, Inventory, Day Of, Close Out, Recurring), 20+ preset tasks. "Quick Add" button on workspace page alongside existing "Add Task". Custom task input preserved. |
+| Retail competitive analysis | Research doc at claude_docs/research/retail-mode-competitive-analysis-2026-04-21.md. Corrected findings: retail mode fully built (S520). Competitive gaps vs Ricochet: Consignor Portal, Color-tagged Discounts, Multi-Location. Pricing strategy: parity ($199) or premium ($249). |
+| Roadmap v116 | #309 Consignor Portal & Payouts, #310 Color-tagged Discount Rules, #311 Multi-Location Inventory View — all planned, specs ready |
 
-## ⬜ Needs Chrome QA (S532 First Priority)
+## ⬜ Needs Chrome QA (S533 First Priority)
 
 Run these in sequence (one at a time — Chrome concurrency rule):
 
@@ -24,12 +25,13 @@ Run these in sequence (one at a time — Chrome concurrency rule):
 | #267 | RSVP Bonus XP | /sales/[id] → click Going as Karen | 2 XP awarded + Discoveries notification appears |
 | #241 | Brand Kit PDFs | /organizer/brand-kit as PRO organizer | All 4 PDF links download (not 404) |
 | #7 | Referral Rewards | /shopper/referrals as Karen | Page loads, referral link shows, share buttons present |
-| #228 | Settlement fee % | /organizer/settlement → Receipt step | Shows 2% (or correct %) NOT 200% |
+| #228 | Settlement fee % | /organizer/settlement → Receipt step | Shows 2% NOT 200% |
 | per-sale | Analytics filter | /organizer/insights → select a sale | Stat cards update to per-sale data |
 | #266 | AvatarDropdown | As shopper (Karen) → avatar dropdown | Shows "Explorer Profile → /shopper/explorer-profile" |
 | S529 | Storefront widget | /organizer/dashboard | Copy Link + View Storefront buttons appear |
-| S529 | Mobile nav rank | Layout.tsx on mobile viewport | Real rank shows (not hardcoded "Scout") |
+| S529 | Mobile nav rank | Layout.tsx on mobile viewport | Real rank (not hardcoded "Scout") |
 | S529 | Card reader content | /faq, /guide, /support | S700/S710 only. No Tap to Pay. No M2. |
+| S532 | Quick Picker | /workspace/[slug] as TEAMS user | "Quick Add" button opens modal, select tasks, submit, tasks appear |
 
 ## Still Unverified (Need Special Setup)
 
@@ -44,11 +46,11 @@ Run these in sequence (one at a time — Chrome concurrency rule):
 | #255/#257/#261/#268 | Higher XP rank / trail with stops / Ranger+ |
 | #75 Tier Lapse | PRO account with lapsed subscription |
 
-## Next Session (S532)
+## Next Session (S533)
 
-1. Chrome QA all 9 items above (S531 fixes + S529 features)
+1. Chrome QA all 10 items above (S531+S529+S532)
 2. Investigate Organizer Insights runtime error (Alice)
-3. Brand drift cleanup — 17 violations open
+3. Start spec work on retail gap items (#309–#311) — Architect dispatch ready
 
 ## Your Pending Actions
 
@@ -59,6 +61,6 @@ Run these in sequence (one at a time — Chrome concurrency rule):
 
 | Service | Status |
 |---------|--------|
-| Vercel (frontend) | ✅ Green — commit 5ebe70e |
-| Railway (backend) | ✅ Live |
-| Database | ✅ Railway PostgreSQL — no pending migrations |
+| Vercel (frontend) | ✅ Green |
+| Railway (backend) | ✅ Green |
+| Last push | S532 — brand drift + loyalty + quick picker + Vercel fix |

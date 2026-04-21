@@ -4,7 +4,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S531 — COMPLETE):** 6 parallel dev fixes shipped + Vercel insights.tsx type fix. All green. P0: #267 RSVP XP routes registered + DISCOVERY notification added. P1: #241 Brand Kit PDFs (optionalAuthenticate), #7 Referral Rewards page created, SettlementWizard fee % (double-multiply removed), per-sale analytics filter (PerformanceMetrics type + correct field paths). P2: #266 AvatarDropdown role-conditional nav link. All fixes pushed and live. QA queued in qa-backlog.md.
+**Latest work (S532 — COMPLETE):** Multi-track session. (1) Loyalty page XP audit: 4 stale values corrected (VISIT 2→5 XP, PURCHASE 25→10 XP, coupon "20 XP"→"100–500 XP", Rarity Boost description updated). (2) Brand drift cleanup: 11 files fixed (D-001 inclusive sale-type copy in meta tags, FAQ, email-digest, guide, promote, encyclopedia; D-002 dark mode `dark:bg-gray-800` on 12 modal containers). (3) Vercel build fix: `sales/[id].tsx:891` undefined-index guard. (4) Quick Picker Task Modal: new TEAMS feature — `taskTemplates.ts` util (5 categories, 20+ tasks), `useTaskTemplates` hook, `QuickPickerTaskModal.tsx` component, `getTaskTemplates` controller + route, workspace slug page wired with "Quick Add" button. (5) Retail competitive analysis: research doc created, corrected (retail mode IS fully built S520), 3 gaps identified (Consignor Portal, Color-tagged Discounts, Multi-Location), parity/premium pricing strategy confirmed. (6) Roadmap v116: #309 Consignor Portal & Payouts, #310 Color-tagged Discount Rules, #311 Multi-Location Inventory View added. Vercel and Railway both green at wrap.
 
 **S530 QA results — full session (documented in qa-backlog.md):**
 - ✅ Verified: Explorer Profile page + redirect, #270 onboarding card, shopper /coupons (3 tiers), profileSlug XP gate, #200 shopper public profile (collectorTitle gone), S529 avatar dropdown rank (live!), #224 rapid-capture redirect, #259 Hunt Pass page accuracy, #279 Rare Finds Pass, #282 Explorer Profile Completion XP (+50 XP confirmed)
@@ -122,19 +122,22 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S532)
+## Next Session (S533)
 
-**S532 priority queue:**
-1. **Chrome QA S531 fixes** (6 items — see QA Backlog above). Run sequentially one at a time (Chrome concurrency rule).
+**S533 priority queue:**
+1. **Chrome QA S531 fixes** (6 items in Blocked/Unverified Queue). Run sequentially one at a time.
 2. **Chrome QA S529 features** — storefront widget, mobile nav rank, card reader content.
-3. **Investigate Organizer Insights runtime error** — Test as Alice (user1@example.com). Bob loads fine; error is user-specific. Check Railway logs.
-4. **Brand drift cleanup** — 17 violations open (see `claude_docs/audits/brand-drift-2026-04-21.md`). Highest priority: `pages/sales/[id].tsx:881` hardcodes "estate sale", homepage meta tags omit flea markets.
+3. **Chrome QA S532 features** — Quick Picker Task Modal (workspace page, TEAMS workspace), brand drift fixes spot-check.
+4. **Investigate Organizer Insights runtime error** — Test as Alice (user1@example.com). Bob loads fine; error is user-specific. Check Railway logs.
+5. **Retail gap roadmap items** (#309 Consignor Portal, #310 Color-tagged Discounts, #311 Multi-Location) — ready for Architect spec dispatch and dev planning.
 
-**Patrick actions (none blocking S532):**
+**Patrick actions (none blocking S533):**
 - ⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway (still outstanding)
 - ⚠️ Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway
 
 ## Recent Sessions
+
+**S532 (2026-04-21, COMPLETE):** Multi-track session. Loyalty XP audit (4 stale values corrected in shopper/loyalty.tsx). Brand drift batch (11 files — D-001 inclusive copy + D-002 dark mode modals, brand-drift-2026-04-21.md). Vercel build fix (sales/[id].tsx:891 undefined-index guard). Quick Picker Task Modal shipped (taskTemplates.ts util, useTaskTemplates hook, QuickPickerTaskModal.tsx, backend templates endpoint, workspace/[slug].tsx wired). Retail competitive analysis research doc created (retail-mode-competitive-analysis-2026-04-21.md — corrected: retail mode fully built S520, pricing strategy parity/premium vs Ricochet). Roadmap v116: #309–#311 retail gap features added. All pushes green. Vercel + Railway both green at wrap.
 
 **S531 (2026-04-21, COMPLETE):** Bug fix session. 6 parallel fixes dispatched + Vercel build crisis resolved (2 iterations). P0 fixed: #267 RSVP Bonus XP — RSVP routes were never registered in sales.ts Express router; DISCOVERY notification was missing from rsvpController. P1 fixed: #241 Brand Kit PDFs — `authenticate` middleware on routes called via `<a href>` (browser sends no auth header); swapped to `optionalAuthenticate`. #7 Shopper Referral Rewards — created pages/shopper/referrals.tsx using existing useReferral hook. SettlementWizard fee % — backend returns commissionRate as integer (8=8%), frontend was doing ×100 again; removed double-multiply. Per-sale analytics filter — stat cards always read aggregate `insights`; fixed to conditionally show PerformanceMetrics when saleId selected; also fixed stale `Insights` type cast and incorrect field names (5 edits to insights.tsx). P2 fixed: #266 AvatarDropdown — hardcoded to organizer profile for all users; made role-conditional. Vercel errors: (1) pnpm lockfile mismatch from Agent 2 downgrading typescript ^5.1.3→^5.0.0; (2) wrong TS type cast introduced by per-sale fix agent; (3) remaining PerformanceMetrics field errors (dateRange, cacheExpiry, metrics.*) not caught in first fix pass. All 3 resolved. Decision locked: /coupons organizer section NOT TEAMS-only. All 6 fixes live. QA queued.
 
