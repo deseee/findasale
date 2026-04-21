@@ -29,7 +29,11 @@ const convertDecimalsToNumbers = (obj: any) => {
 // ---------------------------------------------------------------------------
 export const getPerSaleAnalytics = async (req: AuthRequest, res: Response) => {
   try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const hasOrganizerRole =
+      req.user?.roles?.includes('ORGANIZER') ||
+      req.user?.role === 'ORGANIZER' ||
+      req.user?.roles?.includes('ADMIN') ||
+      req.user?.role === 'ADMIN'; // ADMIN users have organizer access (matches requireOrganizer middleware)
     if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
@@ -143,7 +147,11 @@ export const getPerSaleAnalytics = async (req: AuthRequest, res: Response) => {
 
 export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
   try {
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    const hasOrganizerRole =
+      req.user?.roles?.includes('ORGANIZER') ||
+      req.user?.role === 'ORGANIZER' ||
+      req.user?.roles?.includes('ADMIN') ||
+      req.user?.role === 'ADMIN'; // ADMIN users have organizer access (matches requireOrganizer middleware)
     if (!req.user || !hasOrganizerRole) {
       return res.status(403).json({ message: 'Access denied. Organizer access required.' });
     }
