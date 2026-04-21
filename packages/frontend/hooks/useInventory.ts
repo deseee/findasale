@@ -11,6 +11,8 @@ export interface InventoryItem {
   photoUrls: string[];
   status: string;
   organizerId?: string;
+  locationId?: string | null;
+  tagColor?: string | null;
   inInventory: boolean;
   priceHistory?: Array<{ price: number; changedBy: string; createdAt: string }>;
 }
