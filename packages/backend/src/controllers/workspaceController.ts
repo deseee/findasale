@@ -303,7 +303,7 @@ export const listMembers = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const getPublicWorkspace = async (req: Request, res: Response) => {
+export const getPublicWorkspace = async (req: AuthRequest, res: Response) => {
   try {
     const { slug } = req.params;
     if (!slug || typeof slug !== 'string') return res.status(400).json({ error: 'Slug is required' });
@@ -339,6 +339,17 @@ export const getPublicWorkspace = async (req: Request, res: Response) => {
       },
     });
     if (!workspace) return res.status(404).json({ error: 'Workspace not found' });
+
+    // Require requester to be the workspace owner or an accepted member
+    const requestingUserId = req.user?.id;
+    const isOwner = workspace.owner?.user?.id === requestingUserId;
+    const isMember = workspace.members.some(
+      (m: any) => m.userId === requestingUserId && m.acceptedAt !== null
+    );
+    if (!isOwner && !isMember) {
+      return res.status(403).json({ error: 'You are not a member of this workspace' });
+    }
+
     const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length;
     const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
     const ownerUserId = workspace.owner?.user?.id || null;

@@ -38,7 +38,7 @@ import {
 const router = Router();
 
 // Unauthenticated public endpoints (must come before param routes to avoid conflicts)
-router.get('/public/:slug', getPublicWorkspace);
+router.get('/public/:slug', authenticate, getPublicWorkspace);
 router.get('/invite/validate/:token', validateInviteToken);
 
 // All workspace routes require TEAMS tier (except possibly getMyWorkspace which requires auth)
