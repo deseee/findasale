@@ -306,6 +306,234 @@ const GuildPrimerPage = () => {
             </div>
           </div>
 
+          {/* Spend Your XP — XP Sinks */}
+          <div className="mb-16">
+            <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+              Spend Your XP — XP Sinks
+            </h2>
+            <p className="text-warm-600 dark:text-warm-400 mb-8">
+              XP is currency. Spend it on cosmetics, gameplay boosts, organizer tools, and guild features.
+            </p>
+
+            {/* Cosmetics & Profile */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Cosmetics & Profile</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-warm-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Item</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Custom Username Color</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">1,000</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Ranger+ / Permanent</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Custom Frame Badge</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">2,500</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Sage+ / Permanent / One choice</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Custom Map Pin</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">1,000 or $10</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Scout+ / Permanent</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Profile Showcase Slot</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">250–500</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ / Permanent (Bronze 250, Silver 350, Gold 500)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Gameplay Boosts */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Gameplay Boosts</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-warm-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Item</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Rarity Boost (1 Sale)</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50 or $0.50</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ / Until sale ends / Stackable</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Haul Visibility Boost</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">80 or $0.80</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ / 7 days</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Bounty Visibility Boost</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50 or $0.50</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Scout+ / 7 days</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Wishlist Notification Boost</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100 or $1.00</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ / 30 days</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Content Creation & Unlocks */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Content Creation & Unlocks</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-warm-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Item</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Seasonal Challenge Access</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">250 or $2.50</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ (non-Hunt Pass) / 1 season</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Guide Publication</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100 or $1.00</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Ranger+ / Permanent</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Hunt Pass & Discounts */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Hunt Pass & Discounts</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-warm-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Item</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Shopper Coupon Tier 1</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ / $0.75 off $10+ / XP-only</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Shopper Coupon Tier 2</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">200</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ / $2.00 off $25+ / XP-only</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Shopper Coupon Tier 3</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">500</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ / $5.00 off $50+ / XP-only</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Hunt Pass Discount</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Scout+ / $1 off one month / One-time</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Early Access Cache</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Account age 30+ days / Weekly gacha spin</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Guild & Social */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Guild & Social</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-warm-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Item</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Guild/Crew Creation</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">500</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time / Max 50 members / XP-only</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Organizer Features */}
+            <div className="mb-8">
+              <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Organizer Features</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-warm-100 dark:bg-gray-700">
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Item</th>
+                      <th className="px-4 py-3 text-right font-semibold text-warm-900 dark:text-warm-100">XP</th>
+                      <th className="px-4 py-3 text-left font-semibold text-warm-900 dark:text-warm-100">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Sale Bump</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100 or $1.00</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Scout+ / 1 hour</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Early Access Boost</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">200 or $2.00</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Elite+ / 1 week</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Listings Extension (10 listings)</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">250 or $2.50</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Trusted+ / 1 month</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Event Sponsorship (7-day)</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">1,000 or $10</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Elite+ / 7 days</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Event Sponsorship (14-day)</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">1,800 or $18</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Elite+ / 14 days</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Trail Sponsor</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">150 or $1.50</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Scout+ / Per trail</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
           {/* Seasonal Adventures */}
           <div className="mb-16">
             <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-4">
