@@ -42,8 +42,6 @@ const CreateSalePage = () => {
     lng: null as number | null,
     // B1: Sale type selector
     saleType: 'ESTATE',
-    // Feature #XXX: Retail Mode
-    isRetailMode: false,
     retailAutoRenewDays: 30,
   });
 
@@ -149,15 +147,15 @@ const CreateSalePage = () => {
     try {
       // Combine date + time and convert to UTC ISO string using browser's local timezone
       // P1 fix: omit lat/lng when null — sending null fails Zod validation before tier check runs
-      const { lat, lng, isRetailMode, retailAutoRenewDays, ...restFormData } = formData;
+      const { lat, lng, retailAutoRenewDays, ...restFormData } = formData;
+      const isRetail = formData.saleType === 'RETAIL';
       const payload = {
         ...restFormData,
-        isRetailMode,
         retailAutoRenewDays,
-        startDate: isRetailMode
+        startDate: isRetail
           ? new Date().toISOString() // Retail mode: use today
           : formData.startDate ? new Date(`${formData.startDate}T${startTime}`).toISOString() : formData.startDate,
-        endDate: isRetailMode
+        endDate: isRetail
           ? new Date(Date.now() + retailAutoRenewDays * 24 * 60 * 60 * 1000).toISOString() // Retail mode: auto-calculated on backend
           : formData.endDate ? new Date(`${formData.endDate}T${endTime}`).toISOString() : formData.endDate,
         ...(lat !== null ? { lat } : {}),
@@ -230,43 +228,29 @@ const CreateSalePage = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Feature #XXX: Retail Mode — Sale Type Selector (Event vs Retail) */}
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-lg border border-amber-200 dark:border-amber-700">
-              <h3 className="text-sm font-bold text-warm-900 dark:text-warm-100 mb-4">What are you setting up?</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Event Option */}
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, isRetailMode: false }))}
-                  className={`p-4 border-2 rounded-lg transition-colors font-medium ${
-                    !formData.isRetailMode
-                      ? 'border-amber-600 bg-amber-100 dark:bg-amber-900/40 text-warm-900 dark:text-warm-100'
-                      : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-400 hover:border-amber-400'
-                  }`}
-                >
-                  <div className="font-bold text-base">Event</div>
-                  <div className="text-xs mt-1 opacity-90">Estate sale, yard sale, auction, or pop-up</div>
-                </button>
-                {/* Retail Option */}
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, isRetailMode: true }))}
-                  className={`p-4 border-2 rounded-lg transition-colors font-medium ${
-                    formData.isRetailMode
-                      ? 'border-amber-600 bg-amber-100 dark:bg-amber-900/40 text-warm-900 dark:text-warm-100'
-                      : 'border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-400 hover:border-amber-400'
-                  }`}
-                >
-                  <div className="font-bold text-base">Retail</div>
-                  <div className="text-xs mt-1 opacity-90">Resale store, antique dealer, consignment</div>
-                </button>
-              </div>
+            {/* Sale Type Selector */}
+            <div>
+              <label htmlFor="saleType" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Sale Type</label>
+              <select
+                id="saleType"
+                name="saleType"
+                value={formData.saleType}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+              >
+                <option value="ESTATE">Estate Sale</option>
+                <option value="YARD">Yard Sale</option>
+                <option value="AUCTION">Auction</option>
+                <option value="FLEA_MARKET">Flea Market</option>
+                <option value="CONSIGNMENT">Consignment</option>
+                <option value="RETAIL">Retail Store</option>
+              </select>
             </div>
 
             {/* Basic Info */}
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <label htmlFor="title" className="block text-sm font-medium text-warm-700 dark:text-warm-300">{formData.isRetailMode ? 'Retail Store Name' : 'Sale Title'}</label>
+                <label htmlFor="title" className="block text-sm font-medium text-warm-700 dark:text-warm-300">{formData.saleType === 'RETAIL' ? 'Retail Store Name' : 'Sale Title'}</label>
                 <Tooltip content="This is the first thing shoppers see. Be specific: 'Johnson Family Estate Sale' beats 'Estate Sale'. Include the neighborhood or street if public." />
               </div>
               <input
@@ -310,7 +294,7 @@ const CreateSalePage = () => {
             </div>
 
             {/* Dates — Hidden for Retail Mode */}
-            {!formData.isRetailMode && (
+            {formData.saleType !== 'RETAIL' && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -325,7 +309,7 @@ const CreateSalePage = () => {
                     onChange={handleChange}
                     onBlur={handleBlur}
                     min={new Date().toISOString().split('T')[0]}
-                    required={!formData.isRetailMode}
+                    required={formData.saleType !== 'RETAIL'}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                   />
                   {validationErrors.startDate && touchedFields.has('startDate') && (
@@ -352,7 +336,7 @@ const CreateSalePage = () => {
                     onChange={handleChange}
                     onBlur={handleBlur}
                     min={new Date().toISOString().split('T')[0]}
-                    required={!formData.isRetailMode}
+                    required={formData.saleType !== 'RETAIL'}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                   />
                   {validationErrors.endDate && touchedFields.has('endDate') && (
@@ -372,7 +356,7 @@ const CreateSalePage = () => {
             )}
 
             {/* Retail Mode Info */}
-            {formData.isRetailMode && (
+            {formData.saleType === 'RETAIL' && (
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                 <p className="text-sm text-blue-900 dark:text-blue-100">
                   ✓ Your retail store stays live automatically. Items you add are visible to shoppers immediately.

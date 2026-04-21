@@ -30,6 +30,7 @@ enum SaleType {
   CONSIGNMENT = 'CONSIGNMENT',
   CHARITY = 'CHARITY',
   BUSINESS_CORPORATE = 'BUSINESS_CORPORATE',
+  RETAIL = 'RETAIL',
 }
 
 // Updated datetime validation to accept ISO 8601 format with optional milliseconds and timezone,
@@ -80,9 +81,9 @@ const saleCreateSchema = z.object({
   tags: z.array(z.string()).optional(),
   isAuctionSale: z.boolean().optional().default(false), // Deprecated: use saleType instead
   // B1: Sale type — Feature #5: Strict validation for enum consistency
-  // Allow all 7 sale type options from frontend
-  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'CONSIGNMENT', 'CHARITY', 'BUSINESS_CORPORATE'], {
-    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, CONSIGNMENT, CHARITY, BUSINESS_CORPORATE' })
+  // Allow all 8 sale type options from frontend
+  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'CONSIGNMENT', 'CHARITY', 'BUSINESS_CORPORATE', 'RETAIL'], {
+    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, CONSIGNMENT, CHARITY, BUSINESS_CORPORATE, RETAIL' })
   }).optional().default(SaleType.ESTATE),
   neighborhood: z.string().optional(), // U2
   // Feature 35: Front Door Locator
@@ -95,8 +96,7 @@ const saleCreateSchema = z.object({
   treasureHuntEnabled: z.boolean().optional(),
   treasureHuntCompletionBadge: z.boolean().optional(),
   holdsEnabled: z.boolean().optional(),  // Feature #121: allow organizer to disable holds per-sale
-  // Feature #XXX: Retail Mode
-  isRetailMode: z.boolean().optional().default(false),
+  // Feature #XXX: Retail Mode — auto-renewal for retail stores (saleType='RETAIL')
   retailAutoRenewDays: z.number().int().min(1).max(365).optional().default(30),
 });
 
@@ -438,7 +438,7 @@ export const createSale = async (req: AuthRequest, res: Response) => {
     }
 
     // Feature #XXX: Retail Mode — TEAMS tier only
-    if (saleData.isRetailMode && (!organizer || (organizer.subscriptionTier as string) !== 'TEAMS' && (organizer.subscriptionTier as string) !== 'ENTERPRISE')) {
+    if (saleData.saleType === 'RETAIL' && (!organizer || (organizer.subscriptionTier as string) !== 'TEAMS' && (organizer.subscriptionTier as string) !== 'ENTERPRISE')) {
       return res.status(403).json({
         message: 'Retail Mode requires TEAMS tier',
         code: 'RETAIL_MODE_REQUIRES_TEAMS',
@@ -447,7 +447,7 @@ export const createSale = async (req: AuthRequest, res: Response) => {
     }
 
     // Feature #XXX: Retail Mode — auto-calculate endDate
-    if (saleData.isRetailMode) {
+    if (saleData.saleType === 'RETAIL') {
       const startDate = new Date(saleData.startDate);
       const renewDays = saleData.retailAutoRenewDays || 30;
       const calculatedEndDate = new Date(startDate.getTime() + renewDays * 24 * 60 * 60 * 1000);
@@ -505,14 +505,6 @@ export const createSale = async (req: AuthRequest, res: Response) => {
     const sale = await prisma.sale.create({
       data: { ...saleData, organizerId, status: 'DRAFT' }
     });
-
-    // Feature #XXX: Update organizer hasRetailMode flag if creating first retail mode sale
-    if (saleData.isRetailMode && organizer) {
-      await prisma.organizer.update({
-        where: { id: organizerId },
-        data: { hasRetailMode: true }
-      });
-    }
 
     // Check achievements and award XP (first sale creation)
     let newlyUnlockedAchievements: Array<{ id: string; key: string; name: string; icon?: string }> = [];
