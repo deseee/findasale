@@ -569,6 +569,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <span>Hunt Pass</span>
             </Link>
 
+            <Link href="/shopper/guild-primer" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-sage-600 dark:hover:text-sage-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Learn ranks, earning paths, seasonal adventures, and how the XP system works">
+              <Compass size={16} className="text-sage-600 dark:text-sage-400" />
+              <span>Explorer's Guild</span>
+            </Link>
+
             <SectionHeader icon={Award} label="Hunt Exclusives" color="amber" />
             <Link href="/shopper/rare-finds" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Dedicated rare items page for Hunt Pass subscribers">
               <Sparkles size={16} className="text-amber-400" />
