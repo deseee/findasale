@@ -234,7 +234,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
                 <span className="text-gray-900 dark:text-white">${(settlement?.totalRevenue ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Platform Fee ({Math.round((settlement?.commissionRate ?? organizer?.commissionRate ?? 0.1) * 100)}%)</span>
+                <span className="text-gray-600 dark:text-gray-400">Platform Fee ({Math.round(settlement?.commissionRate ?? organizer?.commissionRate ?? 0.1)}%)</span>
                 <span className="text-blue-600 dark:text-blue-400">-${(settlement?.platformFeeAmount ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">

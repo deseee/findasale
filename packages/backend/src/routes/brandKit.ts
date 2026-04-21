@@ -4,7 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, optionalAuthenticate } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
 import { getBrandKit, getBrandKitBySlug, updateBrandKit } from '../controllers/brandKitController';
 import {
@@ -30,9 +30,11 @@ router.patch('/', authenticate, requireTier('PRO'), updateBrandKit);
 
 // Authenticated: Feature #241 - Brand Kit Print Assets (PRO tier only)
 // Generate downloadable brand asset PDFs
-router.get('/organizer/business-card', authenticate, requireTier('PRO'), generateBusinessCards);
-router.get('/organizer/letterhead', authenticate, requireTier('PRO'), generateLetterhead);
-router.get('/organizer/social-headers', authenticate, requireTier('PRO'), generateSocialHeaders);
-router.get('/organizer/yard-sign', authenticate, requireTier('PRO'), generateBrandedYardSign);
+// Note: Uses optionalAuthenticate instead of authenticate because these routes are accessed via <a href> links
+// from the browser, which don't include Authorization headers by default. Handlers verify authentication and tier internally.
+router.get('/organizer/business-card', optionalAuthenticate, generateBusinessCards);
+router.get('/organizer/letterhead', optionalAuthenticate, generateLetterhead);
+router.get('/organizer/social-headers', optionalAuthenticate, generateSocialHeaders);
+router.get('/organizer/yard-sign', optionalAuthenticate, generateBrandedYardSign);
 
 export default router;

@@ -4,7 +4,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S530 — COMPLETE):** Pure QA discovery run. No code changes. Extended Chrome QA across S528/S526 backlog + Explorer's Guild / shopper feature backlog. qa-backlog.md fully updated with all findings.
+**Latest work (S531 — IN PROGRESS):** 6 parallel dev fixes dispatched. P0 RSVP XP fixed. P1: Brand Kit PDFs, Referral Rewards page, SettlementWizard fee %, per-sale analytics filter. P2: AvatarDropdown nav link. Pending push + QA.
 
 **S530 QA results — full session (documented in qa-backlog.md):**
 - ✅ Verified: Explorer Profile page + redirect, #270 onboarding card, shopper /coupons (3 tiers), profileSlug XP gate, #200 shopper public profile (collectorTitle gone), S529 avatar dropdown rank (live!), #224 rapid-capture redirect, #259 Hunt Pass page accuracy, #279 Rare Finds Pass, #282 Explorer Profile Completion XP (+50 XP confirmed)
@@ -12,7 +12,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ❌ New bugs (P0): #267 RSVP Bonus XP — not firing, no Discoveries notification, XP delta unexplained
 - ❌ New bugs (P1): #241 Brand Kit PDF generators — all 4 endpoints 404; #7 Shopper Referral Rewards — page doesn't exist, no dashboard link
 - ❌ Pre-compaction bugs: AvatarDropdown nav link "My Profile" (P2); SettlementWizard "200%" fee (P1); per-sale analytics filter (P1)
-- DECISION NEEDED: /coupons organizer "Shopper Discount Codes" section visible to PRO — Patrick says TEAMS-only
+- LOCKED (S531): /coupons organizer "Shopper Discount Codes" section — NOT TEAMS-only. Available to all organizer tiers. Frontend: `{isOrganizer && (`, backend: `requireOrganizer` only. No code change needed.
 - UNVERIFIED: #235 DonationModal, S529 storefront/mobile nav/card reader (pending push), #275 Hunt Pass Cosmetics (Karen has no Hunt Pass), #278/#280/#281/#255/#257/#268/#261/#75 (various test data blockers), Organizer Insights as Alice
 
 **S529 shipped (all live pending push):**
@@ -53,7 +53,13 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - **#200 Shopper Public Profiles (P2):** ✅ FIXED S526 — collectorTitle removed S528 (deprecated). Profile display updated. Pending Chrome QA.
 - **W-5 Create Sale link (P3):** ✅ FIXED S526 — live. Pending Chrome QA.
 - **#277 Haul Posts nav (P3):** ✅ Chrome-verified S525.
-- **Coupons (P2):** ✅ FIXED S528 — unified /coupons page (cross-role). /organizer/coupons redirects there. Pending Chrome QA.
+- **Coupons (P2):** ✅ FIXED S528 — unified /coupons page (cross-role). /organizer/coupons redirects there. Pending Chrome QA. LOCKED S531: organizer section is NOT TEAMS-only — available to all tiers.
+- **#267 RSVP Bonus XP (P0):** ✅ FIXED S531 — RSVP routes were never registered in sales.ts; DISCOVERY notification was missing from rsvpController.ts. Both fixed.
+- **#241 Brand Kit PDFs (P1):** ✅ FIXED S531 — PDF routes used `authenticate` but frontend calls via `<a href>` (no auth header). Swapped to `optionalAuthenticate`; controller validates internally.
+- **#7 Shopper Referral Rewards (P1):** ✅ FIXED S531 — Created pages/shopper/referrals.tsx using existing useReferral hook + backend endpoints.
+- **SettlementWizard fee % (P1):** ✅ FIXED S531 — Backend returns commissionRate as integer (e.g., 8 = 8%). Frontend was multiplying ×100 again. Removed double-multiply.
+- **Per-sale analytics filter (P1):** ✅ FIXED S531 — Top metric cards always read aggregate state, ignoring selectedSaleId. Now conditionally shows per-sale data when a sale is selected.
+- **AvatarDropdown nav link (P2):** ✅ FIXED S531 — Was hardcoded to /organizer/profile for all users. Now role-conditional: organizers → "My Profile" / /organizer/profile; shoppers → "Explorer Profile" / /shopper/explorer-profile.
 - **Organizer Insights (P2):** ⚠️ Runtime error on /organizer/insights ("failed to load") — pre-existing, not caused by S528. Needs Railway log investigation.
 - **Sale Analytics drill-down (P2):** ✅ FIXED S528 — GET /api/insights/organizer/sale/:saleId built and wired. Pending Chrome QA.
 - **Categories HTML entities (P2):** ✅ FIXED S528 — decoding + href fix live. Pending Chrome QA.
@@ -85,9 +91,12 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| AvatarDropdown nav link | S528 rename not applied to dropdown | Fix: update "My Profile" label + href to "Explorer Profile" → /shopper/explorer-profile | S530 |
-| SettlementWizard fee % | P1 regression: "200%" shown instead of "2%" | Fix decimal-to-percent formatting in Receipt step | S530 |
-| Per-sale analytics filter | P1: filter doesn't scope data | All stat cards show same numbers regardless of sale selection | S528 |
+| #267 RSVP XP + Notifications | Fixed S531 — pending Chrome QA | Push S531, verify RSVP awards XP + Discoveries notification appears | S531 |
+| #241 Brand Kit PDFs | Fixed S531 — pending Chrome QA | Push S531, verify all 4 PDF download links work for PRO organizer | S531 |
+| #7 Shopper Referral Rewards | Fixed S531 — pending Chrome QA | Push S531, verify /shopper/referrals loads, shows referral code + stats | S531 |
+| SettlementWizard fee % | Fixed S531 — pending Chrome QA | Push S531, verify fee shows correct % in Receipt step | S531 |
+| Per-sale analytics filter | Fixed S531 — pending Chrome QA | Push S531, select a sale from filter, verify stat cards update | S531 |
+| AvatarDropdown nav link | Fixed S531 — pending Chrome QA | Push S531, verify shopper avatar dropdown shows "Explorer Profile" → /shopper/explorer-profile | S531 |
 | S529 storefront widget | Pending push | Push S529, verify /organizer/dashboard shows Copy Link + View Storefront | S529 |
 | S529 mobile nav rank | Pending push | Push S529, test mobile viewport, verify Layout.tsx reads real rank | S529 |
 | S529 card reader content | Pending push | Push S529, verify /faq, /guide, /support show S700/S710 hardware content | S529 |
@@ -116,19 +125,18 @@ See `claude_docs/operations/qa-backlog.md` for complete list. Priority order:
 
 ## Next Immediate Actions (S531)
 
-**DECISION NEEDED from Patrick before S531 work:**
-- Should "Shopper Discount Codes" section on /coupons be TEAMS-only or stay on PRO?
+**S531 completed fixes (pending push):**
+- ✅ #267 RSVP Bonus XP (P0) — routes + notification fixed
+- ✅ #241 Brand Kit PDFs (P1) — optionalAuthenticate fix
+- ✅ #7 Shopper Referral Rewards (P1) — page created
+- ✅ SettlementWizard fee % (P1) — double-multiply removed
+- ✅ Per-sale analytics filter (P1) — conditional display fixed
+- ✅ AvatarDropdown nav link (P2) — role-conditional fixed
 
-**S531 dev dispatch queue (P0/P1 fixes):**
-1. **Push S529** — Patrick: run `.\push.ps1` for S529 commits (storefront widget, mobile nav rank, card reader content).
-2. **Fix #267 RSVP Bonus XP (P0)** — Award not firing. No Discoveries notification after RSVP click. Dispatch findasale-dev to investigate XP service RSVP handler.
-3. **Fix #241 Brand Kit PDFs (P1)** — All 4 endpoints (/api/brand-kit/organizer/[type]) return 404. Backend routes missing. Dispatch findasale-dev.
-4. **Fix #7 Shopper Referral Rewards (P1)** — Page doesn't exist. /shopper/referrals → 404. Dispatch findasale-dev.
-5. **Fix SettlementWizard fee label (P1)** — Receipt step shows "200%" instead of "2%". Dispatch findasale-dev.
-6. **Fix per-sale analytics filter (P1)** — stat cards show identical data regardless of sale selection. Dispatch findasale-dev.
-7. **Fix AvatarDropdown nav link (P2)** — "My Profile → /organizer/profile" should be "Explorer Profile → /shopper/explorer-profile". Dispatch findasale-dev.
-8. **Investigate Organizer Insights error** — Test as Alice (user1@example.com). Bob loads fine; error is user-specific.
-9. **Verify S529 features after push** — storefront widget, mobile nav rank, card reader content.
+**Remaining queue (S532):**
+1. **Investigate Organizer Insights error** — Test as Alice (user1@example.com). Bob loads fine; error is user-specific. (Different from per-sale filter bug — this is a runtime crash.)
+2. **Chrome QA S531 fixes** — after push: RSVP XP, Brand Kit PDFs, Referral Rewards page, SettlementWizard fee, per-sale analytics, AvatarDropdown
+3. **Chrome QA S529 features** — storefront widget, mobile nav rank, card reader content
 
 ## Recent Sessions
 
