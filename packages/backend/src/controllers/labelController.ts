@@ -51,12 +51,12 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
 <head>
   <meta charset="UTF-8">
   <style>
-    @page { size: 4in 3in; margin: 0; }
+    @page { size: 4in 3.333in; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
     .label-container {
       width: 4in;
-      height: 3in;
+      height: 3.333in;
       padding: 0.1in;
       display: flex;
       align-items: center;
@@ -85,9 +85,11 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
       display: block;
     }
     .label-scan { font-size: 6pt; color: #aaaaaa; text-align: center; margin-top: 0.02in; }
+    .avery-note { font-size: 6pt; color: #cccccc; text-align: center; padding-top: 0.05in; }
   </style>
 </head>
 <body>
+  <div class="avery-note">Avery&#174; 5164 &middot; 4&#34; &times; 3&#8531;&#34; &middot; 6 per sheet</div>
   <div class="label-container">
     <div class="label-text">
       <div class="label-sale">${item.sale!.title}</div>
@@ -117,7 +119,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
       await page.setContent(labelHtml, { waitUntil: 'networkidle0' });
       const pdfBuffer = await page.pdf({
         width: '4in',
-        height: '3in',
+        height: '3.333in',
         printBackground: true,
         margin: { top: '0', right: '0', bottom: '0', left: '0' },
       });
@@ -191,20 +193,21 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
     @page { size: letter; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Helvetica, Arial, sans-serif; }
+    /* Avery 5164 — 4" × 3-1/3" shipping labels, 6 per sheet */
     .page {
       width: 8.5in;
       height: 11in;
-      padding: 1in 0.25in;
+      padding: 0.5in 0.156in 0 0.156in;
       display: grid;
       grid-template-columns: repeat(2, 4in);
-      grid-template-rows: repeat(3, 3in);
-      column-gap: 0;
+      grid-template-rows: repeat(3, 3.333in);
+      column-gap: 0.1875in;
       row-gap: 0;
       page-break-after: always;
     }
     .label {
       width: 4in;
-      height: 3in;
+      height: 3.333in;
       padding: 0.15in;
       border: 1px solid #e0e0e0;
       display: flex;
@@ -235,6 +238,8 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
       display: block;
     }
     .label-scan { font-size: 6pt; color: #aaaaaa; text-align: center; margin-top: 0.02in; }
+    /* Avery 5164 note — prints below last label row, outside perforation area */
+    .avery-note { font-size: 6pt; color: #cccccc; text-align: left; padding: 0.05in 0.156in 0; }
   </style>
 </head>
 <body>`;
@@ -279,6 +284,7 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
       labelsHtml += '</div>';
     }
 
+    labelsHtml += '<div class="avery-note">Avery&#174; 5164 &middot; 4&#34; &times; 3&#8531;&#34; shipping labels &middot; 6 per sheet</div>';
     labelsHtml += '</body></html>';
 
     // Use Puppeteer to render to PDF
