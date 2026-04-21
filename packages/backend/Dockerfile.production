@@ -65,4 +65,17 @@ COPY --from=builder /app/packages/shared/node_modules ./packages/shared/node_mod
 COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=builder /app/packages/backend/package.json ./packages/backend/
-COPY --from=builder /app/packages/database/package.jso
+COPY --from=builder /app/packages/database/package.json ./packages/database/
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+
+# Set Puppeteer to use system Chromium
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+WORKDIR /app/packages/backend
+
+ENV NODE_ENV=production
+
+EXPOSE 3001
+
+CMD ["node", "dist/index.js"]

@@ -122,21 +122,27 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S533)
+## Next Session (S534)
 
-**S533 priority queue:**
-1. **Chrome QA S531/S529/S532 fixes** — deferred to tonight (off-peak).
-2. **Retail gap backend dispatch** — Phase 2 (3 parallel controller dispatches) after migration deploys.
+**S534 priority queue:**
+1. **Phase 3 frontend** — Dispatch D (Consignor pages), E (Color-tag rules + item editor picker), F (Locations pages + inventory filter). All three parallel. ADR §Dev Instructions Phase 3 has full specs.
+2. **Chrome QA S531/S529/S532 fixes** — deferred to off-peak (see QA backlog).
 
-**Patrick actions (blocking Phase 2):**
-- Run migration after push: `cd packages\database` → set DATABASE_URL → `npx prisma migrate deploy` → `npx prisma generate`
+**Patrick actions:** None blocking Phase 3. Phase 3 can start immediately next session.
 
 ## Current Work
 
-**S533 in progress:**
-- ✅ Insights runtime fix: `insightsController.ts` — ADMIN users were getting 403 because controller's inline check didn't include ADMIN role (unlike requireOrganizer middleware). Fixed both `getOrganizerInsights` and `getPerSaleAnalytics`.
-- ✅ Architect spec: ADR written for #309/#310/#311 — `claude_docs/feature-notes/ADR-retail-gap-309-310-311.md`
-- ✅ Schema phase (Phase 1): `schema.prisma` updated + migration SQL created. 4 new models (Consignor, ConsignorPayout, DiscountRule, Location). Item.consignorId FK migrated User→Consignor. Item.tagColor, Item.locationId, Sale.locationId added. Awaiting Patrick push + migrate deploy.
+**S533 COMPLETE — retail gap Phase 1 + 2 shipped:**
+- ✅ Insights runtime fix: `insightsController.ts` — ADMIN users were getting 403; fixed both controllers.
+- ✅ Dockerfile.production truncation fixed + Railway unblocked (cache-bust pushed via MCP).
+- ✅ Schema Phase 1: `schema.prisma` + migration `20260421000000_retail_gap_309_310_311` pushed + deployed by Patrick. 4 new models: Consignor, ConsignorPayout, DiscountRule, Location.
+- ✅ Phase 2 backend (3 parallel dispatches, zero TS errors):
+  - `consignorController.ts` + `routes/consignors.ts` — CRUD + payout logic + public portal endpoint
+  - `discountRuleController.ts` + `routes/discountRules.ts` — CRUD, TEAMS-gated
+  - `locationController.ts` + `routes/locations.ts` — CRUD + transfer + inventory filter
+  - `itemController.ts` — `getEffectivePrice` helper + effectivePrice/tagColor on item listings
+  - All three wired into `index.ts`
+- 🔲 Phase 3 frontend (Dispatch D/E/F) — next session or Patrick's call
 - ⏳ Phase 2 (backend controllers): blocked until migration deployed.
 
 ## Recent Sessions

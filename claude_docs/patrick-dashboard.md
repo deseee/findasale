@@ -1,24 +1,31 @@
-# Patrick's Dashboard — S532 Complete
+# Patrick's Dashboard — S533 Complete
 
 ## What Happened This Session
 
-S532 was a multi-track session: loyalty XP audit, brand drift cleanup (11 files), Vercel build fix, Quick Picker Task Modal (new TEAMS feature), retail competitive analysis + roadmap planning.
+S533: Insights Alice fix, Dockerfile truncation repair (Railway unblocked), retail gap #309–#311 Phase 1 schema (already pushed + migrated) + Phase 2 backend (all 3 controllers done, zero TS errors). Phase 3 frontend ready to dispatch next session.
 
-## ✅ Done This Session (S532)
+## ✅ Done This Session (S533)
 
 | What | Details |
 |------|---------|
-| Loyalty XP values corrected | shopper/loyalty.tsx: VISIT 2→5 XP, PURCHASE 25→10 XP, coupon display updated to 100–500 XP tiers, Rarity Boost description fixed |
-| Brand drift batch (D-001) | 11 files: homepage meta tags now include flea markets, sales/[id].tsx Nextdoor share text dynamic, SharePromoteModal fallback→"sale", FAQ, guide, email-digest, promote, encyclopedia — all fixed |
-| Dark mode modal gap (D-002) | 12 modal components: ActivityFeed, BidModal, Bulk*Modals (6), CheckoutModal, HoldButton, HuntPassModal, ItemSearchResults all got `dark:bg-gray-800`. organizers/[id].tsx dark variants + empty state CTA. |
-| Vercel build fix | sales/[id].tsx:891 — `labels[saleType]` with undefined saleType caused TypeScript error. Fixed with null guard. |
-| Quick Picker Task Modal | New TEAMS feature. 5 categories (Setup, Inventory, Day Of, Close Out, Recurring), 20+ preset tasks. "Quick Add" button on workspace page alongside existing "Add Task". Custom task input preserved. |
-| Retail competitive analysis | Research doc at claude_docs/research/retail-mode-competitive-analysis-2026-04-21.md. Corrected findings: retail mode fully built (S520). Competitive gaps vs Ricochet: Consignor Portal, Color-tagged Discounts, Multi-Location. Pricing strategy: parity ($199) or premium ($249). |
-| Roadmap v116 | #309 Consignor Portal & Payouts, #310 Color-tagged Discount Rules, #311 Multi-Location Inventory View — all planned, specs ready |
+| Insights Alice fix | insightsController.ts — ADMIN users got 403 because controller's inline role check excluded ADMIN. Fixed both getOrganizerInsights and getPerSaleAnalytics. |
+| Dockerfile.production repair | Line 68 was truncated (package.jso) — missing dest arg + 3 missing runner stage lines (ENV, EXPOSE, CMD). Fixed + pushed via MCP. Railway build resumed. |
+| #309 Consignor Portal — backend | consignorController.ts + routes/consignors.ts: CRUD, payout calculation (SOLD items × commissionRate), public portal endpoint (no auth, token-based) |
+| #310 Color-tagged Discounts — backend | discountRuleController.ts + routes/discountRules.ts: CRUD, TEAMS-gated. itemController.ts updated with getEffectivePrice() helper + effectivePrice/tagColor on item listing responses |
+| #311 Multi-Location — backend | locationController.ts + routes/locations.ts: CRUD, transfer endpoint (bulk Item.locationId update), inventory filter, delete guard (409 if items/sales assigned) |
+| index.ts wired | All 3 route sets imported and registered |
 
-## ⬜ Needs Chrome QA (S533 First Priority)
+## 🔲 Phase 3 Frontend — Next Session
 
-Run these in sequence (one at a time — Chrome concurrency rule):
+Three parallel dispatches. ADR at `claude_docs/feature-notes/ADR-retail-gap-309-310-311.md` §Dev Instructions Phase 3 has full specs.
+
+| Dispatch | What |
+|---------|------|
+| D — Consignor pages | pages/organizer/consignors.tsx (list + create/edit modal + payout button), ConsignorPayoutModal.tsx, pages/consignor/portal/[token].tsx (public, no auth) |
+| E — Color-tag pages | pages/organizer/color-rules.tsx (CRUD + swatch preview), TagColorPicker in item editor, ColorKeyLegend on sale detail page, effectivePrice strikethrough on item cards |
+| F — Location pages | pages/organizer/locations.tsx (CRUD + transfer modal), LocationSelector on create-sale + item editor, location filter on inventory page |
+
+## ⬜ Needs Chrome QA (Deferred to Tonight)
 
 | # | Feature | Where | What to Verify |
 |---|---------|-------|----------------|
@@ -32,6 +39,7 @@ Run these in sequence (one at a time — Chrome concurrency rule):
 | S529 | Mobile nav rank | Layout.tsx on mobile viewport | Real rank (not hardcoded "Scout") |
 | S529 | Card reader content | /faq, /guide, /support | S700/S710 only. No Tap to Pay. No M2. |
 | S532 | Quick Picker | /workspace/[slug] as TEAMS user | "Quick Add" button opens modal, select tasks, submit, tasks appear |
+| S533 | Insights Alice | /organizer/insights as Alice (user1) | Should now load (ADMIN fix) |
 
 ## Still Unverified (Need Special Setup)
 
@@ -41,26 +49,18 @@ Run these in sequence (one at a time — Chrome concurrency rule):
 | #278 Treasure Hunt Pro | Hunt Pass + active QR scan |
 | #280 Condition Rating XP | Log in as Bob, set conditionGrade on any item |
 | #235 DonationModal | Sale with charity close configured |
-| Organizer Insights error | Test as Alice (user1@example.com) — Bob loads fine |
 | #281 Streak Milestone | Real 5-day consecutive streak |
 | #255/#257/#261/#268 | Higher XP rank / trail with stops / Ranger+ |
 | #75 Tier Lapse | PRO account with lapsed subscription |
 
-## Next Session (S533)
-
-1. Chrome QA all 10 items above (S531+S529+S532)
-2. Investigate Organizer Insights runtime error (Alice)
-3. Start spec work on retail gap items (#309–#311) — Architect dispatch ready
-
 ## Your Pending Actions
 
-- ⚠️ Set `MAILERLITE_SHOPPERS_GROUP_ID=182012431062533831` on Railway
-- ⚠️ Verify `RESEND_API_KEY` and `RESEND_FROM_EMAIL` on Railway
+None blocking next session.
 
 ## Build Status
 
 | Service | Status |
 |---------|--------|
 | Vercel (frontend) | ✅ Green |
-| Railway (backend) | ✅ Green |
-| Last push | S532 — brand drift + loyalty + quick picker + Vercel fix |
+| Railway (backend) | 🔄 Rebuilding (Dockerfile fix) — should go green shortly |
+| Last push | S533 — Dockerfile fix + Phase 2 backend (pending Patrick push below) |
