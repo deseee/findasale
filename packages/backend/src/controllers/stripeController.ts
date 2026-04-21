@@ -947,6 +947,34 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 console.error('[XP] Failed to award first purchase milestone XP:', err)
               );
 
+              // ORG_SHOPPER_SIGNUP: Award 10 XP to the organizer when a new shopper makes their first purchase
+              // Per gamedesign spec: fires on first purchase only, no monthly cap
+              try {
+                const saleOrganizer = purchase.sale?.organizer;
+                const orgUserId = saleOrganizer?.userId;
+
+                if (orgUserId) {
+                  // Idempotency: use purchaseId to ensure this exact purchase doesn't double-award
+                  const alreadyAwarded = await prisma.pointsTransaction.findFirst({
+                    where: {
+                      userId: orgUserId,
+                      type: 'ORG_SHOPPER_SIGNUP',
+                      purchaseId: purchase.id,
+                    },
+                  });
+
+                  if (!alreadyAwarded) {
+                    awardXp(orgUserId, 'ORG_SHOPPER_SIGNUP', XP_AWARDS.ORG_SHOPPER_SIGNUP, {
+                      saleId: purchase.saleId ?? undefined,
+                      purchaseId: purchase.id,
+                      description: `New shopper first purchase at sale ${purchase.saleId}`,
+                    }).catch(err => console.error('[XP] Failed to award ORG_SHOPPER_SIGNUP:', err));
+                  }
+                }
+              } catch (err) {
+                console.error('[XP] Failed to check ORG_SHOPPER_SIGNUP eligibility:', err);
+              }
+
               // Check referral reward eligibility
               try {
                 const referralReward = await prisma.referralReward.findFirst({
