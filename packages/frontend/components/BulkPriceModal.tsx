@@ -48,8 +48,8 @@ const BulkPriceModal: React.FC<BulkPriceModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div className="bg-white rounded-lg p-6 max-w-sm mx-4 shadow-xl">
-        <h3 className="text-lg font-bold text-warm-900 mb-4">Update Prices</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4 shadow-xl">
+        <h3 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Update Prices</h3>
 
         <p className="text-warm-700 mb-6 text-sm">
           Updating {selectedCount} item{selectedCount !== 1 ? 's' : ''}

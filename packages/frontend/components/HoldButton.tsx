@@ -161,8 +161,8 @@ const HoldButton: React.FC<HoldButtonProps> = ({
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h2 className="text-xl font-bold mb-4">Place Hold</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-4">Place Hold</h2>
 
             {/* Item info */}
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">

@@ -88,9 +88,9 @@ const BulkTagModal: React.FC<BulkTagModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-      <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <h3 className="text-lg font-bold text-warm-900 mb-4">Manage Tags</h3>
+        <h3 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Manage Tags</h3>
 
         {/* Info */}
         <p className="text-warm-700 mb-4 text-sm">

@@ -352,7 +352,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'How does buying work for shoppers?',
     answer: (
       <>
-        Shoppers browse estate sales on the{' '}
+        Shoppers browse sales on the{' '}
         <Link href="/" className="text-amber-600 hover:underline">homepage</Link> or map,
         click into any sale to see items, then click <strong>Buy Now</strong> and complete checkout
         via Stripe. Once paid, the item is marked sold and they receive a confirmation. They coordinate

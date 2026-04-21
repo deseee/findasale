@@ -90,8 +90,8 @@ const ActivityFeed = ({ saleId }: Props) => {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-lg font-bold text-warm-900 mb-4">Live Activity</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Live Activity</h2>
         <div className="space-y-3">
           <div className="h-4 bg-warm-200 rounded animate-pulse" />
           <div className="h-4 bg-warm-200 rounded animate-pulse" />
@@ -101,8 +101,8 @@ const ActivityFeed = ({ saleId }: Props) => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-      <h2 className="text-lg font-bold text-warm-900 mb-4">Live Activity</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
+      <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Live Activity</h2>
 
       {/* Feature 34: Hype Meter — real-time viewer count */}
       <div className="mb-4">

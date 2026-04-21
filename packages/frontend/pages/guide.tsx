@@ -98,9 +98,7 @@ const sections: Section[] = [
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Setting Price</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          Price items competitively. Estate sale pricing is typically 20–50% of retail value. Research
-          comparable items online if you're unsure. You can adjust prices any time before or during the sale.
-          For auction items, set a starting bid price; the 10% platform fee applies to the final bid.
+          Pricing varies by event type. Estate sale items typically go for 20–50% of retail. Auction items may exceed retail with competitive bidding; garage sale and flea market items often go lower. Research comparable items online if you're unsure. You can adjust prices any time before or during the sale. For auction items, set a starting bid price; the 10% platform fee applies to the final bid.
         </p>
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Tags and Categories</h3>
@@ -238,7 +236,7 @@ const sections: Section[] = [
     content: (
       <div className="space-y-4">
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          Every organizer account has a unique referral link. Share it with other estate sale operators.
+          Every organizer account has a unique referral link. Share it with other sale organizers.
           When someone signs up using your link and creates their first paid sale, you earn a <strong>$5 credit</strong>{' '}
           toward your next platform fees. Credits accumulate and are applied automatically. Find your
           link at <strong>Settings → Referrals</strong>.

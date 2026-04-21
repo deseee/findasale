@@ -81,7 +81,7 @@ const OrganizerProfilePage = () => {
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{organizer.businessName} – FindA.Sale</title>
-        <meta name="description" content={`Estate sales by ${organizer.businessName}`} />
+        <meta name="description" content={`Sales by ${organizer.businessName} — browse upcoming estate sales, auctions, garage sales, and more`} />
       </Head>
 
       <main className="container mx-auto px-4 py-8 max-w-4xl">
@@ -178,8 +178,9 @@ const OrganizerProfilePage = () => {
         )}
 
         {organizer.sales.length === 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center text-warm-500 dark:text-warm-400">
-            No sales listed yet.
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+            <p className="text-warm-500 dark:text-warm-400">No sales listed yet.</p>
+            <p className="text-sm text-warm-400 dark:text-warm-500 mt-2">Check back soon for upcoming sales.</p>
           </div>
         )}
       </main>

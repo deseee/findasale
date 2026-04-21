@@ -14,7 +14,7 @@ import { ItemSearchResult } from '../hooks/useItemSearch';
 const ItemCard = ({ item }: { item: ItemSearchResult }) => (
   <Link
     href={`/items/${item.id}`}
-    className="bg-white rounded-xl overflow-hidden border border-warm-100 shadow-sm hover:shadow-md transition-shadow flex flex-col"
+    className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-warm-100 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow flex flex-col"
   >
     {item.photoUrls?.[0] ? (
       <img
@@ -63,8 +63,8 @@ const ItemCard = ({ item }: { item: ItemSearchResult }) => (
 // Skeleton card
 // ---------------------------------------------------------------------------
 const SkeletonCard = () => (
-  <div className="bg-white rounded-xl overflow-hidden border border-warm-100 shadow-sm animate-pulse">
-    <div className="aspect-square bg-warm-200" />
+  <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden border border-warm-100 dark:border-gray-700 shadow-sm animate-pulse">
+    <div className="aspect-square bg-warm-200 dark:bg-gray-700" />
     <div className="p-3 space-y-2">
       <div className="h-3 bg-warm-200 rounded w-4/5" />
       <div className="h-3 bg-warm-200 rounded w-3/5" />
@@ -146,7 +146,7 @@ const ItemSearchResults: React.FC<ItemSearchResultsProps> = ({
           {query ? `We couldn't find "${query}"` : 'No items match your search'}
         </p>
         <p className="text-warm-500 text-sm mb-4">
-          {query ? 'Try different keywords or browse nearby sales for hidden gems.' : 'Start browsing estate sales to discover unique finds.'}
+          {query ? 'Try different keywords or browse nearby sales for hidden gems.' : 'Start browsing sales to discover unique finds.'}
         </p>
         <button
           onClick={() => {
