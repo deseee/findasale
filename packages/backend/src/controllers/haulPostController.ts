@@ -82,6 +82,20 @@ export const createHaulPost = async (req: AuthRequest, res: Response) => {
       }).catch(err => console.error('[HaulPost] XP award failed:', err));
     }
 
+    // Award XP to organizer if haul is linked to their sale
+    if (saleId) {
+      const sale = await prisma.sale.findUnique({
+        where: { id: saleId },
+        select: { userId: true },
+      });
+      if (sale?.userId) {
+        awardXp(sale.userId, 'ORG_HAUL_FROM_SALE', XP_AWARDS.ORG_HAUL_FROM_SALE, {
+          saleId,
+          description: 'Haul published from your sale'
+        }).catch(err => console.error('[HaulPost] Organizer XP award failed:', err));
+      }
+    }
+
     res.status(201).json(haul);
   } catch (error) {
     console.error('Error creating haul post:', error);

@@ -939,7 +939,15 @@ export const webhookHandler = async (req: Request, res: Response) => {
           try {
             const purchaseCount = await prisma.purchase.count({ where: { userId: purchase.userId } });
             if (purchaseCount === 1) {
-              // This is their first purchase — check referral reward eligibility
+              // This is their first purchase — award milestone XP
+              awardXp(purchase.userId, 'FIRST_PURCHASE_EVER', XP_AWARDS.FIRST_PURCHASE_EVER, {
+                saleId: purchase.saleId ?? undefined,
+                description: 'First purchase milestone'
+              }).catch(err =>
+                console.error('[XP] Failed to award first purchase milestone XP:', err)
+              );
+
+              // Check referral reward eligibility
               try {
                 const referralReward = await prisma.referralReward.findFirst({
                   where: { referredUserId: purchase.userId }
