@@ -54,6 +54,7 @@ import SocialProofBadge from '../../components/SocialProofBadge';
 import { useSaleSocialProof } from '../../hooks/useSocialProof';
 import BountyModal from '../../components/BountyModal';
 import ColorKeyLegend from '../../components/ColorKeyLegend'; // Feature #310: Color-tagged discount rules
+import useXpProfile from '../../hooks/useXpProfile'; // Rank-Based Early Access: fresh rank (explorerRank no longer on AuthContext User)
 
 
 interface Sale {
@@ -135,6 +136,7 @@ const SaleDetailPage = () => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
+  const { data: xpProfile } = useXpProfile(!!user?.id); // Rank-Based Early Access: fresh rank from /api/xp/profile
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const shopperCart = useShopperCart(user?.id);
@@ -521,7 +523,7 @@ const SaleDetailPage = () => {
 
   // Rank-Based Early Access: Check if sale is locked for this user
   const isSaleLocked = sale.locked === true;
-  const showRankUpCta = user?.explorerRank === 'INITIATE' && isSaleLocked;
+  const showRankUpCta = xpProfile?.explorerRank === 'INITIATE' && isSaleLocked;
 
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -543,7 +545,7 @@ const SaleDetailPage = () => {
               saleTitle={sale.title}
               saleCity={sale.city}
               minutesUntilUnlock={sale.minutesUntilUnlock || 0}
-              userRank={user?.explorerRank || 'INITIATE'}
+              userRank={xpProfile?.explorerRank || 'INITIATE'}
               showRankUpCta={showRankUpCta}
               organizerName={sale.organizer.businessName}
               photoUrl={sale.photoUrls[0]}
@@ -1444,6 +1446,7 @@ const SaleDetailPage = () => {
         {/* ActivityFeed removed — LiveFeedTicker under About covers this */}
 
       </main>
+      )}
 
       {/* Modals */}
       {checkoutItem && (
@@ -1504,7 +1507,6 @@ const SaleDetailPage = () => {
             </div>
           </div>
         </div>
-      )}
       )}
     </div>
   );
