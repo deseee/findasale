@@ -1,148 +1,67 @@
-# Patrick's Dashboard — S540 Complete
+# Patrick's Dashboard — S541 Complete
 
 ## What Happened This Session
 
-S540: Page audit → `/coupons` becomes the unified XP-spend hub. `/coupons` was already role-aware but was organizer-only in the nav — shoppers couldn't reach their own section of the page. Meanwhile `/shopper/loyalty` duplicated the rank/XP UI from `/shopper/explorer-profile` and had stale +3/+5/+10 XP values, yet held the only Rarity Boost entry point. Fix: promoted `/coupons` to the hub for both roles, migrated Rarity Boost over, reduced `/shopper/loyalty` to a 16-line redirect stub, removed the duplicate Achievements widget from the dashboard (still lives on `/shopper/explorer-profile`), and retargeted 6 orphan `/shopper/loyalty` references. Added shopper "Rewards" nav links in 4 places.
+S541: QA-only session. 6 features Chrome-verified green, 3 bugs found.
 
-## Done This Session
+**Verified ✅**
+- /coupons Rarity Boost (shopper view, 530 XP) — active, modal opens with sale picker, cost correct
+- /coupons organizer view — Shopper Discount Codes show, Rarity Boost absent (correct)
+- /shopper/loyalty → /coupons — instant redirect, no flash
+- /shopper/referrals — loads, referral link REF-0215DAB8, Copy + 5 share buttons, stats
+- /shopper/appraisals — submit works (needed JS click — coordinate click is a VM rendering quirk, not a product bug)
+- /shopper/early-access-cache — loads correctly
 
-| What | Details |
-|------|---------|
-| /coupons Rarity Boost migration | Added `<RarityBoostModal>` named import, Sparkles icon, indigo/purple gradient card gated `{!isOrganizer && ...}`. Button disabled when `spendableXp < 15`. onSuccess invalidates xp-profile query. |
-| /shopper/loyalty redirect stub | Replaced 636 lines with 16-line `useEffect(router.replace('/coupons'))` — deep links, email refs, bookmarks preserved. |
-| Layout.tsx Rewards links (3) | Desktop sidebar Connect (~line 553), mobile in-sale tools (~line 1318), mobile shopper-only nav (~line 1537). Ticket icon, indigo-500. |
-| AvatarDropdown.tsx Rewards link | Shopper branch `{!isOrganizer && ...}`, after Explorer's Guild (~line 1086). Ticket icon, indigo-500. |
-| Dashboard Achievements dedup | Removed `<AchievementBadgesSection>` block + `useMyAchievements` import + `achievementsData` query. Still on /shopper/explorer-profile. |
-| ActivitySummary.tsx | Streak Points card href: /shopper/loyalty → /coupons (XP-spend context). |
-| ExplorerGuildOnboardingCard.tsx | "View Your Rank & Progress" CTA: /shopper/loyalty → /shopper/explorer-profile (rank context, not coupons). |
-| ranks.tsx / loot-legend.tsx / league.tsx | Back links retargeted to /shopper/explorer-profile. |
-| profile.tsx | Explorer Rank CTA retargeted to /shopper/explorer-profile. |
+**Bugs Found ❌**
 
-## DECISION POINT — Orphan Ref Retargeting
-
-Spec said point all orphan loyalty refs to `/coupons`. 5 of 6 had rank/passport-context labels ("View Your Rank & Progress", "Back to Loyalty Passport", Explorer Rank CTA) — semantically these belong at `/shopper/explorer-profile`, not at an XP-spend hub. Retargeted those accordingly. ActivitySummary's Streak Points card (XP-earning context) went to `/coupons` as spec intended. If Patrick wants all refs uniformly pointing to /coupons regardless of label context, flag and we'll flip them.
-
-## Still Open
-
-| Item | Details |
-|------|---------|
-| phoneVerified missing from User model | REFERRAL_FIRST_PURCHASE (500 XP) phone gate not enforced. Needs phone verification feature. |
-
-## Still Needs Chrome QA
-
-| Feature | Where | What to Verify |
-|---------|-------|----------------|
-| S540 Rewards nav link (desktop) | Desktop sidebar Connect as shopper | "Rewards" link with Ticket icon indigo-500, clicks to /coupons, shopper section renders |
-| S540 Rewards nav link (mobile in-sale) | Mobile hamburger, in-sale tools section | Rewards link appears, routes to /coupons |
-| S540 Rewards nav link (mobile shopper nav) | Mobile hamburger, shopper section | Rewards link appears, routes to /coupons |
-| S540 Rewards nav link (dropdown) | AvatarDropdown as shopper | Rewards link in shopper branch, routes to /coupons |
-| S540 Rarity Boost card (shopper, ≥15 XP) | /coupons as shopper with ≥15 spendableXp | Card visible, button enabled, click → modal opens → select sale → spend → XP -15, toast, modal closes |
-| S540 Rarity Boost card (shopper, <15 XP) | /coupons as shopper with <15 spendableXp | Card visible, button disabled, "You need at least 15 XP" hint shows |
-| S540 Rarity Boost hidden (organizer) | /coupons as Bob/Alice | Organizer section renders normally. Rarity Boost card MUST NOT appear. |
-| S540 Loyalty redirect | Navigate /shopper/loyalty directly | Instant redirect to /coupons, no flash of old content |
-| S540 Dashboard achievements dedup | /shopper/dashboard Overview tab | Achievements widget GONE. /shopper/explorer-profile still has it. |
-| S540 Orphan ref hops | /shopper/ranks, /loot-legend, /league, /profile | Back/CTA links route to /shopper/explorer-profile (not /loyalty, not 404) |
-| S539 nav fixes | /shopper/* as George Roberts | Settings → /shopper/settings. Host a Sale → modal. Explorer Profile icon blue. |
-| S539 create-sale | /organizer/create-sale | Lightweight form, redirects to edit-sale, PRO modal fires |
-| Guild Primer | /shopper/guild-primer | All expanded tables, HP column, tiered trail table, dark mode |
-| #267 RSVP Bonus XP | /sales/[id] → Going as Karen | 2 XP + Discoveries notification |
-| #241 Brand Kit PDFs | /organizer/brand-kit as PRO | All 4 PDF links download |
-| #7 Referral Rewards | /shopper/referrals as Karen | Page loads, referral link + share |
-| #228 Settlement fee % | Settlement → Receipt step | 2% NOT 200% |
-| Per-sale analytics | /organizer/insights → select sale | Stat cards update |
-| S529 Storefront widget | /organizer/dashboard | Copy Link + View Storefront |
+| Priority | Bug | Details |
+|----------|-----|---------|
+| P0 | Print kit broken | /organizer/print-kit/cmnxvyic4001li51qobwidrbl → "Failed to load print kit". `/api/items/drafts?saleId=...` returns 500. Sale is RETAIL type, Apr 1–30 dates (whole month), 87 items in DB. Organizer changing dates to full-month likely triggered the bug. |
+| P1 | Brand Kit PDFs still broken | Hrefs hardcoded as `/api/brand-kit/organizer/...` relative to Vercel — no Next.js rewrite routes these to Railway. Fix: use `NEXT_PUBLIC_API_URL` base. |
+| P1 | /coupons coupon Generate buttons dead | Clicking Generate on the shopper section generates no API call, no toast, nothing. |
+| P2 | ActionBar Treasure Trails wrong route | ActionBar.tsx line 27: `/shopper/trails` → should be `/trails` (public browse, not create-trail) |
+| P2 | Hunt Pass Active badge for non-subscriber | Karen (no Hunt Pass) shows "Hunt Pass Active" badge — false positive |
+| P2 | /shopper/ranks Scout boundary mismatch | Rank badge and earned message disagree at the Scout threshold |
 
 ## Build Status
 
 | Service | Status |
 |---------|--------|
-| Vercel (frontend) | Green (S539 live) |
-| Railway (backend) | Green (S539 live) |
-| S540 changes | Unpushed — single push block below |
+| Vercel (frontend) | ✅ Green — S540 live |
+| Railway (backend) | ✅ Green |
+| Pending pushes | None — no code changes this session |
 
-## Your Push Block — S540
+## No Push Block This Session
 
-```powershell
-git add packages/frontend/pages/coupons.tsx
-git add packages/frontend/pages/shopper/loyalty.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git add packages/frontend/pages/shopper/ranks.tsx
-git add packages/frontend/pages/shopper/loot-legend.tsx
-git add packages/frontend/pages/shopper/league.tsx
-git add packages/frontend/pages/profile.tsx
-git add packages/frontend/components/Layout.tsx
-git add packages/frontend/components/AvatarDropdown.tsx
-git add packages/frontend/components/ActivitySummary.tsx
-git add packages/frontend/components/ExplorerGuildOnboardingCard.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S540: /coupons becomes unified XP-spend hub
+S541 was QA-only. No code was changed. Nothing to push.
 
-- /coupons Rarity Boost card added (shopper-gated) via RarityBoostModal
-- /shopper/loyalty reduced to 16-line redirect stub to /coupons
-- Rewards nav link added: desktop sidebar, mobile in-sale, mobile shopper nav, AvatarDropdown shopper branch
-- Dashboard Achievements widget removed (dedup — still on /shopper/explorer-profile)
-- 6 orphan /shopper/loyalty refs retargeted (5 to /shopper/explorer-profile, 1 to /coupons)
-- Preserves deep links, no feature removals, role-aware rendering"
-.\push.ps1
-```
+## What's Next (S542)
 
-## QA Scenarios for S541 (post-deploy)
+**Priority 1 — P0 Print Kit investigation:**
 
-Sequential Chrome QA — one feature per dispatch, evidence per PRE-VERIFICATION GATE. Run only after Vercel green.
+The organizer at artifactmi@gmail.com has a RETAIL sale ("Artifact Downtown Paw Paw", Apr 1–30) where the print kit fails to load. The sale has 87 items in the DB but the items/drafts endpoint returns a 500 error. Next session starts by reading the itemController getDrafts function and figuring out if RETAIL sale type or a whole-month date range breaks something.
 
-**Scenario 1 — Shopper nav Rewards link visibility (all 4 locations)**
-- Login as Karen (shopper).
-- Desktop: look at left sidebar Connect section. Verify "Rewards" link appears with Ticket icon (indigo-500) near Explorer's Guild.
-- Mobile viewport (375px): open hamburger. Verify Rewards appears in shopper section.
-- In-sale mobile: navigate to any sale page on mobile. Verify Rewards appears in in-sale tools.
-- AvatarDropdown: click avatar (shopper). Verify Rewards in shopper dropdown branch.
-- Evidence: screenshot each of the 4 locations.
+**Priority 2 — Fix the 3 bugs above (P1s and quick P2s)**
 
-**Scenario 2 — /coupons Rarity Boost card (shopper with ≥15 XP)**
-- Karen's spendableXp check — if <15, top up via psycopg2 Railway DB.
-- Navigate /coupons as Karen. Scroll to shopper section.
-- Verify Rarity Boost card renders with gradient indigo/purple background.
-- Click "Activate Rarity Boost (15 XP)".
-- Modal opens with sale picker.
-- Select a sale, confirm spend.
-- Verify: XP balance decrements by 15, success toast, modal closes.
-- Refresh page, verify XP persists at new value.
-- Evidence: before/after/reload screenshots.
+Brand Kit PDF hrefs are a one-file fix. Coupon Generate buttons need a read + trace. The P2s are all tiny.
 
-**Scenario 3 — /coupons Rarity Boost card (insufficient XP)**
-- Create/use test shopper with <15 XP (or drain Karen's spendable XP).
-- Navigate /coupons.
-- Verify button disabled (opacity-50, cursor-not-allowed).
-- Verify "You need at least 15 XP" hint below button.
-- Evidence: screenshot showing disabled button + hint.
+**Priority 3 — Continue QA backlog**
 
-**Scenario 4 — Organizer view of /coupons (Rarity Boost hidden)**
-- Login as Bob or Alice (organizer).
-- Navigate /coupons.
-- Verify organizer section renders: Shopper Discount Codes + $1-off generator.
-- Verify Rarity Boost card DOES NOT render anywhere on the page.
-- Evidence: full-page screenshot.
+Still unverified: S540 Rewards nav links (4 locations), dashboard achievements dedup, orphan ref hops, S529 storefront widget, #267 RSVP XP, per-sale analytics filter, settlement fee %.
 
-**Scenario 5 — /shopper/loyalty redirect**
-- Navigate directly to /shopper/loyalty as shopper.
-- Verify instant redirect to /coupons.
-- Verify NO flash of old loyalty content (stale XP values, duplicate rank UI).
-- Evidence: after-redirect URL bar screenshot + /coupons page screenshot.
+## QA Backlog (still needs Chrome verification)
 
-**Scenario 6 — Dashboard achievements dedup**
-- Login as shopper with some achievements.
-- Navigate /shopper/dashboard Overview tab.
-- Verify Achievements widget is GONE.
-- Navigate /shopper/explorer-profile.
-- Verify Achievements widget IS STILL present.
-- Evidence: screenshots of both pages.
-
-**Scenario 7 — Orphan ref hops**
-- Navigate /shopper/ranks → click back link → lands on /shopper/explorer-profile (not /loyalty, not 404).
-- Navigate /shopper/loot-legend → click back link → lands on /shopper/explorer-profile.
-- Navigate /shopper/league → click back link → lands on /shopper/explorer-profile.
-- Navigate /profile → click "View Your Rank" CTA → lands on /shopper/explorer-profile.
-- On /shopper/dashboard or onboarding flow, if ExplorerGuildOnboardingCard appears → click "View Your Rank & Progress" → lands on /shopper/explorer-profile.
-- On ActivitySummary Streak Points card → click → lands on /coupons.
-- Evidence: URL bar screenshot for each hop.
+| Feature | Where | What to Verify |
+|---------|-------|----------------|
+| S540 Rewards nav (desktop sidebar) | Desktop as Karen | "Rewards" link with Ticket icon → /coupons |
+| S540 Rewards nav (mobile in-sale) | Mobile hamburger, in-sale | Rewards link → /coupons |
+| S540 Rewards nav (mobile shopper) | Mobile hamburger, shopper section | Rewards link → /coupons |
+| S540 Rewards nav (AvatarDropdown) | Click avatar as Karen | Rewards in shopper dropdown branch → /coupons |
+| S540 Dashboard achievements dedup | /shopper/dashboard Overview | Achievements widget GONE (still on /explorer-profile) |
+| S540 Orphan ref hops | /shopper/ranks, /loot-legend, /league, /profile | Back/CTA links → /shopper/explorer-profile |
+| #267 RSVP Bonus XP | RSVP to a sale as Karen | 2 XP + Discoveries notification |
+| #228 Settlement fee % | Settlement → Receipt step | Shows 2% (not 200%) |
+| Per-sale analytics | /organizer/insights → select sale | Stat cards update for selected sale |
+| S529 Storefront widget | /organizer/dashboard as organizer | Copy Link + View Storefront buttons |
+| Guild Primer | /shopper/guild-primer | All tables, HP column, tiered trails, dark mode |
+| S539 nav fixes | /shopper/* as George Roberts | Settings → /shopper/settings, Host a Sale → modal |
