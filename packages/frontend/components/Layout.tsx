@@ -760,7 +760,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <div className="border-l border-warm-300 dark:border-gray-700 pl-4 flex items-center gap-2">
                     <CartIcon />
                     <NotificationBell />
-                    <ThemeToggle compact={true} />
                     {isLowBandwidth && (
                       <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700" title="Low-Bandwidth Mode enabled — photos optimized for slow connections">
                         Low BW
@@ -794,7 +793,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <NotificationBell />
                 </>
               )}
-              <ThemeToggle compact={true} />
               <button
                 className="p-2 rounded-md text-warm-500 dark:text-warm-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-200 dark:hover:bg-warm-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
                 onClick={() => setMenuOpen(!menuOpen)}

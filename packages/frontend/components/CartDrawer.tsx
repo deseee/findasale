@@ -124,9 +124,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const holdsTotal = holds.reduce((sum, hold) => sum + (hold.item.price || 0), 0);
-  const cartTotal = cart.getTotal();
-  const grandTotal = holdsTotal + cartTotal;
+  // Hold prices are stored as dollars in DB; cart items are stored as cents via useShopperCart
+  const holdsTotal = holds.reduce((sum, hold) => sum + (hold.item.price || 0), 0); // dollars
+  const cartTotalCents = cart.getTotal(); // cents
+  const grandTotal = holdsTotal + (cartTotalCents / 100); // unified dollars
   const hasContent = holds.length > 0 || cart.cartCount > 0;
 
   const handleBackdropClick = () => {
@@ -248,7 +249,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
 
                             {hold.item.price && (
                               <p className="text-sm font-bold text-amber-700 dark:text-amber-400 mt-1">
-                                ${(hold.item.price / 100).toFixed(2)}
+                                ${hold.item.price.toFixed(2)}
                               </p>
                             )}
                           </div>
@@ -321,14 +322,22 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                           </div>
                         </div>
 
-                        {/* Place Hold Button */}
-                        <button
-                          onClick={() => handlePlaceHold(item)}
-                          disabled={placeHoldMutation.isPending}
-                          className="w-full text-xs font-medium py-2 px-3 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors disabled:opacity-50"
-                        >
-                          {placeHoldMutation.isPending ? 'Placing Hold…' : 'Place Hold'}
-                        </button>
+                        {/* Place Hold + Remove Buttons */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handlePlaceHold(item)}
+                            disabled={placeHoldMutation.isPending}
+                            className="flex-1 text-xs font-semibold py-2 px-3 rounded bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white transition-colors disabled:opacity-50"
+                          >
+                            {placeHoldMutation.isPending ? 'Placing…' : 'Place Hold'}
+                          </button>
+                          <button
+                            onClick={() => { cart.removeItem(item.id); showToast('Item removed from cart', 'info'); }}
+                            className="text-xs font-medium py-2 px-3 rounded border border-red-400 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -346,7 +355,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
               <div className="flex justify-between items-center text-sm">
                 <span className="text-warm-700 dark:text-gray-300">On Hold</span>
                 <span className="font-semibold text-warm-900 dark:text-gray-50">
-                  ${(holdsTotal / 100).toFixed(2)}
+                  ${holdsTotal.toFixed(2)}
                 </span>
               </div>
             )}
@@ -354,7 +363,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
               <div className="flex justify-between items-center text-sm">
                 <span className="text-warm-700 dark:text-gray-300">Cart Subtotal</span>
                 <span className="font-semibold text-warm-900 dark:text-gray-50">
-                  ${(cartTotal / 100).toFixed(2)}
+                  ${(cartTotalCents / 100).toFixed(2)}
                 </span>
               </div>
             )}
@@ -363,7 +372,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
             <div className="flex justify-between items-center border-t border-warm-200 dark:border-gray-700 pt-3">
               <span className="text-warm-700 dark:text-gray-300 font-medium">Total</span>
               <span className="text-xl font-bold text-amber-700 dark:text-amber-400">
-                ${(grandTotal / 100).toFixed(2)}
+                ${grandTotal.toFixed(2)}
               </span>
             </div>
 
