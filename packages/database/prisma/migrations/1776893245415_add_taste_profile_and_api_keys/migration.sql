@@ -5,8 +5,11 @@
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1. Add tasteProfile to User model
+-- Column name MUST be camelCase "tasteProfile" — Prisma field has no @map,
+-- so client queries reference the exact field name. Previously was
+-- "taste_profile" which would deploy but still throw P2022 at runtime.
 -- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE "User" ADD COLUMN "taste_profile" JSONB;
+ALTER TABLE "User" ADD COLUMN "tasteProfile" JSONB;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. Create ApiKey model
