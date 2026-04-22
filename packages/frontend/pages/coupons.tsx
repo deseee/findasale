@@ -130,7 +130,7 @@ const CouponsPage = () => {
       const res = await api.post('/coupons/generate');
       return res.data as GenerateResult;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: GenerateResult) => {
       setNewCode(data.code);
       setNewCodeType('organizer');
       queryClient.invalidateQueries({ queryKey: ['coupons'] });
@@ -149,7 +149,7 @@ const CouponsPage = () => {
       const res = await api.post('/coupons/generate-from-xp', { tier });
       return res.data as GenerateResult;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: GenerateResult) => {
       setNewCode(data.code);
       setNewCodeType('shopper');
       queryClient.invalidateQueries({ queryKey: ['coupons'] });
@@ -549,7 +549,7 @@ const CouponsPage = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {coupons.map((coupon) => {
+              {coupons.map((coupon: Coupon) => {
                 const discount =
                   coupon.discountType === 'PERCENT'
                     ? `${coupon.discountValue}% off`
