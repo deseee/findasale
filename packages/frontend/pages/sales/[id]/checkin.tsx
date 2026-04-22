@@ -18,7 +18,7 @@ interface CheckInResponse {
 
 const CheckInPage: React.FC = () => {
   const router = useRouter();
-  const { saleId } = router.query;
+  const { id } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -28,13 +28,13 @@ const CheckInPage: React.FC = () => {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push(`/login?redirect=/sales/${saleId}/checkin`);
+      router.push(`/login?redirect=/sales/${id}/checkin`);
     }
-  }, [user, authLoading, saleId, router]);
+  }, [user, authLoading, id, router]);
 
   // Call check-in endpoint on mount
   useEffect(() => {
-    if (!saleId || typeof saleId !== 'string' || !user) {
+    if (!id || typeof id !== 'string' || !user) {
       return;
     }
 
@@ -43,7 +43,7 @@ const CheckInPage: React.FC = () => {
         setIsLoading(true);
         setError(null);
 
-        const response = await api.post(`/sales/${saleId}/checkin`);
+        const response = await api.post(`/sales/${id}/checkin`);
         const data = response.data as CheckInResponse;
 
         setCheckInResult(data);
@@ -64,17 +64,17 @@ const CheckInPage: React.FC = () => {
     };
 
     performCheckIn();
-  }, [saleId, user, showToast]);
+  }, [id, user, showToast]);
 
   const handleRetry = () => {
-    if (saleId && typeof saleId === 'string') {
-      router.push(`/sales/${saleId}/checkin`);
+    if (id && typeof id === 'string') {
+      router.push(`/sales/${id}/checkin`);
     }
   };
 
   const handleBrowseItems = () => {
-    if (saleId) {
-      router.push(`/sales/${saleId}`);
+    if (id) {
+      router.push(`/sales/${id}`);
     }
   };
 
