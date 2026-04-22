@@ -218,7 +218,11 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
 
         if (item.status === 'SOLD' && item.price) {
           totalItemsSold += 1;
-          totalRevenue += item.price;
+          // Convert Decimal to number before addition
+          const price = typeof item.price === 'object' && 'toNumber' in item.price
+            ? item.price.toNumber()
+            : Number(item.price);
+          totalRevenue += price;
         }
 
         if (item.status === 'AVAILABLE') {
@@ -234,22 +238,40 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
     // Calculate average item price
     const itemsWithPrice = allItems.filter((item) => item.price != null);
     const avgItemPrice = itemsWithPrice.length > 0
-      ? itemsWithPrice.reduce((sum, item) => sum + (item.price || 0), 0) / itemsWithPrice.length
+      ? itemsWithPrice.reduce((sum, item) => {
+          const price = typeof item.price === 'object' && 'toNumber' in item.price
+            ? item.price.toNumber()
+            : Number(item.price);
+          return sum + (price || 0);
+        }, 0) / itemsWithPrice.length
       : 0;
 
     // Get top 5 items by price (as proxy for popular/valuable items)
     // If viewCount existed on Item, we'd sort by that instead
     const topItems = allItems
       .filter((item) => item.price != null)
-      .sort((a, b) => (b.price || 0) - (a.price || 0))
+      .sort((a, b) => {
+        const priceA = typeof a.price === 'object' && 'toNumber' in a.price
+          ? a.price.toNumber()
+          : Number(a.price || 0);
+        const priceB = typeof b.price === 'object' && 'toNumber' in b.price
+          ? b.price.toNumber()
+          : Number(b.price || 0);
+        return priceB - priceA;
+      })
       .slice(0, 5)
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        price: item.price,
-        category: item.category || 'uncategorized',
-        status: item.status,
-      }));
+      .map((item) => {
+        const price = typeof item.price === 'object' && 'toNumber' in item.price
+          ? item.price.toNumber()
+          : Number(item.price);
+        return {
+          id: item.id,
+          title: item.title,
+          price,
+          category: item.category || 'uncategorized',
+          status: item.status,
+        };
+      });
 
     // Build category breakdown (count per category)
     const categoryBreakdown = Object.entries(categoryMap)
