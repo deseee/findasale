@@ -22,6 +22,7 @@ import {
   getMarkdownConfig,
   cancelSale,
   recordVisit,
+  checkInToSale,
 } from '../controllers/saleController';
 import { generateMarketingKit } from '../controllers/marketingKitController';
 import { getSaleLabels } from '../controllers/labelController'; // W2
@@ -63,6 +64,7 @@ router.put('/:id/markdown-config', authenticate, requireTier('PRO'), updateMarkd
 router.post('/', authenticate, createSale);
 router.post('/generate-description', authenticate, generateSaleDescriptionHandler); // AI sale description generator
 router.post('/:id/visit', authenticate, recordVisit); // Phase 2a: Record visit and award XP
+router.post('/:saleId/checkin', authenticate, checkInToSale); // Award XP for QR check-in
 router.post('/:id/track-scan', trackQrScan); // public, no auth needed
 router.post('/:id/generate-qr', authenticate, generateQRCode);
 router.post('/:id/generate-marketing-kit', authenticate, generateMarketingKit);

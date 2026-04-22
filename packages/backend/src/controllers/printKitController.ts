@@ -504,10 +504,10 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
     };
     const saleTypeStr = saleTypeLabel[sale.saleType ?? ''] ?? '';
 
-    // QR centered in a 306pt panel: x = (306 - 300) / 2 = 3 (use standard 300pt for consistency)
-    const QR_SIZE_TENT = QR_SIZE_STANDARD;  // 300pt for consistency across kits
-    const QR_X_FRONT = (PANEL_W - QR_SIZE_TENT) / 2;        // 3 — left panel
-    const QR_X_BACK  = PANEL_W + (PANEL_W - QR_SIZE_TENT) / 2; // 309 — right panel
+    // QR centered in a 306pt panel: shrink to 200pt to fit within panel with room for caption
+    const QR_SIZE_TENT = 200;  // Reduced from 300pt to fit within panel boundaries
+    const QR_X_FRONT = (PANEL_W - QR_SIZE_TENT) / 2;        // (306 - 200) / 2 = 53
+    const QR_X_BACK  = PANEL_W + (PANEL_W - QR_SIZE_TENT) / 2; // 306 + 53 = 359
 
     // Draw two tents per page (tent 1: y=0..396, tent 2: y=396..792)
     for (let i = 0; i < 2; i++) {
@@ -553,15 +553,15 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
         .fillColor('#16a34a')
         .text('Browse & buy before you arrive.', 12, yOffset + 106, { width: 282, align: 'center', lineBreak: false });
 
-      // QR code — centered, standardized size, starts at y+125 → ends y+425
+      // QR code — centered, 200pt size, starts at y+125 → ends y+325
       doc.image(qrBuffer, QR_X_FRONT, yOffset + 125, { width: QR_SIZE_TENT, height: QR_SIZE_TENT });
 
-      // "Scan to view items" caption
+      // "Scan to view items" caption — positioned below QR
       doc
         .font('Helvetica')
         .fontSize(9)
         .fillColor('#999999')
-        .text('Scan to view items online', 12, yOffset + 322, { width: 282, align: 'center', lineBreak: false });
+        .text('Scan to view items online', 12, yOffset + 333, { width: 282, align: 'center', lineBreak: false });
 
       // Outer border
       doc.rect(0, yOffset, PANEL_W, TENT_H).lineWidth(1).stroke('#cccccc');
@@ -603,22 +603,22 @@ export const getTableTentKit = async (req: AuthRequest, res: Response) => {
       // Divider
       doc.moveTo(PANEL_W + 12, yOffset + 98).lineTo(PANEL_W + 294, yOffset + 98).lineWidth(0.5).stroke('#dddddd');
 
-      // Second QR code — same URL, centered in back panel
+      // Second QR code — same URL, centered in back panel, 200pt size
       doc.image(qrBuffer, QR_X_BACK, yOffset + 110, { width: QR_SIZE_TENT, height: QR_SIZE_TENT });
 
-      // "Scan to view items" caption
+      // "Scan to view items" caption — positioned below QR
       doc
         .font('Helvetica')
         .fontSize(9)
         .fillColor('#999999')
-        .text('Scan to view items online', PANEL_W + 12, yOffset + 307, { width: 282, align: 'center', lineBreak: false });
+        .text('Scan to view items online', PANEL_W + 12, yOffset + 318, { width: 282, align: 'center', lineBreak: false });
 
       // Date + type footer
       doc
         .font('Helvetica')
         .fontSize(9)
         .fillColor('#aaaaaa')
-        .text(typeAndDate, PANEL_W + 12, yOffset + 325, { width: 282, align: 'center', lineBreak: false });
+        .text(typeAndDate, PANEL_W + 12, yOffset + 335, { width: 282, align: 'center', lineBreak: false });
 
       // Outer border
       doc.rect(PANEL_W, yOffset, PANEL_W, TENT_H).lineWidth(1).stroke('#cccccc');
@@ -1436,9 +1436,9 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       ? `${fkSaleTypeStr}  ·  ${startDate} – ${endDate}`
       : `${startDate} – ${endDate}`;
 
-    const FK_QR_SIZE = QR_SIZE_STANDARD;  // 300pt for consistency
-    const FK_QR_X_FRONT = (PANEL_W_FULL - FK_QR_SIZE) / 2;               // 3
-    const FK_QR_X_BACK  = PANEL_W_FULL + (PANEL_W_FULL - FK_QR_SIZE) / 2; // 309
+    const FK_QR_SIZE = 200;  // Reduced from 300pt — fits within 396pt panel (125+200+caption = 333pt)
+    const FK_QR_X_FRONT = (PANEL_W_FULL - FK_QR_SIZE) / 2;               // 53
+    const FK_QR_X_BACK  = PANEL_W_FULL + (PANEL_W_FULL - FK_QR_SIZE) / 2; // 359
 
     for (let i = 0; i < 2; i++) {
       const yOffset = i * 396;
@@ -1469,7 +1469,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
 
       doc
         .font('Helvetica').fontSize(9).fillColor('#999999')
-        .text('Scan to view items online', 12, yOffset + 322, { width: 282, align: 'center', lineBreak: false });
+        .text('Scan to view items online', 12, yOffset + 333, { width: 282, align: 'center', lineBreak: false });
 
       doc.rect(0, yOffset, PANEL_W_FULL, TENT_H_FULL).lineWidth(1).stroke('#cccccc');
 
@@ -1497,11 +1497,11 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
 
       doc
         .font('Helvetica').fontSize(9).fillColor('#999999')
-        .text('Scan to view items online', PANEL_W_FULL + 12, yOffset + 307, { width: 282, align: 'center', lineBreak: false });
+        .text('Scan to view items online', PANEL_W_FULL + 12, yOffset + 318, { width: 282, align: 'center', lineBreak: false });
 
       doc
         .font('Helvetica').fontSize(9).fillColor('#aaaaaa')
-        .text(fkTypeAndDate, PANEL_W_FULL + 12, yOffset + 325, { width: 282, align: 'center', lineBreak: false });
+        .text(fkTypeAndDate, PANEL_W_FULL + 12, yOffset + 335, { width: 282, align: 'center', lineBreak: false });
 
       doc.rect(PANEL_W_FULL, yOffset, PANEL_W_FULL, TENT_H_FULL).lineWidth(1).stroke('#cccccc');
     }
