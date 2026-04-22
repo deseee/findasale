@@ -581,7 +581,7 @@ const OrganizerSettingsPage = () => {
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Business Name <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Name or Business Name <span className="text-red-500">*</span></label>
                     <Tooltip content="This is how your business appears to shoppers on item listings and sale pages. Use your official business name or brand." position="right" />
                   </div>
                   <input
@@ -589,8 +589,9 @@ const OrganizerSettingsPage = () => {
                     value={businessName}
                     onChange={(e) => setBusinessName(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="e.g., My Business Name"
+                    placeholder="e.g., Sarah's Finds, Smith Family Estate, or your own name"
                   />
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">No business? Your name works perfectly.</p>
                 </div>
 
                 <div>

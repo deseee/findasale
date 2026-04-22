@@ -171,7 +171,11 @@ const CreateSalePage = () => {
       const firstSaleUnlocked = response.data.achievements?.some(
         (a: { key: string }) => a.key === 'FIRST_SALE_CREATED'
       );
-      if (firstSaleUnlocked) {
+      if (response.data.isFirstSaleFreePro) {
+        showToast('🎉 Your first sale gets PRO features — on us! Enjoy unlimited photos and smart tagging.', 'success');
+        // Brief delay so user sees the toast before navigating
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } else if (firstSaleUnlocked) {
         showToast('🚀 Achievement Unlocked: Sale Launcher! +25 XP', 'success');
         // Brief delay so user sees the achievement toast before navigating
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -482,29 +486,6 @@ const CreateSalePage = () => {
               label="Location"
               placeholder="Select a location (optional)"
             />
-
-            {/* B1: Sale Type Selector */}
-            <div>
-              <label htmlFor="saleType" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Sale Type
-              </label>
-              <select
-                id="saleType"
-                name="saleType"
-                value={formData.saleType}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              >
-                <option value="ESTATE">Estate Sale</option>
-                <option value="YARD">Yard Sale</option>
-                <option value="AUCTION">Auction</option>
-                <option value="FLEA_MARKET">Flea Market</option>
-                <option value="CONSIGNMENT">Consignment</option>
-                <option value="CHARITY">Charity</option>
-                <option value="BUSINESS_CORPORATE">Business/Corporate Sale</option>
-              </select>
-            </div>
 
             {/* Submit */}
             <button
