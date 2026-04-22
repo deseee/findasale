@@ -7,7 +7,7 @@
 
 import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Clock } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 import api from '../lib/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from './AuthContext';
@@ -63,12 +63,12 @@ const CartIcon: React.FC = () => {
       aria-label={`Shopping cart with ${combinedCount} items`}
       title={badgeLabel}
     >
-      {/* Clock icon — matches mobile holds icon */}
-      <Clock size={22} />
+      {/* Shopping cart icon */}
+      <ShoppingCart size={22} />
 
       {/* Combined count badge — only show if > 0 */}
       {combinedCount > 0 && (
-        <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white dark:text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 dark:bg-red-700 rounded-full">
+        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white dark:text-white transform translate-x-0 translate-y-0 bg-amber-500 rounded-full">
           {combinedCount > 99 ? '99+' : combinedCount}
         </span>
       )}
