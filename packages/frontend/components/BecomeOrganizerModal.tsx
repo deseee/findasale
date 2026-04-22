@@ -114,17 +114,18 @@ const BecomeOrganizerModal: React.FC<BecomeOrganizerModalProps> = ({
           {/* Business Name Field */}
           <div>
             <label htmlFor="businessName" className="block text-sm font-medium text-warm-900 dark:text-warm-100 mb-1">
-              Business Name <span className="text-red-500">*</span>
+              Name or Business Name <span className="text-red-500">*</span>
             </label>
             <input
               id="businessName"
               type="text"
-              placeholder="Your business name"
+              placeholder="e.g., Sarah's Finds, Smith Family Estate, or your own name"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               disabled={loading}
               className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 placeholder-warm-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
             />
+            <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">No business? Your name works perfectly.</p>
           </div>
 
           {/* Phone Field */}
