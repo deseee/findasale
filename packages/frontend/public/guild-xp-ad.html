@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FindA.Sale — Guild XP Explainer (40s)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0D0D0D;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  padding: 20px;
+}
+
+/* ── Embed mode: strip chrome so iframe host owns framing ── */
+body.embed {
+  min-height: auto;
+  padding: 0;
+  display: block;
+  background: transparent;
+}
+body.embed #player {
+  border-radius: 0;
+  box-shadow: none;
+}
+body.embed #info,
+body.embed #timer { display: none; }
+
+/* ── 9:16 Player ── */
+#player {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: #0A0A0A;
+  overflow: hidden;
+  border-radius: 44px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 100px rgba(0,0,0,0.8);
+  flex-shrink: 0;
+}
+
+/* ── Scenes ── */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  padding: 40px 36px;
+}
+.scene.active { opacity: 1; }
+
+/* ── Progress Bar ── */
+#progress-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: #D97706;
+  width: 0%;
+  z-index: 200;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Replay ── */
+#replay-btn {
+  position: absolute;
+  bottom: 36px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 10px 28px;
+  border-radius: 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  display: none;
+  z-index: 300;
+  transition: background 0.2s;
+}
+#replay-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── Play overlay (click to start) ── */
+#play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  cursor: pointer;
+  border-radius: 44px;
+  transition: opacity 0.3s;
+  padding: 60px 36px 80px;
+}
+#play-overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+}
+.overlay-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.overlay-logo .a-dot { color: #D97706; }
+.overlay-watch {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+}
+.play-icon {
+  width: 72px; height: 72px;
+  background: rgba(217,119,6,0.9);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
+}
+.play-icon svg { margin-left: 5px; }
+
+/* ────────────────────────────────
+   SCENE 1 — EVERY VISIT EARNS XP (0–5s)
+──────────────────────────────── */
+#s1 { background: #0A0A0A; gap: 0; }
+
+.s1-map-pin {
+  font-size: 64px;
+  opacity: 0;
+  transform: scale(0.5) translateY(20px);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  margin-bottom: 20px;
+}
+.s1-map-pin.in { opacity: 1; transform: scale(1) translateY(0); }
+
+.s1-xp-counter {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 44px;
+  font-weight: 900;
+  color: #D97706;
+  letter-spacing: -1px;
+  opacity: 0;
+  transform: scale(0.6) translateY(16px);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  margin-bottom: 24px;
+}
+.s1-xp-counter.in { opacity: 1; transform: scale(1) translateY(0); }
+
+.s1-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s1-title.in { opacity: 1; transform: translateY(0); }
+
+.s1-subtext {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  margin-top: 12px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s1-subtext.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 2 — PURCHASE = PROGRESS (5–11s)
+──────────────────────────────── */
+#s2 { background: #111118; padding: 32px 24px; justify-content: center; }
+
+.s2-phone-wrap {
+  position: relative;
+  width: 288px;
+  height: 576px;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.s2-phone-shell {
+  width: 100%;
+  height: 100%;
+  background: #1C1C2E;
+  border-radius: 28px;
+  border: 2px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.s2-phone-island {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  width: 88px; height: 26px;
+  background: #000;
+  border-radius: 14px;
+  z-index: 10;
+}
+
+.s2-phone-body {
+  flex: 1;
+  padding: 48px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.s2-item-card {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 16px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s2-item-card.in { opacity: 1; transform: translateY(0); }
+
+.s2-item-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+}
+
+.s2-item-price {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #D97706;
+  margin-top: 6px;
+}
+
+.s2-purchase-btn {
+  width: 100%;
+  background: #10B981;
+  color: white;
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 8px;
+}
+.s2-purchase-btn.in { opacity: 1; transform: translateY(0); }
+.s2-purchase-btn.tapped { animation: btnTap 0.3s ease forwards; }
+
+@keyframes btnTap {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.92); background: #059669; }
+  100% { transform: scale(1); }
+}
+
+.s2-xp-burst {
+  position: absolute;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  color: #D97706;
+  opacity: 0;
+  letter-spacing: -0.5px;
+  pointer-events: none;
+}
+
+.s2-xp-burst.burst { animation: xpBurst 1.2s ease-out forwards; }
+
+@keyframes xpBurst {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-60px) scale(0.8); }
+}
+
+.s2-xp-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 12px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.s2-xp-bar.in { opacity: 1; }
+
+.s2-xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #D97706, #F59E0B);
+  border-radius: 3px;
+  width: 30%;
+  transition: width 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.s2-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 12px;
+}
+.s2-title.in { opacity: 1; transform: translateY(0); }
+
+.s2-subtext {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s2-subtext.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 3 — REACH SCOUT (11–17s)
+──────────────────────────────── */
+#s3 { background: #0D0D15; gap: 0; }
+
+.s3-xp-bar-container {
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s3-xp-bar-container.in { opacity: 1; transform: translateY(0); }
+
+.s3-xp-bar-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+}
+
+.s3-xp-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.s3-xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #D97706, #F59E0B);
+  border-radius: 4px;
+  width: 0%;
+  transition: width 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.s3-badge {
+  font-size: 56px;
+  margin-bottom: 16px;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.s3-badge.in { opacity: 1; transform: scale(1); }
+
+.s3-badge-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #FFFFFF;
+  border: 2px solid #D97706;
+  border-radius: 12px;
+  padding: 10px 20px;
+  opacity: 0;
+  transform: scale(0.9) translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 16px;
+}
+.s3-badge-label.in { opacity: 1; transform: scale(1) translateY(0); }
+
+.s3-confetti {
+  position: absolute;
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.s3-confetti.pop { animation: confettiPop 0.8s ease-out forwards; }
+
+@keyframes confettiPop {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); }
+}
+
+.s3-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 12px;
+}
+.s3-title.in { opacity: 1; transform: translateY(0); }
+
+.s3-subtext {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 8px;
+}
+.s3-subtext.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 4 — RARE FIND BONUS (17–22s)
+──────────────────────────────── */
+#s4 { background: #0A0A0A; gap: 0; }
+
+.s4-rare-card {
+  width: 280px;
+  background: rgba(124, 58, 237, 0.1);
+  border: 2px solid rgba(124, 58, 237, 0.6);
+  border-radius: 16px;
+  padding: 20px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  box-shadow: 0 0 24px rgba(124, 58, 237, 0.2);
+  margin-bottom: 20px;
+}
+.s4-rare-card.in { opacity: 1; transform: translateY(0); }
+
+.s4-rare-badge {
+  display: inline-block;
+  background: #7C3AED;
+  color: white;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.s4-item-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+}
+
+.s4-item-price {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #D97706;
+  margin-top: 8px;
+}
+
+.s4-xp-burst {
+  position: absolute;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #7C3AED;
+  opacity: 0;
+  letter-spacing: -0.5px;
+  pointer-events: none;
+}
+
+.s4-xp-burst.burst { animation: xpBurst 1.2s ease-out forwards; }
+
+.s4-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s4-title.in { opacity: 1; transform: translateY(0); }
+
+.s4-subtext {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 8px;
+}
+.s4-subtext.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 5 — REACH RANGER (22–27s)
+──────────────────────────────── */
+#s5 { background: #0D0D15; gap: 0; }
+
+.s5-rank-progression {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s5-rank-progression.in { opacity: 1; transform: translateY(0); }
+
+.s5-rank-badge {
+  font-size: 40px;
+  opacity: 0.4;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s5-rank-badge.old { opacity: 0.2; }
+.s5-rank-badge.new { opacity: 1; font-size: 56px; }
+
+.s5-arrow {
+  color: #D97706;
+  font-size: 24px;
+}
+
+.s5-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 12px;
+}
+.s5-title.in { opacity: 1; transform: translateY(0); }
+
+.s5-subtext {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 8px;
+}
+.s5-subtext.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 6 — PERKS STACK UP (27–32s)
+──────────────────────────────── */
+#s6 { background: #0A0A0A; gap: 0; padding: 32px 24px; }
+
+.s6-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 20px;
+}
+.s6-title.in { opacity: 1; transform: translateY(0); }
+
+.s6-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 280px;
+}
+
+.s6-benefit-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 12px;
+  opacity: 0;
+  transform: translateX(-12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s6-benefit-row.in { opacity: 1; transform: translateX(0); }
+
+.s6-benefit-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.s6-benefit-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+  line-height: 1.4;
+}
+
+.s6-subtext {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 16px;
+}
+.s6-subtext.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 7 — PATH TO GRANDMASTER (32–36s)
+──────────────────────────────── */
+#s7 { background: #0D0D15; gap: 0; padding: 40px 24px; }
+
+.s7-rank-ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 280px;
+  margin-bottom: 16px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s7-rank-ladder.in { opacity: 1; transform: translateY(0); }
+
+.s7-rank-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.s7-rank-step.grandmaster {
+  background: rgba(217,119,6,0.15);
+  border-color: #D97706;
+  box-shadow: 0 0 16px rgba(217,119,6,0.2);
+}
+
+.s7-rank-emoji {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.s7-rank-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  flex: 1;
+}
+
+.s7-rank-xp {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  flex-shrink: 0;
+}
+.s7-rank-step.grandmaster .s7-rank-xp {
+  color: #D97706;
+}
+
+.s7-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 12px;
+}
+.s7-title.in { opacity: 1; transform: translateY(0); }
+
+.s7-subtext {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 8px;
+}
+.s7-subtext.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 8 — CTA (36–40s)
+──────────────────────────────── */
+#s8 { background: #050505; gap: 0; }
+
+.s8-glow {
+  position: absolute;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(217,119,6,0.12) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+.s8-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  margin-bottom: 32px;
+}
+.s8-logo-wrap.in { opacity: 1; transform: translateY(0); }
+
+.s8-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.s8-logo .a-dot { color: #D97706; }
+
+.s8-main {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -1px;
+  line-height: 1.2;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s cubic-bezier(0.34,1.3,0.64,1);
+  margin-bottom: 12px;
+}
+.s8-main.in { opacity: 1; transform: scale(1); }
+
+.s8-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.5s 0.4s ease;
+  margin-bottom: 28px;
+}
+.s8-sub.in { opacity: 1; }
+
+.s8-url {
+  display: inline-block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #D97706;
+  opacity: 0;
+  transition: opacity 0.5s 0.6s ease;
+  letter-spacing: -0.3px;
+}
+.s8-url.in { opacity: 1; }
+
+/* ── Scene Navigation ── */
+#scene-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+.nav-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.75);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+#scene-dots {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.scene-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: background 0.25s, transform 0.25s;
+  flex-shrink: 0;
+}
+.scene-dot.active { background: #D97706; transform: scale(1.4); }
+.scene-dot:hover:not(.active) { background: rgba(255,255,255,0.45); }
+
+/* ── Info panel below player ── */
+#info {
+  margin-top: 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.7;
+}
+#info strong { color: rgba(255,255,255,0.5); }
+
+/* ── Timer display ── */
+#timer {
+  position: absolute;
+  top: 16px; right: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  z-index: 150;
+  letter-spacing: 0.5px;
+}
+
+/* Pause indicator */
+#pause-indicator {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 350;
+}
+#pause-indicator > div {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(255,255,255,0.15);
+}
+#pause-indicator svg { margin: 0; }
+</style>
+</head>
+<body>
+
+<div id="player">
+
+  <!-- Timer -->
+  <div id="timer">0:00</div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar"></div>
+
+  <!-- Play overlay -->
+  <div id="play-overlay">
+    <div class="overlay-brand">
+      <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="overlay-watch">Watch — 40 Seconds</div>
+    </div>
+    <div class="play-icon">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M8 5L23 14L8 23V5Z" fill="white"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ── Scene 1: Every Visit Earns XP (0–5s) ── -->
+  <div class="scene" id="s1">
+    <div class="s1-map-pin" id="s1-pin">📍</div>
+    <div class="s1-xp-counter" id="s1-counter">+5 XP</div>
+    <div class="s1-title" id="s1-title">Every sale visit.</div>
+    <div class="s1-subtext" id="s1-sub">5 XP each time you show up.</div>
+  </div>
+
+  <!-- ── Scene 2: Purchase = Progress (5–11s) ── -->
+  <div class="scene" id="s2">
+    <div class="s2-phone-wrap">
+      <div class="s2-phone-shell">
+        <div class="s2-phone-island"></div>
+        <div class="s2-phone-body">
+          <div class="s2-item-card" id="s2-card">
+            <div class="s2-item-title">Vintage Brass Lamp</div>
+            <div class="s2-item-price">$45</div>
+          </div>
+          <div class="s2-purchase-btn" id="s2-btn">Purchase</div>
+          <div class="s2-xp-bar">
+            <div class="s2-xp-bar-fill" id="s2-bar"></div>
+          </div>
+        </div>
+      </div>
+      <div class="s2-xp-burst" id="s2-burst">+10 XP</div>
+    </div>
+    <div class="s2-title" id="s2-title">Buy something.</div>
+    <div class="s2-subtext" id="s2-sub">+10 XP per purchase.</div>
+  </div>
+
+  <!-- ── Scene 3: Reach Scout (11–17s) ── -->
+  <div class="scene" id="s3">
+    <div class="s3-xp-bar-container" id="s3-bar-container">
+      <div class="s3-xp-bar-label">Progress to Scout</div>
+      <div class="s3-xp-bar">
+        <div class="s3-xp-bar-fill" id="s3-bar"></div>
+      </div>
+    </div>
+    <div class="s3-badge" id="s3-badge">⚔️</div>
+    <div class="s3-badge-label" id="s3-label">SCOUT</div>
+    <div class="s3-title" id="s3-title">500 XP — Scout.</div>
+    <div class="s3-subtext" id="s3-sub">5% off Hunt Pass. 1 early-access sale per week.</div>
+  </div>
+
+  <!-- ── Scene 4: Rare Find Bonus (17–22s) ── -->
+  <div class="scene" id="s4">
+    <div class="s4-rare-card" id="s4-card">
+      <div class="s4-rare-badge">RARE</div>
+      <div class="s4-item-title">Mid-Century Armchair</div>
+      <div class="s4-item-price">$285</div>
+    </div>
+    <div class="s4-xp-burst" id="s4-burst">+15 XP</div>
+    <div class="s4-title" id="s4-title">Rare finds reward more.</div>
+    <div class="s4-subtext" id="s4-sub">Auction wins earn 15 XP.</div>
+  </div>
+
+  <!-- ── Scene 5: Reach Ranger (22–27s) ── -->
+  <div class="scene" id="s5">
+    <div class="s5-rank-progression" id="s5-progression">
+      <div class="s5-rank-badge" id="s5-old">⚔️</div>
+      <div class="s5-arrow">→</div>
+      <div class="s5-rank-badge new" id="s5-new">🏹</div>
+    </div>
+    <div class="s5-title" id="s5-title">2,000 XP — Ranger.</div>
+    <div class="s5-subtext" id="s5-sub">3 early-access sales/week. 10% off Hunt Pass.</div>
+  </div>
+
+  <!-- ── Scene 6: Perks Stack Up (27–32s) ── -->
+  <div class="scene" id="s6">
+    <div class="s6-title" id="s6-title">The higher you climb...</div>
+    <div class="s6-benefits">
+      <div class="s6-benefit-row" id="s6-r1">
+        <div class="s6-benefit-icon">🗺️</div>
+        <div class="s6-benefit-text">Map early access — see sales before they open</div>
+      </div>
+      <div class="s6-benefit-row" id="s6-r2">
+        <div class="s6-benefit-icon">🏷️</div>
+        <div class="s6-benefit-text">Hold items longer — 45 minutes at Scout</div>
+      </div>
+      <div class="s6-benefit-row" id="s6-r3">
+        <div class="s6-benefit-icon">🎟️</div>
+        <div class="s6-benefit-text">Hunt Pass discount — up to 15% off at Sage</div>
+      </div>
+    </div>
+    <div class="s6-subtext" id="s6-sub">...the better it gets.</div>
+  </div>
+
+  <!-- ── Scene 7: Path to Grandmaster (32–36s) ── -->
+  <div class="scene" id="s7">
+    <div class="s7-rank-ladder" id="s7-ladder">
+      <div class="s7-rank-step">
+        <div class="s7-rank-emoji">🧭</div>
+        <div class="s7-rank-name">INITIATE</div>
+        <div class="s7-rank-xp">0 XP</div>
+      </div>
+      <div class="s7-rank-step">
+        <div class="s7-rank-emoji">⚔️</div>
+        <div class="s7-rank-name">SCOUT</div>
+        <div class="s7-rank-xp">500 XP</div>
+      </div>
+      <div class="s7-rank-step">
+        <div class="s7-rank-emoji">🏹</div>
+        <div class="s7-rank-name">RANGER</div>
+        <div class="s7-rank-xp">2,000 XP</div>
+      </div>
+      <div class="s7-rank-step">
+        <div class="s7-rank-emoji">📚</div>
+        <div class="s7-rank-name">SAGE</div>
+        <div class="s7-rank-xp">5,000 XP</div>
+      </div>
+      <div class="s7-rank-step grandmaster">
+        <div class="s7-rank-emoji">👑</div>
+        <div class="s7-rank-name">GRANDMASTER</div>
+        <div class="s7-rank-xp">12,000 XP</div>
+      </div>
+    </div>
+    <div class="s7-title" id="s7-title">The summit.</div>
+    <div class="s7-subtext" id="s7-sub">Hunt Pass free forever at Grandmaster.</div>
+  </div>
+
+  <!-- ── Scene 8: CTA (36–40s) ── -->
+  <div class="scene" id="s8">
+    <div class="s8-glow"></div>
+    <div class="s8-logo-wrap" id="s8-logo">
+      <div class="s8-logo">Find<span class="a-dot">A.</span>Sale</div>
+    </div>
+    <div class="s8-main" id="s8-main">Your rank is yours.</div>
+    <div class="s8-sub" id="s8-sub">Progress never resets. Every hunt counts.</div>
+    <div class="s8-url" id="s8-url">finda.sale/shopper/guild-primer</div>
+  </div>
+
+  <!-- Pause indicator -->
+  <div id="pause-indicator">
+    <div>
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect x="4" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+        <rect x="13" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Replay button -->
+  <button id="replay-btn">↺ &nbsp;Play again</button>
+
+</div>
+
+<!-- Scene navigation -->
+<div id="scene-nav">
+  <button class="nav-btn" id="prev-btn">&#8249;</button>
+  <div id="scene-dots">
+    <div class="scene-dot active" data-scene="0" title="Scene 1: Every Visit"></div>
+    <div class="scene-dot" data-scene="1" title="Scene 2: Purchase"></div>
+    <div class="scene-dot" data-scene="2" title="Scene 3: Scout"></div>
+    <div class="scene-dot" data-scene="3" title="Scene 4: Rare Find"></div>
+    <div class="scene-dot" data-scene="4" title="Scene 5: Ranger"></div>
+    <div class="scene-dot" data-scene="5" title="Scene 6: Perks"></div>
+    <div class="scene-dot" data-scene="6" title="Scene 7: Path"></div>
+    <div class="scene-dot" data-scene="7" title="Scene 8: CTA"></div>
+  </div>
+  <button class="nav-btn" id="next-btn">&#8250;</button>
+</div>
+
+<div id="info">
+  <strong>FindA.Sale — 40-second Guild XP Explainer</strong><br>
+  9:16 vertical · Embed in /shopper/guild-primer<br>
+  Click the player to start · Screen-record to capture
+</div>
+
+<script>
+// ── Embed mode: activate via ?embed=1 on the iframe src ──
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.body.classList.add('embed');
+}
+
+// ── State ──
+let startTime = null;
+let rafId = null;
+let running = false;
+let paused = false;
+let pauseStart = null;
+const DURATION = 40000;
+const sceneStarts = [0, 5000, 11000, 17000, 22000, 27000, 32000, 36000];
+let currentScene = 0;
+
+// ── DOM refs ──
+const player       = document.getElementById('player');
+const playOverlay  = document.getElementById('play-overlay');
+const progressBar  = document.getElementById('progress-bar');
+const replayBtn    = document.getElementById('replay-btn');
+const timerEl      = document.getElementById('timer');
+
+// Scene els
+const scenes = ['s1','s2','s3','s4','s5','s6','s7','s8'].map(id => document.getElementById(id));
+
+// ── Helper: add class after delay ──
+function addAt(el, cls, delay) {
+  if (!el) return;
+  return setTimeout(() => el.classList.add(cls), delay);
+}
+
+// ── Show/hide scene ──
+function showScene(id) {
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  const idx = parseInt(id.replace('s', '')) - 1;
+  if (!isNaN(idx) && idx >= 0) { currentScene = idx; updateDots(); }
+}
+
+// ── Sync nav dots to current scene ──
+function updateDots() {
+  document.querySelectorAll('.scene-dot').forEach(function(dot, i) {
+    dot.classList.toggle('active', i === currentScene);
+  });
+}
+
+// ── Jump to scene by index (0–7) ──
+function seekToScene(n) {
+  n = Math.max(0, Math.min(7, n));
+  running = false;
+  cancelAnimationFrame(rafId);
+  playOverlay.classList.add('hidden');
+  replayBtn.style.display = 'none';
+  resetAll();
+  const seekMs = sceneStarts[n];
+  startTime = performance.now() - seekMs;
+  nextEvent = 0;
+  while (nextEvent < events.length && events[nextEvent].at < seekMs) { nextEvent++; }
+  showScene('s' + (n + 1));
+  paused = false;
+  running = true;
+  rafId = requestAnimationFrame(tick);
+}
+
+// ── Reset all ──
+function resetAll() {
+  ['s1-pin','s1-counter','s1-title','s1-sub'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  ['s2-card','s2-btn','s2-bar','s2-title','s2-sub'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s2-burst').classList.remove('burst');
+  ['s3-bar-container','s3-badge','s3-label','s3-title','s3-sub'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s3-bar').style.width = '0%';
+  document.getElementById('s3-bar').style.transition = 'none';
+  ['s4-card','s4-title','s4-sub'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s4-burst').classList.remove('burst');
+  ['s5-progression','s5-title','s5-sub'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  ['s6-title','s6-r1','s6-r2','s6-r3','s6-sub'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  ['s7-ladder','s7-title','s7-sub'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  ['s8-logo','s8-main','s8-sub','s8-url'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  progressBar.style.width = '0%';
+  progressBar.style.transition = 'none';
+  timerEl.textContent = '0:00';
+  replayBtn.style.display = 'none';
+  pauseIndicator.style.opacity = '0';
+}
+
+// ── Timeline events ── (ms offset)
+const events = [
+
+  // SCENE 1 — Every Visit Earns XP (0–5s)
+  { at: 0, fn: () => {
+    showScene('s1');
+    addAt(document.getElementById('s1-pin'), 'in', 100);
+    addAt(document.getElementById('s1-counter'), 'in', 500);
+    addAt(document.getElementById('s1-title'), 'in', 800);
+    addAt(document.getElementById('s1-sub'), 'in', 1000);
+  }},
+
+  // SCENE 2 — Purchase = Progress (5–11s)
+  { at: 5000, fn: () => {
+    showScene('s2');
+    addAt(document.getElementById('s2-card'), 'in', 100);
+    addAt(document.getElementById('s2-btn'), 'in', 500);
+    addAt(document.getElementById('s2-bar'), 'in', 700);
+  }},
+
+  // Purchase tap at 6500ms
+  { at: 6500, fn: () => {
+    document.getElementById('s2-btn').classList.add('tapped');
+    setTimeout(() => {
+      const burst = document.getElementById('s2-burst');
+      burst.textContent = '+10 XP';
+      burst.classList.add('burst');
+      // Bar animation starts
+      setTimeout(() => {
+        document.getElementById('s2-bar').style.transition = 'width 1.2s cubic-bezier(0.25,0.46,0.45,0.94)';
+        document.getElementById('s2-bar').style.width = '50%';
+      }, 100);
+    }, 150);
+  }},
+
+  // Text at 8200ms
+  { at: 8200, fn: () => {
+    addAt(document.getElementById('s2-title'), 'in', 100);
+    addAt(document.getElementById('s2-sub'), 'in', 300);
+  }},
+
+  // SCENE 3 — Reach Scout (11–17s)
+  { at: 11000, fn: () => {
+    showScene('s3');
+    addAt(document.getElementById('s3-bar-container'), 'in', 0);
+    // Bar fill animation starts immediately
+    setTimeout(() => {
+      document.getElementById('s3-bar').style.transition = 'width 2.2s cubic-bezier(0.25,0.46,0.45,0.94)';
+      document.getElementById('s3-bar').style.width = '100%';
+    }, 100);
+  }},
+
+  // Badge pops at 13500ms (scout reached)
+  { at: 13500, fn: () => {
+    addAt(document.getElementById('s3-badge'), 'in', 0);
+    addAt(document.getElementById('s3-label'), 'in', 200);
+    // Confetti bursts
+    for (let i = 0; i < 4; i++) {
+      const dot = document.createElement('div');
+      dot.className = 's3-confetti';
+      dot.textContent = '✦';
+      dot.style.color = '#D97706';
+      const angle = (i / 4) * Math.PI * 2;
+      const dist = 80;
+      const x = Math.cos(angle) * dist;
+      const y = Math.sin(angle) * dist;
+      dot.style.setProperty('--tx', x + 'px');
+      dot.style.setProperty('--ty', y + 'px');
+      document.getElementById('s3-badge').parentElement.appendChild(dot);
+      setTimeout(() => dot.classList.add('pop'), 10);
+    }
+  }},
+
+  // Text at 14800ms
+  { at: 14800, fn: () => {
+    addAt(document.getElementById('s3-title'), 'in', 100);
+    addAt(document.getElementById('s3-sub'), 'in', 300);
+  }},
+
+  // SCENE 4 — Rare Find Bonus (17–22s)
+  { at: 17000, fn: () => {
+    showScene('s4');
+    addAt(document.getElementById('s4-card'), 'in', 200);
+  }},
+
+  // XP burst at 18500ms
+  { at: 18500, fn: () => {
+    const burst = document.getElementById('s4-burst');
+    burst.textContent = '+15 XP';
+    burst.style.color = '#7C3AED';
+    burst.classList.add('burst');
+  }},
+
+  // Text at 19500ms
+  { at: 19500, fn: () => {
+    addAt(document.getElementById('s4-title'), 'in', 100);
+    addAt(document.getElementById('s4-sub'), 'in', 300);
+  }},
+
+  // SCENE 5 — Reach Ranger (22–27s)
+  { at: 22000, fn: () => {
+    showScene('s5');
+    addAt(document.getElementById('s5-progression'), 'in', 200);
+    // Transition scout to old
+    setTimeout(() => {
+      document.getElementById('s5-old').classList.add('old');
+    }, 400);
+  }},
+
+  // Text at 24000ms
+  { at: 24000, fn: () => {
+    addAt(document.getElementById('s5-title'), 'in', 100);
+    addAt(document.getElementById('s5-sub'), 'in', 300);
+  }},
+
+  // SCENE 6 — Perks Stack Up (27–32s)
+  { at: 27000, fn: () => {
+    showScene('s6');
+    addAt(document.getElementById('s6-title'), 'in', 200);
+    addAt(document.getElementById('s6-r1'), 'in', 600);
+    addAt(document.getElementById('s6-r2'), 'in', 1000);
+    addAt(document.getElementById('s6-r3'), 'in', 1400);
+    addAt(document.getElementById('s6-sub'), 'in', 2000);
+  }},
+
+  // SCENE 7 — Path to Grandmaster (32–36s)
+  { at: 32000, fn: () => {
+    showScene('s7');
+    addAt(document.getElementById('s7-ladder'), 'in', 200);
+    addAt(document.getElementById('s7-title'), 'in', 800);
+    addAt(document.getElementById('s7-sub'), 'in', 1000);
+  }},
+
+  // SCENE 8 — CTA (36–40s)
+  { at: 36000, fn: () => {
+    showScene('s8');
+    addAt(document.getElementById('s8-logo'), 'in', 0);
+    addAt(document.getElementById('s8-main'), 'in', 400);
+    addAt(document.getElementById('s8-sub'), 'in', 800);
+    addAt(document.getElementById('s8-url'), 'in', 1100);
+  }},
+
+  // End at 40000ms
+  { at: 40000, fn: () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+    replayBtn.style.display = 'block';
+  }}
+];
+
+// ── RAF loop ──
+let nextEvent = 0;
+function tick(now) {
+  if (!running) return;
+  const elapsed = now - startTime;
+
+  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
+    events[nextEvent].fn();
+    nextEvent++;
+  }
+
+  const pct = Math.min((elapsed / DURATION) * 100, 100);
+  progressBar.style.width = pct + '%';
+
+  const secs = Math.min(Math.floor(elapsed / 1000), 40);
+  const ss = String(secs % 60).padStart(2,'0');
+  timerEl.textContent = `0:${ss}`;
+
+  if (elapsed < DURATION) {
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function start() {
+  resetAll();
+  nextEvent = 0;
+  running = true;
+  paused = false;
+  pauseStart = null;
+  startTime = performance.now();
+  requestAnimationFrame(tick);
+}
+
+// ── Pause / Resume ──
+const pauseIndicator = document.getElementById('pause-indicator');
+let pauseFlashTimer = null;
+
+function togglePause() {
+  if (!startTime || (!running && !paused)) return;
+  if (paused) {
+    const pauseDuration = performance.now() - pauseStart;
+    startTime += pauseDuration;
+    pauseStart = null;
+    paused = false;
+    running = true;
+    pauseIndicator.style.opacity = '0';
+    rafId = requestAnimationFrame(tick);
+  } else {
+    paused = true;
+    pauseStart = performance.now();
+    running = false;
+    cancelAnimationFrame(rafId);
+    pauseIndicator.style.opacity = '1';
+    clearTimeout(pauseFlashTimer);
+    pauseFlashTimer = setTimeout(() => {
+      if (paused) pauseIndicator.style.opacity = '0.35';
+    }, 600);
+  }
+}
+
+player.addEventListener('click', (e) => {
+  if (e.target.closest('#play-overlay')) return;
+  if (e.target.closest('#replay-btn')) return;
+  if (!startTime) return;
+  togglePause();
+});
+
+// ── Play overlay ──
+playOverlay.addEventListener('click', () => {
+  playOverlay.classList.add('hidden');
+  start();
+});
+
+// ── Replay ──
+replayBtn.addEventListener('click', () => {
+  replayBtn.style.display = 'none';
+  start();
+});
+
+// ── Scene navigation ──
+document.getElementById('prev-btn').addEventListener('click', function() {
+  seekToScene(currentScene - 1);
+});
+document.getElementById('next-btn').addEventListener('click', function() {
+  seekToScene(currentScene + 1);
+});
+document.querySelectorAll('.scene-dot').forEach(function(dot) {
+  dot.addEventListener('click', function() {
+    seekToScene(parseInt(this.dataset.scene));
+  });
+});
+</script>
+</body>
+</html>

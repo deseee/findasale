@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FindA.Sale — Shopper Video (40s)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0D0D0D;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  padding: 20px;
+}
+
+/* ── Embed mode: strip chrome so iframe host owns framing ── */
+body.embed {
+  min-height: auto;
+  padding: 0;
+  display: block;
+  background: transparent;
+}
+body.embed #player {
+  border-radius: 0;
+  box-shadow: none;
+}
+body.embed #info,
+body.embed #timer { display: none; }
+
+/* ── 9:16 Player ── */
+#player {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: #0A0A0A;
+  overflow: hidden;
+  border-radius: 44px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 100px rgba(0,0,0,0.8);
+  flex-shrink: 0;
+}
+
+/* ── Scenes ── */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  padding: 40px 36px;
+}
+.scene.active { opacity: 1; }
+
+/* ── Progress Bar ── */
+#progress-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: #D97706;
+  width: 0%;
+  z-index: 200;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Replay ── */
+#replay-btn {
+  position: absolute;
+  bottom: 36px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 10px 28px;
+  border-radius: 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  display: none;
+  z-index: 300;
+  transition: background 0.2s;
+}
+#replay-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── Play overlay (click to start) ── */
+#play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  cursor: pointer;
+  border-radius: 44px;
+  transition: opacity 0.3s;
+  padding: 60px 36px 80px;
+}
+#play-overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+}
+.overlay-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.overlay-logo .a-dot { color: #D97706; }
+.overlay-watch {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+}
+.play-icon {
+  width: 72px; height: 72px;
+  background: rgba(217,119,6,0.9);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
+}
+.play-icon svg { margin-left: 5px; }
+
+/* ────────────────────────────────
+   SCENE 1 — HOOK / MAP
+──────────────────────────────── */
+#s1 { background: #0A0A0A; gap: 0; }
+
+.map-container {
+  position: relative;
+  width: 280px;
+  height: 220px;
+  margin-bottom: 24px;
+}
+
+.map-pins {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.pin {
+  position: absolute;
+  width: 32px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0) translateY(-20px);
+}
+
+.pin:nth-child(1) {
+  top: 20px;
+  left: 40px;
+  animation: pinDrop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: 0s;
+}
+
+.pin:nth-child(2) {
+  top: 80px;
+  right: 30px;
+  animation: pinDrop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: 0.3s;
+}
+
+.pin:nth-child(3) {
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: pinDrop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: 0.6s;
+}
+
+.pin-icon {
+  width: 28px;
+  height: 36px;
+  background: #D97706;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 0 0 6px rgba(217, 119, 6, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.pin-icon::after {
+  content: '●';
+  color: white;
+  font-size: 8px;
+  transform: rotate(45deg);
+}
+
+.pin-pulse {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(217, 119, 6, 0.4) 0%, transparent 70%);
+  animation: mapPulse 1.8s ease-out infinite;
+}
+
+@keyframes pinDrop {
+  0% {
+    opacity: 0;
+    transform: scale(0) translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes mapPulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.5);
+  }
+}
+
+.s1-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s1-headline.in { opacity: 1; transform: translateY(0); }
+
+.s1-subheading {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  margin-top: 12px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s 0.1s ease, transform 0.4s 0.1s ease;
+}
+.s1-subheading.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 2 — BROWSE/DISCOVERY
+──────────────────────────────── */
+#s2 { background: #111118; padding: 32px 24px; justify-content: center; }
+
+.s2-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 28px;
+}
+.s2-headline.in { opacity: 1; transform: translateY(0); }
+
+/* Listing card mockup */
+.listing-card {
+  width: 280px;
+  background: #1C1C2E;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.listing-card.in { opacity: 1; transform: translateY(0); }
+
+.card-photo {
+  width: 100%;
+  height: 140px;
+  background: linear-gradient(135deg, #8B7355 0%, #6B5B3E 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.lamp-icon {
+  width: 80px;
+  height: 100px;
+}
+
+.card-body {
+  padding: 16px;
+}
+
+.card-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 8px;
+}
+
+.card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.card-price {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: #D97706;
+}
+
+.card-category {
+  font-size: 11px;
+  background: rgba(217, 119, 6, 0.2);
+  color: #D97706;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wishlist-btn {
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.wishlist-btn.in { opacity: 1; transform: scale(1); }
+.wishlist-btn.tapped {
+  animation: heartTap 0.4s ease forwards;
+}
+
+@keyframes heartTap {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.card-distance {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+}
+
+.s2-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 18px;
+}
+.s2-subline.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 3 — TREASURE TRAILS
+──────────────────────────────── */
+#s3 { background: #0D0D15; gap: 0; padding: 28px 32px; justify-content: center; }
+
+.s3-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 32px;
+}
+.s3-headline.in { opacity: 1; transform: translateY(0); }
+
+.route-map {
+  position: relative;
+  width: 240px;
+  height: 180px;
+  margin-bottom: 24px;
+}
+
+.route-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.route-pins {
+  position: absolute;
+  inset: 0;
+}
+
+.route-pin {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+  transform: scale(0);
+}
+
+.route-pin:nth-child(1) {
+  top: 30px;
+  left: 20px;
+  animation: routePinBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: 0.3s;
+}
+
+.route-pin:nth-child(2) {
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: routePinBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: 0.6s;
+}
+
+.route-pin:nth-child(3) {
+  top: 120px;
+  right: 20px;
+  animation: routePinBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation-delay: 0.9s;
+}
+
+.route-pin-inner {
+  width: 100%;
+  height: 100%;
+  background: #D97706;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+@keyframes routePinBounce {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.s3-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s3-subline.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 4 — EXPLORER'S GUILD / XP
+──────────────────────────────── */
+#s4 { background: #0A0A0A; gap: 0; padding: 40px 32px; justify-content: center; }
+
+.s4-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 32px;
+}
+.s4-headline.in { opacity: 1; transform: translateY(0); }
+
+.xp-display {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 24px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.xp-display.in { opacity: 1; transform: translateY(0); }
+
+.xp-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: rgba(255,255,255,0.85);
+}
+
+.xp-row .label {
+  color: rgba(255,255,255,0.6);
+  font-size: 14px;
+}
+
+.xp-badge {
+  background: #D97706;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.rank-transition {
+  margin-top: 8px;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.rank-transition.in { opacity: 1; transform: scale(1); }
+
+.rank-badge {
+  font-size: 32px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.rank-label {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #D97706;
+  text-align: center;
+}
+
+.s4-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s4-subline.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 5 — HUNT PASS
+──────────────────────────────── */
+#s5 { background: #0D0D15; gap: 0; padding: 40px 32px; justify-content: center; }
+
+.s5-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 24px;
+}
+.s5-headline.in { opacity: 1; transform: translateY(0); }
+
+.hunt-pass-card {
+  background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 20px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.hunt-pass-card.in { opacity: 1; transform: translateY(0); }
+
+.hunt-pass-label {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 8px;
+}
+
+.hunt-pass-title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: white;
+  margin-bottom: 12px;
+}
+
+.timer-display {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 24px;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.timer-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+}
+
+.s5-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s5-subline.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 6 — HAUL POST
+──────────────────────────────── */
+#s6 { background: #111118; padding: 32px 24px; justify-content: center; }
+
+.s6-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 24px;
+}
+.s6-headline.in { opacity: 1; transform: translateY(0); }
+
+.haul-post {
+  width: 260px;
+  background: #1C1C2E;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.haul-post.in { opacity: 1; transform: translateY(0); }
+
+.haul-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 8px;
+}
+
+.grid-item {
+  aspect-ratio: 1;
+  background: linear-gradient(135deg, #8B7355 0%, #6B5B3E 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.grid-item:nth-child(1) { background: linear-gradient(135deg, #8B7355 0%, #6B5B3E 100%); }
+.grid-item:nth-child(2) { background: linear-gradient(135deg, #A68A5D 0%, #7B6B45 100%); }
+.grid-item:nth-child(3) { background: linear-gradient(135deg, #9D7E50 0%, #6B5B3E 100%); }
+.grid-item:nth-child(4) { background: linear-gradient(135deg, #8B7355 0%, #5D4B31 100%); }
+
+.haul-footer {
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.like-counter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  color: #D97706;
+  font-size: 14px;
+}
+
+.like-number {
+  display: inline-block;
+  min-width: 28px;
+}
+
+.xp-badge-footer {
+  background: rgba(217, 119, 6, 0.2);
+  color: #D97706;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.xp-badge-footer.in { opacity: 1; transform: scale(1); }
+
+.s6-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-top: 16px;
+}
+.s6-subline.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 7 — CTA
+──────────────────────────────── */
+#s7 { background: #050505; gap: 0; }
+
+.cta-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  margin-bottom: 32px;
+}
+.cta-logo-wrap.in { opacity: 1; transform: translateY(0); }
+.cta-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 52px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.cta-logo .a-dot { color: #D97706; }
+.cta-tagline {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  margin-top: 12px;
+}
+
+.cta-main {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 52px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -1.8px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s cubic-bezier(0.34,1.3,0.64,1);
+}
+.cta-main.in { opacity: 1; transform: scale(1); }
+
+.cta-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  margin-top: 16px;
+  opacity: 0;
+  transition: opacity 0.5s 0.4s ease;
+}
+.cta-sub.in { opacity: 1; }
+
+.cta-url {
+  display: inline-block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #D97706;
+  margin-top: 40px;
+  opacity: 0;
+  transition: opacity 0.5s 0.6s ease;
+  letter-spacing: -0.3px;
+}
+.cta-url.in { opacity: 1; }
+
+.cta-glow {
+  position: absolute;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(217,119,6,0.12) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 3s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+/* ── Scene Navigation ── */
+#scene-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+.nav-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.75);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+#scene-dots {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.scene-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: background 0.25s, transform 0.25s;
+  flex-shrink: 0;
+}
+.scene-dot.active { background: #D97706; transform: scale(1.4); }
+.scene-dot:hover:not(.active) { background: rgba(255,255,255,0.45); }
+
+/* ── Info panel below player ── */
+#info {
+  margin-top: 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.7;
+}
+#info strong { color: rgba(255,255,255,0.5); }
+
+/* ── Timer display ── */
+#timer {
+  position: absolute;
+  top: 16px; right: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  z-index: 150;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<div id="player">
+
+  <!-- Timer -->
+  <div id="timer">0:00</div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar"></div>
+
+  <!-- Play overlay -->
+  <div id="play-overlay">
+    <div class="overlay-brand">
+      <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="overlay-watch">Watch — 40 Seconds</div>
+    </div>
+    <div class="play-icon">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M8 5L23 14L8 23V5Z" fill="white"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ── Scene 1: Hook / Map ── -->
+  <div class="scene" id="s1">
+    <div class="map-container">
+      <div class="map-pins">
+        <div class="pin"><div class="pin-icon"><div class="pin-pulse"></div></div></div>
+        <div class="pin"><div class="pin-icon"><div class="pin-pulse"></div></div></div>
+        <div class="pin"><div class="pin-icon"><div class="pin-pulse"></div></div></div>
+      </div>
+    </div>
+    <div class="s1-headline" id="s1-headline">Hundreds of sales.</div>
+    <div class="s1-subheading" id="s1-subheading">Right in your neighborhood.</div>
+  </div>
+
+  <!-- ── Scene 2: Browse/Discovery ── -->
+  <div class="scene" id="s2">
+    <div class="s2-headline" id="s2-headline">Browse before you go.</div>
+    <div class="listing-card" id="listing-card">
+      <div class="card-photo">
+        <svg class="lamp-icon" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="34" y="2" width="12" height="5" rx="2.5" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+          <path d="M31 7 L49 7 L66 43 L14 43 Z" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.78)" stroke-width="2" stroke-linejoin="round"/>
+          <ellipse cx="40" cy="27" rx="11" ry="10" fill="rgba(251,191,36,0.22)" stroke="rgba(251,191,36,0.75)" stroke-width="1.3"/>
+          <rect x="36" y="43" width="8" height="7" rx="2" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.5)" stroke-width="1.3"/>
+          <line x1="40" y1="50" x2="40" y2="68" stroke="rgba(255,255,255,0.62)" stroke-width="2.5" stroke-linecap="round"/>
+          <rect x="24" y="68" width="32" height="8" rx="3" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.62)" stroke-width="1.5"/>
+          <rect x="28" y="76" width="24" height="6" rx="2.5" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Vintage Lamp</div>
+        <div class="card-meta">
+          <div class="card-price">$45</div>
+          <div class="card-category">Lights</div>
+        </div>
+        <div class="card-footer">
+          <div class="wishlist-btn" id="wishlist-btn">♡</div>
+          <div class="card-distance">0.3 mi away</div>
+        </div>
+      </div>
+    </div>
+    <div class="s2-subline" id="s2-subline">Know what's there. Know the price.</div>
+  </div>
+
+  <!-- ── Scene 3: Treasure Trails ── -->
+  <div class="scene" id="s3">
+    <div class="s3-headline" id="s3-headline">One route. Three sales.</div>
+    <div class="route-map">
+      <div class="route-line">
+        <svg viewBox="0 0 240 180" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <style>
+              .route-line-svg {
+                stroke-dasharray: 160;
+                stroke-dashoffset: 160;
+                animation: dashDraw 2s ease-in-out forwards;
+                animation-delay: 0.2s;
+              }
+              @keyframes dashDraw {
+                to {
+                  stroke-dashoffset: 0;
+                }
+              }
+            </style>
+          </defs>
+          <path class="route-line-svg" d="M 50 45 Q 90 70 120 100 T 200 140" stroke="#D97706" stroke-width="2" fill="none" stroke-dasharray="5,5"/>
+        </svg>
+      </div>
+      <div class="route-pins">
+        <div class="route-pin"><div class="route-pin-inner">1</div></div>
+        <div class="route-pin"><div class="route-pin-inner">2</div></div>
+        <div class="route-pin"><div class="route-pin-inner">3</div></div>
+      </div>
+    </div>
+    <div class="s3-subline" id="s3-subline">Plan your Saturday in two taps.</div>
+  </div>
+
+  <!-- ── Scene 4: Explorer's Guild / XP ── -->
+  <div class="scene" id="s4">
+    <div class="s4-headline" id="s4-headline">Earn as you hunt.</div>
+    <div class="xp-display" id="xp-display">
+      <div class="xp-row">
+        <span class="label">Visit:</span>
+        <span class="xp-badge">+5 XP</span>
+      </div>
+      <div class="xp-row">
+        <span class="label">Purchase:</span>
+        <span class="xp-badge">+10 XP</span>
+      </div>
+      <div class="xp-row">
+        <span class="label">Wishlist:</span>
+        <span class="xp-badge">+3 XP</span>
+      </div>
+    </div>
+    <div class="rank-transition" id="rank-transition">
+      <div class="rank-badge">🧭</div>
+      <div class="rank-label">INITIATE</div>
+    </div>
+    <div style="position:relative;height:0;overflow:visible;">
+      <div class="rank-transition" id="rank-transition-scout" style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);">
+        <div class="rank-badge">⚔️</div>
+        <div class="rank-label">SCOUT</div>
+      </div>
+    </div>
+    <div class="s4-subline" id="s4-subline">Rank up. Unlock early access.</div>
+  </div>
+
+  <!-- ── Scene 5: Hunt Pass ── -->
+  <div class="scene" id="s5">
+    <div class="s5-headline" id="s5-headline">See it first. Claim it first.</div>
+    <div class="hunt-pass-card" id="hunt-pass-card">
+      <div class="hunt-pass-label">HUNT PASS</div>
+      <div class="hunt-pass-title">First dibs on rare finds.</div>
+      <div class="timer-display" id="timer-display">6:00:00</div>
+      <div class="timer-label">Early access countdown</div>
+    </div>
+    <div class="s5-subline" id="s5-subline">Hunt Pass members get early access.</div>
+  </div>
+
+  <!-- ── Scene 6: Haul Post ── -->
+  <div class="scene" id="s6">
+    <div class="s6-headline" id="s6-headline">Show off your finds.</div>
+    <div class="haul-post" id="haul-post">
+      <div class="haul-grid">
+        <div class="grid-item">📷</div>
+        <div class="grid-item">📷</div>
+        <div class="grid-item">📷</div>
+        <div class="grid-item">📷</div>
+      </div>
+      <div class="haul-footer">
+        <div class="like-counter">
+          <span>♥</span>
+          <span class="like-number" id="like-number">47</span>
+        </div>
+        <div class="xp-badge-footer" id="xp-badge-footer">+5 XP</div>
+      </div>
+    </div>
+    <div class="s6-subline" id="s6-subline">Post your haul. Earn XP. Build your rep.</div>
+  </div>
+
+  <!-- ── Scene 7: CTA ── -->
+  <div class="scene" id="s7">
+    <div class="cta-glow"></div>
+    <div class="cta-logo-wrap" id="cta-logo">
+      <div class="cta-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="cta-tagline">Hunt for free.</div>
+    </div>
+    <div class="cta-main" id="cta-main">No fees to browse.</div>
+    <div class="cta-sub" id="cta-sub">Explore every sale near you.</div>
+    <div class="cta-url" id="cta-url">https://finda.sale</div>
+  </div>
+
+  <!-- Pause indicator -->
+  <div id="pause-indicator" style="
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:350;
+  ">
+    <div style="
+      width:60px; height:60px; border-radius:50%;
+      background:rgba(0,0,0,0.6); backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:center;
+      border:1.5px solid rgba(255,255,255,0.15);
+    ">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect x="4" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+        <rect x="13" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Replay button -->
+  <button id="replay-btn">↺ &nbsp;Play again</button>
+
+</div>
+
+<!-- Scene navigation -->
+<div id="scene-nav">
+  <button class="nav-btn" id="prev-btn">&#8249;</button>
+  <div id="scene-dots">
+    <div class="scene-dot active" data-scene="0" title="Scene 1: Hook"></div>
+    <div class="scene-dot" data-scene="1" title="Scene 2: Browse"></div>
+    <div class="scene-dot" data-scene="2" title="Scene 3: Treasure Trails"></div>
+    <div class="scene-dot" data-scene="3" title="Scene 4: Guild"></div>
+    <div class="scene-dot" data-scene="4" title="Scene 5: Hunt Pass"></div>
+    <div class="scene-dot" data-scene="5" title="Scene 6: Haul Post"></div>
+    <div class="scene-dot" data-scene="6" title="Scene 7: CTA"></div>
+  </div>
+  <button class="nav-btn" id="next-btn">&#8250;</button>
+</div>
+
+<div id="info">
+  <strong>FindA.Sale — 40-second Shopper Video</strong><br>
+  9:16 vertical · TikTok / YouTube Shorts format<br>
+  Click the player to start · Screen-record to capture
+</div>
+
+<script>
+// ── Embed mode: activate via ?embed=1 on the iframe src ──
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.body.classList.add('embed');
+}
+
+// ── State ──
+let startTime = null;
+let rafId = null;
+let running = false;
+let paused = false;
+let pauseStart = null;
+const DURATION = 40000;
+const sceneStarts = [0, 5000, 11000, 17000, 23000, 28000, 33000];
+let currentScene = 0;
+
+// ── DOM refs ──
+const player       = document.getElementById('player');
+const playOverlay  = document.getElementById('play-overlay');
+const progressBar  = document.getElementById('progress-bar');
+const replayBtn    = document.getElementById('replay-btn');
+const timerEl      = document.getElementById('timer');
+
+// Scene els
+const scenes = ['s1','s2','s3','s4','s5','s6','s7'].map(id => document.getElementById(id));
+
+// ── Helper: add class after delay ──
+function addAt(el, cls, delay) {
+  if (!el) return;
+  return setTimeout(() => el.classList.add(cls), delay);
+}
+
+// ── Helper: animate counter ──
+function animateCounter(from, to, duration, onTick) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+    onTick(Math.round(from + (to - from) * ease));
+    if (t < 1) requestAnimationFrame(step);
+    else onTick(to);
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Helper: animate timer countdown ──
+function animateTimer(el, fromSec, toSec, duration) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const sec = Math.round(fromSec - (fromSec - toSec) * t);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    el.textContent = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Show/hide scene ──
+function showScene(id) {
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  const idx = parseInt(id.replace('s', '')) - 1;
+  if (!isNaN(idx) && idx >= 0) { currentScene = idx; updateDots(); }
+}
+
+// ── Sync nav dots to current scene ──
+function updateDots() {
+  document.querySelectorAll('.scene-dot').forEach(function(dot, i) {
+    dot.classList.toggle('active', i === currentScene);
+  });
+}
+
+// ── Jump to scene by index (0–6) ──
+function seekToScene(n) {
+  n = Math.max(0, Math.min(6, n));
+  running = false;
+  cancelAnimationFrame(rafId);
+  playOverlay.classList.add('hidden');
+  replayBtn.style.display = 'none';
+  resetAll();
+  const seekMs = sceneStarts[n];
+  startTime = performance.now() - seekMs;
+  nextEvent = 0;
+  while (nextEvent < events.length && events[nextEvent].at < seekMs) { nextEvent++; }
+  showScene('s' + (n + 1));
+  paused = false;
+  running = true;
+  rafId = requestAnimationFrame(tick);
+}
+
+// ── Reset all ──
+function resetAll() {
+  // Scene 1
+  ['s1-headline','s1-subheading'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.querySelectorAll('.pin').forEach(p => p.style.animation = 'none');
+  // Scene 2
+  document.getElementById('s2-headline').classList.remove('in');
+  document.getElementById('listing-card').classList.remove('in');
+  document.getElementById('wishlist-btn').classList.remove('in', 'tapped');
+  document.getElementById('s2-subline').classList.remove('in');
+  // Scene 3
+  document.getElementById('s3-headline').classList.remove('in');
+  document.getElementById('s3-subline').classList.remove('in');
+  document.querySelectorAll('.route-pin').forEach(p => p.style.animation = 'none');
+  // Scene 4
+  document.getElementById('s4-headline').classList.remove('in');
+  document.getElementById('xp-display').classList.remove('in');
+  document.getElementById('rank-transition').classList.remove('in');
+  document.getElementById('rank-transition-scout').classList.remove('in');
+  document.getElementById('s4-subline').classList.remove('in');
+  // Scene 5
+  document.getElementById('s5-headline').classList.remove('in');
+  document.getElementById('hunt-pass-card').classList.remove('in');
+  document.getElementById('timer-display').textContent = '6:00:00';
+  document.getElementById('s5-subline').classList.remove('in');
+  // Scene 6
+  document.getElementById('s6-headline').classList.remove('in');
+  document.getElementById('haul-post').classList.remove('in');
+  document.getElementById('like-number').textContent = '47';
+  document.getElementById('xp-badge-footer').classList.remove('in');
+  document.getElementById('s6-subline').classList.remove('in');
+  // Scene 7
+  document.getElementById('cta-logo').classList.remove('in');
+  document.getElementById('cta-main').classList.remove('in');
+  document.getElementById('cta-sub').classList.remove('in');
+  document.getElementById('cta-url').classList.remove('in');
+  // UI
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  progressBar.style.width = '0%';
+  progressBar.style.transition = 'none';
+  timerEl.textContent = '0:00';
+  replayBtn.style.display = 'none';
+  pauseIndicator.style.opacity = '0';
+}
+
+// ── Timeline events ── (ms offset)
+const events = [
+
+  // SCENE 1 — Hook / Map (0–5000ms)
+  { at: 0, fn: () => {
+    showScene('s1');
+    addAt(document.getElementById('s1-headline'),'in',0);
+    addAt(document.getElementById('s1-subheading'),'in',200);
+  }},
+
+  // SCENE 2 — Browse (5000ms–11000ms)
+  { at: 5000, fn: () => {
+    showScene('s2');
+    addAt(document.getElementById('s2-headline'),'in',0);
+    addAt(document.getElementById('listing-card'),'in',600);
+  }},
+
+  // Wishlist tap at 7500ms
+  { at: 7500, fn: () => {
+    document.getElementById('wishlist-btn').classList.add('in');
+    setTimeout(() => {
+      document.getElementById('wishlist-btn').classList.add('tapped');
+      document.getElementById('wishlist-btn').textContent = '♥';
+      document.getElementById('wishlist-btn').style.color = '#D97706';
+    }, 200);
+  }},
+
+  // Subline at 9200ms
+  { at: 9200, fn: () => { addAt(document.getElementById('s2-subline'),'in',0); } },
+
+  // SCENE 3 — Treasure Trails (11000ms–17000ms)
+  { at: 11000, fn: () => {
+    showScene('s3');
+    addAt(document.getElementById('s3-headline'),'in',0);
+  }},
+
+  // Subline at 15200ms
+  { at: 15200, fn: () => { addAt(document.getElementById('s3-subline'),'in',0); } },
+
+  // SCENE 4 — Guild/XP (17000ms–23000ms)
+  { at: 17000, fn: () => {
+    showScene('s4');
+    addAt(document.getElementById('s4-headline'),'in',0);
+    addAt(document.getElementById('xp-display'),'in',600);
+  }},
+
+  // Scout rank at 20200ms
+  { at: 20200, fn: () => {
+    addAt(document.getElementById('rank-transition'),'in',0);
+    setTimeout(() => {
+      addAt(document.getElementById('rank-transition-scout'),'in',300);
+    }, 800);
+  }},
+
+  // Subline at 21800ms
+  { at: 21800, fn: () => { addAt(document.getElementById('s4-subline'),'in',0); } },
+
+  // SCENE 5 — Hunt Pass (23000ms–28000ms)
+  { at: 23000, fn: () => {
+    showScene('s5');
+    addAt(document.getElementById('s5-headline'),'in',0);
+    addAt(document.getElementById('hunt-pass-card'),'in',600);
+  }},
+
+  // Timer countdown at 24200ms
+  { at: 24200, fn: () => {
+    animateTimer(document.getElementById('timer-display'), 21600, 0, 3200);
+  }},
+
+  // Subline at 26400ms
+  { at: 26400, fn: () => { addAt(document.getElementById('s5-subline'),'in',0); } },
+
+  // SCENE 6 — Haul Post (28000ms–33000ms)
+  { at: 28000, fn: () => {
+    showScene('s6');
+    addAt(document.getElementById('s6-headline'),'in',0);
+    addAt(document.getElementById('haul-post'),'in',600);
+  }},
+
+  // Like counter at 29800ms
+  { at: 29800, fn: () => {
+    animateCounter(47, 142, 1200, (v) => {
+      document.getElementById('like-number').textContent = v;
+    });
+  }},
+
+  // XP badge at 31000ms
+  { at: 31000, fn: () => { addAt(document.getElementById('xp-badge-footer'),'in',0); } },
+
+  // Subline at 31800ms
+  { at: 31800, fn: () => { addAt(document.getElementById('s6-subline'),'in',0); } },
+
+  // SCENE 7 — CTA (33000ms–40000ms)
+  { at: 33000, fn: () => {
+    showScene('s7');
+    addAt(document.getElementById('cta-logo'),'in',0);
+    addAt(document.getElementById('cta-main'),'in',400);
+    addAt(document.getElementById('cta-sub'),'in',800);
+    addAt(document.getElementById('cta-url'),'in',1100);
+  }},
+
+  // End at 40000ms
+  { at: 40000, fn: () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+    replayBtn.style.display = 'block';
+  }}
+];
+
+// ── RAF loop ──
+let nextEvent = 0;
+function tick(now) {
+  if (!running) return;
+  const elapsed = now - startTime;
+
+  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
+    events[nextEvent].fn();
+    nextEvent++;
+  }
+
+  const pct = Math.min((elapsed / DURATION) * 100, 100);
+  progressBar.style.width = pct + '%';
+
+  const secs = Math.min(Math.floor(elapsed / 1000), 40);
+  const ss = String(secs % 60).padStart(2,'0');
+  timerEl.textContent = `0:${ss}`;
+
+  if (elapsed < DURATION) {
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function start() {
+  resetAll();
+  nextEvent = 0;
+  running = true;
+  paused = false;
+  pauseStart = null;
+  startTime = performance.now();
+  requestAnimationFrame(tick);
+}
+
+// ── Pause / Resume ──
+const pauseIndicator = document.getElementById('pause-indicator');
+let pauseFlashTimer = null;
+
+function togglePause() {
+  if (!startTime || (!running && !paused)) return;
+  if (paused) {
+    const pauseDuration = performance.now() - pauseStart;
+    startTime += pauseDuration;
+    pauseStart = null;
+    paused = false;
+    running = true;
+    pauseIndicator.style.opacity = '0';
+    rafId = requestAnimationFrame(tick);
+  } else {
+    paused = true;
+    pauseStart = performance.now();
+    running = false;
+    cancelAnimationFrame(rafId);
+    pauseIndicator.style.opacity = '1';
+    clearTimeout(pauseFlashTimer);
+    pauseFlashTimer = setTimeout(() => {
+      if (paused) pauseIndicator.style.opacity = '0.35';
+    }, 600);
+  }
+}
+
+player.addEventListener('click', (e) => {
+  if (e.target.closest('#play-overlay')) return;
+  if (e.target.closest('#replay-btn')) return;
+  if (!startTime) return;
+  togglePause();
+});
+
+// ── Play overlay ──
+playOverlay.addEventListener('click', () => {
+  playOverlay.classList.add('hidden');
+  start();
+});
+
+// ── Replay ──
+replayBtn.addEventListener('click', () => {
+  replayBtn.style.display = 'none';
+  start();
+});
+
+// ── Scene navigation ──
+document.getElementById('prev-btn').addEventListener('click', function() {
+  seekToScene(currentScene - 1);
+});
+document.getElementById('next-btn').addEventListener('click', function() {
+  seekToScene(currentScene + 1);
+});
+document.querySelectorAll('.scene-dot').forEach(function(dot) {
+  dot.addEventListener('click', function() {
+    seekToScene(parseInt(this.dataset.scene));
+  });
+});
+</script>
+</body>
+</html>
