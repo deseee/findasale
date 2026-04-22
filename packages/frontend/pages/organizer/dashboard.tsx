@@ -1049,8 +1049,8 @@ const OrganizerDashboard = () => {
                                   {urgency.text}
                                 </span>
                               ) : null; })()}
-                              {/* Weather Strip inline with status badge */}
-                              <div className="flex-shrink-0">
+                              {/* Weather Strip — own row on mobile, inline with badges on desktop */}
+                              <div className="w-full sm:w-auto sm:flex-shrink-0">
                                 <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
                               </div>
                             </div>
