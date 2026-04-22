@@ -67,7 +67,7 @@ const ActivitySummary: React.FC = () => {
       icon: '⚡',
       color: 'bg-amber-50 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700',
       textColor: 'text-amber-700 dark:text-amber-300',
-      href: '/shopper/loyalty',
+      href: '/coupons',
     },
   ];
 

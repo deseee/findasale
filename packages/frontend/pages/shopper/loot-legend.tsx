@@ -215,10 +215,10 @@ function LootLegendPage() {
           </div>
         )}
 
-        {/* Back to Loyalty */}
+        {/* Back to Explorer Profile */}
         <div className="mt-12 text-center">
           <Link
-            href="/shopper/loyalty"
+            href="/shopper/explorer-profile"
             className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
           >
             ← Back to Explorer's Guild

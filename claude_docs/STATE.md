@@ -4,7 +4,9 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S536 — COMPLETE):** Full XP economy security audit (19 findings, hacker agent) + all P0/P1/P2 fixes dispatched + three deferred XP wirings shipped. Security fixes: cap fail-open→fail-closed (2 caps), spendXp atomic updateMany, REFERRAL_FIRST_PURCHASE 24h hold + purchaseId, ORGANIZER_REFERRAL_PURCHASE atomic ordering + constant, both referral awards purchaseId linked (chargeback claw-back now works), SALE_PUBLISHED one-time only, HAUL_POST_COUNT cap renamed HAUL_POST:60 (was breaking after 1st post), ORG_HAUL_FROM_SALE cap 100/month, HP churn hold fail-closed, leaderboard userId removed, Math.random→crypto in referralService, IP pair logging for self-referral detection. New wirings: HAUL_POST_LIKES (5 XP at 10+ likes, once per post, idempotency via PointsTransaction), ORG_SHOPPER_SIGNUP (10 XP to organizer on shopper's first purchase, purchaseId idempotency), REFERRAL_ORG_FIRST_SALE (50 XP to shopper referrer on referred organizer's first published sale). Notable schema finding: `phoneVerified` field does not exist on User — REFERRAL_FIRST_PURCHASE phone gate from gamedesign spec is not yet enforced.
+**Latest work (S540 — COMPLETE):** Page audit (5 pages) → unified XP-spend hub consolidation. Diagnosis: `/coupons` was organizer-only in nav (shoppers couldn't surface it) yet had a complete shopper section sitting unreachable; `/shopper/loyalty` duplicated rank/XP UI from `/shopper/explorer-profile` and held the only Rarity Boost entry point with stale +3/+5/+10 XP values. Fix: `/coupons` becomes the unified XP-spend hub (already role-aware — confirmed via `isOrganizer` check at line 104). Shopper Rewards link added to nav at 4 locations (desktop sidebar Connect, mobile in-sale tools, mobile shopper-only nav, AvatarDropdown shopper branch). Rarity Boost migrated to `/coupons` shopper section using existing `<RarityBoostModal>` component (drop-in port). `/shopper/loyalty` reduced to 16-line redirect stub → `/coupons` (preserves deep links, email refs, bookmarks). Dashboard duplicate `<AchievementBadgesSection>` removed (still lives on `/shopper/explorer-profile`). 6 orphan `/shopper/loyalty` refs across ranks.tsx, loot-legend.tsx, league.tsx, profile.tsx, ExplorerGuildOnboardingCard.tsx, ActivitySummary.tsx retargeted (5 to `/shopper/explorer-profile` for rank/passport context, 1 to `/coupons` for XP-spend context). 11 files modified, zero new TS logic errors.
+
+**Latest prior work (S536 — COMPLETE):** Full XP economy security audit (19 findings, hacker agent) + all P0/P1/P2 fixes dispatched + three deferred XP wirings shipped. Security fixes: cap fail-open→fail-closed (2 caps), spendXp atomic updateMany, REFERRAL_FIRST_PURCHASE 24h hold + purchaseId, ORGANIZER_REFERRAL_PURCHASE atomic ordering + constant, both referral awards purchaseId linked (chargeback claw-back now works), SALE_PUBLISHED one-time only, HAUL_POST_COUNT cap renamed HAUL_POST:60 (was breaking after 1st post), ORG_HAUL_FROM_SALE cap 100/month, HP churn hold fail-closed, leaderboard userId removed, Math.random→crypto in referralService, IP pair logging for self-referral detection. New wirings: HAUL_POST_LIKES (5 XP at 10+ likes, once per post, idempotency via PointsTransaction), ORG_SHOPPER_SIGNUP (10 XP to organizer on shopper's first purchase, purchaseId idempotency), REFERRAL_ORG_FIRST_SALE (50 XP to shopper referrer on referred organizer's first published sale). Notable schema finding: `phoneVerified` field does not exist on User — REFERRAL_FIRST_PURCHASE phone gate from gamedesign spec is not yet enforced.
 
 **S530 QA results — full session (documented in qa-backlog.md):**
 - ✅ Verified: Explorer Profile page + redirect, #270 onboarding card, shopper /coupons (3 tiers), profileSlug XP gate, #200 shopper public profile (collectorTitle gone), S529 avatar dropdown rank (live!), #224 rapid-capture redirect, #259 Hunt Pass page accuracy, #279 Rare Finds Pass, #282 Explorer Profile Completion XP (+50 XP confirmed)
@@ -116,6 +118,13 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | Layout.tsx mobile nav guild link | Updated — pending Chrome QA | Mobile hamburger: Explorer's Guild should link to /shopper/guild-primer not /loyalty | S534 |
 | AvatarDropdown guild link | Updated — pending Chrome QA | CONNECT section: Explorer's Guild → /shopper/guild-primer | S534 |
 | RankUpModal dark mode | Fixed — pending Chrome QA | "New Perks Unlocked" box should use dark:bg-gray-700 (not too-light sage) | S534 |
+| S540 Rewards nav link (4 locations) | Pushed — pending Chrome QA | As shopper (Karen): verify "Rewards" link → /coupons in desktop sidebar Connect, mobile in-sale tools, mobile shopper-only nav, AvatarDropdown shopper branch | S540 |
+| S540 Rarity Boost on /coupons | Pushed — pending Chrome QA | As shopper with ≥15 spendableXp: navigate /coupons → scroll to shopper section → click "Activate Rarity Boost (15 XP)" → select sale → confirm spend → verify XP balance decrements 15, toast appears, modal closes | S540 |
+| S540 Rarity Boost insufficient XP | Pushed — pending Chrome QA | As shopper with <15 XP: button disabled, "You need at least 15 XP" hint appears | S540 |
+| S540 Organizer view of /coupons | Pushed — pending Chrome QA | As organizer (Bob/Alice): /coupons shows organizer Shopper Discount Codes section + $1-off generator. Rarity Boost card MUST NOT render | S540 |
+| S540 Loyalty redirect | Pushed — pending Chrome QA | Navigate /shopper/loyalty → instant redirect to /coupons, no flash of old content | S540 |
+| S540 Dashboard achievements dedup | Pushed — pending Chrome QA | /shopper/dashboard Overview tab: Achievements widget GONE. /shopper/explorer-profile: Achievements widget STILL present | S540 |
+| S540 Orphan ref hops | Pushed — pending Chrome QA | From /shopper/ranks, /shopper/loot-legend, /shopper/league, /profile follow back/CTA links → land on /shopper/explorer-profile (not 404, not loyalty) | S540 |
 
 ## File Organization
 
@@ -127,28 +136,37 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S540)
+## Next Session (S541)
 
-**S540 priority queue:**
-1. **Push S539 changes** — 10 files across frontend + backend (push block in patrick-dashboard.md). Push in order: S537 first, then S534+S535, S536 Batch 1, S536 Batch 2, S538 video pages, then S539.
-2. **Page audit — diagnose before dispatching:** Research these 5 pages in Chrome, identify staleness/overlap issues, report plan to Patrick before any dev dispatch:
-   - /shopper/settings
-   - /organizer/settings
-   - /shopper/loyalty
-   - /shopper/dashboard
-   - /shopper/explorer-passport (note: may now be /shopper/explorer-profile — verify redirect)
-3. **Chrome QA backlog** — S531/S529/S532 fixes still pending verification (blocked/unverified queue).
+**S541 priority queue:**
+1. **Live-site smoke test S540 (FIRST action)** — push S540 from patrick-dashboard.md → wait Vercel green → smoke test 7 areas: shopper desktop sidebar Rewards link, mobile shopper nav Rewards link, AvatarDropdown shopper Rewards link, /coupons Rarity Boost card (shopper view), /coupons organizer view (no Rarity Boost), /shopper/loyalty redirect, dashboard achievements gone.
+2. **Chrome QA the S540 dispatch** — full role × tier × interaction matrix per QA Honesty Gate. Use real shopper account with ≥15 XP (Karen has insufficient — may need DB top-up via psycopg2).
+3. **Chrome QA backlog carry-over** — S531/S529/S532/S534 fixes still pending verification (blocked/unverified queue grew significantly).
 4. **Phone verification feature** — `phoneVerified` missing from User model. REFERRAL_FIRST_PURCHASE phone gate not enforced.
+5. **Continue page audits** — S540 only addressed loyalty/coupons/dashboard. Other pages from earlier audit may have similar overlap issues worth investigating.
 
 **Patrick actions:**
-- Push S537 changes (Push 1 in patrick-dashboard.md)
-- Push S534+S535 changes (Push 2)
-- Push S536 security hardening (Push 3)
-- Push S536 XP wirings (Push 4)
-- Push S538 video pages (Push 5)
-- Push S539 nav + XP fixes (Push 6 — new, in patrick-dashboard.md)
+- Push S540 nav + Rarity Boost migration + loyalty redirect (Push 1 in patrick-dashboard.md — only push pending)
 
 ## Current Work
+
+**S540 COMPLETE — /coupons unified XP-spend hub + loyalty consolidation:**
+- ✅ Page audit (5 pages): identified `/coupons` was organizer-only in nav (shoppers couldn't reach it) yet had complete shopper section sitting unreachable; `/shopper/loyalty` had stale +3/+5/+10 XP values (post-S534 actuals are +10 scan/+25 purchase/+2 check-in) and held the only Rarity Boost entry point; `/shopper/dashboard` had duplicate AchievementBadgesSection (also on /shopper/explorer-profile)
+- ✅ Strategy decision (Patrick approved Path C): use already-role-aware `/coupons` as unified XP-spend hub instead of either/or split
+- ✅ packages/frontend/pages/coupons.tsx — added Sparkles icon import, `import { RarityBoostModal }` named import, `showRarityBoostModal` useState, Rarity Boost card (gradient indigo/purple, gated `{!isOrganizer && ...}`) below shopper newly-generated-code block, `<RarityBoostModal>` rendered with `userXp={spendableXp}` and onSuccess callback invalidating xp-profile query
+- ✅ packages/frontend/pages/shopper/loyalty.tsx — replaced 636 lines with 16-line LoyaltyRedirect stub (`router.replace('/coupons')` on mount)
+- ✅ packages/frontend/components/Layout.tsx — added shopper "Rewards" link → /coupons with Ticket icon (indigo-500) at 3 nav locations: desktop sidebar Connect (after Explorer's Guild ~line 553), mobile in-sale tools (~line 1318), mobile shopper-only nav (~line 1537)
+- ✅ packages/frontend/components/AvatarDropdown.tsx — added shopper Rewards link → /coupons with Ticket icon inside `{!isOrganizer && ...}` branch (after Explorer's Guild link, before Leaderboard, ~line 1086)
+- ✅ packages/frontend/pages/shopper/dashboard.tsx — removed duplicate `<AchievementBadgesSection>` block (lines 424-430) + unused imports (`useMyAchievements`, `AchievementBadgesSection`) + orphan `achievementsData` query. Achievements widget remains on /shopper/explorer-profile only (dedup, not removal)
+- ✅ packages/frontend/components/ActivitySummary.tsx — Streak Points stat card href: /shopper/loyalty → /coupons (XP-spend context)
+- ✅ packages/frontend/components/ExplorerGuildOnboardingCard.tsx — "View Your Rank & Progress" CTA href: /shopper/loyalty → /shopper/explorer-profile (rank context, not coupons — semantically correct adjustment from spec)
+- ✅ packages/frontend/pages/shopper/ranks.tsx — back link "← Back to Loyalty Passport" → "← Back to Explorer Profile" → /shopper/explorer-profile
+- ✅ packages/frontend/pages/shopper/loot-legend.tsx — back link → /shopper/explorer-profile (label kept "Explorer's Guild")
+- ✅ packages/frontend/pages/shopper/league.tsx — back link → /shopper/explorer-profile (label kept "Explorer's Guild")
+- ✅ packages/frontend/pages/profile.tsx — Explorer Rank card "View Your Rank" CTA → /shopper/explorer-profile
+- ✅ TS check: zero new logic errors in edited files (env-only `Cannot find module 'react'` errors in VM affect every .tsx repo-wide, not introduced by these changes; Vercel will resolve types correctly)
+- 🔲 11 files unpushed — Patrick action: push block in patrick-dashboard.md
+- 🔲 Chrome QA pending: 7 verification scenarios in Blocked/Unverified Queue
 
 **S539 COMPLETE — Nav parity + XP achievement bug + create-sale overhaul:**
 - ✅ Shopper Settings redirect — both AvatarDropdown.tsx and Layout.tsx mobile nav now route shoppers to /shopper/settings (was /organizer/settings → login redirect for all users)
@@ -202,6 +220,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - 🔲 Chrome QA for all S534 changes (pending).
 
 ## Recent Sessions
+
+**S540 (2026-04-22, COMPLETE):** Page audit → `/coupons` becomes unified XP-spend hub. Diagnosis: `/coupons` was organizer-only in nav yet the page had a complete shopper section sitting unreachable; `/shopper/loyalty` duplicated rank/XP UI from `/shopper/explorer-profile` and held the only Rarity Boost entry with stale +3/+5/+10 XP values. Patrick approved Path C — use the already-role-aware `/coupons` (isOrganizer at line 104) as the unified hub, consolidate loyalty into redirect stub. Shopper "Rewards" nav link added at 4 locations (desktop sidebar Connect, mobile in-sale tools, mobile shopper-only nav, AvatarDropdown shopper branch) with Ticket icon indigo-500. Rarity Boost card migrated to `/coupons` shopper section as drop-in `<RarityBoostModal>` import (named export, NOT default — verified via grep). `/shopper/loyalty` reduced 636 → 16 lines (useEffect `router.replace('/coupons')`). Dashboard duplicate `<AchievementBadgesSection>` removed + orphan `useMyAchievements` query removed (widget still lives on `/shopper/explorer-profile` — dedup, not deletion). 6 orphan `/shopper/loyalty` refs retargeted: 5 to `/shopper/explorer-profile` for rank/passport-context labels (ranks.tsx, loot-legend.tsx, league.tsx, profile.tsx, ExplorerGuildOnboardingCard.tsx), 1 to `/coupons` for XP-spend context (ActivitySummary.tsx Streak Points card). 11 files modified. TS check: zero new logic errors in edited files (env-only Cannot-find-module 'react' errors in VM are pre-existing and affect every .tsx repo-wide; Vercel will resolve). Push block in patrick-dashboard.md. S541 priorities: push S540, then smoke test 7 verification scenarios.
 
 **S539 (2026-04-21, COMPLETE):** Nav parity + XP achievement bug + create-sale overhaul. Root cause of shopper Settings redirect: both AvatarDropdown.tsx and Layout.tsx mobile nav hardcoded `/organizer/settings` for all users — fixed to role-conditional `/shopper/settings`. Mobile nav: Host a Sale (opens BecomeOrganizerModal) and Explorer Profile added to footer; Install App added; Settings icon indigo for shoppers; shopper-only rank/XP header restored (was organizer branch only). Avatar dropdown: Host a Sale moved from shopper section to footer below Pricing; Explorer Profile icon now indigo. Critical XP bug: achievementService.ts used strict `!== null` on optional chaining result — when existingUserAch is null, `?.unlockedAt` returns `undefined`, and `undefined !== null` is `true`, marking all new users as "already unlocked" and skipping all XP awards. Fixed with loose `!= null`. XP rank now uses `lifetimeXpEarned` (never decrements on spend); spendXp hold check added to appraisal/crew/trail controllers. create-sale stripped to lightweight first step: removed description, neighborhood, duplicate Sale Type; redirects to edit-sale; PRO celebration modal fires on isFirstSaleFreePro. Business name copy updated in settings.tsx + BecomeOrganizerModal.tsx.
 

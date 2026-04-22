@@ -33,8 +33,6 @@ import Skeleton from '../../components/Skeleton';
 import { useFollows } from '../../hooks/useFollows';
 import BrandFollowManager from '../../components/BrandFollowManager';
 import ClaimCard from '../../components/ClaimCard'; // Hold-to-Pay: Shopper pending payments
-import { useMyAchievements } from '../../hooks/useAchievements';
-import { AchievementBadgesSection } from '../../components/AchievementBadgesSection';
 import useXpProfile from '../../hooks/useXpProfile';
 import RankBadge, { ExplorerRank } from '../../components/RankBadge';
 import RankProgressBar from '../../components/RankProgressBar';
@@ -179,9 +177,6 @@ const ShopperDashboard = () => {
     },
     enabled: !!user?.id,
   });
-
-  // Fetch achievements for badges display
-  const { data: achievementsData, isLoading: achievementsLoading } = useMyAchievements();
 
   // Fetch XP profile for rank progress
   const { data: xpProfile, isLoading: xpLoading } = useXpProfile(!!user?.id);
@@ -421,13 +416,7 @@ const ShopperDashboard = () => {
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Achievements Badges — First in Overview */}
-              {achievementsData?.achievements && achievementsData.achievements.length > 0 && !achievementsLoading && (
-                <AchievementBadgesSection
-                  achievements={achievementsData.achievements}
-                  showStats={true}
-                />
-              )}
+              {/* Achievements now live on /shopper/explorer-profile only (S540 dedup) */}
 
               {/* Hold-to-Pay: Pending Payments Section — Priority #1 */}
               {pendingInvoices && pendingInvoices.length > 0 && (
