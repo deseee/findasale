@@ -100,13 +100,13 @@ export const XP_SINKS = {
   // Organizer sinks
   COUPON_GENERATE: 50,         // Organizer generates $1-off coupon for shoppers
   EARLY_ACCESS_BOOST: 200,     // Organizer presale visibility bump
-  BOUNTY_VISIBILITY_BOOST: 15, // Organizer increases fulfillment odds (raised from 5)
+  BOUNTY_VISIBILITY_BOOST: 50, // Organizer increases fulfillment odds (boostPricing.ts S541)
   LISTINGS_EXTENSION: 250,     // Organizer extends listing tier (avoids $2.99 upgrade)
-  EVENT_SPONSORSHIP: 500,      // Organizer gets exclusive bounties + high visibility (gamedesign S418)
+  EVENT_SPONSORSHIP: 1000,     // Organizer gets exclusive bounties + high visibility (boostPricing.ts S541)
 
   // Shopper sinks
   COUPON_CLAIM_SHOPPER: 100,   // Shopper spends for $1 off any purchase (1 XP = $0.01, gamedesign S418)
-  RARITY_BOOST: 15,            // Shopper gets +2% legendary odds for one sale
+  RARITY_BOOST: 50,            // Shopper gets +2% legendary odds for one sale (boostPricing.ts S541)
   HUNT_PASS_DISCOUNT: 100,     // Shopper gets $1 off Hunt Pass subscription (1 XP = $0.01, gamedesign S418)
   HAUL_VISIBILITY_BOOST: 80,   // Shopper bumps haul post to top of local feed for 2h (D-XP-013, was 10)
   SEASONAL_CHALLENGE_ACCESS: 250, // Shopper unlocks seasonal challenge tier (gamedesign S418)
