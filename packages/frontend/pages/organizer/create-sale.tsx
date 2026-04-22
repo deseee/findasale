@@ -31,14 +31,12 @@ const CreateSalePage = () => {
 
   const [formData, setFormData] = useState({
     title: '',
-    description: '',
     startDate: '',
     endDate: '',
     address: '',
     city: '',
     state: '',
     zip: '',
-    neighborhood: '',
     lat: null as number | null,
     lng: null as number | null,
     // B1: Sale type selector
@@ -49,10 +47,11 @@ const CreateSalePage = () => {
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [tierLimitError, setTierLimitError] = useState<any>(null);
+  const [showProModal, setShowProModal] = useState(false);
+  const [newSaleId, setNewSaleId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -117,25 +116,6 @@ const CreateSalePage = () => {
     }
   };
 
-  const handleGenerateDescription = async () => {
-    if (!formData.title.trim()) return;
-    setIsGeneratingDesc(true);
-    try {
-      const response = await api.post('/sales/generate-description', {
-        title: formData.title,
-        city: formData.city || undefined,
-        // B1: Send saleType instead of isAuctionSale
-        saleType: formData.saleType,
-        startDate: formData.startDate || undefined,
-        endDate: formData.endDate || undefined,
-      });
-      setFormData(prev => ({ ...prev, description: response.data.description }));
-    } catch {
-      showToast("Couldn't generate description — try again", 'error');
-    } finally {
-      setIsGeneratingDesc(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,17 +152,17 @@ const CreateSalePage = () => {
         (a: { key: string }) => a.key === 'FIRST_SALE_CREATED'
       );
       if (response.data.isFirstSaleFreePro) {
-        showToast('🎉 Your first sale gets PRO features — on us! Enjoy unlimited photos and smart tagging.', 'success');
-        // Brief delay so user sees the toast before navigating
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        setNewSaleId(response.data.id);
+        setShowProModal(true);
       } else if (firstSaleUnlocked) {
         showToast('🚀 Achievement Unlocked: Sale Launcher! +25 XP', 'success');
         // Brief delay so user sees the achievement toast before navigating
         await new Promise(resolve => setTimeout(resolve, 1500));
+        router.push(`/organizer/edit-sale/${response.data.id}`);
       } else {
         showToast('Sale created! Add items next.', 'success');
+        router.push(`/organizer/edit-sale/${response.data.id}`);
       }
-      router.push(`/organizer/add-items/${response.data.id}`);
     } catch (error: any) {
       // Feature #249: Handle concurrent sales tier limit (409)
       if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
@@ -273,33 +253,6 @@ const CreateSalePage = () => {
                 required
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                 placeholder="e.g., My Weekend Sale"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <label htmlFor="description" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Description</label>
-                  <Tooltip content="Briefly describe what's for sale. Mention standout categories: 'Mid-century furniture, vintage tools, estate jewelry.' 2-3 sentences is enough." />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleGenerateDescription}
-                  disabled={!formData.title.trim() || isGeneratingDesc}
-                  className="text-xs bg-sage-600 hover:bg-sage-700 text-white py-1 px-3 rounded-full disabled:opacity-40 transition-colors flex items-center gap-1"
-                >
-                  {isGeneratingDesc ? 'Generating\u2026' : '\u2728 Generate'}
-                </button>
-              </div>
-              <textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                rows={4}
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                placeholder="Describe the sale, highlight special items..."
               />
             </div>
 
@@ -444,41 +397,6 @@ const CreateSalePage = () => {
               </div>
             </div>
 
-            {/* Neighborhood — U2 (autocomplete input, replaces scrolling dropdown) */}
-            <div>
-              <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Neighborhood <span className="text-warm-400 font-normal">(optional — helps shoppers find you)</span>
-              </label>
-              <input
-                id="neighborhood"
-                type="text"
-                name="neighborhood"
-                list="neighborhood-list"
-                value={formData.neighborhood}
-                onChange={handleChange}
-                onBlur={handleBlur}
-                placeholder="Start typing or select..."
-                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
-                autoComplete="off"
-              />
-              <datalist id="neighborhood-list">
-                <option value="Downtown" />
-                <option value="Eastown" />
-                <option value="East Hills" />
-                <option value="Heritage Hill" />
-                <option value="Creston" />
-                <option value="Westside" />
-                <option value="Midtown" />
-                <option value="Fulton Heights" />
-                <option value="Alger Heights" />
-                <option value="Ada Township" />
-                <option value="Cascade" />
-                <option value="Kentwood" />
-                <option value="Wyoming" />
-                <option value="Grandville" />
-              </datalist>
-            </div>
-
             {/* Feature #311: Multi-Location Inventory View */}
             <LocationSelector
               value={formData.locationId}
@@ -496,6 +414,29 @@ const CreateSalePage = () => {
               {isSubmitting ? 'Creating...' : 'Create Sale'}
             </button>
           </form>
+
+          {/* PRO Modal */}
+          {showProModal && newSaleId && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-8">
+                <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+                  Your first sale is on PRO — on us 🎉
+                </h2>
+                <p className="text-warm-700 dark:text-warm-300 mb-6">
+                  We've unlocked PRO features for your first sale. Enjoy unlimited item listings, up to 10 photos per item, smart auto-tagging, and priority placement on FindA.Sale.
+                </p>
+                <button
+                  onClick={() => {
+                    setShowProModal(false);
+                    router.push(`/organizer/edit-sale/${newSaleId}`);
+                  }}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                >
+                  Start Adding Items
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
