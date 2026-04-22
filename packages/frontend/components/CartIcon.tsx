@@ -39,8 +39,8 @@ const CartIcon: React.FC = () => {
       const response = await api.get('/reservations/my-holds-full');
       return response.data as Hold[];
     },
-    refetchInterval: 30000, // Poll every 30s
-    staleTime: 25000,
+    refetchInterval: 60000, // Poll every 60s — badge doesn't need sub-minute freshness
+    staleTime: 55000,
   });
 
   // Update context with live hold count

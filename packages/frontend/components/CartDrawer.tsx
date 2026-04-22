@@ -60,7 +60,6 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     mutationFn: (reservationId: string) => api.delete(`/reservations/${reservationId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-holds-full'] });
-      refetch();
       showToast('Hold released', 'success');
     },
     onError: (err: any) => {
@@ -74,7 +73,6 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     onSuccess: (_, cartItem) => {
       cart.removeItem(cartItem.id);
       queryClient.invalidateQueries({ queryKey: ['my-holds-full'] });
-      refetch();
       showToast('Item placed on hold', 'success');
     },
     onError: (err: any) => {

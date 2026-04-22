@@ -98,8 +98,8 @@ export function PosPaymentRequestAlert() {
       return res.data.requests;
     },
     enabled: isAuthenticated,
-    refetchInterval: 5000,
-    staleTime: 0,
+    refetchInterval: 30000,
+    staleTime: 25000,
     select: (requests) => {
       // Show the first unseen request
       if (requests.length > 0) showRequest(requests[0]);
