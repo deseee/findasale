@@ -679,7 +679,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Link href="/" className="text-xl lg:text-2xl text-gray-900 dark:text-white" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 800 }}>
                 Find<span className="text-amber-600">A.</span>Sale
               </Link>
-              <span className="text-[10px] font-bold tracking-wider uppercase bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 px-1.5 py-0.5 rounded self-start mt-1">Beta</span>
+              <span className="hidden sm:inline-block text-[10px] font-bold tracking-wider uppercase bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 px-1.5 py-0.5 rounded self-start mt-1">Beta</span>
             </div>
 
             {/* Desktop nav */}
