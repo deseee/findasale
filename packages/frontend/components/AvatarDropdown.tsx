@@ -187,7 +187,10 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
           {getInitials()}
         </div>
 
-        {/* User name label — hidden to keep top nav compact */}
+        {/* User name label (hidden on very small screens) */}
+        <span className="text-sm font-medium text-warm-900 dark:text-warm-100 hidden sm:inline max-w-[120px] truncate">
+          {user.name || user.email.split('@')[0]}
+        </span>
 
         {/* Dropdown arrow */}
         <svg
