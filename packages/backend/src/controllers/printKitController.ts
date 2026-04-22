@@ -1695,7 +1695,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
         .fontSize(26)
         .fillColor('#1a1a2e')
         .font('Helvetica-Bold')
-        .text(`🗺️ ${clueLabel}`, PAGE_MARGIN, 30, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+        .text(`Treasure Hunt: ${clueLabel}`, PAGE_MARGIN, 30, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
       doc.image(clue.buffer, qrX_interactive, 75, { width: qrSize_interactive, height: qrSize_interactive });
 
