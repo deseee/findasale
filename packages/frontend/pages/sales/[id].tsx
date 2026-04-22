@@ -39,8 +39,8 @@ import { useArrivalAssistant } from '../../hooks/useArrivalAssistant'; // Featur
 import RemindMeButton from '../../components/RemindMeButton';
 import LeaveSaleWarning from '../../components/LeaveSaleWarning'; // Feature #121: Warn on leave
 import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart Cart
-import ShopperCartDrawer from '../../components/ShopperCartDrawer'; // Phase 1: Smart Cart
 import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
+import { useCart } from '../../context/CartContext';
 import ActivityFeed from '../../components/ActivityFeed'; // Feature #51: Activity Feed + HypeMeter
 import HypeMeter from '../../components/HypeMeter'; // Feature #51: Hype Meter (viewer count)
 import SaleRSVPButton from '../../components/SaleRSVPButton';
@@ -142,9 +142,9 @@ const SaleDetailPage = () => {
   const [downloadingKit, setDownloadingKit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [messageModalOpen, setMessageModalOpen] = useState(false);
+  const { openCart } = useCart();
   const [showLeaveWarning, setShowLeaveWarning] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
-  const [isShopperCartOpen, setIsShopperCartOpen] = useState(false);
   const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false);
   const [pendingCartItem, setPendingCartItem] = useState<any>(null);
   const [photoUploadError, setPhotoUploadError] = useState('');
@@ -1446,15 +1446,8 @@ const SaleDetailPage = () => {
         onSuccess={handleMessageSuccess}
       />
 
-      {/* Phase 1: Smart Cart — browsing cart drawer */}
-      <ShopperCartDrawer
-        isOpen={isShopperCartOpen}
-        onClose={() => setIsShopperCartOpen(false)}
-        saleName={sale?.title}
-      />
-
       {/* Phase 1: Smart Cart — floating action button */}
-      <ShopperCartFAB onClick={() => setIsShopperCartOpen(true)} />
+      <ShopperCartFAB onClick={openCart} />
 
       {/* Phase 1: Smart Cart — switch sale confirmation modal */}
       {showSwitchSaleModal && (
