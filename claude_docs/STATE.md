@@ -127,18 +127,19 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S537)
+## Next Session (S538)
 
-**S537 priority queue:**
-1. **Push S536 changes** — two push blocks provided: (a) security hardening batch (6 files), (b) XP wirings batch (3 files). Both must be pushed before Chrome QA.
-2. **Chrome QA — Guild Primer** — verify /shopper/guild-primer: all sections render, Hunt Pass column, tiered trail table, dark mode, personalized XP bar when logged in, cross-link to /hunt-pass.
-3. **Chrome QA — Hunt Pass slim CTA** — verify /shopper/hunt-pass: hero, price card, 4 benefits, CTAs, cross-link to /guild-primer.
-4. **Chrome QA backlog** — S531/S529/S532 fixes (blocked/unverified queue).
-5. **Phone verification feature** — `phoneVerified` field missing from User model. REFERRAL_FIRST_PURCHASE (500 XP) gamedesign spec requires phone gate. Either build phone verification or get explicit gamedesign exception documented.
+**S538 priority queue:**
+1. **Push S537 changes** — push block below (4 files: Layout.tsx, next.config.js, _app.tsx, CLAUDE.md).
+2. **Push S536 changes (still pending)** — push blocks in patrick-dashboard.md: (a) S534+S535 batch, (b) security hardening batch (6 files), (c) XP wirings batch (3 files).
+3. **Chrome QA — Guild Primer** — verify /shopper/guild-primer: all sections render, Hunt Pass column, tiered trail table, dark mode, personalized XP bar when logged in.
+4. **Chrome QA — Hunt Pass slim CTA** — verify /shopper/hunt-pass: hero, price card, 4 benefits, CTAs.
+5. **Chrome QA backlog** — S531/S529/S532 fixes (blocked/unverified queue).
+6. **Phone verification feature** — `phoneVerified` field missing from User model. REFERRAL_FIRST_PURCHASE (500 XP) gamedesign spec requires phone gate. Either build phone verification or get explicit gamedesign exception documented.
 
 **Patrick actions:**
-- Push security hardening batch (push block from S536 above — 6 files)
-- Push XP wirings batch (push block from S536 above — 3 files)
+- Push S537 changes (push block below)
+- Push S536 changes (3 push blocks still pending from patrick-dashboard.md)
 
 ## Current Work
 
@@ -181,6 +182,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - 🔲 Chrome QA for all S534 changes (pending).
 
 ## Recent Sessions
+
+**S537 (2026-04-21, COMPLETE):** Infrastructure + housekeeping session. Beta badge added to Layout.tsx header (desktop + mobile). GitGuardian credential exposure remediated: Railway DB password rotated (old `QvnUGsnsjujFVoeVyORLTusAovQkirAq` invalid), hardcoded credential removed from committed CLAUDE.md, stored in private global mnt/.claude/CLAUDE.md (not in git) and packages/database/.env (gitignored). SEO: www → non-www permanent redirect added to next.config.js, global canonical URL tag added to _app.tsx (strips query params, always points to finda.sale). CLAUDE.md §7 parallel dispatch HARD RULE added to prevent re-deriving Skill vs Agent pattern each session. Railway MCP OAuth double-fire investigated — root cause is Anthropic bug #51398 (CLAUDE_PLUGIN_DATA not persistent in Cowork Desktop). Workaround: Railway CLI v4.40.2 installed with project token, binary stored at mnt/.claude/bin/railway (persistent), token at mnt/.claude/railway.env. Use CLI for all Railway ops (logs, restart, redeploy) — bypass OAuth entirely. Push block in patrick-dashboard.md.
 
 **S536 (2026-04-21, COMPLETE):** XP economy security audit + hardening + deferred wirings. Hacker agent ran full audit — 19 findings (2 P0, 8 P1, 9 P2). All dispatched in parallel (4 fix agents + 3 wiring agents). Key fixes: cap checks now fail-closed (return 0 not full cap on DB error), spendXp atomic via updateMany WHERE guard, REFERRAL_FIRST_PURCHASE gets 24h holdUntil + purchaseId for claw-back, ORGANIZER_REFERRAL_PURCHASE status-CREDITED-before-award (atomic), both referral XP awards now linked to purchaseId (chargeback reversal was blind to them before), SALE_PUBLISHED one-time milestone (no more publish/unpublish farm), HAUL_POST cap renamed HAUL_POST:60 (old value of 4 was firing after the first 15-XP post), ORG_HAUL_FROM_SALE capped at 100/month, leaderboard no longer exposes userId, referral codes now use crypto.randomBytes. Three deferred XP wirings shipped: HAUL_POST_LIKES (5 XP, once per post at 10+ likes), ORG_SHOPPER_SIGNUP (10 XP to organizer on shopper's first purchase), REFERRAL_ORG_FIRST_SALE (50 XP to shopper referrer on organizer's first published sale). Open gap: phoneVerified not on User model — REFERRAL_FIRST_PURCHASE phone gate not yet enforced.
 

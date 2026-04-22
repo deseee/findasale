@@ -1,40 +1,26 @@
-# Patrick's Dashboard — S536 Complete
+# Patrick's Dashboard — S537 Complete
 
 ## What Happened This Session
 
-S536: Full XP economy security audit (hacker agent, 19 findings) + all P0/P1/P2 fixes shipped + three deferred XP wirings finally wired.
+S537: Infrastructure + housekeeping. Beta badge, credential rotation, SEO canonical fix, Railway CLI setup.
 
-## ✅ Done This Session — Security Hardening (S536 Batch 1)
+## ✅ Done This Session
 
 | What | Details |
 |------|---------|
-| Cap fail-open → fail-closed | checkDailyXpCap + checkMonthlyXpCap now return 0 on DB error (was returning full cap — anyone could bypass all XP rate limits during DB instability) |
-| spendXp() atomic | Now uses updateMany with WHERE guildXp >= amount — prevents concurrent double-spend race |
-| REFERRAL_FIRST_PURCHASE secured | 24h holdUntil from payment added; purchaseId linked so chargeback claw-back now works |
-| ORGANIZER_REFERRAL_PURCHASE atomic | Status set to CREDITED BEFORE XP fires (was after — race allowed double-award); hardcoded 500 → XP_AWARDS constant |
-| Both referral awards purchaseId-linked | REFERRAL_FIRST_PURCHASE and ORGANIZER_REFERRAL_PURCHASE now pass purchaseId to awardXp — chargeback reversal was completely blind to both |
-| SALE_PUBLISHED one-time | Added idempotency check — only fires on organizer's very first publish ever (was every publish = free farm) |
-| Visit XP race fixed | All concurrent visit checks wrapped in Prisma $transaction to prevent two simultaneous requests both earning XP |
-| HAUL_POST cap renamed | HAUL_POST_COUNT:4 → HAUL_POST:60. The old value of 4 meant the cap fired after earning just 4 XP total — effectively blocking after the 1st haul post (which gives 15 XP). Now correctly capped at 60 XP/month (4 posts × 15 XP) |
-| ORG_HAUL_FROM_SALE capped | 100 XP/month cap added (was uncapped — coordinated haul ring could spam organizer XP) |
-| HP churn hold fail-closed | applyHuntPassChurnHold now returns 30-day hold on DB error (was returning null = no hold) |
-| Leaderboard userId removed | Public leaderboard no longer exposes primary DB keys (IDOR enumeration vector) |
-| Referral codes now crypto | Math.random() → crypto.randomBytes(4) in referralService |
-| Self-referral IP logging | authController logs referrer/referee IP pair post-referral for fraud ring detection |
+| Beta badge | Added to desktop header (next to logo) and mobile drawer header. Amber pill, "BETA" uppercase. |
+| Credential rotation | Railway DB password rotated after GitGuardian alert. Old password is dead. New creds in mnt/.claude/CLAUDE.md + packages/database/.env only — never in git. |
+| CLAUDE.md credential cleanup | Hardcoded Railway URL removed from committed CLAUDE.md. Stored in private global CLAUDE.md (not in git). |
+| WWW redirect | next.config.js: www.finda.sale → finda.sale permanent redirect. Fixes Google "duplicate without canonical." |
+| Canonical tag | _app.tsx: global `<link rel="canonical">` on every page, strips query params, always points to finda.sale. |
+| CLAUDE.md dispatch rule | §7 parallel dispatch HARD RULE added — stops Claude from re-deriving Skill vs Agent pattern every session (was wasting tokens). |
+| Railway CLI workaround | OAuth double-fire is Anthropic bug #51398 (unfixable from our side). Workaround: Railway CLI v4.40.2 stored at mnt/.claude/bin/railway + token at mnt/.claude/railway.env. Future sessions use CLI — no OAuth pop-ups. |
 
-## ✅ Done This Session — New XP Wirings (S536 Batch 2)
-
-| What | XP | Details |
-|------|----|---------|
-| HAUL_POST_LIKES | 5 | haulPostController addReaction(): fires when post hits 10+ likes, once per post (PointsTransaction idempotency). UGCPhotoReaction has DB-level unique constraint — duplicate likes blocked. |
-| ORG_SHOPPER_SIGNUP | 10 | stripeController: fires on shopper's first-ever purchase (purchaseCount===1), awards to sale organizer. purchaseId idempotency guard. No monthly cap per gamedesign spec. |
-| REFERRAL_ORG_FIRST_SALE | 50 | saleController updateSaleStatus: fires on organizer's first published sale. Looks up ReferralReward to find referring shopper. Description-scoped idempotency. Non-blocking. |
-
-## 🚩 Still Open
+## 🚩 Still Open From S536
 
 | Item | Details |
 |------|---------|
-| phoneVerified missing from User model | REFERRAL_FIRST_PURCHASE (500 XP) gamedesign spec requires phone verification before award fires. Field doesn't exist. Needs phone verification feature OR GameDesign to document exception. |
+| phoneVerified missing from User model | REFERRAL_FIRST_PURCHASE (500 XP) spec requires phone gate. Field doesn't exist. Needs phone verification feature or GameDesign exception. |
 
 ## ⬜ Still Needs Chrome QA
 
@@ -61,15 +47,28 @@ S536: Full XP economy security audit (hacker agent, 19 findings) + all P0/P1/P2 
 |---------|--------|
 | Vercel (frontend) | ✅ Green |
 | Railway (backend) | ✅ Green |
-| S534+S535 changes | ⚠️ Unpushed (include in push below) |
-| S536 Batch 1 (security) | ⚠️ Unpushed |
-| S536 Batch 2 (wirings) | ⚠️ Unpushed |
+| S537 changes | ⚠️ Unpushed (push block below) |
+| S534+S535 changes | ⚠️ Unpushed (push block below) |
+| S536 Batch 1 (security) | ⚠️ Unpushed (push block below) |
+| S536 Batch 2 (wirings) | ⚠️ Unpushed (push block below) |
 
 ## Your Push Blocks
 
-Push these in order. Each one builds on the last.
+Push these in order.
 
-### Push 1 — S534+S535 (older unpushed work)
+### Push 1 — S537 (this session)
+```powershell
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/next.config.js
+git add packages/frontend/pages/_app.tsx
+git add CLAUDE.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S537: Beta badge, www redirect, canonical tag, cred cleanup, dispatch rule, Railway CLI"
+.\push.ps1
+```
+
+### Push 2 — S534+S535 (older unpushed work)
 ```powershell
 git add packages/backend/src/services/boostPricing.ts
 git add packages/backend/src/services/xpService.ts
@@ -80,14 +79,13 @@ git add packages/backend/src/controllers/haulPostController.ts
 git add packages/backend/src/controllers/stripeController.ts
 git add packages/frontend/pages/shopper/hunt-pass.tsx
 git add packages/frontend/pages/shopper/guild-primer.tsx
-git add packages/frontend/components/Layout.tsx
 git add packages/frontend/components/AvatarDropdown.tsx
 git add packages/frontend/components/RankUpModal.tsx
 git commit -m "S534+S535: Guild Primer, Hunt Pass CTA, XP repricing, 8 new XP constants, controller wiring"
 .\push.ps1
 ```
 
-### Push 2 — S536 Security Hardening
+### Push 3 — S536 Security Hardening
 ```powershell
 git add packages/backend/src/services/xpService.ts
 git add packages/backend/src/services/referralService.ts
@@ -114,19 +112,16 @@ git commit -m "Security: XP economy hardening — P0/P1/P2 audit fixes
 .\push.ps1
 ```
 
-### Push 3 — S536 XP Wirings + Docs
+### Push 4 — S536 XP Wirings + Docs
 ```powershell
 git add packages/backend/src/controllers/haulPostController.ts
 git add packages/backend/src/controllers/stripeController.ts
 git add packages/backend/src/controllers/saleController.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
 git add claude_docs/strategy/roadmap.md
-git commit -m "Feature: Wire deferred XP awards + S536 wrap docs
+git commit -m "Feature: Wire deferred XP awards
 
 - HAUL_POST_LIKES (5 XP): fires when haul post hits 10+ likes, once per post
 - ORG_SHOPPER_SIGNUP (10 XP): fires on shopper first purchase, awards to sale organizer
-- REFERRAL_ORG_FIRST_SALE (50 XP): fires on organizer first published sale, awards to referrer
-- STATE.md, patrick-dashboard.md, roadmap.md updated for S536"
+- REFERRAL_ORG_FIRST_SALE (50 XP): fires on organizer first published sale, awards to referrer"
 .\push.ps1
 ```
