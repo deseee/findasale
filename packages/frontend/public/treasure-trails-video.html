@@ -3,24 +3,51 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Treasure Trails — Multi-Sale Routes & Bonuses</title>
-<meta name="description" content="Plan multi-sale routes. Optimize your route. Complete trails. Earn bonus XP. Hit every sale. Find the good stuff.">
-<meta name="keywords" content="treasure trails, multi-sale routes, route planner, bonus xp, estate sales">
+<title>FindA.Sale — Plan Your Hunt. Earn XP.</title>
+<meta name="description" content="Build multi-sale routes. Optimize your time. Earn XP bonuses. Complete trails and unlock rewards.">
+<meta name="keywords" content="estate sale app, yard sale app, multi-sale routes, treasure trails, route planner, XP rewards">
 <meta name="author" content="FindA.Sale">
+<meta name="robots" content="index, follow">
 <meta name="theme-color" content="#D97706">
+<link rel="canonical" href="https://finda.sale/video/treasure-trails">
 
-<!-- Open Graph -->
+<!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="FindA.Sale">
-<meta property="og:url" content="https://finda.sale/treasure-trails">
-<meta property="og:title" content="Treasure Trails — Multi-Sale Routes">
-<meta property="og:description" content="Plan multi-sale routes. Complete trails. Earn bonus XP.">
+<meta property="og:url" content="https://finda.sale/video/treasure-trails">
+<meta property="og:title" content="FindA.Sale — Plan Your Hunt. Earn XP.">
+<meta property="og:description" content="Build multi-sale routes. Optimize your time. Earn XP bonuses.">
 <meta property="og:image" content="https://finda.sale/og-default.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="FindA.Sale — plan your treasure trail">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:url" content="https://finda.sale/treasure-trails">
-<meta name="twitter:title" content="Treasure Trails — Multi-Sale Routes">
+<meta name="twitter:url" content="https://finda.sale/video/treasure-trails">
+<meta name="twitter:title" content="FindA.Sale — Plan Your Hunt. Earn XP.">
+<meta name="twitter:description" content="Build multi-sale routes. Optimize your time. Earn XP bonuses.">
+<meta name="twitter:image" content="https://finda.sale/og-default.png">
+
+<!-- Icons -->
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "FindA.Sale",
+  "description": "Plan multi-sale routes and earn XP rewards with Treasure Trails.",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web, iOS, Android",
+  "url": "https://finda.sale/video/treasure-trails"
+}
+</script>
 
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -29,13 +56,14 @@
 :root {
   --amber: #D97706;
   --amber-light: #F59E0B;
+  --green: #10B981;
   --bg: #0D0D0D;
   --surface: #1A1A1A;
+  --surface-hover: #242424;
   --text: #F5F5F5;
   --text-muted: #A3A3A3;
   --text-dim: #737373;
   --radius: 16px;
-  --green: #10B981;
 }
 
 body {
@@ -52,12 +80,10 @@ body {
   padding: 16px 24px 80px;
 }
 
-/* Logo */
 .logo-bar {
   text-align: center;
   padding: 8px 0 12px;
 }
-
 .logo-text {
   font-family: 'Montserrat', sans-serif;
   font-weight: 800;
@@ -65,18 +91,24 @@ body {
   letter-spacing: -0.5px;
   color: var(--text);
 }
-
 .logo-text span {
   color: var(--amber);
 }
 
-/* Video player */
 .video-section {
   display: flex;
   justify-content: center;
   margin-bottom: 40px;
 }
-
+.video-caption {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
 .video-wrapper {
   position: relative;
   width: 320px;
@@ -85,243 +117,177 @@ body {
   overflow: hidden;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 32px 80px rgba(0,0,0,0.6);
 }
-
-#player {
-  position: relative;
+.video-wrapper iframe {
   width: 390px;
-  height: 844px;
-  background: #0A0A0A;
-  overflow: hidden;
-  border-radius: 44px;
+  height: 915px;
+  border: none;
   transform: scale(0.82);
   transform-origin: top left;
+  display: block;
 }
 
-.scene {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.45s ease;
-  padding: 40px 36px;
-}
-
-.scene.active {
-  opacity: 1;
-}
-
-#progress-bar {
-  position: absolute;
-  bottom: 0; left: 0;
-  height: 3px;
-  background: var(--amber);
-  width: 0%;
-  z-index: 200;
-}
-
-#play-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,0.72);
-  backdrop-filter: blur(4px);
-  z-index: 400;
-  cursor: pointer;
-  border-radius: 44px;
-  transition: opacity 0.3s;
-  padding: 60px 36px 80px;
-}
-
-#play-overlay.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.overlay-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
+.hero {
+  text-align: center;
   margin-bottom: 56px;
 }
-
-.overlay-logo {
+.hero h1 {
   font-family: 'Montserrat', sans-serif;
-  font-size: 46px;
-  font-weight: 900;
-  letter-spacing: -1.8px;
-  color: #FFFFFF;
-  line-height: 1;
+  font-weight: 800;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -1px;
+  margin-bottom: 18px;
+}
+.hero h1 em {
+  font-style: normal;
+  color: var(--green);
+}
+.hero .subtitle {
+  font-size: 18px;
+  color: var(--text-muted);
+  max-width: 520px;
+  margin: 0 auto;
 }
 
-.overlay-logo .a-dot {
-  color: var(--amber);
+.section-header {
+  text-align: center;
+  margin-bottom: 28px;
 }
-
-.overlay-watch {
-  font-family: 'Inter', sans-serif;
+.section-header .eyebrow {
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 3.5px;
+  color: var(--green);
   text-transform: uppercase;
-  color: rgba(255,255,255,0.42);
+  letter-spacing: 2px;
+  margin-bottom: 10px;
 }
-
-.play-icon {
-  width: 72px; height: 72px;
-  background: rgba(217,119,6,0.9);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
-}
-
-.play-icon svg {
-  margin-left: 5px;
-}
-
-/* Scene styles */
-#s1 { background: #0A0A0A; gap: 0; }
-#s2 { background: #111118; gap: 0; }
-#s3 { background: #0D0D15; gap: 0; }
-#s4 { background: #0A0A0A; gap: 0; }
-#s5 { background: #050505; gap: 0; }
-
-.s-heading {
+.section-header h2 {
   font-family: 'Montserrat', sans-serif;
-  font-size: 36px;
-  font-weight: 800;
-  color: #FFFFFF;
-  text-align: center;
+  font-weight: 700;
+  font-size: 26px;
   letter-spacing: -0.5px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  line-height: 1.2;
 }
 
-.s-heading.in { opacity: 1; transform: translateY(0); }
-.s-heading em { font-style: normal; color: var(--amber); }
-
-.s-subtext {
-  font-family: 'Inter', sans-serif;
-  font-size: 18px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
-  margin-top: 12px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s 0.15s ease, transform 0.4s 0.15s ease;
+.features {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 56px;
 }
-
-.s-subtext.in { opacity: 1; transform: translateY(0); }
-
-.badge-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin: 24px 0;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+.feature {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius);
+  padding: 28px 28px 26px;
 }
-
-.badge-container.in { opacity: 1; transform: translateY(0); }
-
-.badge {
-  background: rgba(217, 119, 6, 0.2);
-  border: 1px solid var(--amber);
-  color: var(--amber-light);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.badge.green {
+.feature .icon {
+  width: 44px;
+  height: 44px;
   background: rgba(16, 185, 129, 0.15);
-  border-color: var(--green);
-  color: var(--green);
-}
-
-.map-visual {
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 240px;
-  height: 200px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-radius: 16px;
-  margin: 16px 0;
-  position: relative;
-  opacity: 0;
-  transform: scale(0.9);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 16px;
+  font-size: 24px;
 }
-
-.map-visual.in { opacity: 1; transform: scale(1); }
-
-.map-pin {
-  width: 28px;
-  height: 40px;
-  position: absolute;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.map-pin.in { opacity: 1; transform: translateY(0); }
-
-.map-pin svg {
-  width: 100%;
-  height: 100%;
-}
-
-.checkmark-display {
+.feature h3 {
   font-family: 'Montserrat', sans-serif;
-  font-size: 48px;
-  font-weight: 900;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+.feature p {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.feature p strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.xp-tiers {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 56px;
+}
+.xp-tier {
+  background: var(--surface);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius);
+  padding: 16px 12px;
+  text-align: center;
+}
+.stops-count {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
   color: var(--green);
-  text-align: center;
-  margin: 20px 0;
-  opacity: 0;
-  transition: opacity 0.4s ease;
+  margin-bottom: 4px;
 }
-
-.checkmark-display.in { opacity: 1; }
-
-.xp-badge-display {
-  background: rgba(217, 119, 6, 0.2);
-  border: 2px solid var(--amber);
-  color: var(--amber-light);
-  padding: 12px 24px;
-  border-radius: 24px;
+.xp-reward {
   font-family: 'Montserrat', sans-serif;
-  font-size: 20px;
-  font-weight: 800;
-  text-align: center;
-  margin: 16px 0;
-  opacity: 0;
-  transform: scale(0.8);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--amber-light);
+  margin-top: 6px;
+}
+.tier-label {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.xp-badge-display.in { opacity: 1; transform: scale(1); }
+.offer {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, var(--surface) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius);
+  padding: 40px 32px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+.offer .badge {
+  display: inline-block;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+.offer h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+  margin-bottom: 14px;
+}
+.offer h2 em {
+  font-style: normal;
+  color: var(--green);
+}
+.offer p {
+  color: var(--text-muted);
+  font-size: 16px;
+  max-width: 460px;
+  margin: 0 auto 8px;
+  line-height: 1.55;
+}
 
 .cta-section {
   text-align: center;
   margin-bottom: 56px;
 }
-
 .cta-btn {
   display: inline-block;
   background: var(--amber);
@@ -335,67 +301,15 @@ body {
   letter-spacing: -0.3px;
   transition: background 0.2s, transform 0.15s;
   box-shadow: 0 4px 24px rgba(217, 119, 6, 0.3);
-  border: none;
-  cursor: pointer;
 }
-
 .cta-btn:hover {
   background: var(--amber-light);
   transform: translateY(-1px);
 }
-
-/* Section header */
-.section-header {
-  text-align: center;
-  margin-bottom: 28px;
-}
-
-.section-header h2 {
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 700;
-  font-size: 26px;
-  letter-spacing: -0.5px;
-}
-
-/* Feature cards */
-.features {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  margin-bottom: 56px;
-}
-
-.feature {
-  background: var(--surface);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: var(--radius);
-  padding: 28px;
-}
-
-.feature .icon {
-  width: 44px;
-  height: 44px;
-  background: rgba(217, 119, 6, 0.15);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-  font-size: 24px;
-}
-
-.feature h3 {
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 700;
-  font-size: 19px;
-  margin-bottom: 8px;
-  letter-spacing: -0.3px;
-}
-
-.feature p {
-  font-size: 15px;
-  color: var(--text-muted);
-  line-height: 1.55;
+.cta-note {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--text-dim);
 }
 
 .footer {
@@ -403,12 +317,10 @@ body {
   padding: 32px 0 16px;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
-
 .footer p {
   font-size: 13px;
   color: var(--text-dim);
 }
-
 .footer a {
   color: var(--amber);
   text-decoration: none;
@@ -416,270 +328,109 @@ body {
 
 @media (max-width: 600px) {
   .page { padding: 8px 16px 60px; }
-  .video-wrapper { width: 290px; height: 679px; border-radius: 38px; }
-  #player { transform: scale(0.7425); }
+  .video-wrapper {
+    width: 290px;
+    height: 679px;
+    border-radius: 38px;
+  }
+  .video-wrapper iframe {
+    transform: scale(0.7425);
+  }
+  .cta-btn { font-size: 16px; padding: 16px 40px; }
   .section-header h2 { font-size: 22px; }
   .feature { padding: 24px 22px; }
-  .cta-btn { font-size: 16px; padding: 16px 40px; }
+  .xp-tiers { gap: 8px; }
 }
 </style>
 </head>
 <body>
 
 <div class="page">
-  <!-- Logo -->
-  <div class="logo-bar">
-    <div class="logo-text">Find<span>A.</span>Sale</div>
-  </div>
-
-  <!-- Video player -->
   <div class="video-section">
     <div class="video-wrapper">
-      <div id="player">
-        <!-- Play overlay -->
-        <div id="play-overlay">
-          <div class="overlay-brand">
-            <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
-            <div class="overlay-watch">Watch — 30 Seconds</div>
-          </div>
-          <div class="play-icon">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <path d="M8 5L23 14L8 23V5Z" fill="white"/>
-            </svg>
-          </div>
-        </div>
-
-        <!-- Scene 1: Three sales, one route -->
-        <div class="scene" id="s1">
-          <div class="s-heading" id="h1">Three sales</div>
-          <div class="map-visual" id="map1">
-            <div class="map-pin" id="pin1" style="left:20%; top:20%;">
-              <svg viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C6.48 2 2 6.48 2 12c0 7 10 21 10 21s10-14 10-21c0-5.52-4.48-10-10-10z" fill="#D97706"/>
-              </svg>
-            </div>
-            <div class="map-pin" id="pin2" style="left:50%; top:40%;">
-              <svg viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C6.48 2 2 6.48 2 12c0 7 10 21 10 21s10-14 10-21c0-5.52-4.48-10-10-10z" fill="#D97706"/>
-              </svg>
-            </div>
-            <div class="map-pin" id="pin3" style="right:20%; top:60%;">
-              <svg viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C6.48 2 2 6.48 2 12c0 7 10 21 10 21s10-14 10-21c0-5.52-4.48-10-10-10z" fill="#D97706"/>
-              </svg>
-            </div>
-          </div>
-          <div class="s-subtext" id="st1">One optimized route</div>
-        </div>
-
-        <!-- Scene 2: Optimized -->
-        <div class="scene" id="s2">
-          <div class="s-heading" id="h2">We plan the order</div>
-          <div class="s-subtext" id="st2">9 AM · 10:30 AM · 12 PM</div>
-          <div class="s-subtext" id="st2b">You just drive</div>
-        </div>
-
-        <!-- Scene 3: Trail Bonus -->
-        <div class="scene" id="s3">
-          <div class="s-heading" id="h3">Complete a trail</div>
-          <div class="checkmark-display" id="checkmark">✓</div>
-          <div class="xp-badge-display" id="xp-bonus">+50 XP Trail Bonus</div>
-          <div class="s-subtext" id="st3">3+ stops = bonus</div>
-        </div>
-
-        <!-- Scene 4: Community Trails -->
-        <div class="scene" id="s4">
-          <div class="s-heading" id="h4">Community trails</div>
-          <div class="s-subtext" id="st4">234 completions · 4.8 ⭐</div>
-          <div class="badge-container" id="bc4">
-            <div class="badge">Save Trail</div>
-          </div>
-        </div>
-
-        <!-- Scene 5: CTA -->
-        <div class="scene" id="s5">
-          <div class="s-heading" id="h5">Your next adventure</div>
-          <div class="s-subtext" id="st5">Plan a trail. Hit every sale.</div>
-          <div style="margin-top:40px; opacity:0; transition:opacity 0.5s 0.6s ease;" id="url5">
-            <div style="font-family: 'Montserrat', sans-serif; font-size:20px; font-weight:700; color:var(--amber); letter-spacing:-0.3px;">finda.sale</div>
-          </div>
-        </div>
-
-        <!-- Progress bar -->
-        <div id="progress-bar"></div>
-      </div>
+      <iframe src="treasure-trails-video-ad.html?embed=1" title="FindA.Sale Treasure Trails Demo" loading="lazy"></iframe>
     </div>
   </div>
 
-  <!-- Section: Features -->
+  <div class="hero">
+    <h1>Plan smarter.<br><em>Hunt better.</em></h1>
+    <p class="subtitle">Build multi-sale routes that maximize your time. Complete trails and earn XP bonuses. Find more, travel less.</p>
+  </div>
+
   <div class="section-header">
-    <h2>Turn a Saturday into an expedition.</h2>
+    <div class="eyebrow">Route Mastery</div>
+    <h2>XP Rewards by Trail</h2>
+  </div>
+
+  <div class="xp-tiers">
+    <div class="xp-tier">
+      <div class="stops-count">3</div>
+      <div class="tier-label">Stops</div>
+      <div class="xp-reward">+40 XP</div>
+    </div>
+    <div class="xp-tier">
+      <div class="stops-count">4</div>
+      <div class="tier-label">Stops</div>
+      <div class="xp-reward">+50 XP</div>
+    </div>
+    <div class="xp-tier">
+      <div class="stops-count">5</div>
+      <div class="tier-label">Stops</div>
+      <div class="xp-reward">+60 XP</div>
+    </div>
+    <div class="xp-tier">
+      <div class="stops-count">7+</div>
+      <div class="tier-label">Stops</div>
+      <div class="xp-reward">+80 XP</div>
+    </div>
   </div>
 
   <div class="features">
     <div class="feature">
       <div class="icon">🗺️</div>
+      <h3>Build Routes</h3>
+      <p>Add multiple sales to one route. <strong>3+ stops unlock bonus XP.</strong> Plan your perfect hunt day.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">⏱️</div>
       <h3>Optimized Routes</h3>
-      <p>Add sales to your list. Trails calculates the best order — minimizing backtracking and maximizing your morning. Multi-sale planning in two taps.</p>
+      <p>See travel time between sales. <strong>Plan realistically.</strong> Never miss a sale due to bad timing.</p>
     </div>
     <div class="feature">
-      <div class="icon">📈</div>
-      <h3>Trail XP Bonus</h3>
-      <p>Complete a 3+ stop trail and earn a completion bonus on top of your regular visit XP. More stops, more XP.</p>
-    </div>
-    <div class="feature">
-      <div class="icon">👥</div>
-      <h3>Community Trails</h3>
-      <p>Browse trails built by other shoppers in your area. Sort by rating, distance, or sale type. Estate sales, yard sales, auctions — all in one route.</p>
+      <div class="icon">🔗</div>
+      <h3>Share & Collaborate</h3>
+      <p>Share routes with other hunters. <strong>Discover proven trails.</strong> Build the hunting community.</p>
     </div>
   </div>
 
-  <!-- CTA -->
+  <div class="offer">
+    <div class="badge">Treasure Trails</div>
+    <h2>Complete trails. <em>Earn XP.</em></h2>
+    <p>Every multi-sale route is a treasure trail. Hit 3+ sales and unlock bonus rewards. More stops = more XP.</p>
+  </div>
+
   <div class="cta-section">
-    <a href="https://finda.sale/explore" class="cta-btn">Find a Trail</a>
+    <a href="https://finda.sale/register" class="cta-btn" id="main-cta">Start Planning Today</a>
+    <p class="cta-note">Build your first route. Earn rewards. Join the hunt.</p>
   </div>
 
-  <!-- Footer -->
   <div class="footer">
     <p>Built by <a href="https://finda.sale">FindA.Sale</a> — the app for estate sales, yard sales, auctions, flea markets, and consignment.</p>
   </div>
 </div>
 
 <script>
-const DURATION = 30000; // 30 seconds
-const scenes = ['s1', 's2', 's3', 's4', 's5'];
-const sceneStarts = [0, 6000, 12000, 18000, 24000];
-
-let startTime = null;
-let rafId = null;
-let running = false;
-let currentScene = 0;
-
-const playOverlay = document.getElementById('play-overlay');
-const progressBar = document.getElementById('progress-bar');
-const player = document.getElementById('player');
-
-function showScene(idx) {
-  scenes.forEach((s, i) => {
-    const el = document.getElementById(s);
-    if (el) el.classList.toggle('active', i === idx);
-  });
-  currentScene = idx;
-}
-
-function resetAll() {
-  ['h1','st1','map1','pin1','pin2','pin3'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['h2','st2','st2b'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['h3','st3','checkmark','xp-bonus'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['h4','st4','bc4'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['h5','st5','url5'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  progressBar.style.width = '0%';
-  progressBar.style.transition = 'none';
-  scenes.forEach(s => {
-    const el = document.getElementById(s);
-    if (el) el.classList.remove('active');
-  });
-}
-
-const events = [
-  { at: 0, fn: () => {
-    showScene(0);
-    setTimeout(() => document.getElementById('h1').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('map1').classList.add('in'), 300);
-    setTimeout(() => document.getElementById('pin1').classList.add('in'), 500);
-    setTimeout(() => document.getElementById('pin2').classList.add('in'), 700);
-    setTimeout(() => document.getElementById('pin3').classList.add('in'), 900);
-    setTimeout(() => document.getElementById('st1').classList.add('in'), 1200);
-  }},
-  { at: 6000, fn: () => {
-    showScene(1);
-    setTimeout(() => document.getElementById('h2').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('st2').classList.add('in'), 400);
-    setTimeout(() => document.getElementById('st2b').classList.add('in'), 1000);
-  }},
-  { at: 12000, fn: () => {
-    showScene(2);
-    setTimeout(() => document.getElementById('h3').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('checkmark').classList.add('in'), 400);
-    setTimeout(() => document.getElementById('xp-bonus').classList.add('in'), 900);
-    setTimeout(() => document.getElementById('st3').classList.add('in'), 1400);
-  }},
-  { at: 18000, fn: () => {
-    showScene(3);
-    setTimeout(() => document.getElementById('h4').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('st4').classList.add('in'), 500);
-    setTimeout(() => document.getElementById('bc4').classList.add('in'), 1000);
-  }},
-  { at: 24000, fn: () => {
-    showScene(4);
-    setTimeout(() => document.getElementById('h5').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('st5').classList.add('in'), 400);
-    setTimeout(() => document.getElementById('url5').classList.add('in'), 800);
-  }},
-  { at: 30000, fn: () => {
-    running = false;
-    cancelAnimationFrame(rafId);
-  }}
-];
-
-let nextEvent = 0;
-
-function tick(now) {
-  if (!running) return;
-  const elapsed = now - startTime;
-
-  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
-    events[nextEvent].fn();
-    nextEvent++;
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const src = params.get('src');
+  if (src) {
+    document.querySelectorAll('a[href*="/register"]').forEach(function(link) {
+      const url = new URL(link.href);
+      url.searchParams.set('src', src);
+      link.href = url.toString();
+    });
   }
-
-  const pct = Math.min((elapsed / DURATION) * 100, 100);
-  progressBar.style.width = pct + '%';
-
-  if (elapsed < DURATION) {
-    rafId = requestAnimationFrame(tick);
-  }
-}
-
-function start() {
-  resetAll();
-  nextEvent = 0;
-  running = true;
-  startTime = performance.now();
-  requestAnimationFrame(tick);
-}
-
-playOverlay.addEventListener('click', () => {
-  playOverlay.classList.add('hidden');
-  start();
-});
-
-player.addEventListener('click', () => {
-  if (!startTime) return;
-  running = !running;
-  if (running) {
-    startTime = performance.now() - (startTime || 0);
-    rafId = requestAnimationFrame(tick);
-  } else {
-    cancelAnimationFrame(rafId);
-  }
-});
+})();
 </script>
-
 </body>
 </html>

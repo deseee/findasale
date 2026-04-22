@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hunt Pass — Marketing Video (40s)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0D0D0D;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  padding: 20px;
+}
+
+/* ── Embed mode: strip chrome so iframe host owns framing ── */
+body.embed {
+  min-height: auto;
+  padding: 0;
+  display: block;
+  background: transparent;
+}
+body.embed #player {
+  border-radius: 0;
+  box-shadow: none;
+}
+body.embed #info,
+body.embed #timer { display: none; }
+
+/* ── 9:16 Player ── */
+#player {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: #0A0A0A;
+  overflow: hidden;
+  border-radius: 44px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 100px rgba(0,0,0,0.8);
+  flex-shrink: 0;
+}
+
+/* ── Scenes ── */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  padding: 40px 36px;
+}
+.scene.active { opacity: 1; }
+
+/* ── Progress Bar ── */
+#progress-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: #D97706;
+  width: 0%;
+  z-index: 200;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Replay ── */
+#replay-btn {
+  position: absolute;
+  bottom: 36px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 10px 28px;
+  border-radius: 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  display: none;
+  z-index: 300;
+  transition: background 0.2s;
+}
+#replay-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── Play overlay (click to start) ── */
+#play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  cursor: pointer;
+  border-radius: 44px;
+  transition: opacity 0.3s;
+  padding: 60px 36px 80px;
+}
+#play-overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+}
+.overlay-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.overlay-logo .a-dot { color: #D97706; }
+.overlay-watch {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+}
+.play-icon {
+  width: 72px; height: 72px;
+  background: rgba(217,119,6,0.9);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
+}
+.play-icon svg { margin-left: 5px; }
+
+/* ────────────────────────────────
+   SCENE 1 — HOOK
+──────────────────────────────── */
+#s1 { background: #0A0A0A; gap: 0; }
+
+.s1-tagline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  color: #FFFFFF;
+  line-height: 1.1;
+  letter-spacing: -2px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(-12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.s1-tagline.in { opacity: 1; transform: translateY(0); }
+
+.s1-card {
+  margin-top: 40px;
+  width: 280px;
+  height: 160px;
+  background: linear-gradient(135deg, #D97706 0%, #F59E0B 100%);
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  opacity: 0;
+  transform: scale(0.88);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s cubic-bezier(0.34,1.3,0.64,1);
+  box-shadow: 0 16px 48px rgba(217,119,6,0.4);
+}
+.s1-card.in { opacity: 1; transform: scale(1); }
+
+.card-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(0,0,0,0.7);
+}
+.card-price {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 42px;
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: -1.5px;
+}
+.card-period {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(0,0,0,0.65);
+}
+
+/* ────────────────────────────────
+   SCENE 2 — EARLY ACCESS
+──────────────────────────────── */
+#s2 { background: #111118; padding: 32px 24px; justify-content: center; }
+
+.s2-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 28px;
+}
+.s2-headline.in { opacity: 1; transform: translateY(0); }
+
+/* Phone mockup */
+.phone-wrap {
+  position: relative;
+  width: 288px;
+  height: 576px;
+  flex-shrink: 0;
+}
+.phone-shell {
+  width: 100%;
+  height: 100%;
+  background: #1C1C2E;
+  border-radius: 28px;
+  border: 2px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.phone-island {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  width: 88px; height: 26px;
+  background: #000;
+  border-radius: 14px;
+  z-index: 10;
+}
+.phone-screen {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.35s ease;
+}
+.phone-screen.hidden { opacity: 0; pointer-events: none; }
+
+.listings-screen {
+  background: #1C1C2E;
+  padding: 48px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.listing-item {
+  background: rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 12px;
+  height: 80px;
+  display: flex;
+  gap: 10px;
+  opacity: 0.35;
+  filter: blur(2px);
+}
+.listing-item.unlocked {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.listing-thumb {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #8B7355 0%, #6B5B3E 100%);
+}
+
+.listing-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.listing-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+}
+
+.listing-price {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #D97706;
+}
+
+.unlock-animation {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.unlock-animation.in { opacity: 1; }
+
+.s2-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  margin-top: 18px;
+}
+.s2-subline.in { opacity: 1; transform: translateY(0); }
+
+/* ────────────────────────────────
+   SCENE 3 — 1.5× XP MULTIPLIER
+──────────────────────────────── */
+#s3 { background: #0D0D15; gap: 0; padding: 32px 24px; justify-content: center; }
+
+.s3-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 32px;
+}
+.s3-headline.in { opacity: 1; transform: translateY(0); }
+
+.xp-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.xp-row.in { opacity: 1; transform: translateY(0); }
+
+.xp-box {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.xp-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+}
+
+.xp-value {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  color: #F59E0B;
+  letter-spacing: -1px;
+}
+
+.xp-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7C3AED 0%, #A78BFA 100%);
+  border-radius: 3px;
+  width: 40%;
+  transition: width 2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.xp-bar-fill.expand { width: 60%; }
+
+.vs-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.35);
+  margin: 0 -2px;
+}
+
+/* ────────────────────────────────
+   SCENE 4 — HOLD PRIORITY
+──────────────────────────────── */
+#s4 { background: #0A0A0A; gap: 0; padding: 32px 24px; justify-content: center; }
+
+.s4-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 36px;
+}
+.s4-headline.in { opacity: 1; transform: translateY(0); }
+
+.hold-cards {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.hold-card {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  text-align: center;
+}
+.hold-card.in { opacity: 1; transform: translateY(0); }
+
+.hold-card.fast {
+  border-color: #D97706;
+  background: rgba(217,119,6,0.1);
+}
+
+.hold-icon {
+  font-size: 32px;
+}
+
+.hold-status {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+}
+
+.hold-status.fast { color: #D97706; }
+
+/* ────────────────────────────────
+   SCENE 5 — EARN FREE PATH
+──────────────────────────────── */
+#s5 { background: #0D0D15; gap: 0; padding: 32px 24px; justify-content: center; }
+
+.s5-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 28px;
+}
+.s5-headline.in { opacity: 1; transform: translateY(0); }
+
+.xp-progress {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.progress-bar {
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #D97706 0%, #F59E0B 100%);
+  border-radius: 4px;
+  width: 60%;
+  transition: width 2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.progress-fill.complete { width: 100%; }
+
+.progress-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+}
+
+.grandmaster-badge {
+  background: linear-gradient(135deg, rgba(217,119,6,0.2) 0%, rgba(245,158,11,0.1) 100%);
+  border: 1.5px solid rgba(217,119,6,0.4);
+  border-radius: 16px;
+  padding: 20px 16px;
+  text-align: center;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s 0.2s ease, transform 0.5s 0.2s cubic-bezier(0.34,1.3,0.64,1);
+}
+.grandmaster-badge.in { opacity: 1; transform: scale(1); }
+
+.rank-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.rank-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  color: #F59E0B;
+  letter-spacing: -0.3px;
+  margin-bottom: 4px;
+}
+
+.rank-benefit {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.7);
+}
+
+/* ────────────────────────────────
+   SCENE 6 — VALUE STACK
+──────────────────────────────── */
+#s6 { background: #050505; gap: 0; padding: 28px 24px; justify-content: center; }
+
+.s6-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 24px;
+}
+.s6-headline.in { opacity: 1; transform: translateY(0); }
+
+.value-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.value-item {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.value-item.in { opacity: 1; transform: translateX(0); }
+
+.value-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.2);
+  border: 1.5px solid #10B981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10B981;
+  font-size: 14px;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: scale(0.6);
+  animation: checkPop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+
+@keyframes checkPop {
+  0% { opacity: 0; transform: scale(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.value-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+}
+
+.s6-offer {
+  margin-top: 24px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s6-offer.in { opacity: 1; transform: translateY(0); }
+
+.offer-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.3px;
+}
+
+.offer-text em {
+  font-style: normal;
+  color: #D97706;
+}
+
+/* ────────────────────────────────
+   SCENE 7 — CTA
+──────────────────────────────── */
+#s7 { background: #0D0D0D; gap: 0; padding: 40px 32px; }
+
+.cta-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  margin-bottom: 40px;
+}
+.cta-text.in { opacity: 1; transform: translateY(0); }
+
+.cta-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 52px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s 0.2s ease, transform 0.5s 0.2s cubic-bezier(0.34,1.3,0.64,1);
+}
+.cta-logo.in { opacity: 1; transform: scale(1); }
+.cta-logo .a-dot { color: #D97706; }
+
+.cta-url {
+  display: inline-block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #D97706;
+  margin-top: 24px;
+  opacity: 0;
+  transition: opacity 0.5s 0.4s ease;
+  letter-spacing: -0.3px;
+}
+.cta-url.in { opacity: 1; }
+
+/* ── Scene Navigation ── */
+#scene-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+.nav-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.75);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+#scene-dots {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.scene-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: background 0.25s, transform 0.25s;
+  flex-shrink: 0;
+}
+.scene-dot.active { background: #D97706; transform: scale(1.4); }
+.scene-dot:hover:not(.active) { background: rgba(255,255,255,0.45); }
+
+/* ── Info panel below player ── */
+#info {
+  margin-top: 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.7;
+}
+#info strong { color: rgba(255,255,255,0.5); }
+
+/* ── Timer display ── */
+#timer {
+  position: absolute;
+  top: 16px; right: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  z-index: 150;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<div id="player">
+
+  <!-- Timer -->
+  <div id="timer">0:00</div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar"></div>
+
+  <!-- Play overlay -->
+  <div id="play-overlay">
+    <div class="overlay-brand">
+      <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="overlay-watch">Watch — 40 Seconds</div>
+    </div>
+    <div class="play-icon">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M8 5L23 14L8 23V5Z" fill="white"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ── Scene 1: Hook ── -->
+  <div class="scene" id="s1">
+    <div class="s1-tagline" id="s1-tagline">Hunt first.<br>Find better.</div>
+    <div class="s1-card" id="s1-card">
+      <div class="card-label">Hunt Pass</div>
+      <div class="card-price">$9.99</div>
+      <div class="card-period">/month</div>
+    </div>
+  </div>
+
+  <!-- ── Scene 2: Early Access ── -->
+  <div class="scene" id="s2">
+    <div class="s2-headline" id="s2-headline">See sales before everyone else.</div>
+    <div class="phone-wrap">
+      <div class="phone-shell">
+        <div class="phone-island"></div>
+        <div class="phone-screen" id="listings-screen">
+          <div class="listings-screen">
+            <div class="listing-item" id="l1">
+              <div class="listing-thumb"></div>
+              <div class="listing-text">
+                <div class="listing-title">Vintage Lamp</div>
+                <div class="listing-price">$25</div>
+              </div>
+            </div>
+            <div class="listing-item" id="l2">
+              <div class="listing-thumb"></div>
+              <div class="listing-text">
+                <div class="listing-title">Brass Mirror</div>
+                <div class="listing-price">$35</div>
+              </div>
+            </div>
+            <div class="listing-item" id="l3">
+              <div class="listing-thumb"></div>
+              <div class="listing-text">
+                <div class="listing-title">Oak Table</div>
+                <div class="listing-price">$120</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="s2-subline" id="s2-subline">Early access before doors open</div>
+  </div>
+
+  <!-- ── Scene 3: 1.5× XP Multiplier ── -->
+  <div class="scene" id="s3">
+    <div class="s3-headline" id="s3-headline">Every action earns more.</div>
+    <div class="xp-row" id="xp-row-1">
+      <div class="xp-box">
+        <div class="xp-label">Regular Shopper</div>
+        <div class="xp-value" id="xp-regular">10</div>
+        <div class="xp-bar">
+          <div class="xp-bar-fill"></div>
+        </div>
+        <div class="xp-label" style="margin-top:4px;">XP per purchase</div>
+      </div>
+    </div>
+    <div style="margin: 20px 0; font-family:'Inter'; font-size:14px; font-weight:600; color:rgba(255,255,255,0.4); opacity:0; transition:opacity 0.4s ease;" id="vs-label">vs.</div>
+    <div class="xp-row" id="xp-row-2">
+      <div class="xp-box" style="background:rgba(124,58,237,0.12);border-color:rgba(124,58,237,0.3);">
+        <div class="xp-label">Hunt Pass Member</div>
+        <div class="xp-value" id="xp-hunt" style="color:#A78BFA;">15</div>
+        <div class="xp-bar">
+          <div class="xp-bar-fill expand" style="background:linear-gradient(90deg,#7C3AED 0%,#A78BFA 100%);"></div>
+        </div>
+        <div class="xp-label" style="margin-top:4px;">XP per purchase</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scene 4: Hold Priority ── -->
+  <div class="scene" id="s4">
+    <div class="s4-headline" id="s4-headline">First dibs on holds.</div>
+    <div class="hold-cards">
+      <div class="hold-card" id="hold-1">
+        <div class="hold-icon">⏱️</div>
+        <div class="hold-status">Regular</div>
+      </div>
+      <div class="hold-card fast" id="hold-2">
+        <div class="hold-icon">⚡</div>
+        <div class="hold-status fast">Hunt Pass</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scene 5: Earn Free Path ── -->
+  <div class="scene" id="s5">
+    <div class="s5-headline" id="s5-headline">Earn your way. Keep it free.</div>
+    <div class="xp-progress">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-text">Reach 👑 GRANDMASTER (12,000 XP)</div>
+    </div>
+    <div class="grandmaster-badge" id="gm-badge">
+      <div class="rank-icon">👑</div>
+      <div class="rank-name">GRANDMASTER</div>
+      <div class="rank-benefit">Free Hunt Pass forever</div>
+    </div>
+  </div>
+
+  <!-- ── Scene 6: Value Stack ── -->
+  <div class="scene" id="s6">
+    <div class="s6-headline" id="s6-headline">What you get</div>
+    <div class="value-list">
+      <div class="value-item" id="vi1">
+        <div class="value-check">✓</div>
+        <div class="value-text">Early access</div>
+      </div>
+      <div class="value-item" id="vi2">
+        <div class="value-check">✓</div>
+        <div class="value-text">1.5× XP multiplier</div>
+      </div>
+      <div class="value-item" id="vi3">
+        <div class="value-check">✓</div>
+        <div class="value-text">Hold priority</div>
+      </div>
+      <div class="value-item" id="vi4">
+        <div class="value-check">✓</div>
+        <div class="value-text">Rarity boosts</div>
+      </div>
+    </div>
+    <div class="s6-offer" id="s6-offer">
+      <div class="offer-text">$9.99/month<br>Or <em>earn it free</em></div>
+    </div>
+  </div>
+
+  <!-- ── Scene 7: CTA ── -->
+  <div class="scene" id="s7">
+    <div class="cta-text" id="cta-text">Start hunting early.</div>
+    <div class="cta-logo" id="cta-logo">Find<span class="a-dot">A.</span>Sale</div>
+    <div class="cta-url" id="cta-url">https://finda.sale/hunt-pass</div>
+  </div>
+
+  <!-- Pause indicator -->
+  <div id="pause-indicator" style="
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:350;
+  ">
+    <div style="
+      width:60px; height:60px; border-radius:50%;
+      background:rgba(0,0,0,0.6); backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:center;
+      border:1.5px solid rgba(255,255,255,0.15);
+    ">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect x="4" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+        <rect x="13" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Replay button -->
+  <button id="replay-btn">↺ &nbsp;Play again</button>
+
+</div>
+
+<!-- Scene navigation -->
+<div id="scene-nav">
+  <button class="nav-btn" id="prev-btn">&#8249;</button>
+  <div id="scene-dots">
+    <div class="scene-dot active" data-scene="0" title="Scene 1: Hook"></div>
+    <div class="scene-dot" data-scene="1" title="Scene 2: Early Access"></div>
+    <div class="scene-dot" data-scene="2" title="Scene 3: 1.5× XP"></div>
+    <div class="scene-dot" data-scene="3" title="Scene 4: Hold Priority"></div>
+    <div class="scene-dot" data-scene="4" title="Scene 5: Earn Free"></div>
+    <div class="scene-dot" data-scene="5" title="Scene 6: Value Stack"></div>
+    <div class="scene-dot" data-scene="6" title="Scene 7: CTA"></div>
+  </div>
+  <button class="nav-btn" id="next-btn">&#8250;</button>
+</div>
+
+<div id="info">
+  <strong>Hunt Pass — 40-second Marketing Video</strong><br>
+  9:16 vertical · TikTok / YouTube Shorts format<br>
+  Click the player to start · Screen-record to capture
+</div>
+
+<script>
+// ── Embed mode: activate via ?embed=1 on the iframe src ──
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.body.classList.add('embed');
+}
+
+// ── State ──
+let startTime = null;
+let rafId = null;
+let running = false;
+let paused = false;
+let pauseStart = null;
+const DURATION = 40000;
+const sceneStarts = [0, 5000, 12000, 18000, 24000, 29000, 35000];
+let currentScene = 0;
+
+// ── DOM refs ──
+const player       = document.getElementById('player');
+const playOverlay  = document.getElementById('play-overlay');
+const progressBar  = document.getElementById('progress-bar');
+const replayBtn    = document.getElementById('replay-btn');
+const timerEl      = document.getElementById('timer');
+
+// Scene els
+const scenes = ['s1','s2','s3','s4','s5','s6','s7'].map(id => document.getElementById(id));
+
+// ── Helper: add class after delay ──
+function addAt(el, cls, delay) {
+  if (!el) return;
+  return setTimeout(() => el.classList.add(cls), delay);
+}
+
+// ── Show/hide scene ──
+function showScene(id) {
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  const idx = parseInt(id.replace('s', '')) - 1;
+  if (!isNaN(idx) && idx >= 0) { currentScene = idx; updateDots(); }
+}
+
+// ── Sync nav dots to current scene ──
+function updateDots() {
+  document.querySelectorAll('.scene-dot').forEach(function(dot, i) {
+    dot.classList.toggle('active', i === currentScene);
+  });
+}
+
+// ── Jump to scene by index (0–6) ──
+function seekToScene(n) {
+  n = Math.max(0, Math.min(6, n));
+  running = false;
+  cancelAnimationFrame(rafId);
+  playOverlay.classList.add('hidden');
+  replayBtn.style.display = 'none';
+  resetAll();
+  const seekMs = sceneStarts[n];
+  startTime = performance.now() - seekMs;
+  nextEvent = 0;
+  while (nextEvent < events.length && events[nextEvent].at < seekMs) { nextEvent++; }
+  showScene('s' + (n + 1));
+  paused = false;
+  running = true;
+  rafId = requestAnimationFrame(tick);
+}
+
+// ── Reset all ──
+function resetAll() {
+  // Scene 1
+  document.getElementById('s1-tagline').classList.remove('in');
+  document.getElementById('s1-card').classList.remove('in');
+  // Scene 2
+  document.getElementById('s2-headline').classList.remove('in');
+  ['l1','l2','l3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('unlocked');
+  });
+  document.getElementById('s2-subline').classList.remove('in');
+  // Scene 3
+  document.getElementById('s3-headline').classList.remove('in');
+  document.getElementById('xp-row-1').classList.remove('in');
+  document.getElementById('xp-row-2').classList.remove('in');
+  document.getElementById('vs-label').style.opacity = '0';
+  const xpBar2 = document.querySelector('.xp-row:nth-child(3) .xp-bar-fill');
+  if (xpBar2) xpBar2.classList.remove('expand');
+  // Scene 4
+  document.getElementById('s4-headline').classList.remove('in');
+  document.getElementById('hold-1').classList.remove('in');
+  document.getElementById('hold-2').classList.remove('in');
+  // Scene 5
+  document.getElementById('s5-headline').classList.remove('in');
+  document.getElementById('progress-fill').classList.remove('complete');
+  document.getElementById('gm-badge').classList.remove('in');
+  // Scene 6
+  document.getElementById('s6-headline').classList.remove('in');
+  ['vi1','vi2','vi3','vi4'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s6-offer').classList.remove('in');
+  // Scene 7
+  document.getElementById('cta-text').classList.remove('in');
+  document.getElementById('cta-logo').classList.remove('in');
+  document.getElementById('cta-url').classList.remove('in');
+  // UI
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  progressBar.style.width = '0%';
+  progressBar.style.transition = 'none';
+  timerEl.textContent = '0:00';
+  replayBtn.style.display = 'none';
+  pauseIndicator.style.opacity = '0';
+}
+
+// ── Timeline events ── (ms offset)
+const events = [
+  // SCENE 1 — Hook (0–5000ms)
+  { at: 0, fn: () => {
+    showScene('s1');
+    addAt(document.getElementById('s1-tagline'),'in',0);
+    addAt(document.getElementById('s1-card'),'in',200);
+  }},
+
+  // SCENE 2 — Early Access (5000–12000ms)
+  { at: 5000, fn: () => {
+    showScene('s2');
+    addAt(document.getElementById('s2-headline'),'in',0);
+  }},
+
+  { at: 6500, fn: () => {
+    document.getElementById('l1').classList.add('unlocked');
+  }},
+
+  { at: 7200, fn: () => {
+    document.getElementById('l2').classList.add('unlocked');
+  }},
+
+  { at: 7900, fn: () => {
+    document.getElementById('l3').classList.add('unlocked');
+  }},
+
+  { at: 9500, fn: () => {
+    addAt(document.getElementById('s2-subline'),'in',0);
+  }},
+
+  // SCENE 3 — 1.5× XP (12000–18000ms)
+  { at: 12000, fn: () => {
+    showScene('s3');
+    addAt(document.getElementById('s3-headline'),'in',0);
+    addAt(document.getElementById('xp-row-1'),'in',500);
+  }},
+
+  { at: 14000, fn: () => {
+    document.getElementById('vs-label').style.opacity = '1';
+    addAt(document.getElementById('xp-row-2'),'in',200);
+  }},
+
+  { at: 16200, fn: () => {
+    document.querySelector('.xp-row:nth-child(3) .xp-bar-fill').classList.add('expand');
+  }},
+
+  // SCENE 4 — Hold Priority (18000–24000ms)
+  { at: 18000, fn: () => {
+    showScene('s4');
+    addAt(document.getElementById('s4-headline'),'in',0);
+    addAt(document.getElementById('hold-1'),'in',600);
+    addAt(document.getElementById('hold-2'),'in',900);
+  }},
+
+  // SCENE 5 — Earn Free (24000–29000ms)
+  { at: 24000, fn: () => {
+    showScene('s5');
+    addAt(document.getElementById('s5-headline'),'in',0);
+  }},
+
+  { at: 25500, fn: () => {
+    document.getElementById('progress-fill').classList.add('complete');
+  }},
+
+  { at: 27000, fn: () => {
+    addAt(document.getElementById('gm-badge'),'in',0);
+  }},
+
+  // SCENE 6 — Value Stack (29000–35000ms)
+  { at: 29000, fn: () => {
+    showScene('s6');
+    addAt(document.getElementById('s6-headline'),'in',0);
+  }},
+
+  { at: 30200, fn: () => { addAt(document.getElementById('vi1'),'in',0); }},
+  { at: 30650, fn: () => { addAt(document.getElementById('vi2'),'in',0); }},
+  { at: 31100, fn: () => { addAt(document.getElementById('vi3'),'in',0); }},
+  { at: 31550, fn: () => { addAt(document.getElementById('vi4'),'in',0); }},
+
+  { at: 32800, fn: () => {
+    addAt(document.getElementById('s6-offer'),'in',0);
+  }},
+
+  // SCENE 7 — CTA (35000–40000ms)
+  { at: 35000, fn: () => {
+    showScene('s7');
+    addAt(document.getElementById('cta-text'),'in',0);
+    addAt(document.getElementById('cta-logo'),'in',600);
+    addAt(document.getElementById('cta-url'),'in',1100);
+  }},
+
+  // End at 40000ms
+  { at: 40000, fn: () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+    replayBtn.style.display = 'block';
+  }}
+];
+
+// ── RAF loop ──
+let nextEvent = 0;
+function tick(now) {
+  if (!running) return;
+  const elapsed = now - startTime;
+
+  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
+    events[nextEvent].fn();
+    nextEvent++;
+  }
+
+  const pct = Math.min((elapsed / DURATION) * 100, 100);
+  progressBar.style.width = pct + '%';
+
+  const secs = Math.min(Math.floor(elapsed / 1000), 40);
+  const ss = String(secs % 60).padStart(2,'0');
+  timerEl.textContent = `0:${ss}`;
+
+  if (elapsed < DURATION) {
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function start() {
+  resetAll();
+  nextEvent = 0;
+  running = true;
+  paused = false;
+  pauseStart = null;
+  startTime = performance.now();
+  requestAnimationFrame(tick);
+}
+
+// ── Pause / Resume ──
+const pauseIndicator = document.getElementById('pause-indicator');
+let pauseFlashTimer = null;
+
+function togglePause() {
+  if (!startTime || (!running && !paused)) return;
+  if (paused) {
+    const pauseDuration = performance.now() - pauseStart;
+    startTime += pauseDuration;
+    pauseStart = null;
+    paused = false;
+    running = true;
+    pauseIndicator.style.opacity = '0';
+    rafId = requestAnimationFrame(tick);
+  } else {
+    paused = true;
+    pauseStart = performance.now();
+    running = false;
+    cancelAnimationFrame(rafId);
+    pauseIndicator.style.opacity = '1';
+    clearTimeout(pauseFlashTimer);
+    pauseFlashTimer = setTimeout(() => {
+      if (paused) pauseIndicator.style.opacity = '0.35';
+    }, 600);
+  }
+}
+
+player.addEventListener('click', (e) => {
+  if (e.target.closest('#play-overlay')) return;
+  if (e.target.closest('#replay-btn')) return;
+  if (!startTime) return;
+  togglePause();
+});
+
+// ── Play overlay ──
+playOverlay.addEventListener('click', () => {
+  playOverlay.classList.add('hidden');
+  start();
+});
+
+// ── Replay ──
+replayBtn.addEventListener('click', () => {
+  replayBtn.style.display = 'none';
+  start();
+});
+
+// ── Scene navigation ──
+document.getElementById('prev-btn').addEventListener('click', function() {
+  seekToScene(currentScene - 1);
+});
+document.getElementById('next-btn').addEventListener('click', function() {
+  seekToScene(currentScene + 1);
+});
+document.querySelectorAll('.scene-dot').forEach(function(dot) {
+  dot.addEventListener('click', function() {
+    seekToScene(parseInt(this.dataset.scene));
+  });
+});
+</script>
+</body>
+</html>
