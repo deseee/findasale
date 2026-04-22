@@ -458,8 +458,11 @@ export async function spendXp(
       return false; // Insufficient balance (atomic check failed)
     }
 
-    // Fetch updated user for rank recalculation
-    const updatedUser = await prisma.user.findUnique({ where: { id: userId } });
+    // Fetch updated user for rank recalculation — use lifetimeXpEarned (permanent milestone)
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { guildXp: true, lifetimeXpEarned: true, explorerRank: true },
+    });
     if (!updatedUser) return false;
 
     // Create negative transaction record
@@ -473,9 +476,9 @@ export async function spendXp(
       },
     });
 
-    // Recalculate rank based on new balance (updatedUser.guildXp already reflects the decrement)
+    // Recalculate rank based on lifetime XP (permanent milestones)
     // Note: ranks are milestones — spending XP does NOT drop rank (gamedesign S417 decision #14)
-    const newRank = getRankForXp(updatedUser.guildXp);
+    const newRank = getRankForXp(updatedUser.lifetimeXpEarned);
     if (newRank !== updatedUser.explorerRank) {
       await prisma.user.update({
         where: { id: userId },

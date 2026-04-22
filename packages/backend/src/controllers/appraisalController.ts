@@ -10,7 +10,7 @@ import {
   getOpenRequests,
   voteOnResponse,
 } from '../services/appraisalService';
-import { spendXp, XP_SINKS } from '../services/xpService';
+import { spendXp, getSpendableXp, XP_SINKS } from '../services/xpService';
 import { prisma } from '../lib/prisma';
 
 /**
@@ -64,6 +64,17 @@ export const createAppraisalRequest = async (req: AuthRequest, res: Response) =>
         required: appraisalXpCost,
         minimum: MIN_APPRAISAL_XP,
         current: user.guildXp,
+        cost: appraisalXpCost,
+      });
+    }
+
+    // Check if user has spendable XP (not on hold)
+    const spendableXp = await getSpendableXp(req.user.id);
+    if (spendableXp < appraisalXpCost) {
+      return res.status(402).json({
+        message: 'Insufficient spendable XP. Some XP may be on hold.',
+        required: appraisalXpCost,
+        spendable: spendableXp,
         cost: appraisalXpCost,
       });
     }

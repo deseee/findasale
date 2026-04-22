@@ -148,7 +148,9 @@ export const checkAndAward = async (
       });
 
       // Only increment if not yet unlocked
-      const isAlreadyUnlocked = existingUserAch?.unlockedAt !== null;
+      // Note: existingUserAch?.unlockedAt returns undefined (not null) when no record exists,
+      // so use != null (loose) to catch both null and undefined correctly.
+      const isAlreadyUnlocked = existingUserAch?.unlockedAt != null;
 
       if (isAlreadyUnlocked) {
         // Already unlocked, skip this achievement
