@@ -551,6 +551,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Star size={16} className="text-indigo-500" />
               <span>Explorer's Guild</span>
             </Link>
+            <Link href="/coupons" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Spend XP on discount codes and Rarity Boost">
+              <Ticket size={16} className="text-indigo-500" />
+              <span>Rewards</span>
+            </Link>
             <Link href="/shopper/reputation" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Shield size={16} className="text-indigo-500" />
               <span>Reputation</span>
@@ -1311,6 +1315,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/shopper/guild-primer" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Star size={14} className="inline mr-2 text-indigo-500" /> Explorer's Guild
                         </Link>
+                        <Link href="/coupons" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <Ticket size={14} className="inline mr-2 text-indigo-500" /> Rewards
+                        </Link>
                         <Link href="/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Trophy size={14} className="inline mr-2 text-indigo-500" /> Leaderboard
                         </Link>
@@ -1526,6 +1533,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </Link>
                     <Link href="/shopper/guild-primer" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Star size={14} className="inline mr-2 text-indigo-500" /> Explorer's Guild
+                    </Link>
+                    <Link href="/coupons" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <Ticket size={14} className="inline mr-2 text-indigo-500" /> Rewards
                     </Link>
                     <Link href="/leaderboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <Trophy size={14} className="inline mr-2 text-indigo-500" /> Leaderboard

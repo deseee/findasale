@@ -11,10 +11,11 @@ import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Head from 'next/head';
 import Link from 'next/link';
-import { Ticket } from 'lucide-react';
+import { Ticket, Sparkles } from 'lucide-react';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/ToastContext';
+import { RarityBoostModal } from '../components/RarityBoostModal';
 
 type Coupon = {
   id: string;
@@ -94,6 +95,7 @@ const CouponsPage = () => {
   const [newCode, setNewCode] = useState<string | null>(null);
   const [newCodeType, setNewCodeType] = useState<'organizer' | 'shopper'>('organizer');
   const [copied, setCopied] = useState(false);
+  const [showRarityBoostModal, setShowRarityBoostModal] = useState(false);
 
   // Redirect to login if not authenticated
   if (!authLoading && !user) {
@@ -356,6 +358,38 @@ const CouponsPage = () => {
               </p>
             </div>
           )}
+
+          {/* Rarity Boost — shopper-only XP spend */}
+          {!isOrganizer && (
+            <div className="mt-6 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-700 rounded-xl p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-indigo-500 dark:bg-indigo-600 rounded-lg flex items-center justify-center">
+                  <Sparkles className="text-white" size={24} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">
+                    Rarity Boost
+                  </h3>
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+                    Spend 15 XP to boost the rarity rolls on your next photo uploads at a sale.
+                    Higher chance of rolling a rare find.
+                  </p>
+                  <button
+                    onClick={() => setShowRarityBoostModal(true)}
+                    disabled={spendableXp < 15}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition"
+                  >
+                    Activate Rarity Boost (15 XP)
+                  </button>
+                  {spendableXp < 15 && (
+                    <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-2">
+                      You need at least 15 XP. Earn XP by scanning QR codes, completing purchases, and checking in at sales.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Active Coupons List */}
@@ -420,6 +454,19 @@ const CouponsPage = () => {
           )}
         </div>
       </main>
+
+      {/* Rarity Boost Modal — shopper XP spend */}
+      {!isOrganizer && (
+        <RarityBoostModal
+          isOpen={showRarityBoostModal}
+          onClose={() => setShowRarityBoostModal(false)}
+          userXp={spendableXp}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['xp-profile'] });
+            showToast('Rarity Boost activated — your next upload gets a rarity bonus!', 'success');
+          }}
+        />
+      )}
     </>
   );
 };

@@ -359,13 +359,13 @@ function RanksPage() {
             })}
           </div>
 
-          {/* Back to Loyalty Link */}
+          {/* Back to Explorer Profile */}
           <div className="text-center mt-12">
             <Link
-              href="/shopper/loyalty"
+              href="/shopper/explorer-profile"
               className="inline-block text-amber-600 dark:text-amber-400 hover:underline font-semibold"
             >
-              ← Back to Loyalty Passport
+              ← Back to Explorer Profile
             </Link>
           </div>
         </div>

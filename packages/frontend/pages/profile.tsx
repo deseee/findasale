@@ -425,7 +425,7 @@ const ProfilePage = () => {
             <p className="text-warm-600 dark:text-warm-400 text-sm mb-4">
               Track your XP, rank up, and earn rewards.
             </p>
-            <Link href="/shopper/loyalty" className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+            <Link href="/shopper/explorer-profile" className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
               View Your Rank
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
