@@ -31,7 +31,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
     emoji: '🧭',
     label: 'Initiate',
     milestone: 'Everyone starts here',
-    perks: ['Basic access', 'Start earning XP', 'Join community'],
+    perks: ['Hold items for 30 minutes', 'Save 1 item to wishlist'],
   },
   {
     rank: 'SCOUT',
@@ -40,7 +40,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
     emoji: '🔍',
     label: 'Scout',
     milestone: 'First milestone',
-    perks: ['Haul posts unlocked', 'Cosmetics available', 'Boosts unlock', '1 early-access sale/week'],
+    perks: ['Hold items for 45 minutes', 'Save up to 3 items', '1-hour early access to Legendary items', 'Scout Reveal + Haul Unboxing unlocked'],
   },
   {
     rank: 'RANGER',
@@ -49,7 +49,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
     emoji: '🎯',
     label: 'Ranger',
     milestone: 'Serious hunter',
-    perks: ['3 early-access sales/week', 'Priority support (2hr)', 'Sourcebook access'],
+    perks: ['Hold items for 60 minutes', 'Hold 2 items at once', '2-hour early access', 'Save up to 10 items', 'Treasure Trails: 3/week'],
   },
   {
     rank: 'SAGE',
@@ -58,7 +58,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
     emoji: '✨',
     label: 'Sage',
     milestone: 'Expert collector',
-    perks: ['Unlimited early access', '48h alerts', 'Featured placement'],
+    perks: ['Hold items for 75 minutes', 'Hold 3 items at once', '4-hour early access', 'Leaderboard visibility', 'Treasure Trails: unlimited'],
   },
   {
     rank: 'GRANDMASTER',
@@ -67,7 +67,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
     emoji: '👑',
     label: 'Grandmaster',
     milestone: 'Mastery achieved',
-    perks: ['Free Hunt Pass forever', 'All Sage perks', 'Annual leaderboard'],
+    perks: ['Hold items for 90 minutes', 'All holds auto-confirm', '6-hour early access', 'Unlimited wishlist', 'All cosmetics unlocked', 'Free Hunt Pass included'],
   },
 ];
 
