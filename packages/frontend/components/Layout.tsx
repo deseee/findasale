@@ -1608,6 +1608,22 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Link href={isOrganizer ? "/organizer/settings" : "/shopper/settings"} className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                     <Settings size={14} className={`inline mr-2 ${isOrganizer ? "text-amber-500" : "text-indigo-500"}`} /> Settings
                   </Link>
+                  {!isStandalone && (
+                    <>
+                      <button
+                        onClick={handleInstallApp}
+                        className="block w-full text-left px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
+                      >
+                        <Smartphone size={14} className="inline mr-2 text-amber-500" />
+                        📲 Install App
+                      </button>
+                      {showIOSTooltip && (
+                        <div className="px-3 py-2 text-xs text-warm-700 dark:text-warm-300 bg-warm-50 dark:bg-gray-800 rounded-md mx-2 mt-1">
+                          Tap the Share button (↑) below, then select "Add to Home Screen"
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={handleLogout}

@@ -955,19 +955,6 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 </>
               )}
 
-              {/* Host a Sale CTA for shopper-only users */}
-              {!isOrganizer && (
-                <button
-                  onClick={() => {
-                    onBecomeOrganizer?.();
-                    setIsOpen(false);
-                  }}
-                  className="block w-full text-left px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium transition-colors"
-                >
-                  Host a Sale
-                </button>
-              )}
-
               {/* Explore Section — Collapsible */}
               <button
                 onClick={() => setExploreOpen(!exploreOpen)}
@@ -1195,7 +1182,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
             </>
           )}
 
-          {/* Footer: Pricing, My Profile, Settings, Logout */}
+          {/* Footer: Pricing, Host a Sale, My Profile/Explorer Profile, Settings, Logout */}
           <hr className="my-2 border-warm-200 dark:border-gray-700" />
           <Link
             href="/pricing"
@@ -1205,12 +1192,21 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
             <Tag size={16} className="text-warm-500" />
             <span>Pricing</span>
           </Link>
+          {!isOrganizer && (
+            <button
+              onClick={() => { onBecomeOrganizer?.(); setIsOpen(false); }}
+              className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            >
+              <UserPlus size={16} className="text-amber-600 dark:text-amber-400" />
+              <span>Host a Sale</span>
+            </button>
+          )}
           <Link
             href={isOrganizer ? "/organizer/profile" : "/shopper/explorer-profile"}
             className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
-            <UserCircle size={16} className="text-amber-600" />
+            <UserCircle size={16} className={isOrganizer ? "text-amber-600" : "text-indigo-500"} />
             <span>{isOrganizer ? "My Profile" : "Explorer Profile"}</span>
           </Link>
           <Link
