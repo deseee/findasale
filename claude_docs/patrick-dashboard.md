@@ -1,4 +1,43 @@
-# Patrick's Dashboard — S546 Complete
+# Patrick's Dashboard — S547 Complete
+
+## 🔥 S547 — Past Sales Card Mobile Overflow
+
+**One-line summary:** Fixed the Reopen / Settle / View Details buttons overflowing past the card edge on the organizer dashboard's Past Sales cards when viewed on mobile.
+
+**Root cause.** Two "Past Sales" blocks in `packages/frontend/pages/organizer/dashboard.tsx` (one in State 2 at line ~1520 that shows when you have an active sale, one in State 3 at line ~1640 when all sales are ended) laid the title + three action buttons out as horizontal flex siblings. Title took `flex-1`, the three actions (Reopen button, Settle → link, View Details → link) each sat inline with `ml-4` / `ml-2` margins. On a 375px viewport the title plus three buttons couldn't fit — the last button got clipped.
+
+**Fix.** Pure Tailwind-only, no logic touched:
+- Outer row → `flex-col sm:flex-row sm:items-center sm:justify-between` with a `gap-2` / `gap-3` on mobile, `sm:gap-0` on desktop. Mobile = title on top, actions below. Desktop = side-by-side like before.
+- Three action elements wrapped in a new `<div className="flex flex-wrap items-center gap-2 sm:ml-4">` — they now share a gap container and wrap cleanly, instead of each carrying its own inline margin.
+- Title + city got `min-w-0 truncate` so long sale names no longer force layout blow-out.
+- Removed obsolete `ml-4` / `ml-2` classes from the individual buttons (parent gap handles spacing now).
+
+**Desktop layout unchanged.** The `sm:flex-row sm:items-center sm:justify-between` means from 640px up, it's visually identical to before.
+
+**Single-file, <20 line change** — inline per CLAUDE.md §7 single-targeted-edit exception.
+
+## 📤 Push Block (S547)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+
+git commit -m "S547: fix past sales card mobile overflow on organizer dashboard"
+
+.\push.ps1
+```
+
+## 🎯 Next Session (S548) — What's Queued
+
+1. **Smoke test S547 fix** — open `/organizer/dashboard` on a 375px viewport as an organizer with ENDED sales; confirm the Past Sales cards no longer overflow and desktop view is unchanged.
+2. **Carry-over from S547 queue** — S545/S546 smoke tests (rank lock behavior, SaleLockCard, affiliate endpoint, mobile dashboard flex fix, Alice Insights Decimal fix).
+3. **Affiliate Batches 2–10** — architect spec at `claude_docs/feature-notes/affiliate-program-spec-S544.md`. Payout amounts still placeholder — lock before Batch 4.
+4. **Chrome QA backlog** — see STATE.md "Blocked/Unverified Queue".
+
+## ─── Archived Below: S546 ───
 
 ## 🔥 S546 — Recovery Session (S545 migrations)
 

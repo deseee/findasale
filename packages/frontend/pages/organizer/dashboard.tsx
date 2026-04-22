@@ -1528,43 +1528,45 @@ const OrganizerDashboard = () => {
                   </div>
                   <div className="space-y-2">
                     {salesData.filter((s: Sale) => s.status === 'ENDED').slice(0, 5).map((sale: Sale) => (
-                      <div key={sale.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors">
-                        <div className="flex-1">
-                          <p className="font-medium text-warm-900 dark:text-warm-100 text-sm">{sale.title}</p>
-                          <p className="text-xs text-warm-600 dark:text-warm-400">{sale.city}, {sale.state}</p>
+                      <div key={sale.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors gap-2 sm:gap-0">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-warm-900 dark:text-warm-100 text-sm truncate">{sale.title}</p>
+                          <p className="text-xs text-warm-600 dark:text-warm-400 truncate">{sale.city}, {sale.state}</p>
                         </div>
-                        <button
-                          onClick={async () => {
-                            if (!window.confirm('Reopen this sale? It will become visible to shoppers again.')) return;
-                            try {
-                              await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
-                              showToast('Sale reopened', 'success');
-                              setTimeout(() => window.location.reload(), 1000);
-                            } catch (error: any) {
-                              // Feature #249: Handle concurrent sales tier limit (409)
-                              if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
-                                const tierErr = error.response.data;
-                                showToast(
-                                  `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
-                                  'error'
-                                );
-                              } else {
-                                showToast(error.response?.data?.message || 'Failed to reopen', 'error');
+                        <div className="flex flex-wrap items-center gap-2 sm:ml-4">
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm('Reopen this sale? It will become visible to shoppers again.')) return;
+                              try {
+                                await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
+                                showToast('Sale reopened', 'success');
+                                setTimeout(() => window.location.reload(), 1000);
+                              } catch (error: any) {
+                                // Feature #249: Handle concurrent sales tier limit (409)
+                                if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+                                  const tierErr = error.response.data;
+                                  showToast(
+                                    `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
+                                    'error'
+                                  );
+                                } else {
+                                  showToast(error.response?.data?.message || 'Failed to reopen', 'error');
+                                }
                               }
-                            }
-                          }}
-                          className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors ml-4"
-                        >
-                          Reopen
-                        </button>
-                        {sale.status === 'ENDED' && (
-                          <Link href={`/organizer/settlement/${sale.id}`} className="text-green-600 hover:text-green-700 dark:text-green-400 font-semibold text-xs ml-2">
-                            Settle →
+                            }}
+                            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+                          >
+                            Reopen
+                          </button>
+                          {sale.status === 'ENDED' && (
+                            <Link href={`/organizer/settlement/${sale.id}`} className="text-green-600 hover:text-green-700 dark:text-green-400 font-semibold text-xs">
+                              Settle →
+                            </Link>
+                          )}
+                          <Link href={`/sales/${sale.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs">
+                            View Details →
                           </Link>
-                        )}
-                        <Link href={`/sales/${sale.id}`} className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs ml-2">
-                          View Details →
-                        </Link>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1642,12 +1644,12 @@ const OrganizerDashboard = () => {
                 <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Past Sales</h3>
                 <div className="space-y-4">
                   {salesData.map((sale: Sale) => (
-                    <div key={sale.id} className="flex items-center justify-between p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-semibold text-warm-900 dark:text-warm-100">{sale.title}</p>
-                        <p className="text-sm text-warm-600 dark:text-warm-400">{sale.city}, {sale.state}</p>
+                    <div key={sale.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 bg-warm-50 dark:bg-gray-700 rounded-lg gap-3 sm:gap-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-warm-900 dark:text-warm-100 truncate">{sale.title}</p>
+                        <p className="text-sm text-warm-600 dark:text-warm-400 truncate">{sale.city}, {sale.state}</p>
                       </div>
-                      <div className="flex items-center gap-2 ml-4">
+                      <div className="flex flex-wrap items-center gap-2 sm:ml-4">
                         {sale.status === 'ENDED' && (
                           <>
                             <button
