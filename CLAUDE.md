@@ -180,9 +180,15 @@ MUST go through subagents. This is not advisory — it is a hard gate.
 other `findasale-*` names are **Skills**, not agent types. Invoke them with
 `Skill('findasale-dev')`, NEVER with `Agent(subagent_type='findasale-dev')`.
 The Agent tool only accepts these types: `general-purpose`, `Explore`, `Plan`,
-`statusline-setup`, `claude-code-guide`. If you catch yourself reasoning about
-"which agent type to use" for a findasale skill — STOP. Use the Skill tool.
-Do not waste tokens deliberating. This mapping is fixed and non-negotiable.
+`statusline-setup`, `claude-code-guide`. Do not deliberate on this — the mapping
+is fixed and non-negotiable.
+
+**Parallel dispatch pattern (HARD RULE — do not re-derive this):**
+`Skill()` runs sequentially in the main conversation. For parallel work, use
+`Agent(subagent_type='general-purpose')` with the relevant skill context embedded
+in the prompt (file paths, task spec, acceptance criteria). Up to 7 concurrent
+Agent calls per message (Rule 33). Never invoke multiple Skills sequentially when
+the work is independent — that wastes tokens and time.
 
 **GATE (before every Write/Edit that creates or modifies code in `packages/`):**
 
