@@ -1192,7 +1192,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
                     {/* Shopping Cart Button */}
                     <button
-                      onClick={() => { setMobileCartOpen(true); setMenuOpen(false); }}
+                      onClick={() => { openCart(); setMenuOpen(false); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors text-left"
                     >
                       <ShoppingCart size={14} className="text-indigo-500" />
@@ -1414,7 +1414,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
                 {/* Shopping Cart Button */}
                 <button
-                  onClick={() => { setMobileCartOpen(true); setMenuOpen(false); }}
+                  onClick={() => { openCart(); setMenuOpen(false); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors text-left"
                 >
                   <ShoppingCart size={14} className="text-indigo-500" />
