@@ -460,7 +460,7 @@ const ShopperDashboard = () => {
               <MyTeamsCard />
 
               {/* Hunt Pass Active Badge */}
-              {userData && userData.huntPassActive && (
+              {user && user.huntPassActive && (
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <span className="text-xl">✅</span>
