@@ -87,7 +87,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const { isLowBandwidth } = useNetworkQuality();
   const cart = useShopperCart(user?.id);
   const { items: cartItems } = cart;
-  const { holdCount, isCartOpen, closeCart } = useCart();
+  const { holdCount, isCartOpen, closeCart, openCart } = useCart();
   const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const { data: unreadMessages } = useUnreadMessages(!!user);
@@ -190,7 +190,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         // Cart is empty or on a different sale — just notify
         showToast('Cashier is ready for you — open your cart and tap Share', 'info');
       }
-      setMobileCartOpen(true);
+      openCart();
     });
     return () => { socket.disconnect(); };
   }, [user?.id, cart.saleId, cart.cartCount]);
