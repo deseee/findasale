@@ -112,14 +112,14 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     enabled: !!saleId && typeof saleId === 'string',
   });
 
-  // Fetch treasure hunt clues
+  // Fetch treasure hunt clues — endpoint is public, no isPro gate needed here
   const { data: clues } = useQuery<Array<{id: string; category: string | null; createdAt: string}>>({
     queryKey: ['print-kit-clues', saleId],
     queryFn: async () => {
       const response = await api.get(`/sales/${saleId}/treasure-hunt-qr`);
-      return response.data.clues;
+      return response.data.clues ?? [];
     },
-    enabled: !!saleId && typeof saleId === 'string' && isPro,
+    enabled: !!saleId && typeof saleId === 'string',
   });
 
   const handlePrint = () => {
