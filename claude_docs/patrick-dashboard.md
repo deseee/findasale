@@ -1,98 +1,72 @@
-# Patrick's Dashboard — S545 Complete
+# Patrick's Dashboard — S546 Complete
 
-## 🔥 S545 — Shipped This Session
+## 🔥 S546 — Recovery Session (S545 migrations)
 
-**P0 auth crash (tasteProfile) — FIXED LIVE.** Rename migration deployed to Railway, verified via psycopg2. All authenticated requests work again.
+**S545 push failed in 4 ways. All 4 are now fixed, shipped, and live.**
 
-**P0 /organizer/sales — AUTO-RESOLVED.** Was an auth-crash symptom. You confirmed "working".
+1. **P3018 — AffiliateReferral index collision.** Migration renamed `AffiliateReferral` → `AffiliateReferral_OLD` but PG indexes are global per schema, so they traveled with the old table under their original names, crashing `CREATE INDEX` on the new table. Fix: prepended 6 `ALTER INDEX IF EXISTS ... RENAME TO ..._OLD_*` statements in the migration so new indexes have clean names.
+2. **P1012 — missing opposite relation.** `AffiliateReferral.referredUser` had no inverse on User model (old comment wrongly said "implicit"). Added `affiliateReferralsReceived AffiliateReferral[] @relation("AffiliateReferrals_Referred")` to User.
+3. **Vercel TS error.** S545 dev agent wrote `user?.explorerRank` in sales/[id].tsx, but AuthContext User type deliberately excludes `explorerRank` (prevents stale JWT cache — there's a comment explaining this on line 14). Swapped both references to `xpProfile?.explorerRank` via `useXpProfile` hook.
+4. **JSX structural error.** S545 dev agent put the closing `)}` for the `{!isSaleLocked && (` lock conditional in the wrong place. Fixed.
 
-**Mobile organizer dashboard layout — FIXED (pending push).** `dashboard.tsx` responsive flex — Copy Link + More Options stack on mobile, inline on desktop.
+**Plus Railway cache-bust** on `Dockerfile.production` to force a clean rebuild after 2 failed builds.
 
-**Organizer Insights for Alice — FIXED (pending push).** `.toNumber()` conversion on Prisma Decimal prices in `insightsController.ts`.
+**Migration recovery sequence ran clean.** `migrate resolve --rolled-back` → `migrate deploy` → `generate`. Both pending migrations (`consolidate_affiliate_payout_to_referral` + `add_sale_publishedAt`) now marked OK.
 
-**Rank-Based Early Access — BUILT (pending push + migration).** Full Option A: `publishedAt` on Sale, rank-tier time windows (Scout 1h / Ranger 2h / Sage 4h / GM 6h), lock card UI, 🔒 badge on sale cards, Initiate "Rank up" CTA. Migration backfills all existing sales with `publishedAt = createdAt` so nobody gets locked out. 9 files.
+**DB verified via psycopg2.** AffiliateReferral has all 12 consolidated columns. AffiliatePayout dropped. Sale.publishedAt + User.affiliateReferralCode both present.
 
-**Affiliate Program Batch 1 — BUILT with placeholders (pending push + migration).** Consolidated `AffiliateReferral` model (merged old `AffiliatePayout`), config file with PLACEHOLDER amounts (PRO=$20, TEAMS=$55, SIMPLE=$0, ENT=$0), core service (code gen + fraud gates: 7-day account age, 30-day payout lockout), and `GET /api/affiliate/me` endpoint. 5 files. Batches 2–10 still ahead.
+**Chrome smoke test.** Homepage clean. Sale detail page (`/sales/cmnxvyic4001li51qobwidrbl`) renders clean — no `explorerRank` TS error, title + location show correctly. Only console errors are MetaMask browser extension conflicts (not app code).
 
-## ⚠️ Flags for You
+## ⚠️ Flags carried forward from S545
 
-**Affiliate payout amounts are PLACEHOLDERS.** `packages/backend/src/config/affiliateConfig.ts` — change one line to lock PRO/TEAMS amounts before Batch 4 (Stripe webhook wiring) ships. The agent also added a `calculateAffiliatePayoutCents` helper doing 2% with $50 floor — this contradicts your "flat cash per tier" decision in STATE.md S544. Decide: keep flat, or move to 2%/floor. Both paths are in the code right now; whichever you pick, the other gets deleted.
+**Affiliate payout amounts are still PLACEHOLDERS.** `packages/backend/src/config/affiliateConfig.ts` (PRO=$20, TEAMS=$55). Lock before Batch 4 (Stripe webhook wiring). The "flat cash per tier" vs "2% + $50 floor" decision is still unresolved — both paths exist in code.
 
-**Rank early access timezone gotcha.** Organizer's timezone isn't passed from backend to frontend yet — unlock times currently render in the viewer's browser TZ. Minor; Batch 2 concern.
+**Rank early access timezone gotcha.** Organizer TZ not passed to frontend yet; unlock times render in viewer's browser TZ. Batch 2 concern.
 
-**Schema.prisma cleanup I did.** The affiliate agent left a stale `affiliatePayouts AffiliatePayout[]` relation on the Sale model after removing the `AffiliatePayout` model. I removed it so Prisma will generate cleanly.
+## 📤 What You Shipped This Session
 
-## 📤 Push Block (S545 — Everything)
+You pushed two commits during this session:
 
-Two commits are already on GitHub via MCP (cf9c7b39 original migration fix, ea885c37 rename migration). The block below is everything else:
+1. **Recovery commit** — 4 files (schema.prisma, migration.sql, sales/[id].tsx, Dockerfile.production)
+2. **Post-recovery** — nothing pending, all fixes live
+
+Railway build: ✅ green. Vercel build: ✅ green. Migrations: ✅ applied.
+
+## 📤 Wrap Push Block (S546 doc updates)
+
+Just STATE.md + patrick-dashboard.md:
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-# Hotfixes
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/backend/src/controllers/insightsController.ts
-
-# Docs
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-# Schema (shared between rank + affiliate features)
-git add packages/database/prisma/schema.prisma
+git commit -m "S546 wrap: STATE + dashboard update (migration recovery complete)"
 
-# Rank Early Access migration (renamed to proper timestamp)
-git add packages/database/prisma/migrations/20260422231500_add_sale_publishedAt
-
-# Rank Early Access code
-git add packages/backend/src/services/rankService.ts
-git add packages/backend/src/services/xpService.ts
-git add packages/backend/src/controllers/saleController.ts
-git add packages/frontend/lib/rankEarlyAccess.ts
-git add packages/frontend/components/SaleLockCard.tsx
-git add packages/frontend/components/SaleCard.tsx
-git add packages/frontend/pages/sales/[id].tsx
-
-# Affiliate Program Batch 1 migration
-git add packages/database/prisma/migrations/20260422230000_consolidate_affiliate_payout_to_referral
-
-# Affiliate Program Batch 1 code
-git add packages/backend/src/config/affiliateConfig.ts
-git add packages/backend/src/services/affiliateService.ts
-git add packages/backend/src/controllers/affiliateController.ts
-
-git commit -m "S545: rank early access + affiliate batch 1 + hotfixes
-
-Hotfixes:
-- dashboard.tsx mobile layout (Copy Link + More Options responsive)
-- insightsController.ts Decimal .toNumber() fix for Alice
-
-Rank-Based Early Access (Option A, 4 decisions locked by Patrick):
-- Sale.publishedAt DateTime? + backfill migration (all existing sales get createdAt)
-- rankService.ts: RANK_EARLY_ACCESS_HOURS (Scout:1 / Ranger:2 / Sage:4 / GM:6)
-- saleController gating on getSale/listSales/searchSales
-- SaleLockCard + SaleCard lock badge + Initiate rank-up CTA
-
-Affiliate Program Batch 1:
-- Consolidated AffiliateReferral model (AffiliatePayout merged)
-- affiliateConfig.ts with PLACEHOLDER amounts (PRO:20, TEAMS:55)
-- affiliateService.ts with 7-day account age + 30-day payout lockout gates
-- GET /api/affiliate/me endpoint
-- Batches 2-10 deferred"
 .\push.ps1
 ```
 
-## 🗃️ Migration Deploy (after push)
+## 🎯 Next Session (S547) — What's Queued
 
-Two new migrations need to run on Railway. Run this block AFTER push completes:
+1. **Live smoke test of S545 features** (mandatory per CLAUDE.md §10). Test in Chrome:
+   - Sale lock for INITIATE shopper → shows 🔒 + Rank-Up CTA
+   - Sale unlock for Scout/Ranger/Sage/GM at correct tier hours (1h/2h/4h/6h)
+   - SaleLockCard + rank badge copy
+   - Affiliate `GET /api/affiliate/me` returns referralCode + referrals (no UI yet, backend-only)
+   - S545 mobile organizer dashboard fix
+   - S545 Organizer Insights Decimal fix for Alice
+2. **Affiliate Batches 2–10** — architect spec at `claude_docs/feature-notes/affiliate-program-spec-S544.md`. Payout amounts still a decision point (can unblock Batch 4).
+3. **Chrome QA backlog** — see STATE.md "## Blocked/Unverified Queue" section.
+4. **S542 hold price + Remove button** — still needs shopper with active holds.
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
+## ─── Archived Below: S545 ───
 
-This applies `20260422230000_consolidate_affiliate_payout_to_referral` then `20260422231500_add_sale_publishedAt` in order, then regenerates the TS client.
+# S545 Complete
+
+## What Happened (archived)
+
+Rank early access + affiliate Batch 1 + hotfixes. 17 files. Migration recovery followed in S546.
 
 ## ─── Archived Below: S544 ───
 
