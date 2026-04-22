@@ -68,7 +68,11 @@ import useXpProfile from '../hooks/useXpProfile';
 import ShopperCartDrawer from './ShopperCartDrawer';
 import { ExplorerRank } from './RankBadge';
 
-const AvatarDropdown: React.FC = () => {
+interface AvatarDropdownProps {
+  onBecomeOrganizer?: () => void;
+}
+
+const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) => {
   const { user, logout } = useAuth();
   const { canAccess } = useOrganizerTier();
   const router = useRouter();
@@ -955,7 +959,7 @@ const AvatarDropdown: React.FC = () => {
               {!isOrganizer && (
                 <button
                   onClick={() => {
-                    router.push('/organizer/register');
+                    onBecomeOrganizer?.();
                     setIsOpen(false);
                   }}
                   className="block w-full text-left px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium transition-colors"
@@ -1210,11 +1214,11 @@ const AvatarDropdown: React.FC = () => {
             <span>{isOrganizer ? "My Profile" : "Explorer Profile"}</span>
           </Link>
           <Link
-            href="/organizer/settings"
+            href={isOrganizer ? "/organizer/settings" : "/shopper/settings"}
             className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
           >
-            <Settings size={16} className="text-amber-600" />
+            <Settings size={16} className={isOrganizer ? "text-amber-600" : "text-indigo-500"} />
             <span>Settings</span>
           </Link>
 

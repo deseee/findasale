@@ -763,7 +763,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         Low BW
                       </span>
                     )}
-                    <AvatarDropdown />
+                    <AvatarDropdown onBecomeOrganizer={() => setShowBecomeOrganizerModal(true)} />
                   </div>
                 </>
               ) : (
@@ -1558,7 +1558,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <UserCircle size={14} className="inline mr-2 text-amber-600" /> My Profile
                     </Link>
                   )}
-                  <Link href="/organizer/settings" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                  <Link href={isOrganizer ? "/organizer/settings" : "/shopper/settings"} className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                     <Settings size={14} className="inline mr-2 text-amber-500" /> Settings
                   </Link>
                 </div>
