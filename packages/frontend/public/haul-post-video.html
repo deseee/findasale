@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Haul Posts — Share Your Finds, Build Your Legend</title>
+<meta name="description" content="Snap your haul. Post it. Build your collection story. Like earn XP. Get featured.">
+<meta name="keywords" content="haul posts, share finds, collection, social proof, rewards">
+<meta name="author" content="FindA.Sale">
+<meta name="theme-color" content="#D97706">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FindA.Sale">
+<meta property="og:url" content="https://finda.sale/haul-posts">
+<meta property="og:title" content="Haul Posts — Share Your Finds">
+<meta property="og:description" content="Snap your haul. Post it. Build your collection story.">
+<meta property="og:image" content="https://finda.sale/og-default.png">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:url" content="https://finda.sale/haul-posts">
+<meta name="twitter:title" content="Haul Posts — Share Your Finds">
+
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --amber: #D97706;
+  --amber-light: #F59E0B;
+  --bg: #0D0D0D;
+  --surface: #1A1A1A;
+  --text: #F5F5F5;
+  --text-muted: #A3A3A3;
+  --text-dim: #737373;
+  --radius: 16px;
+  --green: #10B981;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px 24px 80px;
+}
+
+/* Logo */
+.logo-bar {
+  text-align: center;
+  padding: 8px 0 12px;
+}
+
+.logo-text {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+
+.logo-text span {
+  color: var(--amber);
+}
+
+/* Video player */
+.video-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 40px;
+}
+
+.video-wrapper {
+  position: relative;
+  width: 320px;
+  height: 750px;
+  border-radius: 44px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 32px 80px rgba(0,0,0,0.6);
+}
+
+#player {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: #0A0A0A;
+  overflow: hidden;
+  border-radius: 44px;
+  transform: scale(0.82);
+  transform-origin: top left;
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  padding: 40px 36px;
+}
+
+.scene.active {
+  opacity: 1;
+}
+
+#progress-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: var(--amber);
+  width: 0%;
+  z-index: 200;
+}
+
+#play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  cursor: pointer;
+  border-radius: 44px;
+  transition: opacity 0.3s;
+  padding: 60px 36px 80px;
+}
+
+#play-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+}
+
+.overlay-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+
+.overlay-logo .a-dot {
+  color: var(--amber);
+}
+
+.overlay-watch {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+}
+
+.play-icon {
+  width: 72px; height: 72px;
+  background: rgba(217,119,6,0.9);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
+}
+
+.play-icon svg {
+  margin-left: 5px;
+}
+
+/* Scene styles */
+#s1 { background: #0A0A0A; gap: 0; }
+#s2 { background: #111118; gap: 0; }
+#s3 { background: #0D0D15; gap: 0; }
+#s4 { background: #0A0A0A; gap: 0; }
+#s5 { background: #050505; gap: 0; }
+
+.s-heading {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 36px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  line-height: 1.2;
+}
+
+.s-heading.in { opacity: 1; transform: translateY(0); }
+.s-heading em { font-style: normal; color: var(--amber); }
+
+.s-subtext {
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  margin-top: 12px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s 0.15s ease, transform 0.4s 0.15s ease;
+}
+
+.s-subtext.in { opacity: 1; transform: translateY(0); }
+
+.badge-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 24px 0;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.badge-container.in { opacity: 1; transform: translateY(0); }
+
+.badge {
+  background: rgba(217, 119, 6, 0.2);
+  border: 1px solid var(--amber);
+  color: var(--amber-light);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.badge.green {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.badge.featured {
+  background: rgba(217, 119, 6, 0.3);
+  border-color: var(--amber-light);
+  color: var(--amber-light);
+}
+
+.counter-display {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  color: var(--amber);
+  text-align: center;
+  margin: 20px 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.counter-display.in { opacity: 1; }
+
+.cta-section {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.cta-btn {
+  display: inline-block;
+  background: var(--amber);
+  color: #000;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  padding: 18px 52px;
+  border-radius: 12px;
+  text-decoration: none;
+  letter-spacing: -0.3px;
+  transition: background 0.2s, transform 0.15s;
+  box-shadow: 0 4px 24px rgba(217, 119, 6, 0.3);
+  border: none;
+  cursor: pointer;
+}
+
+.cta-btn:hover {
+  background: var(--amber-light);
+  transform: translateY(-1px);
+}
+
+/* Section header */
+.section-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.section-header h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.5px;
+}
+
+/* Feature cards */
+.features {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 56px;
+}
+
+.feature {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+
+.feature .icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(217, 119, 6, 0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  font-size: 24px;
+}
+
+.feature h3 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+
+.feature p {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.footer {
+  text-align: center;
+  padding: 32px 0 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.footer p {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.footer a {
+  color: var(--amber);
+  text-decoration: none;
+}
+
+@media (max-width: 600px) {
+  .page { padding: 8px 16px 60px; }
+  .video-wrapper { width: 290px; height: 679px; border-radius: 38px; }
+  #player { transform: scale(0.7425); }
+  .section-header h2 { font-size: 22px; }
+  .feature { padding: 24px 22px; }
+  .cta-btn { font-size: 16px; padding: 16px 40px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <!-- Logo -->
+  <div class="logo-bar">
+    <div class="logo-text">Find<span>A.</span>Sale</div>
+  </div>
+
+  <!-- Video player -->
+  <div class="video-section">
+    <div class="video-wrapper">
+      <div id="player">
+        <!-- Play overlay -->
+        <div id="play-overlay">
+          <div class="overlay-brand">
+            <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
+            <div class="overlay-watch">Watch — 30 Seconds</div>
+          </div>
+          <div class="play-icon">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <path d="M8 5L23 14L8 23V5Z" fill="white"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Scene 1: Snap & Post -->
+        <div class="scene" id="s1">
+          <div class="s-heading" id="h1">Snap your haul</div>
+          <div class="s-subtext" id="st1">One tap to share what you found</div>
+        </div>
+
+        <!-- Scene 2: Likes earn XP -->
+        <div class="scene" id="s2">
+          <div class="s-heading" id="h2"><span style="color:var(--amber); font-size:48px;">♥</span> <span id="like-count">47</span></div>
+          <div class="badge-container" id="bc2">
+            <div class="badge green">+5 XP</div>
+          </div>
+          <div class="s-subtext" id="st2">Likes earn XP. 10+ → bonus</div>
+        </div>
+
+        <!-- Scene 3: Get Inspired -->
+        <div class="scene" id="s3">
+          <div class="s-heading" id="h3">Get inspired</div>
+          <div class="s-subtext" id="st3">See what serious shoppers are finding</div>
+        </div>
+
+        <!-- Scene 4: Stand Out -->
+        <div class="scene" id="s4">
+          <div class="s-heading" id="h4">Stand out</div>
+          <div class="badge-container" id="bc4">
+            <div class="badge featured">FEATURED</div>
+          </div>
+          <div class="s-subtext" id="st4">Top hauls get featured on the homepage</div>
+        </div>
+
+        <!-- Scene 5: CTA -->
+        <div class="scene" id="s5">
+          <div class="s-heading" id="h5">Build your collection story</div>
+          <div class="s-subtext" id="st5">Every haul post adds to your legend</div>
+          <div style="margin-top:40px; opacity:0; transition:opacity 0.5s 0.6s ease;" id="url5">
+            <div style="font-family: 'Montserrat', sans-serif; font-size:20px; font-weight:700; color:var(--amber); letter-spacing:-0.3px;">finda.sale</div>
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div id="progress-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Features -->
+  <div class="section-header">
+    <h2>Your finds deserve an audience.</h2>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <div class="icon">📸</div>
+      <h3>Snap & Share</h3>
+      <p>Photograph your items. The app writes the listing. Shoppers find you on the map. Leftovers push to eBay.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">❤️</div>
+      <h3>Likes Earn XP</h3>
+      <p>10+ likes on a post earns bonus XP. Build your reputation. Every post strengthens your hunter profile.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">⭐</div>
+      <h3>Get Featured</h3>
+      <p>Top hauls get featured on the homepage. Gain visibility. Inspire other collectors. Build your legend.</p>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-section">
+    <a href="https://finda.sale/shopper/haul-posts" class="cta-btn">Share Your First Haul</a>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>Built by <a href="https://finda.sale">FindA.Sale</a> — the app for estate sales, yard sales, auctions, flea markets, and consignment.</p>
+  </div>
+</div>
+
+<script>
+const DURATION = 30000; // 30 seconds
+const scenes = ['s1', 's2', 's3', 's4', 's5'];
+const sceneStarts = [0, 6000, 12000, 18000, 24000];
+
+let startTime = null;
+let rafId = null;
+let running = false;
+let currentScene = 0;
+
+const playOverlay = document.getElementById('play-overlay');
+const progressBar = document.getElementById('progress-bar');
+const player = document.getElementById('player');
+
+function showScene(idx) {
+  scenes.forEach((s, i) => {
+    const el = document.getElementById(s);
+    if (el) el.classList.toggle('active', i === idx);
+  });
+  currentScene = idx;
+}
+
+function resetAll() {
+  ['h1','st1'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  ['h2','st2','bc2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  ['h3','st3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  ['h4','st4','bc4'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  ['h5','st5','url5'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('like-count').textContent = '0';
+  progressBar.style.width = '0%';
+  progressBar.style.transition = 'none';
+  scenes.forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.classList.remove('active');
+  });
+}
+
+function animateCounter(from, to, duration, onTick) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+    onTick(Math.round(from + (to - from) * ease));
+    if (t < 1) requestAnimationFrame(step);
+    else onTick(to);
+  }
+  requestAnimationFrame(step);
+}
+
+const events = [
+  { at: 0, fn: () => {
+    showScene(0);
+    setTimeout(() => document.getElementById('h1').classList.add('in'), 0);
+    setTimeout(() => document.getElementById('st1').classList.add('in'), 500);
+  }},
+  { at: 6000, fn: () => {
+    showScene(1);
+    setTimeout(() => document.getElementById('h2').classList.add('in'), 0);
+    setTimeout(() => {
+      animateCounter(0, 47, 800, (v) => {
+        document.getElementById('like-count').textContent = v;
+      });
+    }, 400);
+    setTimeout(() => document.getElementById('bc2').classList.add('in'), 1200);
+    setTimeout(() => document.getElementById('st2').classList.add('in'), 1600);
+  }},
+  { at: 12000, fn: () => {
+    showScene(2);
+    setTimeout(() => document.getElementById('h3').classList.add('in'), 0);
+    setTimeout(() => document.getElementById('st3').classList.add('in'), 500);
+  }},
+  { at: 18000, fn: () => {
+    showScene(3);
+    setTimeout(() => document.getElementById('h4').classList.add('in'), 0);
+    setTimeout(() => document.getElementById('bc4').classList.add('in'), 400);
+    setTimeout(() => document.getElementById('st4').classList.add('in'), 900);
+  }},
+  { at: 24000, fn: () => {
+    showScene(4);
+    setTimeout(() => document.getElementById('h5').classList.add('in'), 0);
+    setTimeout(() => document.getElementById('st5').classList.add('in'), 400);
+    setTimeout(() => document.getElementById('url5').classList.add('in'), 800);
+  }},
+  { at: 30000, fn: () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+  }}
+];
+
+let nextEvent = 0;
+
+function tick(now) {
+  if (!running) return;
+  const elapsed = now - startTime;
+
+  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
+    events[nextEvent].fn();
+    nextEvent++;
+  }
+
+  const pct = Math.min((elapsed / DURATION) * 100, 100);
+  progressBar.style.width = pct + '%';
+
+  if (elapsed < DURATION) {
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function start() {
+  resetAll();
+  nextEvent = 0;
+  running = true;
+  startTime = performance.now();
+  requestAnimationFrame(tick);
+}
+
+playOverlay.addEventListener('click', () => {
+  playOverlay.classList.add('hidden');
+  start();
+});
+
+player.addEventListener('click', () => {
+  if (!startTime) return;
+  running = !running;
+  if (running) {
+    startTime = performance.now() - (startTime || 0);
+    rafId = requestAnimationFrame(tick);
+  } else {
+    cancelAnimationFrame(rafId);
+  }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FindA.Sale — Hunt for deals. Find your next treasure.</title>
+<meta name="description" content="Browse sales on the map. Discover curated Treasure Trails. Earn XP and rank up. Hunt Pass for early access to rare finds.">
+<meta name="keywords" content="estate sale app, yard sale app, treasure hunting, sale discovery, shopper app, Hunt Pass, treasure trails, XP rewards">
+<meta name="author" content="FindA.Sale">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#D97706">
+<link rel="canonical" href="https://finda.sale/shopper-video">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FindA.Sale">
+<meta property="og:url" content="https://finda.sale/shopper-video">
+<meta property="og:title" content="FindA.Sale — Hunt for deals. Find your next treasure.">
+<meta property="og:description" content="Browse sales on the map. Discover curated Treasure Trails. Earn XP and rank up. Hunt Pass for early access to rare finds.">
+<meta property="og:image" content="https://finda.sale/og-default.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="FindA.Sale — the app for secondary sale shoppers.">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:url" content="https://finda.sale/shopper-video">
+<meta name="twitter:title" content="FindA.Sale — Hunt for deals. Find your next treasure.">
+<meta name="twitter:description" content="Browse sales on the map. Discover curated Treasure Trails. Earn XP and rank up. Hunt Pass for early access to rare finds.">
+<meta name="twitter:image" content="https://finda.sale/og-default.png">
+
+<!-- Icons -->
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "FindA.Sale",
+  "description": "The app for secondary sale shoppers. Discover estate sales, yard sales, auctions, and flea markets on the map. Earn XP, rank up, and get early access to rare finds with Hunt Pass.",
+  "applicationCategory": "ShoppingApplication",
+  "operatingSystem": "Web, iOS, Android",
+  "url": "https://finda.sale/shopper-video",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD",
+    "description": "Free to browse. Hunt Pass $9.99/month for early access."
+  },
+  "audience": {
+    "@type": "Audience",
+    "audienceType": "Secondary sale shoppers, treasure hunters, antique collectors, bargain shoppers"
+  }
+}
+</script>
+
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --amber: #D97706;
+  --amber-light: #F59E0B;
+  --bg: #0D0D0D;
+  --surface: #1A1A1A;
+  --surface-hover: #242424;
+  --text: #F5F5F5;
+  --text-muted: #A3A3A3;
+  --text-dim: #737373;
+  --radius: 16px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ── */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px 24px 80px;
+}
+
+/* ── Logo ── */
+.logo-bar {
+  text-align: center;
+  padding: 8px 0 12px;
+}
+.logo-text {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+.logo-text span {
+  color: var(--amber);
+}
+
+/* ── Video (fits the 390x844 native player) ── */
+.video-section {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 40px;
+}
+.video-caption {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+.video-wrapper {
+  position: relative;
+  width: 320px;
+  height: 750px;
+  border-radius: 44px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 32px 80px rgba(0,0,0,0.6);
+}
+.video-wrapper iframe {
+  width: 390px;
+  height: 915px;
+  border: none;
+  /* 390*0.82=319.8px wide (fits 320px), 915*0.82=750.3px tall (fits 750px) */
+  transform: scale(0.82);
+  transform-origin: top left;
+  display: block;
+}
+
+/* ── Hero ── */
+.hero {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.hero h1 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -1px;
+  margin-bottom: 18px;
+}
+.hero h1 em {
+  font-style: normal;
+  color: var(--amber);
+}
+.hero .subtitle {
+  font-size: 18px;
+  color: var(--text-muted);
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* ── Section Header ── */
+.section-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.section-header .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber-light);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+.section-header h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.5px;
+}
+
+/* ── Feature Grid (2x2) ── */
+.features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 56px;
+}
+.feature {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius);
+  padding: 24px 20px 22px;
+}
+.feature .icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(217, 119, 6, 0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.feature .icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: var(--amber-light);
+  fill: none;
+  stroke-width: 2;
+}
+.feature h3 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+.feature p {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── Offer Block ── */
+.offer {
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.08) 0%, var(--surface) 100%);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  border-radius: var(--radius);
+  padding: 40px 32px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+.offer .badge {
+  display: inline-block;
+  background: rgba(217, 119, 6, 0.15);
+  color: var(--amber-light);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+.offer h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+  margin-bottom: 14px;
+}
+.offer h2 em {
+  font-style: normal;
+  color: var(--amber-light);
+}
+.offer p {
+  color: var(--text-muted);
+  font-size: 16px;
+  max-width: 460px;
+  margin: 0 auto 8px;
+  line-height: 1.55;
+}
+.offer .detail {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-top: 14px;
+}
+
+/* ── FAQ mini ── */
+.faq {
+  margin-bottom: 48px;
+}
+.faq-row {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 16px 0;
+}
+.faq-row:last-child { border-bottom: none; }
+.faq-q {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.faq-a {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+/* ── CTA ── */
+.cta-section {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.cta-btn {
+  display: inline-block;
+  background: var(--amber);
+  color: #000;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  padding: 18px 52px;
+  border-radius: 12px;
+  text-decoration: none;
+  letter-spacing: -0.3px;
+  transition: background 0.2s, transform 0.15s;
+  box-shadow: 0 4px 24px rgba(217, 119, 6, 0.3);
+}
+.cta-btn:hover {
+  background: var(--amber-light);
+  transform: translateY(-1px);
+}
+.cta-note {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+/* ── Footer ── */
+.footer {
+  text-align: center;
+  padding: 32px 0 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.footer p {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.footer a {
+  color: var(--amber);
+  text-decoration: none;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .page { padding: 8px 16px 60px; }
+  .video-wrapper {
+    width: 290px;
+    height: 679px;
+    border-radius: 38px;
+  }
+  .video-wrapper iframe {
+    /* 390*0.7425=289.6px wide, 915*0.7425=679.4px tall */
+    transform: scale(0.7425);
+  }
+  .features { grid-template-columns: 1fr; }
+  .offer { padding: 32px 22px; }
+  .cta-btn { font-size: 16px; padding: 16px 40px; }
+  .section-header h2 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <!-- Video Demo (front and center) -->
+  <div class="video-section">
+    <div class="video-wrapper">
+      <iframe src="shopper-video-ad.html?embed=1" title="FindA.Sale Shopper Demo" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <!-- Hero section for shoppers -->
+  <div class="section-header">
+    <h2>Find the good stuff.</h2>
+  </div>
+
+  <!-- Feature grid (4 items, 2x2) -->
+  <div class="features">
+    <div class="feature">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="11" r="8"/>
+          <path d="M21 21l-6-6"/>
+        </svg>
+      </div>
+      <h3>Map Discovery</h3>
+      <p>Filter by category, distance, and sale type. Find exactly what you're after.</p>
+    </div>
+
+    <div class="feature">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M4 12c0-4 2-7 8-7s8 3 8 7"/>
+          <path d="M12 5v14"/>
+        </svg>
+      </div>
+      <h3>Treasure Trails</h3>
+      <p>Multi-sale routes planned for you. Make the most of your Saturday.</p>
+    </div>
+
+    <div class="feature">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M13 2L15.5 9H23L17.5 14L19 21L13 16.5L7 21L8.5 14L3 9H11L13 2Z"/>
+        </svg>
+      </div>
+      <h3>Explorer's Guild</h3>
+      <p>Earn XP for every visit and purchase. Rank up. Unlock early access to rare finds.</p>
+    </div>
+
+    <div class="feature">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="5" width="18" height="14" rx="2"/>
+          <path d="M3 9h18"/>
+        </svg>
+      </div>
+      <h3>Hunt Pass</h3>
+      <p>First dibs on Legendary finds. $9.99/month. Cancel anytime.</p>
+    </div>
+  </div>
+
+  <!-- The Offer -->
+  <div class="offer">
+    <div class="badge">Always free to explore.</div>
+    <h2>Free to browse. <em>Always.</em></h2>
+    <p>Browse every sale, save wishlists, and earn Guild XP at no cost. Hunt Pass is optional — for serious collectors who want first dibs on rare finds.</p>
+  </div>
+
+  <!-- FAQ -->
+  <div class="faq">
+    <div class="faq-row">
+      <div class="faq-q">Do I need an account to browse?</div>
+      <div class="faq-a">No. You can browse sales on the map without signing up. Create a free account to save wishlists and earn XP.</div>
+    </div>
+    <div class="faq-row">
+      <div class="faq-q">What is Hunt Pass?</div>
+      <div class="faq-a">Hunt Pass ($9.99/month) gives you early access to sales before they open to the public. Cancel anytime.</div>
+    </div>
+  </div>
+
+  <!-- The one CTA -->
+  <div class="cta-section">
+    <a href="https://finda.sale/register" class="cta-btn" id="main-cta">Start Exploring</a>
+    <p class="cta-note">Free forever. Browse every sale near you.</p>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>Built by <a href="https://finda.sale">FindA.Sale</a> — the app for estate sales, yard sales, auctions, flea markets, and consignment.</p>
+  </div>
+</div>
+
+<script>
+// ── Source Attribution ──
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const src = params.get('src');
+  if (src) {
+    document.querySelectorAll('a[href*="/register"]').forEach(function(link) {
+      const url = new URL(link.href);
+      url.searchParams.set('src', src);
+      link.href = url.toString();
+    });
+  }
+})();
+</script>
+</body>
+</html>
