@@ -86,9 +86,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     cancelMutation.mutate(reservationId);
   };
 
-  const handleHoldExpiry = (reservationId: string) => {
-    refetch();
-    showToast('Hold expired', 'info');
+  const handleHoldExpiry = (_reservationId: string) => {
+    refetch(); // silently remove expired hold from list
   };
 
   const handlePlaceHold = (cartItem: typeof cart.items[0]) => {

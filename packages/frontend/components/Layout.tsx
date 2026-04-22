@@ -717,19 +717,19 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 )}
               </div>
 
-              {/* Desktop collapsible search */}
-              <div className="flex items-center ml-2">
-                {!isSearchOpen ? (
-                  <button
-                    onClick={() => setIsSearchOpen(true)}
-                    className="p-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    aria-label="Open search"
-                  >
-                    <Search size={20} />
-                  </button>
-                ) : (
-                  <form onSubmit={handleHeaderSearch} role="search" aria-label="Search sales" className="flex items-center">
-                    <div className="relative transition-all duration-200">
+              {/* Desktop collapsible search — overlays nav when open */}
+              <div className="relative flex items-center">
+                <button
+                  onClick={() => setIsSearchOpen(prev => !prev)}
+                  className="p-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  aria-label={isSearchOpen ? 'Close search' : 'Open search'}
+                >
+                  <Search size={20} />
+                </button>
+                {isSearchOpen && (
+                  <form onSubmit={handleHeaderSearch} role="search" aria-label="Search sales"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-50">
+                    <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-warm-400 pointer-events-none" aria-hidden="true">
                         <Search size={16} />
                       </span>
@@ -740,9 +740,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         onChange={(e) => setHeaderSearch(e.target.value)}
                         onKeyDown={handleSearchKeyDown}
                         onBlur={handleSearchBlur}
-                        placeholder="Search…"
+                        placeholder="Search..."
                         aria-label="Search sales and items"
-                        className="pl-9 pr-3 py-1.5 text-sm border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-warm-50 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 w-48 transition-all duration-200"
+                        className="pl-9 pr-3 py-1.5 text-sm border border-amber-500 dark:border-amber-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 w-64 shadow-lg"
                       />
                     </div>
                   </form>
