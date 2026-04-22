@@ -66,6 +66,7 @@ import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { useShopperCart } from '../hooks/useShopperCart';
 import useXpProfile from '../hooks/useXpProfile';
 import { useCart } from '../context/CartContext';
+import ThemeToggle from './ThemeToggle';
 import { ExplorerRank } from './RankBadge';
 
 interface AvatarDropdownProps {
@@ -1243,6 +1244,12 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
               )}
             </div>
           )}
+
+          {/* Dark Mode Toggle */}
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-sm text-warm-900 dark:text-warm-100">Appearance</span>
+            <ThemeToggle compact={true} />
+          </div>
 
           <button
             onClick={handleLogout}
