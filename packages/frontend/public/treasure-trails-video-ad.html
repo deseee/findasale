@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FindA.Sale — Treasure Trails (35s)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0D0D0D;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  padding: 20px;
+}
+
+body.embed {
+  min-height: auto;
+  padding: 0;
+  display: block;
+  background: transparent;
+}
+body.embed #player {
+  border-radius: 0;
+  box-shadow: none;
+}
+body.embed #info,
+body.embed #timer { display: none; }
+
+#player {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: #0A0A0A;
+  overflow: hidden;
+  border-radius: 44px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 100px rgba(0,0,0,0.8);
+  flex-shrink: 0;
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  padding: 40px 36px;
+}
+.scene.active { opacity: 1; }
+
+#progress-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: #D97706;
+  width: 0%;
+  z-index: 200;
+  border-radius: 0 2px 2px 0;
+}
+
+#replay-btn {
+  position: absolute;
+  bottom: 36px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 10px 28px;
+  border-radius: 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  display: none;
+  z-index: 300;
+  transition: background 0.2s;
+}
+#replay-btn:hover { background: rgba(255,255,255,0.18); }
+
+#play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  cursor: pointer;
+  border-radius: 44px;
+  transition: opacity 0.3s;
+  padding: 60px 36px 80px;
+}
+#play-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.overlay-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+}
+.overlay-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.overlay-logo .a-dot { color: #D97706; }
+
+.overlay-watch {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+}
+
+.play-icon {
+  width: 72px; height: 72px;
+  background: rgba(217,119,6,0.9);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
+}
+.play-icon svg { margin-left: 5px; }
+
+/* ────────────────────────────────
+   SCENE 1 — HOOK
+──────────────────────────────── */
+#s1 { background: #0A0A0A; gap: 0; }
+
+.s1-hook {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 38px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.34,1.3,0.64,1);
+}
+.s1-hook.in { opacity: 1; transform: scale(1); }
+.s1-hook em { font-style: normal; color: #10B981; }
+
+/* Map background */
+.map-canvas {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin-top: 40px;
+  background: linear-gradient(135deg, #0f3460 0%, #16213e 50%, #0d1b2a 100%);
+  border-radius: 12px;
+  overflow: hidden;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+}
+.map-canvas.in { opacity: 1; transform: scale(1); }
+
+.map-pin {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: #10B981;
+  border-radius: 50% 50% 0 0;
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: white;
+  opacity: 0;
+  animation: pinDrop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+
+.map-pin:nth-child(1) { animation-delay: 0s; left: 40px; top: 60px; }
+.map-pin:nth-child(2) { animation-delay: 0.6s; left: 100px; top: 80px; }
+.map-pin:nth-child(3) { animation-delay: 1.2s; left: 130px; top: 40px; }
+
+@keyframes pinDrop {
+  0% { opacity: 0; transform: rotate(-45deg) translateY(-30px); }
+  100% { opacity: 1; transform: rotate(-45deg) translateY(0); }
+}
+
+.map-line {
+  position: absolute;
+  background: #10B981;
+  opacity: 0;
+  transform-origin: left center;
+}
+.map-line.draw { animation: lineDraw 1.2s ease-out forwards; }
+@keyframes lineDraw {
+  0% { opacity: 0; width: 0; }
+  100% { opacity: 0.6; width: 100%; }
+}
+
+/* ────────────────────────────────
+   SCENE 2 — BUILD THE TRAIL
+──────────────────────────────── */
+#s2 { background: #111118; padding: 28px 20px; justify-content: center; }
+
+.s2-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 24px;
+}
+.s2-headline.in { opacity: 1; transform: translateY(0); }
+
+.phone-wrap {
+  position: relative;
+  width: 280px;
+  height: 560px;
+  flex-shrink: 0;
+}
+.phone-shell {
+  width: 100%;
+  height: 100%;
+  background: #1C1C2E;
+  border-radius: 28px;
+  border: 2px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.phone-island {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  width: 88px; height: 26px;
+  background: #000;
+  border-radius: 14px;
+  z-index: 10;
+}
+
+.phone-screen {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.35s ease;
+  display: flex;
+  flex-direction: column;
+  background: #F9F7F4;
+  padding: 50px 16px 24px;
+  gap: 12px;
+}
+.phone-screen.hidden { opacity: 0; pointer-events: none; }
+
+.trail-item {
+  background: white;
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  transform: translateX(-12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.trail-item.in { opacity: 1; transform: translateX(0); }
+
+.trail-pin {
+  width: 20px;
+  height: 20px;
+  background: #10B981;
+  border-radius: 50% 50% 0 0;
+  transform: rotate(-45deg);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: white;
+}
+
+.trail-info {
+  flex: 1;
+}
+.trail-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+.trail-time {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  color: #8B7355;
+}
+
+/* ────────────────────────────────
+   SCENE 3 — XP REWARDS
+──────────────────────────────── */
+#s3 { background: #0A0A0A; gap: 0; padding: 48px 28px; justify-content: center; }
+
+.s3-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 32px;
+}
+.s3-title.in { opacity: 1; transform: translateY(0); }
+
+.xp-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 260px;
+}
+
+.xp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(16,185,129,0.1);
+  border: 1px solid rgba(16,185,129,0.2);
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.xp-row.in { opacity: 1; transform: translateY(0); }
+
+.stops-count {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  color: #10B981;
+  min-width: 32px;
+}
+
+.xp-amount {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+  margin-left: auto;
+}
+
+/* ────────────────────────────────
+   SCENE 4 — TRAVEL TIME
+──────────────────────────────── */
+#s4 { background: #111118; padding: 28px 20px; }
+
+.s4-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 28px;
+}
+.s4-headline.in { opacity: 1; transform: translateY(0); }
+
+.route-info {
+  background: #1C1C2E;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.route-info.in { opacity: 1; transform: translateY(0); }
+
+.route-time {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #10B981;
+  text-align: center;
+  letter-spacing: -0.5px;
+}
+
+.route-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+  margin-top: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ────────────────────────────────
+   SCENE 5 — SHARE
+──────────────────────────────── */
+#s5 { background: #0A0A0A; gap: 0; padding: 48px 28px; justify-content: center; }
+
+.s5-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 32px;
+}
+.s5-headline.in { opacity: 1; transform: translateY(0); }
+
+.link-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  background: rgba(16,185,129,0.15);
+  border: 1px solid rgba(16,185,129,0.3);
+  border-radius: 12px;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.link-action.in { opacity: 1; transform: scale(1); }
+
+.link-icon {
+  font-size: 32px;
+}
+
+.link-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #10B981;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.toast-msg {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: rgba(255,255,255,0.8);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.toast-msg.in { opacity: 1; }
+
+/* ────────────────────────────────
+   SCENE 6 — CTA
+──────────────────────────────── */
+#s6 { background: #050505; gap: 0; }
+
+.cta-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  margin-bottom: 28px;
+}
+.cta-logo-wrap.in { opacity: 1; transform: translateY(0); }
+
+.cta-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.cta-logo .a-dot { color: #D97706; }
+
+.cta-tagline {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  margin-top: 10px;
+}
+
+.cta-main {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 52px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -2px;
+  line-height: 1.1;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s cubic-bezier(0.34,1.3,0.64,1);
+}
+.cta-main.in { opacity: 1; transform: scale(1); }
+
+.cta-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  margin-top: 16px;
+  opacity: 0;
+  transition: opacity 0.5s 0.4s ease;
+}
+.cta-sub.in { opacity: 1; }
+
+.cta-url {
+  display: inline-block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #D97706;
+  margin-top: 32px;
+  opacity: 0;
+  transition: opacity 0.5s 0.6s ease;
+  letter-spacing: -0.3px;
+}
+.cta-url.in { opacity: 1; }
+
+.cta-glow {
+  position: absolute;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 3s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+#scene-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+.nav-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.75);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+
+#scene-dots {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.scene-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: background 0.25s, transform 0.25s;
+  flex-shrink: 0;
+}
+.scene-dot.active { background: #D97706; transform: scale(1.4); }
+.scene-dot:hover:not(.active) { background: rgba(255,255,255,0.45); }
+
+#info {
+  margin-top: 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.7;
+}
+#info strong { color: rgba(255,255,255,0.5); }
+
+#timer {
+  position: absolute;
+  top: 16px; right: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  z-index: 150;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<div id="player">
+  <div id="timer">0:00</div>
+  <div id="progress-bar"></div>
+
+  <div id="play-overlay">
+    <div class="overlay-brand">
+      <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="overlay-watch">Watch — 35 Seconds</div>
+    </div>
+    <div class="play-icon">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M8 5L23 14L8 23V5Z" fill="white"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Scene 1: Hook -->
+  <div class="scene" id="s1">
+    <div class="s1-hook" id="s1-hook">One route.<br><em>Every sale.</em></div>
+    <div class="map-canvas" id="map-canvas">
+      <div class="map-pin">📍</div>
+      <div class="map-pin">📍</div>
+      <div class="map-pin">📍</div>
+      <svg style="position:absolute;inset:0;width:100%;height:100%;">
+        <line class="map-line" x1="50" y1="75" x2="120" y2="95" stroke="#10B981" stroke-width="2"/>
+        <line class="map-line" x1="120" y1="95" x2="155" y2="55" stroke="#10B981" stroke-width="2" style="animation-delay:0.6s;"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Scene 2: Build the Trail -->
+  <div class="scene" id="s2">
+    <div class="s2-headline" id="s2-headline">Add stops. Build your route.</div>
+    <div class="phone-wrap">
+      <div class="phone-shell">
+        <div class="phone-island"></div>
+        <div class="phone-screen">
+          <div class="trail-item" id="item1">
+            <div class="trail-pin"></div>
+            <div class="trail-info">
+              <div class="trail-name">Estate Sale</div>
+              <div class="trail-time">9:00 AM</div>
+            </div>
+          </div>
+          <div class="trail-item" id="item2">
+            <div class="trail-pin"></div>
+            <div class="trail-info">
+              <div class="trail-name">Yard Sale</div>
+              <div class="trail-time">10:30 AM</div>
+            </div>
+          </div>
+          <div class="trail-item" id="item3">
+            <div class="trail-pin"></div>
+            <div class="trail-info">
+              <div class="trail-name">Flea Market</div>
+              <div class="trail-time">12:00 PM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 3: XP Rewards -->
+  <div class="scene" id="s3">
+    <div class="s3-title" id="s3-title">More stops = More XP</div>
+    <div class="xp-scale">
+      <div class="xp-row" id="xp1">
+        <div class="stops-count">3</div>
+        <div>stops</div>
+        <div class="xp-amount">+40 XP</div>
+      </div>
+      <div class="xp-row" id="xp2">
+        <div class="stops-count">4</div>
+        <div>stops</div>
+        <div class="xp-amount">+50 XP</div>
+      </div>
+      <div class="xp-row" id="xp3">
+        <div class="stops-count">5</div>
+        <div>stops</div>
+        <div class="xp-amount">+60 XP</div>
+      </div>
+      <div class="xp-row" id="xp4">
+        <div class="stops-count">7+</div>
+        <div>stops</div>
+        <div class="xp-amount">+80 XP</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 4: Travel Time -->
+  <div class="scene" id="s4">
+    <div class="s4-headline" id="s4-headline">Optimized for you.</div>
+    <div class="route-info" id="route-info">
+      <div class="route-time">45 min</div>
+      <div class="route-label">Total Drive Time</div>
+    </div>
+  </div>
+
+  <!-- Scene 5: Share -->
+  <div class="scene" id="s5">
+    <div class="s5-headline" id="s5-headline">Share your run.</div>
+    <div class="link-action" id="link-action">
+      <div class="link-icon">🔗</div>
+      <div class="link-text">Link Copied</div>
+    </div>
+    <div class="toast-msg" id="toast-msg">Share with fellow hunters</div>
+  </div>
+
+  <!-- Scene 6: CTA -->
+  <div class="scene" id="s6">
+    <div class="cta-glow"></div>
+    <div class="cta-logo-wrap" id="cta-logo">
+      <div class="cta-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="cta-tagline">Hunt smarter.</div>
+    </div>
+    <div class="cta-main" id="cta-main">Plan your<br>hunt.</div>
+    <div class="cta-sub" id="cta-sub">Multi-sale routes that save time and maximize finds.</div>
+    <div class="cta-url" id="cta-url">https://finda.sale/register</div>
+  </div>
+
+  <div id="pause-indicator" style="
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:350;
+  ">
+    <div style="
+      width:60px; height:60px; border-radius:50%;
+      background:rgba(0,0,0,0.6); backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:center;
+      border:1.5px solid rgba(255,255,255,0.15);
+    ">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect x="4" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+        <rect x="13" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+      </svg>
+    </div>
+  </div>
+
+  <button id="replay-btn">↺ &nbsp;Play again</button>
+</div>
+
+<div id="scene-nav">
+  <button class="nav-btn" id="prev-btn">&#8249;</button>
+  <div id="scene-dots">
+    <div class="scene-dot active" data-scene="0" title="Scene 1: Hook"></div>
+    <div class="scene-dot" data-scene="1" title="Scene 2: Build Trail"></div>
+    <div class="scene-dot" data-scene="2" title="Scene 3: XP Rewards"></div>
+    <div class="scene-dot" data-scene="3" title="Scene 4: Travel Time"></div>
+    <div class="scene-dot" data-scene="4" title="Scene 5: Share"></div>
+    <div class="scene-dot" data-scene="5" title="Scene 6: CTA"></div>
+  </div>
+  <button class="nav-btn" id="next-btn">&#8250;</button>
+</div>
+
+<div id="info">
+  <strong>FindA.Sale — Treasure Trails Feature (35 seconds)</strong><br>
+  9:16 vertical · TikTok / YouTube Shorts format<br>
+  Click the player to start · Screen-record to capture
+</div>
+
+<script>
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.body.classList.add('embed');
+}
+
+let startTime = null;
+let rafId = null;
+let running = false;
+let paused = false;
+let pauseStart = null;
+const DURATION = 35000;
+const sceneStarts = [0, 5500, 12000, 18000, 24000, 30500];
+let currentScene = 0;
+
+const player = document.getElementById('player');
+const playOverlay = document.getElementById('play-overlay');
+const progressBar = document.getElementById('progress-bar');
+const replayBtn = document.getElementById('replay-btn');
+const timerEl = document.getElementById('timer');
+const scenes = ['s1','s2','s3','s4','s5','s6'].map(id => document.getElementById(id));
+
+function addAt(el, cls, delay) {
+  if (!el) return;
+  return setTimeout(() => el.classList.add(cls), delay);
+}
+
+function showScene(id) {
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  const idx = parseInt(id.replace('s', '')) - 1;
+  if (!isNaN(idx) && idx >= 0) { currentScene = idx; updateDots(); }
+}
+
+function updateDots() {
+  document.querySelectorAll('.scene-dot').forEach(function(dot, i) {
+    dot.classList.toggle('active', i === currentScene);
+  });
+}
+
+function seekToScene(n) {
+  n = Math.max(0, Math.min(5, n));
+  running = false;
+  cancelAnimationFrame(rafId);
+  playOverlay.classList.add('hidden');
+  replayBtn.style.display = 'none';
+  resetAll();
+  const seekMs = sceneStarts[n];
+  startTime = performance.now() - seekMs;
+  nextEvent = 0;
+  while (nextEvent < events.length && events[nextEvent].at < seekMs) { nextEvent++; }
+  showScene('s' + (n + 1));
+  paused = false;
+  running = true;
+  rafId = requestAnimationFrame(tick);
+}
+
+function resetAll() {
+  ['s1-hook','map-canvas'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.querySelectorAll('.map-line').forEach(el => el.classList.remove('draw'));
+  document.getElementById('s2-headline').classList.remove('in');
+  ['item1','item2','item3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s3-title').classList.remove('in');
+  ['xp1','xp2','xp3','xp4'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s4-headline').classList.remove('in');
+  document.getElementById('route-info').classList.remove('in');
+  document.getElementById('s5-headline').classList.remove('in');
+  document.getElementById('link-action').classList.remove('in');
+  document.getElementById('toast-msg').classList.remove('in');
+  document.getElementById('cta-logo').classList.remove('in');
+  document.getElementById('cta-main').classList.remove('in');
+  document.getElementById('cta-sub').classList.remove('in');
+  document.getElementById('cta-url').classList.remove('in');
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  progressBar.style.width = '0%';
+  progressBar.style.transition = 'none';
+  timerEl.textContent = '0:00';
+  replayBtn.style.display = 'none';
+  document.getElementById('pause-indicator').style.opacity = '0';
+}
+
+const events = [
+  // Scene 1: Hook (0–5.5s)
+  { at: 0, fn: () => {
+    showScene('s1');
+    addAt(document.getElementById('s1-hook'), 'in', 0);
+    addAt(document.getElementById('map-canvas'), 'in', 300);
+    document.querySelectorAll('.map-line').forEach((el, i) => {
+      setTimeout(() => el.classList.add('draw'), 500 + (i * 600));
+    });
+  }},
+
+  // Scene 2: Build Trail (5.5–12s)
+  { at: 5500, fn: () => {
+    showScene('s2');
+    addAt(document.getElementById('s2-headline'), 'in', 0);
+    addAt(document.getElementById('item1'), 'in', 400);
+    addAt(document.getElementById('item2'), 'in', 700);
+    addAt(document.getElementById('item3'), 'in', 1000);
+  }},
+
+  // Scene 3: XP Scale (12–18s)
+  { at: 12000, fn: () => {
+    showScene('s3');
+    addAt(document.getElementById('s3-title'), 'in', 0);
+    addAt(document.getElementById('xp1'), 'in', 300);
+    addAt(document.getElementById('xp2'), 'in', 500);
+    addAt(document.getElementById('xp3'), 'in', 700);
+    addAt(document.getElementById('xp4'), 'in', 900);
+  }},
+
+  // Scene 4: Travel Time (18–24s)
+  { at: 18000, fn: () => {
+    showScene('s4');
+    addAt(document.getElementById('s4-headline'), 'in', 0);
+    addAt(document.getElementById('route-info'), 'in', 600);
+  }},
+
+  // Scene 5: Share (24–30.5s)
+  { at: 24000, fn: () => {
+    showScene('s5');
+    addAt(document.getElementById('s5-headline'), 'in', 0);
+    addAt(document.getElementById('link-action'), 'in', 500);
+    addAt(document.getElementById('toast-msg'), 'in', 1000);
+  }},
+
+  // Scene 6: CTA (30.5–35s)
+  { at: 30500, fn: () => {
+    showScene('s6');
+    addAt(document.getElementById('cta-logo'), 'in', 0);
+    addAt(document.getElementById('cta-main'), 'in', 400);
+    addAt(document.getElementById('cta-sub'), 'in', 800);
+    addAt(document.getElementById('cta-url'), 'in', 1100);
+  }},
+
+  { at: 35000, fn: () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+    replayBtn.style.display = 'block';
+  }}
+];
+
+let nextEvent = 0;
+function tick(now) {
+  if (!running) return;
+  const elapsed = now - startTime;
+
+  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
+    events[nextEvent].fn();
+    nextEvent++;
+  }
+
+  const pct = Math.min((elapsed / DURATION) * 100, 100);
+  progressBar.style.width = pct + '%';
+
+  const secs = Math.min(Math.floor(elapsed / 1000), 35);
+  const ss = String(secs % 60).padStart(2,'0');
+  timerEl.textContent = `0:${ss}`;
+
+  if (elapsed < DURATION) {
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function start() {
+  resetAll();
+  nextEvent = 0;
+  running = true;
+  paused = false;
+  pauseStart = null;
+  startTime = performance.now();
+  requestAnimationFrame(tick);
+}
+
+const pauseIndicator = document.getElementById('pause-indicator');
+let pauseFlashTimer = null;
+
+function togglePause() {
+  if (!startTime || (!running && !paused)) return;
+  if (paused) {
+    const pauseDuration = performance.now() - pauseStart;
+    startTime += pauseDuration;
+    pauseStart = null;
+    paused = false;
+    running = true;
+    pauseIndicator.style.opacity = '0';
+    rafId = requestAnimationFrame(tick);
+  } else {
+    paused = true;
+    pauseStart = performance.now();
+    running = false;
+    cancelAnimationFrame(rafId);
+    pauseIndicator.style.opacity = '1';
+    clearTimeout(pauseFlashTimer);
+    pauseFlashTimer = setTimeout(() => {
+      if (paused) pauseIndicator.style.opacity = '0.35';
+    }, 600);
+  }
+}
+
+player.addEventListener('click', (e) => {
+  if (e.target.closest('#play-overlay')) return;
+  if (e.target.closest('#replay-btn')) return;
+  if (!startTime) return;
+  togglePause();
+});
+
+playOverlay.addEventListener('click', () => {
+  playOverlay.classList.add('hidden');
+  start();
+});
+
+replayBtn.addEventListener('click', () => {
+  replayBtn.style.display = 'none';
+  start();
+});
+
+document.getElementById('prev-btn').addEventListener('click', function() {
+  seekToScene(currentScene - 1);
+});
+document.getElementById('next-btn').addEventListener('click', function() {
+  seekToScene(currentScene + 1);
+});
+document.querySelectorAll('.scene-dot').forEach(function(dot) {
+  dot.addEventListener('click', function() {
+    seekToScene(parseInt(this.dataset.scene));
+  });
+});
+</script>
+</body>
+</html>

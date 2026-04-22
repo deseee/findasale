@@ -3,25 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hunt Pass — Early Access for Serious Collectors</title>
-<meta name="description" content="See estate sales 6 hours early. Claim holds. 1.5× XP. Hunt first, find better. $9.99/month.">
-<meta name="keywords" content="hunt pass, early access, estate sales, yard sales, finder app, collector rewards">
+<title>Hunt Pass — Premium Shopper Membership</title>
+<meta name="description" content="Hunt Pass: Early access to sales, 1.5× XP multiplier, hold priority, and rarity boosts. $9.99/month or earn it free at GRANDMASTER rank.">
+<meta name="keywords" content="hunt pass, shopper membership, early access sales, XP multiplier, hold priority, rarity, FindA.Sale premium">
 <meta name="author" content="FindA.Sale">
+<meta name="robots" content="index, follow">
 <meta name="theme-color" content="#D97706">
+<link rel="canonical" href="https://finda.sale/hunt-pass">
 
-<!-- Open Graph -->
+<!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="FindA.Sale">
 <meta property="og:url" content="https://finda.sale/hunt-pass">
-<meta property="og:title" content="Hunt Pass — Early Access for Serious Collectors">
-<meta property="og:description" content="See estate sales 6 hours early. Claim holds. 1.5× XP. Hunt first, find better.">
-<meta property="og:image" content="https://finda.sale/og-default.png">
+<meta property="og:title" content="Hunt Pass — Premium Shopper Membership">
+<meta property="og:description" content="Early access to sales, 1.5× XP multiplier, hold priority. $9.99/month or earn it free.">
+<meta property="og:image" content="https://finda.sale/og-hunt-pass.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hunt Pass — the premium membership for sale hunters.">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://finda.sale/hunt-pass">
-<meta name="twitter:title" content="Hunt Pass — Early Access">
-<meta name="twitter:description" content="See estate sales 6 hours early. Claim holds. 1.5× XP.">
+<meta name="twitter:title" content="Hunt Pass — Premium Shopper Membership">
+<meta name="twitter:description" content="Early access to sales, 1.5× XP multiplier, hold priority. $9.99/month or earn it free.">
+<meta name="twitter:image" content="https://finda.sale/og-hunt-pass.png">
+
+<!-- Icons -->
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Hunt Pass",
+  "description": "Premium membership for secondary sale shoppers. Early access to sales, 1.5× XP multiplier, hold priority, and rarity boosts.",
+  "brand": "FindA.Sale",
+  "offers": {
+    "@type": "Offer",
+    "price": "9.99",
+    "priceCurrency": "USD",
+    "url": "https://finda.sale/hunt-pass"
+  }
+}
+</script>
 
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -32,11 +62,11 @@
   --amber-light: #F59E0B;
   --bg: #0D0D0D;
   --surface: #1A1A1A;
+  --surface-hover: #242424;
   --text: #F5F5F5;
   --text-muted: #A3A3A3;
   --text-dim: #737373;
   --radius: 16px;
-  --green: #10B981;
 }
 
 body {
@@ -47,18 +77,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Layout ── */
 .page {
   max-width: 720px;
   margin: 0 auto;
   padding: 16px 24px 80px;
 }
 
-/* Logo */
+/* ── Logo ── */
 .logo-bar {
   text-align: center;
   padding: 8px 0 12px;
 }
-
 .logo-text {
   font-family: 'Montserrat', sans-serif;
   font-weight: 800;
@@ -66,18 +96,25 @@ body {
   letter-spacing: -0.5px;
   color: var(--text);
 }
-
 .logo-text span {
   color: var(--amber);
 }
 
-/* Video player */
+/* ── Video (fits the 390x844 native player) ── */
 .video-section {
   display: flex;
   justify-content: center;
   margin-bottom: 40px;
 }
-
+.video-caption {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
 .video-wrapper {
   position: relative;
   width: 320px;
@@ -86,211 +123,175 @@ body {
   overflow: hidden;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 32px 80px rgba(0,0,0,0.6);
 }
-
-#player {
-  position: relative;
+.video-wrapper iframe {
   width: 390px;
-  height: 844px;
-  background: #0A0A0A;
-  overflow: hidden;
-  border-radius: 44px;
+  height: 915px;
+  border: none;
+  /* 390*0.82=319.8px wide (fits 320px), 915*0.82=750.3px tall (fits 750px) */
   transform: scale(0.82);
   transform-origin: top left;
+  display: block;
 }
 
-.scene {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.45s ease;
-  padding: 40px 36px;
-}
-
-.scene.active {
-  opacity: 1;
-}
-
-#progress-bar {
-  position: absolute;
-  bottom: 0; left: 0;
-  height: 3px;
-  background: var(--amber);
-  width: 0%;
-  z-index: 200;
-}
-
-#play-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,0.72);
-  backdrop-filter: blur(4px);
-  z-index: 400;
-  cursor: pointer;
-  border-radius: 44px;
-  transition: opacity 0.3s;
-  padding: 60px 36px 80px;
-}
-
-#play-overlay.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.overlay-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
+/* ── Hero ── */
+.hero {
+  text-align: center;
   margin-bottom: 56px;
 }
-
-.overlay-logo {
+.hero h1 {
   font-family: 'Montserrat', sans-serif;
-  font-size: 46px;
-  font-weight: 900;
-  letter-spacing: -1.8px;
-  color: #FFFFFF;
-  line-height: 1;
-}
-
-.overlay-logo .a-dot {
-  color: var(--amber);
-}
-
-.overlay-watch {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 3.5px;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.42);
-}
-
-.play-icon {
-  width: 72px; height: 72px;
-  background: rgba(217,119,6,0.9);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
-}
-
-.play-icon svg {
-  margin-left: 5px;
-}
-
-/* Scene styles */
-#s1 { background: #0A0A0A; gap: 0; }
-#s2 { background: #111118; gap: 0; }
-#s3 { background: #0D0D15; gap: 0; }
-#s4 { background: #0A0A0A; gap: 0; }
-#s5 { background: #050505; gap: 0; }
-
-.s-heading {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 36px;
   font-weight: 800;
-  color: #FFFFFF;
-  text-align: center;
-  letter-spacing: -0.5px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  line-height: 1.2;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -1px;
+  margin-bottom: 18px;
 }
-
-.s-heading.in { opacity: 1; transform: translateY(0); }
-.s-heading em { font-style: normal; color: var(--amber); }
-
-.s-subtext {
-  font-family: 'Inter', sans-serif;
-  font-size: 18px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
-  margin-top: 12px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s 0.15s ease, transform 0.4s 0.15s ease;
-}
-
-.s-subtext.in { opacity: 1; transform: translateY(0); }
-
-.clock-display {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 72px;
-  font-weight: 900;
+.hero h1 em {
+  font-style: normal;
   color: var(--amber);
-  text-align: center;
-  margin: 20px 0;
-  opacity: 0;
-  transition: opacity 0.4s ease;
+}
+.hero .subtitle {
+  font-size: 18px;
+  color: var(--text-muted);
+  max-width: 520px;
+  margin: 0 auto;
 }
 
-.clock-display.in { opacity: 1; }
-
-.badge-container {
+/* ── Feature Cards ── */
+.features {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 56px;
+}
+.feature {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius);
+  padding: 28px 28px 26px;
+}
+.feature .icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(217, 119, 6, 0.15);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin: 24px 0;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 16px;
+  font-size: 24px;
+}
+.feature h3 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+.feature p {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.feature p strong {
+  color: var(--text);
+  font-weight: 600;
 }
 
-.badge-container.in { opacity: 1; transform: translateY(0); }
-
-.badge {
-  background: rgba(217, 119, 6, 0.2);
-  border: 1px solid var(--amber);
-  color: var(--amber-light);
-  padding: 8px 16px;
-  border-radius: 20px;
+/* ── Rank Benefits ── */
+.rank-benefits {
+  margin-bottom: 56px;
+}
+.rank-title {
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  margin-bottom: 24px;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+.ranks-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rank-card {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  text-align: center;
+}
+.rank-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+.rank-name {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 6px;
+  letter-spacing: -0.2px;
+}
+.rank-discount {
   font-family: 'Inter', sans-serif;
   font-size: 13px;
+  color: var(--amber-light);
   font-weight: 600;
+}
+
+/* ── Offer Block ── */
+.offer {
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.08) 0%, var(--surface) 100%);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  border-radius: var(--radius);
+  padding: 40px 32px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+.offer .badge {
+  display: inline-block;
+  background: rgba(217, 119, 6, 0.15);
+  color: var(--amber-light);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  margin-bottom: 20px;
 }
-
-.badge.green {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: var(--green);
-  color: var(--green);
-}
-
-.xp-display {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.offer h2 {
   font-family: 'Montserrat', sans-serif;
-  font-size: 32px;
-  font-weight: 900;
-  color: var(--text);
-  opacity: 0;
-  transform: scale(0.9);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.5px;
+  margin-bottom: 14px;
+}
+.offer h2 em {
+  font-style: normal;
+  color: var(--amber-light);
+}
+.offer p {
+  color: var(--text-muted);
+  font-size: 16px;
+  max-width: 460px;
+  margin: 0 auto 8px;
+  line-height: 1.55;
+}
+.offer .detail {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-top: 14px;
 }
 
-.xp-display.in { opacity: 1; transform: scale(1); }
-
-.xp-base { color: rgba(255,255,255,0.3); }
-.xp-multiplier { color: var(--amber); }
-
+/* ── CTA ── */
 .cta-section {
   text-align: center;
   margin-bottom: 56px;
 }
-
 .cta-btn {
   display: inline-block;
   background: var(--amber);
@@ -304,332 +305,195 @@ body {
   letter-spacing: -0.3px;
   transition: background 0.2s, transform 0.15s;
   box-shadow: 0 4px 24px rgba(217, 119, 6, 0.3);
-  border: none;
-  cursor: pointer;
 }
-
 .cta-btn:hover {
   background: var(--amber-light);
   transform: translateY(-1px);
 }
-
-/* Section header */
-.section-header {
-  text-align: center;
-  margin-bottom: 28px;
+.cta-note {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--text-dim);
 }
 
-.section-header h2 {
+/* ── FAQ mini ── */
+.faq {
+  margin-bottom: 48px;
+}
+.faq-row {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 16px 0;
+}
+.faq-row:last-child { border-bottom: none; }
+.faq-q {
   font-family: 'Montserrat', sans-serif;
   font-weight: 700;
-  font-size: 26px;
-  letter-spacing: -0.5px;
-}
-
-/* Feature cards */
-.features {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  margin-bottom: 56px;
-}
-
-.feature {
-  background: var(--surface);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: var(--radius);
-  padding: 28px;
-}
-
-.feature .icon {
-  width: 44px;
-  height: 44px;
-  background: rgba(217, 119, 6, 0.15);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-  font-size: 24px;
-}
-
-.feature h3 {
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 700;
-  font-size: 19px;
-  margin-bottom: 8px;
-  letter-spacing: -0.3px;
-}
-
-.feature p {
   font-size: 15px;
+  margin-bottom: 6px;
+}
+.faq-a {
+  font-size: 14px;
   color: var(--text-muted);
   line-height: 1.55;
 }
 
+/* ── Footer ── */
 .footer {
   text-align: center;
   padding: 32px 0 16px;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
-
 .footer p {
   font-size: 13px;
   color: var(--text-dim);
 }
-
 .footer a {
   color: var(--amber);
   text-decoration: none;
 }
 
+/* ── Responsive ── */
 @media (max-width: 600px) {
   .page { padding: 8px 16px 60px; }
-  .video-wrapper { width: 290px; height: 679px; border-radius: 38px; }
-  #player { transform: scale(0.7425); }
-  .section-header h2 { font-size: 22px; }
-  .feature { padding: 24px 22px; }
+  .video-wrapper {
+    width: 290px;
+    height: 679px;
+    border-radius: 38px;
+  }
+  .video-wrapper iframe {
+    /* 390*0.7425=289.6px wide, 915*0.7425=679.4px tall */
+    transform: scale(0.7425);
+  }
+  .ranks-grid { grid-template-columns: 1fr; }
+  .offer { padding: 32px 22px; }
   .cta-btn { font-size: 16px; padding: 16px 40px; }
+  .rank-title { font-size: 20px; }
+  .feature { padding: 24px 22px; }
 }
 </style>
 </head>
 <body>
 
 <div class="page">
-  <!-- Logo -->
+  <!-- Logo bar -->
   <div class="logo-bar">
     <div class="logo-text">Find<span>A.</span>Sale</div>
   </div>
 
-  <!-- Video player -->
+  <!-- Video Demo (front and center) -->
   <div class="video-section">
+    <div class="video-caption">Watch (40 seconds)</div>
     <div class="video-wrapper">
-      <div id="player">
-        <!-- Play overlay -->
-        <div id="play-overlay">
-          <div class="overlay-brand">
-            <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
-            <div class="overlay-watch">Watch — 30 Seconds</div>
-          </div>
-          <div class="play-icon">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <path d="M8 5L23 14L8 23V5Z" fill="white"/>
-            </svg>
-          </div>
-        </div>
+      <iframe src="hunt-pass-video-ad.html?embed=1" title="Hunt Pass" loading="lazy"></iframe>
+    </div>
+  </div>
 
-        <!-- Scene 1: Clock — early access -->
-        <div class="scene" id="s1">
-          <div class="s-heading" id="h1">Hunt Pass members see it early</div>
-          <div class="clock-display" id="clock">6:00 AM</div>
-          <div class="s-subtext" id="st1">Sale opens at noon</div>
-          <div class="s-subtext" id="st2">You find it 6 hours first</div>
-        </div>
+  <!-- Hero ── -->
+  <div class="hero">
+    <h1>Hunt <em>first.</em><br>Find better.</h1>
+    <p class="subtitle">Hunt Pass members see sales before everyone else, earn 1.5× XP on every action, and get priority on holds.</p>
+  </div>
 
-        <!-- Scene 2: Claim Hold card -->
-        <div class="scene" id="s2">
-          <div class="s-heading" id="h2">Claim a hold. Nobody else can buy it yet.</div>
-          <div class="badge-container" id="bc2">
-            <div class="badge">EARLY ACCESS</div>
-          </div>
-          <div class="s-subtext" id="st3">45-minute hold starts now</div>
-        </div>
+  <!-- Features ── -->
+  <div class="features">
+    <div class="feature">
+      <div class="icon">🔓</div>
+      <h3>Early Access</h3>
+      <p>See sales before doors open. Hunt Pass members get early access before non-members, giving you first pick of the best finds.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">⚡</div>
+      <h3>1.5× XP Multiplier</h3>
+      <p>Every visit, purchase, haul post, and rank activity earns <strong>50% more XP.</strong> Unlock ranks and rewards faster.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">🎯</div>
+      <h3>Hold Priority</h3>
+      <p>When you claim a hold, Hunt Pass members go to the front of the queue. First dibs on the treasure you find.</p>
+    </div>
+    <div class="feature">
+      <div class="icon">✨</div>
+      <h3>Rarity Boosts</h3>
+      <p>Spend XP to increase your odds of finding Legendary items at any sale. Hunt Pass members can boost rarity +2%.</p>
+    </div>
+  </div>
 
-        <!-- Scene 3: Advantage split -->
-        <div class="scene" id="s3">
-          <div class="s-heading" id="h3"><em>6 hours</em> of advantage</div>
-          <div class="s-subtext" id="st4">For serious collectors</div>
-        </div>
-
-        <!-- Scene 4: XP Multiplier -->
-        <div class="scene" id="s4">
-          <div class="s-heading" id="h4"><em>1.5×</em> XP. Rank faster.</div>
-          <div class="xp-display" id="xpd">
-            <span class="xp-base">+10</span> <span class="xp-multiplier">→ +15</span>
-          </div>
-          <div class="s-subtext" id="st5">Reach Ranger in half the time</div>
-        </div>
-
-        <!-- Scene 5: CTA -->
-        <div class="scene" id="s5">
-          <div class="s-heading" id="h5">Hunt Pass</div>
-          <div class="s-subtext" id="st6">$9.99/month. Cancel anytime.</div>
-          <div style="margin-top:40px; opacity:0; transition:opacity 0.5s 0.6s ease;" id="url5">
-            <div style="font-family: 'Montserrat', sans-serif; font-size:20px; font-weight:700; color:var(--amber); letter-spacing:-0.3px;">finda.sale/hunt-pass</div>
-          </div>
-        </div>
-
-        <!-- Progress bar -->
-        <div id="progress-bar"></div>
+  <!-- Rank Discounts ── -->
+  <div class="rank-benefits">
+    <div class="rank-title">Discounts at Every Rank</div>
+    <div class="ranks-grid">
+      <div class="rank-card">
+        <div class="rank-icon">🔍</div>
+        <div class="rank-name">SCOUT</div>
+        <div class="rank-discount">5% off</div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-icon">🎯</div>
+        <div class="rank-name">RANGER</div>
+        <div class="rank-discount">10% off</div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-icon">✨</div>
+        <div class="rank-name">SAGE</div>
+        <div class="rank-discount">15% off</div>
+      </div>
+      <div class="rank-card">
+        <div class="rank-icon">👑</div>
+        <div class="rank-name">GRANDMASTER</div>
+        <div class="rank-discount">Free forever</div>
       </div>
     </div>
   </div>
 
-  <!-- Section: Features -->
-  <div class="section-header">
-    <h2>Hunt first. Find better.</h2>
+  <!-- The Offer ── -->
+  <div class="offer">
+    <div class="badge">Early Access + 1.5× XP + Hold Priority</div>
+    <h2>$9.99<em>/month</em><br>Or <em>earn it free</em></h2>
+    <p>Reach GRANDMASTER rank (12,000 XP) and you unlock Hunt Pass forever at no additional cost. Keep hunting, keep earning.</p>
+    <p class="detail">Discounts available at SCOUT, RANGER, and SAGE ranks as you climb the guild.</p>
   </div>
 
-  <div class="features">
-    <div class="feature">
-      <div class="icon">⏰</div>
-      <h3>First Dibs</h3>
-      <p>Hunt Pass members see every sale 6 hours before it opens to the public. The best items sell in the first hour. Be there first.</p>
-    </div>
-    <div class="feature">
-      <div class="icon">⭐</div>
-      <h3>1.5× XP Multiplier</h3>
-      <p>Every visit, purchase, and review earns 50% more XP. Reach Ranger twice as fast. Sage three times faster.</p>
-    </div>
-    <div class="feature">
-      <div class="icon">🎯</div>
-      <h3>Claim Holds</h3>
-      <p>Found something? Hold it for 45 minutes while you head over. Nobody else can buy it while your hold is active.</p>
-    </div>
-  </div>
-
-  <!-- CTA -->
+  <!-- The one CTA ── -->
   <div class="cta-section">
-    <a href="https://finda.sale/shopper/hunt-pass" class="cta-btn">Start Your Hunt Pass</a>
+    <a href="https://finda.sale/hunt-pass" class="cta-btn" id="main-cta">Get Hunt Pass</a>
+    <p class="cta-note">$9.99/month. Cancel anytime. Or earn it free at GRANDMASTER.</p>
   </div>
 
-  <!-- Footer -->
+  <!-- FAQ ── -->
+  <div class="faq">
+    <div class="faq-row">
+      <div class="faq-q">How do I cancel Hunt Pass?</div>
+      <div class="faq-a">You can cancel anytime from your account settings. No commitments, no questions asked. Or reach GRANDMASTER and it's free forever.</div>
+    </div>
+    <div class="faq-row">
+      <div class="faq-q">How much XP do I need for GRANDMASTER?</div>
+      <div class="faq-a">12,000 XP. With the 1.5× multiplier, you'll earn it faster than regular shoppers. Every visit, purchase, haul post, and rank milestone counts.</div>
+    </div>
+    <div class="faq-row">
+      <div class="faq-q">Does early access work for all sales?</div>
+      <div class="faq-a">Yes. Hunt Pass members see sales before doors open on every event in the app — estate sales, yard sales, auctions, flea markets, and consignment shops.</div>
+    </div>
+  </div>
+
+  <!-- Footer ── -->
   <div class="footer">
-    <p>Built by <a href="https://finda.sale">FindA.Sale</a> — the app for estate sales, yard sales, auctions, flea markets, and consignment.</p>
+    <p>Hunt Pass is a premium membership for <a href="https://finda.sale">FindA.Sale</a> shoppers. Earn ranks, collect treasures, hunt with friends.</p>
   </div>
 </div>
 
 <script>
-const DURATION = 30000; // 30 seconds
-const scenes = ['s1', 's2', 's3', 's4', 's5'];
-const sceneStarts = [0, 6000, 12000, 18000, 24000];
-
-let startTime = null;
-let rafId = null;
-let running = false;
-let currentScene = 0;
-
-const playOverlay = document.getElementById('play-overlay');
-const progressBar = document.getElementById('progress-bar');
-const player = document.getElementById('player');
-
-function showScene(idx) {
-  scenes.forEach((s, i) => {
-    const el = document.getElementById(s);
-    if (el) el.classList.toggle('active', i === idx);
-  });
-  currentScene = idx;
-}
-
-function resetAll() {
-  ['h1','st1','st2','clock'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['h2','st3','bc2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['h3','st4'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['h4','xpd','st5'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['h5','st6','url5'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  progressBar.style.width = '0%';
-  progressBar.style.transition = 'none';
-  scenes.forEach(s => {
-    const el = document.getElementById(s);
-    if (el) el.classList.remove('active');
-  });
-}
-
-const events = [
-  { at: 0, fn: () => {
-    showScene(0);
-    setTimeout(() => document.getElementById('h1').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('clock').classList.add('in'), 300);
-    setTimeout(() => document.getElementById('st1').classList.add('in'), 600);
-    setTimeout(() => document.getElementById('st2').classList.add('in'), 1200);
-  }},
-  { at: 6000, fn: () => {
-    showScene(1);
-    setTimeout(() => document.getElementById('h2').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('bc2').classList.add('in'), 400);
-    setTimeout(() => document.getElementById('st3').classList.add('in'), 900);
-  }},
-  { at: 12000, fn: () => {
-    showScene(2);
-    setTimeout(() => document.getElementById('h3').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('st4').classList.add('in'), 500);
-  }},
-  { at: 18000, fn: () => {
-    showScene(3);
-    setTimeout(() => document.getElementById('h4').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('xpd').classList.add('in'), 400);
-    setTimeout(() => document.getElementById('st5').classList.add('in'), 900);
-  }},
-  { at: 24000, fn: () => {
-    showScene(4);
-    setTimeout(() => document.getElementById('h5').classList.add('in'), 0);
-    setTimeout(() => document.getElementById('st6').classList.add('in'), 400);
-    setTimeout(() => document.getElementById('url5').classList.add('in'), 800);
-  }},
-  { at: 30000, fn: () => {
-    running = false;
-    cancelAnimationFrame(rafId);
-  }}
-];
-
-let nextEvent = 0;
-
-function tick(now) {
-  if (!running) return;
-  const elapsed = now - startTime;
-
-  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
-    events[nextEvent].fn();
-    nextEvent++;
+// ── Source Attribution ──
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const src = params.get('src');
+  if (src) {
+    document.querySelectorAll('a[href*="/hunt-pass"]').forEach(function(link) {
+      const url = new URL(link.href, window.location);
+      url.searchParams.set('src', src);
+      link.href = url.toString();
+    });
   }
-
-  const pct = Math.min((elapsed / DURATION) * 100, 100);
-  progressBar.style.width = pct + '%';
-
-  if (elapsed < DURATION) {
-    rafId = requestAnimationFrame(tick);
-  }
-}
-
-function start() {
-  resetAll();
-  nextEvent = 0;
-  running = true;
-  startTime = performance.now();
-  requestAnimationFrame(tick);
-}
-
-playOverlay.addEventListener('click', () => {
-  playOverlay.classList.add('hidden');
-  start();
-});
-
-player.addEventListener('click', () => {
-  if (!startTime) return;
-  running = !running;
-  if (running) {
-    startTime = performance.now() - (startTime || 0);
-    rafId = requestAnimationFrame(tick);
-  } else {
-    cancelAnimationFrame(rafId);
-  }
-});
+})();
 </script>
-
 </body>
 </html>

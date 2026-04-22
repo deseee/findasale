@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FindA.Sale — Haul Posts (35s)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0D0D0D;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  padding: 20px;
+}
+
+/* ── Embed mode: strip chrome so iframe host owns framing ── */
+body.embed {
+  min-height: auto;
+  padding: 0;
+  display: block;
+  background: transparent;
+}
+body.embed #player {
+  border-radius: 0;
+  box-shadow: none;
+}
+body.embed #info,
+body.embed #timer { display: none; }
+
+/* ── 9:16 Player ── */
+#player {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: #0A0A0A;
+  overflow: hidden;
+  border-radius: 44px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 100px rgba(0,0,0,0.8);
+  flex-shrink: 0;
+}
+
+/* ── Scenes ── */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  padding: 40px 36px;
+}
+.scene.active { opacity: 1; }
+
+/* ── Progress Bar (amber) ── */
+#progress-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: #D97706;
+  width: 0%;
+  z-index: 200;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Replay ── */
+#replay-btn {
+  position: absolute;
+  bottom: 36px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 10px 28px;
+  border-radius: 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  display: none;
+  z-index: 300;
+  transition: background 0.2s;
+}
+#replay-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── Play overlay ── */
+#play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  cursor: pointer;
+  border-radius: 44px;
+  transition: opacity 0.3s;
+  padding: 60px 36px 80px;
+}
+#play-overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+}
+.overlay-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.overlay-logo .a-dot { color: #D97706; }
+.overlay-watch {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+}
+.play-icon {
+  width: 72px; height: 72px;
+  background: rgba(217,119,6,0.9);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
+}
+.play-icon svg { margin-left: 5px; }
+
+/* ────────────────────────────────
+   SCENE 1 — HOOK
+──────────────────────────────── */
+#s1 { background: #0A0A0A; gap: 0; }
+
+.s1-hook {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 38px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.34,1.3,0.64,1);
+}
+.s1-hook.in { opacity: 1; transform: scale(1); }
+.s1-hook em { font-style: normal; color: #D97706; }
+
+/* Polaroid animation */
+.polaroid-wrap {
+  position: relative;
+  width: 160px;
+  height: 180px;
+  margin-top: 40px;
+  opacity: 0;
+  transform: translateY(20px) rotate(-8deg) scale(0.85);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.34,1.56,0.64,1);
+}
+.polaroid-wrap.in { opacity: 1; transform: translateY(0) rotate(0) scale(1); }
+
+.polaroid {
+  width: 100%;
+  height: 100%;
+  background: #F9F7F4;
+  border-radius: 2px;
+  padding: 8px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.4);
+}
+
+.polaroid-photo {
+  width: 100%;
+  height: 120px;
+  background: linear-gradient(135deg, #C49A6C 0%, #8B5A3C 100%);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+}
+
+.flash-effect {
+  position: absolute;
+  inset: 0;
+  background: white;
+  opacity: 0;
+  border-radius: 1px;
+  animation: flashPop 0.4s ease forwards;
+}
+@keyframes flashPop {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.polaroid-text {
+  margin-top: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  color: #3F3F3F;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* ────────────────────────────────
+   SCENE 2 — THE POST
+──────────────────────────────── */
+#s2 { background: #111118; padding: 28px 20px; justify-content: center; }
+
+.s2-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 28px;
+}
+.s2-headline.in { opacity: 1; transform: translateY(0); }
+
+/* Phone mockup */
+.phone-wrap {
+  position: relative;
+  width: 280px;
+  height: 560px;
+  flex-shrink: 0;
+}
+.phone-shell {
+  width: 100%;
+  height: 100%;
+  background: #1C1C2E;
+  border-radius: 28px;
+  border: 2px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.phone-island {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  width: 88px; height: 26px;
+  background: #000;
+  border-radius: 14px;
+  z-index: 10;
+}
+
+.phone-screen {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.35s ease;
+  display: flex;
+  flex-direction: column;
+}
+.phone-screen.hidden { opacity: 0; pointer-events: none; }
+
+/* Camera screen */
+.cam-screen {
+  height: 100%;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 20px;
+}
+.cam-viewfinder {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cam-subject {
+  width: 140px; height: 140px;
+  background: transparent;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cam-subject::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border: 2px solid rgba(217,119,6,0.45);
+  border-radius: 16px;
+  animation: camPulse 1.5s ease-in-out infinite;
+}
+@keyframes camPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+.subject-icon {
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 60px;
+}
+
+.cam-shutter {
+  position: relative; z-index: 5;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  border: 4px solid rgba(255,255,255,0.4);
+  cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(255,255,255,0.5);
+  animation: shutterReady 2s ease-in-out infinite;
+}
+@keyframes shutterReady {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.0); }
+  50% { box-shadow: 0 0 0 8px rgba(255,255,255,0.15); }
+}
+.cam-shutter.tapped {
+  animation: shutterTap 0.3s ease forwards;
+}
+@keyframes shutterTap {
+  0% { transform: scale(1); background: rgba(255,255,255,0.9); }
+  50% { transform: scale(0.85); background: rgba(217,119,6,0.9); }
+  100% { transform: scale(1); background: rgba(255,255,255,0.9); }
+}
+
+/* Post card screen */
+.post-screen {
+  background: #F9F7F4;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: flex-start;
+  height: 100%;
+  box-sizing: border-box;
+  padding-top: 60px;
+}
+
+.post-photo {
+  width: 100%;
+  height: 140px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #A0704D 0%, #6B5142 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 50px;
+}
+
+.post-caption {
+  background: white;
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0,0,0,0.06);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #8B7355;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.post-button {
+  background: #D97706;
+  color: white;
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.post-button.in { opacity: 1; transform: translateY(0); }
+.post-button.tapped {
+  animation: btnTap 0.3s ease forwards;
+}
+@keyframes btnTap {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); background: #B45309; }
+  100% { transform: scale(1); }
+}
+
+/* Success screen */
+.success-screen {
+  background: #0A0A0A;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 24px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.success-ring {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.12);
+  border: 2.5px solid #10B981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.success-ring.in { opacity: 1; transform: scale(1); }
+
+.success-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #10B981;
+  opacity: 0;
+  transition: opacity 0.4s 0.2s ease;
+}
+.success-title.in { opacity: 1; }
+
+.success-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  color: rgba(255,255,255,0.60);
+  opacity: 0;
+  transition: opacity 0.4s 0.4s ease;
+  text-align: center;
+}
+.success-sub.in { opacity: 1; }
+
+/* ────────────────────────────────
+   SCENE 3 — THE LIKES
+──────────────────────────────── */
+#s3 { background: #0A0A0A; gap: 0; padding: 48px 28px; justify-content: center; }
+
+.s3-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 32px;
+}
+.s3-title.in { opacity: 1; transform: translateY(0); }
+
+.like-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.like-display {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 64px;
+  font-weight: 900;
+  color: #D97706;
+  letter-spacing: -2px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.like-display.in { opacity: 1; transform: scale(1); }
+
+.like-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.60);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.like-label.in { opacity: 1; }
+
+.bonus-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  background: rgba(124,58,237,0.15);
+  border: 1px solid rgba(124,58,237,0.3);
+  border-radius: 14px;
+  margin-top: 16px;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.bonus-badge.in { opacity: 1; transform: scale(1); }
+
+.bonus-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  color: #7C3AED;
+}
+
+/* ────────────────────────────────
+   SCENE 4 — THE FEED
+──────────────────────────────── */
+#s4 { background: #111118; padding: 28px 20px; }
+
+.s4-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 24px;
+}
+.s4-headline.in { opacity: 1; transform: translateY(0); }
+
+.feed-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feed-card {
+  background: #1C1C2E;
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.feed-card.in { opacity: 1; transform: translateY(0); }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.card-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #D97706, #F59E0B);
+}
+
+.card-meta {
+  flex: 1;
+}
+.card-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+.card-rank {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+}
+
+.card-thumb {
+  width: 100%;
+  height: 80px;
+  background: linear-gradient(135deg, #A0704D 0%, #6B5142 100%);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.card-footer {
+  display: flex;
+  gap: 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+}
+.card-foot-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ────────────────────────────────
+   SCENE 5 — SCOUT RANK UNLOCK
+──────────────────────────────── */
+#s5 { background: #0A0A0A; gap: 0; padding: 48px 28px; justify-content: center; }
+
+.s5-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 32px;
+  line-height: 1.25;
+}
+.s5-headline.in { opacity: 1; transform: translateY(0); }
+
+.rank-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.rank-badge {
+  font-size: 64px;
+  opacity: 0;
+  transform: scale(0.6) rotateZ(-15deg);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.34,1.56,0.64,1);
+}
+.rank-badge.in { opacity: 1; transform: scale(1) rotateZ(0); }
+
+.rank-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: #D97706;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.4s 0.2s ease;
+}
+.rank-label.in { opacity: 1; }
+
+.xp-bar-wrap {
+  width: 100%;
+  max-width: 240px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.xp-bar-wrap.in { opacity: 1; transform: translateY(0); }
+
+.xp-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.xp-bar-bg {
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #D97706, #F59E0B);
+  border-radius: 4px;
+  width: 0%;
+  transition: width 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ────────────────────────────────
+   SCENE 6 — CTA
+──────────────────────────────── */
+#s6 { background: #050505; gap: 0; }
+
+.cta-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  margin-bottom: 28px;
+}
+.cta-logo-wrap.in { opacity: 1; transform: translateY(0); }
+
+.cta-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.cta-logo .a-dot { color: #D97706; }
+
+.cta-tagline {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  margin-top: 10px;
+}
+
+.cta-main {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 52px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -2px;
+  line-height: 1.1;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s cubic-bezier(0.34,1.3,0.64,1);
+}
+.cta-main.in { opacity: 1; transform: scale(1); }
+
+.cta-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  margin-top: 16px;
+  opacity: 0;
+  transition: opacity 0.5s 0.4s ease;
+}
+.cta-sub.in { opacity: 1; }
+
+.cta-url {
+  display: inline-block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #D97706;
+  margin-top: 32px;
+  opacity: 0;
+  transition: opacity 0.5s 0.6s ease;
+  letter-spacing: -0.3px;
+}
+.cta-url.in { opacity: 1; }
+
+.cta-glow {
+  position: absolute;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(217,119,6,0.12) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 3s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+/* ── Scene Navigation ── */
+#scene-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+.nav-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.75);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+
+#scene-dots {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.scene-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: background 0.25s, transform 0.25s;
+  flex-shrink: 0;
+}
+.scene-dot.active { background: #D97706; transform: scale(1.4); }
+.scene-dot:hover:not(.active) { background: rgba(255,255,255,0.45); }
+
+#info {
+  margin-top: 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.7;
+}
+#info strong { color: rgba(255,255,255,0.5); }
+
+#timer {
+  position: absolute;
+  top: 16px; right: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  z-index: 150;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<div id="player">
+  <div id="timer">0:00</div>
+  <div id="progress-bar"></div>
+
+  <div id="play-overlay">
+    <div class="overlay-brand">
+      <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="overlay-watch">Watch — 35 Seconds</div>
+    </div>
+    <div class="play-icon">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M8 5L23 14L8 23V5Z" fill="white"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Scene 1: Hook -->
+  <div class="scene" id="s1">
+    <div class="s1-hook" id="s1-hook">Your finds.<br><em>Your story.</em></div>
+    <div class="polaroid-wrap" id="polaroid">
+      <div class="polaroid">
+        <div class="polaroid-photo">
+          <div class="flash-effect" id="flash"></div>
+          📷
+        </div>
+        <div class="polaroid-text">Today's haul</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 2: The Post -->
+  <div class="scene" id="s2">
+    <div class="s2-headline" id="s2-headline">Snap. Caption. Post.</div>
+    <div class="phone-wrap">
+      <div class="phone-shell">
+        <div class="phone-island"></div>
+
+        <!-- Camera screen -->
+        <div class="phone-screen" id="cam-screen">
+          <div class="cam-screen">
+            <div class="cam-viewfinder">
+              <div class="cam-subject">
+                <div class="subject-icon">🏺</div>
+              </div>
+            </div>
+            <div class="cam-shutter" id="cam-shutter"></div>
+          </div>
+        </div>
+
+        <!-- Post card screen -->
+        <div class="phone-screen hidden" id="post-screen">
+          <div class="post-screen">
+            <div class="post-photo">✨</div>
+            <div class="post-caption">Found this gorgeous vase!</div>
+            <div class="post-button" id="post-button">Share haul →</div>
+          </div>
+        </div>
+
+        <!-- Success screen -->
+        <div class="phone-screen hidden" id="success-screen">
+          <div class="success-screen">
+            <div class="success-ring" id="success-ring">✓</div>
+            <div class="success-title" id="success-title">Posted!</div>
+            <div class="success-sub" id="success-sub">+15 XP earned</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 3: The Likes -->
+  <div class="scene" id="s3">
+    <div class="s3-title" id="s3-title">Likes = XP</div>
+    <div class="like-counter">
+      <div class="like-display" id="like-display">0</div>
+      <div class="like-label" id="like-label">Likes</div>
+    </div>
+    <div class="bonus-badge" id="bonus-badge">
+      <span>+5 XP</span>
+      <span class="bonus-text">Bonus!</span>
+    </div>
+  </div>
+
+  <!-- Scene 4: The Feed -->
+  <div class="scene" id="s4">
+    <div class="s4-headline" id="s4-headline">Join the hunt community</div>
+    <div class="feed-cards">
+      <div class="feed-card" id="card1">
+        <div class="card-header">
+          <div class="card-avatar"></div>
+          <div class="card-meta">
+            <div class="card-name">Sarah</div>
+            <div class="card-rank">🎯 RANGER</div>
+          </div>
+        </div>
+        <div class="card-thumb"></div>
+        <div class="card-footer">
+          <div class="card-foot-item">♥ 23</div>
+          <div class="card-foot-item">💬 5</div>
+        </div>
+      </div>
+      <div class="feed-card" id="card2">
+        <div class="card-header">
+          <div class="card-avatar" style="background: linear-gradient(135deg, #10B981, #34D399);"></div>
+          <div class="card-meta">
+            <div class="card-name">Alex</div>
+            <div class="card-rank">✨ SAGE</div>
+          </div>
+        </div>
+        <div class="card-thumb"></div>
+        <div class="card-footer">
+          <div class="card-foot-item">♥ 41</div>
+          <div class="card-foot-item">💬 8</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 5: SCOUT Rank -->
+  <div class="scene" id="s5">
+    <div class="s5-headline" id="s5-headline">Haul posts unlock<br>at 🔍 SCOUT</div>
+    <div class="rank-display">
+      <div class="rank-badge" id="rank-badge">🔍</div>
+      <div class="rank-label" id="rank-label">SCOUT RANK</div>
+    </div>
+    <div class="xp-bar-wrap" id="xp-bar-wrap">
+      <div class="xp-label">500 XP to unlock</div>
+      <div class="xp-bar-bg">
+        <div class="xp-bar-fill" id="xp-bar-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 6: CTA -->
+  <div class="scene" id="s6">
+    <div class="cta-glow"></div>
+    <div class="cta-logo-wrap" id="cta-logo">
+      <div class="cta-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="cta-tagline">Every hunt matters.</div>
+    </div>
+    <div class="cta-main" id="cta-main">Share your<br>haul.</div>
+    <div class="cta-sub" id="cta-sub">Earn ranks. Build your reputation.</div>
+    <div class="cta-url" id="cta-url">https://finda.sale/register</div>
+  </div>
+
+  <div id="pause-indicator" style="
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:350;
+  ">
+    <div style="
+      width:60px; height:60px; border-radius:50%;
+      background:rgba(0,0,0,0.6); backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:center;
+      border:1.5px solid rgba(255,255,255,0.15);
+    ">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect x="4" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+        <rect x="13" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+      </svg>
+    </div>
+  </div>
+
+  <button id="replay-btn">↺ &nbsp;Play again</button>
+</div>
+
+<div id="scene-nav">
+  <button class="nav-btn" id="prev-btn">&#8249;</button>
+  <div id="scene-dots">
+    <div class="scene-dot active" data-scene="0" title="Scene 1: Hook"></div>
+    <div class="scene-dot" data-scene="1" title="Scene 2: The Post"></div>
+    <div class="scene-dot" data-scene="2" title="Scene 3: Likes"></div>
+    <div class="scene-dot" data-scene="3" title="Scene 4: Feed"></div>
+    <div class="scene-dot" data-scene="4" title="Scene 5: Rank"></div>
+    <div class="scene-dot" data-scene="5" title="Scene 6: CTA"></div>
+  </div>
+  <button class="nav-btn" id="next-btn">&#8250;</button>
+</div>
+
+<div id="info">
+  <strong>FindA.Sale — Haul Posts Feature (35 seconds)</strong><br>
+  9:16 vertical · TikTok / YouTube Shorts format<br>
+  Click the player to start · Screen-record to capture
+</div>
+
+<script>
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.body.classList.add('embed');
+}
+
+let startTime = null;
+let rafId = null;
+let running = false;
+let paused = false;
+let pauseStart = null;
+const DURATION = 35000;
+const sceneStarts = [0, 5000, 11000, 17000, 24000, 30500];
+let currentScene = 0;
+
+const player = document.getElementById('player');
+const playOverlay = document.getElementById('play-overlay');
+const progressBar = document.getElementById('progress-bar');
+const replayBtn = document.getElementById('replay-btn');
+const timerEl = document.getElementById('timer');
+const scenes = ['s1','s2','s3','s4','s5','s6'].map(id => document.getElementById(id));
+
+function addAt(el, cls, delay) {
+  if (!el) return;
+  return setTimeout(() => el.classList.add(cls), delay);
+}
+
+function animateCounter(from, to, duration, onTick) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+    onTick(Math.round(from + (to - from) * ease));
+    if (t < 1) requestAnimationFrame(step);
+    else onTick(to);
+  }
+  requestAnimationFrame(step);
+}
+
+function showScene(id) {
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  const idx = parseInt(id.replace('s', '')) - 1;
+  if (!isNaN(idx) && idx >= 0) { currentScene = idx; updateDots(); }
+}
+
+function updateDots() {
+  document.querySelectorAll('.scene-dot').forEach(function(dot, i) {
+    dot.classList.toggle('active', i === currentScene);
+  });
+}
+
+function seekToScene(n) {
+  n = Math.max(0, Math.min(5, n));
+  running = false;
+  cancelAnimationFrame(rafId);
+  playOverlay.classList.add('hidden');
+  replayBtn.style.display = 'none';
+  resetAll();
+  const seekMs = sceneStarts[n];
+  startTime = performance.now() - seekMs;
+  nextEvent = 0;
+  while (nextEvent < events.length && events[nextEvent].at < seekMs) { nextEvent++; }
+  showScene('s' + (n + 1));
+  paused = false;
+  running = true;
+  rafId = requestAnimationFrame(tick);
+}
+
+function resetAll() {
+  ['s1-hook','polaroid'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s2-headline').classList.remove('in');
+  document.getElementById('cam-screen').classList.remove('hidden');
+  document.getElementById('post-screen').classList.add('hidden');
+  document.getElementById('success-screen').classList.add('hidden');
+  document.getElementById('cam-shutter').classList.remove('tapped');
+  document.getElementById('post-button').classList.remove('in','tapped');
+  document.getElementById('success-ring').classList.remove('in');
+  document.getElementById('success-title').classList.remove('in');
+  document.getElementById('success-sub').classList.remove('in');
+  document.getElementById('s3-title').classList.remove('in');
+  document.getElementById('like-display').classList.remove('in');
+  document.getElementById('like-label').classList.remove('in');
+  document.getElementById('like-display').textContent = '0';
+  document.getElementById('bonus-badge').classList.remove('in');
+  document.getElementById('s4-headline').classList.remove('in');
+  ['card1','card2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s5-headline').classList.remove('in');
+  document.getElementById('rank-badge').classList.remove('in');
+  document.getElementById('rank-label').classList.remove('in');
+  document.getElementById('xp-bar-wrap').classList.remove('in');
+  document.getElementById('xp-bar-fill').style.width = '0%';
+  document.getElementById('xp-bar-fill').style.transition = 'none';
+  document.getElementById('cta-logo').classList.remove('in');
+  document.getElementById('cta-main').classList.remove('in');
+  document.getElementById('cta-sub').classList.remove('in');
+  document.getElementById('cta-url').classList.remove('in');
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  progressBar.style.width = '0%';
+  progressBar.style.transition = 'none';
+  timerEl.textContent = '0:00';
+  replayBtn.style.display = 'none';
+  document.getElementById('pause-indicator').style.opacity = '0';
+}
+
+const events = [
+  // Scene 1: Hook (0–5s)
+  { at: 0, fn: () => {
+    showScene('s1');
+    addAt(document.getElementById('s1-hook'), 'in', 0);
+    addAt(document.getElementById('polaroid'), 'in', 300);
+    addAt(document.getElementById('flash'), null, 600);
+  }},
+
+  // Scene 2: The Post (5–11s)
+  { at: 5000, fn: () => {
+    showScene('s2');
+    addAt(document.getElementById('s2-headline'), 'in', 0);
+  }},
+
+  { at: 6800, fn: () => {
+    document.getElementById('cam-shutter').classList.add('tapped');
+    setTimeout(() => {
+      document.getElementById('cam-screen').classList.add('hidden');
+      document.getElementById('post-screen').classList.remove('hidden');
+      addAt(document.getElementById('post-button'), 'in', 300);
+    }, 800);
+  }},
+
+  { at: 8600, fn: () => {
+    document.getElementById('post-button').classList.add('tapped');
+    setTimeout(() => {
+      document.getElementById('post-screen').classList.add('hidden');
+      document.getElementById('success-screen').classList.remove('hidden');
+      addAt(document.getElementById('success-ring'), 'in', 100);
+      addAt(document.getElementById('success-title'), 'in', 280);
+      addAt(document.getElementById('success-sub'), 'in', 480);
+    }, 800);
+  }},
+
+  // Scene 3: Likes (11–17s)
+  { at: 11000, fn: () => {
+    showScene('s3');
+    addAt(document.getElementById('s3-title'), 'in', 0);
+    addAt(document.getElementById('like-display'), 'in', 400);
+    addAt(document.getElementById('like-label'), 'in', 500);
+  }},
+
+  { at: 12200, fn: () => {
+    animateCounter(0, 10, 3000, (v) => {
+      document.getElementById('like-display').textContent = v;
+    });
+  }},
+
+  { at: 15000, fn: () => {
+    addAt(document.getElementById('bonus-badge'), 'in', 0);
+  }},
+
+  // Scene 4: Feed (17–24s)
+  { at: 17000, fn: () => {
+    showScene('s4');
+    addAt(document.getElementById('s4-headline'), 'in', 0);
+    addAt(document.getElementById('card1'), 'in', 600);
+    addAt(document.getElementById('card2'), 'in', 1000);
+  }},
+
+  // Scene 5: SCOUT Rank (24–30.5s)
+  { at: 24000, fn: () => {
+    showScene('s5');
+    addAt(document.getElementById('s5-headline'), 'in', 0);
+    addAt(document.getElementById('rank-badge'), 'in', 500);
+    addAt(document.getElementById('rank-label'), 'in', 700);
+    addAt(document.getElementById('xp-bar-wrap'), 'in', 900);
+  }},
+
+  { at: 25200, fn: () => {
+    document.getElementById('xp-bar-fill').style.transition = 'width 1.3s cubic-bezier(0.25,0.46,0.45,0.94)';
+    document.getElementById('xp-bar-fill').style.width = '100%';
+  }},
+
+  // Scene 6: CTA (30.5–35s)
+  { at: 30500, fn: () => {
+    showScene('s6');
+    addAt(document.getElementById('cta-logo'), 'in', 0);
+    addAt(document.getElementById('cta-main'), 'in', 400);
+    addAt(document.getElementById('cta-sub'), 'in', 800);
+    addAt(document.getElementById('cta-url'), 'in', 1100);
+  }},
+
+  { at: 35000, fn: () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+    replayBtn.style.display = 'block';
+  }}
+];
+
+let nextEvent = 0;
+function tick(now) {
+  if (!running) return;
+  const elapsed = now - startTime;
+
+  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
+    events[nextEvent].fn();
+    nextEvent++;
+  }
+
+  const pct = Math.min((elapsed / DURATION) * 100, 100);
+  progressBar.style.width = pct + '%';
+
+  const secs = Math.min(Math.floor(elapsed / 1000), 35);
+  const ss = String(secs % 60).padStart(2,'0');
+  timerEl.textContent = `0:${ss}`;
+
+  if (elapsed < DURATION) {
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function start() {
+  resetAll();
+  nextEvent = 0;
+  running = true;
+  paused = false;
+  pauseStart = null;
+  startTime = performance.now();
+  requestAnimationFrame(tick);
+}
+
+const pauseIndicator = document.getElementById('pause-indicator');
+let pauseFlashTimer = null;
+
+function togglePause() {
+  if (!startTime || (!running && !paused)) return;
+  if (paused) {
+    const pauseDuration = performance.now() - pauseStart;
+    startTime += pauseDuration;
+    pauseStart = null;
+    paused = false;
+    running = true;
+    pauseIndicator.style.opacity = '0';
+    rafId = requestAnimationFrame(tick);
+  } else {
+    paused = true;
+    pauseStart = performance.now();
+    running = false;
+    cancelAnimationFrame(rafId);
+    pauseIndicator.style.opacity = '1';
+    clearTimeout(pauseFlashTimer);
+    pauseFlashTimer = setTimeout(() => {
+      if (paused) pauseIndicator.style.opacity = '0.35';
+    }, 600);
+  }
+}
+
+player.addEventListener('click', (e) => {
+  if (e.target.closest('#play-overlay')) return;
+  if (e.target.closest('#replay-btn')) return;
+  if (!startTime) return;
+  togglePause();
+});
+
+playOverlay.addEventListener('click', () => {
+  playOverlay.classList.add('hidden');
+  start();
+});
+
+replayBtn.addEventListener('click', () => {
+  replayBtn.style.display = 'none';
+  start();
+});
+
+document.getElementById('prev-btn').addEventListener('click', function() {
+  seekToScene(currentScene - 1);
+});
+document.getElementById('next-btn').addEventListener('click', function() {
+  seekToScene(currentScene + 1);
+});
+document.querySelectorAll('.scene-dot').forEach(function(dot) {
+  dot.addEventListener('click', function() {
+    seekToScene(parseInt(this.dataset.scene));
+  });
+});
+</script>
+</body>
+</html>

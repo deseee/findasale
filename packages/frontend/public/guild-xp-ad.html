@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FindA.Sale — Guild XP Explainer (40s)</title>
+<title>FindA.Sale — Explorer's Guild XP System (40s)</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -144,70 +144,100 @@ body.embed #timer { display: none; }
 .play-icon svg { margin-left: 5px; }
 
 /* ────────────────────────────────
-   SCENE 1 — EVERY VISIT EARNS XP (0–5s)
+   SCENE 1 — HOOK: Every Move Earns XP
 ──────────────────────────────── */
 #s1 { background: #0A0A0A; gap: 0; }
 
-.s1-map-pin {
-  font-size: 64px;
-  opacity: 0;
-  transform: scale(0.5) translateY(20px);
-  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
-  margin-bottom: 20px;
-}
-.s1-map-pin.in { opacity: 1; transform: scale(1) translateY(0); }
-
-.s1-xp-counter {
+.s1-counter-wrap {
   font-family: 'Montserrat', sans-serif;
-  font-size: 44px;
+  font-size: 120px;
   font-weight: 900;
-  color: #D97706;
-  letter-spacing: -1px;
+  color: #7C3AED;
+  line-height: 1;
+  letter-spacing: -5px;
   opacity: 0;
-  transform: scale(0.6) translateY(16px);
-  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
-  margin-bottom: 24px;
+  transform: scale(0.8);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  margin-bottom: 12px;
 }
-.s1-xp-counter.in { opacity: 1; transform: scale(1) translateY(0); }
+.s1-counter-wrap.in { opacity: 1; transform: scale(1); }
 
-.s1-title {
+.s1-counter-label {
   font-family: 'Montserrat', sans-serif;
-  font-size: 28px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
+  font-size: 24px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+  letter-spacing: -0.3px;
+  margin-top: 6px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s 0.15s ease, transform 0.5s 0.15s ease;
+}
+.s1-counter-label.in { opacity: 1; transform: translateY(0); }
+
+.s1-hook-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 36px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  margin-top: 28px;
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  line-height: 1.2;
+}
+.s1-hook-text.in { opacity: 1; transform: translateY(0) scale(1); }
+
+.s1-ranks {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 36px;
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.s1-ranks.in { opacity: 1; transform: translateY(0); }
+
+.rank-icon {
+  font-size: 32px;
+  line-height: 1;
+  filter: grayscale(40%);
+  transition: filter 0.3s;
+}
+.rank-icon:hover { filter: grayscale(0%); }
+
+/* ────────────────────────────────
+   SCENE 2 — XP EARNING DEMO
+──────────────────────────────── */
+#s2 { background: #111118; padding: 32px 24px; justify-content: center; }
+
+.s2-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
   letter-spacing: -0.3px;
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 24px;
+  line-height: 1.4;
 }
-.s1-title.in { opacity: 1; transform: translateY(0); }
+.s2-headline.in { opacity: 1; transform: translateY(0); }
 
-.s1-subtext {
-  font-family: 'Inter', sans-serif;
-  font-size: 15px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
-  margin-top: 12px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.s1-subtext.in { opacity: 1; transform: translateY(0); }
-
-/* ────────────────────────────────
-   SCENE 2 — PURCHASE = PROGRESS (5–11s)
-──────────────────────────────── */
-#s2 { background: #111118; padding: 32px 24px; justify-content: center; }
-
-.s2-phone-wrap {
+/* Phone mockup */
+.phone-wrap {
   position: relative;
   width: 288px;
   height: 576px;
   flex-shrink: 0;
-  margin-bottom: 16px;
 }
-
-.s2-phone-shell {
+.phone-shell {
   width: 100%;
   height: 100%;
   background: #1C1C2E;
@@ -216,11 +246,10 @@ body.embed #timer { display: none; }
   overflow: hidden;
   position: relative;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
-  display: flex;
-  flex-direction: column;
 }
 
-.s2-phone-island {
+/* Dynamic island */
+.phone-island {
   position: absolute;
   top: 10px; left: 50%;
   transform: translateX(-50%);
@@ -230,598 +259,549 @@ body.embed #timer { display: none; }
   z-index: 10;
 }
 
-.s2-phone-body {
-  flex: 1;
-  padding: 48px 20px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-}
-
-.s2-item-card {
-  width: 100%;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 16px;
-  padding: 16px;
-  opacity: 0;
-  transform: translateY(12px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.s2-item-card.in { opacity: 1; transform: translateY(0); }
-
-.s2-item-title {
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.9);
-}
-
-.s2-item-price {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-  color: #D97706;
-  margin-top: 6px;
-}
-
-.s2-purchase-btn {
-  width: 100%;
-  background: #10B981;
-  color: white;
-  border-radius: 12px;
-  padding: 14px;
-  text-align: center;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  opacity: 0;
-  transform: translateY(12px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 8px;
-}
-.s2-purchase-btn.in { opacity: 1; transform: translateY(0); }
-.s2-purchase-btn.tapped { animation: btnTap 0.3s ease forwards; }
-
-@keyframes btnTap {
-  0% { transform: scale(1); }
-  50% { transform: scale(0.92); background: #059669; }
-  100% { transform: scale(1); }
-}
-
-.s2-xp-burst {
+/* Phone screen */
+.phone-screen {
   position: absolute;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 28px;
-  font-weight: 900;
-  color: #D97706;
-  opacity: 0;
-  letter-spacing: -0.5px;
-  pointer-events: none;
+  inset: 0;
+  transition: opacity 0.35s ease;
+  padding: 48px 18px 28px;
+  overflow-y: auto;
 }
+.phone-screen.hidden { opacity: 0; pointer-events: none; }
 
-.s2-xp-burst.burst { animation: xpBurst 1.2s ease-out forwards; }
-
-@keyframes xpBurst {
-  0% { opacity: 1; transform: translateY(0) scale(1); }
-  100% { opacity: 0; transform: translateY(-60px) scale(0.8); }
-}
-
-.s2-xp-bar {
-  width: 100%;
-  height: 6px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-top: 12px;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-.s2-xp-bar.in { opacity: 1; }
-
-.s2-xp-bar-fill {
+.browse-screen {
+  background: #F9F7F4;
   height: 100%;
-  background: linear-gradient(90deg, #D97706, #F59E0B);
-  border-radius: 3px;
-  width: 30%;
-  transition: width 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.s2-title {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 26px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 12px;
-}
-.s2-title.in { opacity: 1; transform: translateY(0); }
-
-.s2-subtext {
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.s2-subtext.in { opacity: 1; transform: translateY(0); }
-
-/* ────────────────────────────────
-   SCENE 3 — REACH SCOUT (11–17s)
-──────────────────────────────── */
-#s3 { background: #0D0D15; gap: 0; }
-
-.s3-xp-bar-container {
-  width: 240px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 24px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  gap: 12px;
 }
-.s3-xp-bar-container.in { opacity: 1; transform: translateY(0); }
 
-.s3-xp-bar-label {
+.sale-card {
+  border-radius: 12px;
+  background: white;
+  padding: 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.sale-card.in { opacity: 1; transform: translateY(0); }
+
+.card-photo {
+  width: 100%;
+  height: 80px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #8B7355 0%, #6B5B3E 100%);
+  margin-bottom: 8px;
+}
+
+.card-title {
   font-family: 'Inter', sans-serif;
   font-size: 13px;
-  color: rgba(255,255,255,0.6);
-  text-align: center;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 4px;
 }
 
-.s3-xp-bar {
-  width: 100%;
-  height: 8px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.s3-xp-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #D97706, #F59E0B);
-  border-radius: 4px;
-  width: 0%;
-  transition: width 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.s3-badge {
-  font-size: 56px;
-  margin-bottom: 16px;
-  opacity: 0;
-  transform: scale(0.5);
-  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
-}
-.s3-badge.in { opacity: 1; transform: scale(1); }
-
-.s3-badge-label {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 28px;
-  font-weight: 700;
-  color: #FFFFFF;
-  border: 2px solid #D97706;
-  border-radius: 12px;
-  padding: 10px 20px;
-  opacity: 0;
-  transform: scale(0.9) translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-bottom: 16px;
-}
-.s3-badge-label.in { opacity: 1; transform: scale(1) translateY(0); }
-
-.s3-confetti {
-  position: absolute;
-  font-size: 12px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.s3-confetti.pop { animation: confettiPop 0.8s ease-out forwards; }
-
-@keyframes confettiPop {
-  0% { opacity: 1; transform: translate(0, 0) scale(1); }
-  100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); }
-}
-
-.s3-title {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 26px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 12px;
-}
-.s3-title.in { opacity: 1; transform: translateY(0); }
-
-.s3-subtext {
+.card-meta {
   font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(0,0,0,0.6);
 }
-.s3-subtext.in { opacity: 1; transform: translateY(0); }
 
-/* ────────────────────────────────
-   SCENE 4 — RARE FIND BONUS (17–22s)
-──────────────────────────────── */
-#s4 { background: #0A0A0A; gap: 0; }
-
-.s4-rare-card {
-  width: 280px;
-  background: rgba(124, 58, 237, 0.1);
-  border: 2px solid rgba(124, 58, 237, 0.6);
-  border-radius: 16px;
-  padding: 20px;
-  opacity: 0;
-  transform: translateY(12px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  box-shadow: 0 0 24px rgba(124, 58, 237, 0.2);
-  margin-bottom: 20px;
-}
-.s4-rare-card.in { opacity: 1; transform: translateY(0); }
-
-.s4-rare-badge {
+.xp-badge {
   display: inline-block;
   background: #7C3AED;
   color: white;
   font-family: 'Montserrat', sans-serif;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  padding: 5px 12px;
-  border-radius: 8px;
-  margin-bottom: 12px;
-}
-
-.s4-item-title {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 18px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
-}
-
-.s4-item-price {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-  color: #D97706;
-  margin-top: 8px;
-}
-
-.s4-xp-burst {
-  position: absolute;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 32px;
-  font-weight: 900;
-  color: #7C3AED;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-top: 6px;
   opacity: 0;
-  letter-spacing: -0.5px;
-  pointer-events: none;
+  transform: scale(0.7);
+  transition: opacity 0.3s, transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
 }
+.xp-badge.in { opacity: 1; transform: scale(1); }
 
-.s4-xp-burst.burst { animation: xpBurst 1.2s ease-out forwards; }
-
-.s4-title {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 24px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
-  text-align: center;
+.xp-progress {
+  margin-top: 16px;
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.4s ease, transform 0.4s ease;
 }
-.s4-title.in { opacity: 1; transform: translateY(0); }
+.xp-progress.in { opacity: 1; transform: translateY(0); }
 
-.s4-subtext {
+.progress-label {
   font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  color: rgba(255,255,255,0.65);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.progress-bar-bg {
+  height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7C3AED, #A855F7);
+  border-radius: 3px;
+  width: 15%;
+  transition: width 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.s2-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.9);
   text-align: center;
   opacity: 0;
   transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 8px;
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  margin-top: 18px;
 }
-.s4-subtext.in { opacity: 1; transform: translateY(0); }
+.s2-subline.in { opacity: 1; transform: translateY(0); }
+.s2-subline span { color: #7C3AED; }
 
 /* ────────────────────────────────
-   SCENE 5 — REACH RANGER (22–27s)
+   SCENE 3 — RANK UNLOCK: SCOUT
 ──────────────────────────────── */
-#s5 { background: #0D0D15; gap: 0; }
+#s3 { background: #0A0A0A; gap: 0; padding: 48px 32px; justify-content: center; }
 
-.s5-rank-progression {
+.s3-banner {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
   align-items: center;
+  gap: 16px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s3-banner.in { opacity: 1; transform: translateY(0); }
+
+.s3-icon-badge {
+  font-size: 72px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.4s 0.15s ease, transform 0.4s 0.15s cubic-bezier(0.34,1.56,0.64,1);
+}
+.s3-icon-badge.in { opacity: 1; transform: scale(1); }
+
+.s3-rank-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 42px;
+  font-weight: 900;
+  color: #10B981;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.s3-xp-count {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.s3-perks {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s 0.3s ease, transform 0.4s 0.3s ease;
+}
+.s3-perks.in { opacity: 1; transform: translateY(0); }
+
+.s3-perk {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.s3-perk-icon {
+  color: #10B981;
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ────────────────────────────────
+   SCENE 4 — MULTIPLIER: STREAKS
+──────────────────────────────── */
+#s4 { background: #111118; gap: 0; padding: 40px 28px; justify-content: center; }
+
+.s4-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  margin-bottom: 32px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  line-height: 1.3;
+}
+.s4-headline.in { opacity: 1; transform: translateY(0); }
+
+.s4-streak-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s4-streak-grid.in { opacity: 1; transform: translateY(0); }
+
+.streak-day {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.3s ease, transform 0.3s ease, background 0.3s, border-color 0.3s, color 0.3s;
+}
+.streak-day.checked {
+  background: rgba(124,58,237,0.25);
+  border-color: #7C3AED;
+  color: #A855F7;
+  opacity: 1;
+  transform: scale(1);
+}
+.streak-day.checked::after {
+  content: '✓';
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.s4-bonus-banner {
+  margin-top: 28px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(168,85,247,0.1) 100%);
+  border: 1px solid rgba(124,58,237,0.4);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s 0.4s ease, transform 0.4s 0.4s ease;
+}
+.s4-bonus-banner.in { opacity: 1; transform: translateY(0); }
+
+.bonus-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.bonus-xp {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  color: #A855F7;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+/* ────────────────────────────────
+   SCENE 5 — RANGER UNLOCK
+──────────────────────────────── */
+#s5 { background: #0A0A0A; gap: 0; padding: 48px 32px; justify-content: center; }
+
+.s5-milestone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s5-milestone.in { opacity: 1; transform: translateY(0); }
+
+.s5-icon-badge {
+  font-size: 72px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.4s 0.15s ease, transform 0.4s 0.15s cubic-bezier(0.34,1.56,0.64,1);
+}
+.s5-icon-badge.in { opacity: 1; transform: scale(1); }
+
+.s5-rank-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 42px;
+  font-weight: 900;
+  color: #F59E0B;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.s5-xp-count {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.s5-perks {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s 0.3s ease, transform 0.4s 0.3s ease;
+}
+.s5-perks.in { opacity: 1; transform: translateY(0); }
+
+.s5-perk {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.85);
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.s5-perk-icon {
+  color: #F59E0B;
+  font-size: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ────────────────────────────────
+   SCENE 6 — TOP TIER PREVIEW
+──────────────────────────────── */
+#s6 { background: #111118; gap: 0; padding: 32px 20px; justify-content: center; }
+
+.s6-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
   margin-bottom: 24px;
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.4s ease, transform 0.4s ease;
 }
-.s5-rank-progression.in { opacity: 1; transform: translateY(0); }
+.s6-headline.in { opacity: 1; transform: translateY(0); }
 
-.s5-rank-badge {
-  font-size: 40px;
-  opacity: 0.4;
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.s5-rank-badge.old { opacity: 0.2; }
-.s5-rank-badge.new { opacity: 1; font-size: 56px; }
-
-.s5-arrow {
-  color: #D97706;
-  font-size: 24px;
-}
-
-.s5-title {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 26px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 12px;
-}
-.s5-title.in { opacity: 1; transform: translateY(0); }
-
-.s5-subtext {
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 8px;
-}
-.s5-subtext.in { opacity: 1; transform: translateY(0); }
-
-/* ────────────────────────────────
-   SCENE 6 — PERKS STACK UP (27–32s)
-──────────────────────────────── */
-#s6 { background: #0A0A0A; gap: 0; padding: 32px 24px; }
-
-.s6-title {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 24px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-bottom: 20px;
-}
-.s6-title.in { opacity: 1; transform: translateY(0); }
-
-.s6-benefits {
+.s6-tier-row {
   display: flex;
-  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
   gap: 12px;
   width: 100%;
-  max-width: 280px;
 }
 
-.s6-benefit-row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 12px;
-  opacity: 0;
-  transform: translateX(-12px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.s6-benefit-row.in { opacity: 1; transform: translateX(0); }
-
-.s6-benefit-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.s6-benefit-text {
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  color: rgba(255,255,255,0.85);
-  line-height: 1.4;
-}
-
-.s6-subtext {
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 16px;
-}
-.s6-subtext.in { opacity: 1; transform: translateY(0); }
-
-/* ────────────────────────────────
-   SCENE 7 — PATH TO GRANDMASTER (32–36s)
-──────────────────────────────── */
-#s7 { background: #0D0D15; gap: 0; padding: 40px 24px; }
-
-.s7-rank-ladder {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  max-width: 280px;
-  margin-bottom: 16px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.s7-rank-ladder.in { opacity: 1; transform: translateY(0); }
-
-.s7-rank-step {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.08);
-  transition: background 0.3s ease, border-color 0.3s ease;
-}
-.s7-rank-step.grandmaster {
-  background: rgba(217,119,6,0.15);
-  border-color: #D97706;
-  box-shadow: 0 0 16px rgba(217,119,6,0.2);
-}
-
-.s7-rank-emoji {
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.s7-rank-name {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
+.s6-tier-card {
   flex: 1;
-}
-
-.s7-rank-xp {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.6);
-  flex-shrink: 0;
-}
-.s7-rank-step.grandmaster .s7-rank-xp {
-  color: #D97706;
-}
-
-.s7-title {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 26px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 12px;
-}
-.s7-title.in { opacity: 1; transform: translateY(0); }
-
-.s7-subtext {
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  margin-top: 8px;
-}
-.s7-subtext.in { opacity: 1; transform: translateY(0); }
-
-/* ────────────────────────────────
-   SCENE 8 — CTA (36–40s)
-──────────────────────────────── */
-#s8 { background: #050505; gap: 0; }
-
-.s8-glow {
-  position: absolute;
-  width: 300px; height: 300px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(217,119,6,0.12) 0%, transparent 70%);
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  animation: glowPulse 3s ease-in-out infinite;
-}
-
-@keyframes glowPulse {
-  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
-}
-
-.s8-logo-wrap {
+  border-radius: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  text-align: center;
+  gap: 10px;
   opacity: 0;
   transform: translateY(12px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
-  margin-bottom: 32px;
+  transition: opacity 0.45s ease, transform 0.45s ease;
 }
-.s8-logo-wrap.in { opacity: 1; transform: translateY(0); }
+.s6-tier-card.in { opacity: 1; transform: translateY(0); }
 
-.s8-logo {
-  font-family: 'Montserrat', sans-serif;
+.s6-tier-card.sage {
+  background: linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(168,85,247,0.08) 100%);
+  border: 1px solid rgba(124,58,237,0.3);
+}
+
+.s6-tier-card.gm {
+  background: linear-gradient(135deg, rgba(217,119,6,0.15) 0%, rgba(245,158,11,0.08) 100%);
+  border: 1px solid rgba(217,119,6,0.3);
+}
+
+.s6-tier-icon {
   font-size: 48px;
-  font-weight: 900;
-  letter-spacing: -1.8px;
-  color: #FFFFFF;
   line-height: 1;
 }
-.s8-logo .a-dot { color: #D97706; }
 
-.s8-main {
+.s6-tier-name {
   font-family: 'Montserrat', sans-serif;
-  font-size: 48px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.3px;
+}
+
+.s6-tier-xp {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.5px;
+}
+
+.s6-tier-perk {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.3;
+}
+
+.s6-journey {
+  margin-top: 20px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s 0.3s ease, transform 0.4s 0.3s ease;
+}
+.s6-journey.in { opacity: 1; transform: translateY(0); }
+
+.journey-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  letter-spacing: -0.3px;
+}
+
+.journey-xp {
+  color: #A855F7;
+}
+
+/* ────────────────────────────────
+   SCENE 7 — CTA
+──────────────────────────────── */
+#s7 { background: #050505; gap: 0; }
+
+.cta-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+}
+
+.cta-tagline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 16px;
+}
+.cta-tagline.in { opacity: 1; transform: translateY(0); }
+
+.cta-main {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 56px;
   font-weight: 900;
   color: #FFFFFF;
   text-align: center;
-  letter-spacing: -1px;
-  line-height: 1.2;
+  letter-spacing: -2px;
+  line-height: 1.1;
   opacity: 0;
   transform: scale(0.92);
   transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s cubic-bezier(0.34,1.3,0.64,1);
-  margin-bottom: 12px;
 }
-.s8-main.in { opacity: 1; transform: scale(1); }
+.cta-main.in { opacity: 1; transform: scale(1); }
+.cta-main em { font-style: normal; color: #7C3AED; }
 
-.s8-sub {
+.cta-sub {
   font-family: 'Inter', sans-serif;
   font-size: 16px;
   color: rgba(255,255,255,0.7);
   text-align: center;
+  margin-top: 18px;
   opacity: 0;
   transition: opacity 0.5s 0.4s ease;
-  margin-bottom: 28px;
 }
-.s8-sub.in { opacity: 1; }
+.cta-sub.in { opacity: 1; }
 
-.s8-url {
+.cta-button {
+  margin-top: 32px;
   display: inline-block;
+  background: #7C3AED;
+  color: #fff;
+  border-radius: 16px;
+  padding: 16px 42px;
+  text-align: center;
   font-family: 'Montserrat', sans-serif;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
-  color: #D97706;
-  opacity: 0;
-  transition: opacity 0.5s 0.6s ease;
   letter-spacing: -0.3px;
+  cursor: pointer;
+  box-shadow: 0 0 28px rgba(124,58,237,0.35);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s 0.6s ease, transform 0.5s 0.6s ease;
+  text-decoration: none;
+  border: none;
 }
-.s8-url.in { opacity: 1; }
+.cta-button.in { opacity: 1; transform: translateY(0); }
+.cta-button:hover { background: #6D28D9; }
+
+/* Animated glow bg for CTA */
+.cta-glow {
+  position: absolute;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 3s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
 
 /* ── Scene Navigation ── */
 #scene-nav {
@@ -858,7 +838,7 @@ body.embed #timer { display: none; }
   transition: background 0.25s, transform 0.25s;
   flex-shrink: 0;
 }
-.scene-dot.active { background: #D97706; transform: scale(1.4); }
+.scene-dot.active { background: #7C3AED; transform: scale(1.4); }
 .scene-dot:hover:not(.active) { background: rgba(255,255,255,0.45); }
 
 /* ── Info panel below player ── */
@@ -897,8 +877,7 @@ body.embed #timer { display: none; }
   z-index: 350;
 }
 #pause-indicator > div {
-  width: 60px;
-  height: 60px;
+  width: 60px; height: 60px;
   border-radius: 50%;
   background: rgba(0,0,0,0.6);
   backdrop-filter: blur(8px);
@@ -907,7 +886,6 @@ body.embed #timer { display: none; }
   justify-content: center;
   border: 1.5px solid rgba(255,255,255,0.15);
 }
-#pause-indicator svg { margin: 0; }
 </style>
 </head>
 <body>
@@ -933,135 +911,146 @@ body.embed #timer { display: none; }
     </div>
   </div>
 
-  <!-- ── Scene 1: Every Visit Earns XP (0–5s) ── -->
+  <!-- ── Scene 1: Hook — Every Move Earns XP ── -->
   <div class="scene" id="s1">
-    <div class="s1-map-pin" id="s1-pin">📍</div>
-    <div class="s1-xp-counter" id="s1-counter">+5 XP</div>
-    <div class="s1-title" id="s1-title">Every sale visit.</div>
-    <div class="s1-subtext" id="s1-sub">5 XP each time you show up.</div>
+    <div class="s1-counter-wrap" id="s1-counter">0</div>
+    <div class="s1-counter-label" id="s1-label">XP Earned</div>
+    <div class="s1-hook-text" id="s1-hook">Everything earns.<br>Nothing expires.</div>
+    <div class="s1-ranks" id="s1-ranks">
+      <div class="rank-icon" title="Initiate">🧭</div>
+      <div class="rank-icon" title="Scout">🔍</div>
+      <div class="rank-icon" title="Ranger">🎯</div>
+      <div class="rank-icon" title="Sage">✨</div>
+      <div class="rank-icon" title="Grandmaster">👑</div>
+    </div>
   </div>
 
-  <!-- ── Scene 2: Purchase = Progress (5–11s) ── -->
+  <!-- ── Scene 2: XP Earning Demo ── -->
   <div class="scene" id="s2">
-    <div class="s2-phone-wrap">
-      <div class="s2-phone-shell">
-        <div class="s2-phone-island"></div>
-        <div class="s2-phone-body">
-          <div class="s2-item-card" id="s2-card">
-            <div class="s2-item-title">Vintage Brass Lamp</div>
-            <div class="s2-item-price">$45</div>
-          </div>
-          <div class="s2-purchase-btn" id="s2-btn">Purchase</div>
-          <div class="s2-xp-bar">
-            <div class="s2-xp-bar-fill" id="s2-bar"></div>
+    <div class="s2-headline" id="s2-headline">Earn XP your way</div>
+
+    <div class="phone-wrap">
+      <div class="phone-shell">
+        <div class="phone-island"></div>
+        <div class="phone-screen" id="browse-screen">
+          <div class="browse-screen">
+            <div class="sale-card" id="card1">
+              <div class="card-photo"></div>
+              <div class="card-title">Estate Sale — Downtown</div>
+              <div class="card-meta">12 miles away</div>
+              <div class="xp-badge" id="badge1">+ 5 XP Visit</div>
+            </div>
+            <div class="sale-card" id="card2">
+              <div class="card-photo"></div>
+              <div class="card-title">Saturday Haul Market</div>
+              <div class="card-meta">Comeback +20 XP</div>
+              <div class="xp-badge" id="badge2">+ 20 XP Bonus</div>
+            </div>
+            <div class="sale-card" id="card3">
+              <div class="card-photo"></div>
+              <div class="card-title">Spring Auction House</div>
+              <div class="card-meta">New! First purchase</div>
+              <div class="xp-badge" id="badge3">+ 50 XP Buy</div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="s2-xp-burst" id="s2-burst">+10 XP</div>
     </div>
-    <div class="s2-title" id="s2-title">Buy something.</div>
-    <div class="s2-subtext" id="s2-sub">+10 XP per purchase.</div>
+
+    <div class="xp-progress" id="xp-progress">
+      <div class="progress-label">
+        <span>Path to SCOUT</span>
+        <span><span id="progress-num">75</span> / 500 XP</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="s2-subline" id="s2-subline">Earn <span>75+ XP</span> your first week</div>
   </div>
 
-  <!-- ── Scene 3: Reach Scout (11–17s) ── -->
+  <!-- ── Scene 3: SCOUT Rank Unlock ── -->
   <div class="scene" id="s3">
-    <div class="s3-xp-bar-container" id="s3-bar-container">
-      <div class="s3-xp-bar-label">Progress to Scout</div>
-      <div class="s3-xp-bar">
-        <div class="s3-xp-bar-fill" id="s3-bar"></div>
+    <div class="s3-banner" id="s3-banner">
+      <div class="s3-icon-badge" id="s3-icon">🔍</div>
+      <div>
+        <div class="s3-rank-title">SCOUT</div>
+        <div class="s3-xp-count">500 XP Reached</div>
       </div>
     </div>
-    <div class="s3-badge" id="s3-badge">⚔️</div>
-    <div class="s3-badge-label" id="s3-label">SCOUT</div>
-    <div class="s3-title" id="s3-title">500 XP — Scout.</div>
-    <div class="s3-subtext" id="s3-sub">5% off Hunt Pass. 1 early-access sale per week.</div>
+    <div class="s3-perks" id="s3-perks">
+      <div class="s3-perk"><span class="s3-perk-icon">✓</span> <span>1 early-access sale/week</span></div>
+      <div class="s3-perk"><span class="s3-perk-icon">✓</span> <span>Haul posts unlocked</span></div>
+      <div class="s3-perk"><span class="s3-perk-icon">✓</span> <span>Cosmetics available</span></div>
+    </div>
   </div>
 
-  <!-- ── Scene 4: Rare Find Bonus (17–22s) ── -->
+  <!-- ── Scene 4: The Multiplier — Streaks ── -->
   <div class="scene" id="s4">
-    <div class="s4-rare-card" id="s4-card">
-      <div class="s4-rare-badge">RARE</div>
-      <div class="s4-item-title">Mid-Century Armchair</div>
-      <div class="s4-item-price">$285</div>
+    <div class="s4-headline" id="s4-headline">Weekly streaks<br>multiply your gains</div>
+    <div class="s4-streak-grid" id="s4-grid">
+      <div class="streak-day"></div>
+      <div class="streak-day"></div>
+      <div class="streak-day"></div>
+      <div class="streak-day"></div>
+      <div class="streak-day"></div>
+      <div class="streak-day"></div>
+      <div class="streak-day"></div>
     </div>
-    <div class="s4-xp-burst" id="s4-burst">+15 XP</div>
-    <div class="s4-title" id="s4-title">Rare finds reward more.</div>
-    <div class="s4-subtext" id="s4-sub">Auction wins earn 15 XP.</div>
+    <div class="s4-bonus-banner" id="s4-bonus">
+      <div class="bonus-label">7-Day Streak Bonus</div>
+      <div class="bonus-xp">+ 100 XP</div>
+    </div>
   </div>
 
-  <!-- ── Scene 5: Reach Ranger (22–27s) ── -->
+  <!-- ── Scene 5: RANGER Rank Unlock ── -->
   <div class="scene" id="s5">
-    <div class="s5-rank-progression" id="s5-progression">
-      <div class="s5-rank-badge" id="s5-old">⚔️</div>
-      <div class="s5-arrow">→</div>
-      <div class="s5-rank-badge new" id="s5-new">🏹</div>
+    <div class="s5-milestone" id="s5-milestone">
+      <div class="s5-icon-badge" id="s5-icon">🎯</div>
+      <div>
+        <div class="s5-rank-title">RANGER</div>
+        <div class="s5-xp-count">2,000 XP Reached</div>
+      </div>
     </div>
-    <div class="s5-title" id="s5-title">2,000 XP — Ranger.</div>
-    <div class="s5-subtext" id="s5-sub">3 early-access sales/week. 10% off Hunt Pass.</div>
+    <div class="s5-perks" id="s5-perks">
+      <div class="s5-perk"><span class="s5-perk-icon">✓</span> <span>3 early-access sales/week</span></div>
+      <div class="s5-perk"><span class="s5-perk-icon">✓</span> <span>Priority support (2hr)</span></div>
+      <div class="s5-perk"><span class="s5-perk-icon">✓</span> <span>Sourcebook access</span></div>
+    </div>
   </div>
 
-  <!-- ── Scene 6: Perks Stack Up (27–32s) ── -->
+  <!-- ── Scene 6: Top Tier Preview ── -->
   <div class="scene" id="s6">
-    <div class="s6-title" id="s6-title">The higher you climb...</div>
-    <div class="s6-benefits">
-      <div class="s6-benefit-row" id="s6-r1">
-        <div class="s6-benefit-icon">🗺️</div>
-        <div class="s6-benefit-text">Map early access — see sales before they open</div>
+    <div class="s6-headline" id="s6-headline">The journey continues</div>
+    <div class="s6-tier-row">
+      <div class="s6-tier-card sage" id="sage-card">
+        <div class="s6-tier-icon">✨</div>
+        <div class="s6-tier-name">SAGE</div>
+        <div class="s6-tier-xp">5,000 XP</div>
+        <div class="s6-tier-perk">Unlimited early access · 48h alerts</div>
       </div>
-      <div class="s6-benefit-row" id="s6-r2">
-        <div class="s6-benefit-icon">🏷️</div>
-        <div class="s6-benefit-text">Hold items longer — 45 minutes at Scout</div>
-      </div>
-      <div class="s6-benefit-row" id="s6-r3">
-        <div class="s6-benefit-icon">🎟️</div>
-        <div class="s6-benefit-text">Hunt Pass discount — up to 15% off at Sage</div>
+      <div class="s6-tier-card gm" id="gm-card">
+        <div class="s6-tier-icon">👑</div>
+        <div class="s6-tier-name">GRANDMASTER</div>
+        <div class="s6-tier-xp">12,000 XP</div>
+        <div class="s6-tier-perk">Free Hunt Pass forever</div>
       </div>
     </div>
-    <div class="s6-subtext" id="s6-sub">...the better it gets.</div>
+    <div class="s6-journey" id="s6-journey">
+      <div class="journey-text">Reach <span class="journey-xp">12,000 XP</span> for ultimate rewards</div>
+    </div>
   </div>
 
-  <!-- ── Scene 7: Path to Grandmaster (32–36s) ── -->
+  <!-- ── Scene 7: CTA ── -->
   <div class="scene" id="s7">
-    <div class="s7-rank-ladder" id="s7-ladder">
-      <div class="s7-rank-step">
-        <div class="s7-rank-emoji">🧭</div>
-        <div class="s7-rank-name">INITIATE</div>
-        <div class="s7-rank-xp">0 XP</div>
-      </div>
-      <div class="s7-rank-step">
-        <div class="s7-rank-emoji">⚔️</div>
-        <div class="s7-rank-name">SCOUT</div>
-        <div class="s7-rank-xp">500 XP</div>
-      </div>
-      <div class="s7-rank-step">
-        <div class="s7-rank-emoji">🏹</div>
-        <div class="s7-rank-name">RANGER</div>
-        <div class="s7-rank-xp">2,000 XP</div>
-      </div>
-      <div class="s7-rank-step">
-        <div class="s7-rank-emoji">📚</div>
-        <div class="s7-rank-name">SAGE</div>
-        <div class="s7-rank-xp">5,000 XP</div>
-      </div>
-      <div class="s7-rank-step grandmaster">
-        <div class="s7-rank-emoji">👑</div>
-        <div class="s7-rank-name">GRANDMASTER</div>
-        <div class="s7-rank-xp">12,000 XP</div>
-      </div>
+    <div class="cta-glow"></div>
+    <div class="cta-content">
+      <div class="cta-tagline" id="cta-tag">Start Hunting</div>
+      <div class="cta-main" id="cta-main">Build your<br><em>legacy.</em></div>
+      <div class="cta-sub" id="cta-sub">Earn, climb, hunt for free.</div>
+      <a href="https://finda.sale/register" class="cta-button" id="cta-btn">Join the Guild →</a>
     </div>
-    <div class="s7-title" id="s7-title">The summit.</div>
-    <div class="s7-subtext" id="s7-sub">Hunt Pass free forever at Grandmaster.</div>
-  </div>
-
-  <!-- ── Scene 8: CTA (36–40s) ── -->
-  <div class="scene" id="s8">
-    <div class="s8-glow"></div>
-    <div class="s8-logo-wrap" id="s8-logo">
-      <div class="s8-logo">Find<span class="a-dot">A.</span>Sale</div>
-    </div>
-    <div class="s8-main" id="s8-main">Your rank is yours.</div>
-    <div class="s8-sub" id="s8-sub">Progress never resets. Every hunt counts.</div>
-    <div class="s8-url" id="s8-url">finda.sale/shopper/guild-primer</div>
   </div>
 
   <!-- Pause indicator -->
@@ -1083,21 +1072,20 @@ body.embed #timer { display: none; }
 <div id="scene-nav">
   <button class="nav-btn" id="prev-btn">&#8249;</button>
   <div id="scene-dots">
-    <div class="scene-dot active" data-scene="0" title="Scene 1: Every Visit"></div>
-    <div class="scene-dot" data-scene="1" title="Scene 2: Purchase"></div>
+    <div class="scene-dot active" data-scene="0" title="Scene 1: Hook"></div>
+    <div class="scene-dot" data-scene="1" title="Scene 2: XP Demo"></div>
     <div class="scene-dot" data-scene="2" title="Scene 3: Scout"></div>
-    <div class="scene-dot" data-scene="3" title="Scene 4: Rare Find"></div>
+    <div class="scene-dot" data-scene="3" title="Scene 4: Streaks"></div>
     <div class="scene-dot" data-scene="4" title="Scene 5: Ranger"></div>
-    <div class="scene-dot" data-scene="5" title="Scene 6: Perks"></div>
-    <div class="scene-dot" data-scene="6" title="Scene 7: Path"></div>
-    <div class="scene-dot" data-scene="7" title="Scene 8: CTA"></div>
+    <div class="scene-dot" data-scene="5" title="Scene 6: Top Tier"></div>
+    <div class="scene-dot" data-scene="6" title="Scene 7: CTA"></div>
   </div>
   <button class="nav-btn" id="next-btn">&#8250;</button>
 </div>
 
 <div id="info">
-  <strong>FindA.Sale — 40-second Guild XP Explainer</strong><br>
-  9:16 vertical · Embed in /shopper/guild-primer<br>
+  <strong>FindA.Sale — Explorer's Guild XP System (40s)</strong><br>
+  9:16 vertical · TikTok / YouTube Shorts format<br>
   Click the player to start · Screen-record to capture
 </div>
 
@@ -1114,7 +1102,7 @@ let running = false;
 let paused = false;
 let pauseStart = null;
 const DURATION = 40000;
-const sceneStarts = [0, 5000, 11000, 17000, 22000, 27000, 32000, 36000];
+const sceneStarts = [0, 5000, 12000, 18000, 24000, 29000, 35500];
 let currentScene = 0;
 
 // ── DOM refs ──
@@ -1123,14 +1111,28 @@ const playOverlay  = document.getElementById('play-overlay');
 const progressBar  = document.getElementById('progress-bar');
 const replayBtn    = document.getElementById('replay-btn');
 const timerEl      = document.getElementById('timer');
+const pauseIndicator = document.getElementById('pause-indicator');
 
 // Scene els
-const scenes = ['s1','s2','s3','s4','s5','s6','s7','s8'].map(id => document.getElementById(id));
+const scenes = ['s1','s2','s3','s4','s5','s6','s7'].map(id => document.getElementById(id));
 
 // ── Helper: add class after delay ──
 function addAt(el, cls, delay) {
   if (!el) return;
   return setTimeout(() => el.classList.add(cls), delay);
+}
+
+// ── Helper: animate counter ──
+function animateCounter(from, to, duration, onTick) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+    onTick(Math.round(from + (to - from) * ease));
+    if (t < 1) requestAnimationFrame(step);
+    else onTick(to);
+  }
+  requestAnimationFrame(step);
 }
 
 // ── Show/hide scene ──
@@ -1149,9 +1151,9 @@ function updateDots() {
   });
 }
 
-// ── Jump to scene by index (0–7) ──
+// ── Jump to scene by index (0–6) ──
 function seekToScene(n) {
-  n = Math.max(0, Math.min(7, n));
+  n = Math.max(0, Math.min(6, n));
   running = false;
   cancelAnimationFrame(rafId);
   playOverlay.classList.add('hidden');
@@ -1169,42 +1171,58 @@ function seekToScene(n) {
 
 // ── Reset all ──
 function resetAll() {
-  ['s1-pin','s1-counter','s1-title','s1-sub'].forEach(id => {
+  // Scene 1
+  ['s1-counter','s1-label','s1-hook','s1-ranks'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('in');
   });
-  ['s2-card','s2-btn','s2-bar','s2-title','s2-sub'].forEach(id => {
+  document.getElementById('s1-counter').textContent = '0';
+
+  // Scene 2
+  document.getElementById('s2-headline').classList.remove('in');
+  ['card1','card2','card3'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('in');
   });
-  document.getElementById('s2-burst').classList.remove('burst');
-  ['s3-bar-container','s3-badge','s3-label','s3-title','s3-sub'].forEach(id => {
+  ['badge1','badge2','badge3'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('in');
   });
-  document.getElementById('s3-bar').style.width = '0%';
-  document.getElementById('s3-bar').style.transition = 'none';
-  ['s4-card','s4-title','s4-sub'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  document.getElementById('s4-burst').classList.remove('burst');
-  ['s5-progression','s5-title','s5-sub'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['s6-title','s6-r1','s6-r2','s6-r3','s6-sub'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['s7-ladder','s7-title','s7-sub'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
-  ['s8-logo','s8-main','s8-sub','s8-url'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('in');
-  });
+  document.getElementById('xp-progress').classList.remove('in');
+  document.getElementById('progress-fill').style.width = '15%';
+  document.getElementById('progress-fill').style.transition = 'none';
+  document.getElementById('progress-num').textContent = '75';
+  document.getElementById('s2-subline').classList.remove('in');
+
+  // Scene 3
+  document.getElementById('s3-banner').classList.remove('in');
+  document.getElementById('s3-icon').classList.remove('in');
+  document.getElementById('s3-perks').classList.remove('in');
+
+  // Scene 4
+  document.getElementById('s4-headline').classList.remove('in');
+  document.getElementById('s4-grid').classList.remove('in');
+  document.querySelectorAll('.streak-day').forEach(el => el.classList.remove('checked'));
+  document.getElementById('s4-bonus').classList.remove('in');
+
+  // Scene 5
+  document.getElementById('s5-milestone').classList.remove('in');
+  document.getElementById('s5-icon').classList.remove('in');
+  document.getElementById('s5-perks').classList.remove('in');
+
+  // Scene 6
+  document.getElementById('s6-headline').classList.remove('in');
+  document.getElementById('sage-card').classList.remove('in');
+  document.getElementById('gm-card').classList.remove('in');
+  document.getElementById('s6-journey').classList.remove('in');
+
+  // Scene 7
+  document.getElementById('cta-tag').classList.remove('in');
+  document.getElementById('cta-main').classList.remove('in');
+  document.getElementById('cta-sub').classList.remove('in');
+  document.getElementById('cta-btn').classList.remove('in');
+
+  // UI
   scenes.forEach(s => { if (s) s.classList.remove('active'); });
   progressBar.style.width = '0%';
   progressBar.style.transition = 'none';
@@ -1216,146 +1234,93 @@ function resetAll() {
 // ── Timeline events ── (ms offset)
 const events = [
 
-  // SCENE 1 — Every Visit Earns XP (0–5s)
+  // SCENE 1 — Hook (0–5000ms)
+  // Counter animates, hook text lands, rank icons show
   { at: 0, fn: () => {
     showScene('s1');
-    addAt(document.getElementById('s1-pin'), 'in', 100);
-    addAt(document.getElementById('s1-counter'), 'in', 500);
-    addAt(document.getElementById('s1-title'), 'in', 800);
-    addAt(document.getElementById('s1-sub'), 'in', 1000);
+    addAt(document.getElementById('s1-counter'), 'in', 0);
+    animateCounter(0, 127, 1500, (v) => {
+      document.getElementById('s1-counter').textContent = v;
+    });
+    addAt(document.getElementById('s1-label'), 'in', 200);
+    addAt(document.getElementById('s1-hook'), 'in', 400);
+    addAt(document.getElementById('s1-ranks'), 'in', 1000);
   }},
 
-  // SCENE 2 — Purchase = Progress (5–11s)
+  // SCENE 2 — XP Earning Demo (5000–12000ms)
+  // Phone cards appear with XP badges. Progress bar animates.
   { at: 5000, fn: () => {
     showScene('s2');
-    addAt(document.getElementById('s2-card'), 'in', 100);
-    addAt(document.getElementById('s2-btn'), 'in', 500);
-    addAt(document.getElementById('s2-bar'), 'in', 700);
-  }},
-
-  // Purchase tap at 6500ms
-  { at: 6500, fn: () => {
-    document.getElementById('s2-btn').classList.add('tapped');
+    addAt(document.getElementById('s2-headline'), 'in', 0);
+    addAt(document.getElementById('card1'), 'in', 600);
+    addAt(document.getElementById('badge1'), 'in', 800);
+    addAt(document.getElementById('card2'), 'in', 1100);
+    addAt(document.getElementById('badge2'), 'in', 1300);
+    addAt(document.getElementById('card3'), 'in', 1600);
+    addAt(document.getElementById('badge3'), 'in', 1800);
+    addAt(document.getElementById('xp-progress'), 'in', 2200);
     setTimeout(() => {
-      const burst = document.getElementById('s2-burst');
-      burst.textContent = '+10 XP';
-      burst.classList.add('burst');
-      // Bar animation starts
-      setTimeout(() => {
-        document.getElementById('s2-bar').style.transition = 'width 1.2s cubic-bezier(0.25,0.46,0.45,0.94)';
-        document.getElementById('s2-bar').style.width = '50%';
-      }, 100);
-    }, 150);
+      document.getElementById('progress-fill').style.transition = 'width 1.8s cubic-bezier(0.25,0.46,0.45,0.94)';
+      document.getElementById('progress-fill').style.width = '75%';
+      animateCounter(75, 375, 1800, (v) => {
+        document.getElementById('progress-num').textContent = v;
+      });
+    }, 2400);
+    addAt(document.getElementById('s2-subline'), 'in', 4200);
   }},
 
-  // Text at 8200ms
-  { at: 8200, fn: () => {
-    addAt(document.getElementById('s2-title'), 'in', 100);
-    addAt(document.getElementById('s2-sub'), 'in', 300);
-  }},
-
-  // SCENE 3 — Reach Scout (11–17s)
-  { at: 11000, fn: () => {
+  // SCENE 3 — SCOUT Unlock (12000–18000ms)
+  // Icon bounces in, rank name, perks stagger
+  { at: 12000, fn: () => {
     showScene('s3');
-    addAt(document.getElementById('s3-bar-container'), 'in', 0);
-    // Bar fill animation starts immediately
-    setTimeout(() => {
-      document.getElementById('s3-bar').style.transition = 'width 2.2s cubic-bezier(0.25,0.46,0.45,0.94)';
-      document.getElementById('s3-bar').style.width = '100%';
-    }, 100);
+    addAt(document.getElementById('s3-banner'), 'in', 0);
+    addAt(document.getElementById('s3-icon'), 'in', 200);
+    addAt(document.getElementById('s3-perks'), 'in', 800);
   }},
 
-  // Badge pops at 13500ms (scout reached)
-  { at: 13500, fn: () => {
-    addAt(document.getElementById('s3-badge'), 'in', 0);
-    addAt(document.getElementById('s3-label'), 'in', 200);
-    // Confetti bursts
-    for (let i = 0; i < 4; i++) {
-      const dot = document.createElement('div');
-      dot.className = 's3-confetti';
-      dot.textContent = '✦';
-      dot.style.color = '#D97706';
-      const angle = (i / 4) * Math.PI * 2;
-      const dist = 80;
-      const x = Math.cos(angle) * dist;
-      const y = Math.sin(angle) * dist;
-      dot.style.setProperty('--tx', x + 'px');
-      dot.style.setProperty('--ty', y + 'px');
-      document.getElementById('s3-badge').parentElement.appendChild(dot);
-      setTimeout(() => dot.classList.add('pop'), 10);
-    }
-  }},
-
-  // Text at 14800ms
-  { at: 14800, fn: () => {
-    addAt(document.getElementById('s3-title'), 'in', 100);
-    addAt(document.getElementById('s3-sub'), 'in', 300);
-  }},
-
-  // SCENE 4 — Rare Find Bonus (17–22s)
-  { at: 17000, fn: () => {
+  // SCENE 4 — Streaks/Multiplier (18000–24000ms)
+  // Headline reads. Streak days check off one by one. Bonus banner appears.
+  { at: 18000, fn: () => {
     showScene('s4');
-    addAt(document.getElementById('s4-card'), 'in', 200);
+    addAt(document.getElementById('s4-headline'), 'in', 0);
+    addAt(document.getElementById('s4-grid'), 'in', 800);
+    const days = document.querySelectorAll('.streak-day');
+    days.forEach((day, i) => {
+      setTimeout(() => day.classList.add('checked'), 900 + i * 150);
+    });
+    addAt(document.getElementById('s4-bonus'), 'in', 2100);
   }},
 
-  // XP burst at 18500ms
-  { at: 18500, fn: () => {
-    const burst = document.getElementById('s4-burst');
-    burst.textContent = '+15 XP';
-    burst.style.color = '#7C3AED';
-    burst.classList.add('burst');
-  }},
-
-  // Text at 19500ms
-  { at: 19500, fn: () => {
-    addAt(document.getElementById('s4-title'), 'in', 100);
-    addAt(document.getElementById('s4-sub'), 'in', 300);
-  }},
-
-  // SCENE 5 — Reach Ranger (22–27s)
-  { at: 22000, fn: () => {
-    showScene('s5');
-    addAt(document.getElementById('s5-progression'), 'in', 200);
-    // Transition scout to old
-    setTimeout(() => {
-      document.getElementById('s5-old').classList.add('old');
-    }, 400);
-  }},
-
-  // Text at 24000ms
+  // SCENE 5 — RANGER Unlock (24000–29000ms)
+  // Icon bounces, rank name, perks
   { at: 24000, fn: () => {
-    addAt(document.getElementById('s5-title'), 'in', 100);
-    addAt(document.getElementById('s5-sub'), 'in', 300);
+    showScene('s5');
+    addAt(document.getElementById('s5-milestone'), 'in', 0);
+    addAt(document.getElementById('s5-icon'), 'in', 200);
+    addAt(document.getElementById('s5-perks'), 'in', 800);
   }},
 
-  // SCENE 6 — Perks Stack Up (27–32s)
-  { at: 27000, fn: () => {
+  // SCENE 6 — Top Tier Preview (29000–35500ms)
+  // Split card view of SAGE and GRANDMASTER
+  { at: 29000, fn: () => {
     showScene('s6');
-    addAt(document.getElementById('s6-title'), 'in', 200);
-    addAt(document.getElementById('s6-r1'), 'in', 600);
-    addAt(document.getElementById('s6-r2'), 'in', 1000);
-    addAt(document.getElementById('s6-r3'), 'in', 1400);
-    addAt(document.getElementById('s6-sub'), 'in', 2000);
+    addAt(document.getElementById('s6-headline'), 'in', 0);
+    addAt(document.getElementById('sage-card'), 'in', 600);
+    addAt(document.getElementById('gm-card'), 'in', 900);
+    addAt(document.getElementById('s6-journey'), 'in', 1800);
   }},
 
-  // SCENE 7 — Path to Grandmaster (32–36s)
-  { at: 32000, fn: () => {
+  // SCENE 7 — CTA (35500–40000ms)
+  // Tagline, main call, button
+  { at: 35500, fn: () => {
     showScene('s7');
-    addAt(document.getElementById('s7-ladder'), 'in', 200);
-    addAt(document.getElementById('s7-title'), 'in', 800);
-    addAt(document.getElementById('s7-sub'), 'in', 1000);
+    addAt(document.getElementById('cta-tag'), 'in', 0);
+    addAt(document.getElementById('cta-main'), 'in', 300);
+    addAt(document.getElementById('cta-sub'), 'in', 700);
+    addAt(document.getElementById('cta-btn'), 'in', 1100);
   }},
 
-  // SCENE 8 — CTA (36–40s)
-  { at: 36000, fn: () => {
-    showScene('s8');
-    addAt(document.getElementById('s8-logo'), 'in', 0);
-    addAt(document.getElementById('s8-main'), 'in', 400);
-    addAt(document.getElementById('s8-sub'), 'in', 800);
-    addAt(document.getElementById('s8-url'), 'in', 1100);
-  }},
-
-  // End at 40000ms
+  // End
   { at: 40000, fn: () => {
     running = false;
     cancelAnimationFrame(rafId);
@@ -1397,7 +1362,6 @@ function start() {
 }
 
 // ── Pause / Resume ──
-const pauseIndicator = document.getElementById('pause-indicator');
 let pauseFlashTimer = null;
 
 function togglePause() {
