@@ -1,67 +1,88 @@
-# Patrick's Dashboard — S541 Complete
+# Patrick's Dashboard — S542 Complete
 
 ## What Happened This Session
 
-S541: QA-only session. 6 features Chrome-verified green, 3 bugs found.
+S542: Cart merge, nav restructure, polling/spam fixes. Big session.
 
-**Verified ✅**
-- /coupons Rarity Boost (shopper view, 530 XP) — active, modal opens with sale picker, cost correct
-- /coupons organizer view — Shopper Discount Codes show, Rarity Boost absent (correct)
-- /shopper/loyalty → /coupons — instant redirect, no flash
-- /shopper/referrals — loads, referral link REF-0215DAB8, Copy + 5 share buttons, stats
-- /shopper/appraisals — submit works (needed JS click — coordinate click is a VM rendering quirk, not a product bug)
-- /shopper/early-access-cache — loads correctly
+**Cart Architecture Fixed ✅**
 
-**Bugs Found ❌**
+The cart was broken at the foundation — CartIcon's "Open Cart" button was a no-op because CartDrawer was never rendered anywhere in the app. ShopperCartDrawer was the only live drawer. Fixed by merging everything into a single unified CartDrawer wired to CartContext.
 
-| Priority | Bug | Details |
-|----------|-----|---------|
-| P0 | Print kit broken | /organizer/print-kit/cmnxvyic4001li51qobwidrbl → "Failed to load print kit". `/api/items/drafts?saleId=...` returns 500. Sale is RETAIL type, Apr 1–30 dates (whole month), 87 items in DB. Organizer changing dates to full-month likely triggered the bug. |
-| P1 | Brand Kit PDFs still broken | Hrefs hardcoded as `/api/brand-kit/organizer/...` relative to Vercel — no Next.js rewrite routes these to Railway. Fix: use `NEXT_PUBLIC_API_URL` base. |
-| P1 | /coupons coupon Generate buttons dead | Clicking Generate on the shopper section generates no API call, no toast, nothing. |
-| P2 | ActionBar Treasure Trails wrong route | ActionBar.tsx line 27: `/shopper/trails` → should be `/trails` (public browse, not create-trail) |
-| P2 | Hunt Pass Active badge for non-subscriber | Karen (no Hunt Pass) shows "Hunt Pass Active" badge — false positive |
-| P2 | /shopper/ranks Scout boundary mismatch | Rank badge and earned message disagree at the Scout threshold |
+Also fixed during the merge:
+- Price was showing wrong ($1.98 instead of $197.81) — hold prices from the API are in dollars, browsing cart prices are in cents; CartDrawer was dividing both by 100
+- Remove button was missing from "Saved in Cart" items — restored
+- Hold-expired toast loop — a single hold expiring was re-triggering itself on every re-render; removed toast entirely from the expiry handler
+
+**Nav Restructure ✅**
+- Clock icon → 🛒 Cart icon with amber badge (combined hold + browsing count)
+- Explore ▾ dropdown added between Trending and Search (Feed / Calendar / Wishlist inside)
+- Pricing moved next to Host a Sale button
+- Dark mode toggle removed from top nav → moved to AvatarDropdown as "Appearance" row
+- Search input now overlays (absolute position) instead of squishing nav items
+- Mobile bottom nav: Calendar tab → Trending, Wishlist tab → Explore bottom sheet
+
+**Polling Spam Fixes ✅**
+- 429s on `/api/reservations/my-holds-full` — cart mutations were double-firing (invalidateQueries + refetch). Removed redundant refetch() calls.
+- POS payment request polling: 5s → 30s interval
 
 ## Build Status
 
 | Service | Status |
 |---------|--------|
-| Vercel (frontend) | ✅ Green — S540 live |
-| Railway (backend) | ✅ Green |
-| Pending pushes | None — no code changes this session |
+| Vercel (frontend) | ✅ Build passed — 3 `setMobileCartOpen` errors fixed |
+| Railway (backend) | ✅ Green — no backend changes this session |
+| Pending push | ⚠️ 8 files changed — push block below |
 
-## No Push Block This Session
+## Push Block
 
-S541 was QA-only. No code was changed. Nothing to push.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/CartDrawer.tsx
+git add packages/frontend/components/CartIcon.tsx
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/frontend/components/BottomTabNav.tsx
+git add packages/frontend/components/PosPaymentRequestAlert.tsx
+git add packages/frontend/pages/sales/[id].tsx
+git add packages/frontend/pages/items/[id].tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat: unified cart drawer, nav restructure, Explore dropdown, polling fixes"
+.\push.ps1
+```
 
-## What's Next (S542)
+## What's Next (S543)
 
-**Priority 1 — P0 Print Kit investigation:**
+**Priority 1 — Hunt Pass "What's included" audit**
 
-The organizer at artifactmi@gmail.com has a RETAIL sale ("Artifact Downtown Paw Paw", Apr 1–30) where the print kit fails to load. The sale has 87 items in the DB but the items/drafts endpoint returns a 500 error. Next session starts by reading the itemController getDrafts function and figuring out if RETAIL sale type or a whole-month date range breaks something.
+Patrick asked to review https://finda.sale/shopper/hunt-pass and check what's missing from the "What's included" section. S543 starts here.
 
-**Priority 2 — Fix the 3 bugs above (P1s and quick P2s)**
+**Priority 2 — Fix remaining bugs**
 
-Brand Kit PDF hrefs are a one-file fix. Coupon Generate buttons need a read + trace. The P2s are all tiny.
+| Priority | Bug | Fix |
+|----------|-----|-----|
+| P0 | Print kit 500 | `/api/items/drafts?saleId=cmnxvyic4001li51qobwidrbl` returns 500. RETAIL sale, whole-month dates. Investigate getDrafts in itemController.ts. |
+| P1 | Brand Kit PDFs | brand-kit.tsx hrefs hardcoded `/api/brand-kit/...` relative to Vercel. Fix: use `${NEXT_PUBLIC_API_URL}` base. |
+| P1 | /coupons Generate buttons | No API call fires when shopper clicks Generate. Needs onClick trace. |
+| P2 | ActionBar Treasure Trails | `/shopper/trails` → should be `/trails` |
+| P2 | Hunt Pass Active badge | Showing for Karen who has no Hunt Pass |
+| P2 | /shopper/ranks Scout boundary | Rank badge and earned message disagree |
+| P2 | Organizer Insights runtime error | "Failed to load" — pre-existing, check Railway logs |
 
-**Priority 3 — Continue QA backlog**
+**Priority 3 — QA backlog**
 
-Still unverified: S540 Rewards nav links (4 locations), dashboard achievements dedup, orphan ref hops, S529 storefront widget, #267 RSVP XP, per-sale analytics filter, settlement fee %.
-
-## QA Backlog (still needs Chrome verification)
+Still needs Chrome verification:
 
 | Feature | Where | What to Verify |
 |---------|-------|----------------|
-| S540 Rewards nav (desktop sidebar) | Desktop as Karen | "Rewards" link with Ticket icon → /coupons |
-| S540 Rewards nav (mobile in-sale) | Mobile hamburger, in-sale | Rewards link → /coupons |
-| S540 Rewards nav (mobile shopper) | Mobile hamburger, shopper section | Rewards link → /coupons |
-| S540 Rewards nav (AvatarDropdown) | Click avatar as Karen | Rewards in shopper dropdown branch → /coupons |
-| S540 Dashboard achievements dedup | /shopper/dashboard Overview | Achievements widget GONE (still on /explorer-profile) |
+| S542 cart drawer | Cart icon → drawer | Holds + cart items show, prices correct, Remove works, dark mode |
+| S542 nav | Desktop nav | Explore dropdown opens, Feed/Calendar/Wishlist links work |
+| S542 AvatarDropdown | Click avatar | Appearance row with dark mode toggle present |
+| S540 Rewards nav (4 locations) | As Karen (shopper) | "Rewards" → /coupons in desktop sidebar, mobile in-sale, mobile shopper nav, AvatarDropdown |
+| S540 Dashboard achievements dedup | /shopper/dashboard | Achievements widget GONE (still on /explorer-profile) |
 | S540 Orphan ref hops | /shopper/ranks, /loot-legend, /league, /profile | Back/CTA links → /shopper/explorer-profile |
 | #267 RSVP Bonus XP | RSVP to a sale as Karen | 2 XP + Discoveries notification |
 | #228 Settlement fee % | Settlement → Receipt step | Shows 2% (not 200%) |
-| Per-sale analytics | /organizer/insights → select sale | Stat cards update for selected sale |
-| S529 Storefront widget | /organizer/dashboard as organizer | Copy Link + View Storefront buttons |
+| Per-sale analytics | /organizer/insights → select sale | Stat cards update |
+| S529 Storefront widget | /organizer/dashboard | Copy Link + View Storefront buttons |
 | Guild Primer | /shopper/guild-primer | All tables, HP column, tiered trails, dark mode |
-| S539 nav fixes | /shopper/* as George Roberts | Settings → /shopper/settings, Host a Sale → modal |
