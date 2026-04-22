@@ -725,7 +725,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               {isClient && user && user.roles?.includes('USER') && !user?.roles?.includes('ORGANIZER') && (
                 <button
                   onClick={() => setShowBecomeOrganizerModal(true)}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white rounded-md font-medium text-sm"
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white rounded-md font-medium text-sm whitespace-nowrap"
                 >
                   Host a Sale
                 </button>
