@@ -1258,9 +1258,16 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       color: { dark: '#000000', light: '#ffffff' },
     });
 
+    // Fetch treasure hunt clues for per-clue pages
+    const clues = await prisma.treasureHuntQRClue.findMany({
+      where: { saleId },
+      select: { id: true, category: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
     // Generate QR codes for interactive pages
     const qrCheckIn = await QRCode.toBuffer(
-      `${frontendUrl}/sales/${saleId}?utm_source=qr_full_kit_checkin`,
+      `${frontendUrl}/sales/${saleId}/checkin?utm_source=qr_full_kit_checkin`,
       {
         type: 'png',
         width: QR_SIZE_LARGE,
@@ -1269,14 +1276,21 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       }
     );
 
-    const qrTreasureHunt = await QRCode.toBuffer(
-      `${frontendUrl}/sales/${saleId}/treasure-hunt-qr?utm_source=qr_full_kit_hunt`,
-      {
-        type: 'png',
-        width: QR_SIZE_LARGE,
-        margin: 2,
-        color: { dark: '#000000', light: '#ffffff' },
-      }
+    // Generate per-clue QR buffers (one page each in the PDF)
+    const qrClues: Array<{ buffer: Buffer; category: string | null; index: number }> = await Promise.all(
+      clues.map(async (clue, idx) => ({
+        buffer: await QRCode.toBuffer(
+          `${frontendUrl}/sales/${saleId}/treasure-hunt-qr/${clue.id}?scan=true&utm_source=qr_full_kit`,
+          {
+            type: 'png',
+            width: QR_SIZE_LARGE,
+            margin: 2,
+            color: { dark: '#000000', light: '#ffffff' },
+          }
+        ),
+        category: clue.category,
+        index: idx + 1,
+      }))
     );
 
     const qrPhotoStation = await QRCode.toBuffer(
@@ -1669,32 +1683,38 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       .fillColor('#999999')
       .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    // PAGE 6: Treasure Hunt QR
-    doc.addPage({ size: 'LETTER', margin: 0 });
+    // PAGES 6+: Treasure Hunt Clues — one full page per clue
+    for (const clue of qrClues) {
+      doc.addPage({ size: 'LETTER', margin: 0 });
 
-    doc
-      .fontSize(26)
-      .fillColor('#1a1a2e')
-      .font('Helvetica-Bold')
-      .text('Scan to Hunt for Treasure', PAGE_MARGIN, 30, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+      const clueLabel = clue.category
+        ? `Clue #${clue.index} — ${clue.category}`
+        : `Clue #${clue.index}`;
 
-    doc.image(qrTreasureHunt, qrX_interactive, 75, { width: qrSize_interactive, height: qrSize_interactive });
+      doc
+        .fontSize(26)
+        .fillColor('#1a1a2e')
+        .font('Helvetica-Bold')
+        .text(`🗺️ ${clueLabel}`, PAGE_MARGIN, 30, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
 
-    doc
-      .fontSize(13)
-      .fillColor('#333333')
-      .font('Helvetica')
-      .text('Scan at each clue location to unlock the next hint and earn XP rewards.', PAGE_MARGIN, 570, {
-        width: PAGE_W - PAGE_MARGIN * 2,
-        align: 'center',
-      });
+      doc.image(clue.buffer, qrX_interactive, 75, { width: qrSize_interactive, height: qrSize_interactive });
 
-    doc
-      .fontSize(10)
-      .fillColor('#999999')
-      .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+      doc
+        .fontSize(13)
+        .fillColor('#333333')
+        .font('Helvetica')
+        .text('Scan to unlock this clue and earn XP rewards.', PAGE_MARGIN, 570, {
+          width: PAGE_W - PAGE_MARGIN * 2,
+          align: 'center',
+        });
 
-    // PAGE 7: Photo Station QR
+      doc
+        .fontSize(10)
+        .fillColor('#999999')
+        .text('finda.sale', PAGE_MARGIN, 750, { width: PAGE_W - PAGE_MARGIN * 2, align: 'center' });
+    }
+
+    // Next page: Photo Station QR
     doc.addPage({ size: 'LETTER', margin: 0 });
 
     doc

@@ -822,24 +822,20 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
               )}
 
-              {/* Section 4 — Treasure Hunt Clues QR (PRO/TEAMS only) — per-clue format */}
-              {isPro && clues && clues.length > 0 && (
-                <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
-                  <div className="qr-compact-grid">
-                    {clues.map((clue, idx) => (
-                      <div key={clue.id} className="qr-compact">
-                        <div className="qr-compact-label">Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}</div>
-                        <img
-                          src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr/${clue.id}?scan=true`, 200)}
-                          alt={`Clue ${idx + 1} QR`}
-                          className="qr-compact-qr"
-                        />
-                        <div className="qr-compact-sublabel">Scan to find the clue · finda.sale</div>
-                      </div>
-                    ))}
+              {/* Section 4 — Treasure Hunt Clues QR (PRO/TEAMS only) — one full page per clue */}
+              {isPro && clues && clues.length > 0 && clues.map((clue, idx) => (
+                <div key={clue.id} className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
+                  <div className="flex-1 flex flex-col justify-center items-center">
+                    <img
+                      src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr/${clue.id}?scan=true`, 600)}
+                      alt={`Clue ${idx + 1} QR`}
+                      className="qr-full-page-qr"
+                    />
+                    <div className="qr-full-page-label">🗺️ Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}</div>
+                    <div className="qr-full-page-sublabel">Scan to unlock this clue &amp; earn XP · finda.sale</div>
                   </div>
                 </div>
-              )}
+              ))}
 
               {/* Section 5 — Photo Station QR (all tiers, last print page) */}
               <div className="qr-full-page qr-full-page-last bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
