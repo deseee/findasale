@@ -65,7 +65,7 @@ import {
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
 import { useShopperCart } from '../hooks/useShopperCart';
 import useXpProfile from '../hooks/useXpProfile';
-import ShopperCartDrawer from './ShopperCartDrawer';
+import { useCart } from '../context/CartContext';
 import { ExplorerRank } from './RankBadge';
 
 interface AvatarDropdownProps {
@@ -76,6 +76,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
   const { user, logout } = useAuth();
   const { canAccess } = useOrganizerTier();
   const router = useRouter();
+  const { openCart } = useCart();
   const [isOpen, setIsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [orgToolsOpen, setOrgToolsOpen] = useState(false);
@@ -91,7 +92,6 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
   const [exploreOpen, setExploreOpen] = useState(false);
   const [huntPassOpen, setHuntPassOpen] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
-  const [cartOpen, setCartOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -874,7 +874,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
 
               {/* Shopping Cart Button */}
               <button
-                onClick={() => { setCartOpen(true); setIsOpen(false); }}
+                onClick={() => { openCart(); setIsOpen(false); }}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors w-full text-left"
               >
                 <ShoppingCart size={16} className="text-indigo-500" />
@@ -1254,8 +1254,6 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
         </div>
       )}
 
-      {/* Shopping Cart Drawer */}
-      <ShopperCartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} />
     </div>
   );
 };

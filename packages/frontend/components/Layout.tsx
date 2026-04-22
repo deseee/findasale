@@ -72,7 +72,7 @@ import AvatarDropdown from './AvatarDropdown';
 import BecomeOrganizerModal from './BecomeOrganizerModal';
 import { useShopperCart } from '../hooks/useShopperCart';
 import { useCart } from '../context/CartContext';
-import ShopperCartDrawer from './ShopperCartDrawer';
+import CartDrawer from './CartDrawer';
 import CartIcon from './CartIcon';
 import { io } from 'socket.io-client';
 import { useToast } from './ToastContext';
@@ -87,7 +87,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const { isLowBandwidth } = useNetworkQuality();
   const cart = useShopperCart(user?.id);
   const { items: cartItems } = cart;
-  const { holdCount } = useCart();
+  const { holdCount, isCartOpen, closeCart } = useCart();
   const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const { data: unreadMessages } = useUnreadMessages(!!user);
@@ -114,7 +114,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [mobileTeamsOpen, setMobileTeamsOpen] = useState(false);
   const [mobileDevToolsOpen, setMobileDevToolsOpen] = useState(false);
   const [mobileInSaleToolsOpen, setMobileInSaleToolsOpen] = useState(false);
-  const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [mobileDualRoleHuntPassOpen, setMobileDualRoleHuntPassOpen] = useState(false);
   const [mobileHuntPassOpen, setMobileHuntPassOpen] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -1716,8 +1715,8 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       </footer>
       )}
 
-      {/* Shopping Cart Drawer */}
-      <ShopperCartDrawer isOpen={mobileCartOpen} onClose={() => setMobileCartOpen(false)} />
+      {/* Unified Cart Drawer (holds + browsing cart) */}
+      <CartDrawer isOpen={isCartOpen} onClose={closeCart} />
 
       {/* Become Organizer Modal */}
       <BecomeOrganizerModal

@@ -29,8 +29,8 @@ import HoldTimer from '../../components/HoldTimer'; // Feature #121: Hold Timer
 import HoldToPayModal from '../../components/HoldToPayModal'; // Hold-to-Pay: Organizer invoice modal
 import HoldInvoiceStatusCard from '../../components/HoldInvoiceStatusCard'; // Hold-to-Pay: Shopper payment status
 import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart Cart
-import ShopperCartDrawer from '../../components/ShopperCartDrawer'; // Phase 1: Smart Cart
 import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
+import { useCart } from '../../context/CartContext';
 import BidModal from '../../components/BidModal';
 import BidHistory from '../../components/BidHistory'; // ADR-013 Phase 2: Bid history with anonymization
 
@@ -155,9 +155,9 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [showBidHistory, setShowBidHistory] = useState(false);
   const [estimatedTax, setEstimatedTax] = useState(0);
   const [buyersPremium, setBuyersPremium] = useState(0);
+  const { openCart } = useCart();
   const [showQrModal, setShowQrModal] = useState(false); // Feature #85: Treasure Hunt QR
   const [showHoldToPayModal, setShowHoldToPayModal] = useState(false); // Hold-to-Pay: organizer invoice
-  const [isShopperCartOpen, setIsShopperCartOpen] = useState(false); // Phase 1: Smart Cart
   const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false); // Phase 1: Smart Cart — cross-sale confirmation
   const [pendingCartItem, setPendingCartItem] = useState<any>(null); // Phase 1: Smart Cart
   const [bidModalOpen, setBidModalOpen] = useState(false);
@@ -995,17 +995,8 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
         />
       )}
 
-      {/* Phase 1: Smart Cart — browsing cart drawer */}
-      {item && (
-        <ShopperCartDrawer
-          isOpen={isShopperCartOpen}
-          onClose={() => setIsShopperCartOpen(false)}
-          saleName={item.sale?.title}
-        />
-      )}
-
       {/* Phase 1: Smart Cart — floating action button */}
-      {item && <ShopperCartFAB onClick={() => setIsShopperCartOpen(true)} />}
+      {item && <ShopperCartFAB onClick={openCart} />}
 
       {/* Phase 1: Smart Cart — switch sale confirmation modal */}
       {showSwitchSaleModal && (
