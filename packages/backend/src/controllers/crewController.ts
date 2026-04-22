@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { spendXp } from '../services/xpService';
+import { spendXp, getSpendableXp } from '../services/xpService';
 
 /**
  * Create a new crew (shopper social feature)
@@ -34,6 +34,16 @@ export async function createCrew(req: AuthRequest, res: Response) {
         message: 'Insufficient XP. Crew creation costs 500 XP.',
         required: 500,
         current: req.user.guildXp,
+      });
+    }
+
+    // Check if user has spendable XP (not on hold)
+    const spendableXp = await getSpendableXp(req.user.id);
+    if (spendableXp < 500) {
+      return res.status(402).json({
+        message: 'Insufficient spendable XP. Some XP may be on hold.',
+        required: 500,
+        spendable: spendableXp,
       });
     }
 

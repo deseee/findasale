@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { searchNearbyPlaces, haversineDistance, completionBonus } from '../lib/placesService';
-import { spendXp } from '../services/xpService';
+import { spendXp, getSpendableXp } from '../services/xpService';
 
 /**
  * POST /api/trails
@@ -37,6 +37,16 @@ export const createTrail = async (req: AuthRequest, res: Response) => {
       const currentXp = user?.guildXp || 0;
       return res.status(400).json({
         message: `Creating a Treasure Trail costs 100 XP. You have ${currentXp} XP.`,
+      });
+    }
+
+    // Check if user has spendable XP (not on hold)
+    const spendableXp = await getSpendableXp(userId);
+    if (spendableXp < 100) {
+      return res.status(402).json({
+        message: 'Insufficient spendable XP. Some XP may be on hold.',
+        required: 100,
+        spendable: spendableXp,
       });
     }
 
