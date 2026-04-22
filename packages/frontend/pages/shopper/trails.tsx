@@ -49,7 +49,12 @@ export default function MyTrailsPage() {
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">My Treasure Trails</h1>
+          <div>
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100">My Treasure Trails</h1>
+            <Link href="/trails" className="text-sm text-sage-600 dark:text-sage-400 hover:underline">
+              → Browse All Trails
+            </Link>
+          </div>
           <Link
             href="/shopper/trails/create"
             className="px-4 py-2 bg-sage-600 dark:bg-sage-500 text-white rounded-lg hover:bg-sage-700 dark:hover:bg-sage-600 transition font-semibold"
