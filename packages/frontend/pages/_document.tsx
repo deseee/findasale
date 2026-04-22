@@ -43,7 +43,8 @@ export default function Document() {
         {/* Twitter card type default — page-level <Head> provides twitter:title, twitter:description, twitter:image */}
         <meta name="twitter:card" content="summary_large_image" />
 
-        {/* Viewport is set by Next.js automatically in _app; kept here for completeness */}
+        {/* Viewport — explicit initial-scale=1 so Android PWA renders at true device width (was showing 320px on Pixel 6a — S548) */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
 
