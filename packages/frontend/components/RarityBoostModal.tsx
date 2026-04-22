@@ -18,7 +18,7 @@ interface RarityBoostModalProps {
   onSuccess?: () => void;
 }
 
-const RARITY_BOOST_COST = 15;
+const RARITY_BOOST_COST = 50;
 
 export const RarityBoostModal: React.FC<RarityBoostModalProps> = ({
   isOpen,
