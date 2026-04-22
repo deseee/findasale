@@ -1,23 +1,102 @@
-# Patrick's Dashboard — S545 In Progress
+# Patrick's Dashboard — S545 Complete
 
-## 🔥 S545 — Hotfixes + Dev Dispatches
+## 🔥 S545 — Shipped This Session
 
-**P0 auth crash (tasteProfile) — FIXED.** Railway was throwing `PrismaClientKnownRequestError: The column User.tasteProfile does not exist` on every authenticated request. Root cause: S544 migration applied the column as snake_case `taste_profile`, but Prisma schema uses camelCase `tasteProfile` with no `@map`. Deployed rename migration `20260422220500_rename_taste_profile_camelcase` — verified via psycopg2.
+**P0 auth crash (tasteProfile) — FIXED LIVE.** Rename migration deployed to Railway, verified via psycopg2. All authenticated requests work again.
 
-**P0 /organizer/sales — AUTO-RESOLVED.** Was an auth-crash symptom, not a separate bug. You confirmed "working" after the migration.
+**P0 /organizer/sales — AUTO-RESOLVED.** Was an auth-crash symptom. You confirmed "working".
 
-**Mobile organizer dashboard layout — FIXED (pending push).** `packages/frontend/pages/organizer/dashboard.tsx` lines 1145/1150 — Copy Link + More Options now stack on mobile, inline on desktop.
+**Mobile organizer dashboard layout — FIXED (pending push).** `dashboard.tsx` responsive flex — Copy Link + More Options stack on mobile, inline on desktop.
 
-**Organizer Insights for Alice — FIXED (pending push).** `packages/backend/src/controllers/insightsController.ts` lines 222–274 — Prisma Decimal price objects broke arithmetic (same pattern as S543). Added `.toNumber()` conversion.
+**Organizer Insights for Alice — FIXED (pending push).** `.toNumber()` conversion on Prisma Decimal prices in `insightsController.ts`.
 
-**Rank-Based Early Access — Architect recommends BUILD IT (Option A).** Add `publishedAt` to Sale, gate in saleController by rank time windows (Scout 1h / Ranger 2h / Sage 4h / GM 6h). Effort ~6–8h. Needs your answers on 4 questions below before dev dispatch.
+**Rank-Based Early Access — BUILT (pending push + migration).** Full Option A: `publishedAt` on Sale, rank-tier time windows (Scout 1h / Ranger 2h / Sage 4h / GM 6h), lock card UI, 🔒 badge on sale cards, Initiate "Rank up" CTA. Migration backfills all existing sales with `publishedAt = createdAt` so nobody gets locked out. 9 files.
 
-## 🟡 Decisions Needed — Rank Early Access
+**Affiliate Program Batch 1 — BUILT with placeholders (pending push + migration).** Consolidated `AffiliateReferral` model (merged old `AffiliatePayout`), config file with PLACEHOLDER amounts (PRO=$20, TEAMS=$55, SIMPLE=$0, ENT=$0), core service (code gen + fraud gates: 7-day account age, 30-day payout lockout), and `GET /api/affiliate/me` endpoint. 5 files. Batches 2–10 still ahead.
 
-1. Should presale sales appear in search/map with a 🔒 badge, or be fully hidden until unlocked?
-2. Should Initiates see presale sales with "Rank up" CTA, or 100% hidden?
-3. Timezone — organizer's local TZ for `publishedAt`, or UTC?
-4. Backfill — existing active sales get `publishedAt = createdAt` (no one locked out), or `publishedAt = NOW()` (immediate unlock)?
+## ⚠️ Flags for You
+
+**Affiliate payout amounts are PLACEHOLDERS.** `packages/backend/src/config/affiliateConfig.ts` — change one line to lock PRO/TEAMS amounts before Batch 4 (Stripe webhook wiring) ships. The agent also added a `calculateAffiliatePayoutCents` helper doing 2% with $50 floor — this contradicts your "flat cash per tier" decision in STATE.md S544. Decide: keep flat, or move to 2%/floor. Both paths are in the code right now; whichever you pick, the other gets deleted.
+
+**Rank early access timezone gotcha.** Organizer's timezone isn't passed from backend to frontend yet — unlock times currently render in the viewer's browser TZ. Minor; Batch 2 concern.
+
+**Schema.prisma cleanup I did.** The affiliate agent left a stale `affiliatePayouts AffiliatePayout[]` relation on the Sale model after removing the `AffiliatePayout` model. I removed it so Prisma will generate cleanly.
+
+## 📤 Push Block (S545 — Everything)
+
+Two commits are already on GitHub via MCP (cf9c7b39 original migration fix, ea885c37 rename migration). The block below is everything else:
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+# Hotfixes
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/backend/src/controllers/insightsController.ts
+
+# Docs
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+
+# Schema (shared between rank + affiliate features)
+git add packages/database/prisma/schema.prisma
+
+# Rank Early Access migration (renamed to proper timestamp)
+git add packages/database/prisma/migrations/20260422231500_add_sale_publishedAt
+
+# Rank Early Access code
+git add packages/backend/src/services/rankService.ts
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/frontend/lib/rankEarlyAccess.ts
+git add packages/frontend/components/SaleLockCard.tsx
+git add packages/frontend/components/SaleCard.tsx
+git add packages/frontend/pages/sales/[id].tsx
+
+# Affiliate Program Batch 1 migration
+git add packages/database/prisma/migrations/20260422230000_consolidate_affiliate_payout_to_referral
+
+# Affiliate Program Batch 1 code
+git add packages/backend/src/config/affiliateConfig.ts
+git add packages/backend/src/services/affiliateService.ts
+git add packages/backend/src/controllers/affiliateController.ts
+
+git commit -m "S545: rank early access + affiliate batch 1 + hotfixes
+
+Hotfixes:
+- dashboard.tsx mobile layout (Copy Link + More Options responsive)
+- insightsController.ts Decimal .toNumber() fix for Alice
+
+Rank-Based Early Access (Option A, 4 decisions locked by Patrick):
+- Sale.publishedAt DateTime? + backfill migration (all existing sales get createdAt)
+- rankService.ts: RANK_EARLY_ACCESS_HOURS (Scout:1 / Ranger:2 / Sage:4 / GM:6)
+- saleController gating on getSale/listSales/searchSales
+- SaleLockCard + SaleCard lock badge + Initiate rank-up CTA
+
+Affiliate Program Batch 1:
+- Consolidated AffiliateReferral model (AffiliatePayout merged)
+- affiliateConfig.ts with PLACEHOLDER amounts (PRO:20, TEAMS:55)
+- affiliateService.ts with 7-day account age + 30-day payout lockout gates
+- GET /api/affiliate/me endpoint
+- Batches 2-10 deferred"
+.\push.ps1
+```
+
+## 🗃️ Migration Deploy (after push)
+
+Two new migrations need to run on Railway. Run this block AFTER push completes:
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+This applies `20260422230000_consolidate_affiliate_payout_to_referral` then `20260422231500_add_sale_publishedAt` in order, then regenerates the TS client.
+
+## ─── Archived Below: S544 ───
+
+# S544 Complete
 
 ## ─── Archived Below: S544 ───
 

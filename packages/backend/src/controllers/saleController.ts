@@ -18,8 +18,9 @@ import { getIO } from '../lib/socket'; // V1: Socket.io instance
 import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
 import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feature #32: Smart Follow
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
-import { awardXp, XP_AWARDS, applyHuntPassMultiplier } from '../services/xpService'; // Explorer's Guild XP awards
+import { awardXp, XP_AWARDS, applyHuntPassMultiplier, RANK_EARLY_ACCESS_HOURS } from '../services/xpService'; // Explorer's Guild XP awards
 import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
+import { isSaleLocked, getEffectivePublishTime, getMinutesUntilUnlock } from '../services/rankService'; // Rank-based early access gate
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -202,6 +203,9 @@ export const listSales = async (req: Request, res: Response) => {
       if (b.targetId && !boostBySaleId.has(b.targetId)) boostBySaleId.set(b.targetId, b);
     }
 
+    const authReq = req as any; // Cast to access user if present
+    const userRank = authReq.user?.explorerRank || 'INITIATE';
+
     const convertedSales = sales.map((sale: any) => {
       const { _count, trails, items, ...rest } = convertDecimalsToNumbers(sale);
       const maxOrganizerDiscount = items && items.length > 0
@@ -209,6 +213,11 @@ export const listSales = async (req: Request, res: Response) => {
             .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
             .map((item: any) => item.organizerDiscountAmount))
         : null;
+
+      // Rank-Based Early Access: compute lock status for each sale
+      const locked = isSaleLocked(sale.publishedAt, userRank);
+      const minutesUntilUnlock = getMinutesUntilUnlock(sale.publishedAt, userRank);
+
       return {
         ...rest,
         maxOrganizerDiscount: maxOrganizerDiscount || null,
@@ -216,6 +225,8 @@ export const listSales = async (req: Request, res: Response) => {
         hasActiveTrail: (trails && trails.length > 0) ?? false,
         trailShareToken: trails?.[0]?.shareToken ?? null,
         boost: boostBySaleId.get(sale.id) ?? null,
+        locked,
+        minutesUntilUnlock,
       };
     });
     
@@ -340,6 +351,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
 export const getSale = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const authReq = req as any; // Cast to access user if present
 
     const sale = await prisma.sale.findUnique({
       where: { id },
@@ -363,8 +375,45 @@ export const getSale = async (req: Request, res: Response) => {
         }
       }
     });
-    
+
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
+
+    // Rank-Based Early Access Gate: Check if user can view this sale
+    const isOrganizer = authReq.user?.id === sale.organizer.userId;
+    const isAdmin = authReq.user?.role === 'ADMIN';
+
+    if (!isOrganizer && !isAdmin && sale.status === 'PUBLISHED') {
+      // Get user's rank (default INITIATE if unauthenticated)
+      const userRank = authReq.user?.explorerRank || 'INITIATE';
+      const locked = isSaleLocked(sale.publishedAt, userRank);
+
+      if (locked) {
+        // Sale is locked — return minimal info + lock details instead of full sale data
+        const effectiveTime = getEffectivePublishTime(sale.publishedAt, userRank);
+        const minutesUntilUnlock = getMinutesUntilUnlock(sale.publishedAt, userRank);
+
+        return res.json({
+          id: sale.id,
+          title: sale.title,
+          address: sale.address,
+          city: sale.city,
+          state: sale.state,
+          lat: sale.lat,
+          lng: sale.lng,
+          neighborhood: sale.neighborhood,
+          photoUrls: sale.photoUrls,
+          locked: true,
+          publishedAt: sale.publishedAt,
+          unlocksAt: effectiveTime,
+          minutesUntilUnlock: minutesUntilUnlock,
+          userRank: userRank,
+          organizer: {
+            id: sale.organizer.id,
+            businessName: sale.organizer.businessName,
+          },
+        });
+      }
+    }
 
     const reviews = await prisma.review.findMany({
       where: { sale: { organizerId: sale.organizerId } },
@@ -382,6 +431,7 @@ export const getSale = async (req: Request, res: Response) => {
 
     const convertedSale = convertDecimalsToNumbers({
       ...sale,
+      locked: false,
       organizer: {
         id: organizer.id, userId: organizer.userId, businessName: organizer.businessName,
         phone: organizer.phone, address: organizer.address, badges, avgRating,
@@ -618,7 +668,7 @@ export const searchSales = async (req: Request, res: Response) => {
     if (!q || typeof q !== 'string') {
       return res.status(400).json({ message: 'Search query is required' });
     }
-    
+
     const sales = await prisma.sale.findMany({
       where: {
         OR: [
@@ -630,8 +680,23 @@ export const searchSales = async (req: Request, res: Response) => {
       include: { organizer: { select: { businessName: true } } },
       take: 20
     });
-    
-    res.json(sales.map((sale: any) => convertDecimalsToNumbers(sale)));
+
+    // Rank-Based Early Access: compute lock status for each sale
+    const authReq = req as any; // Cast to access user if present
+    const userRank = authReq.user?.explorerRank || 'INITIATE';
+
+    const enrichedSales = sales.map((sale: any) => {
+      const converted = convertDecimalsToNumbers(sale);
+      const locked = isSaleLocked(sale.publishedAt, userRank);
+      const minutesUntilUnlock = getMinutesUntilUnlock(sale.publishedAt, userRank);
+      return {
+        ...converted,
+        locked,
+        minutesUntilUnlock,
+      };
+    });
+
+    res.json(enrichedSales);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error while searching sales' });
@@ -707,7 +772,13 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const updated = await prisma.sale.update({ where: { id }, data: { status } });
+    // Rank-Based Early Access: Set publishedAt when transitioning to PUBLISHED
+    const updateData: any = { status };
+    if (status === 'PUBLISHED' && (!existingSale.publishedAt || existingSale.status === 'ENDED')) {
+      updateData.publishedAt = new Date();
+    }
+
+    const updated = await prisma.sale.update({ where: { id }, data: updateData });
 
     if (status === 'PUBLISHED' && existingSale.status === 'DRAFT') {
       // Notify organizer that sale is now live

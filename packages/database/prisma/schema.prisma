@@ -143,12 +143,11 @@ model User {
   ripples                      SaleRipple[]           @relation("SaleRipples")
   // Feature #60: TEAMS Onboarding Wizard completion flag
   teamsOnboardingComplete      Boolean                @default(false)
-  // Feature #72: Affiliate Program — referral code and payouts
-  affiliateReferralCode        String?                @unique // Unique code for affiliate referral tracking
-  affiliatePayoutsGiven        AffiliatePayout[]      @relation("AffiliatePayoutsGiven")
-  affiliatePayoutsReceived     AffiliatePayout[]      @relation("AffiliatePayoutsReceived")
+  // Feature #72: Affiliate Program — referral code for signup tracking
+  affiliateReferralCode        String?                @unique // Code this user was referred with (e.g., "ORG_K9X2L4")
+  // Affiliate relationships (one-way: I referred others)
   affiliateReferralsGiven      AffiliateReferral[]    @relation("AffiliateReferrals_Referrer")
-  affiliateReferralsReceived   AffiliateReferral[]    @relation("AffiliateReferrals_Referred")
+  // Inverse relationship managed via AffiliateReferral.referredUserId (implicit)
   // Hold-to-Pay feature: invoices (shopper and organizer sides)
   shopperInvoices              HoldInvoice[]          @relation("ShopperInvoices")
   organizerInvoices            HoldInvoice[]          @relation("OrganizerInvoices")
@@ -625,8 +624,6 @@ model Sale {
   treasureHuntQRClues         TreasureHuntQRClue[]
   treasureHuntEnabled         Boolean                  @default(true)
   treasureHuntCompletionBadge Boolean                  @default(false)
-  // Feature #72: Affiliate Payouts linked to sales
-  affiliatePayouts            AffiliatePayout[]
   // Phase 2a: Explorer's Guild — Rarity boosts for this sale
   rarityBoosts                RarityBoost[]            @relation("RarityBoosts")
   // #132: À La Carte Single-Sale Fee ($9.99)
@@ -646,6 +643,8 @@ model Sale {
   holdInvoices                HoldInvoice[]
   // Feature #106: Prelaunch Preview — restrict inventory browse to Sage+ before this time
   prelaunchAt                 DateTime? // null = no prelaunch; before this time, only Sage+ can browse inventory
+  // Rank-Based Early Access (Option A): published timestamp for rank-gated early viewing
+  publishedAt                 DateTime? // When the sale becomes publicly accessible; null until published
   // Sourcebook relations
   sourcebookEntries           SourcebookEntry[]        @relation("SaleSourcebookEntries")
   // Feature #228: Settlement Hub — lifecycle + commission + settlement
@@ -2925,44 +2924,44 @@ model SaleRipple {
 }
 
 // Feature #72: Affiliate Program — referral payouts and tracking
-model AffiliatePayout {
-  id             String    @id @default(cuid())
-  referrerId     String // User who earned the payout (affiliate)
-  referrer       User      @relation("AffiliatePayoutsGiven", fields: [referrerId], references: [id])
-  referredUserId String? // Optional: user who was referred (null if campaign-wide payout)
-  referredUser   User?     @relation("AffiliatePayoutsReceived", fields: [referredUserId], references: [id])
-  saleId         String? // Optional: linked to a specific sale
-  sale           Sale?     @relation(fields: [saleId], references: [id])
-  amount         Decimal // Payout amount in USD
-  status         String    @default("PENDING") // PENDING | PAID | CANCELLED
-  paidAt         DateTime? // Timestamp when payout was processed
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@index([referrerId])
-  @@index([referredUserId])
-  @@index([saleId])
-  @@index([status])
-}
-
-// Feature #72: Affiliate Referral tracking — tracks individual referral relationships
+// Feature #72: Affiliate Program — Consolidated AffiliateReferral (single source of truth)
+// Batch 1 Foundation: schema + migration + config + service + one endpoint
 model AffiliateReferral {
-  id                String    @id @default(cuid())
-  referrerId        String // The User who referred
-  referrer          User      @relation("AffiliateReferrals_Referrer", fields: [referrerId], references: [id])
-  referredUserId    String // The User who was referred
-  referredUser      User      @relation("AffiliateReferrals_Referred", fields: [referredUserId], references: [id])
-  referralCode      String    @unique // The code used at signup
-  status            String    @default("PENDING") // PENDING | QUALIFIED | PAID
-  payoutAmountCents Int? // Amount in cents (nullable until payout calculated)
-  paidAt            DateTime? // Timestamp when payout was processed
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                    String    @id @default(cuid())
 
+  // Referral relationship
+  referrerId            String // Organizer who referred
+  referrer              User      @relation("AffiliateReferrals_Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUserId        String // Organizer who was referred
+  referredUser          User      @relation("AffiliateReferrals_Referred", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  // Code tracking
+  referralCode          String    @unique // Generated code (e.g., "ORG_K9X2L4")
+
+  // Status flow: PENDING → QUALIFIED → PAID
+  status                String    @default("PENDING") // PENDING | QUALIFIED | PAID | CANCELLED
+
+  // Qualification trigger: first PAID purchase by referred organizer
+  qualifiedAt           DateTime? // Timestamp when referred organizer's first PAID sale completed
+
+  // Payout calculation
+  payoutAmountCents     Int? // Calculated on qualification, before payout transfer
+  payoutCalculatedAt    DateTime? // When amount was calculated
+
+  // Stripe transfer
+  stripeTransferId      String? // Stripe Transfer object ID (created when payout issued)
+  paidAt                DateTime? // When transfer completed in Stripe
+
+  // Audit trail
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([referrerId, referredUserId])
   @@index([referrerId])
   @@index([referredUserId])
   @@index([referralCode])
   @@index([status])
+  @@index([qualifiedAt])
 }
 
 // Feature #87: Brand & Designer Tracking

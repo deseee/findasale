@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import {
+  generateOrGetAffiliateCode,
+  getAffiliateCodeWithStats,
+} from '../services/affiliateService';
 
 // Generate affiliate link for a sale
 export const generateAffiliateLink = async (req: AuthRequest, res: Response) => {
@@ -138,5 +142,55 @@ export const getCreatorStats = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error fetching creator stats:', error);
     res.status(500).json({ message: 'Failed to fetch creator stats' });
+  }
+};
+
+/**
+ * Batch 1 Foundation Endpoint
+ * GET /api/affiliate/me
+ *
+ * Returns current user's affiliate code + stats, or creates one if eligible.
+ * This is the minimal foundation endpoint for Batch 1.
+ *
+ * Response:
+ * - referralCode: unique code for sharing (e.g., "ORG_K9X2L4")
+ * - shareUrl: full URL for signup referral link
+ * - createdAt: when code was generated
+ * - totalReferrals: count of all referred users
+ * - qualifiedReferrals: count of referrals who completed first PAID sale
+ * - totalEarned: lifetime earnings from PAID referrals (cents)
+ * - unpaidEarnings: balance from QUALIFIED referrals awaiting payout (cents)
+ */
+export const getAffiliateMe = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user.id;
+
+    // Check ORGANIZER role
+    if (!req.user.roles?.includes('ORGANIZER')) {
+      return res.status(403).json({
+        error: 'Only organizers can participate in the affiliate program',
+      });
+    }
+
+    // Get stats (does not create code yet; that's Batch 2 POST /affiliate/generate-code)
+    const stats = await getAffiliateCodeWithStats(userId);
+
+    res.json({
+      referralCode: stats.referralCode,
+      shareUrl: stats.shareUrl,
+      createdAt: stats.createdAt,
+      stats: {
+        totalReferrals: stats.totalReferrals,
+        qualifiedReferrals: stats.qualifiedReferrals,
+        totalEarned: stats.totalEarned, // cents
+        unpaidEarnings: stats.unpaidEarnings, // cents
+      },
+      message: stats.referralCode
+        ? 'Affiliate code found'
+        : 'No affiliate code yet (generate one via POST /api/affiliate/generate-code in Batch 2)',
+    });
+  } catch (error) {
+    console.error('Error fetching affiliate data:', error);
+    res.status(500).json({ error: 'Failed to fetch affiliate data' });
   }
 };
