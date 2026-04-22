@@ -1568,3 +1568,81 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
     res.status(500).json({ message: 'Server error while recording visit' });
   }
 };
+
+/**
+ * POST /api/sales/:saleId/checkin
+ * Award XP when a shopper checks in via QR code
+ * Prevents duplicate check-ins on the same day (max 10 XP/day)
+ */
+export const checkInToSale = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { saleId } = req.params;
+    const userId = req.user.id;
+
+    // Verify sale exists and is published
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { id: true, title: true, status: true },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    if (sale.status !== 'PUBLISHED') {
+      return res.status(403).json({ message: 'Sale is not published' });
+    }
+
+    // Check if user already checked in today
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const todayCheckin = await prisma.pointsTransaction.findFirst({
+      where: {
+        userId,
+        type: 'SALE_CHECKIN',
+        saleId,
+        createdAt: {
+          gte: today,
+        },
+      },
+    });
+
+    if (todayCheckin) {
+      return res.json({
+        success: true,
+        xpEarned: 0,
+        alreadyCheckedIn: true,
+        saleTitle: sale.title,
+        message: 'Already checked in today',
+      });
+    }
+
+    // Award 10 XP for check-in
+    const awardResult = await awardXp(userId, 'SALE_CHECKIN', 10, {
+      saleId,
+      description: `Checked in to sale: ${sale.title}`,
+    });
+
+    if (!awardResult) {
+      return res.status(500).json({ message: 'Failed to award XP' });
+    }
+
+    res.json({
+      success: true,
+      xpEarned: 10,
+      alreadyCheckedIn: false,
+      saleTitle: sale.title,
+      guildXp: awardResult.newXp,
+      explorerRank: awardResult.newRank,
+      rankIncreased: awardResult.rankIncreased,
+    });
+  } catch (error) {
+    console.error('Check-in error:', error);
+    res.status(500).json({ message: 'Server error during check-in' });
+  }
+};

@@ -112,6 +112,16 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     enabled: !!saleId && typeof saleId === 'string',
   });
 
+  // Fetch treasure hunt clues
+  const { data: clues } = useQuery<Array<{id: string; category: string | null; createdAt: string}>>({
+    queryKey: ['print-kit-clues', saleId],
+    queryFn: async () => {
+      const response = await api.get(`/sales/${saleId}/treasure-hunt-qr`);
+      return response.data.clues;
+    },
+    enabled: !!saleId && typeof saleId === 'string' && isPro,
+  });
+
   const handlePrint = () => {
     window.print();
   };
@@ -656,7 +666,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   {isPro && (
                     <div className="text-center">
                       <button
-                        onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}`, '🚶 Check In & Join the Line', 'Scan with your phone to check in, browse items, and join the virtual queue for entry.')}
+                        onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/checkin`, '🚶 Check In & Join the Line', 'Scan with your phone to check in, browse items, and join the virtual queue for entry.')}
                         className="w-full bg-pink-600 hover:bg-pink-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
                       >
                         🚶 Check-In / Queue
@@ -665,17 +675,36 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     </div>
                   )}
 
-                  {/* Treasure Hunt QR (PRO/TEAMS only) */}
+                  {/* Treasure Hunt Clues (PRO/TEAMS only) */}
                   {isPro && (
-                    <div className="text-center">
-                      <button
-                        onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr`, '🗺️ Treasure Hunt', 'Scan at this location to unlock the next clue and earn XP rewards.')}
-                        className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
-                      >
-                        🗺️ Treasure Hunt
-                      </button>
-                      <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR — attach near each clue location</p>
-                    </div>
+                    <>
+                      {clues && clues.length > 0 ? (
+                        <div className="text-center">
+                          <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {clues.map((clue, idx) => (
+                              <button
+                                key={clue.id}
+                                onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr/${clue.id}?scan=true`, `🗺️ Clue #${idx + 1}`, `Scan at this location to unlock the clue and earn XP rewards.`)}
+                                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
+                              >
+                                🗺️ Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-sm text-warm-600 dark:text-warm-400 mt-2">Print individual clue QRs — attach near each location</p>
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <button
+                            onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr`, '🗺️ Treasure Hunt', 'Scan at this location to unlock the next clue and earn XP rewards.')}
+                            className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mb-2"
+                          >
+                            🗺️ Treasure Hunt
+                          </button>
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR — attach near each clue location</p>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Photo Station QR (all tiers) */}
@@ -783,7 +812,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                   <div className="flex-1 flex flex-col justify-center items-center">
                     <img
-                      src={getQRUrl(`https://finda.sale/sales/${sale.id}`, 600)}
+                      src={getQRUrl(`https://finda.sale/sales/${sale.id}/checkin`, 600)}
                       alt="Check In & Join the Line QR Code"
                       className="qr-full-page-qr"
                     />
@@ -793,17 +822,21 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
               )}
 
-              {/* Section 4 — Treasure Hunt Clues QR (PRO/TEAMS only) */}
-              {isPro && (
+              {/* Section 4 — Treasure Hunt Clues QR (PRO/TEAMS only) — per-clue format */}
+              {isPro && clues && clues.length > 0 && (
                 <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
-                  <div className="flex-1 flex flex-col justify-center items-center">
-                    <img
-                      src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr`, 600)}
-                      alt="Treasure Hunt QR Code"
-                      className="qr-full-page-qr"
-                    />
-                    <div className="qr-full-page-label">Scan to view the treasure hunt clues</div>
-                    <div className="qr-full-page-sublabel">FindA.Sale</div>
+                  <div className="qr-compact-grid">
+                    {clues.map((clue, idx) => (
+                      <div key={clue.id} className="qr-compact">
+                        <div className="qr-compact-label">Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}</div>
+                        <img
+                          src={getQRUrl(`https://finda.sale/sales/${sale.id}/treasure-hunt-qr/${clue.id}?scan=true`, 200)}
+                          alt={`Clue ${idx + 1} QR`}
+                          className="qr-compact-qr"
+                        />
+                        <div className="qr-compact-sublabel">Scan to find the clue · finda.sale</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
