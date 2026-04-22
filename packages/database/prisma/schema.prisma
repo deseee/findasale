@@ -145,9 +145,9 @@ model User {
   teamsOnboardingComplete      Boolean                @default(false)
   // Feature #72: Affiliate Program — referral code for signup tracking
   affiliateReferralCode        String?                @unique // Code this user was referred with (e.g., "ORG_K9X2L4")
-  // Affiliate relationships (one-way: I referred others)
-  affiliateReferralsGiven      AffiliateReferral[]    @relation("AffiliateReferrals_Referrer")
-  // Inverse relationship managed via AffiliateReferral.referredUserId (implicit)
+  // Affiliate relationships
+  affiliateReferralsGiven      AffiliateReferral[]    @relation("AffiliateReferrals_Referrer") // Users I referred
+  affiliateReferralsReceived   AffiliateReferral[]    @relation("AffiliateReferrals_Referred") // Users who referred me (inverse for P1012)
   // Hold-to-Pay feature: invoices (shopper and organizer sides)
   shopperInvoices              HoldInvoice[]          @relation("ShopperInvoices")
   organizerInvoices            HoldInvoice[]          @relation("OrganizerInvoices")
