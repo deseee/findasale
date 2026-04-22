@@ -692,7 +692,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <button
                   onMouseEnter={() => setExploreOpen(true)}
                   onClick={() => setExploreOpen(prev => !prev)}
-                  className="flex items-center gap-1 text-sm font-medium text-warm-700 dark:text-warm-200 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                  className="flex items-center gap-1 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400"
                 >
                   Explore
                   <svg className="w-3 h-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -752,7 +752,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               {/* Pricing link */}
               <Link
                 href="/pricing"
-                className="hidden xl:inline-flex text-sm font-medium text-warm-700 dark:text-warm-200 hover:text-amber-600 dark:hover:text-amber-400 transition-colors px-2 py-1"
+                className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400"
               >
                 Pricing
               </Link>
