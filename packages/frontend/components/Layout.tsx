@@ -1367,6 +1367,40 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               </>
             ) : isClient && user && user?.roles?.includes('USER') ? (
               <>
+                {/* User info — name, email, rank badge, XP bar */}
+                <div className="px-3 py-2 mb-1 border-b border-warm-200 dark:border-gray-700">
+                  <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">{user.name || user.email}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+                  {xpProfile && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        {xpProfile.explorerRank === 'INITIATE' ? (
+                          <Compass className="w-3.5 h-3.5 text-blue-500" />
+                        ) : (
+                          <span className="text-sm leading-none">
+                            {xpProfile.explorerRank === 'SCOUT' ? '🔍' : xpProfile.explorerRank === 'RANGER' ? '🎯' : xpProfile.explorerRank === 'SAGE' ? '✨' : '👑'}
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                          {xpProfile.explorerRank.charAt(0) + xpProfile.explorerRank.slice(1).toLowerCase()}
+                        </span>
+                      </div>
+                      {xpProfile.rankProgress && (
+                        <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full max-w-[100px] overflow-hidden">
+                          <div
+                            className="h-full bg-indigo-500"
+                            style={{
+                              width: xpProfile.rankProgress.nextRank
+                                ? `${Math.min((xpProfile.rankProgress.currentXp / xpProfile.rankProgress.nextRankXp) * 100, 100)}%`
+                                : '100%',
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Shopper-only nav (when not organizer) */}
                 <Link href="/shopper/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   <LayoutDashboard size={14} className="inline mr-2 text-indigo-600" /> Shopper Dashboard
