@@ -1,85 +1,97 @@
-# Patrick's Dashboard — S543 Complete
+# Patrick's Dashboard — S544 Complete
 
 ## What Happened This Session
 
-S543: Smoke test, bug fixes, Hunt Pass audit, guild-primer rank journey fix.
+S544: Strategy + builds. Hunt Pass polish, Golden Trophy avatar frame, 3x coupon slots, schema pre-wires, affiliate program spec.
 
-**S542 Chrome-Verified ✅**
-- Cart drawer opens correctly (was orphaned — now fixed and working)
-- Explore ▾ dropdown shows Feed / Calendar / Wishlist on hover
-- ThemeToggle lives under "Appearance" in AvatarDropdown
+**Game Design — Grandmaster Hunt Pass Duration (LOCKED)**
+Free Hunt Pass now tied to active Grandmaster status. Lapses on Jan 1 reset if user drops to Sage. Re-qualifying restores it. "Forever" is gone. Spec updated.
 
-**Bug Reanalysis ✅**
-- "/coupons Generate buttons broken" from S541 → **DEBUNKED** — fully working. VM viewport artifact (same as appraisals). Coupon code `94764D37` generated live, XP deducted 500→400.
-- #241 Brand Kit PDFs → **ALREADY FIXED in S542** — the "brand-kit Railway URLs" commit already changed all 4 hrefs to use `NEXT_PUBLIC_API_URL`. Pending Chrome QA as organizer.
+**Hunt Pass Page ✅**
+- Newsletter benefit → "Coming Soon" amber badge (user-written guides platform, post-beta)
+- Treasure Hunt Pro restored (150 scans/day cap — confirmed in xpService.ts)
+- Page now shows 5 confirmed benefits
 
-**S543 Code Fixes (pending push)**
+**Golden Trophy Avatar Frame ✅ (built)**
+- Amber/gold ring on avatar for Hunt Pass subscribers
+- Shows in nav + AvatarDropdown header
+- Purely frontend — huntPassActive already exists on User, no schema change needed
+- New files: HuntPassAvatarBadge.tsx, Avatar.tsx
 
-| Priority | Bug | Fix |
-|----------|-----|-----|
-| P0 | Print kit 500 | Root cause: `getDrafts` fetches workspace discount rules (Feature #310); Prisma `Decimal` objects fail JSON serialization. Fix: explicit `.toNumber()` conversion in `itemController.ts`. |
-| P2 | ActionBar Treasure Trails href | `/shopper/trails` → `/trails` in `ActionBar.tsx` |
-| P2 | Hunt Pass Active badge (Karen) | Changed `userData.huntPassActive` → `user.huntPassActive` in `dashboard.tsx` (fresher auth data) |
-| P2 | /shopper/ranks Scout boundary | `RankHeroSection.tsx` now uses `NEXT_RANK_MAP` lookup for `nextRankThreshold` — badge and earned message agree at Scout boundary |
-| P2 | guild-primer rank journey | Replaced unbuilt perks (priority support, sourcebook, 48h alerts, sales/week counts) with accurate perks from `RankHeroSection.tsx` (hold times, wishlist slots, Treasure Trails gating, early access hours). Grandmaster "Free Hunt Pass included" retained. |
-| Minor | coupons.tsx type | `GenerateResult` type expanded with optional backend response fields (type safety) |
+**3x Monthly Coupon Slots ✅ (built)**
+- HP subscribers: 6/6/3 coupon generations per month (vs standard 2/2/1)
+- Backend cap logic updated in couponController.ts
+- Frontend coupons.tsx shows dynamic limits based on HP status
 
-**Hunt Pass Deep-Dive (S543)**
+**Schema Migration ✅ (created, not yet deployed)**
+- tasteProfile Json? on User (pre-wire for Agentic AI Scout)
+- ApiKey model (pre-wire for API-First Organizer Toolkit)
+- Migration file: `1776893245415_add_taste_profile_and_api_keys`
+- You need to deploy this after pushing (block below)
 
-Fetched the pre-S534 997-line hunt-pass.tsx from git history. Key findings:
+**Research Findings**
+- Consignment: FULLY BUILT — not a pre-wire. Consignor model, ConsignorPayout, consignorController all exist.
+- Persistent Inventory: Schema pre-wired (fields exist) but MasterItemLibrary model missing — not full build yet.
+- Estate Planning (executorUserId, estateId): Pre-wired ✅
 
-| Benefit | Status |
-|---------|--------|
-| 1.5x XP on everything | ✅ Confirmed in `xpService.ts` |
-| 6-hour early access to flash deals | ✅ Confirmed in `flashDealController.ts` |
-| Exclusive Hunt Pass Badge | ✅ Field + display present |
-| Hunt Pass Insider Newsletter | ⚠️ **Copy-only — no backend found** |
-| Treasure Hunt Pro (150/day cap) | 🔲 **In code (xpService.ts), stripped from page in S534** |
-| Rare Finds Pass (rarity early access) | ❓ **Was in old page — backend status unverified** |
-| Golden Trophy Avatar Frame | ❓ **Was in old page — backend status unverified** |
-| 3x Monthly Coupon Slots | ❓ **Was in old page — may overlap existing tier logic** |
+**Affiliate Program — Spec Complete, Awaiting Your Decisions**
+Full Architect spec at claude_docs/feature-notes/affiliate-program-spec-S544.md.
+Payout model: flat cash triggered on first successful paid billing only. No cash for free tier (exploit vector — someone could spin up fake free accounts and collect payouts).
+
+Before dev dispatch you need to decide:
+- PRO payout amount (Investor ballpark: ~$20, not locked)
+- TEAMS payout amount (Investor ballpark: ~$55, not locked)
+- Confirm organizer-only scope (no public influencer network yet)
+- Fraud thresholds OK? (7-day account age before code gen, 30-day before first payout)
+
+No rush — amounts will be config constants, not hardcoded. Dev can start the non-amount work first.
+
+## 🚨 P0 — /organizer/sales Broken Live
+
+Screenshot confirmed: "Unable to load sales. Please try again." on finda.sale/organizer/sales. First task of S545 — Railway log check + dev dispatch. Do not start other work until this is diagnosed.
 
 ## Build Status
 
 | Service | Status |
 |---------|--------|
-| Vercel (frontend) | ✅ S542 live |
+| Vercel (frontend) | ✅ S543 live |
 | Railway (backend) | ✅ Green |
-| S543 pending push | ⚠️ 6 files changed — push block below |
+| S544 pending push | ⚠️ 8 code files + migration — push block below |
 
-## Push Block (S543)
+## Push Block (S544)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/itemController.ts
+git add claude_docs/research/gamification-rpg-spec-S260.md
+git add claude_docs/feature-notes/gamedesign-decisions-2026-04-22.md
+git add claude_docs/feature-notes/affiliate-program-spec-S544.md
+git add claude_docs/strategy/roadmap.md
+git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add packages/frontend/components/HuntPassAvatarBadge.tsx
+git add packages/frontend/components/Avatar.tsx
+git add packages/frontend/components/AvatarDropdown.tsx
+git add packages/backend/src/controllers/couponController.ts
 git add packages/frontend/pages/coupons.tsx
-git add packages/frontend/components/ActionBar.tsx
-git add packages/frontend/pages/shopper/dashboard.tsx
-git add packages/frontend/components/RankHeroSection.tsx
-git add packages/frontend/pages/shopper/guild-primer.tsx
+git add packages/database/prisma/schema.prisma
+git add "packages/database/prisma/migrations/1776893245415_add_taste_profile_and_api_keys"
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: print kit 500, ActionBar trails href, HP badge, Scout boundary, guild-primer rank perks"
+git commit -m "feat: Golden Trophy avatar frame, 3x HP coupon slots, Hunt Pass copy polish, tasteProfile + ApiKey schema pre-wires, affiliate program spec"
 .\push.ps1
 ```
 
-## What's Next (S544)
+## Migration Deploy (run after push)
 
-**After pushing S543:**
-1. Smoke test print kit — navigate to /organizer/print-kit/cmnxvyic4001li51qobwidrbl and confirm it loads
-2. Verify Brand Kit PDFs as organizer (Alice/Bob) — all 4 PDF links should download
-3. Verify P2 fixes: ActionBar Trails → /trails, Hunt Pass badge gone for Karen, ranks Scout boundary correct
-4. Verify guild-primer rank journey accordions show the correct perks (hold times, wishlist slots, Treasure Trails gating)
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-**Product decisions needed:**
-- Hunt Pass newsletter benefit: remove / "coming soon" / implement?
-- Restore "Treasure Hunt Pro" (150 scan/day) to hunt-pass.tsx — confirmed in code, just missing from copy
-- Rare Finds Pass / Golden Trophy Frame / 3x Coupon Slots: verify backend status before restoring to page
+## What's Next (S545)
 
-**Unbuilt features queued for investigation:**
-- Rank-based early access hours (Scout 1h → Grandmaster 6h) — in RankHeroSection perks but no backend presale gating found. Build or remove from copy?
-- Annual leaderboard (Grandmaster perk in guild-primer) — verify if implemented
-- Golden Trophy Avatar Frame + 3x Coupon Slots — always aspirational or partially built?
-
-**Chrome QA backlog:**
-S540 Rewards nav (4 locations), dashboard achievements dedup, orphan ref hops, S529 storefront widget, #267 RSVP XP, per-sale analytics, settlement fee %, Organizer Insights runtime error (Railway logs).
+1. **Diagnose /organizer/sales P0** — Railway logs + dev fix, first thing
+2. **Parallel dispatches while P0 fixes:** rank-based early access backend (Architect), Organizer Insights runtime error, mobile dashboard Copy Link + More Options layout
+3. **Affiliate Program dev dispatch** — after you lock payout amounts
+4. **Chrome QA backlog** — S543 P2 fixes, S540 Rewards nav, RSVP XP, per-sale analytics, settlement fee %

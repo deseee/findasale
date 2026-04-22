@@ -4,7 +4,9 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S543 — IN PROGRESS):** Smoke test + fixes session. S542 Chrome-verified: cart drawer opens ✅ (ss_38260xriu), Explore▾ dropdown Feed/Calendar/Wishlist ✅ (ss_9925pirt5), ThemeToggle under Appearance in AvatarDropdown ✅ (ss_2838xqo76). S541 bug reanalysis: /coupons Generate buttons DEBUNKED as VM viewport artifact — API fires correctly via JS .click(), code `94764D37` generated, XP deducted 500→400, Deluxe tier correctly disabled (ss_2443ofv38). #241 Brand Kit PDFs confirmed already fixed in S542 commit "brand-kit Railway URLs" — all 4 hrefs use `${NEXT_PUBLIC_API_URL}`. S543 fixes dispatched (pending push): (P0) Print kit 500 — getDrafts itemController Decimal serialization fix for workspace discount rules; (P2) ActionBar Treasure Trails /shopper/trails→/trails; (P2) Hunt Pass badge dashboard.tsx userData→user.huntPassActive; (P2) RankHeroSection Scout boundary nextRankThreshold NEXT_RANK_MAP fix; (minor) coupons.tsx GenerateResult type expanded. Hunt Pass audit: 1.5x XP ✅ confirmed code; 6-hour flash deal early access ✅ confirmed code; newsletter benefit ⚠️ copy-only (no backend); higher XP caps on treasure hunt scans (150 vs 100) 🔲 exists in code, missing from hunt-pass.tsx copy.
+**Latest work (S544 — COMPLETE):** Strategy + builds session. Grandmaster Hunt Pass duration revised: free-forever → tied to active status (lapses on Jan 1 reset, re-qualifying restores it). hunt-pass.tsx: Newsletter → "Coming Soon" amber badge, Treasure Hunt Pro restored (150/day confirmed in xpService). Golden Trophy Avatar Frame built — HuntPassAvatarBadge.tsx + Avatar.tsx (new components), AvatarDropdown.tsx updated; purely frontend, no schema needed. 3x Monthly Coupon Slots built — couponController.ts HP limits 6/6/3 vs standard 2/2/1, coupons.tsx shows dynamic limits. Schema migration created (--create-only): tasteProfile Json? on User + ApiKey model. Research: Consignment FULLY BUILT (Consignor model + controller — not a pre-wire). Affiliate Program: full Architect spec written (affiliate-program-spec-S544.md), 10 endpoints, 10-batch dev sequence, schema consolidation (AffiliatePayout → AffiliateReferral). Payout model: flat cash on first successful paid billing only (no SIMPLE/free tier — exploit vector). PRO/TEAMS amounts TBD (config constants). P0 DISCOVERED: /organizer/sales "Unable to load sales" — broken live. S545 first task. 8 code files changed + 4 doc files + 1 migration.
+
+**Latest work (S543 — COMPLETE):** Smoke test + fixes session. S542 Chrome-verified: cart drawer opens ✅ (ss_38260xriu), Explore▾ dropdown Feed/Calendar/Wishlist ✅ (ss_9925pirt5), ThemeToggle under Appearance in AvatarDropdown ✅ (ss_2838xqo76). S541 bug reanalysis: /coupons Generate buttons DEBUNKED as VM viewport artifact — API fires correctly via JS .click(), code `94764D37` generated, XP deducted 500→400, Deluxe tier correctly disabled (ss_2443ofv38). #241 Brand Kit PDFs confirmed already fixed in S542 commit "brand-kit Railway URLs" — all 4 hrefs use `${NEXT_PUBLIC_API_URL}`. S543 fixes dispatched (pending push): (P0) Print kit 500 — getDrafts itemController Decimal serialization fix for workspace discount rules; (P2) ActionBar Treasure Trails /shopper/trails→/trails; (P2) Hunt Pass badge dashboard.tsx userData→user.huntPassActive; (P2) RankHeroSection Scout boundary nextRankThreshold NEXT_RANK_MAP fix; (minor) coupons.tsx GenerateResult type expanded. Hunt Pass audit: 1.5x XP ✅ confirmed code; 6-hour flash deal early access ✅ confirmed code; newsletter benefit ⚠️ copy-only (no backend); higher XP caps on treasure hunt scans (150 vs 100) 🔲 exists in code, missing from hunt-pass.tsx copy.
 
 **Latest prior work (S542 — COMPLETE):** Cart merge + nav restructure + polling/spam fixes. Root cause discovery: CartDrawer was completely orphaned — CartIcon called openCart() but CartDrawer was never rendered anywhere; ShopperCartDrawer was the only live drawer. Merged into unified CartDrawer wired to CartContext. Price inconsistency fixed: hold prices from API are in dollars (197.81), useShopperCart stores cents — CartDrawer was dividing both by 100 (giving $1.98 instead of $197.81). Remove button restored on Saved in Cart items. Hold expiry toast loop fixed: handleHoldExpiry toast was causing refetch→re-render→HoldTimer remount→already-expired fires again loop; removed toast entirely. 429s on /reservations/my-holds-full fixed: mutations had both invalidateQueries + refetch() (double-fire); removed redundant refetch() calls. Nav changes: clock→cart icon (amber badge), Explore ▾ dropdown added between Trending and Search with Feed/Calendar/Wishlist, Pricing moved next to Host a Sale, ThemeToggle moved from nav to AvatarDropdown "Appearance" row. Search input now absolute-positioned (no squishing). BottomTabNav: Calendar→Trending, Wishlist→Explore bottom sheet. PosPaymentRequestAlert polling 5s→30s. 8 files changed. Push block in patrick-dashboard.md.
 
@@ -129,6 +131,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | S540 Rarity Boost insufficient XP | ⚠️ UNVERIFIED S541 | Current test account has 530 XP — cannot test disabled state without a low-XP account | S540 |
 | S540 Organizer view of /coupons | ✅ Chrome-verified S541 — RESOLVED | Organizer sees Shopper Discount Codes + tier cards; Rarity Boost absent. ss_56564zsz7 | S540 |
 | S540 Loyalty redirect | ✅ Chrome-verified S541 — RESOLVED | /shopper/loyalty → /coupons instantly, no flash. ss_8103rmsqm | S540 |
+| /organizer/sales "Unable to load sales" (P0) | ❌ BROKEN LIVE — Confirmed screenshot S544. S545 first task. | Railway log check + dev dispatch S545 | S544 |
+| Mobile organizer dashboard — Copy Link + More Options layout (P2) | Reported S544 — elements breaking mobile display | Dev dispatch S545 | S544 |
 | Print kit items/drafts 500 (P0) | ✅ FIXED S543 — pending push + Chrome QA | Decimal serialization bug in getDrafts. Fix in itemController.ts. After push: verify /organizer/print-kit/cmnxvyic4001li51qobwidrbl loads without error. | S541 |
 | /coupons Shopper coupon Generate buttons (P1) | ✅ DEBUNKED S543 — RESOLVED | Was VM viewport artifact. Buttons work (ss_2443ofv38). | S541 |
 | S540 Dashboard achievements dedup | Pushed — pending Chrome QA | /shopper/dashboard Overview tab: Achievements widget GONE. /shopper/explorer-profile: Achievements widget STILL present | S540 |
@@ -144,26 +148,22 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S544)
+## Next Session (S545)
 
-**S544 priority queue:**
-1. **Push S543 + smoke test print kit fix** — After Patrick pushes S543, navigate to /organizer/print-kit/cmnxvyic4001li51qobwidrbl and verify it loads without 500. Also verify #241 Brand Kit PDFs (as Alice/Bob organizer) — all 4 PDF links should download.
-2. **Hunt Pass copy gaps — product decisions needed:**
-   - "Hunt Pass Insider Newsletter" — copy-only, no backend. Remove / "Coming soon" / implement?
-   - "Treasure Hunt Pro" (150 scan/day cap vs 100) — exists in xpService.ts, stripped from hunt-pass.tsx in S534. Restore to "What's Included"? Dispatch dev for copy-only add.
-   - "Rare Finds Pass" — 6h early rarity access (Rares), 12h (Legendaries), dedicated feed. Was in old 997-line hunt-pass.tsx. Verify if backend implemented before restoring.
-3. **Chrome QA backlog — S543 P2 fixes** — After push: verify ActionBar Treasure Trails → /trails; Hunt Pass Active badge gone for Karen on /shopper/dashboard; /shopper/ranks Scout boundary correct. Also verify guild-primer rank journey accordions show correct perks (hold times, wishlist slots, Treasure Trails gating).
-4. **Unbuilt features inventory (from S543 guild-primer/hunt-pass deep-dive) — verify + spec:**
-   - Rank-based early access hours (Scout 1h, Ranger 2h, Sage 4h, GM 6h) — shown in RankHeroSection.tsx perks but no backend presale gating found. Needs Architect decision: build or remove from perks copy?
-   - Hunt Pass: Golden Trophy Avatar Frame — in old 997-line hunt-pass.tsx as benefit; not found in backend. Verify if implemented or always aspirational.
-   - Hunt Pass: 3x Monthly Coupon Slots — listed in old hunt-pass.tsx. Need to verify if coupon generation limits differ by HP status vs plain tier.
-   - Annual leaderboard (Grandmaster perk in guild-primer) — verify if implemented or spec only.
-5. **Continue Chrome QA backlog** — S540 Rewards nav links (4 locations), dashboard achievements dedup, orphan ref hops, S529 storefront widget, #267 RSVP XP, per-sale analytics, settlement fee %.
-6. **Organizer Insights runtime error (P2)** — "Failed to load" on /organizer/insights. Pre-existing. Check Railway logs.
-7. **S542 hold price + Remove button** — Karen had no active holds during smoke test. Find a shopper with holds to verify $197.81 (not $1.98) and Remove button works in cart drawer.
+**S545 priority queue:**
+1. **P0 — /organizer/sales "Unable to load sales"** — Confirmed broken live (screenshot S544). Dispatch dev immediately on session start while running Railway log check in parallel. Likely saleController GET endpoint. Check if related to S543 itemController changes or pre-existing.
+2. **Parallel dispatches (while P0 is being fixed):**
+   - Rank-based early access backend — Scout 1h, Ranger 2h, Sage 4h, GM 6h shown in RankHeroSection.tsx perks but no backend presale gating exists. Architect decision: build the gating or strip the copy? Dispatch Architect.
+   - Organizer Insights runtime error (P2) — Railway log check, then dev fix.
+   - Mobile organizer dashboard — "Copy Link" and "More Options" elements breaking the display. Dispatch dev for mobile layout fix.
+3. **Affiliate Program dev dispatch** — Patrick decisions still needed before dispatch: (a) payout amounts for PRO and TEAMS (amounts left open — $20/$55 ballpark from Investor, not locked); (b) confirm organizer-only scope; (c) approve fraud thresholds (7-day account age, 30-day payout lockout). Architect spec at claude_docs/feature-notes/affiliate-program-spec-S544.md. Payout amounts = config constants, not hardcoded. No SIMPLE/free tier cash payout — free tier referrals get zero cash (exploit vector).
+4. **Chrome QA backlog** — S543 P2 fixes (ActionBar trails, HP badge, ranks Scout boundary, guild-primer perks), S540 Rewards nav (4 locations), dashboard achievements dedup, orphan ref hops, S529 storefront widget, #267 RSVP XP, per-sale analytics, settlement fee %.
+5. **S542 hold price + Remove button** — Karen had no active holds. Need shopper with active holds to verify $197.81 (not $1.98) and Remove button in cart drawer.
 
-**Patrick actions:**
-- Push S543 fixes (push block below)
+**Patrick actions before S545:**
+- Push S544 (push block in patrick-dashboard.md)
+- Run migration deploy after push (block in patrick-dashboard.md)
+- Decide PRO/TEAMS affiliate payout amounts (no rush — config values, not blocking build start)
 
 ## Current Work
 
