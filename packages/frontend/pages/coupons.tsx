@@ -56,11 +56,12 @@ type GenerateResult = {
 
 type ShopperTier = 'DOLLAR_OFF_TEN' | 'ONE_FIFTY_OFF_TWENTY' | 'FIVE_OFF_FIFTY';
 
-const SHOPPER_TIERS: Record<ShopperTier, {
+const SHOPPER_TIERS_BASE: Record<ShopperTier, {
   cost: number;
   discount: string;
   minPurchase: number;
-  monthlyLimit: number;
+  monthlyLimitStandard: number;
+  monthlyLimitHuntPass: number;
   label: string;
   description: string;
 }> = {
@@ -68,7 +69,8 @@ const SHOPPER_TIERS: Record<ShopperTier, {
     cost: 100,
     discount: '$0.75 off',
     minPurchase: 10,
-    monthlyLimit: 2,
+    monthlyLimitStandard: 2,
+    monthlyLimitHuntPass: 6,
     label: 'Standard Deal',
     description: '$0.75 off $10+ purchases',
   },
@@ -76,7 +78,8 @@ const SHOPPER_TIERS: Record<ShopperTier, {
     cost: 200,
     discount: '$2.00 off',
     minPurchase: 25,
-    monthlyLimit: 2,
+    monthlyLimitStandard: 2,
+    monthlyLimitHuntPass: 6,
     label: 'Premium Deal',
     description: '$2.00 off $25+ purchases',
   },
@@ -84,7 +87,8 @@ const SHOPPER_TIERS: Record<ShopperTier, {
     cost: 500,
     discount: '$5.00 off',
     minPurchase: 50,
-    monthlyLimit: 1,
+    monthlyLimitStandard: 1,
+    monthlyLimitHuntPass: 3,
     label: 'Deluxe Deal',
     description: '$5.00 off $50+ purchases',
   },
@@ -157,7 +161,7 @@ const CouponsPage = () => {
       setNewCodeType('shopper');
       queryClient.invalidateQueries({ queryKey: ['coupons'] });
       queryClient.invalidateQueries({ queryKey: ['xp-profile'] });
-      const tierLabel = Object.values(SHOPPER_TIERS).find(t => t.discount === `$${data.discountValue.toFixed(2)} off`)?.label || 'Coupon';
+      const tierLabel = Object.values(SHOPPER_TIERS_BASE).find(t => t.discount === `$${data.discountValue.toFixed(2)} off`)?.label || 'Coupon';
       showToast(`${tierLabel} generated! ${data.xpSpent} XP spent.`, 'success');
     },
     onError: (err: any) => {
@@ -270,8 +274,9 @@ const CouponsPage = () => {
 
                 {/* Shopper Tier Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  {(Object.entries(SHOPPER_TIERS) as [ShopperTier, typeof SHOPPER_TIERS[ShopperTier]][]).map(
+                  {(Object.entries(SHOPPER_TIERS_BASE) as [ShopperTier, typeof SHOPPER_TIERS_BASE[ShopperTier]][]).map(
                     ([tier, tierData]) => {
+                      const monthlyLimit = huntPassActive ? tierData.monthlyLimitHuntPass : tierData.monthlyLimitStandard;
                       const canGenerate = spendableXp >= tierData.cost && !shopperGenerateMutation.isPending;
                       return (
                         <div
@@ -297,8 +302,12 @@ const CouponsPage = () => {
                               <span className="font-semibold">{tierData.cost} XP</span> to generate
                             </p>
                             <p>
-                              <span className="font-semibold">{tierData.monthlyLimit}/month</span>
-                              {huntPassActive && <span> (3/month with Hunt Pass)</span>}
+                              <span className="font-semibold">{monthlyLimit}/month</span>
+                              {huntPassActive && (
+                                <span className="text-amber-600 dark:text-amber-300 font-semibold ml-1">
+                                  (3x Hunt Pass boost)
+                                </span>
+                              )}
                             </p>
                           </div>
 
