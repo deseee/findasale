@@ -1142,10 +1142,10 @@ const OrganizerDashboard = () => {
 
                   {/* B1: Post-publish share nudge */}
                   {activeSale.status === 'PUBLISHED' && !dismissedSharePrompts.has(activeSale.id) && (
-                    <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg px-4 py-2.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-lg">📣</span>
-                        <p className="text-sm font-medium text-teal-900 dark:text-teal-100 truncate">Your sale is live — spread the word!</p>
+                    <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg px-4 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
+                        <span className="text-lg flex-shrink-0">📣</span>
+                        <p className="text-sm font-medium text-teal-900 dark:text-teal-100 truncate min-w-0">Your sale is live — spread the word!</p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
                         <button
