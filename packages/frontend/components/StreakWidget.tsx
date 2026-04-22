@@ -41,6 +41,12 @@ const StreakWidget: React.FC = () => {
     setIsHuntPassModalOpen(false);
   };
 
+  // Check if Hunt Pass is actually active (not expired)
+  const isHuntPassValid =
+    profile.huntPassActive &&
+    profile.huntPassExpiry &&
+    new Date(profile.huntPassExpiry) > new Date();
+
   return (
     <>
       <div className="flex items-center gap-3 px-3 py-2 bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/30 dark:to-yellow-900/30 rounded-lg border border-orange-200 dark:border-orange-700">
@@ -63,7 +69,7 @@ const StreakWidget: React.FC = () => {
       </div>
 
       {/* Hunt Pass badge or upgrade button */}
-      {profile.huntPassActive ? (
+      {isHuntPassValid ? (
         <div className="flex items-center gap-1 border-l border-orange-300 dark:border-orange-700 pl-3">
           <span className="text-lg">👑</span>
           <div className="flex flex-col">

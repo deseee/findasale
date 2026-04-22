@@ -759,6 +759,13 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (price !== undefined) {
       const newPrice = price ? parseFloat(price) : null;
       updateData.rarity = assignRarity(newPrice);
+
+      // Bug fix: Initialize priceBeforeMarkdown if not already set by auto-markdown cron
+      // This ensures the strikethrough price display works when organizers manually edit prices
+      if (!item.priceBeforeMarkdown && newPrice && newPrice > 0) {
+        updateData.priceBeforeMarkdown = newPrice;
+        updateData.markdownApplied = false;
+      }
     }
     if (auctionStartPrice !== undefined) updateData.auctionStartPrice = auctionStartPrice ? parseFloat(auctionStartPrice) : null;
     if (auctionReservePrice !== undefined) updateData.auctionReservePrice = auctionReservePrice ? parseFloat(auctionReservePrice) : null;

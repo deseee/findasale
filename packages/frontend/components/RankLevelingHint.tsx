@@ -9,6 +9,15 @@ interface RankLevelingHintProps {
   nextRank: ExplorerRank | null;
 }
 
+// Rank XP thresholds — must match backend RANK_THRESHOLDS
+const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
+  INITIATE: 0,
+  SCOUT: 500,
+  RANGER: 2000,
+  SAGE: 5000,
+  GRANDMASTER: 12000,
+};
+
 // Next rank unlock copy
 const NEXT_RANK_UNLOCKS: Record<ExplorerRank, { unlock: string; emoji: string }> = {
   INITIATE: {
@@ -43,7 +52,11 @@ export const RankLevelingHint: React.FC<RankLevelingHintProps> = ({
     return null;
   }
 
-  const percentToNext = (currentXp / nextRankXp) * 100;
+  // Calculate progress within current rank (not absolute progress)
+  const currentRankThreshold = RANK_THRESHOLDS[rank];
+  const xpInCurrentRank = currentXp - currentRankThreshold;
+  const xpNeededForNextRank = nextRankXp - currentRankThreshold;
+  const percentToNext = (xpInCurrentRank / xpNeededForNextRank) * 100;
   const xpRemaining = nextRankXp - currentXp;
   const isCloseToNext = percentToNext >= 80;
   // NEXT_RANK_UNLOCKS is keyed by current rank (it describes what unlocks on the next rank)

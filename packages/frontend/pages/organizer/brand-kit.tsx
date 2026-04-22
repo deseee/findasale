@@ -497,28 +497,28 @@ const BrandKitPage = () => {
                   /* Download buttons grid */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <a
-                      href="/api/brand-kit/organizer/business-card"
+                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/business-card`}
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Business Cards</h3>
                       <p className="text-xs text-warm-600 dark:text-warm-400">10 cards per page (3.5" × 2")</p>
                     </a>
                     <a
-                      href="/api/brand-kit/organizer/letterhead"
+                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/letterhead`}
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Letterhead Template</h3>
                       <p className="text-xs text-warm-600 dark:text-warm-400">Blank page ready for printing</p>
                     </a>
                     <a
-                      href="/api/brand-kit/organizer/social-headers"
+                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/social-headers`}
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Social Headers</h3>
                       <p className="text-xs text-warm-600 dark:text-warm-400">Facebook, Instagram, Twitter templates</p>
                     </a>
                     <a
-                      href="/api/brand-kit/organizer/yard-sign"
+                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/yard-sign`}
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Branded Yard Sign</h3>
