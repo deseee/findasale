@@ -49,6 +49,9 @@ type GenerateResult = {
   generatedThisMonth: number;
   monthlyLimit: number;
   message: string;
+  minPurchaseAmount?: number;
+  tier?: string;
+  huntPassStatus?: string;
 };
 
 type ShopperTier = 'DOLLAR_OFF_TEN' | 'ONE_FIFTY_OFF_TWENTY' | 'FIVE_OFF_FIFTY';

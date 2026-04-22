@@ -136,12 +136,15 @@ export const RankHeroSection: React.FC<RankHeroSectionProps> = ({
   const perks = RANK_PERKS[rank];
   const displayPerks = perks.slice(0, 4);
   const textColors = getRankTextColors(rank);
-  const nextThreshold = rank === 'GRANDMASTER' ? RANK_THRESHOLDS.GRANDMASTER : RANK_THRESHOLDS[rank];
-  const nextRankThreshold = rank === 'INITIATE' ? RANK_THRESHOLDS.SCOUT :
-                            rank === 'SCOUT' ? RANK_THRESHOLDS.RANGER :
-                            rank === 'RANGER' ? RANK_THRESHOLDS.SAGE :
-                            rank === 'SAGE' ? RANK_THRESHOLDS.GRANDMASTER :
-                            RANK_THRESHOLDS.GRANDMASTER;
+  const NEXT_RANK_MAP: Record<ExplorerRank, ExplorerRank | null> = {
+    INITIATE: 'SCOUT',
+    SCOUT: 'RANGER',
+    RANGER: 'SAGE',
+    SAGE: 'GRANDMASTER',
+    GRANDMASTER: null,
+  };
+  const nextRank = NEXT_RANK_MAP[rank];
+  const nextRankThreshold = nextRank ? RANK_THRESHOLDS[nextRank] : RANK_THRESHOLDS.GRANDMASTER;
   const calculatedXpToNext = Math.max(0, nextRankThreshold - guildXp);
 
   return (
@@ -194,13 +197,7 @@ export const RankHeroSection: React.FC<RankHeroSectionProps> = ({
           <div>
             <p className={`text-base font-semibold ${textColors.title}`}>
               {calculatedXpToNext.toLocaleString()} XP to{' '}
-              {rank === 'INITIATE'
-                ? 'Scout'
-                : rank === 'SCOUT'
-                  ? 'Ranger'
-                  : rank === 'RANGER'
-                    ? 'Sage'
-                    : 'Grandmaster'}{' '}
+              {nextRank ? nextRank.charAt(0) + nextRank.slice(1).toLowerCase() : 'Grandmaster'}{' '}
               — unlock {NEXT_RANK_PERKS[rank]}
             </p>
             <p className={`text-xs ${textColors.subtitle}`}>

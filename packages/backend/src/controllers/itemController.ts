@@ -1776,15 +1776,24 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
     });
 
     // Feature #310: Pre-fetch active discount rules for this workspace
-    let activeRules: Array<{ tagColor: string; discountPercent: any; activeFrom: Date | null; activeTo: Date | null }> = [];
+    let activeRules: Array<{ tagColor: string; discountPercent: number; activeFrom: Date | null; activeTo: Date | null }> = [];
     const workspace = await prisma.organizerWorkspace.findFirst({
       where: { ownerId: req.user.id },
     });
     if (workspace) {
-      activeRules = await prisma.discountRule.findMany({
+      const rawRules = await prisma.discountRule.findMany({
         where: { workspaceId: workspace.id },
         select: { tagColor: true, discountPercent: true, activeFrom: true, activeTo: true },
       });
+      // Convert Prisma Decimal to number for JSON serialization
+      activeRules = rawRules.map(r => ({
+        tagColor: r.tagColor,
+        discountPercent: typeof r.discountPercent === 'object' && 'toNumber' in r.discountPercent
+          ? r.discountPercent.toNumber()
+          : Number(r.discountPercent),
+        activeFrom: r.activeFrom,
+        activeTo: r.activeTo,
+      }));
     }
 
     // Sprint 1: Compute health score for each item

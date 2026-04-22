@@ -24,7 +24,7 @@ const ACTION_ITEMS = [
     id: 'trails',
     label: 'Treasure Trails',
     icon: '🗺️',
-    href: '/shopper/trails',
+    href: '/trails',
   },
   {
     id: 'qr',
