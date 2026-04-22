@@ -1553,13 +1553,26 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Link href="/pricing" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                     <Tag size={14} className="inline mr-2 text-warm-500" /> Pricing
                   </Link>
-                  {user?.roles?.includes('ORGANIZER') && (
+                  {!isOrganizer && (
+                    <button
+                      onClick={() => setShowBecomeOrganizerModal(true)}
+                      className="block w-full text-left px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
+                    >
+                      <UserPlus size={14} className="inline mr-2" /> Host a Sale
+                    </button>
+                  )}
+                  {isOrganizer && (
                     <Link href="/organizer/profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                       <UserCircle size={14} className="inline mr-2 text-amber-600" /> My Profile
                     </Link>
                   )}
+                  {!isOrganizer && (
+                    <Link href="/shopper/explorer-profile" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                      <UserCircle size={14} className="inline mr-2 text-indigo-500" /> Explorer Profile
+                    </Link>
+                  )}
                   <Link href={isOrganizer ? "/organizer/settings" : "/shopper/settings"} className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                    <Settings size={14} className="inline mr-2 text-amber-500" /> Settings
+                    <Settings size={14} className={`inline mr-2 ${isOrganizer ? "text-amber-500" : "text-indigo-500"}`} /> Settings
                   </Link>
                 </div>
                 <button
