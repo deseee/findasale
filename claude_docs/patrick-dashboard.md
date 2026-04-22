@@ -1,4 +1,27 @@
-# Patrick's Dashboard — S544 Complete
+# Patrick's Dashboard — S545 In Progress
+
+## 🔥 S545 — Hotfixes + Dev Dispatches
+
+**P0 auth crash (tasteProfile) — FIXED.** Railway was throwing `PrismaClientKnownRequestError: The column User.tasteProfile does not exist` on every authenticated request. Root cause: S544 migration applied the column as snake_case `taste_profile`, but Prisma schema uses camelCase `tasteProfile` with no `@map`. Deployed rename migration `20260422220500_rename_taste_profile_camelcase` — verified via psycopg2.
+
+**P0 /organizer/sales — AUTO-RESOLVED.** Was an auth-crash symptom, not a separate bug. You confirmed "working" after the migration.
+
+**Mobile organizer dashboard layout — FIXED (pending push).** `packages/frontend/pages/organizer/dashboard.tsx` lines 1145/1150 — Copy Link + More Options now stack on mobile, inline on desktop.
+
+**Organizer Insights for Alice — FIXED (pending push).** `packages/backend/src/controllers/insightsController.ts` lines 222–274 — Prisma Decimal price objects broke arithmetic (same pattern as S543). Added `.toNumber()` conversion.
+
+**Rank-Based Early Access — Architect recommends BUILD IT (Option A).** Add `publishedAt` to Sale, gate in saleController by rank time windows (Scout 1h / Ranger 2h / Sage 4h / GM 6h). Effort ~6–8h. Needs your answers on 4 questions below before dev dispatch.
+
+## 🟡 Decisions Needed — Rank Early Access
+
+1. Should presale sales appear in search/map with a 🔒 badge, or be fully hidden until unlocked?
+2. Should Initiates see presale sales with "Rank up" CTA, or 100% hidden?
+3. Timezone — organizer's local TZ for `publishedAt`, or UTC?
+4. Backfill — existing active sales get `publishedAt = createdAt` (no one locked out), or `publishedAt = NOW()` (immediate unlock)?
+
+## ─── Archived Below: S544 ───
+
+# S544 Complete
 
 ## What Happened This Session
 
