@@ -232,12 +232,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
     }
   };
 
+  const [exploreOpen, setExploreOpen] = useState(false);
+
   const staticNavLinks = [
     { href: '/map', label: 'Map' },
-    { href: '/calendar', label: 'Calendar' },
-    { href: '/feed', label: 'Feed' },
     { href: '/trending', label: 'Trending' },
-    { href: '/pricing', label: 'Pricing' },
   ];
 
   const authLinks = isClient ? (
@@ -688,6 +687,36 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <Link key={href} href={href} className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">{label}</Link>
               ))}
 
+              {/* Explore dropdown */}
+              <div className="relative" onMouseLeave={() => setExploreOpen(false)}>
+                <button
+                  onMouseEnter={() => setExploreOpen(true)}
+                  onClick={() => setExploreOpen(prev => !prev)}
+                  className="flex items-center gap-1 text-sm font-medium text-warm-700 dark:text-warm-200 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                >
+                  Explore
+                  <svg className="w-3 h-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {exploreOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-44 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-warm-200 dark:border-gray-700 py-1 z-50">
+                    <Link href="/feed" onClick={() => setExploreOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
+                      <Zap size={14} className="text-amber-500" /> Feed
+                    </Link>
+                    <Link href="/calendar" onClick={() => setExploreOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
+                      <Calendar size={14} className="text-amber-500" /> Calendar
+                    </Link>
+                    <Link href="/shopper/wishlist" onClick={() => setExploreOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700">
+                      <Heart size={14} className="text-rose-500" /> Wishlist
+                    </Link>
+                  </div>
+                )}
+              </div>
+
               {/* Desktop collapsible search */}
               <div className="flex items-center ml-2">
                 {!isSearchOpen ? (
@@ -720,6 +749,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 )}
               </div>
 
+              {/* Pricing link */}
+              <Link
+                href="/pricing"
+                className="hidden xl:inline-flex text-sm font-medium text-warm-700 dark:text-warm-200 hover:text-amber-600 dark:hover:text-amber-400 transition-colors px-2 py-1"
+              >
+                Pricing
+              </Link>
+
               {/* "Host a Sale" CTA for logged-in shoppers without ORGANIZER role */}
               {isClient && user && user.roles?.includes('USER') && !user?.roles?.includes('ORGANIZER') && (
                 <button
@@ -740,11 +777,6 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 </>
               ) : user ? (
                 <>
-                  <Link href="/shopper/wishlist" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400" title="My Wishlist">
-                    <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-                    </svg>
-                  </Link>
                   <div className="relative">
                     <Link href="/messages" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400" title="Messages">
                       <svg className="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
