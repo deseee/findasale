@@ -127,19 +127,21 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S538)
+## Next Session (S539)
 
-**S538 priority queue:**
-1. **Push S537 changes** — push block below (4 files: Layout.tsx, next.config.js, _app.tsx, CLAUDE.md).
-2. **Push S536 changes (still pending)** — push blocks in patrick-dashboard.md: (a) S534+S535 batch, (b) security hardening batch (6 files), (c) XP wirings batch (3 files).
-3. **Chrome QA — Guild Primer** — verify /shopper/guild-primer: all sections render, Hunt Pass column, tiered trail table, dark mode, personalized XP bar when logged in.
-4. **Chrome QA — Hunt Pass slim CTA** — verify /shopper/hunt-pass: hero, price card, 4 benefits, CTAs.
-5. **Chrome QA backlog** — S531/S529/S532 fixes (blocked/unverified queue).
-6. **Phone verification feature** — `phoneVerified` field missing from User model. REFERRAL_FIRST_PURCHASE (500 XP) gamedesign spec requires phone gate. Either build phone verification or get explicit gamedesign exception documented.
+**S539 priority queue:**
+1. **Push S537 changes** — 4 files: Layout.tsx, next.config.js, _app.tsx, CLAUDE.md (push block in patrick-dashboard.md).
+2. **Push S536 changes (still pending)** — 3 blocks: S534+S535 batch, security hardening batch (6 files), XP wirings batch (3 files).
+3. **Push S538 video pages** — 8 files: guild-xp-ad.html, shopper-video-ad.html, hunt-pass-video-ad.html, hunt-pass-video.html, haul-post-video-ad.html, haul-post-video.html, treasure-trails-video-ad.html, treasure-trails-video.html (push block in patrick-dashboard.md).
+4. **Chrome QA — Guild Primer** — /shopper/guild-primer: all sections, Hunt Pass column, tiered trail table, dark mode, personalized bar.
+5. **Chrome QA — Hunt Pass slim CTA** — /shopper/hunt-pass: hero, price card, 4 benefits, CTAs.
+6. **Chrome QA backlog** — S531/S529/S532 fixes (blocked/unverified queue).
+7. **Phone verification feature** — `phoneVerified` missing from User model. REFERRAL_FIRST_PURCHASE phone gate not enforced.
 
 **Patrick actions:**
-- Push S537 changes (push block below)
-- Push S536 changes (3 push blocks still pending from patrick-dashboard.md)
+- Push S537 changes (push block in patrick-dashboard.md)
+- Push S536 changes (3 push blocks still pending)
+- Push S538 video pages (new push block in patrick-dashboard.md)
 
 ## Current Work
 
@@ -182,6 +184,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - 🔲 Chrome QA for all S534 changes (pending).
 
 ## Recent Sessions
+
+**S538 (2026-04-21, COMPLETE):** Shopper video pages — full rebuild. Root cause of prior failure: previous session used rank icons from game design SKILL.md (⚔️/🏹/📚) instead of reading guild-primer.tsx directly, and dev agents received advisory summaries rather than verbatim verified data. Fix: read guild-primer.tsx authoritative source first, included all data verbatim in dispatch prompts. guild-xp-ad.html rebuilt from scratch (1,423 lines) — correct rank icons 🧭🔍🎯✨👑, correct XP values from production tables (auction win 20 XP not 15, haul post 15 XP, all visit/purchase/streak values correct), rich 7-scene RAF animation with XP bar animations, rank badge bounces, streak grid. shopper-video-ad.html patched inline (SCOUT icon ⚔️→🔍, haul XP badge +5→+15). hunt-pass-video-ad.html created (1,268 lines, correct early access copy — no "6 hours", 1.5× XP, hold priority, earn-free path to GRANDMASTER) + hunt-pass-video.html converted to proper wrapper (499 lines). haul-post-video-ad.html created (1,329 lines, 15 XP/post, +5 at 10 likes) + haul-post-video.html wrapper (426 lines). treasure-trails-video-ad.html created (1,030 lines, 40/50/60/70/80 XP by stops, route animation) + treasure-trails-video.html wrapper (436 lines). Push block in patrick-dashboard.md. S539 priorities: push all pending blocks + Chrome QA backlog.
 
 **S537 (2026-04-21, COMPLETE):** Infrastructure + housekeeping session. Beta badge added to Layout.tsx header (desktop + mobile). GitGuardian credential exposure remediated: Railway DB password rotated (old `QvnUGsnsjujFVoeVyORLTusAovQkirAq` invalid), hardcoded credential removed from committed CLAUDE.md, stored in private global mnt/.claude/CLAUDE.md (not in git) and packages/database/.env (gitignored). SEO: www → non-www permanent redirect added to next.config.js, global canonical URL tag added to _app.tsx (strips query params, always points to finda.sale). CLAUDE.md §7 parallel dispatch HARD RULE added to prevent re-deriving Skill vs Agent pattern each session. Railway MCP OAuth double-fire investigated — root cause is Anthropic bug #51398 (CLAUDE_PLUGIN_DATA not persistent in Cowork Desktop). Workaround: Railway CLI v4.40.2 installed with project token, binary stored at mnt/.claude/bin/railway (persistent), token at mnt/.claude/railway.env. Use CLI for all Railway ops (logs, restart, redeploy) — bypass OAuth entirely. Push block in patrick-dashboard.md.
 

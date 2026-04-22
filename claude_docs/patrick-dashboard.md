@@ -1,22 +1,20 @@
-# Patrick's Dashboard — S537 Complete
+# Patrick's Dashboard — S538 Complete
 
 ## What Happened This Session
 
-S537: Infrastructure + housekeeping. Beta badge, credential rotation, SEO canonical fix, Railway CLI setup.
+S538: Shopper video pages rebuilt. Previous session had wrong rank icons (⚔️🏹📚 from skill file, not app code) and stale data. All 8 files rebuilt/patched with authoritative data from guild-primer.tsx.
 
 ## ✅ Done This Session
 
 | What | Details |
 |------|---------|
-| Beta badge | Added to desktop header (next to logo) and mobile drawer header. Amber pill, "BETA" uppercase. |
-| Credential rotation | Railway DB password rotated after GitGuardian alert. Old password is dead. New creds in mnt/.claude/CLAUDE.md + packages/database/.env only — never in git. |
-| CLAUDE.md credential cleanup | Hardcoded Railway URL removed from committed CLAUDE.md. Stored in private global CLAUDE.md (not in git). |
-| WWW redirect | next.config.js: www.finda.sale → finda.sale permanent redirect. Fixes Google "duplicate without canonical." |
-| Canonical tag | _app.tsx: global `<link rel="canonical">` on every page, strips query params, always points to finda.sale. |
-| CLAUDE.md dispatch rule | §7 parallel dispatch HARD RULE added — stops Claude from re-deriving Skill vs Agent pattern every session (was wasting tokens). |
-| Railway CLI workaround | OAuth double-fire is Anthropic bug #51398 (unfixable from our side). Workaround: Railway CLI v4.40.2 stored at mnt/.claude/bin/railway + token at mnt/.claude/railway.env. Future sessions use CLI — no OAuth pop-ups. |
+| guild-xp-ad.html rebuilt | 1,423 lines. Correct icons: 🧭🔍🎯✨👑. Correct XP: visit=5, purchase=10, auction win=20, haul=15, streak=100, referral=500. 7-scene RAF animation, embed mode for guild-primer iframe. |
+| shopper-video-ad.html patched | SCOUT icon ⚔️→🔍. Haul post XP +5→+15. |
+| hunt-pass-video-ad.html + wrapper | 1,268-line animation (no "6 hours early" — correct "early access before doors open") + 499-line wrapper page. |
+| haul-post-video-ad.html + wrapper | 1,329-line animation (15 XP/post, +5 at 10 likes) + 426-line wrapper. |
+| treasure-trails-video-ad.html + wrapper | 1,030-line animation (40/50/60/70/80 XP by stops, route map) + 436-line wrapper. |
 
-## 🚩 Still Open From S536
+## 🚩 Still Open
 
 | Item | Details |
 |------|---------|
@@ -47,10 +45,11 @@ S537: Infrastructure + housekeeping. Beta badge, credential rotation, SEO canoni
 |---------|--------|
 | Vercel (frontend) | ✅ Green |
 | Railway (backend) | ✅ Green |
-| S537 changes | ⚠️ Unpushed (push block below) |
-| S534+S535 changes | ⚠️ Unpushed (push block below) |
-| S536 Batch 1 (security) | ⚠️ Unpushed (push block below) |
-| S536 Batch 2 (wirings) | ⚠️ Unpushed (push block below) |
+| S538 video pages | ⚠️ Unpushed (Push 5 below) |
+| S537 changes | ⚠️ Unpushed (Push 1 below) |
+| S534+S535 changes | ⚠️ Unpushed (Push 2 below) |
+| S536 Batch 1 (security) | ⚠️ Unpushed (Push 3 below) |
+| S536 Batch 2 (wirings) | ⚠️ Unpushed (Push 4 below) |
 
 ## Your Push Blocks
 
@@ -123,5 +122,31 @@ git commit -m "Feature: Wire deferred XP awards
 - HAUL_POST_LIKES (5 XP): fires when haul post hits 10+ likes, once per post
 - ORG_SHOPPER_SIGNUP (10 XP): fires on shopper first purchase, awards to sale organizer
 - REFERRAL_ORG_FIRST_SALE (50 XP): fires on organizer first published sale, awards to referrer"
+.\push.ps1
+```
+
+### Push 5 — S538 Shopper Video Pages
+```powershell
+git add packages/frontend/public/guild-xp-ad.html
+git add packages/frontend/public/shopper-video-ad.html
+git add packages/frontend/public/hunt-pass-video-ad.html
+git add packages/frontend/public/hunt-pass-video.html
+git add packages/frontend/public/haul-post-video-ad.html
+git add packages/frontend/public/haul-post-video.html
+git add packages/frontend/public/treasure-trails-video-ad.html
+git add packages/frontend/public/treasure-trails-video.html
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "Rebuild all shopper video pages with correct rank icons and XP values
+
+- guild-xp-ad.html: Full rebuild 1,423 lines — correct icons 🔍🎯✨, correct XP
+  values from guild-primer.tsx (auction win 20 XP, haul 15 XP, streak 100 XP)
+- shopper-video-ad.html: Fix SCOUT icon (war-sword→magnifying glass), haul XP +5→+15
+- hunt-pass-video-ad.html: New 1,268-line animation — no stale '6 hours early' copy
+- hunt-pass-video.html: Converted to proper wrapper (embeds -ad.html in phone frame)
+- haul-post-video-ad.html: New 1,329-line animation (15 XP/post, +5 at 10 likes)
+- haul-post-video.html: Converted to proper wrapper
+- treasure-trails-video-ad.html: New 1,030-line animation (40-80 XP scaling by stops)
+- treasure-trails-video.html: Converted to proper wrapper"
 .\push.ps1
 ```
