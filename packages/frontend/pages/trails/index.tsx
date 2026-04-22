@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
@@ -79,6 +80,9 @@ export default function TrailsDiscoveryPage() {
           <p className="text-lg text-warm-600 dark:text-warm-400">
             Curated local experiences anchored by a FindA.Sale event
           </p>
+          <Link href="/shopper/trails" className="inline-block mt-3 text-sm text-sage-600 dark:text-sage-400 hover:underline">
+            → View My Trails
+          </Link>
         </div>
 
         {/* Loading state */}
