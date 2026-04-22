@@ -185,7 +185,7 @@ Implementation:
 
 3. **Founder bonus** — First 100 signups: +50% XP for first month if joined before end of April? *Recommendation: Yes (soft launch incentive). No free items.*
 
-4. **Grandmaster Hunt Pass permanence** — Free all year every year? Or only while Grandmaster? *Recommendation: Free forever once earned (keep even if tier drops). It's the ultimate earned flex.*
+4. **Grandmaster Hunt Pass permanence** — Free all year every year? Or only while Grandmaster? *~~Recommendation: Free forever once earned (keep even if tier drops). It's the ultimate earned flex.~~ **REVISED S544:** Free Hunt Pass is tied to active Grandmaster status (≥12,000 XP). On Jan 1 reset, if user drops to Sage soft floor, benefit lapses. Re-achieving Grandmaster restores it. Rationale: "forever" undermines the seasonal reset's retention mechanic for the highest-value users. Annual re-qualification keeps GMs active year-round.*
 
 5. **Reset timing** — January 1st midnight UTC? *Recommendation: UTC midnight (global event feel).*
 

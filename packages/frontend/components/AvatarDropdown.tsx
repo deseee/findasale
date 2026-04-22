@@ -68,6 +68,7 @@ import useXpProfile from '../hooks/useXpProfile';
 import { useCart } from '../context/CartContext';
 import ThemeToggle from './ThemeToggle';
 import { ExplorerRank } from './RankBadge';
+import Avatar from './Avatar';
 
 interface AvatarDropdownProps {
   onBecomeOrganizer?: () => void;
@@ -147,18 +148,6 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
     setIsOpen(false);
   };
 
-  // Generate initials from name or email
-  const getInitials = () => {
-    if (user.name) {
-      return user.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
-    }
-    return user.email[0].toUpperCase();
-  };
 
   const isOrganizer = user.roles?.includes('ORGANIZER');
   const isUser = user.roles?.includes('USER');
@@ -181,12 +170,15 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
         aria-haspopup="true"
         aria-label={`User menu for ${user.name || user.email}`}
       >
-        {/* Avatar Circle — initials only (no profile photo field on User model yet) */}
-        <div className={`w-8 h-8 rounded-full bg-amber-500 dark:bg-amber-600 flex items-center justify-center text-xs font-bold text-white select-none ${
-          user.huntPassActive ? 'ring-2 ring-amber-400 dark:ring-amber-300 ring-offset-1' : ''
-        }`}>
-          {getInitials()}
-        </div>
+        {/* Avatar with Hunt Pass Badge */}
+        <Avatar
+          identifier={user.name || user.email}
+          name={user.name}
+          email={user.email}
+          huntPassActive={user.huntPassActive}
+          size={32}
+          title={user.huntPassActive ? 'Hunt Pass subscriber' : undefined}
+        />
 
         {/* User name label (hidden on very small screens) */}
         <span className="text-sm font-medium text-warm-900 dark:text-warm-100 hidden sm:inline max-w-[120px] truncate">
@@ -223,12 +215,30 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
         >
           {/* User Info Header */}
           <div className="px-4 py-3 border-b border-warm-200 dark:border-gray-700">
-            <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">
-              {user.name || user.email}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-              {user.email}
-            </p>
+            <div className="flex items-center gap-3 mb-2">
+              <Avatar
+                identifier={user.name || user.email}
+                name={user.name}
+                email={user.email}
+                huntPassActive={user.huntPassActive}
+                size={40}
+                title={user.huntPassActive ? 'Hunt Pass subscriber' : undefined}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">
+                  {user.name || user.email}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {user.email}
+                </p>
+                {user.huntPassActive && (
+                  <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5 flex items-center gap-1">
+                    <Trophy size={12} className="inline" />
+                    Hunt Pass Active
+                  </p>
+                )}
+              </div>
+            </div>
             {/* Rank + XP progress — compact inline style, fresh from API */}
             {freshExplorerRank && (
               <div className="mt-2 space-y-1">

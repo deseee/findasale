@@ -234,6 +234,10 @@ model User {
 
   workspaceMemberships WorkspaceMember[] @relation("UserWorkspaceMemberships")
 
+  // Pre-wire: Agentic AI Scout — passive preference data from wishlist/save behavior
+  tasteProfile Json?
+  apiKeys      ApiKey[]
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
@@ -343,6 +347,26 @@ model Organizer {
   graceNotificationsCount Int                    @default(0) // Count of grace period notifications sent (0-2)
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
+}
+
+// Pre-wire: API Keys for third-party integrations (Zapier, IFTTT, webhooks)
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String    // Human-readable label (e.g. "Zapier Integration")
+  keyHash     String    @unique // Hashed API key — never store plaintext
+  prefix      String    // First 8 chars for display (e.g. "fsa_live_")
+  scopes      String[]  @default([]) // Permission scopes
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([keyHash])
+  @@map("api_keys")
 }
 
 // Feature #244 Phase 2: eBay OAuth Connection — stores refresh tokens and connection state

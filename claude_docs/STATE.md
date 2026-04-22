@@ -167,6 +167,32 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Work
 
+**S544 IN PROGRESS — Hunt Pass features + schema pre-wires + affiliate audit:**
+- ✅ Grandmaster Hunt Pass duration changed: free-forever → tied to active status (must re-qualify after Jan 1 reset). Spec updated in gamification-rpg-spec-S260.md. Decision file: gamedesign-decisions-2026-04-22.md.
+- ✅ hunt-pass.tsx: Newsletter → "Coming Soon" amber badge (user-written guides platform, coming post-beta). Treasure Hunt Pro restored (150/day cap, confirmed in xpService.ts). Page shows 5 confirmed benefits.
+- ✅ Golden Trophy Avatar Frame: HuntPassAvatarBadge.tsx (new), Avatar.tsx (new), AvatarDropdown.tsx updated. Purely frontend — huntPassActive already on User. Amber/gold ring on nav + dropdown avatar for HP subscribers.
+- ✅ 3x Monthly Coupon Slots: couponController.ts SHOPPER_COUPON_TIERS updated (HP limits: 6/6/3 vs standard 2/2/1). coupons.tsx shows dynamic limits based on huntPassActive.
+- 🔲 Schema migration pending: tasteProfile Json? on User, ApiKey model (both MISSING — all other pre-wire fields already exist).
+- ✅ Affiliate Program: Full Architect spec complete (claude_docs/feature-notes/affiliate-program-spec-S544.md). Payout model proposed: 2% of referred organizer's first PAID sale GMV, $50 floor. Schema consolidation: merge AffiliatePayout → AffiliateReferral (single source of truth). 10 API endpoints defined. 10-batch dev sequence ready. 5 items flagged for Patrick approval before dev dispatch (payout %, frequency, scope, emails, fraud thresholds). Do NOT dispatch dev until Patrick approves.
+
+**Research findings (S544):**
+- Consignment: FULLY BUILT — Consignor model, ConsignorPayout, consignorController. Not a pre-wire.
+- Persistent Inventory: Schema pre-wired (persistentInventory bool + masterItemLibraryId FK on Item) but no MasterItemLibrary model and no active business logic. Frontend inventory.tsx + backend itemInventoryController exist but use the pre-wire fields only.
+- executorUserId + estateId on Organizer: Both exist (Estate Planning pre-wire ✅)
+- tasteProfile on User: MISSING
+- ApiKey model: MISSING
+- avatarFrame on User: NOT NEEDED — Golden Trophy is purely frontend via huntPassActive
+
+**S544 files changed (pending push):**
+- claude_docs/research/gamification-rpg-spec-S260.md
+- claude_docs/feature-notes/gamedesign-decisions-2026-04-22.md
+- packages/frontend/pages/shopper/hunt-pass.tsx
+- packages/frontend/components/HuntPassAvatarBadge.tsx (new)
+- packages/frontend/components/Avatar.tsx (new)
+- packages/frontend/components/AvatarDropdown.tsx
+- packages/backend/src/controllers/couponController.ts
+- packages/frontend/pages/coupons.tsx
+
 **S542 COMPLETE — Cart merge + nav restructure + polling fixes:**
 - ✅ CartDrawer.tsx — full unified rewrite. CartIcon's `openCart()` was a no-op (CartDrawer was never rendered — orphaned). ShopperCartDrawer was the only live drawer. Merged into single CartDrawer wired to CartContext. Holds section (from `/reservations/my-holds-full`) + Saved in Cart section (from `useShopperCart`). Price fix: hold prices from API are dollars (197.81); useShopperCart prices are cents; CartDrawer no longer divides holds by 100. Remove button restored on Saved in Cart items alongside Place Hold button. `handleHoldExpiry` now silent (no toast — toast was looping: refetch→re-render→HoldTimer remount→sees already-expired time→fires again). Both mutations use only `invalidateQueries` (removed redundant `refetch()` calls that caused 429s).
 - ✅ CartIcon.tsx — Clock icon → ShoppingCart (lucide-react). Amber-500 badge at -top-1 -right-1. Combined count: holds + browsing cart items. Polling 30s→60s, staleTime 55s.

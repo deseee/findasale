@@ -89,16 +89,31 @@ const HuntPassPage = () => {
                 </div>
               </div>
 
-              {/* Benefit 2: Early Access */}
+              {/* Benefit 2: Early Access to Rare Items */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
-                  <div className="text-3xl flex-shrink-0">⚡</div>
+                  <div className="text-3xl flex-shrink-0">💎</div>
                   <div>
                     <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                      6-Hour Early Access to Flash Deals
+                      Rare Finds Pass
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Get notified 6 hours before other shoppers when flash deals go live. See the best treasures first, so you never miss out on amazing finds.
+                      Get exclusive early access to Rarity items (Rare, Ultra-Rare, and Legendary) with a dedicated feed for Hunt Pass subscribers. See the best treasures first, so you never miss out on amazing finds.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Benefit 2b: Treasure Hunt Pro */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl flex-shrink-0">🎯</div>
+                  <div>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                      Treasure Hunt Pro
+                    </h3>
+                    <p className="text-warm-600 dark:text-warm-400">
+                      Increase your daily item scan limit from 100 to 150 scans per day. More scans, more finds — unlock premium hunting capacity.
                     </p>
                   </div>
                 </div>
@@ -119,14 +134,19 @@ const HuntPassPage = () => {
                 </div>
               </div>
 
-              {/* Benefit 4: Insider Newsletter */}
+              {/* Benefit 5: Insider Newsletter */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
                   <div className="text-3xl flex-shrink-0">📧</div>
                   <div>
-                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                      Hunt Pass Insider Newsletter
-                    </h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-warm-900 dark:text-warm-100">
+                        Hunt Pass Insider Newsletter
+                      </h3>
+                      <span className="inline-block px-2 py-1 text-xs font-medium rounded text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900">
+                        Coming Soon
+                      </span>
+                    </div>
                     <p className="text-warm-600 dark:text-warm-400">
                       Get exclusive tips, early sale previews, and featured finds delivered to your inbox. Stay ahead of the hunt with insider knowledge.
                     </p>
