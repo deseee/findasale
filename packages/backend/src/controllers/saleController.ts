@@ -18,7 +18,7 @@ import { getIO } from '../lib/socket'; // V1: Socket.io instance
 import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
 import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feature #32: Smart Follow
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
-import { awardXp, XP_AWARDS } from '../services/xpService'; // Explorer's Guild XP awards
+import { awardXp, XP_AWARDS, applyHuntPassMultiplier } from '../services/xpService'; // Explorer's Guild XP awards
 import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
 
 // Feature #5: Sale type categories (inlined from shared package)
@@ -1622,8 +1622,10 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Award 10 XP for check-in
-    const awardResult = await awardXp(userId, 'SALE_CHECKIN', 10, {
+    // Award VISIT XP (5 base, 7 with Hunt Pass — same as sale visit per guild-primer)
+    const baseXp = XP_AWARDS.VISIT;
+    const finalXp = await applyHuntPassMultiplier(userId, baseXp);
+    const awardResult = await awardXp(userId, 'SALE_CHECKIN', finalXp, {
       saleId,
       description: `Checked in to sale: ${sale.title}`,
     });
@@ -1632,14 +1634,45 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ message: 'Failed to award XP' });
     }
 
+    // Attempt to join the virtual queue if one exists for this sale
+    let queuePosition: number | null = null;
+    try {
+      const existingEntry = await prisma.lineEntry.findUnique({
+        where: { saleId_userId: { saleId, userId } },
+      });
+      if (!existingEntry || existingEntry.status === 'CANCELLED') {
+        const lastEntry = await prisma.lineEntry.findFirst({
+          where: { saleId },
+          orderBy: { position: 'desc' },
+        });
+        const position = (lastEntry?.position ?? 0) + 1;
+        if (existingEntry) {
+          await prisma.lineEntry.update({
+            where: { id: existingEntry.id },
+            data: { position, status: 'WAITING' },
+          });
+        } else {
+          await prisma.lineEntry.create({
+            data: { saleId, userId, position, status: 'WAITING' },
+          });
+        }
+        queuePosition = position;
+      } else {
+        queuePosition = existingEntry.position;
+      }
+    } catch {
+      // Queue join is best-effort — don't fail the check-in if no line exists
+    }
+
     res.json({
       success: true,
-      xpEarned: 10,
+      xpEarned: finalXp,
       alreadyCheckedIn: false,
       saleTitle: sale.title,
       guildXp: awardResult.newXp,
       explorerRank: awardResult.newRank,
       rankIncreased: awardResult.rankIncreased,
+      queuePosition,
     });
   } catch (error) {
     console.error('Check-in error:', error);
