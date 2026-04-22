@@ -33,6 +33,7 @@ import VerifiedBadge from '../../components/VerifiedBadge'; // Feature #16
 import UGCPhotoGallery from '../../components/UGCPhotoGallery'; // Feature #47
 import { RippleIndicator } from '../../components/RippleIndicator'; // Feature #51: Sale Ripples
 import { LiveFeedTicker } from '../../components/LiveFeedTicker'; // Feature #70: Live Activity Ticker
+import SaleLockCard from '../../components/SaleLockCard'; // Rank-Based Early Access
 import MessageComposeModal from '../../components/MessageComposeModal'; // Feature #29: Message Organizer
 import HuntSummary from '../../components/HuntSummary'; // Feature #85: Treasure Hunt QR
 import { useArrivalAssistant } from '../../hooks/useArrivalAssistant'; // Feature #84: Approach Notes
@@ -111,6 +112,12 @@ interface Sale {
   entranceLat?: number;
   entranceLng?: number;
   entranceNote?: string;
+  // Rank-Based Early Access
+  locked?: boolean;
+  publishedAt?: string;
+  unlocksAt?: string;
+  minutesUntilUnlock?: number;
+  userRank?: string;
 }
 
 interface Bid {
@@ -512,6 +519,10 @@ const SaleDetailPage = () => {
     photos: sale.photoUrls.map(url => ({ url })),
   };
 
+  // Rank-Based Early Access: Check if sale is locked for this user
+  const isSaleLocked = sale.locked === true;
+  const showRankUpCta = user?.explorerRank === 'INITIATE' && isSaleLocked;
+
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <SaleOGMeta sale={saleForOGMeta} />
@@ -524,6 +535,24 @@ const SaleDetailPage = () => {
         onConfirmLeave={handleConfirmLeave}
       />
 
+      {/* Rank-Based Early Access: Lock Card */}
+      {isSaleLocked && (
+        <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex items-center justify-center">
+          <div className="container mx-auto px-4 py-8 max-w-2xl">
+            <SaleLockCard
+              saleTitle={sale.title}
+              saleCity={sale.city}
+              minutesUntilUnlock={sale.minutesUntilUnlock || 0}
+              userRank={user?.explorerRank || 'INITIATE'}
+              showRankUpCta={showRankUpCta}
+              organizerName={sale.organizer.businessName}
+              photoUrl={sale.photoUrls[0]}
+            />
+          </div>
+        </div>
+      )}
+
+      {!isSaleLocked && (
       <main className="container mx-auto px-4 py-8">
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">
           ← Back to home
@@ -1475,6 +1504,7 @@ const SaleDetailPage = () => {
             </div>
           </div>
         </div>
+      )}
       )}
     </div>
   );

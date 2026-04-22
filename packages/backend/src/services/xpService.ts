@@ -17,6 +17,15 @@ export const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   GRANDMASTER: 12000,
 };
 
+// Rank-Based Early Access (Option A): hours of early access per rank
+export const RANK_EARLY_ACCESS_HOURS: Record<ExplorerRank, number> = {
+  INITIATE: 0,
+  SCOUT: 1,
+  RANGER: 2,
+  SAGE: 4,
+  GRANDMASTER: 6,
+};
+
 // Seasonal reset floor — when resetting, users drop to this rank minimum
 export const SEASONAL_RESET_FLOOR: Record<ExplorerRank, ExplorerRank> = {
   INITIATE: 'INITIATE',
