@@ -13,6 +13,7 @@ interface CheckInResponse {
   guildXp?: number;
   explorerRank?: string;
   rankIncreased?: boolean;
+  queuePosition?: number | null;
 }
 
 const CheckInPage: React.FC = () => {
@@ -160,8 +161,13 @@ const CheckInPage: React.FC = () => {
                   +{checkInResult.xpEarned} XP Earned
                 </p>
                 {checkInResult.rankIncreased && (
-                  <p className="text-lg text-amber-600 dark:text-amber-400 mb-4">
-                    🎉 Rank: {checkInResult.explorerRank}
+                  <p className="text-lg text-amber-600 dark:text-amber-400 mb-2">
+                    🎉 Rank up: {checkInResult.explorerRank}
+                  </p>
+                )}
+                {checkInResult.queuePosition != null && (
+                  <p className="text-base text-warm-700 dark:text-warm-300 mb-2">
+                    🎟️ You&apos;re #{checkInResult.queuePosition} in line
                   </p>
                 )}
               </>
