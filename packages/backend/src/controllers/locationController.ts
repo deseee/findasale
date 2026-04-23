@@ -16,12 +16,24 @@ export const listLocations = async (req: AuthRequest, res: Response) => {
     }
 
     // Check tier requirement
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { subscriptionTier: true },
     });
 
-    if (!workspace || workspace.subscriptionTier !== 'TEAMS') {
+    if (!organizer || organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
+    }
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizerId },
+    });
+
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     const locations = await prisma.location.findMany({
@@ -77,12 +89,24 @@ export const createLocation = async (req: AuthRequest, res: Response) => {
     }
 
     // Check tier requirement
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { subscriptionTier: true },
     });
 
-    if (!workspace || workspace.subscriptionTier !== 'TEAMS') {
+    if (!organizer || organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
+    }
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizerId },
+    });
+
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     // If managerId provided, verify it's a workspace member
@@ -148,12 +172,24 @@ export const updateLocation = async (req: AuthRequest, res: Response) => {
     const { name, address, phone, managerId } = req.body;
 
     // Check tier requirement
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { subscriptionTier: true },
     });
 
-    if (!workspace || workspace.subscriptionTier !== 'TEAMS') {
+    if (!organizer || organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
+    }
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizerId },
+    });
+
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     // Verify location belongs to workspace
@@ -226,12 +262,24 @@ export const deleteLocation = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
 
     // Check tier requirement
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { subscriptionTier: true },
     });
 
-    if (!workspace || workspace.subscriptionTier !== 'TEAMS') {
+    if (!organizer || organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
+    }
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizerId },
+    });
+
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     // Verify location belongs to workspace
@@ -291,12 +339,24 @@ export const transferItems = async (req: AuthRequest, res: Response) => {
     }
 
     // Check tier requirement
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { subscriptionTier: true },
     });
 
-    if (!workspace || workspace.subscriptionTier !== 'TEAMS') {
+    if (!organizer || organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
+    }
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizerId },
+    });
+
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     // Verify source location belongs to workspace
@@ -353,12 +413,24 @@ export const getLocationInventory = async (req: AuthRequest, res: Response) => {
     const { skip = '0', take = '50' } = req.query;
 
     // Check tier requirement
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { subscriptionTier: true },
     });
 
-    if (!workspace || workspace.subscriptionTier !== 'TEAMS') {
+    if (!organizer || organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
+    }
+
+    const workspace = await prisma.organizerWorkspace.findUnique({
+      where: { ownerId: organizerId },
+    });
+
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
     }
 
     // Verify location belongs to workspace
