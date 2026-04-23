@@ -192,6 +192,10 @@ async function main() {
       // Delete non-preserved users (except protected accounts)
       await tx.user.deleteMany({ where: { id: { notIn: preservedIds } } });
 
+      // Delete OrganizerWorkspace rows — Artifact/deseee are SIMPLE tier, not TEAMS,
+      // so they have no workspaces. Wipe all to avoid slug unique-constraint collision.
+      await (tx as any).organizerWorkspace.deleteMany({});
+
       // Delete badges and achievements (safe — not tied to preserved accounts)
       await tx.badge.deleteMany({});
       await tx.achievement.deleteMany({});
@@ -232,7 +236,10 @@ async function main() {
   const users: any[] = [];
 
 
-  for (let i = 0; i < 100; i++) {
+  // 22 users: 1 admin (user1) + 9 organizers (user2-10) + 12 shoppers (user11-22).
+  // The 12 shoppers cover hardcoded references user11-15 (bids, Hunt Pass) and
+  // users[20]/users[21] (completed-sale purchases). Down from the original 100.
+  for (let i = 0; i < 22; i++) {
     const firstName = firstNames[i % firstNames.length];
     const lastName  = lastNames[i % lastNames.length];
     const email     = `user${i + 1}@example.com`;
@@ -448,7 +455,7 @@ async function main() {
 
   for (let i = 0; i < Math.min(50, soldItems.length); i++) {
     const item        = soldItems[i];
-    const buyerIndex  = Math.floor(Math.random() * 90) + 10;
+    const buyerIndex  = Math.floor(Math.random() * 12) + 10; // shoppers are users[10..21]
     const buyer       = users[buyerIndex];
     const pStatus     = Math.random() > 0.2 ? 'PAID' : 'PENDING';
 
