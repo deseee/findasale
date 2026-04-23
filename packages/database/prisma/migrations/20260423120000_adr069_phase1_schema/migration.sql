@@ -15,11 +15,7 @@ ALTER TABLE "Photo" ADD COLUMN "orderIndex" INTEGER;
 -- EncyclopediaEntry model additions: auto-generation tracking
 ALTER TABLE "EncyclopediaEntry" ADD COLUMN "triggerItemId" VARCHAR(255);
 
--- PriceBenchmark model addition: data source tracking
-ALTER TABLE "PriceBenchmark" ADD COLUMN "dataSource" VARCHAR(255) DEFAULT 'curated';
-
--- Create index for dataSource queries on PriceBenchmark
-CREATE INDEX "PriceBenchmark_dataSource_idx" ON "PriceBenchmark"("dataSource");
+-- PriceBenchmark.dataSource already exists from prior migration — no ALTER needed
 
 -- Create ItemCompLookup table for async eBay comp lookup (Phase 2)
 CREATE TABLE "ItemCompLookup" (
