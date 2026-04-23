@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useAuth } from '../components/AuthContext';
 
 export type SubscriptionTier = 'SIMPLE' | 'PRO' | 'TEAMS';
@@ -16,26 +17,32 @@ function hasAccess(organizerTier: SubscriptionTier, requiredTier: SubscriptionTi
  * Hook to check organizer subscription tier access.
  * Tier logic is inlined — shared package is not a frontend dependency.
  * Frontend-only hook — use in components to conditionally render features.
+ *
+ * IMPORTANT: canAccess is memoized with useCallback so its reference is stable
+ * across renders (only changes when tier changes). Components using it in a
+ * useEffect dependency array rely on this stability — without memoization the
+ * effect fires on every render, causing infinite-loop API hammering (S562 bug).
  */
 export function useOrganizerTier() {
   const { user } = useAuth();
   const tier = (user?.organizerTier || 'SIMPLE') as SubscriptionTier;
+
+  /**
+   * Check if organizer has access to a required tier feature
+   * @param requiredTier - The minimum tier required (PRO, TEAMS, etc.)
+   * @returns true if organizer's tier >= requiredTier
+   */
+  const canAccess = useCallback(
+    (requiredTier: SubscriptionTier): boolean => hasAccess(tier, requiredTier),
+    [tier]
+  );
 
   return {
     /**
      * Current organizer's tier: SIMPLE, PRO, or TEAMS
      */
     tier,
-
-    /**
-     * Check if organizer has access to a required tier feature
-     * @param requiredTier - The minimum tier required (PRO, TEAMS, etc.)
-     * @returns true if organizer's tier >= requiredTier
-     */
-    canAccess: (requiredTier: SubscriptionTier): boolean => {
-      return hasAccess(tier, requiredTier);
-    },
-
+    canAccess,
     /**
      * Convenience checks for common tiers
      */
