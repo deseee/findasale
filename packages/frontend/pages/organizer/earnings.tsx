@@ -227,7 +227,7 @@ const OrganizerEarningsPage = () => {
                     <span className="text-4xl">📊</span>
                   </div>
                   <p className="text-xs text-warm-500 dark:text-warm-500 mt-3">
-                    {((totals.fees / totals.revenue) * 100).toFixed(1)}% of gross revenue
+                    {totals.revenue > 0 ? `${((totals.fees / totals.revenue) * 100).toFixed(1)}%` : '0%'} of gross revenue
                   </p>
                 </div>
 

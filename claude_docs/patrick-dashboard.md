@@ -1,4 +1,64 @@
-# Patrick's Dashboard — S548 Complete
+# Patrick's Dashboard — S549 Complete
+
+## 🔥 S549 — Two P0 Crashes Killed + Four Mobile Overflows Fixed
+
+**One-line summary:** Two pages were throwing ErrorBoundary at any width — `/admin` index and `/organizer/earnings`. Both fixed plus the four S548 mobile overflows you wanted bundled. Six files, three parallel dispatches, no logic touched.
+
+### P0 — `/admin` index crash (FIXED)
+
+Root cause: when the admin stats API returned partial data, the page tried to call `.reduce()` on undefined sparkline arrays and dereferenced `purchase.user.name` / `sale.organizer.businessName` without null checks. Five guards added in `pages/admin/index.tsx` — sparklines fall back to `[]`, missing user/organizer names show `'Unknown'`. No layout change.
+
+### P0 — `/organizer/earnings` crash (FIXED)
+
+Root cause was simpler than feared — **division by zero**. When an organizer has no completed sales, `(totals.fees / totals.revenue) * 100` produces `NaN`, which React refuses to render and bombs the page. Backend was already safe. Fixed at line 230 of `earnings.tsx`: `revenue > 0 ? percent : '0%'`. New organizers will see `0%` instead of a crash.
+
+### P1 — Mobile overflow batch (4 files, FIXED)
+
+Pure Tailwind. Desktop layouts unchanged from `sm:` breakpoint up.
+
+| Page | Before | After |
+|------|--------|-------|
+| `/organizer/edit-sale/[id]` ENDED header | 70px overflow | Buttons wrap, title truncates |
+| `/organizer/insights` SELECT dropdown | 96px scroll | Select shrinks, parent wraps |
+| `/shopper/explorer-profile` Add buttons | 43px overflow | Input + buttons wrap on mobile |
+| `/admin/items` pagination | 839px scroll | Filter row wraps, table scroll-x |
+
+### P2 — Workspace tab bar (FIXED)
+
+`pages/organizer/workspace.tsx` — parent flex `flex-wrap sm:flex-nowrap`, each tab `px-2 sm:px-6 flex-shrink-0 text-sm sm:text-base`, removed `overflow-x-auto`. 4 tabs now wrap onto 2 rows under 412px, single horizontal row from sm: up. No JSX restructure, no logic touched.
+
+### Affiliate Batch 2 — already shipped (audit only)
+
+You asked to dispatch Batch 2 (the checkout sessionStorage → Purchase attribution wire-through). Audit found it's **already implemented end-to-end** in `CheckoutModal.tsx` lines 315–321 (frontend) and `stripeController.ts` lines 329/472/520/1195–1197 (backend). `Purchase.affiliateLinkId` confirmed in schema. Must have shipped silently in a prior session. Zero new code. Spec doc `affiliate-program-spec-S544.md` should be marked "Batch 2 done." Next affiliate work is Batch 3 (POST /affiliate/generate-code + GET /affiliate/code).
+
+## 📤 Push Block (S549)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+git add packages/frontend/pages/admin/index.tsx
+git add packages/frontend/pages/admin/items.tsx
+git add packages/frontend/pages/organizer/earnings.tsx
+git add packages/frontend/pages/organizer/edit-sale/[id].tsx
+git add packages/frontend/pages/organizer/insights.tsx
+git add packages/frontend/pages/shopper/explorer-profile.tsx
+git add packages/frontend/pages/organizer/workspace.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+
+git commit -m "S549: P0 fixes — /admin index null guards, /organizer/earnings divide-by-zero; P1 mobile overflows on 4 pages; P2 workspace tab bar wrap"
+
+.\push.ps1
+```
+
+## 🎯 Next Session (S550) — What's Queued
+
+1. **Smoke test S548 + S549** — open `/admin`, `/organizer/earnings`, the 5 mobile pages (4 overflow fixes + workspace tab bar) in Chrome. Pixel 6a PWA should now render at 412px after S548 viewport meta fix. Confirm crashes gone and overflows resolved.
+2. **Affiliate Batch 3** — POST /affiliate/generate-code + GET /affiliate/code endpoints (spec section 3.1, 3.2). Batch 2 is done; Batch 1's GET /api/affiliate/me may overlap with the spec's GET /affiliate/code — Architect should reconcile before Dev.
+3. **Affiliate payout amounts** — still placeholders ($20 PRO / $55 TEAMS). Lock before Batch 4 (Stripe webhook wiring).
+4. **Carry-over Chrome QA backlog** — S543/S540/S541/S531 items in `STATE.md` Blocked/Unverified Queue.
+
+## ─── Archived Below: S548 ───
 
 ## 🔥 S548 — Full Mobile QA @ 320px (Pixel 6a PWA)
 

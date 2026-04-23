@@ -168,7 +168,7 @@ function ExplorerProfilePage() {
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                 The categories and styles you explore most. Auto-detected from your activity and used to find matching items.
               </p>
-              <div className="flex gap-2 mb-3">
+              <div className="flex flex-wrap gap-2 mb-3">
                 <input
                   type="text"
                   value={newSpecialty}
@@ -180,11 +180,11 @@ function ExplorerProfilePage() {
                     }
                   }}
                   placeholder="e.g., mid-century modern"
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
+                  className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
                 />
                 <button
                   onClick={handleAddSpecialty}
-                  className="px-4 py-2 bg-[#8fb897] text-white rounded-lg hover:bg-[#7ba680] font-medium"
+                  className="px-4 py-2 bg-[#8fb897] text-white rounded-lg hover:bg-[#7ba680] font-medium flex-shrink-0"
                 >
                   Add
                 </button>

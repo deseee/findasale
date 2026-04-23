@@ -145,19 +145,19 @@ const AdminItems = () => {
 
       {/* Search and Filter */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
-        <div className="flex flex-col gap-4 md:flex-row md:gap-4">
+        <div className="flex flex-col gap-4 flex-wrap md:flex-row md:gap-4">
           <input
             type="text"
             placeholder="Search items by title..."
             value={search}
             onChange={handleSearchChange}
-            className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
+            className="flex-1 min-w-0 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
           />
 
           <select
             value={status}
             onChange={handleStatusChange}
-            className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
+            className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600 flex-shrink-0"
           >
             <option value="">All Status</option>
             <option value="DRAFT">Draft</option>
