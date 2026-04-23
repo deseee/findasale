@@ -36,17 +36,49 @@ const lastNames = [
   'Murray', 'Freeman', 'Wells', 'Webb', 'Simpson', 'Stevens', 'Tucker', 'Porter', 'Hunter', 'Barnes',
 ];
 
+// Organizer data arrays — index-aligned across all four.
+// 8 Michigan, 1 N. Indiana, 1 Toledo OH for mild regional color.
 const businessNames = [
-  'Lakeshore Estate Sales',
-  'Riverside Liquidators',
-  'Local Estate Auctions',
-  'Heritage Estate Services',
-  'Lakewood Estate Clearance',
-  'Priority Estate Sales',
-  'Premier Liquidation Solutions',
-  'Treasure Find Estate Sales',
-  'Valley Estate Auctions',
-  'Downtown Downsizing Experts',
+  "Kelly's Estate Sales",
+  'Barn Door Consignment',
+  'Up North Flea Market Booth',
+  'Martin Family Auctions',
+  'Attic Finds Kalamazoo',
+  'Cherry Street Antiques',
+  'Lansing Estate & Downsizing',
+  'Holland Home Clearouts',
+  'South Bend Sale Co',
+  'Toledo Estate Group',
+];
+
+const citiesByOrganizer = [
+  'Grand Rapids',
+  'Kalamazoo',
+  'Holland',
+  'Traverse City',
+  'Kalamazoo',
+  'Ann Arbor',
+  'Lansing',
+  'Holland',
+  'South Bend',
+  'Toledo',
+];
+
+const statesByOrganizer = [
+  'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'IN', 'OH',
+];
+
+const biosByOrganizer = [
+  'Running estate sales around Grand Rapids since 2018. Mostly downsizing clients and full home cleanouts.',
+  'Small consignment shop. Rotate inventory weekly. Take most furniture and vintage.',
+  'Part-time flea market booth, eight years in. I try to keep the junk out.',
+  'Family-run auction house, three generations. We run live and online.',
+  'Two-person shop. We do estate sales and occasional auctions. Based in Kalamazoo.',
+  'Small antique store on Ann Arbor\'s west side. Mix of mid-century and Victorian.',
+  'Estate sales only. I don\'t do consignment, don\'t do appraisals, just sales.',
+  'I do probate estates and full home cleanouts. Solo operator, word of mouth.',
+  'South Bend and surrounding towns. Estate sales, some downsizing, the occasional moving sale.',
+  'Toledo-area estate and auction work. Twenty-plus years. Still figuring out the internet.',
 ];
 
 const streetNames = [
@@ -80,7 +112,7 @@ const saleDescriptions = [
 ];
 
 const categories = [
-  'furniture', 'decor', 'vintage', 'textiles', 'collectibles',
+  'furniture', 'housewares', 'vintage', 'textiles', 'collectibles',
   'art', 'antiques', 'jewelry', 'books', 'tools', 'electronics', 'clothing',
 ];
 
@@ -122,13 +154,53 @@ async function main() {
   console.log('🌱 Starting database seed...');
   const defaultPassword = await bcrypt.hash('password123', 10);
 
-  // ── Clear all tables via PostgreSQL TRUNCATE CASCADE ─────────────────────
-  // CASCADE handles all FK chains automatically — no need to enumerate every table.
-  console.log('🗑️  Clearing existing data...');
-  await prisma.$executeRawUnsafe(
-    `TRUNCATE TABLE "User", "Badge", "FeeStructure", "Achievement" CASCADE`
-  );
-  console.log('✅ Cleared existing data');
+  // ── Clear data, preserving artifactmi@gmail.com and deseee@gmail.com ───────
+  console.log('🗑️  Clearing existing data (preserving protected accounts)...');
+
+  const preservedEmails = ['artifactmi@gmail.com', 'deseee@gmail.com'];
+  const preserved = await prisma.user.findMany({
+    where: { email: { in: preservedEmails } },
+    select: { id: true },
+  });
+  const preservedIds = preserved.map(u => u.id);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET session_replication_role = 'replica'`);
+    try {
+      // Delete all non-preserved organizers and their sales/items
+      const nonPreservedOrgs = await tx.organizer.findMany({
+        where: { userId: { notIn: preservedIds } },
+        select: { id: true },
+      });
+      const orgIdsToDelete = nonPreservedOrgs.map(o => o.id);
+
+      if (orgIdsToDelete.length > 0) {
+        const salesToDelete = await tx.sale.findMany({
+          where: { organizerId: { in: orgIdsToDelete } },
+          select: { id: true },
+        });
+        const saleIdsToDelete = salesToDelete.map(s => s.id);
+
+        if (saleIdsToDelete.length > 0) {
+          await tx.item.deleteMany({ where: { saleId: { in: saleIdsToDelete } } });
+          await tx.sale.deleteMany({ where: { id: { in: saleIdsToDelete } } });
+        }
+
+        await tx.organizer.deleteMany({ where: { id: { in: orgIdsToDelete } } });
+      }
+
+      // Delete non-preserved users (except protected accounts)
+      await tx.user.deleteMany({ where: { id: { notIn: preservedIds } } });
+
+      // Delete badges and achievements (safe — not tied to preserved accounts)
+      await tx.badge.deleteMany({});
+      await tx.achievement.deleteMany({});
+
+      console.log(`✅ Cleared data (preserved ${preservedIds.length} accounts)`);
+    } finally {
+      await tx.$executeRawUnsafe(`SET session_replication_role = 'origin'`);
+    }
+  });
 
   // ── Badges ────────────────────────────────────────────────────────────────
   console.log('⭐ Creating badges...');
@@ -204,6 +276,7 @@ async function main() {
   for (let i = 0; i < 10; i++) {
     const street = streetNames[i % streetNames.length];
     const number = 1000 + i * 123;
+    const city = citiesByOrganizer[i];
     const zip    = SEED_CONFIG.zips[i % SEED_CONFIG.zips.length];
 
     // TD-01: user1 (i=0) and user2 (i=1) get real Stripe test account IDs
@@ -218,8 +291,8 @@ async function main() {
         userId:          users[i].id,
         businessName:    businessNames[i],
         phone:           `616-555-${String(1000 + i).padStart(4, '0')}`,
-        address:         `${number} ${street}, ${SEED_CONFIG.city}, MI ${zip}`,
-        bio:             `Professional estate liquidation service with ${5 + i * 2} years of experience in West Michigan.`,
+        address:         `${number} ${street}, ${city}, ${statesByOrganizer[i]} ${zip}`,
+        bio:             biosByOrganizer[i],
         website:         `https://organizer${i + 1}.example.com`,
         stripeConnectId: stripeConnectId,
         subscriptionTier: (orgTiers[i] || 'SIMPLE') as any,
@@ -282,6 +355,7 @@ async function main() {
         lat,
         lng,
         status,
+        publishedAt: status === 'PUBLISHED' ? new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) : null,
         photoUrls: [salePhotoUrls[i % salePhotoUrls.length]],
         tags,
       },
@@ -343,7 +417,7 @@ async function main() {
 
   for (const [k, spec] of [
     { title: 'Signed Ansel Adams Print',   description: 'Authenticated signed lithograph, COA included.',      price: 200,  startPrice: 200,  category: 'art' },
-    { title: 'Tiffany Style Stained Glass Lamp', description: 'Dragonfly pattern, 22" shade, excellent condition.', price: 300,  startPrice: 300,  category: 'decor' },
+    { title: 'Tiffany Style Stained Glass Lamp', description: 'Dragonfly pattern, 22" shade, excellent condition.', price: 300,  startPrice: 300,  category: 'housewares' },
     { title: 'Vintage Rolex Submariner',   description: '1968 ref. 5513 — original bracelet, recently serviced.', price: 2500, startPrice: 2500, category: 'jewelry' },
   ].entries()) {
     const photoSeeds = ['ansel-adams-print', 'tiffany-lamp', 'rolex-watch'];
