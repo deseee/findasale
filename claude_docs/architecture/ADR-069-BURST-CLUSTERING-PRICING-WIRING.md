@@ -1,9 +1,49 @@
 # ADR-069: Burst Clustering & Pricing Wiring
 
-**Status:** Proposed (awaiting Patrick decision)  
+**Status:** Approved (Patrick locked decisions 1–6, Session N+1 amendment)  
 **Created:** 2026-04-23  
+**Last Updated:** 2026-04-23 (amended with two-way Encyclopedia integration)  
 **Author:** Architect  
 **Epic:** CD2 Phase 2 (batch upload) + Feature #30 (valuation)
+
+## Revision History
+
+- **v1 (Session N):** Original ADR with clustering + PriceBenchmark fallback. Included 6 decision gates (decisions 1–6).
+- **v2 (Session N+1 amendment):** All 6 decisions locked by Patrick. Added two-way Haiku↔Encyclopedia integration (Haiku writes EncoplopediaEntry stubs). Removed decision gates; replaced with locked constraints.
+
+## Locked Constraints (Patrick Decisions 1–6)
+
+### Atomic Set Rules (Decision 1–3)
+- **A set is atomic.** Always.
+  - **Print Kit:** 1 label per set (never N individual labels for components).
+  - **POS/Sale model:** 1 Purchase record per set sale (never N records per component).
+  - **Tier enforcement:** A set counts as 1 item against any tier cap (Simple 50-item, etc.). Uploading a set of 12 dinnerware counts as 1 item, not 12.
+- **Consequence:** `Item.quantity` stores the set size; POS/invoice logic treats the set as a single line item; tier enforcement counts Item records, not summed quantities.
+
+### Auto-Accept Clustering, No UI Prompts (Decision 5)
+- **No confidence badge on clustered groups.** No "We think these 3 are a set, right?" modal or inline prompt.
+- **Clustering happens silently.** Organizer sees the clustered result on the review screen and can edit/split like any other AI-tagged field.
+- **Confidence score still exists internally** for logging, analytics, and edge-case recovery — but never surfaces as a user-facing prompt.
+- **Design principle:** Less noise wins. Friction is the enemy.
+
+### XP Award Clarity (Decision 4 Implicit)
+- **XP is awarded on item creation; 1 set = 1 item creation event = 1 XP award.** Clustering reduces bursts to sets naturally, which is correct behavior, not a nerf.
+- No special "photo-capture XP" mechanic exists; remove any framing that suggests clustering changed XP payout.
+
+### Two-Way Haiku↔Encyclopedia Integration (Decision 6 Locked)
+- **Haiku analysis READS PriceBenchmark** to ground item pricing (existing, unchanged).
+- **Haiku analysis also WRITES EncyclopediaEntry stubs** during the same analysis call. When Haiku tags an item and detects a brand+category+pattern signature that does not already have a matching EncyclopediaEntry, it spawns a stub entry in the background.
+- **Auto-generated entry stub includes:**
+  - Slug (derived from brand+pattern, deduped on insert)
+  - Title, short description, category, tags
+  - `status: 'AUTO_GENERATED'` (new enum value)
+  - `triggerItemId` FK to the item that caused creation
+- **Companion PriceBenchmark row also auto-generated** using Haiku's suggested price range, tagged with `dataSource: 'haiku_inferred'`.
+- **Curator moderation:** Auto-generated entries are visible but flagged as unreviewed. A future curator tool lets Patrick or a VA promote them to `status: 'PUBLISHED'` after review.
+- **Backfill feedback loop:** As real sales data accumulates, a backfill job refines benchmark ranges using actual sold-item data (from ItemPriceHistory).
+- **Cold-start elimination:** The 20 curated seed entries (Session N) become the initial `status: 'PUBLISHED'` content. Haiku auto-generation catches up on remaining categories as organizers photograph items, creating a self-reinforcing flywheel.
+
+---
 
 ## Context
 
@@ -24,9 +64,9 @@ Three independent pathologies block robust photo batch processing and pricing:
 
 **Root cause:** Valuation service queries internal FindA.Sale sales only; never consults PriceBenchmark or Encyclopedia entries.
 
-## Decision
+## Approved Design
 
-Implement three coordinated changes:
+Implement three coordinated changes (all locked — no further decision needed):
 
 ### D1: Haiku Clustering at Batch Intake
 1. Receive up to 20 photos in `batchAnalyzeController`
@@ -35,7 +75,7 @@ Implement three coordinated changes:
 4. Enrich each cluster in parallel: Vision labels, Haiku tagging, pricing
 5. Return cluster summaries (grouped by detected sets) to frontend for review
 
-**Cluster confidence threshold:** 0.75. Haiku returns "these 3 are probably a set" (0.75–0.99) vs. "definitely a set" (0.99+). Frontend shows confidence level; organizer can ungroup or regroup pre-review.
+**Cluster confidence threshold:** 0.75. Haiku returns "these 3 are probably a set" (0.75–0.99) vs. "definitely a set" (0.99+). Frontend does NOT show confidence badges (locked decision 5); organizer sees grouped result and can ungroup/regroup on review screen like any AI-tagged field.
 
 **Clustering prompt schema (to Haiku):**
 ```json
@@ -68,7 +108,7 @@ Implement three coordinated changes:
 
 **Vision config:** Enable `webDetection` (return URLs of similar images online). Capture for optional "find comps online" feature (Phase 3).
 
-### D3: PriceBenchmark as Valuation Fallback + Haiku Context
+### D3: PriceBenchmark as Valuation Fallback + Two-Way Haiku↔Encyclopedia Integration
 1. **Wire valuationService to consult PriceBenchmark:**
    - After querying internal comparables (existing logic)
    - If <10 comparables found: query PriceBenchmark for the item's category + condition
@@ -77,11 +117,33 @@ Implement three coordinated changes:
 2. **Include PriceBenchmark context in Haiku analysis prompt:**
    - When calling `getHaikuAnalysis()` or `getHaikuAnalysisMultiImage()`, pass `benchmarks?: PriceBenchmark[]`
    - Haiku prompt includes: "Similar items in the Encyclopedia are priced $X–$Y for {condition} items in {region}. Use this as a grounding signal but adjust for this specific item's condition and rarity."
-3. **Create ItemCompLookup table (optional, Phase 2):**
+   - **NEW: Haiku prompt also returns optional `newEncyclopediaStub` field** when item doesn't match existing entries (see below).
+3. **Haiku writes EncyclopediaEntry stubs (TWO-WAY INTEGRATION):**
+   - During `getHaikuAnalysisMultiImage()` call, if Haiku detects a brand+category+pattern signature (e.g., "Corelle dinnerware") that does not have a matching EncyclopediaEntry, it returns:
+   ```json
+   {
+     "newEncyclopediaStub": {
+       "slug": "corelle-dinnerware",
+       "title": "Corelle Dinnerware Sets",
+       "description": "Lightweight vitreous china dinnerware, popular 1970s–2000s.",
+       "category": "Dinnerware & Serveware",
+       "tags": ["dinnerware", "corelle", "vintage"],
+       "estimatedPriceLow": 15,
+       "estimatedPriceHigh": 45
+     }
+   }
+   ```
+   - Backend enqueues `createEncyclopediaStub` job to:
+     - Dedup by slug; skip if slug already exists
+     - Create EncyclopediaEntry with `status: 'AUTO_GENERATED'`, `triggerItemId: itemId`
+     - Create paired PriceBenchmark with `dataSource: 'haiku_inferred'`, referencing the new entry
+   - **Curator moderation:** Auto-generated entries visible in Encyclopedia UI but flagged as unreviewed. Future curator tool allows Patrick/VA to promote to `status: 'PUBLISHED'`.
+   - **Backfill feedback loop:** As organizers mark items SOLD, ItemPriceHistory accumulates real-sale data. A scheduled backfill job refines PriceBenchmark ranges (from `haiku_inferred` to `community_consensus`) once N ≥ 5 real sales exist for a slug.
+4. **Create ItemCompLookup table (optional, Phase 2):**
    - Denormalized cache: `{ itemId, ebayListingId, ebayPrice, ebayCondition, ebayCategory, fetchedAt }`
    - Used when `valuationService` triggers async eBay comp fetch (new job type)
    - Prevents duplicate eBay API calls within 24h
-4. **Async eBay comp fetch (Phase 2):**
+5. **Async eBay comp fetch (Phase 2):**
    - After item is PENDING_REVIEW, enqueue `fetchEbayComps` job (separate from AI tagging)
    - Fetch top 3 sold listings from eBay for the item's title + category
    - Store in ItemCompLookup + update Item.estimatedValue if price > aiSuggestedPrice
@@ -118,6 +180,27 @@ orderIndex              Int?                   // Explicit ordering if user reor
 No new Item fields. ValuationService uses existing `category` + `condition` to query PriceBenchmark.
 
 ### New Tables/Models
+
+**EncyclopediaEntry Model Changes:**
+```prisma
+model EncyclopediaEntry {
+  // ... existing fields ...
+  status             String    @default("PUBLISHED")  // Add enum: PUBLISHED, AUTO_GENERATED, UNDER_REVIEW, REJECTED
+  triggerItemId      String?   // Optional FK to item that triggered auto-generation
+  
+  @@index([status])
+}
+```
+
+**PriceBenchmark Model Changes:**
+```prisma
+model PriceBenchmark {
+  // ... existing fields ...
+  dataSource        String    @default("curated")    // Add to enum: curated, community_consensus, haiku_inferred
+  
+  @@index([dataSource])
+}
+```
 
 **ItemCompLookup (optional, Phase 2):**
 ```prisma
@@ -283,52 +366,6 @@ if (recentComparables.length < 10) {
 
 ## Product Decisions Requiring Patrick Sign-Off
 
-**[DECISION 1] Set Labeling in Print Kit**
-When an organizer prints labels for sale day, should a set of 8 items generate:
-- Option A: 1 label labeled "Set of 8 Dinnerware" (atomic unit)
-- Option B: 8 individual labels, all with the same item ID but numbered "1 of 8", "2 of 8", etc. (assembly line clarity)
-
-**Impact:** Affects label print logic, POS / invoice line-item structure, and shopper checkout ("1 set" vs. "add 8 items to cart").
-
-**[DECISION 2] Set Sold as Atomic Unit or Components**
-When a set is marked SOLD:
-- Option A: 1 Purchase record for the entire set; quantity=8 baked into the record
-- Option B: 8 Purchase records, one per component; all linked with `setId` FK
-- Option C: Hybrid — 1 Purchase for the set, but createInvoice() explodes it into line items if customer paid-in-full
-
-**Impact:** Inventory counting, revenue attribution (eBay listing when syncing multiple items), floor-plan layout updates.
-
-**[DECISION 3] Tier Enforcement: Item Cap for Sets**
-SIMPLE tier has a 50-item limit. If an organizer uploads a set of 12:
-- Option A: Counts as 1 item (atomic unit approach; allows larger sets)
-- Option B: Counts as 12 items (strict component counting; set of 12 hits the cap immediately)
-
-**Impact:** Feature perception (can organizers sell large sets on SIMPLE tier?) and upgrade pressure.
-
-**[DECISION 4] XP Awards for Photo Burst Clustering**
-If clustering reduces item count from 20 photos to 8 items (12 were grouped):
-- Option A: Award XP for 20 photos captured (not 8 items) — incentivizes burst capture
-- Option B: Award XP for 8 items published (standard approach) — no boost for grouping
-- Option C: Award XP for 8 items + bulk clustering bonus (10 XP) — incentivizes intelligent grouping
-
-**Impact:** Guild rank progression speed and perception of photo capture value.
-
-**[DECISION 5] Clustering Confidence UI Handling**
-When Haiku detects clusters with 0.75–0.99 confidence:
-- Option A: Show confidence badge on review screen ("95% likely a set"); organizer can ungroup freely
-- Option B: Auto-accept clusters >0.85; show only <0.85 for manual review
-- Option C: Always show light-touch prompt ("We think these 3 are a set — right?") but never block
-
-**Impact:** Friction on happy path (how many organizers ungroup correctly-guessed sets?) vs. recovery from false positives (how many organizers re-merge incorrectly split items?).
-
-**[DECISION 6] Encyclopedia PriceBenchmark Population**
-Currently PriceBenchmark is empty (ADR-052 created it but no curator/admin tool exists to populate it). When should data flow in?
-- Option A: Crowdsource from organizers (add UI: "This sold for $X, add to Encyclopedia benchmark")
-- Option B: Seed from curated reference data (NADA, Kovels, Ruby Lane, etc.) — curator-only import
-- Option C: Both — start with seed, allow organizer submissions (moderator-approved)
-
-**Impact:** Valuation confidence in cold-start (months 1–3 of beta).
-
 ---
 
 ## Schema Migration
@@ -336,6 +373,9 @@ Currently PriceBenchmark is empty (ADR-052 created it but no curator/admin tool 
 **Backwards Compatibility:**
 - `quantity`, `isSet`, `setRole`, `clusterConfidence` default to null/false; existing items unaffected
 - `Photo.photoRole` and `Photo.visionLabels` are new, optional
+- `EncyclopediaEntry.status` defaults to PUBLISHED; existing entries unaffected
+- `EncyclopediaEntry.triggerItemId` is nullable; legacy entries have null
+- `PriceBenchmark.dataSource` defaults to curated; existing benchmarks unaffected
 - `ItemCompLookup` is a new table with no required FK dependencies
 - `valuationService` still works without PriceBenchmark (fallback to insufficient_data); no breaking change
 
@@ -350,6 +390,16 @@ ALTER TABLE Photo ADD COLUMN photoRole VARCHAR(30);
 ALTER TABLE Photo ADD COLUMN visionLabels TEXT[] DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE Photo ADD COLUMN orderIndex INT;
 
+-- EncyclopediaEntry: add status + triggerItemId
+ALTER TABLE EncyclopediaEntry ADD COLUMN status VARCHAR(30) DEFAULT 'PUBLISHED';
+ALTER TABLE EncyclopediaEntry ADD COLUMN triggerItemId VARCHAR(255);
+ALTER TABLE EncyclopediaEntry ADD FOREIGN KEY (triggerItemId) REFERENCES Item(id) ON DELETE SET NULL;
+CREATE INDEX idx_EncyclopediaEntry_status ON EncyclopediaEntry(status);
+
+-- PriceBenchmark: add dataSource
+ALTER TABLE PriceBenchmark ADD COLUMN dataSource VARCHAR(30) DEFAULT 'curated';
+CREATE INDEX idx_PriceBenchmark_dataSource ON PriceBenchmark(dataSource);
+
 -- ItemCompLookup: created fresh (no migration needed)
 ```
 
@@ -357,64 +407,81 @@ ALTER TABLE Photo ADD COLUMN orderIndex INT;
 
 ## Rollout Sequencing
 
-**Phase 1 (Clustering + Vision aggregation) — Weeks 1–2**
+**Phase 1 (Clustering + Vision aggregation + Haiku→Encyclopedia stubs) — Weeks 1–3**
 - Modify `batchAnalyzeController` to cluster first
 - Update `cloudAIService.analyzeItemImages()` for multi-photo Vision
-- Schema migration (Item + Photo)
+- Update Haiku prompt to return `newEncyclopediaStub` field
+- Create `encyclopediaService.createEncyclopediaStub()` with dedup logic
+- Create `createEncyclopediaStub` job type; enqueue from `batchAnalyzeController`
+- Schema migration (Item, Photo, EncyclopediaEntry, PriceBenchmark)
 - Deploy: no feature flag needed; old code path dead (always clusters)
+- Seed initial 20 curated EncyclopediaEntry records with `status: 'PUBLISHED'` (from Session N curator work)
 
-**Phase 2 (PriceBenchmark wiring) — Weeks 3–4**
+**Phase 2 (PriceBenchmark wiring + backfill feedback loop) — Weeks 4–5**
 - Wire `valuationService` to query PriceBenchmark fallback
 - Include benchmarks in Haiku prompt context
-- Publish Encyclopedia curator guide (how to add benchmarks)
-- No schema changes; soft launch
+- Create `backfillBenchmarks` scheduled job: refines `haiku_inferred` → `community_consensus` once N ≥ 5 real sales per slug
+- No new schema changes; soft launch
+- Monitor auto-generated entry quality in admin logs
 
-**Phase 3 (Async eBay comps, ItemCompLookup) — Weeks 5+**
+**Phase 3 (Async eBay comps, ItemCompLookup) — Weeks 6+**
 - New job type: `fetchEbayComps` queued after item reaches PENDING_REVIEW
 - Create ItemCompLookup table + indexes
 - Update valuationService to read ItemCompLookup cache
 - Separate deployment; can defer if eBay API access not ready
 
+**Phase 4 (Curator Tool, deferred) — Future**
+- Build `encyclopedia-review.tsx` UI to promote AUTO_GENERATED → PUBLISHED entries
+- Batch operations for VA or Patrick to review stubs quarterly
+
 ---
 
 ## Knock-On Files
 
-**Unavoidable Changes:**
-1. `packages/database/prisma/schema.prisma` — Add columns + ItemCompLookup table
-2. `packages/backend/src/controllers/batchAnalyzeController.ts` — Clustering logic, new response shape
-3. `packages/backend/src/services/cloudAIService.ts` — Multi-photo Vision aggregation, Haiku prompt updates
+**Unavoidable Changes (Phase 1):**
+1. `packages/database/prisma/schema.prisma` — Add columns to Item, Photo, EncyclopediaEntry, PriceBenchmark + ItemCompLookup table
+2. `packages/backend/src/controllers/batchAnalyzeController.ts` — Clustering logic, new response shape (no confidence badges in response)
+3. `packages/backend/src/services/cloudAIService.ts` — Multi-photo Vision aggregation, Haiku prompt updates, `newEncyclopediaStub` parsing
 4. `packages/backend/src/services/valuationService.ts` — PriceBenchmark fallback query
 5. `packages/backend/src/jobs/processRapidDraft.ts` — Vision label aggregation when calling analyzeItemImages()
-6. `packages/backend/src/lib/tierEnforcement.ts` — Item cap logic: decision needed on set counting
+6. `packages/backend/src/lib/tierEnforcement.ts` — Item cap logic counts Item records (not summed quantities) per locked decision 3
+7. `packages/backend/src/services/encyclopediaService.ts` (new file) — New `createEncyclopediaStub()` service; dedup by slug, create EncyclopediaEntry + PriceBenchmark pair
 
-**Conditional Changes (Phase 2+):**
-7. `packages/backend/src/jobs/fetchEbayComps.ts` (new file) — Async eBay lookup job
-8. `packages/backend/src/controllers/valuationController.ts` (may need updates) — If valuation endpoint returns confidence boosted by benchmarks
+**Phase 2 Changes (Async eBay + Backfill):**
+8. `packages/backend/src/jobs/createEncyclopediaStub.ts` (new job type) — Enqueued when Haiku returns `newEncyclopediaStub`; writes to EncyclopediaEntry + PriceBenchmark
+9. `packages/backend/src/jobs/fetchEbayComps.ts` (new file) — Async eBay lookup job; enqueued after item → PENDING_REVIEW
+10. `packages/backend/src/jobs/backfillBenchmarks.ts` (new scheduled job) — Refines PriceBenchmark ranges from `haiku_inferred` to `community_consensus` once N ≥ 5 real sales exist per slug
 
 **Frontend Changes (High Priority):**
-9. `packages/frontend/components/SmartInventoryUpload.tsx` — Display cluster summaries with confidence badges; add ungroup/regroup UI
-10. `packages/frontend/components/RapidCapture.tsx` — No changes if using analyzeItemImages() (already multimodal); if single-photo path exists, update to aggregate labels
-11. `packages/frontend/lib/itemConstants.ts` — Add set-related constants (setRole enum, etc.)
-12. `packages/frontend/hooks/useItemData.ts` — Possibly: handle quantity field in UI rendering
+11. `packages/frontend/components/SmartInventoryUpload.tsx` — Display cluster summaries WITHOUT confidence badges (no UI prompts per locked decision 5); add ungroup/regroup UI (standard edit mode)
+12. `packages/frontend/components/RapidCapture.tsx` — No changes if using analyzeItemImages() (already multimodal); if single-photo path exists, update to aggregate labels
+13. `packages/frontend/lib/itemConstants.ts` — Add set-related constants (setRole enum, etc.)
+14. `packages/frontend/hooks/useItemData.ts` — Possibly: handle quantity field in UI rendering
+
+**Optional UI (Curator Tool, deferred):**
+15. `packages/frontend/pages/admin/encyclopedia-review.tsx` (future) — Curator dashboard to review auto-generated entries, promote to PUBLISHED
 
 **No changes needed:**
 - Photo model queries (Photo already has itemId FK; reverse cascade already works)
-- PriceBenchmark schema (created by ADR-052; queries only)
 - ItemValuation schema (queries only; confidence score already exists)
 
 ---
 
 ## Constraints Honored
 
-✓ **Photo-centric capture unblocked:** Clustering happens server-side; frontend doesn't wait (upload → Cloudinary → batch-analyze endpoint → clusters returned in <5s for 20 photos).
+✓ **Atomic set behavior:** Per locked decisions 1–3, sets are atomic units (1 label, 1 Purchase record, 1 item against tier cap).
 
-✓ **No organizer-explicit price override:** `aiSuggestedPrice` is a suggestion; organizer-set `price` field always wins in pricing logic (D-005 locked rule maintained).
+✓ **No UI friction on clustering:** No confidence badges, no "is this a set?" prompts (locked decision 5). Organizer sees result and can edit on review screen.
 
-✓ **No "AI" in copy:** Clustering confidence badge shows "95% likely a set" (no "AI" word); benchmark grounding says "Encyclopedia reference" not "AI-powered benchmark."
+✓ **Organizer price always wins:** `aiSuggestedPrice` is a suggestion; organizer-set `price` field always wins in pricing logic (D-005 locked rule maintained).
+
+✓ **No "AI" in user-facing copy:** Clustering happens silently. Benchmark grounding says "Encyclopedia reference" not "AI-powered." Auto-generated entries are flagged internally, never shown to shoppers until curator reviewed.
+
+✓ **XP unchanged:** XP awarded on item creation; clustering naturally reduces bursts to sets, correct behavior not a nerf (locked decision 4 implicit).
 
 ✓ **Inclusive sale-type language:** No "estate sale" bias in clustering prompts; treats all secondary sales equally.
 
-✓ **Backwards compatible:** Existing items with null quantity/isSet work unchanged.
+✓ **Backwards compatible:** Existing items with null quantity/isSet work unchanged. Auto-generated entries marked distinctly from curated data.
 
 ---
 
@@ -438,19 +505,23 @@ Keep current one-item-per-photo behavior; allow organizer to manually group on r
 
 **Risk: Haiku Clustering Hallucination**
 - Haiku groups unrelated items together (e.g., red bowl + red vase as a "red collection")
-- **Mitigation:** Confidence threshold (0.75); show confidence badge; always allow ungroup. A/B test with <0.85 auto-review flag.
+- **Mitigation:** Confidence threshold (0.75); no UI badges (per locked decision 5); organizer can ungroup/regroup on review screen. Confidence score logged internally for analytics and edge-case recovery.
 
 **Risk: Vision API Label Spam**
 - Photo 1: 100 labels (busy background, shelf, other items). Photo 2: 5 labels. Aggregated = 105 labels (noisy).
 - **Mitigation:** Deduplicate, then filter to top 20 by frequency score. Pass to Haiku with note: "Most common labels: X, Y, Z."
 
+**Risk: Haiku-Generated Encyclopedia Entries Are Hallucinated**
+- Haiku creates stub with wrong title, description, or slug.
+- **Mitigation:** Mark as `status: 'AUTO_GENERATED'`, not PUBLISHED. Curator review required before visibility to shoppers (future curator tool). Slug dedup prevents duplicate entries. Internal logging ties each entry back to `triggerItemId` for audit.
+
 **Risk: PriceBenchmark Data Stale or Wrong**
-- Curator adds benchmark data once; market prices change; benchmarks become misleading.
-- **Mitigation:** Start with single source-of-truth data (e.g., Ruby Lane or Etsy aggregated). Sunset if curator capacity is lacking; revert to internal comparables-only fallback.
+- Haiku-inferred benchmarks are outdated or wrong when published.
+- **Mitigation:** Benchmarks marked `dataSource: 'haiku_inferred'` are never shown to shoppers until curator promotes to PUBLISHED. Backfill job refines ranges using actual sold-item data once N ≥ 5 real sales exist; this replaces `haiku_inferred` ranges with `community_consensus`.
 
 **Risk: Set Splitting at Checkout**
 - Organizer uploads "set of 8," customer buys "1 of 8" instead of full set.
-- **Mitigation:** Decision 2 and checkout UX determine this. If sold as atomic unit, POS prevents split purchase.
+- **Mitigation:** Locked decision 1–2: 1 Purchase record per set, 1 label per set. POS prevents split purchase (atomic unit behavior).
 
 ---
 

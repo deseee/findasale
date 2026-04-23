@@ -1,6 +1,65 @@
-# Patrick's Dashboard — S554 Complete
+# Patrick's Dashboard — S555 Complete
 
-## 🔥 S554 — Advisor Outreach + Full Seed Overhaul + Email Setup
+## 🔥 S555 — Print-kit label fix + batching/pricing research + ADR-069 + Encyclopedia seed
+
+**One-line summary:** Fixed the Avery label truncation and bleed problems (labels print clean now), then deep-dived the camera batching and pricing workflow you asked about, wrote a full architecture for fixing it (ADR-069 v2), and produced the first 20 curated Encyclopedia entries + 61 price benchmarks so the seed tables don't stay empty forever.
+
+### What shipped
+
+**Label fix** — `packages/backend/src/controllers/printKitController.ts` got the hardcoded 32-char title truncation removed and the `.label-title` CSS tuned (9pt font, tighter line-height, word-break, max-height, padding-right to stop bleed into the gutter between columns). HTML entity escape added so titles with `&` `<` `>` `"` don't break the rendered HTML. You confirmed in-session that labels print clean at Actual Size. The vertical drift was a print-dialog setting (Fit to Printable Area instead of 100%) — not a template bug, nothing to fix in code.
+
+**Research deep-dive on the batching and pricing workflow:** found two real bugs and a missing integration.
+- Batch Mode (drop 20 photos at once) splits them into 20 separate Items BEFORE any AI runs. That's why a 12-piece dish set becomes 12 unrelated items. The fix is to cluster with Haiku first, THEN create Items per cluster.
+- Rapidfire multi-photo flow has a bug where Vision labels are only extracted from the first photo (`imageBase64Array[0]` is hardcoded). Subsequent detail shots and brand-tag photos are invisible to Vision.
+- eBay comps only fire when you manually click "Search eBay" on the edit screen. The fix is async-after-analysis so comps are cached by the time you open an item.
+- Internal `valuationService` is completely disconnected from the PriceBenchmark table even though ADR-052 built both.
+- Chrome-QA'd Encyclopedia (`/encyclopedia`) and Appraisal (`/shopper/appraisals`, `/organizer/appraisals`) — both shipped, both DB tables empty, both rendering correct empty states.
+
+**ADR-069 v2 locked** — `claude_docs/architecture/ADR-069-BURST-CLUSTERING-PRICING-WIRING.md`. Three core changes:
+- Haiku burst clustering (one multimodal call → cluster → per-cluster analyze) replaces the current 20-item split. Auto-accept silently. No confusing "is this a set?" prompts.
+- Two-way Haiku↔Encyclopedia integration. When Haiku tags an item whose brand/category/pattern doesn't have an entry yet, it spawns an `AUTO_GENERATED` EncyclopediaEntry + PriceBenchmark row in the background. The long tail self-populates; the 20 curated entries are day-one content while auto-generation catches up.
+- Async eBay lookup + enable Google Vision's `webDetection` feature (free — we already pay for Vision). Gives us "pages with matching images" as a third comp signal alongside eBay and internal benchmarks.
+
+**6 architect decisions locked by you:**
+- A set is atomic: 1 label per set, 1 Purchase record per set, counts as 1 toward tier cap.
+- Clustering just happens. No confidence badges, no prompts. Organizer edits on the review screen if they want.
+- No photo-capture XP was invented — I had proposed a fictional mechanic, you correctly called it out, dropped.
+- Two-way Haiku↔Encyclopedia integration locked (the self-populating Encyclopedia design).
+
+**Encyclopedia seed content** — `claude_docs/feature-notes/encyclopedia-seed-entries.md` (20 entries) + `pricebenchmark-seed.json` (61 benchmark rows). Brand-voice compliant. 6 of the 20 are set-focused (Pyrex Primary Colors, Fire-King dinnerware, Fiestaware 8-setting, Stanley Bailey planes, Lionel train sets, Carnival Glass collections). 14/20 are Midwest-biased (Pyrex, Fire-King, Lane cedar chests, MCM credenzas, Depression Glass, Tonka trucks, Windsor chairs, oak roll-tops — stuff that actually shows up in Grand Rapids estate sales, not coastal-elite antiques). Condition tiered EXCELLENT / GOOD / FAIR. Price ranges in cents. Dev just needs a one-time seed script to ingest them, which is one of the S556 parallel dispatches.
+
+### Your decisions needed
+
+**None open right now.** All 6 architect decisions are locked. S556 can dispatch immediately.
+
+### What S556 does (next session)
+
+Three parallel dispatches firing in one message:
+1. **ADR-069 Phase 1 core** — schema migration + burst clustering endpoint + Vision bug fix + valuation↔PriceBenchmark wiring + Haiku-writes-Encyclopedia-stubs path. Biggest dispatch.
+2. **Encyclopedia seed ingest** — one-time script that reads the 20 entries + 61 benchmarks and inserts them into the DB. Small.
+3. **Async eBay + Vision webDetection** — eBay lookup fires after per-item analysis; webDetection flag enabled for free extra signal. Medium.
+
+After all three return, you get one consolidated push block, then Chrome QA micro-dispatches to verify.
+
+## 📤 Push Block (S555 wrap)
+
+If the label-fix (printKitController.ts) was already pushed mid-session, Git will quietly skip it — this block is safe to paste either way.
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/printKitController.ts
+git add claude_docs/architecture/ADR-069-BURST-CLUSTERING-PRICING-WIRING.md
+git add claude_docs/feature-notes/encyclopedia-seed-entries.md
+git add claude_docs/feature-notes/pricebenchmark-seed.json
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "s555: label fix + ADR-069 v2 burst clustering/pricing wiring + Encyclopedia seed content"
+.\push.ps1
+```
+
+No migration required on push — schema changes ship in S556 Phase 1, not here.
+
+## 🔥 S554 — Previous session summary (context)
 
 **One-line summary:** Built the 34-draft advisor outreach list for finda.sale beta credibility push, rewrote the whole production seed from scratch (real regional organizers, tight product photos uploaded to Cloudinary, correct zip codes, user1 promoted to TEAMS), fixed the `/api/locations` rate-limit flood, got patrick@finda.sale sending mail.
 
