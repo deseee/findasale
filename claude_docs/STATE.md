@@ -196,6 +196,37 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 **Patrick actions before S547:**
 - None blocking — push block for S546 already shipped, migrations applied, DB verified.
 
+---
+
+**Parallel dispatch queue (added S551 — dispatch together once Patrick starts next session):**
+
+These items are independent (different files, no cross-dependencies) and should be dispatched as concurrent `Agent(subagent_type='general-purpose')` calls in a single message per CLAUDE.md §7 parallel pattern.
+
+1. **Trailblazer color map cleanup** — `packages/frontend/components/SmartBuyerWidget.tsx` lines 23–31. `RANK_COLORS` references stale rank names (EXPLORER, PATHFINDER, TRAILBLAZER, LEGEND) that don't exist in the live 5-rank system. Replace with the correct map: INITIATE, SCOUT, RANGER, SAGE, GRANDMASTER. P3 dead-code cleanup, ~10 lines.
+
+2. **Coupon tier Hunt Pass values — CODE FIX** — `packages/backend/src/controllers/couponController.ts` lines 253–255. Currently shipped values are `monthlyLimitHuntPass: 6, 6, 3` — Patrick confirmed S551 these are wrong. Correct values: `monthlyLimitHuntPass: 3, 3, 2`. Standard tier values stay as-is (`monthlyLimitStandard: 2, 2, 1`). Also re-think the "3x Monthly Coupon Slots" branding — the math is now 1.5x (tier 1+2) and 2x (tier 3), so drop the "3x" label or reframe. Verify no callers assume the old 6/6/3 numbers.
+
+3. **Hunt Pass page copy update — frame, badge, bonus, coupons (4 separate cards)** — `packages/frontend/pages/shopper/hunt-pass.tsx`. Three issues and one structural change:
+   - **Split badge and frame into two separate cards.** Today the 🎖️ "Exclusive Hunt Pass Badge" card conflates two different features. Split into:
+     - **Card A — Golden Trophy Avatar Frame** (new card): amber/gold ring around the avatar on nav + dropdown (HuntPassAvatarBadge.tsx shipped S544). Visual status marker on the profile photo itself.
+     - **Card B — Hunt Pass Leaderboard Badge** (rewrite existing): 🏆 badge shown next to the user's name on leaderboards.
+   - **Treasure Hunt Pro** (🎯 section) mentions the 100→150 scan cap but omits the **+10% XP bonus** on treasure hunt QR scans (shipped — itemController.ts recordQrScan applies +10% multiplier for Hunt Pass subscribers on top of rank multiplier). Add the +10% bonus line.
+   - **Add Coupon Slots benefit card** (new) with the CORRECTED 3/3/2 numbers (after item #2 code fix lands). Describe as more monthly coupon redemptions across the three XP-coupon tiers vs. free accounts.
+
+4. **Bounty redesign Batch A — Auto-match on item publish (highest value)** — Per `claude_docs/strategy/bounty-redesign-spec.md` §1 + §6a. Backend: `POST /api/bounties/:id/match` endpoint with fuzzy match scoring (60% confidence threshold locked, 25mi radius, category bonus, recency bonus, tag overlap). Frontend: post-publish match modal on `/organizer/add-items` showing top 3–5 matches with Submit CTA per bounty. Architect review may be needed for the fuzzy match algorithm approach.
+
+5. **Bounty redesign Batch B — Shopper submission review page** — Per spec §3a + §6a `GET /api/bounties/submissions` and §6a `PATCH /api/bounties/submissions/:id`. New page `/shopper/bounties/submissions` listing PENDING_REVIEW submissions with approve/decline/message actions. Uses shipped BountySubmission schema. Notifications when submissions arrive + expiry warnings.
+
+6. **Bounty redesign Batch C — Integrated purchase + XP flow** — Per spec §3b + §4b + §6a `POST /api/bounties/:id/submissions/:submissionId/purchase`. Shopper approves → Stripe checkout with XP line item (-50 XP shopper / +25 XP organizer via PointsTransaction BOUNTY_FULFILLMENT). Must block purchase if insufficient XP (no overdraft per spec). Order links bountySubmissionId.
+
+7. **Bounty redesign Batch D — Organizer "Your Recent Submissions" backend endpoint** — Frontend placeholder exists in `/organizer/bounties` V4 but backend is missing. Returns past-30-day BountySubmission records for the organizer with status (PENDING_REVIEW / APPROVED / REJECTED / EXPIRED).
+
+8. **Delete dead `BountyModal.tsx` component file** — Removed from sales/[id].tsx S551. No other consumers (grep confirmed). Requires Patrick explicit approval per CLAUDE.md §7 Removal Gate (component file, not dead code at language level). Surface as DECISION NEEDED at dispatch time OR delete inline if Patrick signs off during the S551 wrap push.
+
+**Dependencies between the bounty batches:** Batch D is independent and can ship solo. Batch A feeds organizer activity but doesn't block B/C. Batch B must ship before Batch C (can't approve a submission that has no review UI). Batch C depends on the Stripe + XP service integration being solid; consider Architect review first.
+
+**Patrick decisions still open (from spec §8):** shopper price negotiation (default no), bounty auto-expiry default (60–90 days recommended, nullable today), message char limit (500 default). Not blockers — default values in spec.
+
 ## Current Work
 
 **S546 COMPLETE — S545 migration recovery:**

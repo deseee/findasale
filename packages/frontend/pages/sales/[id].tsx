@@ -52,7 +52,6 @@ import AddToCalendarButton from '../../components/AddToCalendarButton';
 import LocationMap from '../../components/LocationMap';
 import SocialProofBadge from '../../components/SocialProofBadge';
 import { useSaleSocialProof } from '../../hooks/useSocialProof';
-import BountyModal from '../../components/BountyModal';
 import ColorKeyLegend from '../../components/ColorKeyLegend'; // Feature #310: Color-tagged discount rules
 import useXpProfile from '../../hooks/useXpProfile'; // Rank-Based Early Access: fresh rank (explorerRank no longer on AuthContext User)
 
@@ -1335,11 +1334,6 @@ const SaleDetailPage = () => {
               ))}
             </div>
           )}
-        </div>
-
-        {/* Bounty Modal — Request Missing Items */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          <BountyModal saleId={sale.id} saleStatus={sale.status} />
         </div>
 
         {/* Feature #47: UGC Photo Gallery */}

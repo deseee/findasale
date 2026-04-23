@@ -79,7 +79,7 @@ DECISION: Lock the following earning values, replacing current 10 XP flat purcha
 | **Seller review** | 5 XP | Reduce from 8 to remove extortion leverage ("rate me or lose XP"). |
 | **QR code scan** | 3 XP | Reduce from 12 to reflect zero-effort activation; geo-check required. |
 
-**Fraud gate for referrals:** Referral XP only credits 24+ hours after the friend's first purchase clears payment processing (not pending). Friend's account must have valid email + phone verified. If referrer already referred the same person (duplicate check), credit only once. This prevents drive-by fraud.
+**Fraud gate for referrals:** Referral XP only credits 24+ hours after the friend's first purchase clears payment processing (not pending). Existing fraud controls are sufficient: 24h hold + purchaseId idempotency (prevents multiple awards for one payment), IP pair logging on signup (detects self-referral rings), chargeback clawback (recovers fraudulent XP if payment reversed), self-referral blocked (same-account check), email uniqueness enforcement. These controls eliminate the primary abuse vector (phantom accounts earning XP that doesn't convert to real money). If referrer already referred the same person (duplicate check), credit only once. Phone verification not required.
 
 PLAYER EXPERIENCE: Earning feels consistent: high-effort activities (haul post = 30, appraisal picked = 20) beat low-effort (walk-in = 2, scan = 3). Referral at 500 is a "lottery ticket" — one successful friend pays for a month of casual play.
 

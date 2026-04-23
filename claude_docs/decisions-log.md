@@ -5,6 +5,14 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-04-22 (S550) — Phone Verification NOT Required for REFERRAL_FIRST_PURCHASE XP (500 XP)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Skip phone verification entirely. 500 XP reward not worth $1.50 Stripe Identity check or Twilio SMS verification UX friction. Existing fraud controls (24h hold + purchaseId idempotency, IP pair logging, chargeback clawback, self-referral block, email uniqueness) sufficient. Phantom-account abuse at 500 XP doesn't convert to real money anywhere. If broader phone verification is needed later for other features (beta onboarding, community abuse gating), revisit as standalone build. Supersedes: S536 gamedesign spec phone gate requirement.
+
+---
+
 ## 2026-04-11 (S441) — Team Collaboration System Approved (14 Ideas, 4 Pages)
 
 **Status:** LOCKED
