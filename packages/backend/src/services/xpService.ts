@@ -80,9 +80,15 @@ export const XP_AWARDS = {
   // Auctions (wins only — D-XP-009: flat 20 XP, value multiplier eliminated)
   AUCTION_WIN: 20, // Flat XP per auction win — competitive transaction (D-XP-009, was 10+bonus)
 
-  // Referrals
+  // Referrals — legacy flat award (deprecated, use tranche system)
   REFERRAL_SIGNUP: 20,
-  REFERRAL_FIRST_PURCHASE: 500, // Referrer earns when friend's first purchase clears (D-XP-004, was 30)
+  REFERRAL_FIRST_PURCHASE: 500, // Deprecated: use referral tranche system instead (D-XP-004, was 30)
+
+  // Referral XP Anti-Fraud System — 4-tranche escrow (Feature #XXX)
+  REFERRAL_TRANCHE_A: 100,       // Tranche A: referred user logs in 3 distinct days
+  REFERRAL_TRANCHE_B: 150,       // Tranche B: referred user visits 3 distinct sales
+  REFERRAL_TRANCHE_C: 150,       // Tranche C: referred user completes first purchase
+  REFERRAL_TRANCHE_D: 100,       // Tranche D: referred user completes trail/self-referral/2nd purchase
 
   // First-time buyer milestone
   FIRST_PURCHASE_EVER: 50,      // One-time: shopper's very first purchase on platform

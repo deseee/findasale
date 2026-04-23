@@ -8,6 +8,7 @@ import { handleReferralBadge } from './userController';
 import { addShopperSubscriber } from '../services/mailerliteService';
 import { processReferral } from '../services/referralService';
 import { awardXp, XP_AWARDS } from '../services/xpService';
+import { referralTrancheService } from '../services/referralTrancheService';
 import { checkRegistrationLimit, recordRegistration } from '../lib/registrationRateLimiter';
 import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
 
@@ -691,6 +692,14 @@ export const login = async (req: Request, res: Response) => {
     // Return user without password
     const { password: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword, token });
+
+    // Feature #XXX: Record referral tranche login (non-blocking)
+    try {
+      await referralTrancheService.recordLogin(user.id);
+    } catch (err) {
+      console.error('[referralTranche] recordLogin failed:', err);
+      // Never fail the login due to tranche logic
+    }
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error during login' });

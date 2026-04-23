@@ -19,6 +19,7 @@ import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Fea
 import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feature #32: Smart Follow
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
 import { awardXp, XP_AWARDS, applyHuntPassMultiplier, RANK_EARLY_ACCESS_HOURS } from '../services/xpService'; // Explorer's Guild XP awards
+import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
 import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
 import { isSaleLocked, getEffectivePublishTime, getMinutesUntilUnlock } from '../services/rankService'; // Rank-based early access gate
 
@@ -1626,6 +1627,14 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
       });
     } catch {
       // Field may not exist, continue
+    }
+
+    // Feature #XXX: Record referral tranche sale visit (non-blocking)
+    try {
+      await referralTrancheService.recordSaleVisit(userId, saleId);
+    } catch (err) {
+      console.error('[referralTranche] recordSaleVisit failed:', err);
+      // Never fail the visit recording due to tranche logic
     }
 
     res.json({

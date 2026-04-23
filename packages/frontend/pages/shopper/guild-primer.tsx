@@ -67,7 +67,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
     emoji: '👑',
     label: 'Grandmaster',
     milestone: 'Mastery achieved',
-    perks: ['Hold items for 90 minutes', 'All holds auto-confirm', '6-hour early access', 'Unlimited wishlist', 'All cosmetics unlocked', 'Free Hunt Pass included'],
+    perks: ['Hold items for 90 minutes', 'All holds auto-confirm', '6-hour early access', 'Unlimited wishlist', 'All cosmetics unlocked', 'Hunt Pass included while active Grandmaster'],
   },
 ];
 
@@ -901,7 +901,7 @@ const GuildPrimerPage = () => {
                 },
                 {
                   q: 'What happens when I reach Grandmaster?',
-                  a: 'Free Hunt Pass forever. That\'s yours to keep, regardless of future activity.',
+                  a: 'Hunt Pass is included free while you hold Grandmaster status. It renews each year you re-qualify after the January reset. If you drop below Grandmaster, the pass lapses — re-qualify and it restores automatically.',
                 },
               ].map((faq, idx) => (
                 <details key={idx} className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">

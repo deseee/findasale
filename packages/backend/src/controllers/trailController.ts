@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { searchNearbyPlaces, haversineDistance, completionBonus } from '../lib/placesService';
 import { spendXp, getSpendableXp } from '../services/xpService';
+import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
 
 /**
  * POST /api/trails
@@ -407,6 +408,14 @@ export const checkInAtStop = async (req: AuthRequest, res: Response) => {
             daysToComplete,
           },
         });
+
+        // Feature #XXX: Record referral tranche trail completion (non-blocking)
+        try {
+          await referralTrancheService.recordTrailCompletion(userId);
+        } catch (err) {
+          console.error('[referralTranche] recordTrailCompletion failed:', err);
+          // Never fail the trail completion due to tranche logic
+        }
 
         // Award completion bonus XP to shopper
         await prisma.pointsTransaction.create({
