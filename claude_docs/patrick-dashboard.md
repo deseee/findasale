@@ -1,4 +1,73 @@
-# Patrick's Dashboard — S553 Complete
+# Patrick's Dashboard — S554 Complete
+
+## 🔥 S554 — Advisor Outreach + Full Seed Overhaul + Email Setup
+
+**One-line summary:** Built the 34-draft advisor outreach list for finda.sale beta credibility push, rewrote the whole production seed from scratch (real regional organizers, tight product photos uploaded to Cloudinary, correct zip codes, user1 promoted to TEAMS), fixed the `/api/locations` rate-limit flood, got patrick@finda.sale sending mail.
+
+### What shipped
+
+**Advisor outreach drafts (`claude_docs/marketing/advisory-outreach-drafts.md` v4.1):** 34 first-contact messages across 3 buckets — shopper creators (Reezy, Hairy Tornado, Ralli Roots, Commonwealth Picker, Thrifting Vegas, Becky Park, the whole list), operator-creators who run real businesses + publish (Curiosity Incorporated 586k, plus unverified names you need to spot-check), and organizer-side trade voices (Estate Sale Business Podcast, Antiques Diva, Pre-Loved, AntiqueWeek + Antique Trader editors, NESA/NAOEL/NAA/ISA sponsorship inquiries). Conflicts caught and excluded: Crazy Lamp Lady (owns Niknax on District.net), Thrifter Junker (owns VAMP on same platform), NARTS board, Closet Conversations. Voice is "I've been working on something, you came up in my head because..." — no "cold note" buzzwords, every link is `https://finda.sale/video`. Ready to send one a day.
+
+**Organizer Acquisition Playbook v2 (`Organizer_Acquisition_Playbook_v2.md`):** Supply-first, 3-hours-a-week rewrite of v1. Outscraper→RVM/email as the primary autopilot; probate attorneys / ASEL / Caring Transitions / supply vendors demoted to deferred because they need more Patrick-hours than you have. Measurable "active organizer" definition locked (≥1 sale published AND ≥20 items listed AND ≥1 sale in last 90 days).
+
+**Seed data — full overhaul of `packages/database/prisma/seed.ts`:** Went through many iterations but the final state is clean:
+
+- 10 plain-language regional organizers (8 MI + 1 South Bend IN + 1 Toledo OH). Names like Kelly's Estate Sales, Barn Door Consignment, Up North Flea Market Booth, Martin Family Auctions, Cherry Street Antiques — no "Professionals / Quality / Group / Solutions" corporate tells. Bios read like a real operator wrote them.
+- Per-state zip pools — IN orgs get 46xxx, OH orgs get 43xxx, no more Michigan zips on a Toledo address.
+- Sale titles match organizer type — auction orgs get "Regional Estate Auction", consignment orgs get "Curated Consignment", not generic "Sale #12".
+- Sale geographic jitter — South Bend sales cluster in South Bend, Toledo sales cluster in Toledo.
+- Tiered prices — 65% $5–$75, 25% $100–$500, 10% $500–$2000. No more flat $5–$500 uniform.
+- `publishedAt` set on every PUBLISHED sale so shoppers can actually see them. Artifact's Paw Paw sale patched in production directly.
+- user1 promoted to TEAMS (ADMIN + founder-level). user2 stays PRO, user3 now SIMPLE.
+- 22 users total (1 admin + 9 organizers + 12 shoppers — user11 through user22 all password `password123`), down from 100.
+- Artifact and deseee@ accounts preserved intact — their data survives every re-seed.
+- "decor" category renamed to "housewares" so sale tags don't read awkwardly.
+- Item titles no longer get the dev-only `#1 / #2 / #3` suffix.
+
+**38 category-matched product photos uploaded to your Cloudinary:** Used the Cloudinary API with your key/secret (from `packages/backend/.env`) to upload 5–6 photos per category at `findasale/seed/{category}/{category-N}.jpg` — furniture, kitchenware, tools, jewelry, books, clothing, art, decor. Each photo was picked from Unsplash via description keyword matching (tools pool filtered for "hammer/wrench/pliers/saw", art filtered out "room/gallery/wall full"). Re-curated once after the first pass had too many lifestyle shots. Items now show a chair for a chair, tools for tools, jewelry for jewelry — no more silk scarves showing a chair.
+
+**Backend fixes:** Two bugs shipped earlier in the session — P1017 Prisma retry hook (handles Railway Postgres idle-connection close) in `lib/prisma.ts`, and locationController ownerId bug across all 6 functions (was querying `organizerId` against `User.id` but field is `ownerId` holding `Organizer.id`; every TEAMS user hitting `/api/locations` was silently throwing `PrismaClientValidationError`).
+
+**Frontend fixes:** `useOrganizerTier` hook wrapped `canAccess` in `useCallback([tier])` — the unstable function reference was firing a `useEffect` loop in `LocationSelector` and `organizer/inventory`, hammering `/api/locations` and tripping Railway's rate limiter (the 429 tsunami you saw). Backend fix above actually exposed this by making the endpoint respond fast enough to loop instead of hang. `next.config.js` added `images.unsplash.com` to both `images.domains` AND the CSP `img-src` header — needed both or Next.js blocks server-side vs the browser blocks client-side.
+
+**Email infrastructure:** patrick@finda.sale alias live via ImprovMX (domain routed there already), Gmail "Send mail as" configured with `smtp.gmail.com` + port 587 + TLS + your existing app password. Set "When replying: from same address message was sent to" so outreach replies don't leak deseee@gmail.com. Advisor outreach sends from patrick@.
+
+### Your decisions needed
+
+**None urgent.** The outreach list is ready to send. The site has real photos, real organizers, real prices. Next natural step is: send the first one or two outreach drafts (my recommendation is Bucket 2 operator-creators first, then Bucket 3 podcasters, then Bucket 1 YouTubers last — send order's at the bottom of the drafts file).
+
+### Known quirks from this session
+
+- 8 of the operator-creator entries are flagged **unverified sub count** — don't send to Amanda's Mercantile, Junking with Lou, The Bonafide Hustler, Swap-O-Rama TV, The Griffin Antique Mall, Patdees Traveling Picker, Picker Road, Antique Picking Adventures without verifying their channel size first.
+- `/sales/cmoarye3d0009ryn9vlqo05i2` (Artifact Downtown Paw Paw) returning 500 earlier in the session — separate issue, not investigated. That URL was partially fixed with publishedAt patch; full 500 root cause still unknown.
+- The `/api/locations` 429s should be fully stopped after the `useOrganizerTier` push deploys. If you still see them, your browser has a stale bundle — Ctrl+Shift+R.
+
+## 📤 Push Block (S554 wrap)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+git add packages/database/prisma/seed.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+
+git commit -m "s554: seed overhaul + advisor outreach + email setup
+
+- seed.ts: final state — category-matched Cloudinary photos, no #N
+  suffixes on item titles, 22 users (1 admin / 9 org / 12 shopper),
+  user1 TEAMS, plain regional business names, per-state zips,
+  saleType-matched titles, tiered prices, publishedAt on all
+  PUBLISHED sales, preservation-aware cleanup via session_replication_role
+- STATE.md + patrick-dashboard.md: S554 wrap"
+
+.\push.ps1
+```
+
+No re-seed required on push — the running seed already has all these fields from the earlier runs + DB patches. Seed file is committed for future consistency.
+
+## 🔥 S553 — Previous session summary (context)
+
+
 
 ## 🚨 Audit Alerts (Weekly Full-Site Audit — 2026-04-23)
 
