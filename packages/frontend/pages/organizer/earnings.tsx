@@ -4,7 +4,7 @@
  * Includes PDF export capability
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -41,11 +41,12 @@ const OrganizerEarningsPage = () => {
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [isExporting, setIsExporting] = useState(false);
 
-  if (authLoading) return null;
-  if (!user || !user.roles?.includes('ORGANIZER')) {
-    router.push('/login');
-    return null;
-  }
+  // Redirect if not authenticated/authorized (hooks must run before early return — React #310 fix)
+  useEffect(() => {
+    if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+      router.push('/login');
+    }
+  }, [authLoading, user, router]);
 
   // Fetch organizer profile (for subscriptionTier)
   const { data: organizerProfile } = useQuery({
@@ -115,6 +116,11 @@ const OrganizerEarningsPage = () => {
 
   const previousYear = year - 1;
   const nextYear = year + 1;
+
+  // Gate render after all hooks (redirect handled by useEffect above)
+  if (authLoading || !user || !user.roles?.includes('ORGANIZER')) {
+    return null;
+  }
 
   return (
     <>

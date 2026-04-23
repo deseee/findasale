@@ -1,8 +1,46 @@
-# Patrick's Dashboard — S549 Complete
+# Patrick's Dashboard — S550 Complete
 
-## 🔥 S549 — Two P0 Crashes Killed + Four Mobile Overflows Fixed
+## 🔥 S550 — Affiliate Batches 3+4+6 Shipped, Innovation Review Delivered, /organizer/earnings P0 Killed For Real
 
-**One-line summary:** Two pages were throwing ErrorBoundary at any width — `/admin` index and `/organizer/earnings`. Both fixed plus the four S548 mobile overflows you wanted bundled. Six files, three parallel dispatches, no logic touched.
+**One-line summary:** Affiliate Program got three parallel batches built (code generation, signup attribution, dashboard endpoints). Innovation agent delivered a two-phase review with three actionable recommendations before payout amounts are locked. The /organizer/earnings crash I "fixed" in S549 wasn't really fixed — that was a divide-by-zero red herring. The actual bug was a React #310 hooks-order violation. Fixed for real this time, plus `/organizer/calendar` which had the same pattern. Seven files + one new strategy doc.
+
+### Affiliate Batches 3+4+6 — BUILT
+
+**Batch 3 — Code generation (two endpoints):**
+- `POST /api/affiliate/generate-code` — idempotent (returns existing code if already generated), uses `affiliateService.generateCode()` from S545 with the 7-day-account / 30-day-lockout fraud gates
+- `GET /api/affiliate/code` — returns code without creating one (null if not yet generated)
+- Both registered in `routes/affiliate.ts` (also fixed the orphaned `/me` route from S545 that never got registered)
+
+**Batch 4 — Signup attribution (`?aff=` URL param):**
+- `pages/register.tsx` reads both `?ref=` (existing shopper XP flow, untouched) AND `?aff=` (new affiliate flow)
+- When `?aff=` is present, an amber "An organizer referred you to FindA.Sale" banner shows during signup so the new user knows a commission will be paid on their first sale
+- `authController.ts` accepts `affiliateReferralCode` in signup payload, looks up the referrer inside the existing transaction, creates `AffiliateReferral {status: 'PENDING'}`, blocks self-referral (matches on both user ID and email), logs IP pair for fraud audit
+- Invalid codes silently ignored (don't fail signup)
+
+**Batch 6 — Dashboard endpoints (two endpoints):**
+- `GET /api/affiliate/referrals` — paginated list with status filter (PENDING/QUALIFIED/PAID/REJECTED)
+- `GET /api/affiliate/earnings-summary` — dashboard widget aggregates: totalEarned, unpaidBalance, thisMonthEarnings, last 5 payouts
+- Both ORGANIZER-role gated
+
+### Innovation Review — Two-phase analysis, three actionable recommendations
+
+Before we lock the flat 2% payout, the innovation agent ran ideation (5 frameworks — Adjacent Possibilities, 10x Thinking, Reversal, Intersection, Threat-as-Opportunity) and feasibility evaluation. Top three:
+
+1. **Replace flat 2% with tier-matched commission.** SIMPLE = $0, PRO = 2%, TEAMS = 3%, ENTERPRISE = 5%. Rationale: a TEAMS organizer who refers another TEAMS organizer is bringing in a much higher-LTV customer than a SIMPLE→SIMPLE referral. Flat percentage under-rewards the high-value cases and over-rewards the low ones. Aligns incentive with customer value.
+2. **Hybrid payout — credits default, cash at $200.** Until accumulated balance hits $200, payouts go to FindA.Sale credit (applies to their next billing cycle). At $200+, organizer can request cash via Stripe Transfer. Reduces Stripe fee burden on micro-payouts, keeps high-performing referrers engaged, still honors the "real money" promise at a meaningful threshold.
+3. **Defer the recurring 12-month subscription % model.** Validate the one-time commission model first (Q3 2026). Recurring introduces clawback complexity, 1099-NEC threshold surprises for the referrer, and churn-attribution edge cases. Revisit in 2027 after we have attribution data.
+
+**Compliance flags:** >$500 lifetime payouts trigger Stripe Identity verification. $600/yr triggers 1099-NEC. Both need to be wired before Batch 7 (payout request flow). Full writeup in `claude_docs/feature-notes/affiliate-innovation-review-S550.md`.
+
+### 🛑 /organizer/earnings was still crashing — S549 fixed the wrong thing
+
+Live smoketest per the mandatory post-fix rule. Admin index passed ✅ (S549 null guards working, "Unknown" fallback visible). But /organizer/earnings was STILL throwing ErrorBoundary. Console showed **React error #310 — hooks order violation**. The S549 NaN/divide-by-zero guard was in the code and deployed, but that wasn't the bug.
+
+Real bug: the page had `if (authLoading) return null;` and `if (!user || !user.roles?.includes('ORGANIZER'))` as **early returns BEFORE the useQuery hooks**. React requires hooks to be called in the same order on every render — an early return on some renders skips the hooks on those renders, and React bails with #310 instead of rendering.
+
+Fixed by moving auth checks into `useEffect` (redirect as a side effect) and gating the render with `if (authLoading || !user || !user.roles?.includes('ORGANIZER')) return null;` **after** all hooks are called. Grepped for the same pattern across organizer pages — found `calendar.tsx` had the identical bug, applied the same fix. Members.tsx and ugc-moderation.tsx looked suspect but their hooks were all called before the return (safe).
+
+**S549 post-mortem:** The NaN-guard fix ships, but shouldn't have been closed as resolving the crash. A real browser test would have caught it immediately — that's why the §10 smoketest rule exists.
 
 ### P0 — `/admin` index crash (FIXED)
 
@@ -31,32 +69,47 @@ Pure Tailwind. Desktop layouts unchanged from `sm:` breakpoint up.
 
 You asked to dispatch Batch 2 (the checkout sessionStorage → Purchase attribution wire-through). Audit found it's **already implemented end-to-end** in `CheckoutModal.tsx` lines 315–321 (frontend) and `stripeController.ts` lines 329/472/520/1195–1197 (backend). `Purchase.affiliateLinkId` confirmed in schema. Must have shipped silently in a prior session. Zero new code. Spec doc `affiliate-program-spec-S544.md` should be marked "Batch 2 done." Next affiliate work is Batch 3 (POST /affiliate/generate-code + GET /affiliate/code).
 
-## 📤 Push Block (S549)
+## 📤 Push Block (S550)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-git add packages/frontend/pages/admin/index.tsx
-git add packages/frontend/pages/admin/items.tsx
+git add packages/backend/src/controllers/affiliateController.ts
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/routes/affiliate.ts
+git add packages/frontend/pages/register.tsx
 git add packages/frontend/pages/organizer/earnings.tsx
-git add packages/frontend/pages/organizer/edit-sale/[id].tsx
-git add packages/frontend/pages/organizer/insights.tsx
-git add packages/frontend/pages/shopper/explorer-profile.tsx
-git add packages/frontend/pages/organizer/workspace.tsx
+git add packages/frontend/pages/organizer/calendar.tsx
+git add claude_docs/feature-notes/affiliate-innovation-review-S550.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-git commit -m "S549: P0 fixes — /admin index null guards, /organizer/earnings divide-by-zero; P1 mobile overflows on 4 pages; P2 workspace tab bar wrap"
+git commit -m "S550: Affiliate Batches 3+4+6 (code gen, signup attribution, dashboard); innovation review; P0 /organizer/earnings + calendar hooks-order fix (React #310)"
 
 .\push.ps1
 ```
 
-## 🎯 Next Session (S550) — What's Queued
+## 🎯 Your Decisions — Before Batches 5, 7, 9 Dispatch
 
-1. **Smoke test S548 + S549** — open `/admin`, `/organizer/earnings`, the 5 mobile pages (4 overflow fixes + workspace tab bar) in Chrome. Pixel 6a PWA should now render at 412px after S548 viewport meta fix. Confirm crashes gone and overflows resolved.
-2. **Affiliate Batch 3** — POST /affiliate/generate-code + GET /affiliate/code endpoints (spec section 3.1, 3.2). Batch 2 is done; Batch 1's GET /api/affiliate/me may overlap with the spec's GET /affiliate/code — Architect should reconcile before Dev.
-3. **Affiliate payout amounts** — still placeholders ($20 PRO / $55 TEAMS). Lock before Batch 4 (Stripe webhook wiring).
-4. **Carry-over Chrome QA backlog** — S543/S540/S541/S531 items in `STATE.md` Blocked/Unverified Queue.
+**Affiliate payout model (innovation recommendations):**
+1. **Tier-matched commission instead of flat 2%?** SIMPLE=$0, PRO=2%, TEAMS=3%, ENTERPRISE=5%. Approve / modify / reject.
+2. **Hybrid credits vs cash?** Default to FindA.Sale credits, cash only at $200+ balance. Approve / modify / reject.
+3. **Defer recurring-subscription commission model to 2027?** Validate one-time first. Approve / modify / reject.
+
+Your answers gate:
+- Batch 5 (qualification trigger — first successful paid sale → status QUALIFIED + payout amount calculation)
+- Batch 7 (payout request flow — Stripe Transfer to organizer's connected account)
+- Batch 9 (email templates for PENDING → QUALIFIED → PAID notifications)
+
+## 🎯 Next Session (S551) — What's Queued
+
+1. **Await payout decisions above**, then dispatch Batches 5+7+9 in parallel (different files, no conflict).
+2. **Remaining S549 mobile smoketest** — /organizer/edit-sale/[id] header, /organizer/insights SELECT, /shopper/explorer-profile Add buttons, /admin/items pagination, /organizer/workspace tab bar. Couldn't verify this session (focus pivoted to the /organizer/earnings emergency).
+3. **Smoketest S550 affiliate endpoints** in Chrome after deploy:
+   - Sign up a test user with `?aff=CODE` → confirm banner shows + AffiliateReferral row created
+   - Hit `/api/affiliate/generate-code` as an organizer → confirm code returned, idempotent on second call
+   - Hit `/api/affiliate/earnings-summary` → confirm zero-state renders cleanly
+4. **Batch 8 (fraud detection middleware)** deferred — basic self-referral block is in Batch 4. Full fraud middleware can wait until we have real referral data to tune against.
 
 ## ─── Archived Below: S548 ───
 

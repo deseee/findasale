@@ -19,6 +19,7 @@ const RegisterPage = () => {
     phone: '',
     businessAddress: '',
     referralCode: '',
+    affiliateReferralCode: '',
     inviteCode: '',
   });
   const [organizerEmailConsent, setOrganizerEmailConsent] = useState(false);
@@ -26,12 +27,16 @@ const RegisterPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Pre-fill referral code from ?ref= and invite code from ?invite= URL params
+  // Pre-fill referral codes from URL params
+  // ?ref= for shopper-to-shopper referral rewards (existing system)
+  // ?aff= for organizer-to-organizer affiliate program (new system)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
+    const aff = params.get('aff');
     const invite = params.get('invite');
     if (ref) setFormData(prev => ({ ...prev, referralCode: ref }));
+    if (aff) setFormData(prev => ({ ...prev, affiliateReferralCode: aff }));
     // Invite codes are for organizer beta access — pre-select ORGANIZER role
     if (invite) setFormData(prev => ({ ...prev, inviteCode: invite.toUpperCase(), role: 'ORGANIZER' }));
   }, []);
@@ -106,6 +111,7 @@ const RegisterPage = () => {
         name: formData.name,
         role: formData.role,
         referralCode: formData.referralCode || undefined,
+        affiliateReferralCode: formData.affiliateReferralCode || undefined,
         inviteCode: formData.inviteCode || undefined,
         deviceFingerprint, // Platform Safety #118: Include fingerprint
       };
@@ -163,6 +169,18 @@ const RegisterPage = () => {
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {formData.affiliateReferralCode && (
+            <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+              <div className="flex items-start gap-3">
+                <svg className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zm-11-1a1 1 0 11-2 0 1 1 0 012 0zm-3 4a1 1 0 100-2 1 1 0 000 2zm3 1a1 1 0 11-2 0 1 1 0 012 0zm3-1a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
+                <div className="text-sm text-amber-700 dark:text-amber-200">
+                  An organizer referred you to FindA.Sale. If you join as an organizer and complete a paid sale, they earn a thank-you commission.
+                </div>
+              </div>
+            </div>
+          )}
           {error && (
             <div className="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
               <div className="text-sm text-red-700 dark:text-red-300">
