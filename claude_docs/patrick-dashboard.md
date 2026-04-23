@@ -1,4 +1,4 @@
-# Patrick's Dashboard — S552 Complete
+# Patrick's Dashboard — S553 Complete
 
 ## 🔥 S552 — Bounty Batches A+B+D, Referral Anti-Fraud System, XP Economy Design, Geofencing Audit
 
@@ -95,7 +95,7 @@ git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-git commit -m "S552+S553: Bounty Batches A+B+D; referral tranche anti-fraud system; admin price fix; HP coupon 3/3/2; hunt-pass copy; guild-primer Grandmaster; condition grade S=Mint; appraisal guide content; geofence QR scans; BountyModal.tsx removed"
+git commit -m "S552+S553: Bounty A+B+D; referral tranche anti-fraud; admin price fix; HP coupon 3/3/2; hunt-pass copy; guild-primer GM; condition S=Mint; appraisal guide; geofence QR scans; BountyModal removed; roadmap #316-318; affiliate decisions to roadmap"
 
 .\push.ps1
 ```
@@ -108,41 +108,33 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-## 🎯 Next Session (S553)
+## 🎯 Next Session (S554) — Game Design Deep Dive
 
-1. **Mandatory §10 smoke tests** — /organizer/earnings, /organizer/calendar, 5 mobile overflow pages, admin Recent Purchases dollar amounts
-2. **Geofence QR scans** — ✅ Dispatched S553. Push block below includes the 3 files.
-3. **1000 XP mid-milestone** — Research complete (see summary below). Game design decision ready for dispatch. Top recommendation: milestone badge overlay + optional feed announcement at 1,000 XP (Medium complexity).
-4. **Affiliate decisions** — Tracked at roadmap #318. No longer a session blocker.
+**No code this session.** Dispatch gamedesign + innovation agents to produce a single consolidated design document covering the full engagement system.
 
-## 🎮 1000 XP Mid-Milestone Research Results (S553)
+**Why:** Stamps (LoyaltyPassport), achievements (8 defined), seasonal challenges (Spring 2026 hardcoded), and XP milestones are three separate systems that don't talk to each other and none surface a visible moment when triggered. The 1,000 XP mid-milestone research (MTG Arena, Fortnite, Hearthstone, Rocket League) confirmed the pattern: cosmetics + visible moments at every meaningful threshold. Time to design the whole thing coherently.
 
-Research based on MTG Arena Mastery Pass, Fortnite Battle Pass, Hearthstone Rewards Track, Rocket League Rocket Pass, and Clash Royale.
+**What the agents need to produce** (`claude_docs/strategy/engagement-system-year1.md`):
 
-**Key finding:** Every major game puts cosmetics at mid-milestones that are *visible and expressive* (titles, badge overlays, wraps, emoticons) — not functional rewards (currency). Halfway markers don't need mega rewards; they just need a "moment."
+1. **Stamp + Achievement merge** — one "Explorer Passport" concept. How many stamps, what triggers, what categories. Replace two orphaned parallel systems with one.
 
-**Three options ranked:**
+2. **Full milestone map** — specific XP values for every mid-milestone across all 5 ranks (not "every 1,000 XP" — tiered spacing that scales with rank difficulty). Include what cosmetic/reward at each.
 
-**Option A — Profile Title (LOW complexity)**
-- Exclusive title "⭐ Trail Blazer" or "🔥 Rising Explorer" on Explorer Profile
-- Permanent but replaces with Ranger badge at 2,000 XP (frames it as graduation)
-- Precedent: Hearthstone hero titles, Rocket League player titles
-- Risk: text-only, low visibility
+3. **First-year seasonal calendar** — 4 seasons aligned to real estate sale seasonality (Spring peak Mar–May, Fall peak Sep–Oct). Each season: theme, 3–4 challenge objectives, difficulty mix, seasonal cosmetic, mid-season micro-event.
 
-**Option B — XP Boost Coupon (MEDIUM complexity)**
-- Single-use +25% XP boost for 3 days or 50 XP gains
-- Gives momentum toward Ranger, creates urgency
-- Precedent: MTG Arena Tavern Pass XP boosts, most progression games
-- Risk: functional not cosmetic, feels like a pity reward rather than a celebration
+4. **Achievement notification design** — what does a player see when they unlock something? What's the interrupt level for milestone vs achievement vs seasonal completion?
 
-**Option C — Milestone Badge Overlay + Optional Feed Announcement (MEDIUM complexity — RECOMMENDED)**
-- Small badge (✨ 🎯) overlaid on avatar frame on profile + leaderboards
-- One-time optional "Reached 1K XP!" post in community feed
-- Badge disappears at Ranger (frames as graduating past it)
-- Precedent: TCG Live avatar badges, Rocket League banners, Discord/Reddit badge systems
-- Why it wins: dual recognition (profile + social feed), shareable moment, no art cost if emoji-based, aligns with organizer desire for visibility
+5. **New-user 30-day journey map** — where do they hit a meaningful moment, where is there dead air?
 
-**Dispatch when ready:** gamedesign agent to lock cosmetic, then dev to implement. Low-medium effort (~3 file changes in ProfileHeader, FeedAnnouncement, badge logic).
+**Session start:** load STATE.md → read the 6 context files listed there → dispatch gamedesign + innovation in parallel with the full brief.
+
+## 📋 S553 Summary
+
+- ✅ Geofence QR scans shipped (itemController.ts + treasureHuntQRController.ts + treasure-hunt-qr/[clueId].tsx)
+- ✅ BountyModal.tsx deleted
+- ✅ Roadmap #316/317/318 added; affiliate decisions moved to #318
+- ✅ 1,000 XP mid-milestone researched — Option C (badge overlay + feed announcement) recommended
+- ✅ Engagement system audit: stamps + achievements + seasonal all exist but orphaned — design session queued
 
 ## ─── Archived Below: S550 ───
 

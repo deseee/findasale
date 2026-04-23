@@ -4,7 +4,9 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S552 — IN PROGRESS):** Big parallel session. Admin price bug fixed (purchase.amount /100 removed — was Float dollars, not cents). S551 queue dispatched (6 agents): SmartBuyerWidget rank names corrected; HP coupon limits 6/6/3→3/3/2 + "Bonus Coupon Slots" rebrand; hunt-pass.tsx badge split + +10% QR XP + coupon slots card; Bounty Batches A+B+D (auto-match modal, shopper submission review, organizer submissions endpoint). guild-primer Grandmaster Hunt Pass copy corrected ("free forever" removed). Geofencing audit: Trails ✅ geofenced, QR scans ❌ not — P1 next session. XP economy design: rejected hard referral cap + purchase floor; decided tranche escrow + reputation score system. Referral tranche system dispatched to dev (4 tranches, silent rep score, migration required). Condition grade S fixed Excellent→Mint. Appraisal guide/support content written. **Pending push: 27 files + migration + git rm bounties.tsx + wrap docs.**
+**Latest work (S553 — COMPLETE):** Geofence QR scans shipped (3 files: itemController.ts recordQrScan + treasureHuntQRController.ts markClueFound both enforce 100m haversine with graceful fallback; treasure-hunt-qr/[clueId].tsx frontend requests geolocation before POST). BountyModal.tsx deleted (zero callers — approved by Patrick). Affiliate payout decisions moved to roadmap #318 — cleaned from dashboard and STATE todos. Roadmap entries #316 (Referral Tranche System), #317 (Geofence QR Scans), #318 (Affiliate Program) added; deferred "Shopper Referral + Affiliate Mechanics" entry updated to just leaderboard/badges layer. 1,000 XP mid-milestone research complete: studied MTG Arena Mastery Pass, Fortnite Battle Pass, Hearthstone Rewards Track, Rocket League Rocket Pass, Clash Royale — recommendation is Option C (Milestone Badge Overlay + optional feed announcement at 1,000 XP, emoji-based, medium complexity). Game design audit: LoyaltyPassport stamps (ATTEND_SALE/MAKE_PURCHASE/WRITE_REVIEW/REFER_FRIEND, BRONZE/SILVER/GOLD tiers — component built but orphaned), achievements page exists with 8 achievements (very thin, none fire visible notifications), seasonal challengeService.ts exists (Spring 2026 hardcoded, EASY=25/MEDIUM=50/HARD=100 XP). All three systems are separate and none integrated into the main user loop. Patrick approved: consolidate stamps + achievements into one coherent system; build a first-year seasonal calendar; establish mid-milestone cadence. **S554 is a game design + innovation planning session — no code, pure system design.**
+
+**Latest work (S552 — COMPLETE):** Big parallel session. Admin price bug fixed (purchase.amount /100 removed — was Float dollars, not cents). S551 queue dispatched (6 agents): SmartBuyerWidget rank names corrected; HP coupon limits 6/6/3→3/3/2 + "Bonus Coupon Slots" rebrand; hunt-pass.tsx badge split + +10% QR XP + coupon slots card; Bounty Batches A+B+D (auto-match modal, shopper submission review, organizer submissions endpoint). guild-primer Grandmaster Hunt Pass copy corrected ("free forever" removed). Geofencing audit: Trails ✅ geofenced, QR scans ❌ → fixed S553. Referral tranche system built (4 tranches, silent rep score, migration required). Condition grade S fixed Excellent→Mint. Appraisal guide/support content written. **Pending push: 30 files + migration + git rm BountyModal.tsx + wrap docs (S552+S553 combined block).**
 
 **Latest work (S550 — COMPLETE):** Affiliate Program Batches 3+4+6 built + Innovation two-phase review + /organizer/earnings real fix + /organizer/calendar same-bug fix. 7 files + 1 new strategy doc pending push. **Affiliate Batch 3 — Code generation:** `affiliateController.ts` gained `generateAffiliateCode` (POST /api/affiliate/generate-code, idempotent, uses `affiliateService.generateCode()` from S545 with 7-day-account / 30-day-lockout fraud gates) and `getAffiliateCode` (GET /api/affiliate/code, returns null if not generated). Both added to `routes/affiliate.ts` — and also registered the orphaned S545 `/me` route that was never wired up. **Affiliate Batch 4 — Signup attribution:** `pages/register.tsx` reads both `?ref=` (existing shopper XP flow, untouched) AND `?aff=` (new affiliate flow); amber banner shows during signup when `?aff=` present ("An organizer referred you to FindA.Sale. If you join as an organizer and complete a paid sale, they earn a thank-you commission."). `authController.ts` accepts `affiliateReferralCode` in req.body (destructure line ~35), looks up the referrer by `User.affiliateReferralCode` inside the existing transaction (lines ~202-237), creates `AffiliateReferral {referrerId, referredUserId, referralCode, status: 'PENDING'}`, blocks self-referral (ID + email match), logs IP pair for fraud audit. Invalid codes silently ignored (no signup failure). **Affiliate Batch 6 — Dashboard endpoints:** `getAffiliateReferrals` (GET /api/affiliate/referrals, paginated with status filter PENDING/QUALIFIED/PAID/REJECTED) and `getEarningsSummary` (GET /api/affiliate/earnings-summary, aggregates totalEarned from PAID sum, unpaidBalance from QUALIFIED sum, thisMonthEarnings, last 5 payouts). Both ORGANIZER-role gated. **Innovation review (`claude_docs/feature-notes/affiliate-innovation-review-S550.md`):** Two-phase analysis (5-framework ideation + feasibility evaluation) before flat 2% payout locks. Top 3 actionable recommendations: (1) tier-matched commission — SIMPLE=$0 / PRO=2% / TEAMS=3% / ENTERPRISE=5% aligning payout to referred customer LTV; (2) hybrid payout — FindA.Sale credits default, Stripe Transfer cash at $200+ balance; (3) defer recurring 12-month subscription % model to 2027 — validate one-time first (clawback complexity, 1099 surprises, churn attribution edge cases). Compliance flags: Stripe Identity verification at >$500 lifetime, 1099-NEC at $600/yr — both must ship before Batch 7. All three recommendations gate Patrick's decision before Batches 5/7/9 dispatch. **P0 /organizer/earnings — REAL fix:** Live smoketest per §10 mandatory post-fix verification found the page STILL crashing despite S549's NaN/divide-by-zero guard. Console revealed React error #310 (hooks order violation) — the page had `if (authLoading) return null;` and `if (!user || !user.roles?.includes('ORGANIZER')) { router.push('/login'); return null; }` as early returns BEFORE the two `useQuery` calls. React requires hooks called in identical order every render; early-return renders skipped the hooks, triggering #310. Fix: moved auth-redirect into `useEffect([authLoading, user, router])`, gated render with `if (authLoading || !user || !user.roles?.includes('ORGANIZER')) return null;` AFTER all hooks. Grepped same pattern across organizer pages — `calendar.tsx` had identical bug, same fix applied. `members.tsx` and `ugc-moderation.tsx` looked suspect but hooks were all above their early returns (safe). **S549 post-mortem:** The divide-by-zero guard was real but wasn't the crash cause. Rubber-stamped without browser verification — exactly what §10 exists to catch. Admin index ✅ (S549 null guards working cleanly, "Unknown" fallback visible in Recent Purchases, only console noise is unrelated MetaMask extension). 7 code files + 1 doc + 2 wrap docs pending push.
 
@@ -183,29 +185,35 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **S553 priority queue:**
 
-0. **PUSH S552 BLOCK FIRST** — 27 files + migration. Full block in patrick-dashboard.md. After push, Railway migration must run (ReferralTranche + ReferrerReputationScore new tables).
+**Patrick actions before S554:**
+- Push S552+S553 combined block (see patrick-dashboard.md)
+- Run migration after push: `npx prisma migrate deploy` + `npx prisma generate` against Railway (ReferralTranche + ReferrerReputationScore tables required before deploy)
 
-1. **Mandatory §10 smoke tests after S552 deploys:**
-   - /organizer/earnings — confirm React #310 hooks fix holds (no ErrorBoundary)
-   - /organizer/calendar — same
-   - /organizer/edit-sale/[id] ENDED header — mobile 412px, buttons wrap cleanly
-   - /organizer/insights SELECT dropdown — mobile 412px, no 96px scroll
-   - /shopper/explorer-profile Add buttons — mobile 412px, no 43px overflow
-   - /admin/items pagination — mobile 412px, filter row wraps
-   - /organizer/workspace tab bar — mobile <412px, 4 tabs wrap to 2 rows
-   - Admin /admin index — Recent Purchases show dollar amounts (not fractions)
+**S554 — Game Design + Innovation Deep Dive: Engagement & Progression System**
 
-2. **Geofence QR scans** — ✅ Dispatched S553. itemController.ts recordQrScan + treasureHuntQRController.ts markClueFound + treasure-hunt-qr/[clueId].tsx frontend. Included in S552+S553 push block.
+No code this session. Pure system design. Dispatch gamedesign + innovation agents with full context below.
 
-3. **Affiliate program payout decisions** — Tracked at roadmap #318. No longer an active session todo.
+**Context files to read before dispatch:**
+- `packages/backend/src/services/xpService.ts` — XP awards, rank thresholds (Initiate:0/Scout:500/Ranger:2000/Sage:5000/GM:12000), seasonal reset floor, SEASONAL_CHALLENGE_ACCESS/COMPLETE sinks
+- `packages/backend/src/services/achievementService.ts` — 8 current achievements (FIRST_PURCHASE, FIVE_PURCHASES, FIRST_SALE_ATTENDED, FIRST_ITEM_LISTED, HUNDRED_ITEMS_LISTED, FIRST_SALE_CREATED, WEEKEND_WARRIOR, STREAK_3)
+- `packages/backend/src/services/challengeService.ts` — seasonal challenge system (Spring 2026 hardcoded, EASY/MEDIUM/HARD/MICRO_EVENT difficulties)
+- `packages/frontend/components/LoyaltyPassport.tsx` — stamp system (ATTEND_SALE/MAKE_PURCHASE/WRITE_REVIEW/REFER_FRIEND, BRONZE/SILVER/GOLD milestones)
+- `packages/frontend/pages/shopper/guild-primer.tsx` — how the system is currently explained to users
+- `packages/frontend/pages/shopper/achievements.tsx` — current achievements page
 
-4. **BountyModal.tsx file deletion** — ✅ Approved. git rm included in push block.
+**Design decisions needed from agents:**
 
-5. **1000 XP mid-milestone (Scout→Ranger)** — Research complete S553. Recommendation: Option C (Milestone Badge Overlay + optional feed announcement). Game design dispatch next.
+1. **Stamp + Achievement consolidation** — stamps and achievements are parallel systems doing the same job. Design how they merge into one "Explorer Passport" concept where achievements earn passport stamps. How many stamps total for a compelling collection? What categories? What triggers?
 
-**Patrick actions:**
-- Push S552+S553 block (see patrick-dashboard.md — updated commit)
-- Run migration: `npx prisma migrate deploy` + `npx prisma generate` against Railway (ReferralTranche system requires schema before backend deploy)
+2. **Mid-milestone cadence** — establish the full milestone map for all 5 ranks. Research suggests tiered spacing (not uniform 1,000 XP): ~1 mid per small gap, ~2 mids per large gap. Recommend the specific XP values, cosmetic type, and difficulty for each.
+
+3. **First-year seasonal calendar** — FindA.Sale has natural estate sale seasonality (Spring peak Mar–May, Fall peak Sep–Oct, slow Winter). Design 4 seasons with themes, challenge objectives (3–4 each), difficulty mix, seasonal cosmetic reward, and a mid-season micro-event. Align with real sale activity patterns.
+
+4. **Achievement notification moment** — currently achievements fire silently. Design the "moment" — what does the player see when they unlock an achievement or cross a milestone? Toast? Modal? Feed announcement? What's the right interrupt level for each tier (milestone vs achievement vs seasonal completion)?
+
+5. **Coherence audit** — how do all these systems (XP, ranks, stamps/achievements, seasonal challenges, Hunt Pass, mid-milestones) feel to a new user in their first 30 days? Map the new-user journey and identify where they'd hit a meaningful moment vs where there's dead air.
+
+**Deliverable:** A single consolidated design document (`claude_docs/strategy/engagement-system-year1.md`) covering all five decisions above, with enough specificity that dev can implement without further design input. No vague recommendations — actual XP values, actual stamp names, actual seasonal dates, actual cosmetic descriptions.
 
 ---
 
