@@ -227,6 +227,7 @@ const photosByCategory = {
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-3.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-4.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-5.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-6.jpg',
   ],
   kitchenware: [
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-1.jpg',
@@ -234,6 +235,7 @@ const photosByCategory = {
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-3.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-4.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-5.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-6.jpg',
   ],
   tools: [
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-1.jpg',
@@ -241,12 +243,15 @@ const photosByCategory = {
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-3.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-4.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-5.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-6.jpg',
   ],
   jewelry: [
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-1.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-2.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-4.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-5.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-6.jpg',
   ],
   books: [
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-1.jpg',
@@ -254,23 +259,27 @@ const photosByCategory = {
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-3.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-4.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-5.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-6.jpg',
   ],
   clothing: [
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-1.jpg',
-    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-2.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-3.jpg',
-    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-4.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-5.jpg',
   ],
   art: [
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/art/art-1.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/art/art-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/art/art-3.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/art/art-4.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/art/art-5.jpg',
   ],
   decor: [
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-1.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-2.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-4.jpg',
     'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-5.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-6.jpg',
   ],
 } as const;
 
@@ -562,7 +571,7 @@ async function main() {
       const item = await prisma.item.create({
         data: {
           saleId:      sale.id,
-          title:       `${title} #${j + 1}`,
+          title:       title,
           description: `${title} in ${condition} condition.`,
           price,
           category,
