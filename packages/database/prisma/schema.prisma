@@ -884,6 +884,13 @@ model Item {
   // Feature: Graceful Tier Degradation — grace lock status
   graceLockedAt              DateTime? // When item was locked due to tier downgrade
   graceLockedReason          String? // Reason for grace lock (e.g., "items_over_limit")
+  // ADR-069 Phase 1: Burst Clustering
+  quantity                   Int?                   @default(1) // Items per cluster (e.g. "set of 8")
+  isSet                      Boolean                @default(false) // Haiku clustered this as a set
+  setRole                    String? // "primary" | "member" | null for solo items
+  clusterConfidence          Float? // 0.0–1.0 from Haiku clustering pass
+  // ADR-069 Phase 2: eBay comp lookup cache
+  compLookup                 ItemCompLookup?
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -910,6 +917,10 @@ model Photo {
   isPrimary         Boolean  @default(false)
   autoEnhanced      Boolean  @default(false)
   backgroundRemoved Boolean  @default(false)
+  // ADR-069 Phase 1: Photo role + Vision labels
+  photoRole         String? // "primary" | "detail" | "brand-label" | "condition-wide"
+  visionLabels      String[] @default([]) // Aggregated Vision API labels from this photo
+  orderIndex        Int? // Explicit ordering if user reorders in review UI
   createdAt         DateTime @default(now())
 
   @@index([itemId])
@@ -2737,8 +2748,10 @@ model EncyclopediaEntry {
   authorId String
   author   User   @relation("EncyclopediaAuthor", fields: [authorId], references: [id])
 
-  status     String  @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED | FLAGGED
+  status     String  @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED | FLAGGED | AUTO_GENERATED | UNDER_REVIEW | REJECTED
   isFeatured Boolean @default(false)
+  // ADR-069 Phase 1: Auto-generated entry tracking
+  triggerItemId String? // Optional FK to item that triggered auto-generation
 
   viewCount    Int @default(0)
   helpfulCount Int @default(0)
@@ -2796,10 +2809,31 @@ model PriceBenchmark {
   priceRangeLow  Int
   priceRangeHigh Int
 
-  dataSource String? // AskPrice, SOLD listing, Comps, Appraiser
+  dataSource String @default("curated") // curated | community_consensus | haiku_inferred
   updatedAt  DateTime @updatedAt
 
   @@index([entryId])
+  @@index([dataSource])
+}
+
+// ADR-069 Phase 2: Async eBay comp lookup cache
+model ItemCompLookup {
+  id              String    @id @default(cuid())
+  itemId          String    @unique
+  item            Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  ebayListingId   String?
+  ebayPrice       Float?
+  ebayCondition   String?
+  ebayCategory    String?
+
+  fetchedAt       DateTime?
+  expireAt        DateTime?
+
+  createdAt       DateTime  @default(now())
+
+  @@index([itemId])
+  @@index([fetchedAt])
 }
 
 model EncyclopediaReference {

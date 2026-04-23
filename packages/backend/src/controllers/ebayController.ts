@@ -161,11 +161,39 @@ export async function getEbayAccessToken(): Promise<string | null> {
 }
 
 /**
- * Get eBay price comps for an item based on title and condition
+ * Fetch eBay price comps for an item based on title, category, condition
+ * Exported for use by jobs and controllers alike
+ *
+ * Used by:
+ * - getComps route handler (HTTP endpoint)
+ * - fetchEbayCompsForItem job (async background job)
+ */
+export async function fetchEbayPriceComps(params: {
+  title: string;
+  category?: string;
+  condition?: string;
+  maxResults?: number;
+}): Promise<{
+  min: number;
+  max: number;
+  median: number;
+  count: number;
+  suggestedPrice: number;
+  compsRunAt: string;
+  listings: Array<{ title: string; price: number; condition: string; url: string }>;
+  isMockData?: boolean;
+  message?: string;
+}> {
+  return getEbayPriceComps(params.title, params.condition, params.maxResults || 10);
+}
+
+/**
+ * Internal: Get eBay price comps for an item based on title and condition
  */
 async function getEbayPriceComps(
   title: string,
-  conditionGrade: string | null | undefined
+  conditionGrade: string | null | undefined,
+  limit: number = 10
 ): Promise<{
   min: number;
   max: number;
@@ -203,7 +231,7 @@ async function getEbayPriceComps(
       `q=${query}&` +
       `filter=conditionIds:${conditionId},buyingOptions:FIXED_PRICE,price:[5..],priceCurrency:USD&` +
       `sort=endDate&` +
-      `limit=10`;
+      `limit=${limit}`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -343,7 +371,11 @@ export const getComps = async (req: AuthRequest, res: Response) => {
     }
 
     // Get comps from eBay
-    const comps = await getEbayPriceComps(item.title, item.conditionGrade);
+    const comps = await fetchEbayPriceComps({
+      title: item.title,
+      condition: item.conditionGrade || undefined,
+      maxResults: 10
+    });
 
     // Update item with suggested price if available
     if (comps.count > 0) {

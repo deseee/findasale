@@ -496,10 +496,20 @@ export async function analyzeItemImages(
 
   const imageBase64Array = buffers.map(buf => buf.toString('base64'));
 
-  // Vision labels from primary photo only (best-effort)
+  // ADR-069 Phase 1: Vision labels from ALL photos, not just [0]
   let visionLabels: string[] = [];
   try {
-    visionLabels = await getVisionLabels(imageBase64Array[0]);
+    const allVisionLabels: string[] = [];
+    for (let i = 0; i < imageBase64Array.length; i++) {
+      try {
+        const labels = await getVisionLabels(imageBase64Array[i]);
+        allVisionLabels.push(...labels);
+      } catch {
+        // Graceful: skip this photo's labels, continue with others
+      }
+    }
+    // Deduplicate + cap at 20
+    visionLabels = Array.from(new Set(allVisionLabels)).slice(0, 20);
   } catch {
     // Vision API unavailable or quota exceeded — proceed without labels
   }
@@ -895,3 +905,125 @@ Base your price on actual secondary market demand, not retail pricing. Do not an
     };
   }
 }
+
+// ── ADR-069 Phase 1: Clustering + Multi-Photo Vision Aggregation ─────────────
+
+export interface ClusterResult {
+  clusters: Array<{
+    photoIndices: number[];
+    detectedType: string;
+    confidence: number;
+  }>;
+  ungrouped: number[];
+}
+
+/**
+ * Cluster photos into groups (sets, bundles, identical items, obvious pairs).
+ * Uses Haiku with multimodal images to identify logical groupings.
+ *
+ * Fallback: on error, returns all ungrouped (one-item-per-photo behavior).
+ */
+export async function clusterPhotos(imageBase64Array: string[]): Promise<ClusterResult> {
+  if (imageBase64Array.length === 0) {
+    return { clusters: [], ungrouped: [] };
+  }
+
+  // If only 1 photo, return it ungrouped (no clustering needed)
+  if (imageBase64Array.length === 1) {
+    return { clusters: [], ungrouped: [0] };
+  }
+
+  try {
+    // Build multimodal messages: one image per message
+    const imageMessages = imageBase64Array.map((base64, index) => ({
+      type: 'image' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: 'image/jpeg' as const,
+        data: base64,
+      },
+    }));
+
+    const clusteringPrompt = `You are a batch item grouper for an estate sale app. Given N photos from an organizer's drop, identify logical groupings (matching sets, bundles, identical items, obvious pairs). A "set" is: same pattern/design, same manufacturer, intended to be used/sold together.
+
+Return JSON only:
+{
+  "clusters": [
+    {
+      "id": "cluster-1",
+      "photoIndices": [0, 1, 2],
+      "detectedType": "8-piece place setting",
+      "confidence": 0.95,
+      "reasoning": "Matching dishes, same pattern, consistent lighting"
+    }
+  ],
+  "ungrouped": [3, 4, 5]
+}
+
+Confidence threshold: only cluster at >= 0.75. When in doubt, leave ungrouped.`;
+
+    const estimatedTokens = estimateTokensForRequest(clusteringPrompt, true);
+
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: ANTHROPIC_MODEL,
+        max_tokens: 500,
+        messages: [
+          {
+            role: 'user',
+            content: [...imageMessages, { type: 'text' as const, text: clusteringPrompt }],
+          },
+        ],
+      },
+      {
+        headers: {
+          'x-api-key': ANTHROPIC_API_KEY as string,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        timeout: 60000,
+      }
+    );
+
+    const content: string = response.data.content?.[0]?.text ?? '';
+
+    // Track token usage
+    const responseTokens = Math.ceil(content.length / 4) + 50;
+    trackAITokens(estimatedTokens + responseTokens);
+
+    const raw = content.replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(raw) as ClusterResult;
+
+    // Validate parsed clusters + ungrouped
+    if (!Array.isArray(parsed.clusters)) {
+      parsed.clusters = [];
+    }
+    if (!Array.isArray(parsed.ungrouped)) {
+      parsed.ungrouped = [];
+    }
+
+    // Ensure all clusters meet confidence threshold
+    parsed.clusters = parsed.clusters.filter(c => c.confidence >= 0.75);
+
+    // Ensure all indices are valid
+    const usedIndices = new Set<number>();
+    parsed.clusters.forEach(c => c.photoIndices.forEach(idx => usedIndices.add(idx)));
+    parsed.ungrouped = parsed.ungrouped.filter(idx => !usedIndices.has(idx) && idx < imageBase64Array.length);
+
+    // If no clusters formed, everything is ungrouped
+    if (parsed.clusters.length === 0) {
+      parsed.ungrouped = Array.from({ length: imageBase64Array.length }, (_, i) => i);
+    }
+
+    return parsed;
+  } catch (error: any) {
+    console.warn('[cloudAIService] Clustering failed, falling back to one-item-per-photo:', error.message);
+    // Fallback: treat each photo as ungrouped
+    return {
+      clusters: [],
+      ungrouped: Array.from({ length: imageBase64Array.length }, (_, i) => i),
+    };
+  }
+}
+
