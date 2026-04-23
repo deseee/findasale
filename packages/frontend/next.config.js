@@ -137,7 +137,7 @@ const nextConfig = {
 
   // Cloudinary image optimisation
   images: {
-    domains: ['res.cloudinary.com', 'picsum.photos', 'api.qrserver.com', 'i.ebayimg.com'],
+    domains: ['res.cloudinary.com', 'picsum.photos', 'api.qrserver.com', 'i.ebayimg.com', 'images.unsplash.com'],
     formats: ['image/avif', 'image/webp'],
   },
 
@@ -208,7 +208,7 @@ const nextConfig = {
               // Blocked by CSP → all pins invisible. Must be alongside unpkg.com (default icons).
               // api.qrserver.com: SaleQRCode component fetches QR images and downloads via fetch().
               // Missing from img-src → blank QR on dashboard. Missing from connect-src → download fails.
-              "img-src 'self' data: blob: https://res.cloudinary.com https://picsum.photos https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://unpkg.com https://raw.githubusercontent.com https://api.qrserver.com https://i.ebayimg.com",
+              "img-src 'self' data: blob: https://res.cloudinary.com https://picsum.photos https://images.unsplash.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://unpkg.com https://raw.githubusercontent.com https://api.qrserver.com https://i.ebayimg.com",
               `connect-src 'self' https://api.stripe.com https://m.stripe.network https://terminal-simulator.stripe.com wss://terminal-simulator.stripe.com wss://ws.stripe.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://maps.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://raw.githubusercontent.com https://res.cloudinary.com http://localhost:5000 ${apiOrigin} ${wsOrigin} https://o4508108217778176.ingest.us.sentry.io https://api.qrserver.com`,
               // S486: 'self' added so /video can embed /organizer-video-ad.html in same-origin iframe
               "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://m.stripe.network",
