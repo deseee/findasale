@@ -128,9 +128,21 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       justify-content: space-between;
       overflow: hidden;
     }
-    .label-title { font-size: 10pt; color: #1a1a2e; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .label-title {
+      font-size: 9pt;
+      line-height: 1.15;
+      color: #1a1a2e;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      max-height: 0.43in;
+      padding-right: 0.02in;
+    }
     .label-price { font-size: 14pt; font-weight: bold; color: #16a34a; line-height: 1; }
-    .label-id { font-size: 5pt; color: #999999; }
+    .label-id { font-size: 5pt; color: #999999; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   </style>
 </head>
 <body>`;
@@ -147,7 +159,13 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       for (let i = pageStart; i < pageEnd; i++) {
         const item = items[i];
         const priceText = item.price != null ? `$${item.price.toFixed(2)}` : 'N/A';
-        const titleText = (item.title || '').slice(0, 32);
+        const rawTitle = item.title || '';
+        // Escape HTML special chars to prevent injection/malformed markup
+        const titleText = rawTitle
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
         const qrDataUrl = itemQrDataUrls[i];
 
         stickerHtml += `
