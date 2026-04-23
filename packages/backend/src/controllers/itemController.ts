@@ -21,6 +21,7 @@ import { checkSaleOverLimit, checkItemOverPhotoLimit } from '../lib/tierEnforcem
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
 import { createNotification } from '../services/notificationService'; // P0: Bid notifications
 import { closeAuction } from '../services/auctionService'; // Auction close flow
+import { haversineDistance } from '../lib/placesService'; // Geofencing for QR scans
 import { resetRapidDraftDebounce, rapidfireAIDebounce, heldAnalysisItems } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
 import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '../services/xpService'; // Phase 2a: XP awards
@@ -1912,20 +1913,37 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
   try {
     const { itemId } = req.params;
     const userId = req.user?.id;
+    const latitude = req.query.latitude ? parseFloat(req.query.latitude as string) : undefined;
+    const longitude = req.query.longitude ? parseFloat(req.query.longitude as string) : undefined;
 
     if (!itemId || !userId) {
       res.status(400).json({ message: 'itemId and authentication required.' });
       return;
     }
 
-    // Verify item exists
+    // Verify item exists and fetch sale location for geofencing
     const item = await prisma.item.findUnique({
       where: { id: itemId },
+      include: {
+        sale: {
+          select: { lat: true, lng: true },
+        },
+      },
     });
 
     if (!item) {
       res.status(404).json({ message: 'Item not found.' });
       return;
+    }
+
+    // Geofence check: if client provided lat/lng, enforce 100m radius from sale location
+    if (latitude !== undefined && longitude !== undefined && item.sale?.lat !== null && item.sale?.lng !== null) {
+      const distance = haversineDistance(latitude, longitude, item.sale.lat, item.sale.lng);
+      const MAX_DISTANCE = 100; // 100 meters
+      if (distance > MAX_DISTANCE) {
+        res.status(403).json({ error: 'You must be at the sale location to scan this QR code.' });
+        return;
+      }
     }
 
     // Import awardXp and cap check here to avoid circular dependency

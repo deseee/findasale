@@ -41,9 +41,26 @@ const CluePage = () => {
   // Mark found mutation
   const foundMutation = useMutation({
     mutationFn: async () => {
+      // Attempt to get geolocation (best-effort, non-blocking)
+      let latitude: number | undefined;
+      let longitude: number | undefined;
+
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+          });
+          latitude = position.coords.latitude;
+          longitude = position.coords.longitude;
+        } catch (err) {
+          // Geolocation denied or unavailable — proceed without coordinates
+          console.info('Geolocation unavailable, proceeding without coordinates');
+        }
+      }
+
       const response = await api.post(
         `/sales/${id}/treasure-hunt-qr/${clueId}/found`,
-        {}
+        { latitude, longitude }
       );
       return response.data as FoundResponse;
     },

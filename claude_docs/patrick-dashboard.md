@@ -47,11 +47,9 @@ Fix is queued for S553: same haversine pattern from trailController, add to `ite
 
 ### Your decisions needed
 
-**Affiliate payouts (gates Batches 5/7/9):**
-1. Tier-matched commission (SIMPLE=$0 / PRO=2% / TEAMS=3% / ENT=5%) OR flat 2%?
-2. Credits-default (cash only at $200+ balance) OR straight cash?
+**Affiliate payouts** — decisions moved to roadmap #318. No action needed in dashboard. When you're ready to lock payout model, decisions are documented there.
 
-**BountyModal.tsx deletion:** File still exists in components but has zero callers (removed from sales/[id].tsx in S551). `git rm packages/frontend/components/BountyModal.tsx` — approve? Add it to the push block below if yes.
+**BountyModal.tsx deletion:** ✅ Approved. Included in push block below (git rm).
 
 ## 📤 Push Block (S552)
 
@@ -78,6 +76,10 @@ git add packages/frontend/lib/itemConstants.ts
 git add packages/frontend/components/ConditionBadge.tsx
 git add packages/frontend/pages/guide.tsx
 git add packages/frontend/pages/support.tsx
+git add packages/backend/src/controllers/itemController.ts
+git add packages/backend/src/controllers/treasureHuntQRController.ts
+git add "packages/frontend/pages/sales/[id]/treasure-hunt-qr/[clueId].tsx"
+git rm packages/frontend/components/BountyModal.tsx
 git add packages/backend/src/services/referralTrancheService.ts
 git add packages/backend/src/services/xpService.ts
 git add packages/backend/src/controllers/authController.ts
@@ -93,7 +95,7 @@ git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-git commit -m "S552: Bounty Batches A+B+D; referral tranche anti-fraud system; admin price fix; HP coupon 3/3/2; hunt-pass copy; guild-primer Grandmaster; condition grade S=Mint; appraisal guide content"
+git commit -m "S552+S553: Bounty Batches A+B+D; referral tranche anti-fraud system; admin price fix; HP coupon 3/3/2; hunt-pass copy; guild-primer Grandmaster; condition grade S=Mint; appraisal guide content; geofence QR scans; BountyModal.tsx removed"
 
 .\push.ps1
 ```
@@ -109,10 +111,38 @@ npx prisma generate
 ## 🎯 Next Session (S553)
 
 1. **Mandatory §10 smoke tests** — /organizer/earnings, /organizer/calendar, 5 mobile overflow pages, admin Recent Purchases dollar amounts
-2. **Geofence QR scans** — P1, dispatch dev (haversine to itemController + treasureHuntQRController)
-3. **Affiliate decisions** — tier-matched vs flat, credits vs cash
-4. **BountyModal.tsx git rm** — pending your sign-off above
-5. **1000 XP mid-milestone** — cosmetic Scout→Ranger halfway badge, P2
+2. **Geofence QR scans** — ✅ Dispatched S553. Push block below includes the 3 files.
+3. **1000 XP mid-milestone** — Research complete (see summary below). Game design decision ready for dispatch. Top recommendation: milestone badge overlay + optional feed announcement at 1,000 XP (Medium complexity).
+4. **Affiliate decisions** — Tracked at roadmap #318. No longer a session blocker.
+
+## 🎮 1000 XP Mid-Milestone Research Results (S553)
+
+Research based on MTG Arena Mastery Pass, Fortnite Battle Pass, Hearthstone Rewards Track, Rocket League Rocket Pass, and Clash Royale.
+
+**Key finding:** Every major game puts cosmetics at mid-milestones that are *visible and expressive* (titles, badge overlays, wraps, emoticons) — not functional rewards (currency). Halfway markers don't need mega rewards; they just need a "moment."
+
+**Three options ranked:**
+
+**Option A — Profile Title (LOW complexity)**
+- Exclusive title "⭐ Trail Blazer" or "🔥 Rising Explorer" on Explorer Profile
+- Permanent but replaces with Ranger badge at 2,000 XP (frames it as graduation)
+- Precedent: Hearthstone hero titles, Rocket League player titles
+- Risk: text-only, low visibility
+
+**Option B — XP Boost Coupon (MEDIUM complexity)**
+- Single-use +25% XP boost for 3 days or 50 XP gains
+- Gives momentum toward Ranger, creates urgency
+- Precedent: MTG Arena Tavern Pass XP boosts, most progression games
+- Risk: functional not cosmetic, feels like a pity reward rather than a celebration
+
+**Option C — Milestone Badge Overlay + Optional Feed Announcement (MEDIUM complexity — RECOMMENDED)**
+- Small badge (✨ 🎯) overlaid on avatar frame on profile + leaderboards
+- One-time optional "Reached 1K XP!" post in community feed
+- Badge disappears at Ranger (frames as graduating past it)
+- Precedent: TCG Live avatar badges, Rocket League banners, Discord/Reddit badge systems
+- Why it wins: dual recognition (profile + social feed), shareable moment, no art cost if emoji-based, aligns with organizer desire for visibility
+
+**Dispatch when ready:** gamedesign agent to lock cosmetic, then dev to implement. Low-medium effort (~3 file changes in ProfileHeader, FeedAnnouncement, badge logic).
 
 ## ─── Archived Below: S550 ───
 

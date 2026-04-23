@@ -195,22 +195,17 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
    - /organizer/workspace tab bar — mobile <412px, 4 tabs wrap to 2 rows
    - Admin /admin index — Recent Purchases show dollar amounts (not fractions)
 
-2. **Geofence QR scans** — same haversine pattern from trailController.ts. Add to itemController.ts `recordQrScan` and treasureHuntQRController.ts. Requires client to send lat/lng with scan request. Dispatch dev.
+2. **Geofence QR scans** — ✅ Dispatched S553. itemController.ts recordQrScan + treasureHuntQRController.ts markClueFound + treasure-hunt-qr/[clueId].tsx frontend. Included in S552+S553 push block.
 
-3. **Affiliate program decisions still open:**
-   - Tier-matched commission (SIMPLE=$0/PRO=2%/TEAMS=3%/ENT=5%) vs flat 2%
-   - Credits-default vs cash-at-$200 hybrid payout
-   These gate Batches 5, 7, 9.
+3. **Affiliate program payout decisions** — Tracked at roadmap #318. No longer an active session todo.
 
-4. **BountyModal.tsx file deletion** — S551 removed it from sales/[id].tsx, file still exists with no callers. Needs Patrick sign-off for git rm.
+4. **BountyModal.tsx file deletion** — ✅ Approved. git rm included in push block.
 
-5. **1000 XP mid-milestone (Scout→Ranger)** — cosmetic badge/acknowledgment at halfway point. P2, low effort, addresses retention gap without changing rank thresholds.
+5. **1000 XP mid-milestone (Scout→Ranger)** — Research complete S553. Recommendation: Option C (Milestone Badge Overlay + optional feed announcement). Game design dispatch next.
 
-**Patrick actions before S553:**
-- Push S552 block (see patrick-dashboard.md)
+**Patrick actions:**
+- Push S552+S553 block (see patrick-dashboard.md — updated commit)
 - Run migration: `npx prisma migrate deploy` + `npx prisma generate` against Railway (ReferralTranche system requires schema before backend deploy)
-- Affiliate payout decisions (unlocks Batches 5/7/9)
-- BountyModal.tsx deletion sign-off (yes/no)
 
 ---
 
