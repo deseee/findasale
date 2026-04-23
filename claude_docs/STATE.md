@@ -248,133 +248,21 @@ These items are independent (different files, no cross-dependencies) and should 
 
 ## Current Work
 
-**S546 COMPLETE — S545 migration recovery:**
-- ✅ `packages/database/prisma/migrations/20260422230000_consolidate_affiliate_payout_to_referral/migration.sql` — prepended 6 `ALTER INDEX IF EXISTS ... RENAME TO ..._OLD_*` statements (Step 1) before the table rename, so PG's global index namespace doesn't collide with the new `CREATE INDEX` calls. Old indexes drop with the _OLD table at Step 7. Fixes P3018.
-- ✅ `packages/database/prisma/schema.prisma` — added `affiliateReferralsReceived AffiliateReferral[] @relation("AffiliateReferrals_Referred")` to User model (line ~148). Fixes P1012.
-- ✅ `packages/frontend/pages/sales/[id].tsx` — imported `useXpProfile` hook, called with `!!user?.id` gate, swapped `user?.explorerRank` → `xpProfile?.explorerRank` at line 524 (showRankUpCta) and line 546 (SaleLockCard prop). AuthContext User deliberately excludes explorerRank (prevents stale JWT cache — see AuthContext.tsx line 14 comment). Also fixed S545 JSX structural error: moved `)}` to correct position after `</main>` (line 1448), removed stray `)}` at line 1510.
-- ✅ `packages/backend/Dockerfile.production` — cache-bust bumped to 2026-04-22a to force Railway rebuild after 2 build failures.
-- ✅ Patrick ran recovery sequence against Railway proxy: `prisma migrate resolve --rolled-back 20260422230000_consolidate_affiliate_payout_to_referral` → `prisma migrate deploy` → `prisma generate`. Both pending migrations now OK.
-- ✅ psycopg2 post-migration verification: AffiliateReferral has 12 consolidated columns (id, referrerId, referredUserId, referralCode, status, qualifiedAt, payoutAmountCents, payoutCalculatedAt, stripeTransferId, paidAt, createdAt, updatedAt); AffiliatePayout dropped; Sale.publishedAt exists; User.affiliateReferralCode exists.
-- ✅ Chrome smoke test: homepage + sale detail page (cmnxvyic4001li51qobwidrbl — Artifact Downtown Paw Paw) render clean. Only console errors are MetaMask browser extension conflicts (not app code). `/settings/affiliate` is 404 — expected since Batch 1 is backend/schema only, no UI built yet.
+**S553 COMPLETE** — Geofence QR scans shipped; BountyModal.tsx removed; roadmap #316-318 added; 1,000 XP mid-milestone research done (Option C: badge overlay + feed announcement). See Current Status above for full detail.
 
-**S544 PRIOR — Hunt Pass features + schema pre-wires + affiliate audit:**
-- ✅ Grandmaster Hunt Pass duration changed: free-forever → tied to active status (must re-qualify after Jan 1 reset). Spec updated in gamification-rpg-spec-S260.md. Decision file: gamedesign-decisions-2026-04-22.md.
-- ✅ hunt-pass.tsx: Newsletter → "Coming Soon" amber badge (user-written guides platform, coming post-beta). Treasure Hunt Pro restored (150/day cap, confirmed in xpService.ts). Page shows 5 confirmed benefits.
-- ✅ Golden Trophy Avatar Frame: HuntPassAvatarBadge.tsx (new), Avatar.tsx (new), AvatarDropdown.tsx updated. Purely frontend — huntPassActive already on User. Amber/gold ring on nav + dropdown avatar for HP subscribers.
-- ✅ 3x Monthly Coupon Slots: couponController.ts SHOPPER_COUPON_TIERS updated (HP limits: 6/6/3 vs standard 2/2/1). coupons.tsx shows dynamic limits based on huntPassActive.
-- 🔲 Schema migration pending: tasteProfile Json? on User, ApiKey model (both MISSING — all other pre-wire fields already exist).
-- ✅ Affiliate Program: Full Architect spec complete (claude_docs/feature-notes/affiliate-program-spec-S544.md). Payout model proposed: 2% of referred organizer's first PAID sale GMV, $50 floor. Schema consolidation: merge AffiliatePayout → AffiliateReferral (single source of truth). 10 API endpoints defined. 10-batch dev sequence ready. 5 items flagged for Patrick approval before dev dispatch (payout %, frequency, scope, emails, fraud thresholds). Do NOT dispatch dev until Patrick approves.
+**S554 PENDING** — Game Design + Innovation deep dive. No code. Dispatch gamedesign + innovation agents with full brief from Next Session section above. Deliverable: `claude_docs/strategy/engagement-system-year1.md`.
 
-**Research findings (S544):**
-- Consignment: FULLY BUILT — Consignor model, ConsignorPayout, consignorController. Not a pre-wire.
-- Persistent Inventory: Schema pre-wired (persistentInventory bool + masterItemLibraryId FK on Item) but no MasterItemLibrary model and no active business logic. Frontend inventory.tsx + backend itemInventoryController exist but use the pre-wire fields only.
-- executorUserId + estateId on Organizer: Both exist (Estate Planning pre-wire ✅)
-- tasteProfile on User: MISSING
-- ApiKey model: MISSING
-- avatarFrame on User: NOT NEEDED — Golden Trophy is purely frontend via huntPassActive
+---
 
-**S544 files changed (pending push):**
-- claude_docs/research/gamification-rpg-spec-S260.md
-- claude_docs/feature-notes/gamedesign-decisions-2026-04-22.md
-- packages/frontend/pages/shopper/hunt-pass.tsx
-- packages/frontend/components/HuntPassAvatarBadge.tsx (new)
-- packages/frontend/components/Avatar.tsx (new)
-- packages/frontend/components/AvatarDropdown.tsx
-- packages/backend/src/controllers/couponController.ts
-- packages/frontend/pages/coupons.tsx
+## Archived Current Work (removed 2026-04-23 per T5 gate — see monthly-digest-2026-04.md for S537-S543 detail)
 
-**S542 COMPLETE — Cart merge + nav restructure + polling fixes:**
-- ✅ CartDrawer.tsx — full unified rewrite. CartIcon's `openCart()` was a no-op (CartDrawer was never rendered — orphaned). ShopperCartDrawer was the only live drawer. Merged into single CartDrawer wired to CartContext. Holds section (from `/reservations/my-holds-full`) + Saved in Cart section (from `useShopperCart`). Price fix: hold prices from API are dollars (197.81); useShopperCart prices are cents; CartDrawer no longer divides holds by 100. Remove button restored on Saved in Cart items alongside Place Hold button. `handleHoldExpiry` now silent (no toast — toast was looping: refetch→re-render→HoldTimer remount→sees already-expired time→fires again). Both mutations use only `invalidateQueries` (removed redundant `refetch()` calls that caused 429s).
-- ✅ CartIcon.tsx — Clock icon → ShoppingCart (lucide-react). Amber-500 badge at -top-1 -right-1. Combined count: holds + browsing cart items. Polling 30s→60s, staleTime 55s.
-- ✅ Layout.tsx — wired `openCart` from CartContext (was missing; 3x `setMobileCartOpen` calls fixed). ShopperCartDrawer removed, CartDrawer added. staticNavLinks reduced to [map, trending]. Explore ▾ dropdown added (between Trending and Search): Feed/Calendar/Wishlist with exploreOpen mouse hover state. Explore + Pricing classNames matched to Map/Trending pattern (text-warm-900 dark:text-warm-100, no text-sm/font-medium). Pricing moved next to Host a Sale button. ThemeToggle removed from desktop and mobile nav. Search input now absolute-positioned when open (w-64, right-0, z-50, shadow-lg) — no longer squishes nav items.
-- ✅ AvatarDropdown.tsx — ShopperCartDrawer removed; ThemeToggle added with `import ThemeToggle from './ThemeToggle'`; "Appearance" row added before Logout with `<ThemeToggle compact={true} />`.
-- ✅ BottomTabNav.tsx — Calendar tab → Trending (TrendingUp icon, href=/trending). Wishlist tab → Explore (compass SVG, opens `exploreSheetOpen` bottom sheet with Feed/Calendar/Wishlist grid). Added useState/TrendingUp/Zap/Calendar/Heart imports.
-- ✅ PosPaymentRequestAlert.tsx — refetchInterval 5000→30000, staleTime 0→25000 (was polling every 5s).
-- ✅ pages/sales/[id].tsx + pages/items/[id].tsx — ShopperCartDrawer removed, ShopperCartFAB onClick → openCart().
-- ✅ Vercel build: 3x `setMobileCartOpen is not defined` errors fixed.
+**S546 COMPLETE** — S545 migration recovery. AffiliateReferral index collision fixed (ALTER INDEX rename pattern), P1012 inverse relation added, sales/[id].tsx explorerRank via useXpProfile hook, Dockerfile.production cache-bust. Patrick ran migrate resolve+deploy+generate. psycopg2 verified. Chrome smoke test clean. 4 files. (Full detail: monthly-digest-2026-04.md)
 
-**S541 COMPLETE — Chrome QA session:**
-- ✅ /coupons Rarity Boost (shopper, 530 XP) — active, modal opens with sale list, cost 50 XP displayed correctly. ss_4737i417x
-- ✅ /coupons organizer view — Shopper Discount Codes visible, Rarity Boost absent. ss_56564zsz7
-- ✅ /shopper/loyalty → /coupons redirect — instant, no flash. ss_8103rmsqm
-- ✅ /shopper/referrals — referral link REF-0215DAB8, Copy + 5 share buttons, stats present. ss_59914h5dd
-- ✅ /shopper/appraisals submit — works via JS .click() (coordinate click is VM viewport artifact)
-- ✅ /shopper/early-access-cache — loads correctly
-- ❌ Print kit P0 — /api/items/drafts?saleId=cmnxvyic4001li51qobwidrbl returns 500. RETAIL sale, 87 items, whole-month dates. Needs investigation in S542.
-- ❌ #241 Brand Kit PDFs P1 — STILL BROKEN. Root cause: hardcoded /api/brand-kit/ relative hrefs, no Next.js rewrite. Fix: NEXT_PUBLIC_API_URL base.
-- ❌ /coupons coupon Generate buttons P1 — non-functional, no API call fires.
-- ⚠️ ActionBar.tsx P2 — "Treasure Trails" href /shopper/trails → should be /trails (public browse)
-- ⚠️ "Hunt Pass Active" badge P2 — showing for Karen (shopper with no Hunt Pass)
-- ⚠️ /shopper/ranks Scout boundary P2 — rank badge and earned message mismatch
+**S544–S534 COMPLETE** — Hunt Pass (HP duration, avatar frame, coupon slots), Guild Primer (new page), XP economy security audit (S536), XP wiring (S535), boostPricing rebalance (S534), create-sale overhaul (S539), nav parity fixes (S539). All files pushed. ApiKey model pre-wire still missing from schema (no active impact). phoneVerified not on User — referral phone gate not enforced (decision logged: skip entirely per decisions-log.md 2026-04-22).
 
-**S540 COMPLETE — /coupons unified XP-spend hub + loyalty consolidation:**
-- ✅ Page audit (5 pages): identified `/coupons` was organizer-only in nav (shoppers couldn't reach it) yet had complete shopper section sitting unreachable; `/shopper/loyalty` had stale +3/+5/+10 XP values (post-S534 actuals are +10 scan/+25 purchase/+2 check-in) and held the only Rarity Boost entry point; `/shopper/dashboard` had duplicate AchievementBadgesSection (also on /shopper/explorer-profile)
-- ✅ Strategy decision (Patrick approved Path C): use already-role-aware `/coupons` as unified XP-spend hub instead of either/or split
-- ✅ packages/frontend/pages/coupons.tsx — added Sparkles icon import, `import { RarityBoostModal }` named import, `showRarityBoostModal` useState, Rarity Boost card (gradient indigo/purple, gated `{!isOrganizer && ...}`) below shopper newly-generated-code block, `<RarityBoostModal>` rendered with `userXp={spendableXp}` and onSuccess callback invalidating xp-profile query
-- ✅ packages/frontend/pages/shopper/loyalty.tsx — replaced 636 lines with 16-line LoyaltyRedirect stub (`router.replace('/coupons')` on mount)
-- ✅ packages/frontend/components/Layout.tsx — added shopper "Rewards" link → /coupons with Ticket icon (indigo-500) at 3 nav locations: desktop sidebar Connect (after Explorer's Guild ~line 553), mobile in-sale tools (~line 1318), mobile shopper-only nav (~line 1537)
-- ✅ packages/frontend/components/AvatarDropdown.tsx — added shopper Rewards link → /coupons with Ticket icon inside `{!isOrganizer && ...}` branch (after Explorer's Guild link, before Leaderboard, ~line 1086)
-- ✅ packages/frontend/pages/shopper/dashboard.tsx — removed duplicate `<AchievementBadgesSection>` block (lines 424-430) + unused imports (`useMyAchievements`, `AchievementBadgesSection`) + orphan `achievementsData` query. Achievements widget remains on /shopper/explorer-profile only (dedup, not removal)
-- ✅ packages/frontend/components/ActivitySummary.tsx — Streak Points stat card href: /shopper/loyalty → /coupons (XP-spend context)
-- ✅ packages/frontend/components/ExplorerGuildOnboardingCard.tsx — "View Your Rank & Progress" CTA href: /shopper/loyalty → /shopper/explorer-profile (rank context, not coupons — semantically correct adjustment from spec)
-- ✅ packages/frontend/pages/shopper/ranks.tsx — back link "← Back to Loyalty Passport" → "← Back to Explorer Profile" → /shopper/explorer-profile
-- ✅ packages/frontend/pages/shopper/loot-legend.tsx — back link → /shopper/explorer-profile (label kept "Explorer's Guild")
-- ✅ packages/frontend/pages/shopper/league.tsx — back link → /shopper/explorer-profile (label kept "Explorer's Guild")
-- ✅ packages/frontend/pages/profile.tsx — Explorer Rank card "View Your Rank" CTA → /shopper/explorer-profile
-- ✅ TS check: zero new logic errors in edited files (env-only `Cannot find module 'react'` errors in VM affect every .tsx repo-wide, not introduced by these changes; Vercel will resolve types correctly)
-- 🔲 11 files unpushed — Patrick action: push block in patrick-dashboard.md
-- 🔲 Chrome QA pending: 7 verification scenarios in Blocked/Unverified Queue
+**S542–S541 COMPLETE** — Cart merge (CartDrawer unified, price fix, hold expiry loop fixed, 429s fixed), nav restructure (Explore▾, ThemeToggle→AvatarDropdown, search absolute-positioned), polling fixes. Chrome QA (S541): 6 verified ✅. All items pushed and resolved.
 
-**S539 COMPLETE — Nav parity + XP achievement bug + create-sale overhaul:**
-- ✅ Shopper Settings redirect — both AvatarDropdown.tsx and Layout.tsx mobile nav now route shoppers to /shopper/settings (was /organizer/settings → login redirect for all users)
-- ✅ Avatar dropdown footer — Host a Sale moved from inside shopper section to footer below Pricing (with UserPlus icon); Explorer Profile icon now indigo for shoppers
-- ✅ Mobile nav footer — added Host a Sale (opens BecomeOrganizerModal), Explorer Profile link (indigo), Install App button with iOS tooltip; Settings icon now indigo for shoppers
-- ✅ Mobile nav shopper branch — restored rank/XP bar header for shopper-only users (was organizer-only)
-- ✅ Achievement unlock bug — `undefined !== null` (strict, always true for new users) → `!= null` (loose). Was silently skipping all achievement checks for new users → 0 XP on first sale/purchase/listing
-- ✅ XP rank uses lifetimeXpEarned (not guildXp) — rank never drops when spending XP
-- ✅ spendXp hold guard — getSpendableXp check added to appraisalController, crewController, trailController
-- ✅ create-sale overhaul — removed duplicate Sale Type, description field, neighborhood field; redirects to edit-sale on submit; PRO celebration modal fires when isFirstSaleFreePro === true
-- ✅ Business name copy — settings.tsx + BecomeOrganizerModal.tsx updated: "Name or Business Name", new placeholder, "No business? Your name works perfectly." helper text
-- ✅ AvatarDropdown — Host a Sale opens BecomeOrganizerModal (was router.push to 404 /organizer/register)
-- 🔲 George Roberts (user33) manually backfilled with 25 XP in Railway DB — achievement unlock bug was confirmed root cause
-
-**S536 COMPLETE — XP economy security audit + hardening + deferred wirings:**
-- ✅ Hacker audit: 19 findings (2 P0, 8 P1, 9 P2) across full XP economy
-- ✅ xpService.ts: cap fail-open→fail-closed, spendXp atomic, HAUL_POST cap fix, HP churn hold fail-closed, ORG_HAUL_FROM_SALE cap, leaderboard userId removed, ORGANIZER_REFERRAL_PURCHASE constant added
-- ✅ stripeController.ts: REFERRAL_FIRST_PURCHASE 24h hold + purchaseId, ORGANIZER_REFERRAL_PURCHASE atomic (status CREDITED before award), both referral awards purchaseId + holdUntil
-- ✅ saleController.ts: SALE_PUBLISHED one-time idempotency guard, visit XP race condition fixed (Prisma $transaction wrap)
-- ✅ referralService.ts: Math.random → crypto.randomBytes
-- ✅ authController.ts: IP pair logging for self-referral detection
-- ✅ haulPostController.ts: HAUL_POST_LIKES wired (5 XP at 10+ likes, once per post; UGCPhotoReaction unique constraint confirmed)
-- ✅ stripeController.ts: ORG_SHOPPER_SIGNUP wired (10 XP to organizer on shopper's first purchase, purchaseId idempotency)
-- ✅ saleController.ts: REFERRAL_ORG_FIRST_SALE wired (50 XP to shopper referrer on organizer's first published sale)
-- 🚩 OPEN: `phoneVerified` field does not exist on User model — REFERRAL_FIRST_PURCHASE gamedesign phone gate not enforced. Needs phone verification feature first.
-
-**S535 COMPLETE — XP implementation: missing constants + controller wiring + guild-primer rebuild:**
-- ✅ xpService.ts: 8 new XP_AWARDS constants added (FIRST_PURCHASE_EVER:50, HAUL_POST_LIKES:5, SALE_PUBLISHED:10, ORG_SHOPPER_SIGNUP:10, ORG_HAUL_FROM_SALE:3, ORG_FIVE_STAR_REVIEW:10, REFERRAL_ORG_FIRST_SALE:50, BOUNTY_FULFILLMENT_SHOPPER:25)
-- ✅ xpService.ts: TRAIL_COMPLETE:100 removed — was misleading flat constant. trailController uses tiered completionBonus() from placesService.ts (3→40, 4→50, 5→60, 6→70, 7→80 XP). hasEarnedTrailBonus() updated to check 'TRAIL_COMPLETION' type.
-- ✅ xpService.ts: XP_SINKS stale values fixed — GUIDE_PUBLICATION 50→100, HAUL_VISIBILITY_BOOST 10→80 (matches boostPricing.ts)
-- ✅ saleController.ts: SALE_PUBLISHED bug fixed — was awarding XP_AWARDS.REFERRAL_SIGNUP instead of XP_AWARDS.SALE_PUBLISHED
-- ✅ bountyController.ts: BOUNTY_FULFILLMENT_SHOPPER (25 XP) wired — awards to shopper when bounty fulfilled
-- ✅ reviewController.ts: ORG_FIVE_STAR_REVIEW (10 XP) wired — awards to organizer when they receive 5-star review
-- ✅ haulPostController.ts: ORG_HAUL_FROM_SALE (3 XP) wired — awards to sale organizer when shopper hauls from their event
-- ✅ stripeController.ts: FIRST_PURCHASE_EVER (50 XP) wired — one-time, awards when purchaseCount === 1 after finalization
-- ✅ guild-primer.tsx "How to Earn XP" section rebuilt: HP 1.5× column on all tables, tiered Treasure Trail table (40/50/60/70/80), new "In-Person: Hunt & Scan" section, Organizer Bonuses expanded to 8 rows, all new XP actions surfaced
-- 🔲 DEFERRED: HAUL_POST_LIKES (no like-count threshold hook), ORG_SHOPPER_SIGNUP (no RSVP hook found — complex fraud surface), REFERRAL_ORG_FIRST_SALE (no organizer referral system — needs phase design)
-- 🔲 Chrome QA: guild-primer rebuild + all S534 items still pending
-
-**S534 COMPLETE — Guild Primer + Hunt Pass CTA + XP repricing:**
-- ✅ boostPricing.ts repriced: all 9 existing items updated, 4 new dual-rail entries added (CUSTOM_MAP_PIN, TREASURE_TRAIL_SPONSOR, EARLY_ACCESS_BOOST, LISTINGS_EXTENSION)
-- ✅ xpService.ts XP_SINKS repriced: CUSTOM_MAP_PIN 500→1000, EARLY_ACCESS_BOOST 75→200, TREASURE_TRAIL_SPONSOR 100→150, LISTINGS_EXTENSION 100→250
-- ✅ hunt-pass.tsx refactored to slim CTA (177 lines): header/hero, price card, 4 core benefits, CTA buttons, cross-link to /shopper/guild-primer
-- ✅ guild-primer.tsx created (NEW — /shopper/guild-primer): complete Explorer's Guild walkthrough. Hero + personalized XP progress bar, 5 rank cards (accordion), How to Earn XP (5 categorized subsections — full data from xpService.ts), XP Sinks (6 subsections), Seasonal Adventures, Prestige Layer, FAQ, CTAs.
-- ✅ How to Earn XP section fixed: 8-row flat table → 5 categorized subsections with all 19 XP-earning actions at correct values. Fixed: Referral (50→split: 20 signup + 500 first purchase), Auction win (15→20), Weekly streak (25→100).
-- ✅ Layout.tsx: Explorer's Guild links updated /shopper/loyalty → /shopper/guild-primer in mobile nav (lines 1310, 1492). Duplicate link removed.
-- ✅ AvatarDropdown.tsx: Explorer's Guild link updated /shopper/loyalty → /shopper/guild-primer (line 1083).
-- ✅ RankUpModal.tsx: "New Perks Unlocked" box dark mode fix (dark:bg-sage-900/20 → dark:bg-gray-700).
-- ✅ hunt-pass.tsx cross-link card dark mode fix (bg-sage-50 dark:bg-sage-900/20 → bg-white dark:bg-gray-800).
-- 🚩 FLAGGED: xpService.ts XP_SINKS has stale values for GUIDE_PUBLICATION (50, should be 100) and HAUL_VISIBILITY_BOOST (10, should be 80) — deductions don't match boostPricing.ts. Fix next session.
-- 🔲 Chrome QA for all S534 changes (pending).
+*(S540–S534 archive: see monthly-digest-2026-04.md — all complete and pushed)*
 
 ## Recent Sessions
 
@@ -388,19 +276,7 @@ These items are independent (different files, no cross-dependencies) and should 
 
 **S545 (2026-04-22, COMPLETE):** P0 auth crash fixed (S544 tasteProfile migration was snake_case but schema.prisma is camelCase — rename migration deployed). Dev hotfixes: mobile organizer dashboard layout + Organizer Insights Decimal fix. Architect decided rank-based early access Option A: build presale windows + publishedAt. Rank dispatch built (9 files): Sale.publishedAt field + migration, rankService.ts with tier hours (Scout 1h / Ranger 2h / Sage 4h / GM 6h), saleController locked response shape, SaleLockCard component, SaleCard lock badge, Initiate Rank-Up CTA. Affiliate Batch 1 dispatched (5 files): consolidated AffiliateReferral schema, affiliateConfig.ts (placeholders PRO=$20 / TEAMS=$55 / SIMPLE=$0), affiliateService.ts with fraud gates (7-day / 30-day), `GET /api/affiliate/me` endpoint. Two commits via MCP (cf9c7b39, ea885c37). 17 files total. S546 had to recover the migration + Vercel build.
 
-**S543 (2026-04-22, COMPLETE):** Fixes + smoke test + Hunt Pass audit + guild-primer rank fix. S542 Chrome-verified: cart drawer ✅, Explore▾ dropdown ✅, ThemeToggle in AvatarDropdown ✅. S541 bug reanalysis: /coupons Generate buttons debunked as VM viewport artifact — fully functional (ss_2443ofv38). #241 Brand Kit PDFs confirmed already fixed in S542 (code review). Fixes dispatched: P0 print kit 500 (getDrafts Decimal serialization — itemController.ts), P2 batch (ActionBar Trails href, HP badge userData→user, RankHeroSection Scout boundary), minor coupons.tsx type improvement. Hunt Pass audit: fetched pre-S534 997-line hunt-pass.tsx from git — confirmed S534 stripped 2 subscription benefits (Treasure Hunt Pro, Rare Finds Pass) plus full XP economy reference; newsletter was always copy-only. guild-primer rank journey rewritten to match RankHeroSection.tsx (was showing unbuilt perks: priority support, sourcebook, 48h alerts, featured placement, sales/week counts). Grandmaster "Free Hunt Pass included" retained. 6 files changed. Push block below.
-
-**S542 (2026-04-22, COMPLETE):** Cart merge + nav restructure + polling/spam fixes. Root cause discovery: CartDrawer was completely orphaned — CartIcon called openCart() but CartDrawer was never rendered anywhere; ShopperCartDrawer was the only live drawer. Merged into unified CartDrawer wired to CartContext. Price inconsistency fixed: hold prices from API are in dollars (197.81), useShopperCart stores cents — CartDrawer was dividing both by 100 (giving $1.98 instead of $197.81). Remove button restored on Saved in Cart items. Hold expiry toast loop fixed: handleHoldExpiry toast was causing refetch→re-render→HoldTimer remount→already-expired fires again loop; removed toast entirely. 429s on /reservations/my-holds-full fixed: mutations had both invalidateQueries + refetch() (double-fire); removed redundant refetch() calls. Nav changes: clock→cart icon (amber badge), Explore ▾ dropdown added between Trending and Search with Feed/Calendar/Wishlist, Pricing moved next to Host a Sale, ThemeToggle moved from nav to AvatarDropdown "Appearance" row. Search input now absolute-positioned (no squishing). BottomTabNav: Calendar→Trending, Wishlist→Explore bottom sheet. PosPaymentRequestAlert polling 5s→30s. 8 files changed. Push block in patrick-dashboard.md.
-
-**S541 (2026-04-22, COMPLETE):** QA-only session. 6 Chrome-verified ✅, 3 bugs surfaced. Verified: /coupons Rarity Boost (shopper, 530 XP, ss_4737i417x), /coupons organizer view (no Rarity Boost, ss_56564zsz7), /shopper/loyalty→/coupons redirect (ss_8103rmsqm), /shopper/referrals (referral link + share buttons, ss_59914h5dd), /shopper/appraisals submit (JS .click() required — coordinate click is VM artifact), /shopper/early-access-cache (loads correctly). Bugs found: (P0) Print kit "Artifact Downtown Paw Paw" — /api/items/drafts?saleId=cmnxvyic4001li51qobwidrbl returns 500; RETAIL sale, Apr 1–30 whole-month dates, 87 items confirmed in DB — itemController getDrafts likely has unhandled RETAIL type or month-long date range; (P1) #241 Brand Kit PDFs still broken — hardcoded /api/brand-kit/ hrefs relative to Vercel, no rewrite to Railway; (P1) /coupons coupon Generate buttons non-functional — no API call fires. P2 deferred: ActionBar Treasure Trails href wrong, Hunt Pass Active badge showing for non-subscriber Karen, /shopper/ranks Scout boundary mismatch. S542 starts with P0 print kit investigation.
-
-**S540 (2026-04-22, COMPLETE):** Page audit → `/coupons` becomes unified XP-spend hub. Diagnosis: `/coupons` was organizer-only in nav yet the page had a complete shopper section sitting unreachable; `/shopper/loyalty` duplicated rank/XP UI from `/shopper/explorer-profile` and held the only Rarity Boost entry with stale +3/+5/+10 XP values. Patrick approved Path C — use the already-role-aware `/coupons` (isOrganizer at line 104) as the unified hub, consolidate loyalty into redirect stub. Shopper "Rewards" nav link added at 4 locations (desktop sidebar Connect, mobile in-sale tools, mobile shopper-only nav, AvatarDropdown shopper branch) with Ticket icon indigo-500. Rarity Boost card migrated to `/coupons` shopper section as drop-in `<RarityBoostModal>` import (named export, NOT default — verified via grep). `/shopper/loyalty` reduced 636 → 16 lines (useEffect `router.replace('/coupons')`). Dashboard duplicate `<AchievementBadgesSection>` removed + orphan `useMyAchievements` query removed (widget still lives on `/shopper/explorer-profile` — dedup, not deletion). 6 orphan `/shopper/loyalty` refs retargeted: 5 to `/shopper/explorer-profile` for rank/passport-context labels (ranks.tsx, loot-legend.tsx, league.tsx, profile.tsx, ExplorerGuildOnboardingCard.tsx), 1 to `/coupons` for XP-spend context (ActivitySummary.tsx Streak Points card). 11 files modified. TS check: zero new logic errors in edited files (env-only Cannot-find-module 'react' errors in VM are pre-existing and affect every .tsx repo-wide; Vercel will resolve). Push block in patrick-dashboard.md. S541 priorities: push S540, then smoke test 7 verification scenarios.
-
-**S539 (2026-04-21, COMPLETE):** Nav parity + XP achievement bug + create-sale overhaul. Root cause of shopper Settings redirect: both AvatarDropdown.tsx and Layout.tsx mobile nav hardcoded `/organizer/settings` for all users — fixed to role-conditional `/shopper/settings`. Mobile nav: Host a Sale (opens BecomeOrganizerModal) and Explorer Profile added to footer; Install App added; Settings icon indigo for shoppers; shopper-only rank/XP header restored (was organizer branch only). Avatar dropdown: Host a Sale moved from shopper section to footer below Pricing; Explorer Profile icon now indigo. Critical XP bug: achievementService.ts used strict `!== null` on optional chaining result — when existingUserAch is null, `?.unlockedAt` returns `undefined`, and `undefined !== null` is `true`, marking all new users as "already unlocked" and skipping all XP awards. Fixed with loose `!= null`. XP rank now uses `lifetimeXpEarned` (never decrements on spend); spendXp hold check added to appraisal/crew/trail controllers. create-sale stripped to lightweight first step: removed description, neighborhood, duplicate Sale Type; redirects to edit-sale; PRO celebration modal fires on isFirstSaleFreePro. Business name copy updated in settings.tsx + BecomeOrganizerModal.tsx.
-
-**S538 (2026-04-21, COMPLETE):** Shopper video pages — full rebuild. Root cause of prior failure: previous session used rank icons from game design SKILL.md (⚔️/🏹/📚) instead of reading guild-primer.tsx directly, and dev agents received advisory summaries rather than verbatim verified data. Fix: read guild-primer.tsx authoritative source first, included all data verbatim in dispatch prompts. guild-xp-ad.html rebuilt from scratch (1,423 lines) — correct rank icons 🧭🔍🎯✨👑, correct XP values from production tables (auction win 20 XP not 15, haul post 15 XP, all visit/purchase/streak values correct), rich 7-scene RAF animation with XP bar animations, rank badge bounces, streak grid. shopper-video-ad.html patched inline (SCOUT icon ⚔️→🔍, haul XP badge +5→+15). hunt-pass-video-ad.html created (1,268 lines, correct early access copy — no "6 hours", 1.5× XP, hold priority, earn-free path to GRANDMASTER) + hunt-pass-video.html converted to proper wrapper (499 lines). haul-post-video-ad.html created (1,329 lines, 15 XP/post, +5 at 10 likes) + haul-post-video.html wrapper (426 lines). treasure-trails-video-ad.html created (1,030 lines, 40/50/60/70/80 XP by stops, route animation) + treasure-trails-video.html wrapper (436 lines). Push block in patrick-dashboard.md. S539 priorities: push all pending blocks + Chrome QA backlog.
-
-**S537 (2026-04-21, COMPLETE):** Infrastructure + housekeeping session. Beta badge added to Layout.tsx header (desktop + mobile). GitGuardian credential exposure remediated: Railway DB password rotated (old `QvnUGsnsjujFVoeVyORLTusAovQkirAq` invalid), hardcoded credential removed from committed CLAUDE.md, stored in private global mnt/.claude/CLAUDE.md (not in git) and packages/database/.env (gitignored). SEO: www → non-www permanent redirect added to next.config.js, global canonical URL tag added to _app.tsx (strips query params, always points to finda.sale). CLAUDE.md §7 parallel dispatch HARD RULE added to prevent re-deriving Skill vs Agent pattern each session. Railway MCP OAuth double-fire investigated — root cause is Anthropic bug #51398 (CLAUDE_PLUGIN_DATA not persistent in Cowork Desktop). Workaround: Railway CLI v4.40.2 installed with project token, binary stored at mnt/.claude/bin/railway (persistent), token at mnt/.claude/railway.env. Use CLI for all Railway ops (logs, restart, redeploy) — bypass OAuth entirely. Push block in patrick-dashboard.md.
+*(S543–S537 archived to monthly-digest-2026-04.md — 2026-04-23)*
 
 ## Historical Reference
 

@@ -42,6 +42,7 @@ Review at session start — any FAIL entries need investigation.
 
 | Task | Date | Result | Notes |
 |---|---|---|---|
+| findasale-competitor-monitor | 2026-04-23 | PASS | Top signal: MaxSold photo upload bugs confirmed in Jan 2026 reviews — reliability messaging opportunity; AI cataloging now category baseline (Gavelbase, Aravenda, PROSALE all competing); FindA.Sale absent from GetApp/SoftwareAdvice comparison searches; 3 content pieces generated (social post, 3 subject lines, blog brief) |
 | findasale-competitor-monitor | 2026-04-16 | PASS | Top signal: Claude Haiku 3 deprecates April 19 — urgent migration needed if used in AI tagging; Valuable App + Auctronica gaining comparison-site placement; housing market slowdown = estate sale volume opportunity; 3 content pieces generated (social post, 3 subject lines, blog brief) |
 | findasale-competitor-monitor | 2026-04-09 | PASS | Top signal: SimpleConsign shipped April 9 webinar (UI refresh, cash rounding, never-expire items) — active monthly shipping cadence confirmed; MaxSold buyer app now live (two-sided marketplace complete); 3 content pieces generated (social post, 3 subject lines, blog brief) |
 | findasale-competitor-monitor | 2026-04-02 | PASS | Top signal: SimpleConsign AI cataloging is live and they have an April 9 product push — rising competitor to watch; MaxSold photo upload bugs persist; Haiku 4.5 cost case for AI tagging; 3 content pieces generated (social post, 3 subject lines, blog brief) |

@@ -1,5 +1,17 @@
 # Patrick's Dashboard — S553 Complete
 
+## 🚨 Audit Alerts (Weekly Full-Site Audit — 2026-04-23)
+
+Automated weekly audit found 3 HIGH findings. Full report: `claude_docs/audits/weekly-audit-2026-04-23.md`
+
+1. **Pricing page still says "5 team members" for Teams tier** (D-007 violation — LOCKED at 12 members since S240). This is the second consecutive weekly audit flagging this. ~2 minute copy fix in `packages/frontend/pages/pricing.tsx`.
+2. **/admin/items has 285–500px horizontal overflow at narrow viewports.** Confirmed at both 800px window (285px) and 375px iframe (500px). The table is already `overflow-x:auto` wrapped correctly — the real cause is the `translate-x-full` mobile drawer extending `documentElement.scrollWidth` when closed. Other admin pages don't have this issue. Fix: add `overflow-x: hidden` to main wrapper on this page, or globally on body.
+3. **/shopper/history has 25px mobile horizontal overflow.** Unresolved from prior audit.
+
+Additional MEDIUM findings (5) and LOW findings (4) documented in the audit file. Notable recurring issue: Favorites / Wishlist / "My Collections" still has three different names for one feature — awaiting Patrick decision to lock one name in DECISIONS.md.
+
+Verified resolved since last audit: search filter dark mode, sale detail section order, sale type badge, S550 P0 crashes (/admin, /organizer/earnings, /organizer/calendar all clean).
+
 ## 🔥 S552 — Bounty Batches A+B+D, Referral Anti-Fraud System, XP Economy Design, Geofencing Audit
 
 **One-line summary:** Big parallel + design session. Six S551 queue items dispatched and complete. Referral XP anti-fraud system built (tranche escrow replaces flat 500 XP, silent reputation score). Geofencing audited — QR scans are NOT geofenced (fix queued for S553). Admin price bug fixed. Appraisal guide/support content written.
