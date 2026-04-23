@@ -471,22 +471,22 @@ const EditSalePage = () => {
             Back to dashboard
           </Link>
 
-          <div className="flex items-center justify-between gap-4 mb-8">
-            <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8">
+            <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 min-w-0 truncate">
               Edit Sale {sale?.status === 'PUBLISHED' ? '(Live)' : sale?.status === 'ENDED' ? '(Ended)' : '(Draft)'}
             </h1>
             {sale && (
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
                 {sale.status === 'PUBLISHED' ? (
-                  <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-3 py-1 text-sm font-semibold">
+                  <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 rounded-full px-3 py-1 text-sm font-semibold flex-shrink-0">
                     ● LIVE
                   </span>
                 ) : sale.status === 'ENDED' ? (
-                  <span className="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full px-3 py-1 text-sm font-semibold">
+                  <span className="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-full px-3 py-1 text-sm font-semibold flex-shrink-0">
                     ✓ ENDED
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full px-3 py-1 text-sm font-semibold">
+                  <span className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full px-3 py-1 text-sm font-semibold flex-shrink-0">
                     ◌ DRAFT
                   </span>
                 )}
@@ -494,14 +494,14 @@ const EditSalePage = () => {
                   type="button"
                   onClick={handleToggleSaleStatus}
                   disabled={isTogglingStatus}
-                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50 font-medium"
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50 font-medium flex-shrink-0"
                 >
                   {isTogglingStatus ? 'Updating...' : (sale.status === 'PUBLISHED' ? 'Close Early' : sale.status === 'ENDED' ? 'Reopen' : 'Publish')}
                 </button>
                 {sale.status === 'ENDED' && (
                   <a
                     href={`/organizer/settlement/${sale.id}`}
-                    className="text-sm bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded font-medium"
+                    className="text-sm bg-green-600 hover:bg-green-700 text-white py-1 px-3 rounded font-medium flex-shrink-0 whitespace-nowrap"
                   >
                     Settle This Sale
                   </a>

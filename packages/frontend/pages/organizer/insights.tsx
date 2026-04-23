@@ -286,7 +286,7 @@ const OrganizerInsightsPage = () => {
               </p>
             </div>
             {insights?.salesList && insights.salesList.length > 1 && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <label htmlFor="sale-filter" className="text-sm font-medium text-warm-700 dark:text-warm-300 whitespace-nowrap">
                   Filter by sale:
                 </label>
@@ -294,7 +294,7 @@ const OrganizerInsightsPage = () => {
                   id="sale-filter"
                   value={selectedSaleId}
                   onChange={(e) => setSelectedSaleId(e.target.value)}
-                  className="border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 max-w-xs"
+                  className="border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 max-w-full w-full sm:w-auto min-w-0 truncate"
                 >
                   <option value="">All Sales</option>
                   {insights.salesList.map((s) => (

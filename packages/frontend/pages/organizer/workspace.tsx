@@ -408,12 +408,12 @@ export default function WorkspaceSettingsPage() {
             </p>
 
             {/* Role Tabs */}
-            <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
+            <div className="flex flex-wrap sm:flex-nowrap border-b border-gray-200 dark:border-gray-700 mb-6">
               {WORKSPACE_ROLES.map((role) => (
                 <button
                   key={role}
                   onClick={() => setActiveRoleTab(role)}
-                  className={`px-6 py-3 font-semibold transition whitespace-nowrap ${
+                  className={`flex-shrink-0 px-2 sm:px-6 py-3 font-semibold transition whitespace-nowrap text-sm sm:text-base ${
                     activeRoleTab === role
                       ? 'text-sage-600 dark:text-sage-400 border-b-2 border-sage-600 dark:border-sage-400'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300'

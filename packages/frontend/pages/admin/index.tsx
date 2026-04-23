@@ -250,7 +250,7 @@ const AdminDashboard = () => {
                       })
                     ) : null}
                   </div>
-                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{stats.sparklines.signups.reduce((a, b) => a + b, 0)}</p>
+                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{(stats.sparklines?.signups ?? []).reduce((a, b) => a + b, 0)}</p>
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Total this week</p>
                 </div>
 
@@ -272,7 +272,7 @@ const AdminDashboard = () => {
                       })
                     ) : null}
                   </div>
-                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{formatCurrency(stats.sparklines.transactionRevenue.reduce((a, b) => a + b, 0))}</p>
+                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{formatCurrency((stats.sparklines?.transactionRevenue ?? []).reduce((a, b) => a + b, 0))}</p>
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Total this week</p>
                 </div>
 
@@ -294,7 +294,7 @@ const AdminDashboard = () => {
                       })
                     ) : null}
                   </div>
-                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{stats.sparklines.newSales.reduce((a, b) => a + b, 0)}</p>
+                  <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">{(stats.sparklines?.newSales ?? []).reduce((a, b) => a + b, 0)}</p>
                   <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Total this week</p>
                 </div>
               </div>
@@ -352,7 +352,8 @@ const AdminDashboard = () => {
                     <div key={purchase.id} className="border-b border-warm-200 dark:border-gray-700 pb-3 last:border-0 text-sm">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-medium text-warm-900 dark:text-warm-100">{purchase.user.name}</p>
+                          {/* guard: handle missing purchase.user */}
+                          <p className="font-medium text-warm-900 dark:text-warm-100">{purchase.user?.name || 'Unknown'}</p>
                           <p className="text-warm-600 dark:text-warm-400">{purchase.item?.title || 'Item'}</p>
                         </div>
                         <div className="text-right">
@@ -418,7 +419,8 @@ const AdminDashboard = () => {
                       activity.recentSales.slice(0, 5).map(sale => (
                         <tr key={sale.id} className="border-b border-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900">
                           <td className="px-4 py-2 text-warm-900 dark:text-warm-100">{sale.title}</td>
-                          <td className="px-4 py-2 text-warm-600 dark:text-warm-400">{sale.organizer.businessName}</td>
+                          {/* guard: handle missing sale.organizer */}
+                          <td className="px-4 py-2 text-warm-600 dark:text-warm-400">{sale.organizer?.businessName || 'Unknown'}</td>
                           <td className="px-4 py-2 text-center">
                             <span className={`text-xs px-2 py-1 rounded ${
                               sale.status === 'PUBLISHED' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
