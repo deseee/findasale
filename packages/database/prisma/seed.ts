@@ -136,39 +136,65 @@ const streetNames = [
   'Leonard St', 'College Ave', 'Lyon St', 'Madison Ave', 'Monroe Ave',
 ];
 
-const itemTitles = [
+// Item catalog — title paired with category so photo lookup matches content.
+// Category maps to photosByCategory pool below.
+type ItemDef = { title: string; cat: keyof typeof photosByCategory };
+const itemCatalog: ItemDef[] = [
   // Furniture
-  'Mid-Century Walnut Credenza', 'Victorian Settee with Velvet Upholstery',
-  'Pair of Teak Nightstands', 'Leather Wingback Chair', 'Antique Roll-Top Desk',
-  'Hand-Caned Parsons Chair', 'MCM Dining Table with Two Leaves', 'Oak Farmhouse Table',
-  'Cast Iron Floor Lamp', 'Chinoiserie Wall Cabinet', 'Queen Anne Side Table',
+  { title: 'Mid-Century Walnut Credenza', cat: 'furniture' },
+  { title: 'Victorian Settee with Velvet Upholstery', cat: 'furniture' },
+  { title: 'Pair of Teak Nightstands', cat: 'furniture' },
+  { title: 'Leather Wingback Chair', cat: 'furniture' },
+  { title: 'Antique Roll-Top Desk', cat: 'furniture' },
+  { title: 'Hand-Caned Parsons Chair', cat: 'furniture' },
+  { title: 'MCM Dining Table with Two Leaves', cat: 'furniture' },
+  { title: 'Oak Farmhouse Table', cat: 'furniture' },
+  { title: 'Chinoiserie Wall Cabinet', cat: 'furniture' },
+  { title: 'Queen Anne Side Table', cat: 'furniture' },
   // Kitchenware
-  'Set of 6 Pyrex Mixing Bowls', 'Vintage Cast Iron Cookware Lot',
-  'Copper Bottom Saute Pans, 8 piece', 'Roseville Pottery Pitcher',
-  'Wedgwood China Dinnerware, 12 place setting', 'Le Creuset Enameled Dutch Oven',
-  'Hand-Painted Ceramic Serving Bowls',
+  { title: 'Set of 6 Pyrex Mixing Bowls', cat: 'kitchenware' },
+  { title: 'Vintage Cast Iron Cookware Lot', cat: 'kitchenware' },
+  { title: 'Copper Bottom Saute Pans, 8 piece', cat: 'kitchenware' },
+  { title: 'Roseville Pottery Pitcher', cat: 'kitchenware' },
+  { title: 'Wedgwood China Dinnerware, 12 place setting', cat: 'kitchenware' },
+  { title: 'Le Creuset Enameled Dutch Oven', cat: 'kitchenware' },
+  { title: 'Hand-Painted Ceramic Serving Bowls', cat: 'kitchenware' },
   // Tools
-  'Vintage Craftsman Hand Tools Lot', 'Antique Wooden Tool Chest',
-  'Stanley Bailey Bench Planes, set of 3', 'Makita Power Drill Set with Case',
-  'DeWalt Cordless Circular Saw', 'Vintage Socket Set, 100+ pieces',
-  // Collectibles
-  'Signed Ansel Adams Photography Print', 'Tiffany-Style Stained Glass Lamp',
-  'Royal Doulton Character Jugs, set of 12', 'First Edition Signed Literature Collection',
-  'Vintage Lionel Train Set with Tracks', 'Antique Brass Candlesticks, pair',
-  // Clothing & Accessories
-  'Vintage Wool Coat Collection, 4 pieces', 'Hermès Silk Scarf Lot, 8 scarves',
-  'Vintage Leather Jackets, 3 pieces',
-  // Home goods
-  'Framed Oil Painting, 24 by 36',
-  'Antique Mirror with Ornate Gilt Frame', 'Vintage Persian Rug, 9 by 12',
-  'Native American Pottery Vessel', 'Crystal Chandelier with 12 Lights',
-  // Books & Media
-  'Vintage Book Collection, 50+ volumes', 'Signed First Edition Books, 3 titles',
-  'LP Record Collection, 100+ albums', 'Antique Map Collection, framed',
-  'Vintage Board Games Lot, 8 titles',
+  { title: 'Vintage Craftsman Hand Tools Lot', cat: 'tools' },
+  { title: 'Antique Wooden Tool Chest', cat: 'tools' },
+  { title: 'Stanley Bailey Bench Planes, set of 3', cat: 'tools' },
+  { title: 'Makita Power Drill Set with Case', cat: 'tools' },
+  { title: 'DeWalt Cordless Circular Saw', cat: 'tools' },
+  { title: 'Vintage Socket Set, 100+ pieces', cat: 'tools' },
   // Jewelry
-  'Gold and Diamond Estate Jewelry Lot', '14K Gold Charm Bracelet',
-  'Vintage Pearl Necklace', 'Antique Pocket Watch',
+  { title: 'Gold and Diamond Estate Jewelry Lot', cat: 'jewelry' },
+  { title: '14K Gold Charm Bracelet', cat: 'jewelry' },
+  { title: 'Vintage Pearl Necklace', cat: 'jewelry' },
+  { title: 'Antique Pocket Watch', cat: 'jewelry' },
+  // Books & Media
+  { title: 'Vintage Book Collection, 50+ volumes', cat: 'books' },
+  { title: 'Signed First Edition Books, 3 titles', cat: 'books' },
+  { title: 'LP Record Collection, 100+ albums', cat: 'books' },
+  { title: 'First Edition Signed Literature Collection', cat: 'books' },
+  { title: 'Vintage Board Games Lot, 8 titles', cat: 'books' },
+  // Clothing & Accessories
+  { title: 'Vintage Wool Coat Collection, 4 pieces', cat: 'clothing' },
+  { title: 'Hermès Silk Scarf Lot, 8 scarves', cat: 'clothing' },
+  { title: 'Vintage Leather Jackets, 3 pieces', cat: 'clothing' },
+  // Art
+  { title: 'Signed Ansel Adams Photography Print', cat: 'art' },
+  { title: 'Framed Oil Painting, 24 by 36', cat: 'art' },
+  { title: 'Antique Map Collection, framed', cat: 'art' },
+  // Decor / home goods
+  { title: 'Tiffany-Style Stained Glass Lamp', cat: 'decor' },
+  { title: 'Royal Doulton Character Jugs, set of 12', cat: 'decor' },
+  { title: 'Antique Brass Candlesticks, pair', cat: 'decor' },
+  { title: 'Cast Iron Floor Lamp', cat: 'decor' },
+  { title: 'Antique Mirror with Ornate Gilt Frame', cat: 'decor' },
+  { title: 'Vintage Persian Rug, 9 by 12', cat: 'decor' },
+  { title: 'Native American Pottery Vessel', cat: 'decor' },
+  { title: 'Crystal Chandelier with 12 Lights', cat: 'decor' },
+  { title: 'Vintage Lionel Train Set with Tracks', cat: 'decor' },
 ];
 
 const saleDescriptions = [
@@ -189,37 +215,75 @@ const categories = [
 
 const conditions = ['mint', 'excellent', 'good', 'fair', 'poor'];
 
-// Curated Unsplash photos (each URL verified HTTP 200). Secondary-sale themed —
-// vintage furniture, estate items, antiques, tools, jewelry, books, décor.
-const salePhotoUrls = [
-  'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1592078615290-033ee584e267?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=600&h=400&fit=crop',
-];
+// Cloudinary-hosted category-matched photos. Each photo was hand-selected from
+// Unsplash via description matching (e.g., "a box filled with lots of different
+// types of tools" → tools pool) then uploaded to the FindA.Sale Cloudinary
+// account. That means every photoUrl on an item actually depicts an item of
+// that category — no more "silk scarf" items showing a chair.
+const photosByCategory = {
+  furniture: [
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-1.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-4.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/furniture/furniture-5.jpg',
+  ],
+  kitchenware: [
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-1.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-4.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/kitchenware/kitchenware-5.jpg',
+  ],
+  tools: [
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-1.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-4.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/tools/tools-5.jpg',
+  ],
+  jewelry: [
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-1.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/jewelry/jewelry-5.jpg',
+  ],
+  books: [
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-1.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-4.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/books/books-5.jpg',
+  ],
+  clothing: [
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-1.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/clothing/clothing-4.jpg',
+  ],
+  art: [
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/art/art-1.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/art/art-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/art/art-4.jpg',
+  ],
+  decor: [
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-1.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-2.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-3.jpg',
+    'https://res.cloudinary.com/db8yhzjdq/image/upload/findasale/seed/decor/decor-5.jpg',
+  ],
+} as const;
 
-const itemPhotoPool = [
-  'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1592078615290-033ee584e267?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1554995207-c18c203602cb?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1567521464027-f127ff144326?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1550572017-edd951b55104?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1542496658-e33a6d0d50f6?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=600&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=600&h=400&fit=crop',
+// Sale card photos — grab one representative from each category so sale cards
+// are varied and never show the same photo as an item on the same sale.
+const salePhotoUrls = [
+  photosByCategory.furniture[0],
+  photosByCategory.furniture[2],
+  photosByCategory.decor[0],
+  photosByCategory.decor[2],
+  photosByCategory.books[0],
+  photosByCategory.tools[2],
+  photosByCategory.kitchenware[1],
 ];
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -464,14 +528,17 @@ async function main() {
   // ── Items (~12 per sale) ──────────────────────────────────────────────────
   console.log('📦 Creating items...');
   const items: any[] = [];
-  let photoIdx = 0;
   let globalItemIndex = 0;
 
   for (const sale of sales) {
     const itemsPerSale = Math.floor(Math.random() * 5) + 10;
     for (let j = 0; j < itemsPerSale; j++) {
-      const title     = itemTitles[Math.floor(Math.random() * itemTitles.length)];
-      const category  = categories[Math.floor(Math.random() * categories.length)];
+      // Pick a catalog entry — title, category, and photo are now yoked together
+      const def       = itemCatalog[Math.floor(Math.random() * itemCatalog.length)];
+      const title     = def.title;
+      const category  = def.cat;
+      const photoPool = photosByCategory[def.cat];
+      const itemPhoto = photoPool[Math.floor(Math.random() * photoPool.length)];
       const condition = conditions[Math.floor(Math.random() * conditions.length)];
       // Tiered price distribution: 65% $5-$75, 25% $100-$500, 10% $500-$2000
       const priceRand = Math.random();
@@ -496,19 +563,18 @@ async function main() {
         data: {
           saleId:      sale.id,
           title:       `${title} #${j + 1}`,
-          description: `Beautiful ${category} item in ${condition} condition. Authentic and well-maintained.`,
+          description: `${title} in ${condition} condition.`,
           price,
           category,
           condition,
           status:      itemStatus,
-          photoUrls:   [itemPhotoPool[photoIdx % itemPhotoPool.length]],
+          photoUrls:   [itemPhoto],
           embedding:   [],
           draftStatus: 'PUBLISHED',
           ...(rarity && { rarity }),
         },
       });
       items.push(item);
-      photoIdx++;
       globalItemIndex++;
     }
   }
@@ -913,7 +979,7 @@ async function main() {
         status: 'SOLD',
         category: spec.category,
         condition: spec.condition,
-        photoUrls: [itemPhotoPool[completedSaleItems.length]],
+        photoUrls: [photosByCategory[spec.category as keyof typeof photosByCategory]?.[0] ?? photosByCategory.furniture[0]],
         embedding: [],
       },
     });
