@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import Head from 'next/head';
-import { useAuth } from '../../components/AuthContext';
-import { Target, MapPin, Clock, DollarSign, X } from 'lucide-react';
-import api from '../../lib/api';
-import { useToast } from '../../components/ToastContext';
+import Link from 'next/link';
+import { useAuth } from '../../../components/AuthContext';
+import { Target, MapPin, Clock, DollarSign, X, Bell } from 'lucide-react';
+import api from '../../../lib/api';
+import { useToast } from '../../../components/ToastContext';
 
 interface Bounty {
   id: string;
@@ -100,7 +101,7 @@ export default function ShopperBountiesPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev: BountyRequest) => ({
       ...prev,
       [name]: name === 'maxBudget' || name === 'radius' || name === 'xpReward' ? parseFloat(value) : value,
     }));
@@ -197,7 +198,7 @@ export default function ShopperBountiesPage() {
     }
 
     try {
-      setSubmissionModal(prev => ({ ...prev, isSubmitting: true }));
+      setSubmissionModal((prev: SubmissionModalState) => ({ ...prev, isSubmitting: true }));
 
       await api.post(`/bounties/${submissionModal.bountyId}/submissions`, {
         itemId: submissionModal.selectedItemId,
@@ -218,7 +219,7 @@ export default function ShopperBountiesPage() {
       const errorMsg = (error as any).response?.data?.message || 'Failed to submit match';
       showToast(errorMsg, 'error');
     } finally {
-      setSubmissionModal(prev => ({ ...prev, isSubmitting: false }));
+      setSubmissionModal((prev: SubmissionModalState) => ({ ...prev, isSubmitting: false }));
     }
   };
 
@@ -344,14 +345,22 @@ export default function ShopperBountiesPage() {
       )}
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
+        {/* Header with Submissions Link */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Bounty Board
-          </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Request hard-to-find items from local organizers
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                Bounty Board
+              </h1>
+              <p className="text-lg text-gray-600 dark:text-gray-400">
+                Request hard-to-find items from local organizers
+              </p>
+            </div>
+            <Link href="/shopper/bounties/submissions" className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+              <Bell size={18} className="text-amber-600 dark:text-amber-400" />
+              <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">My Submissions</span>
+            </Link>
+          </div>
         </div>
 
         {/* Request Button */}

@@ -543,81 +543,131 @@ export const approveDeclineSubmission = async (req: AuthRequest, res: Response) 
 };
 
 /**
- * POST /api/bounties/:id/match
+ * Haversine distance calculation (miles)
+ */
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3959; // Earth radius in miles
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * POST /api/bounties/match
  * Auto-match item against bounties (ORGANIZER auth)
- * Simple text matching: calculate confidence based on word overlap
+ * Improved scoring algorithm per spec §1:
+ * - Category match: +30 points
+ * - Title keyword overlap: +20 points per matching word (cap at 40)
+ * - Tag overlap: +10 points per matching tag (cap at 20)
+ * - Within 25mi radius: +10 points; outside 25mi: skip entirely
+ * - Recency bonus (bounty posted <7 days): +5 points
+ * - Confidence threshold: 60 points minimum
  */
 export const matchItemToBounties = async (req: AuthRequest, res: Response) => {
   try {
-    const { id: bountyId } = req.params;
     const { itemId } = req.body;
     const organizerId = req.user?.id;
 
     if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
     if (!itemId) return res.status(400).json({ message: 'itemId is required.' });
 
-    // Fetch item
+    // Fetch item with full details
     const item = await prisma.item.findUnique({
       where: { id: itemId },
-      include: { sale: true },
+      include: { sale: { select: { id: true, lat: true, lng: true, organizerId: true } } },
     });
     if (!item) return res.status(404).json({ message: 'Item not found.' });
-    if (item.sale!.organizerId !== organizerId) {
+    if (!item.sale || item.sale.organizerId !== organizerId) {
       return res.status(403).json({ message: 'Item does not belong to you.' });
     }
 
-    // Get organizer's sale location (lat/lng)
-    const organizerSales = await prisma.sale.findMany({
-      where: { organizer: { userId: organizerId } },
-      select: { id: true, lat: true, lng: true },
-    });
+    const itemLat = item.sale.lat;
+    const itemLng = item.sale.lng;
 
-    // Query for OPEN bounties not from organizer's sales, within 90 days, not ended
+    // Query for OPEN bounties within 90 days, not from organizer's own sales, with non-ended sales
     const candidateBounties = await prisma.missingListingBounty.findMany({
       where: {
         status: 'OPEN',
-        saleId: { notIn: organizerSales.map((s: any) => s.id) },
         createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
-        sale: { status: { not: 'ENDED' } },
+        sale: {
+          status: { not: 'ENDED' },
+          organizer: { userId: { not: organizerId } }, // Exclude organizer's own bounties
+        },
       },
       include: {
-        user: { select: { name: true, roles: true } },
-        sale: { select: { title: true, lat: true, lng: true } },
+        user: { select: { id: true, name: true } },
+        sale: { select: { id: true, lat: true, lng: true } },
       },
     });
 
-    // Simple text matching: split item title and bounty description into words
-    const itemWords = (item.title + ' ' + (item.description || ''))
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((w: any) => w.length > 2);
-
-    const matches = candidateBounties
+    // Score each bounty
+    const scoredMatches = candidateBounties
       .map((bounty: any) => {
-        const bountyWords = bounty.description
+        let score = 0;
+
+        // Only include bounties within 25 miles (skip entirely if outside)
+        if (itemLat && itemLng && bounty.sale?.lat && bounty.sale?.lng) {
+          const distance = haversineDistance(itemLat, itemLng, bounty.sale.lat, bounty.sale.lng);
+          if (distance > 25) {
+            return null; // Skip bounties outside 25 mile radius
+          }
+          score += 10; // Within 25mi: +10 points
+        }
+
+        // Category match: +30 points (if both have category)
+        if (item.category && bounty.category && item.category.toLowerCase() === bounty.category.toLowerCase()) {
+          score += 30;
+        }
+
+        // Title keyword overlap: +20 points per matching word (cap at 40)
+        const itemTitleWords = (item.title || '')
           .toLowerCase()
           .split(/\s+/)
           .filter((w: any) => w.length > 2);
+        const bountyDescriptionWords = (bounty.description || '')
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((w: any) => w.length > 2);
+        const titleOverlapCount = itemTitleWords.filter((w: any) => bountyDescriptionWords.includes(w)).length;
+        score += Math.min(titleOverlapCount * 20, 40);
 
-        // Count overlapping words
-        const overlap = itemWords.filter((w: any) => bountyWords.includes(w)).length;
-        const totalUnique = new Set([...itemWords, ...bountyWords]).size;
-        const confidence = totalUnique > 0 ? overlap / totalUnique : 0;
+        // Tag overlap: +10 points per matching tag (cap at 20)
+        if (item.tags && item.tags.length > 0 && bounty.category) {
+          const itemTagsLower = item.tags.map((t: string) => t.toLowerCase());
+          const bountyTagsLower = bounty.category.toLowerCase().split(/\s+/);
+          const tagOverlapCount = itemTagsLower.filter((t: string) => bountyTagsLower.some((bt: string) => t.includes(bt))).length;
+          score += Math.min(tagOverlapCount * 10, 20);
+        }
+
+        // Recency bonus: +5 points if bounty posted <7 days ago
+        const daysSinceCreation = (Date.now() - bounty.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSinceCreation < 7) {
+          score += 5;
+        }
+
+        const confidence = score / 100; // Convert to 0–1 scale for display
 
         return {
-          id: bounty.id,
-          description: bounty.description,
-          confidence: Math.round(confidence * 100) / 100, // Round to 2 decimals
-          offerPrice: bounty.offerPrice,
-          user: bounty.user,
-          sale: bounty.sale,
+          bountyId: bounty.id,
+          title: bounty.description,
+          reward: bounty.xpReward,
+          shopperName: bounty.user.name,
+          score,
+          confidence: Math.round(confidence * 100) / 100, // Display as percentage (0.0–1.0)
         };
       })
-      .filter((m: any) => m.confidence >= 0.6) // Filter by threshold
-      .sort((a: any, b: any) => b.confidence - a.confidence) // Sort descending
+      .filter((m: any) => m !== null && m.score >= 60) // Filter by threshold (60 points)
+      .sort((a: any, b: any) => b.score - a.score) // Sort descending by score
       .slice(0, 5); // Top 5
 
-    return res.json({ matches });
+    return res.json({ matches: scoredMatches });
   } catch (error) {
     console.error('matchItemToBounties error:', error);
     return res.status(500).json({ message: 'Server error.' });
@@ -759,6 +809,94 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
     });
   } catch (error) {
     console.error('completeBountyPurchase error:', error);
+    return res.status(500).json({ message: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/bounties/organizer/submissions
+ * Organizer view their bounty submissions (past 30 days)
+ * Returns submissions for items that belong to the organizer's sales
+ */
+export const getOrganizerSubmissions = async (req: AuthRequest, res: Response) => {
+  try {
+    const organizerId = req.user?.id;
+    if (!organizerId) return res.status(401).json({ message: 'Authentication required' });
+
+    // Calculate 30 days ago
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Query submissions where the item belongs to one of the organizer's sales
+    const submissions = await prisma.bountySubmission.findMany({
+      where: {
+        submittedAt: { gte: thirtyDaysAgo },
+        item: {
+          sale: {
+            organizerId,
+          },
+        },
+      },
+      include: {
+        bounty: {
+          select: {
+            id: true,
+            description: true,
+            offerPrice: true,
+            xpReward: true,
+            createdAt: true,
+          },
+        },
+        item: {
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            photoUrls: true,
+            saleId: true,
+          },
+        },
+        organizer: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+
+    // Count total submissions in the same criteria
+    const total = await prisma.bountySubmission.count({
+      where: {
+        submittedAt: { gte: thirtyDaysAgo },
+        item: {
+          sale: {
+            organizerId,
+          },
+        },
+      },
+    });
+
+    // Format response to match frontend expectations
+    const formattedSubmissions = submissions.map((s: any) => ({
+      id: s.id,
+      bounty: s.bounty,
+      item: s.item,
+      organizer: s.organizer,
+      message: s.shopperMessage,
+      status: s.status,
+      submittedAt: s.submittedAt,
+      expiresAt: s.expiresAt,
+      xpCost: s.bounty.xpReward ? s.bounty.xpReward * 2 : 50,
+    }));
+
+    return res.json({
+      submissions: formattedSubmissions,
+      total,
+    });
+  } catch (error) {
+    console.error('getOrganizerSubmissions error:', error);
     return res.status(500).json({ message: 'Server error.' });
   }
 };

@@ -54,6 +54,7 @@ import BulkOperationErrorModal from '../../../components/BulkOperationErrorModal
 import ValuationWidget from '../../../components/ValuationWidget';
 import { decodeHtmlEntities } from '../../../utils/textUtils';
 import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42: Voice-to-Tag
+import BountyMatchModal from '../../../components/BountyMatchModal';
 
 /**
  * Phase 3: On-Device Image Processing Utilities
@@ -331,6 +332,12 @@ const AddItemsDetailPage = () => {
   const [pendingFaceTempId, setPendingFaceTempId] = useState<string | null>(null);
   const [pendingFaceAppendId, setPendingFaceAppendId] = useState<string | null>(null);
 
+  // Bounty match modal state
+  const [bountyMatchOpen, setBountyMatchOpen] = useState(false);
+  const [bountyMatches, setBountyMatches] = useState<any[]>([]);
+  const [matchingItemId, setMatchingItemId] = useState<string | null>(null);
+  const [matchingItemTitle, setMatchingItemTitle] = useState<string>('');
+
   // Phase 3-5: Bulk Operations Toolkit state
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkConfirmData, setBulkConfirmData] = useState<{
@@ -587,11 +594,20 @@ const AddItemsDetailPage = () => {
       );
     },
     onMutate: () => { inMutationFlight.current = true; },
-    onSuccess: () => {
+    onSuccess: (response: any) => {
       showToast('Item created successfully', 'success');
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
       setFormData(emptyForm);
       setBulkPrice('');
+
+      // Fire bounty matching
+      const newItemId = response.data?.id;
+      const newItemTitle = response.data?.title || 'Item';
+      if (newItemId) {
+        setMatchingItemId(newItemId);
+        setMatchingItemTitle(newItemTitle);
+        matchMutation.mutate(newItemId);
+      }
     },
     onError: (error: any) => {
       let message =
@@ -706,6 +722,24 @@ const AddItemsDetailPage = () => {
       }
     },
     onSettled: () => { inMutationFlight.current = false; },
+  });
+
+  // Bounty matching mutation (fires after item creation)
+  const matchMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      return await api.post('/bounties/match', { itemId });
+    },
+    onSuccess: (response: any) => {
+      const matches = response.data.matches || [];
+      if (matches.length > 0) {
+        setBountyMatches(matches);
+        setBountyMatchOpen(true);
+      }
+    },
+    onError: (error: any) => {
+      // Silently fail — matching is a bonus feature
+      console.error('Bounty matching error:', error);
+    },
   });
 
   // Early returns after all hooks and mutations
@@ -2596,6 +2630,15 @@ const AddItemsDetailPage = () => {
           </div>
         </div>
       )}
+
+      {/* Bounty Match Modal */}
+      <BountyMatchModal
+        isOpen={bountyMatchOpen}
+        matches={bountyMatches}
+        itemId={matchingItemId || ''}
+        itemTitle={matchingItemTitle}
+        onClose={() => setBountyMatchOpen(false)}
+      />
     </>
   );
 };
