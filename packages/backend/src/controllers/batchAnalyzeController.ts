@@ -1,31 +1,49 @@
 /**
- * batchAnalyzeController.ts — CD2 Phase 2
+ * batchAnalyzeController.ts — ADR-069 Phase 1
  *
- * Batch AI analysis for Cloudinary image URLs.
+ * Batch AI analysis for Cloudinary image URLs with clustering support.
  * Processes 5–20 photos without upload — photos already exist in Cloudinary.
- * Returns AI suggestions for each photo as a batch.
+ *
+ * NEW FLOW (clustering-first):
+ * 1. Receive up to 20 photos
+ * 2. Call Haiku clustering to group related items into sets
+ * 3. Create one Item per cluster (not per photo)
+ * 4. Analyze each cluster in parallel
+ * 5. Return cluster summaries (no confidence badges per locked decision 5)
  */
 
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService';
+import {
+  analyzeItemImages,
+  isCloudAIAvailable,
+  clusterPhotos
+} from '../services/cloudAIService';
+import { prisma } from '../lib/prisma';
 import axios from 'axios';
 import { trackCloudinaryServe } from '../lib/cloudinaryBandwidthTracker';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
 
-interface BatchAnalysisResult {
-  photoUrl: string;
+interface ClusterSummary {
+  itemId: string;
+  photoIndices: number[];
+  isSet: boolean;
+  quantity: number;
   suggestedTitle: string;
-  suggestedDescription: string;
-  suggestedCategory: string;
-  suggestedCondition: string;
-  suggestedPrice: number;
-  suggestedTags: string[];
-  confidence: number; // AI confidence score (0.0–1.0)
-  error?: string;
-  errorCode?: 'AI_TIMEOUT' | 'AI_PARSE_ERROR' | 'AI_RATE_LIMIT' | 'AI_ERROR';
+  suggestedDescription?: string;
+  suggestedCategory?: string;
+  suggestedCondition?: string;
+  suggestedPrice?: number;
+  suggestedTags?: string[];
+  aiConfidence?: number;
+}
+
+interface BatchAnalysisResponse {
+  clusters: ClusterSummary[];
+  totalProcessed: number;
+  successCount: number;
 }
 
 /**
@@ -33,13 +51,14 @@ interface BatchAnalysisResult {
  *
  * Body: { imageUrls: string[] } — array of Cloudinary URLs (already uploaded)
  *
- * For each URL:
- *   1. Download the image
- *   2. Run Google Vision + Claude Haiku (or Ollama fallback)
- *   3. Return AI suggestions
+ * NEW FLOW (ADR-069 Phase 1):
+ * 1. Download all images
+ * 2. Call clusterPhotos() to group them
+ * 3. For each cluster: create 1 Item record
+ * 4. Analyze each cluster in parallel
+ * 5. Return cluster summaries
  *
- * Process up to 20 images, max 10 concurrent.
- * Return partial results if individual images fail.
+ * If clustering fails, fall back to one-item-per-photo (old behavior).
  */
 export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -61,8 +80,131 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // CB5: Updated Ollama fallback prompt to match cloud AI output format (includes tags).
-    const ollamaPrompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
+    // Step 1: Download all images from Cloudinary
+    const downloadedImages: { buffer: Buffer; mimeType: string; url: string }[] = [];
+
+    for (const photoUrl of imageUrls) {
+      trackCloudinaryServe();
+
+      try {
+        const response = await axios.get(photoUrl, {
+          responseType: 'arraybuffer',
+          timeout: 15000,
+        });
+        downloadedImages.push({
+          buffer: Buffer.from(response.data),
+          mimeType: 'image/jpeg',
+          url: photoUrl,
+        });
+      } catch (err: any) {
+        console.error(`Failed to download image ${photoUrl}:`, err.message);
+        // Partial result: skip this image, continue with others
+      }
+    }
+
+    if (downloadedImages.length === 0) {
+      res.status(400).json({ message: 'Failed to download any images' });
+      return;
+    }
+
+    // Step 2: Cluster the photos (ADR-069 Phase 1)
+    let clusterGroups: Array<{ photoIndices: number[]; detectedType: string; confidence: number }> = [];
+    let ungroupedIndices: number[] = [];
+
+    try {
+      const clusterResult = await clusterPhotos(downloadedImages.map(img => img.buffer.toString('base64')));
+      clusterGroups = clusterResult.clusters || [];
+      ungroupedIndices = clusterResult.ungrouped || [];
+    } catch (clusterError) {
+      console.warn('[batchAnalyzeController] Clustering failed, falling back to one-item-per-photo:', clusterError);
+      // Fallback: treat each photo as its own cluster
+      clusterGroups = downloadedImages.map((_, i) => ({
+        photoIndices: [i],
+        detectedType: 'Single Item',
+        confidence: 0.5,
+      }));
+      ungroupedIndices = [];
+    }
+
+    // Step 3: Create Item records for clusters + ungrouped photos
+    const itemIds: string[] = [];
+
+    for (const cluster of clusterGroups) {
+      try {
+        const item = await prisma.item.create({
+          data: {
+            title: 'Item', // Placeholder; will be updated by Haiku analysis
+            quantity: cluster.photoIndices.length,
+            isSet: cluster.photoIndices.length > 1,
+            clusterConfidence: cluster.confidence,
+            isAiTagged: true,
+          },
+        });
+        itemIds.push(item.id);
+      } catch (err) {
+        console.error('Failed to create Item for cluster:', err);
+      }
+    }
+
+    // For ungrouped indices, each becomes a solo item
+    for (const idx of ungroupedIndices) {
+      try {
+        const item = await prisma.item.create({
+          data: {
+            title: 'Item',
+            quantity: 1,
+            isSet: false,
+            isAiTagged: true,
+          },
+        });
+        itemIds.push(item.id);
+      } catch (err) {
+        console.error('Failed to create Item for ungrouped photo:', err);
+      }
+    }
+
+    // Step 4: Analyze each cluster in parallel
+    const useCloudAI = isCloudAIAvailable();
+    const results: ClusterSummary[] = [];
+
+    const CONCURRENCY_LIMIT = 5;
+    const allClusters = [
+      ...clusterGroups.map((c, idx) => ({ ...c, itemId: itemIds[idx], type: 'cluster' as const })),
+      ...ungroupedIndices.map((idx, cidx) => ({
+        photoIndices: [idx],
+        detectedType: 'Single Item',
+        confidence: 0.5,
+        itemId: itemIds[clusterGroups.length + cidx],
+        type: 'ungrouped' as const
+      })),
+    ];
+
+    for (let i = 0; i < allClusters.length; i += CONCURRENCY_LIMIT) {
+      const batch = allClusters.slice(i, i + CONCURRENCY_LIMIT);
+
+      const batchResults = await Promise.allSettled(
+        batch.map(async (clusterSpec) => {
+          const { photoIndices, itemId } = clusterSpec;
+
+          // Get images for this cluster
+          const clusterImages = photoIndices.map(idx => downloadedImages[idx]);
+
+          let analysis: any = null;
+
+          if (useCloudAI) {
+            try {
+              const imageBuffers = clusterImages.map(img => img.buffer);
+              const mimeTypes = clusterImages.map(img => img.mimeType);
+              analysis = await analyzeItemImages(imageBuffers, mimeTypes);
+            } catch (err: any) {
+              console.error(`Cloud AI error for item ${itemId}:`, err.message);
+            }
+          }
+
+          // Fallback to Ollama if Cloud AI unavailable or failed
+          if (!analysis) {
+            try {
+              const ollamaPrompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation):
 {
   "title": "short specific title (include material, era, or maker if visible)",
   "description": "1-2 sentence description mentioning condition and notable features",
@@ -72,60 +214,13 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
   "suggestedTags": ["Tag1", "Tag2", "Tag3"]
 }`;
 
-    const useCloudAI = isCloudAIAvailable();
-
-    // Process images with concurrency limit (max 10 concurrent)
-    const results: BatchAnalysisResult[] = [];
-    const CONCURRENCY_LIMIT = 10;
-
-    for (let i = 0; i < imageUrls.length; i += CONCURRENCY_LIMIT) {
-      const batch = imageUrls.slice(i, i + CONCURRENCY_LIMIT);
-
-      const batchResults = await Promise.allSettled(
-        batch.map(async (photoUrl: string) => {
-          // Track Cloudinary serve for bandwidth monitoring (#105)
-          trackCloudinaryServe();
-
-          // Download image from Cloudinary
-          let imageBuffer: Buffer;
-          try {
-            const response = await axios.get(photoUrl, {
-              responseType: 'arraybuffer',
-              timeout: 15000,
-            });
-            imageBuffer = Buffer.from(response.data);
-          } catch (err: any) {
-            return {
-              photoUrl,
-              error: `Failed to download image: ${(err as Error)?.message ?? 'Unknown error'}`,
-            } as Partial<BatchAnalysisResult>;
-          }
-
-          // AI analysis (best-effort)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let ai: Record<string, any> | null = null;
-
-          if (useCloudAI) {
-            try {
-              ai = await analyzeItemImage(imageBuffer, 'image/jpeg');
-            } catch (error: any) {
-              // P0-3: Capture error code from Cloud AI for later surfacing
-              const errorCode = (error as any)?.errorCode || 'AI_ERROR';
-              const errorMsg = error.message || 'Cloud AI failed';
-              console.error(`Cloud AI error for batch item: ${errorCode} - ${errorMsg}`);
-              // Fall through to Ollama
-            }
-          }
-
-          if (!ai) {
-            try {
-              const base64Image = imageBuffer.toString('base64');
+              const base64Images = clusterImages.map(img => img.buffer.toString('base64'));
               const aiResponse = await axios.post(
                 `${OLLAMA_URL}/api/generate`,
                 {
                   model: OLLAMA_VISION_MODEL,
                   prompt: ollamaPrompt,
-                  images: [base64Image],
+                  images: base64Images.slice(0, 1), // Ollama: use primary image only
                   stream: false,
                 },
                 { timeout: 45000 }
@@ -133,69 +228,65 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               const raw = aiResponse.data.response
                 .replace(/```json\n?|\n?```/g, '')
                 .trim();
-              ai = JSON.parse(raw);
-            } catch {
-              // AI unavailable — organizer fills in manually
+              analysis = JSON.parse(raw);
+            } catch (err) {
+              console.error(`Ollama error for item ${itemId}:`, err);
             }
           }
 
-          if (!ai) {
-            // P0-3: Return structured error for frontend visibility
-            return {
-              photoUrl,
-              error: 'AI analysis unavailable for this image',
-              errorCode: 'AI_ERROR',
-            } as Partial<BatchAnalysisResult>;
-          }
-
-          // Map AI response to our result format
-          const result: BatchAnalysisResult = {
-            photoUrl,
-            suggestedTitle: (ai.title as string) || 'Item',
-            suggestedDescription:
-              (ai.description as string) || 'No description available',
-            suggestedCategory: (ai.category as string) || 'Other',
-            suggestedCondition: (ai.condition as string) || 'USED',
-            suggestedPrice: (ai.suggestedPrice as number) || 10,
-            // CB5-fix: cloud AI returns 'tags', Ollama returns 'suggestedTags' — handle both
-            suggestedTags: Array.isArray(ai.tags)
-              ? (ai.tags as string[])
-              : Array.isArray(ai.suggestedTags)
-              ? (ai.suggestedTags as string[])
-              : [],
-            // Use actual confidence from AI response (0.0–1.0); fallback to 0.5 if missing
-            confidence: typeof ai.confidence === 'number' ? ai.confidence : 0.5,
+          // Build cluster summary
+          const summary: ClusterSummary = {
+            itemId,
+            photoIndices,
+            isSet: photoIndices.length > 1,
+            quantity: photoIndices.length,
+            suggestedTitle: analysis?.title || 'Item',
+            suggestedDescription: analysis?.description || 'No description available',
+            suggestedCategory: analysis?.category || 'Other',
+            suggestedCondition: analysis?.condition || 'USED',
+            suggestedPrice: analysis?.suggestedPrice || 10,
+            suggestedTags: analysis?.tags || analysis?.suggestedTags || [],
+            aiConfidence: analysis?.confidence || 0.5,
           };
 
-          return result;
+          // Update Item record with AI analysis
+          try {
+            await prisma.item.update({
+              where: { id: itemId },
+              data: {
+                title: summary.suggestedTitle,
+                description: summary.suggestedDescription,
+                category: summary.suggestedCategory,
+                condition: summary.suggestedCondition,
+                price: summary.suggestedPrice ? summary.suggestedPrice * 100 : undefined,
+                tags: summary.suggestedTags,
+                aiConfidence: summary.aiConfidence,
+              },
+            });
+          } catch (err) {
+            console.error(`Failed to update Item ${itemId}:`, err);
+          }
+
+          return summary;
         })
       );
 
-      // Collect results from this batch
       batchResults.forEach((r) => {
         if (r.status === 'fulfilled') {
-          results.push(r.value as BatchAnalysisResult);
+          results.push(r.value as ClusterSummary);
         } else {
-          results.push({
-            photoUrl: '(unknown)',
-            suggestedTitle: 'Error',
-            suggestedDescription: (r.reason as Error)?.message ?? 'Analysis failed',
-            suggestedCategory: 'Other',
-            suggestedCondition: 'USED',
-            suggestedPrice: 10,
-            suggestedTags: [],
-            confidence: 0.4,
-            error: (r.reason as Error)?.message ?? 'Failed to analyze',
-          });
+          console.error('Cluster analysis failed:', r.reason);
         }
       });
     }
 
-    res.json({
-      results,
+    const response: BatchAnalysisResponse = {
+      clusters: results,
       totalProcessed: results.length,
-      successCount: results.filter((r) => !r.error).length,
-    });
+      successCount: results.filter(r => r.suggestedTitle !== 'Error').length,
+    };
+
+    res.json(response);
   } catch (error) {
     console.error('batchAnalyzeImages error:', error);
     res.status(500).json({ message: 'Batch analysis failed' });

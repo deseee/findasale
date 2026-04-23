@@ -26,6 +26,7 @@ import { resetRapidDraftDebounce, rapidfireAIDebounce, heldAnalysisItems } from 
 import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
 import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '../services/xpService'; // Phase 2a: XP awards
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
+import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
 
 // Feature #5: Item listing/transaction types (inlined from shared package)
 enum ListingType {
@@ -1598,6 +1599,9 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
       title: updatedItem.title,
       status: updatedItem.draftStatus
     }).catch(err => console.error('Webhook fire error:', err));
+
+    // ADR-069 Phase 2: Queue async eBay comps fetch (non-blocking)
+    enqueueFetchEbayComps(updatedItem.id);
 
     res.json(updatedItem);
 

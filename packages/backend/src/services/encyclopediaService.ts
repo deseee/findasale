@@ -1,356 +1,246 @@
+/**
+ * encyclopediaService.ts — ADR-069 Phase 1
+ *
+ * Service for creating and managing EncyclopediaEntry stubs from Haiku analysis.
+ * Supports auto-generation and deduplication by slug.
+ */
+
 import { prisma } from '../lib/prisma';
-import { Prisma } from '@prisma/client';
 
-/**
- * EncyclopediaService — CRUD + search operations for encyclopedia entries
- */
-
-export interface CreateEntryInput {
+export interface NewEncyclopediaStub {
+  slug: string;
   title: string;
-  subtitle?: string;
-  content: string;
+  description: string;
   category: string;
-  tags?: string[];
-  references?: Array<{ title: string; url: string; source?: string }>;
-}
-
-export interface UpdateEntryInput {
-  title?: string;
-  subtitle?: string;
-  content?: string;
-  category?: string;
-  tags?: string[];
-  changeNote?: string;
-}
-
-export interface ListEntriesQuery {
-  page?: number;
-  limit?: number;
-  category?: string;
-  search?: string;
-  sort?: 'recent' | 'popular' | 'trending';
+  tags: string[];
+  estimatedPriceLow: number; // in cents
+  estimatedPriceHigh: number; // in cents
 }
 
 /**
- * Create a new encyclopedia entry (PENDING_REVIEW status)
+ * Create an Encyclopedia stub if one with the same slug doesn't already exist.
+ *
+ * Creates both:
+ * 1. EncyclopediaEntry with status='AUTO_GENERATED'
+ * 2. PriceBenchmark with dataSource='haiku_inferred'
+ *
+ * Fire-and-forget: does not throw, logs errors internally.
  */
-export const createEntry = async (
-  authorId: string,
-  input: CreateEntryInput
-): Promise<any> => {
-  // Generate slug from title
-  const slug = generateSlug(input.title);
+export async function createEncyclopediaStubIfNew(
+  stub: NewEncyclopediaStub,
+  triggerItemId?: string
+): Promise<void> {
+  try {
+    // Check if slug already exists
+    const existing = await prisma.encyclopediaEntry.findUnique({
+      where: { slug: stub.slug },
+    });
 
-  // Check if slug already exists
-  const existing = await prisma.encyclopediaEntry.findUnique({
-    where: { slug }
-  });
-
-  if (existing) {
-    throw new Error('Entry with this slug already exists');
-  }
-
-  // Create entry with references
-  const entry = await prisma.encyclopediaEntry.create({
-    data: {
-      slug,
-      title: input.title,
-      subtitle: input.subtitle,
-      content: input.content,
-      category: input.category,
-      tags: input.tags || [],
-      authorId,
-      status: 'PENDING_REVIEW',
-      references: {
-        create: (input.references || []).map(ref => ({
-          title: ref.title,
-          url: ref.url,
-          source: ref.source
-        }))
-      }
-    },
-    include: {
-      author: {
-        select: { id: true, name: true }
-      },
-      references: true
+    if (existing) {
+      console.log(`[encyclopediaService] Entry slug "${stub.slug}" already exists, skipping creation`);
+      return;
     }
-  });
 
-  return entry;
-};
-
-/**
- * Get entry by ID (internal — used for ownership checks)
- */
-export const getEntry = async (entryId: string): Promise<any> => {
-  return await prisma.encyclopediaEntry.findUnique({
-    where: { id: entryId }
-  });
-};
-
-/**
- * Get entry by slug with full details (published only for non-authors)
- */
-export const getEntryBySlug = async (
-  slug: string,
-  userId?: string
-): Promise<any> => {
-  const entry = await prisma.encyclopediaEntry.findUnique({
-    where: { slug },
-    include: {
-      author: {
-        select: { id: true, name: true }
+    // Create entry + benchmark in transaction
+    const entry = await prisma.encyclopediaEntry.create({
+      data: {
+        slug: stub.slug,
+        title: stub.title,
+        subtitle: `Auto-generated from item analysis`,
+        content: stub.description,
+        category: stub.category,
+        tags: stub.tags,
+        status: 'AUTO_GENERATED',
+        triggerItemId: triggerItemId || null,
+        // Auto-generated entries need an author; use system user (or admin ID if defined)
+        authorId: process.env.SYSTEM_USER_ID || 'system',
       },
-      benchmarks: true,
-      references: true,
-      revisions: {
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          changeNote: true,
-          createdAt: true,
-          author: { select: { name: true } }
-        }
+    });
+
+    // Create paired PriceBenchmark
+    const benchmark = await prisma.priceBenchmark.create({
+      data: {
+        entryId: entry.id,
+        condition: 'USED', // Default condition for auto-generated benchmarks
+        region: 'National', // Default region
+        priceRangeLow: stub.estimatedPriceLow,
+        priceRangeHigh: stub.estimatedPriceHigh,
+        dataSource: 'haiku_inferred',
       },
-      votes: userId ? { where: { userId } } : false
-    }
-  });
+    });
 
-  if (!entry) {
-    return null;
+    console.log(
+      `[encyclopediaService] Created EncyclopediaEntry "${stub.slug}" (id: ${entry.id}) + PriceBenchmark (id: ${benchmark.id})`
+    );
+  } catch (error) {
+    console.error('[encyclopediaService] Failed to create Encyclopedia stub:', error);
+    // No throw: this is async, fire-and-forget
   }
-
-  // Check visibility: non-authors should only see PUBLISHED entries
-  if (entry.status !== 'PUBLISHED' && entry.authorId !== userId) {
-    return null;
-  }
-
-  // Increment view count
-  await prisma.encyclopediaEntry.update({
-    where: { slug },
-    data: { viewCount: { increment: 1 } }
-  });
-
-  // Fetch related entries (3 random from same category, published only)
-  const related = await prisma.encyclopediaEntry.findMany({
-    where: {
-      category: entry.category,
-      id: { not: entry.id },
-      status: 'PUBLISHED'
-    },
-    select: { slug: true, title: true, viewCount: true },
-    take: 3,
-    orderBy: { viewCount: 'desc' }
-  });
-
-  return {
-    ...entry,
-    userVote: entry.votes && (entry.votes as any[]).length > 0 ? (entry.votes as any[])[0].helpful : null,
-    related
-  };
-};
+}
 
 /**
- * List encyclopedia entries with pagination and filtering
+ * Bulk create multiple Encyclopedia stubs (for seed data or backfill).
+ * Skips entries that already exist by slug.
  */
-export const listEntries = async (
-  query: ListEntriesQuery,
-  userId?: string
-): Promise<{ entries: any[]; total: number; page: number; hasMore: boolean }> => {
-  const page = query.page || 1;
-  const limit = Math.min(query.limit || 20, 100);
+export async function createEncyclopediaStubsIfNew(stubs: NewEncyclopediaStub[]): Promise<void> {
+  for (const stub of stubs) {
+    await createEncyclopediaStubIfNew(stub);
+  }
+}
+
+// ── Existing Encyclopedia Service Functions (used by encyclopediaController) ──
+
+/**
+ * List Encyclopedia entries with pagination and filtering.
+ */
+export async function listEntries(
+  page: number = 1,
+  limit: number = 20,
+  category?: string
+): Promise<{ entries: any[]; total: number }> {
   const skip = (page - 1) * limit;
 
-  // Build where clause
-  const where: Prisma.EncyclopediaEntryWhereInput = {
-    status: 'PUBLISHED'
-  };
-
-  if (query.category) {
-    where.category = query.category;
-  }
-
-  // Full-text search on title and tags
-  if (query.search) {
-    where.OR = [
-      { title: { contains: query.search, mode: 'insensitive' } },
-      { tags: { hasSome: [query.search] } }
-    ];
-  }
-
-  // Order by sort parameter
-  let orderBy: Prisma.EncyclopediaEntryOrderByWithRelationInput = { createdAt: 'desc' };
-  if (query.sort === 'popular') {
-    orderBy = { viewCount: 'desc' };
-  } else if (query.sort === 'trending') {
-    // Trending = recent + popular (views in last 7 days)
-    // Simplified: just use viewCount for now
-    orderBy = { viewCount: 'desc' };
+  const where: any = { status: 'PUBLISHED' };
+  if (category) {
+    where.category = { contains: category, mode: 'insensitive' };
   }
 
   const [entries, total] = await Promise.all([
     prisma.encyclopediaEntry.findMany({
       where,
-      include: {
-        author: { select: { name: true } },
-        votes: userId ? { where: { userId } } : false
-      },
-      orderBy,
       skip,
-      take: limit
+      take: limit,
+      include: { author: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
     }),
-    prisma.encyclopediaEntry.count({ where })
+    prisma.encyclopediaEntry.count({ where }),
   ]);
 
-  const mapped = entries.map(e => ({
-    id: e.id,
-    slug: e.slug,
-    title: e.title,
-    subtitle: e.subtitle,
-    category: e.category,
-    authorName: e.author.name,
-    status: e.status,
-    viewCount: e.viewCount,
-    helpfulCount: e.helpfulCount,
-    excerpt: e.content.substring(0, 200),
-    isFeatured: e.isFeatured,
-    createdAt: e.createdAt,
-    updatedAt: e.updatedAt,
-    userVote: e.votes && (e.votes as any[]).length > 0 ? (e.votes as any[])[0].helpful : null
-  }));
-
-  return {
-    entries: mapped,
-    total,
-    page,
-    hasMore: skip + limit < total
-  };
-};
+  return { entries, total };
+}
 
 /**
- * Vote on entry (helpful/not helpful)
+ * Get a single Encyclopedia entry by slug.
  */
-export const voteOnEntry = async (
+export async function getEntryBySlug(slug: string, userId?: string): Promise<any> {
+  const entry = await prisma.encyclopediaEntry.findUnique({
+    where: { slug },
+    include: {
+      author: { select: { name: true, id: true } },
+      benchmarks: true,
+      votes: userId ? { where: { userId } } : false,
+    },
+  });
+
+  if (!entry) {
+    throw new Error(`Encyclopedia entry not found: ${slug}`);
+  }
+
+  return entry;
+}
+
+/**
+ * Create a new Encyclopedia entry (used by authenticated users).
+ */
+export async function createEntry(
+  authorId: string,
+  data: { slug: string; title: string; content: string; category: string; tags: string[] }
+): Promise<any> {
+  const existing = await prisma.encyclopediaEntry.findUnique({
+    where: { slug: data.slug },
+  });
+
+  if (existing) {
+    throw new Error(`Slug "${data.slug}" already exists`);
+  }
+
+  const entry = await prisma.encyclopediaEntry.create({
+    data: {
+      ...data,
+      status: 'PENDING_REVIEW',
+      authorId,
+    },
+  });
+
+  return entry;
+}
+
+/**
+ * Vote on (like/dislike) an Encyclopedia entry.
+ */
+export async function voteOnEntry(
   entryId: string,
   userId: string,
   helpful: boolean
-): Promise<{ helpfulCount: number; userVote: boolean }> => {
-  // Verify entry exists
-  const entry = await prisma.encyclopediaEntry.findUnique({
-    where: { id: entryId }
-  });
-
-  if (!entry) {
-    throw new Error('Entry not found');
-  }
-
-  // Upsert vote
+): Promise<any> {
   const vote = await prisma.encyclopediaVote.upsert({
-    where: { entryId_userId: { entryId, userId } },
+    where: {
+      entryId_userId: { entryId, userId },
+    },
+    create: { entryId, userId, helpful },
     update: { helpful },
-    create: { entryId, userId, helpful }
   });
 
-  // Recalculate helpful count
-  const helpfulCount = await prisma.encyclopediaVote.count({
-    where: { entryId, helpful: true }
-  });
-
-  // Update entry
-  await prisma.encyclopediaEntry.update({
+  // Update helpfulCount on entry
+  const entry = await prisma.encyclopediaEntry.findUnique({
     where: { id: entryId },
-    data: { helpfulCount }
   });
 
-  return {
-    helpfulCount,
-    userVote: helpful
-  };
-};
+  if (entry) {
+    const newHelpfulCount = await prisma.encyclopediaVote.count({
+      where: { entryId, helpful: true },
+    });
+
+    await prisma.encyclopediaEntry.update({
+      where: { id: entryId },
+      data: { helpfulCount: newHelpfulCount },
+    });
+  }
+
+  return vote;
+}
 
 /**
- * Update entry (owner or admin only) — creates revision
+ * Get a single Encyclopedia entry by ID.
  */
-export const updateEntry = async (
-  entryId: string,
-  userId: string,
-  userRole: string,
-  input: UpdateEntryInput
-): Promise<any> => {
-  // Check authorization
+export async function getEntry(entryId: string): Promise<any> {
   const entry = await prisma.encyclopediaEntry.findUnique({
-    where: { id: entryId }
+    where: { id: entryId },
+    include: { author: { select: { name: true } } },
   });
 
   if (!entry) {
-    throw new Error('Entry not found');
+    throw new Error(`Encyclopedia entry not found: ${entryId}`);
   }
 
-  if (entry.authorId !== userId && userRole !== 'ADMIN') {
-    throw new Error('Unauthorized');
-  }
-
-  // Create revision before update
-  const revision = await prisma.encyclopediaRevision.create({
-    data: {
-      entryId,
-      title: input.title || entry.title,
-      content: input.content || entry.content,
-      category: input.category || entry.category,
-      tags: input.tags || entry.tags,
-      authorId: userId,
-      changeNote: input.changeNote
-    }
-  });
-
-  // Update entry
-  const updated = await prisma.encyclopediaEntry.update({
-    where: { id: entryId },
-    data: {
-      title: input.title,
-      subtitle: input.subtitle,
-      content: input.content,
-      category: input.category,
-      tags: input.tags,
-      updatedAt: new Date()
-    },
-    include: {
-      author: { select: { id: true, name: true } },
-      revisions: { orderBy: { createdAt: 'desc' }, take: 5 }
-    }
-  });
-
-  return {
-    ...updated,
-    revisionId: revision.id
-  };
-};
+  return entry;
+}
 
 /**
- * Get entry revisions
+ * Update an Encyclopedia entry (authorization should be checked by controller).
  */
-export const getEntryRevisions = async (entryId: string): Promise<any> => {
+export async function updateEntry(
+  entryId: string,
+  data: Partial<{ title: string; content: string; category: string; tags: string[] }>
+): Promise<any> {
+  const entry = await prisma.encyclopediaEntry.update({
+    where: { id: entryId },
+    data,
+  });
+
+  return entry;
+}
+
+/**
+ * Get revision history for an Encyclopedia entry.
+ */
+export async function getEntryRevisions(entryId: string, limit: number = 20): Promise<any[]> {
   const revisions = await prisma.encyclopediaRevision.findMany({
     where: { entryId },
-    include: {
-      author: { select: { name: true } }
-    },
-    orderBy: { createdAt: 'desc' }
+    include: { author: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
   });
 
   return revisions;
-};
-
-/**
- * Helper: Generate URL-friendly slug
- */
-function generateSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, '') // Remove special chars
-    .replace(/\s+/g, '-') // Replace spaces with hyphens
-    .replace(/-+/g, '-') // Replace multiple hyphens with single
-    .substring(0, 100);
 }

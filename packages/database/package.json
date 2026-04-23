@@ -7,7 +7,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "seed:encyclopedia": "ts-node --require tsconfig-paths/register prisma/seedEncyclopedia.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

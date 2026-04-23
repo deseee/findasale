@@ -52,52 +52,93 @@ export async function generateValuation(itemId: string) {
       return soldDate && soldDate > ninetyDaysAgo;
     });
 
-    // Need at least 10 comparables
+    // Need at least 10 comparables; fallback to PriceBenchmark (ADR-069 Phase 1)
+    let priceLow = 0;
+    let priceHigh = 0;
+    let priceMedian = 0;
+    let confidenceScore = 0;
+    let method = 'STATISTICAL';
+
     if (recentComparables.length < 10) {
-      // Return null to indicate insufficient data
-      await prisma.itemValuation.upsert({
-        where: { itemId },
-        create: {
-          itemId,
-          priceLow: 0,
-          priceHigh: 0,
-          priceMedian: 0,
-          confidenceScore: 0,
-          comparableCount: recentComparables.length,
-          method: 'STATISTICAL',
+      // ADR-069: Query PriceBenchmark as fallback
+      const benchmarks = await prisma.priceBenchmark.findMany({
+        where: {
+          entry: {
+            category: { contains: item.category || '', mode: 'insensitive' }
+          },
+          condition: item.condition || 'USED'
         },
-        update: {
-          comparableCount: recentComparables.length,
-        },
+        include: { entry: true },
+        take: 3,
+        orderBy: { createdAt: 'desc' }
       });
 
-      return { insufficient_data: true, comparableCount: recentComparables.length };
+      if (benchmarks.length > 0) {
+        // Calculate median from benchmark price ranges
+        const benchmarkPrices = benchmarks.map(b => (b.priceRangeLow + b.priceRangeHigh) / 2);
+        benchmarkPrices.sort((a, b) => a - b);
+        const benchmarkMedian = benchmarkPrices[Math.floor(benchmarkPrices.length / 2)];
+
+        // Blend: 60% Haiku suggested price, 40% benchmark median
+        const haikuPrice = item.aiSuggestedPrice ? Number(item.aiSuggestedPrice) : 0;
+        priceMedian = haikuPrice > 0
+          ? haikuPrice * 0.6 + benchmarkMedian * 0.4
+          : benchmarkMedian;
+
+        // Use benchmark low/high with slight adjustment
+        priceLow = Math.max(benchmarks[0].priceRangeLow, priceMedian * 0.8);
+        priceHigh = Math.min(benchmarks[0].priceRangeHigh, priceMedian * 1.2);
+
+        // Confidence: comparables count + benchmark boost
+        confidenceScore = Math.min((recentComparables.length + 5) / 20 * 100, 100);
+        method = 'STATISTICAL_WITH_BENCHMARK';
+      } else {
+        // No benchmarks either; return insufficient data
+        await prisma.itemValuation.upsert({
+          where: { itemId },
+          create: {
+            itemId,
+            priceLow: 0,
+            priceHigh: 0,
+            priceMedian: 0,
+            confidenceScore: 0,
+            comparableCount: recentComparables.length,
+            method: 'STATISTICAL',
+          },
+          update: {
+            comparableCount: recentComparables.length,
+          },
+        });
+
+        return { insufficient_data: true, comparableCount: recentComparables.length };
+      }
+    } else {
+      // Standard path: have enough comparables
+      // Extract prices, sort, remove top/bottom 5%
+      const prices = recentComparables
+        .map((c) => c.price)
+        .filter((p) => p !== null && p !== undefined) as number[];
+
+      prices.sort((a, b) => a - b);
+
+      // Remove top and bottom 5%
+      const trimCount = Math.ceil(prices.length * 0.05);
+      const trimmedPrices = prices.slice(trimCount, prices.length - trimCount);
+
+      // Calculate min, max, median
+      priceLow = Math.min(...trimmedPrices);
+      priceHigh = Math.max(...trimmedPrices);
+      priceMedian =
+        trimmedPrices.length % 2 === 0
+          ? (trimmedPrices[trimmedPrices.length / 2 - 1] +
+              trimmedPrices[trimmedPrices.length / 2]) /
+            2
+          : trimmedPrices[Math.floor(trimmedPrices.length / 2)];
+
+      // Confidence score: min(comparableCount * 5, 100)
+      confidenceScore = Math.min(recentComparables.length * 5, 100);
+      method = 'STATISTICAL';
     }
-
-    // Extract prices, sort, remove top/bottom 5%
-    const prices = recentComparables
-      .map((c) => c.price)
-      .filter((p) => p !== null && p !== undefined) as number[];
-
-    prices.sort((a, b) => a - b);
-
-    // Remove top and bottom 5%
-    const trimCount = Math.ceil(prices.length * 0.05);
-    const trimmedPrices = prices.slice(trimCount, prices.length - trimCount);
-
-    // Calculate min, max, median
-    const priceLow = Math.min(...trimmedPrices);
-    const priceHigh = Math.max(...trimmedPrices);
-    const priceMedian =
-      trimmedPrices.length % 2 === 0
-        ? (trimmedPrices[trimmedPrices.length / 2 - 1] +
-            trimmedPrices[trimmedPrices.length / 2]) /
-          2
-        : trimmedPrices[Math.floor(trimmedPrices.length / 2)];
-
-    // Confidence score: min(comparableCount * 5, 100)
-    // 20 comparables = 100% confidence
-    const confidenceScore = Math.min(recentComparables.length * 5, 100);
 
     // Upsert valuation record
     const valuation = await prisma.itemValuation.upsert({
@@ -109,7 +150,7 @@ export async function generateValuation(itemId: string) {
         priceMedian,
         confidenceScore,
         comparableCount: recentComparables.length,
-        method: 'STATISTICAL',
+        method,
       },
       update: {
         priceLow,
@@ -117,6 +158,7 @@ export async function generateValuation(itemId: string) {
         priceMedian,
         confidenceScore,
         comparableCount: recentComparables.length,
+        method,
         updatedAt: new Date(),
       },
     });
