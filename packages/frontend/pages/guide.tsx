@@ -111,6 +111,61 @@ const sections: Section[] = [
     ),
   },
   {
+    id: 'community-appraisals',
+    title: 'Community Appraisals',
+    content: (
+      <div className="space-y-4">
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Not sure what an item is worth? Community members can appraise items for you.
+          Mark an item for appraisal and Scout-rank members will submit valuations based on
+          their expertise, research, and market knowledge. You choose the appraisal you find
+          most useful — it's your decision, your final value.
+        </p>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">What Qualifies You to Appraise</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          You don't need formal credentials. What matters is specificity and honesty. Appraisers
+          with collecting experience, professional backgrounds (antiques dealer, estate sale organizer,
+          eBay powerseller), or solid research skills can all contribute valuable insights.
+          A collector with 20 years of pottery knowledge is more useful than a generalist with a degree.
+        </p>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">What Makes a Great Appraisal</h3>
+        <ul className="space-y-3 text-warm-700 dark:text-warm-300 list-disc list-inside">
+          <li><strong>Cite your source:</strong> eBay sold listings, Worthpoint, live auction results, personal sales experience — name it.</li>
+          <li><strong>Be specific about what you see:</strong> Describe joinery style, maker's marks, material, era, model number. "Old bowl" is useless; "Wedgwood Jasperware, ca. 1920, blue with white relief figures" is credible.</li>
+          <li><strong>Give a price range, not a single number:</strong> $150–$250, not $185. Explain the spread — condition variance, regional differences, market timing.</li>
+          <li><strong>Note what pushes value up or down:</strong> Original hardware vs. replacements, restoration work, provenance, reproduction parts. Honesty builds trust.</li>
+        </ul>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Structure Your Appraisal for Impact</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Strong appraisals follow a simple flow:
+        </p>
+        <ol className="space-y-2 text-warm-700 dark:text-warm-300 list-decimal list-inside">
+          <li><strong>What I see:</strong> Identify maker, era, material, condition, distinguishing details.</li>
+          <li><strong>What it's worth:</strong> Price range with reasoning.</li>
+          <li><strong>Why:</strong> Comparable sales, market demand, condition impact.</li>
+          <li><strong>Source:</strong> Where you found your data.</li>
+        </ol>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">What Gets Rejected or Downvoted</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Vague opinions ("looks old"), AI-generated text, copy-pasted descriptions from elsewhere,
+          no source cited, or a price with zero reasoning all get flagged. The community votes down
+          weak appraisals so the strongest ones rise to the top.
+        </p>
+
+        <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">XP Rewards</h3>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Submitting an appraisal earns base XP. If the organizer selects your appraisal as most useful,
+          you earn a significant bonus. Over time, expert appraisers climb the Guild ranks and unlock
+          perks like bulk editing and team management.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: 'managing-inventory',
     title: 'Managing Inventory',
     content: (

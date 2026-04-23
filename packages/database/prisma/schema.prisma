@@ -237,6 +237,11 @@ model User {
   tasteProfile Json?
   apiKeys      ApiKey[]
 
+  // Feature #XXX: Referral XP Anti-Fraud System — 4-tranche escrow with reputation scoring
+  tranchesGiven         ReferralTranche[]        @relation("TranchesGiven")
+  tranchesReceived      ReferralTranche[]        @relation("TranchesReceived")
+  reputationScore       ReferrerReputationScore?
+
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
   @@index([explorerRank])
@@ -1889,6 +1894,49 @@ model ReferralFraudSignal {
   @@index([referrerId])
   @@index([referredUserId])
   @@index([reviewOutcome])
+}
+
+// Feature #XXX: Referral XP Anti-Fraud System — 4-tranche escrow tracking
+model ReferralTranche {
+  id                   String    @id @default(cuid())
+  referrerId           String
+  referrer             User      @relation("TranchesGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUserId       String
+  referredUser         User      @relation("TranchesReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  // Tranche release timestamps
+  trancheAReleasedAt   DateTime?
+  trancheBReleasedAt   DateTime?
+  trancheCReleasedAt   DateTime?
+  trancheDReleasedAt   DateTime?
+
+  // Activity tracking for tranche releases
+  loginsOnDistinctDays Int       @default(0)           // Number of distinct UTC calendar days user logged in
+  distinctSalesVisited String[]  @default([])          // Array of saleIds visited
+  secondPurchaseId     String?                          // ID of second purchase (for Tranche D detection)
+  trailCompletedAt     DateTime?                        // When user completed a treasure trail (for Tranche D)
+  ownReferralSucceeded Boolean   @default(false)       // Whether referred user made their own successful referral (for Tranche D)
+
+  createdAt            DateTime  @default(now())
+  lastActivityAt       DateTime  @default(now())
+
+  @@unique([referrerId, referredUserId])
+  @@index([referredUserId])
+}
+
+// Feature #XXX: Referral XP Anti-Fraud System — silent reputation score
+model ReferrerReputationScore {
+  id                  String    @id @default(cuid())
+  referrerId          String    @unique
+  referrer            User      @relation(fields: [referrerId], references: [id], onDelete: Cascade)
+
+  // Scoring metrics
+  totalReferrals      Int       @default(0)            // Total referral pairs created in 90-day window
+  fullyEarnedCount    Int       @default(0)            // Count where all 4 tranches released
+  score               Float     @default(1.0)          // Score 0.0-1.0; multiplied against tranche XP awards
+  lastUpdatedAt       DateTime  @default(now())
+
+  @@index([referrerId])
 }
 
 // #18: Post Performance Analytics — track social link clicks with UTM parameters

@@ -1,6 +1,12 @@
 import React from 'react';
 
 export const CONDITION_COLORS: Record<string, { bg: string; text: string; border: string; description: string }> = {
+  mint: {
+    bg: 'bg-emerald-100',
+    text: 'text-emerald-800',
+    border: 'border-emerald-300',
+    description: 'Mint condition. Essentially new, no signs of use. May still have original packaging or tags.',
+  },
   excellent: {
     bg: 'bg-green-100',
     text: 'text-green-800',

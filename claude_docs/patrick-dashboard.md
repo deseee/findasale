@@ -1,4 +1,120 @@
-# Patrick's Dashboard — S550 Complete
+# Patrick's Dashboard — S552 Complete
+
+## 🔥 S552 — Bounty Batches A+B+D, Referral Anti-Fraud System, XP Economy Design, Geofencing Audit
+
+**One-line summary:** Big parallel + design session. Six S551 queue items dispatched and complete. Referral XP anti-fraud system built (tranche escrow replaces flat 500 XP, silent reputation score). Geofencing audited — QR scans are NOT geofenced (fix queued for S553). Admin price bug fixed. Appraisal guide/support content written.
+
+### What shipped
+
+**Admin price bug (P0):** Recent Purchases on /admin showed $0.01 instead of $1.00 — `purchase.amount` is a Float in dollars; was being divided by 100 again in the frontend. One-line fix.
+
+**S551 parallel queue (6 agents):**
+- SmartBuyerWidget rank colors: stale names (EXPLORER/PATHFINDER etc.) → correct (INITIATE/SCOUT/RANGER/SAGE/GRANDMASTER)
+- Hunt Pass coupon limits: 6/6/3 → 3/3/2 in controller + frontend; "3x boost" label → "Bonus Coupon Slots"
+- hunt-pass.tsx: badge card split into Avatar Frame + Leaderboard Badge; +10% QR scan XP bonus added; new Coupon Slots benefit card with correct 3/3/2 numbers
+- Bounty Batch D: `GET /api/bounties/organizer/submissions` built and wired into the organizer/bounties placeholder
+- Bounty Batch A: `POST /api/bounties/match` with fuzzy scoring (category/title/tags/radius/recency, 60-point threshold); `BountyMatchModal.tsx` (new); wired into add-items so organizers see matches after publishing
+- Bounty Batch B: `/shopper/bounties/` restructured into `index.tsx` + `submissions.tsx`; approve/decline flow with optional message; backend endpoints already existed
+
+**guild-primer stale copy:** Two fixes — Grandmaster perk now says "Hunt Pass included while active Grandmaster" (not "free forever") and the FAQ answer corrects the reset/lapse/restore behavior.
+
+**Condition grade S:** `itemConstants.ts` and `ConditionBadge.tsx` — S grade was incorrectly labeled "Excellent" (same as A). Now correctly "Mint" to match backend eBay labels.
+
+**Appraisal guide + support content:** `guide.tsx` has a new "Community Appraisals" section explaining what qualifies an appraiser, structured format, sources. `support.tsx` has 5 new FAQ entries covering how to request, why submissions get declined, and how to dispute.
+
+**Referral Tranche Anti-Fraud System (major new feature):**
+Replaces the single 500 XP `REFERRAL_FIRST_PURCHASE` award with a 4-tranche escrow. Fake accounts that buy once and disappear only unlock 150 XP instead of 500. Real active users unlock all 4 tranches over time.
+
+| Tranche | XP | Trigger |
+|---|---|---|
+| A | 100 | Referred user logs in on 3 distinct days |
+| B | 150 | Referred user visits 3 different sales |
+| C | 150 | Referred user's first purchase (current trigger, now just 1 tranche) |
+| D | 100 | Trail completion OR own referral success OR 2nd purchase — first wins |
+
+Silent reputation score (0.0–1.0) multiplies all tranche awards. Fully-converting referrers trend toward 1.0x; ghost-account farmers trend toward 0.1x floor. Score applies after 3+ referrals in rolling 90-day window. Daily recompute job at 2am UTC. Never shown in UI.
+
+New schema: `ReferralTranche` + `ReferrerReputationScore` models. New files: `referralTrancheService.ts`, `reputationScoreJob.ts`. Modified: `xpService.ts`, `authController.ts`, `saleController.ts`, `stripeController.ts`, `trailController.ts`, `referralService.ts`.
+
+**⚠️ Migration required before deploy** — new tables must exist before Railway rebuilds.
+
+### Geofencing audit finding (NOT fixed yet — S553)
+
+Treasure Trail stops: ✅ Geofenced (100m haversine in trailController.ts)
+QR code scans (item + treasure hunt): ❌ NOT geofenced — anyone can hit the endpoint from their couch
+
+Fix is queued for S553: same haversine pattern from trailController, add to `itemController.ts recordQrScan` and `treasureHuntQRController.ts`. Client needs to send lat/lng with scan.
+
+### Your decisions needed
+
+**Affiliate payouts (gates Batches 5/7/9):**
+1. Tier-matched commission (SIMPLE=$0 / PRO=2% / TEAMS=3% / ENT=5%) OR flat 2%?
+2. Credits-default (cash only at $200+ balance) OR straight cash?
+
+**BountyModal.tsx deletion:** File still exists in components but has zero callers (removed from sales/[id].tsx in S551). `git rm packages/frontend/components/BountyModal.tsx` — approve? Add it to the push block below if yes.
+
+## 📤 Push Block (S552)
+
+⚠️ Run migration AFTER pushing (new schema models):
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+
+git add packages/frontend/pages/admin/index.tsx
+git add packages/frontend/components/SmartBuyerWidget.tsx
+git add packages/backend/src/controllers/couponController.ts
+git add packages/frontend/pages/coupons.tsx
+git add packages/frontend/pages/shopper/hunt-pass.tsx
+git add packages/backend/src/controllers/bountyController.ts
+git add packages/backend/src/routes/bounties.ts
+git add packages/frontend/pages/organizer/bounties.tsx
+git add packages/frontend/components/BountyMatchModal.tsx
+git add "packages/frontend/pages/organizer/add-items/[saleId].tsx"
+git add packages/frontend/pages/shopper/bounties/index.tsx
+git add packages/frontend/pages/shopper/bounties/submissions.tsx
+git rm packages/frontend/pages/shopper/bounties.tsx
+git add packages/frontend/pages/shopper/guild-primer.tsx
+git add packages/frontend/lib/itemConstants.ts
+git add packages/frontend/components/ConditionBadge.tsx
+git add packages/frontend/pages/guide.tsx
+git add packages/frontend/pages/support.tsx
+git add packages/backend/src/services/referralTrancheService.ts
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/controllers/authController.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/controllers/trailController.ts
+git add packages/backend/src/services/referralService.ts
+git add packages/backend/src/jobs/reputationScoreJob.ts
+git add packages/backend/src/index.ts
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260423_add_referral_tranche_system/migration.sql
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+
+git commit -m "S552: Bounty Batches A+B+D; referral tranche anti-fraud system; admin price fix; HP coupon 3/3/2; hunt-pass copy; guild-primer Grandmaster; condition grade S=Mint; appraisal guide content"
+
+.\push.ps1
+```
+
+**After push — run migration:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:Qlzi9PdY34gG6H7zIVOBbJScz1V1sI2sicifzXhDM8@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+## 🎯 Next Session (S553)
+
+1. **Mandatory §10 smoke tests** — /organizer/earnings, /organizer/calendar, 5 mobile overflow pages, admin Recent Purchases dollar amounts
+2. **Geofence QR scans** — P1, dispatch dev (haversine to itemController + treasureHuntQRController)
+3. **Affiliate decisions** — tier-matched vs flat, credits vs cash
+4. **BountyModal.tsx git rm** — pending your sign-off above
+5. **1000 XP mid-milestone** — cosmetic Scout→Ranger halfway badge, P2
+
+## ─── Archived Below: S550 ───
 
 ## 🔥 S550 — Affiliate Batches 3+4+6 Shipped, Innovation Review Delivered, /organizer/earnings P0 Killed For Real
 

@@ -16,6 +16,7 @@ import { sendItemSoldAlert } from '../services/saleAlertEmailService';
 import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty Passport
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, markHuntPassCancellation } from '../services/xpService'; // Explorer's Guild XP awards
+import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 import { evaluateReferralFraud, getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '../services/referralFraudService'; // D-XP-004: Referral Fraud Gate
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
@@ -946,6 +947,23 @@ export const webhookHandler = async (req: Request, res: Response) => {
               }).catch(err =>
                 console.error('[XP] Failed to award first purchase milestone XP:', err)
               );
+
+              // Feature #XXX: Record referral tranche first purchase (non-blocking)
+              try {
+                await referralTrancheService.recordFirstPurchase(purchase.userId, purchase.id);
+
+                // Also check if this buyer was themselves a referred user
+                // If so, trigger Tranche D for their referrer (own-referral success)
+                const buyerReferral = await prisma.referral.findUnique({
+                  where: { referredUserId: purchase.userId },
+                });
+                if (buyerReferral) {
+                  await referralTrancheService.recordOwnReferralSuccess(purchase.userId);
+                }
+              } catch (err) {
+                console.error('[referralTranche] recordFirstPurchase failed:', err);
+                // Never fail the purchase completion due to tranche logic
+              }
 
               // ORG_SHOPPER_SIGNUP: Award 10 XP to the organizer when a new shopper makes their first purchase
               // Per gamedesign spec: fires on first purchase only, no monthly cap

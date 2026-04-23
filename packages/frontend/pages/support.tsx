@@ -118,6 +118,43 @@ const FAQ_DATA = [
       'From your sale\'s item list, check the boxes next to multiple items to select them. The bulk action bar appears at the top — use it to change status, delete, move items between sales, or export selected items. Bulk operations are available on PRO and TEAMS plans.',
   },
 
+  // Community Appraisals FAQs
+  {
+    id: 'appraisals-1',
+    category: 'Community Appraisals',
+    question: 'How do I request an appraisal for an item?',
+    answer:
+      'Mark an item for appraisal from your sale dashboard — flip the toggle or click the Appraisal icon on the item card. Your item will be visible to the community. Members with Scout rank or higher can submit appraisals. You\'ll receive notifications as appraisals come in. Once you have one or more submissions, review them and select the one you find most useful. You stay in control — pick the appraisal that best matches what you believe the item is worth.',
+  },
+  {
+    id: 'appraisals-2',
+    category: 'Community Appraisals',
+    question: 'What qualifies someone to submit an appraisal?',
+    answer:
+      'You don\'t need formal credentials. Appraisers are community members with collecting experience, professional backgrounds (estate sale organizers, antiques dealers, eBay powersellers), or strong research skills. What matters is specificity — cite your sources, describe what you\'re seeing, and explain your reasoning. A collector with deep knowledge of one category is more valuable than a generalist.',
+  },
+  {
+    id: 'appraisals-3',
+    category: 'Community Appraisals',
+    question: 'Why was my appraisal submission declined or downvoted?',
+    answer:
+      'Appraisals are evaluated for quality and credibility. Common reasons submissions are declined: vague opinions with no specificity, no source cited, AI-generated or copy-pasted text, prices with no reasoning, or falling below the character minimum. The community votes down weak submissions so the strongest appraisals float to the top. If your appraisal was declined, review the feedback and try again with more specificity and sources.',
+  },
+  {
+    id: 'appraisals-4',
+    category: 'Community Appraisals',
+    question: 'I think an appraisal is wrong — what do I do?',
+    answer:
+      'You have three options: (1) Downvote the appraisal so it ranks lower, (2) Leave a comment with your concern or alternative perspective, or (3) Request a second opinion. The organizer who requested the appraisal ultimately chooses which submission they find most useful — you\'re not locked into any one appraisal. Multiple perspectives help everyone make better decisions.',
+  },
+  {
+    id: 'appraisals-5',
+    category: 'Community Appraisals',
+    question: 'Do I earn XP for submitting appraisals?',
+    answer:
+      'Yes. Every appraisal submission earns base XP. If the organizer selects your appraisal as the most useful, you earn a significant bonus on top of the base reward. Over time, strong appraisers climb the Guild ranks and unlock perks like bulk editing, team management, and other exclusive features.',
+  },
+
   // Photos & Rapid Capture FAQs
   {
     id: 'photos-1',
@@ -325,11 +362,13 @@ const Support: React.FC = () => {
     'Getting Started',
     'Sales Management',
     'Item Management',
+    'Community Appraisals',
     'Photos & Rapid Capture',
     'Holds & Reservations',
     'Print Kit & QR Codes',
     'Analytics & Command Center',
     'Teams & Permissions',
+    'In-Person Payments',
     'Integrations & Webhooks',
   ];
 
