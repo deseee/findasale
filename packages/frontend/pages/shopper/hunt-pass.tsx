@@ -115,20 +115,53 @@ const HuntPassPage = () => {
                     <p className="text-warm-600 dark:text-warm-400">
                       Increase your daily item scan limit from 100 to 150 scans per day. More scans, more finds — unlock premium hunting capacity.
                     </p>
+                    <p className="text-warm-600 dark:text-warm-400 mt-2">
+                      +10% XP bonus on every QR scan, stacked on top of your rank multiplier.
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Benefit 3: Exclusive Badge */}
+              {/* Benefit 3a: Golden Trophy Avatar Frame */}
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
                 <div className="flex items-start gap-4">
-                  <div className="text-3xl flex-shrink-0">🎖️</div>
+                  <div className="text-3xl flex-shrink-0">🏆</div>
                   <div>
                     <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
-                      Exclusive Hunt Pass Badge
+                      Golden Trophy Avatar Frame
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Show off your premium status with an exclusive badge on your profile. Let other shoppers know you're a serious collector and treasure hunter.
+                      Amber trophy ring on your profile photo — visible on your nav avatar and dropdown. A subtle status marker that shows at a glance you're a Hunt Pass subscriber.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Benefit 3b: Hunt Pass Leaderboard Badge */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl flex-shrink-0">🏅</div>
+                  <div>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                      Hunt Pass Leaderboard Badge
+                    </h3>
+                    <p className="text-warm-600 dark:text-warm-400">
+                      A 🏆 badge next to your name on the Explorer's Guild leaderboard. Stand out among top collectors.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Benefit 4: Coupon Slots */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">
+                <div className="flex items-start gap-4">
+                  <div className="text-3xl flex-shrink-0">🎟️</div>
+                  <div>
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-2">
+                      More Monthly Coupon Slots
+                    </h3>
+                    <p className="text-warm-600 dark:text-warm-400">
+                      More monthly coupon redemptions — 3 Standard, 3 Deluxe, and 2 Premium per month (vs 2/2/1 for free accounts).
                     </p>
                   </div>
                 </div>

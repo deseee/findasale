@@ -70,7 +70,7 @@ const SHOPPER_TIERS_BASE: Record<ShopperTier, {
     discount: '$0.75 off',
     minPurchase: 10,
     monthlyLimitStandard: 2,
-    monthlyLimitHuntPass: 6,
+    monthlyLimitHuntPass: 3,
     label: 'Standard Deal',
     description: '$0.75 off $10+ purchases',
   },
@@ -79,7 +79,7 @@ const SHOPPER_TIERS_BASE: Record<ShopperTier, {
     discount: '$2.00 off',
     minPurchase: 25,
     monthlyLimitStandard: 2,
-    monthlyLimitHuntPass: 6,
+    monthlyLimitHuntPass: 3,
     label: 'Premium Deal',
     description: '$2.00 off $25+ purchases',
   },
@@ -88,7 +88,7 @@ const SHOPPER_TIERS_BASE: Record<ShopperTier, {
     discount: '$5.00 off',
     minPurchase: 50,
     monthlyLimitStandard: 1,
-    monthlyLimitHuntPass: 3,
+    monthlyLimitHuntPass: 2,
     label: 'Deluxe Deal',
     description: '$5.00 off $50+ purchases',
   },
@@ -305,7 +305,7 @@ const CouponsPage = () => {
                               <span className="font-semibold">{monthlyLimit}/month</span>
                               {huntPassActive && (
                                 <span className="text-amber-600 dark:text-amber-300 font-semibold ml-1">
-                                  (3x Hunt Pass boost)
+                                  (Bonus Coupon Slots)
                                 </span>
                               )}
                             </p>

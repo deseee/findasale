@@ -125,9 +125,9 @@ const OrganizerBountiesPage = () => {
   });
 
   const { data: submissionsData, isLoading: submissionsLoading } = useQuery({
-    queryKey: ['my-submissions'],
+    queryKey: ['organizer-submissions'],
     queryFn: async () => {
-      const res = await api.get('/bounties/submissions');
+      const res = await api.get('/bounties/organizer/submissions');
       return res.data;
     },
     enabled: activeTab === 'submissions',

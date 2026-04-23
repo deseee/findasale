@@ -357,7 +357,7 @@ const AdminDashboard = () => {
                           <p className="text-warm-600 dark:text-warm-400">{purchase.item?.title || 'Item'}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-medium text-warm-900 dark:text-warm-100">${(purchase.amount / 100).toFixed(2)}</p>
+                          <p className="font-medium text-warm-900 dark:text-warm-100">${(purchase.amount).toFixed(2)}</p>
                           <p className={`text-xs ${purchase.status === 'PAID' ? 'text-green-600' : 'text-yellow-600'}`}>
                             {purchase.status}
                           </p>

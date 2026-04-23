@@ -250,9 +250,9 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 
 const SHOPPER_COUPON_TIERS = {
-  DOLLAR_OFF_TEN:       { xpCost: 100, discount: 0.75, minPurchase: 10,  monthlyLimitStandard: 2, monthlyLimitHuntPass: 6 },
-  ONE_FIFTY_OFF_TWENTY: { xpCost: 200, discount: 2.00, minPurchase: 25,  monthlyLimitStandard: 2, monthlyLimitHuntPass: 6 },
-  FIVE_OFF_FIFTY:       { xpCost: 500, discount: 5.00, minPurchase: 50,  monthlyLimitStandard: 1, monthlyLimitHuntPass: 3 },
+  DOLLAR_OFF_TEN:       { xpCost: 100, discount: 0.75, minPurchase: 10,  monthlyLimitStandard: 2, monthlyLimitHuntPass: 3 },
+  ONE_FIFTY_OFF_TWENTY: { xpCost: 200, discount: 2.00, minPurchase: 25,  monthlyLimitStandard: 2, monthlyLimitHuntPass: 3 },
+  FIVE_OFF_FIFTY:       { xpCost: 500, discount: 5.00, minPurchase: 50,  monthlyLimitStandard: 1, monthlyLimitHuntPass: 2 },
 } as const;
 
 type ShopperCouponTier = keyof typeof SHOPPER_COUPON_TIERS;
