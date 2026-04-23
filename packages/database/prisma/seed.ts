@@ -352,7 +352,8 @@ async function main() {
   console.log('🏢 Creating 10 organizers...');
   const organizers: any[] = [];
   // Subscription tiers by organizer index (0-based): 0=SIMPLE, 1=PRO, 2=TEAMS, rest=SIMPLE
-  const orgTiers: Record<number, string> = { 0: 'SIMPLE', 1: 'PRO', 2: 'TEAMS' };
+  // user1 = TEAMS + ADMIN (founder-level), user2 = PRO, user3 = SIMPLE
+  const orgTiers: Record<number, string> = { 0: 'TEAMS', 1: 'PRO', 2: 'SIMPLE' };
 
   for (let i = 0; i < 10; i++) {
     const street = streetNames[i % streetNames.length];
