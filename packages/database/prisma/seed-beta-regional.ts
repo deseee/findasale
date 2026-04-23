@@ -254,7 +254,9 @@ async function main() {
     });
   }
 
-  // Delete non-preserved users (ORGANIZER role only)
+  // Delete non-preserved users (ORGANIZER role only) — same FK bypass pattern
+  // as the organizer/sale/item cleanup above. User has many non-cascade
+  // children (Bid, Favorite, Purchase, etc.) that block deletion otherwise.
   const usersToDelete = await prisma.user.findMany({
     where: {
       AND: [
@@ -265,10 +267,17 @@ async function main() {
   });
 
   if (usersToDelete.length > 0) {
-    await prisma.user.deleteMany({
-      where: { id: { in: usersToDelete.map(u => u.id) } },
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SET session_replication_role = 'replica'`);
+      try {
+        await tx.user.deleteMany({
+          where: { id: { in: usersToDelete.map(u => u.id) } },
+        });
+        console.log(`✅ Deleted ${usersToDelete.length} old user accounts (FK checks bypassed)`);
+      } finally {
+        await tx.$executeRawUnsafe(`SET session_replication_role = 'origin'`);
+      }
     });
-    console.log(`✅ Deleted ${usersToDelete.length} old user accounts`);
   }
 
   // ── Create new regional organizer accounts ──────────────────────────────────
