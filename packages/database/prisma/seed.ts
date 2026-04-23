@@ -68,6 +68,55 @@ const statesByOrganizer = [
   'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'IN', 'OH',
 ];
 
+// Per-state zip code pools so IN/OH organizers don't get Michigan zips
+const zipsByState: Record<string, string[]> = {
+  MI: ['49503', '49504', '49505', '49506', '49007', '49009', '49423', '49424', '48103', '48104', '48906', '48912', '49684', '49686'],
+  IN: ['46601', '46614', '46615', '46616', '46619', '46628', '46637'],
+  OH: ['43604', '43606', '43607', '43609', '43610', '43612', '43613'],
+};
+
+// Sale type per organizer — index-aligned with businessNames
+const saleTypesByOrganizer: Array<'ESTATE' | 'YARD' | 'CONSIGNMENT' | 'AUCTION' | 'FLEA_MARKET'> = [
+  'ESTATE',       // Kelly's Estate Sales
+  'CONSIGNMENT',  // Barn Door Consignment
+  'FLEA_MARKET',  // Up North Flea Market Booth
+  'AUCTION',      // Martin Family Auctions
+  'ESTATE',       // Attic Finds Kalamazoo
+  'CONSIGNMENT',  // Cherry Street Antiques
+  'ESTATE',       // Lansing Estate & Downsizing
+  'ESTATE',       // Holland Home Clearouts
+  'ESTATE',       // South Bend Sale Co
+  'ESTATE',       // Toledo Estate Group
+];
+
+// Realistic sale titles by type
+const saleTitlesByType: Record<string, string[]> = {
+  ESTATE: [
+    'Three-Generation Estate Sale — Furniture, Tools, Jewelry',
+    'Complete Home Contents — Downsizing After 40 Years',
+    'Estate Liquidation: Quality Furniture and Collectibles',
+    'Multi-Room Estate Sale',
+    'Estate Sale: Vintage Textiles, Books, Home Furnishings',
+  ],
+  YARD: [
+    'Moving Sale: Tools, Sporting Goods, Kitchen',
+    'Garage Clean-Out: Furniture, Electronics, Books',
+    'Moving Day Sale — Vintage Finds and Furniture',
+  ],
+  CONSIGNMENT: [
+    'Curated Consignment: Vintage and Antiques',
+    'Rotating Consignment — New Inventory This Week',
+  ],
+  AUCTION: [
+    'Regional Estate Auction: Furniture and Jewelry',
+    'Fine Art & Antiques Auction',
+  ],
+  FLEA_MARKET: [
+    'Booth Restock — Vintage Tools and Collectibles',
+    'Vendor Booth: Mid-Century Modern Finds',
+  ],
+};
+
 const biosByOrganizer = [
   'Running estate sales around Grand Rapids since 2018. Mostly downsizing clients and full home cleanouts.',
   'Small consignment shop. Rotate inventory weekly. Take most furniture and vintage.',
@@ -88,16 +137,38 @@ const streetNames = [
 ];
 
 const itemTitles = [
-  '1940s Mahogany Dresser', 'Singer Sewing Machine', 'Cast Iron Skillet Set',
-  'Vintage Record Player', 'Leather Wingback Chair', 'Crystal Vase Collection',
-  'Oak Dining Table', 'Antique Pocket Watch', 'Mid-Century Sofa', 'Persian Rug',
-  'Vintage Typewriter', 'Brass Floor Lamp', 'Wooden Bookshelf', 'Gilt Mirror',
-  'Porcelain Dinnerware Set', 'Leather Briefcase', 'Tiffany Glass Lamp', 'Clock Radio',
-  'Decorative Plates', 'Vintage Camera', 'Glass Pitcher Set', 'Copper Cookware',
-  'Handmade Quilts', 'Wooden Jewelry Box', 'Oil Painting', 'Antique Desk',
-  'Chaise Lounge', 'Bookcase Unit', 'Floor Lamp', 'Side Table',
-  'Ottoman', 'Wall Sconce', 'Decorative Mirror', 'Area Rug', 'Table Runner',
-  'Figurines', 'Music Box', 'Wooden Trunk', 'Coat Rack', 'Console Table',
+  // Furniture
+  'Mid-Century Walnut Credenza', 'Victorian Settee with Velvet Upholstery',
+  'Pair of Teak Nightstands', 'Leather Wingback Chair', 'Antique Roll-Top Desk',
+  'Hand-Caned Parsons Chair', 'MCM Dining Table with Two Leaves', 'Oak Farmhouse Table',
+  'Cast Iron Floor Lamp', 'Chinoiserie Wall Cabinet', 'Queen Anne Side Table',
+  // Kitchenware
+  'Set of 6 Pyrex Mixing Bowls', 'Vintage Cast Iron Cookware Lot',
+  'Copper Bottom Saute Pans, 8 piece', 'Roseville Pottery Pitcher',
+  'Wedgwood China Dinnerware, 12 place setting', 'Le Creuset Enameled Dutch Oven',
+  'Hand-Painted Ceramic Serving Bowls',
+  // Tools
+  'Vintage Craftsman Hand Tools Lot', 'Antique Wooden Tool Chest',
+  'Stanley Bailey Bench Planes, set of 3', 'Makita Power Drill Set with Case',
+  'DeWalt Cordless Circular Saw', 'Vintage Socket Set, 100+ pieces',
+  // Collectibles
+  'Signed Ansel Adams Photography Print', 'Tiffany-Style Stained Glass Lamp',
+  'Royal Doulton Character Jugs, set of 12', 'First Edition Signed Literature Collection',
+  'Vintage Lionel Train Set with Tracks', 'Antique Brass Candlesticks, pair',
+  // Clothing & Accessories
+  'Vintage Wool Coat Collection, 4 pieces', 'Hermès Silk Scarf Lot, 8 scarves',
+  'Vintage Leather Jackets, 3 pieces',
+  // Home goods
+  'Framed Oil Painting, 24 by 36',
+  'Antique Mirror with Ornate Gilt Frame', 'Vintage Persian Rug, 9 by 12',
+  'Native American Pottery Vessel', 'Crystal Chandelier with 12 Lights',
+  // Books & Media
+  'Vintage Book Collection, 50+ volumes', 'Signed First Edition Books, 3 titles',
+  'LP Record Collection, 100+ albums', 'Antique Map Collection, framed',
+  'Vintage Board Games Lot, 8 titles',
+  // Jewelry
+  'Gold and Diamond Estate Jewelry Lot', '14K Gold Charm Bracelet',
+  'Vintage Pearl Necklace', 'Antique Pocket Watch',
 ];
 
 const saleDescriptions = [
@@ -118,34 +189,37 @@ const categories = [
 
 const conditions = ['mint', 'excellent', 'good', 'fair', 'poor'];
 
+// Curated Unsplash photos (each URL verified HTTP 200). Secondary-sale themed —
+// vintage furniture, estate items, antiques, tools, jewelry, books, décor.
 const salePhotoUrls = [
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774572270/findasale/zdz9nnjs9qskngq4pprv.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774613425/findasale/zpd2x0qi9uqdpors6e8r.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774621665/findasale/l17agiqk4fupvmwnylv2.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624097/findasale/hw0citcz5wbofji41thk.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624183/findasale/edswprrevqnjs9bw5ojq.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624409/findasale/joohqy18vsgsblxtcqdm.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624763/findasale/romiardlvccoou0cviul.jpg',
+  'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1592078615290-033ee584e267?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=600&h=400&fit=crop',
 ];
 
 const itemPhotoPool = [
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774572270/findasale/zdz9nnjs9qskngq4pprv.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774613425/findasale/zpd2x0qi9uqdpors6e8r.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774621665/findasale/l17agiqk4fupvmwnylv2.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624097/findasale/hw0citcz5wbofji41thk.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624183/findasale/edswprrevqnjs9bw5ojq.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624409/findasale/joohqy18vsgsblxtcqdm.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774624763/findasale/romiardlvccoou0cviul.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774625653/findasale/jhk3clxk0onhzy6biffc.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774627143/findasale/cxa6drwrkvm8ao8ltn8b.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774627155/findasale/d3zgbc5uskbg1akmzsf8.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774627346/findasale/xps2v1tcmcrfmthuvkq2.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774627514/findasale/gyjudlre435tzopxtpn6.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774629065/findasale/owxkp4gten1r2svcqmat.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774631273/findasale/rij4e0k8e8eqxclkszgz.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774649337/findasale/xtozesgqbqzfqijxynga.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774650289/findasale/kggddivtetbnwpkgczsy.jpg',
-  'https://res.cloudinary.com/db8yhzjdq/image/upload/v1774659629/findasale/ujcavof49vro4dfid6vn.jpg',
+  'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1592078615290-033ee584e267?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1554995207-c18c203602cb?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1567521464027-f127ff144326?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1591195853828-11db59a44f6b?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1550572017-edd951b55104?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1542496658-e33a6d0d50f6?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=600&h=400&fit=crop',
+  'https://images.unsplash.com/photo-1584589167171-541ce45f1eea?w=600&h=400&fit=crop',
 ];
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -284,7 +358,9 @@ async function main() {
     const street = streetNames[i % streetNames.length];
     const number = 1000 + i * 123;
     const city = citiesByOrganizer[i];
-    const zip    = SEED_CONFIG.zips[i % SEED_CONFIG.zips.length];
+    const state = statesByOrganizer[i];
+    const stateZips = zipsByState[state];
+    const zip = stateZips[i % stateZips.length];
 
     // TD-01: user1 (i=0) and user2 (i=1) get real Stripe test account IDs
     let stripeConnectId: string | null = null;
@@ -316,10 +392,17 @@ async function main() {
   const now = new Date();
 
   for (let i = 0; i < 25; i++) {
-    const organizer = organizers[i % organizers.length];
+    const orgIdx    = i % organizers.length;
+    const organizer = organizers[orgIdx];
     const street    = streetNames[i % streetNames.length];
     const number    = Math.floor(Math.random() * 5000) + 100;
-    const zip       = SEED_CONFIG.zips[i % SEED_CONFIG.zips.length];
+    const saleState = statesByOrganizer[orgIdx];
+    const saleCity  = citiesByOrganizer[orgIdx];
+    const stateZipList = zipsByState[saleState];
+    const zip       = stateZipList[i % stateZipList.length];
+    const saleType  = saleTypesByOrganizer[orgIdx];
+    const titlePool = saleTitlesByType[saleType];
+    const saleTitle = titlePool[i % titlePool.length];
 
     let startDate: Date, endDate: Date, status: string;
     if (i < 8) {
@@ -344,20 +427,25 @@ async function main() {
       status    = 'DRAFT';
     }
 
-    const lat  = SEED_CONFIG.centerLat + (Math.random() - 0.5) * 0.12;
-    const lng  = SEED_CONFIG.centerLng + (Math.random() - 0.5) * 0.12;
+    // Per-org geographic jitter so sales land near their organizer's city
+    const cityLat = (zipsByState[saleState] && saleState === 'MI') ? 42.96 :
+                    saleState === 'IN' ? 41.68 : 41.65;
+    const cityLng = saleState === 'MI' ? -85.66 :
+                    saleState === 'IN' ? -86.25 : -83.55;
+    const lat  = cityLat + (Math.random() - 0.5) * 0.08;
+    const lng  = cityLng + (Math.random() - 0.5) * 0.08;
     const tags = categories.slice(0, 3).sort(() => Math.random() - 0.5);
 
     const sale = await prisma.sale.create({
       data: {
         organizerId: organizer.id,
-        title:       `${['Downtown Downsizing', "Eastside Collector's", 'Lakefront Estate', 'Family Collection'][i % 4]} Sale ${i + 1}`,
+        title:       saleTitle,
         description: saleDescriptions[i % saleDescriptions.length],
         startDate,
         endDate,
         address:   `${number} ${street}`,
-        city:      SEED_CONFIG.city,
-        state:     SEED_CONFIG.state,
+        city:      saleCity,
+        state:     saleState,
         zip,
         lat,
         lng,
@@ -365,6 +453,7 @@ async function main() {
         publishedAt: status === 'PUBLISHED' ? new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) : null,
         photoUrls: [salePhotoUrls[i % salePhotoUrls.length]],
         tags,
+        saleType,
       },
     });
     sales.push(sale);
@@ -383,7 +472,13 @@ async function main() {
       const title     = itemTitles[Math.floor(Math.random() * itemTitles.length)];
       const category  = categories[Math.floor(Math.random() * categories.length)];
       const condition = conditions[Math.floor(Math.random() * conditions.length)];
-      const price     = Math.round((Math.random() * 495 + 5) * 100) / 100;
+      // Tiered price distribution: 65% $5-$75, 25% $100-$500, 10% $500-$2000
+      const priceRand = Math.random();
+      let price: number;
+      if (priceRand < 0.65)      price = 5 + Math.random() * 70;
+      else if (priceRand < 0.90) price = 100 + Math.random() * 400;
+      else                       price = 500 + Math.random() * 1500;
+      price = Math.round(price * 100) / 100;
       let itemStatus  = 'AVAILABLE';
       if (Math.random() < 0.10) itemStatus = 'SOLD';
       else if (Math.random() < 0.05) itemStatus = 'RESERVED';
