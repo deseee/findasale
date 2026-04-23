@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { awardXp, XP_AWARDS, checkDailyXpCap } from '../services/xpService';
+import { haversineDistance } from '../lib/placesService'; // Geofencing for QR scans
 
 /**
  * Feature #85: Treasure Hunt QR Controller
@@ -226,11 +227,13 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     }
 
     const { saleId, clueId } = req.params;
+    const latitude = req.body.latitude;
+    const longitude = req.body.longitude;
 
-    // Verify sale exists
+    // Verify sale exists and fetch location for geofencing
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true },
+      select: { id: true, lat: true, lng: true },
     });
 
     if (!sale) {
@@ -248,6 +251,15 @@ export async function markClueFound(req: AuthRequest, res: Response) {
 
     if (clue.saleId !== saleId) {
       return res.status(404).json({ message: 'Clue not found in this sale' });
+    }
+
+    // Geofence check: if client provided lat/lng, enforce 100m radius from sale location
+    if (latitude !== undefined && longitude !== undefined && sale.lat !== null && sale.lng !== null) {
+      const distance = haversineDistance(latitude, longitude, sale.lat, sale.lng);
+      const MAX_DISTANCE = 100; // 100 meters
+      if (distance > MAX_DISTANCE) {
+        return res.status(403).json({ error: 'You must be at the sale location to scan this QR code.' });
+      }
     }
 
     // Check if user already scanned this clue
