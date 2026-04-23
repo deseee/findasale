@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -49,12 +49,12 @@ export default function OrganizerCalendarPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Auth guard
-  if (authLoading) return null;
-  if (!user || !user.roles?.includes('ORGANIZER')) {
-    router.push('/login');
-    return null;
-  }
+  // Redirect if not authorized — must be in useEffect, not early return, to preserve hooks order (React #310 fix)
+  useEffect(() => {
+    if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+      router.push('/login');
+    }
+  }, [authLoading, user, router]);
 
   // Fetch organizer's sales
   const { data: salesData, isLoading, isError } = useQuery<Sale[]>({
@@ -105,6 +105,11 @@ export default function OrganizerCalendarPage() {
       .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
       .slice(0, 5);
   }, [sales]);
+
+  // Gate render after all hooks (redirect handled by useEffect above)
+  if (authLoading || !user || !user.roles?.includes('ORGANIZER')) {
+    return null;
+  }
 
   // Navigation handlers
   const goToPreviousMonth = () => {

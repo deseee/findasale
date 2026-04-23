@@ -33,7 +33,7 @@ const isValidRedirectUri = (uri: string | null | undefined): boolean => {
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -196,6 +196,43 @@ export const register = async (req: Request, res: Response) => {
               data: { referralDiscountExpiry: discountExpiry }
             });
           }
+        }
+      }
+
+      // Feature #72: Affiliate Program (Batch 4) — Handle organizer-to-organizer affiliate code at signup
+      // This is SEPARATE from the shopper referral system above (different fields, different rewards model)
+      if (affiliateReferralCode) {
+        // Look up the referrer by their affiliate code
+        // NOTE: The affiliateReferralCode field is stored on the REFERRER's User row (the organizer who generated it)
+        const affiliateReferrer = await tx.user.findUnique({
+          where: { affiliateReferralCode }
+        });
+
+        if (affiliateReferrer) {
+          // Self-referral block: prevent signup if new user matches referrer
+          // Check both ID (paranoid, shouldn't happen) and email
+          if (affiliateReferrer.id !== newUser.id && affiliateReferrer.email !== email) {
+            // Create AffiliateReferral record with PENDING status
+            // Status transitions to QUALIFIED when referred user completes first PAID sale
+            await tx.affiliateReferral.create({
+              data: {
+                referrerId: affiliateReferrer.id,
+                referredUserId: newUser.id,
+                referralCode: affiliateReferralCode, // Store the code used at signup
+                status: 'PENDING' // Awaiting first PAID sale
+              }
+            });
+
+            // Log for fraud detection and audit trail
+            console.log(`[affiliate][signup] referrer=${affiliateReferrer.id} referred=${newUser.id} code=${affiliateReferralCode} ts=${new Date().toISOString()}`);
+            console.log(`[affiliate][ip-audit] referrer=${affiliateReferrer.id} referred=${newUser.id} referrer_ip=${clientIp} ts=${new Date().toISOString()}`);
+          } else {
+            // Self-referral attempt — log and silently ignore (don't create AffiliateReferral)
+            console.log(`[affiliate][self-referral-blocked] attempted_user=${email} code=${affiliateReferralCode} ts=${new Date().toISOString()}`);
+          }
+        } else {
+          // Invalid affiliate code — silently ignore (don't block signup, don't create AffiliateReferral)
+          console.log(`[affiliate][invalid-code] email=${email} code=${affiliateReferralCode} ts=${new Date().toISOString()}`);
         }
       }
 
