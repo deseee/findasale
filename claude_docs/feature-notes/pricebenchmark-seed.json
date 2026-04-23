@@ -1,0 +1,551 @@
+[
+  {
+    "entrySlug": "pyrex-primary-colors-mixing-bowls",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 8000,
+    "priceRangeHigh": 22500,
+    "dataSource": "Estate sales + eBay sold (Q1 2026)",
+    "notes": "Complete 4-piece set in clean condition. Chips reduce value 40–60%."
+  },
+  {
+    "entrySlug": "pyrex-primary-colors-mixing-bowls",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 5000,
+    "priceRangeHigh": 12000,
+    "dataSource": "Estate sales + Facebook Marketplace",
+    "notes": "Minor wear marks or missing smallest bowl. Normal condition for vintage use."
+  },
+  {
+    "entrySlug": "pyrex-primary-colors-mixing-bowls",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 2500,
+    "priceRangeHigh": 7500,
+    "dataSource": "Community consensus",
+    "notes": "Visible staining, cracks, or significant damage. Reduced desirability."
+  },
+  {
+    "entrySlug": "fire-king-dinnerware-patterns-identification",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 30000,
+    "priceRangeHigh": 60000,
+    "dataSource": "Estate sales + eBay (complete 8-place sets)",
+    "notes": "Complete 8-place service with serving pieces. Condition excellent."
+  },
+  {
+    "entrySlug": "fire-king-dinnerware-patterns-identification",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 15000,
+    "priceRangeHigh": 30000,
+    "dataSource": "Estate sales",
+    "notes": "6-place service or 8-place with minor wear. Missing some pieces acceptable."
+  },
+  {
+    "entrySlug": "fire-king-dinnerware-patterns-identification",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 5000,
+    "priceRangeHigh": 15000,
+    "dataSource": "Facebook Marketplace + local auctions",
+    "notes": "Mixed collection or significant wear. Chips or discoloration present."
+  },
+  {
+    "entrySlug": "lane-cedar-chests-dating-and-value",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 30000,
+    "priceRangeHigh": 50000,
+    "dataSource": "Estate sales + antique dealers",
+    "notes": "Excellent finish, smooth operation, cedar scent present. MCM styling premium."
+  },
+  {
+    "entrySlug": "lane-cedar-chests-dating-and-value",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 15000,
+    "priceRangeHigh": 30000,
+    "dataSource": "Estate sales + Facebook Marketplace",
+    "notes": "Minor scratches, discoloration, or sticking lid. Structurally sound."
+  },
+  {
+    "entrySlug": "lane-cedar-chests-dating-and-value",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 7500,
+    "priceRangeHigh": 15000,
+    "dataSource": "Local auctions + estate sales",
+    "notes": "Obvious wear, water marks, finish loss. Lid may need repair."
+  },
+  {
+    "entrySlug": "stanley-bailey-hand-planes-collector-guide",
+    "condition": "EXCELLENT",
+    "region": "NATIONAL",
+    "priceRangeLow": 2500,
+    "priceRangeHigh": 6000,
+    "dataSource": "Tool auctions + eBay",
+    "notes": "Individual plane (No. 4 or 5). Excellent condition commands premium."
+  },
+  {
+    "entrySlug": "stanley-bailey-hand-planes-collector-guide",
+    "condition": "GOOD",
+    "region": "NATIONAL",
+    "priceRangeLow": 1000,
+    "priceRangeHigh": 3000,
+    "dataSource": "Tool auctions + Facebook Marketplace",
+    "notes": "Single plane in usable condition. Minor pitting or wear acceptable."
+  },
+  {
+    "entrySlug": "stanley-bailey-hand-planes-collector-guide",
+    "condition": "FAIR",
+    "region": "NATIONAL",
+    "priceRangeLow": 500,
+    "priceRangeHigh": 1500,
+    "dataSource": "Local estate sales",
+    "notes": "Plane is functional but shows heavy rust or damage. Still desired by users."
+  },
+  {
+    "entrySlug": "stanley-bailey-hand-planes-collector-guide",
+    "condition": "EXCELLENT",
+    "region": "NATIONAL",
+    "priceRangeLow": 20000,
+    "priceRangeHigh": 50000,
+    "dataSource": "Tool auctions",
+    "notes": "Complete matching set of 4+ planes. Significant premium for completeness."
+  },
+  {
+    "entrySlug": "carnival-glass-identification-and-value",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 1500,
+    "priceRangeHigh": 4000,
+    "dataSource": "Carnival Glass collector forums + eBay",
+    "notes": "Uncommon pattern, excellent iridescent coating. Strong condition."
+  },
+  {
+    "entrySlug": "carnival-glass-identification-and-value",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 1000,
+    "priceRangeHigh": 3000,
+    "dataSource": "Estate sales + Facebook",
+    "notes": "Common pattern or moderate wear to coating. Still visually striking."
+  },
+  {
+    "entrySlug": "carnival-glass-identification-and-value",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 500,
+    "priceRangeHigh": 1500,
+    "dataSource": "Local auctions",
+    "notes": "Heavy wear to iridescent coating. Still collectible but reduced appeal."
+  },
+  {
+    "entrySlug": "noritake-dinnerware-sets-collectors-guide",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 40000,
+    "priceRangeHigh": 80000,
+    "dataSource": "Estate sales + online China collectors",
+    "notes": "8-place service with serving pieces. Complete, excellent condition."
+  },
+  {
+    "entrySlug": "noritake-dinnerware-sets-collectors-guide",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 25000,
+    "priceRangeHigh": 50000,
+    "dataSource": "Estate sales",
+    "notes": "8-place service, good condition. May be missing serving pieces."
+  },
+  {
+    "entrySlug": "noritake-dinnerware-sets-collectors-guide",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 10000,
+    "priceRangeHigh": 25000,
+    "dataSource": "Facebook Marketplace + local auctions",
+    "notes": "Partial service or visible crazing. Still functional and collectible."
+  },
+  {
+    "entrySlug": "fiestaware-dinnerware-complete-sets",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 40000,
+    "priceRangeHigh": 70000,
+    "dataSource": "Estate sales + Fiestaware collector forums",
+    "notes": "Complete 8-place set, original colors (red, blue, green). No crazing."
+  },
+  {
+    "entrySlug": "fiestaware-dinnerware-complete-sets",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 25000,
+    "priceRangeHigh": 45000,
+    "dataSource": "Estate sales + Facebook",
+    "notes": "8-place set, minor crazing acceptable. Vibrant colors."
+  },
+  {
+    "entrySlug": "fiestaware-dinnerware-complete-sets",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 10000,
+    "priceRangeHigh": 25000,
+    "dataSource": "Local auctions",
+    "notes": "Partial set or late-era colors. Still desirable to users."
+  },
+  {
+    "entrySlug": "depression-glass-patterns-identification",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 10000,
+    "priceRangeHigh": 30000,
+    "dataSource": "Depression Glass collector forums + eBay",
+    "notes": "Complete 8-place set in desirable pattern (Cherry Blossom). Mint condition."
+  },
+  {
+    "entrySlug": "depression-glass-patterns-identification",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 5000,
+    "priceRangeHigh": 15000,
+    "dataSource": "Estate sales + Facebook",
+    "notes": "6-8 place set, desirable pattern. Minor chips acceptable."
+  },
+  {
+    "entrySlug": "depression-glass-patterns-identification",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 2000,
+    "priceRangeHigh": 8000,
+    "dataSource": "Local auctions + estate sales",
+    "notes": "Partial set or common pattern. Heavy wear acceptable due to era."
+  },
+  {
+    "entrySlug": "cast-iron-cookware-restoration-and-value",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 4000,
+    "priceRangeHigh": 15000,
+    "dataSource": "Cast iron collector forums + eBay",
+    "notes": "Griswold or Wapak piece, no rust, excellent seasoning. Premium manufacturer."
+  },
+  {
+    "entrySlug": "cast-iron-cookware-restoration-and-value",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 1500,
+    "priceRangeHigh": 5000,
+    "dataSource": "Estate sales + Facebook Marketplace",
+    "notes": "Griswold or Wapak, minimal rust. Needs re-seasoning but structurally sound."
+  },
+  {
+    "entrySlug": "cast-iron-cookware-restoration-and-value",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 500,
+    "priceRangeHigh": 1500,
+    "dataSource": "Local auctions + estate sales",
+    "notes": "Lodge or unknown maker, heavy rust. Still desired by users for restoration."
+  },
+  {
+    "entrySlug": "mid-century-modern-walnut-credenzas",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 70000,
+    "priceRangeHigh": 200000,
+    "dataSource": "MCM auctions + design-focused online marketplaces",
+    "notes": "Designer-branded (Herman Miller, Knoll) or exceptional unmarked example."
+  },
+  {
+    "entrySlug": "mid-century-modern-walnut-credenzas",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 30000,
+    "priceRangeHigh": 70000,
+    "dataSource": "Estate sales + MCM dealer networks",
+    "notes": "Unmarked MCM credenza, good condition. Functional, all doors/drawers work."
+  },
+  {
+    "entrySlug": "mid-century-modern-walnut-credenzas",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 15000,
+    "priceRangeHigh": 35000,
+    "dataSource": "Facebook Marketplace + local auctions",
+    "notes": "Cosmetic wear, sticky drawers, or stains. Needs restoration or refinishing."
+  },
+  {
+    "entrySlug": "barbie-dolls-valuable-eras-and-markings",
+    "condition": "EXCELLENT",
+    "region": "NATIONAL",
+    "priceRangeLow": 150000,
+    "priceRangeHigh": 800000,
+    "dataSource": "Barbie collector auctions + specialized dealers",
+    "notes": "#1 Barbie in mint condition with original box and accessories. Premium era."
+  },
+  {
+    "entrySlug": "barbie-dolls-valuable-eras-and-markings",
+    "condition": "GOOD",
+    "region": "NATIONAL",
+    "priceRangeLow": 50000,
+    "priceRangeHigh": 120000,
+    "dataSource": "eBay + Barbie collector forums",
+    "notes": "#1 Barbie, excellent condition, no box. Still highly desirable."
+  },
+  {
+    "entrySlug": "barbie-dolls-valuable-eras-and-markings",
+    "condition": "FAIR",
+    "region": "NATIONAL",
+    "priceRangeLow": 5000,
+    "priceRangeHigh": 20000,
+    "dataSource": "Estate sales + online auctions",
+    "notes": "#1 or #2 Barbie, heavy wear or matted hair. Original outfit adds value."
+  },
+  {
+    "entrySlug": "lionel-train-sets-complete-collections-and-dating",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 100000,
+    "priceRangeHigh": 300000,
+    "dataSource": "Train collector auctions + specialized dealers",
+    "notes": "Standard Gauge complete set, all pieces, original boxes, excellent condition."
+  },
+  {
+    "entrySlug": "lionel-train-sets-complete-collections-and-dating",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 50000,
+    "priceRangeHigh": 150000,
+    "dataSource": "Train auctions + estate sales",
+    "notes": "O Gauge complete set, all functional, some paint wear. Original transformer."
+  },
+  {
+    "entrySlug": "lionel-train-sets-complete-collections-and-dating",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 15000,
+    "priceRangeHigh": 50000,
+    "dataSource": "Facebook Marketplace + local auctions",
+    "notes": "HO Gauge set or O Gauge partial set. Missing track or transformer reduces value."
+  },
+  {
+    "entrySlug": "hot-wheels-redlines-valuable-models",
+    "condition": "EXCELLENT",
+    "region": "NATIONAL",
+    "priceRangeLow": 30000,
+    "priceRangeHigh": 80000,
+    "dataSource": "Hot Wheels collector auctions + specialized dealers",
+    "notes": "1968 Sweet 16 Redline in mint condition, original card and box."
+  },
+  {
+    "entrySlug": "hot-wheels-redlines-valuable-models",
+    "condition": "GOOD",
+    "region": "NATIONAL",
+    "priceRangeLow": 5000,
+    "priceRangeHigh": 20000,
+    "dataSource": "eBay + car collector forums",
+    "notes": "1968–1970 Redline, excellent condition, no box. Vibrant paint."
+  },
+  {
+    "entrySlug": "hot-wheels-redlines-valuable-models",
+    "condition": "FAIR",
+    "region": "NATIONAL",
+    "priceRangeLow": 1500,
+    "priceRangeHigh": 5000,
+    "dataSource": "Estate sales + online auctions",
+    "notes": "1975–1977 Redline or painted wear on earlier models. Still collectible."
+  },
+  {
+    "entrySlug": "tonka-trucks-vintage-steel-toy-collectibles",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 15000,
+    "priceRangeHigh": 40000,
+    "dataSource": "Toy auctions + collector forums",
+    "notes": "1938–1950s Streamliner, all-steel, minimal rust, all parts functional."
+  },
+  {
+    "entrySlug": "tonka-trucks-vintage-steel-toy-collectibles",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 5000,
+    "priceRangeHigh": 15000,
+    "dataSource": "Estate sales + Facebook Marketplace",
+    "notes": "1960s–1970s Tonka, surface rust, paint faded, all mechanical parts work."
+  },
+  {
+    "entrySlug": "tonka-trucks-vintage-steel-toy-collectibles",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 2000,
+    "priceRangeHigh": 5000,
+    "dataSource": "Local auctions + estate sales",
+    "notes": "Heavy rust, missing parts, non-functional. Still valued for restoration projects."
+  },
+  {
+    "entrySlug": "spode-dinnerware-english-porcelain-sets",
+    "condition": "EXCELLENT",
+    "region": "NATIONAL",
+    "priceRangeLow": 60000,
+    "priceRangeHigh": 120000,
+    "dataSource": "China collector auctions + estate sales",
+    "notes": "8-place service with serving pieces, excellent condition, no crazing."
+  },
+  {
+    "entrySlug": "spode-dinnerware-english-porcelain-sets",
+    "condition": "GOOD",
+    "region": "NATIONAL",
+    "priceRangeLow": 35000,
+    "priceRangeHigh": 70000,
+    "dataSource": "Estate sales + online resale",
+    "notes": "8-place service, good condition. Minor crazing or wear acceptable."
+  },
+  {
+    "entrySlug": "spode-dinnerware-english-porcelain-sets",
+    "condition": "FAIR",
+    "region": "NATIONAL",
+    "priceRangeLow": 10000,
+    "priceRangeHigh": 35000,
+    "dataSource": "Facebook Marketplace + local auctions",
+    "notes": "Partial service or visible crazing. Still desired by traditionalists."
+  },
+  {
+    "entrySlug": "oak-roll-top-desks-identification-and-value",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 60000,
+    "priceRangeHigh": 120000,
+    "dataSource": "Furniture auctions + estate sales",
+    "notes": "Early 1890s–1910s oak desk, pristine finish, roll-top mechanism smooth."
+  },
+  {
+    "entrySlug": "oak-roll-top-desks-identification-and-value",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 30000,
+    "priceRangeHigh": 60000,
+    "dataSource": "Estate sales + Facebook Marketplace",
+    "notes": "1920s–1950s oak desk, minor wear, mechanism functional. Solid condition."
+  },
+  {
+    "entrySlug": "oak-roll-top-desks-identification-and-value",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 15000,
+    "priceRangeHigh": 30000,
+    "dataSource": "Local auctions + estate sales",
+    "notes": "Obvious wear, roll-top may be sticky. Requires some restoration."
+  },
+  {
+    "entrySlug": "carnival-glass-bowls-collections-and-signed-pieces",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 10000,
+    "priceRangeHigh": 30000,
+    "dataSource": "Carnival Glass collector auctions",
+    "notes": "5-piece matching set, excellent iridescence, desirable pattern (Peacocks, Grape)."
+  },
+  {
+    "entrySlug": "carnival-glass-bowls-collections-and-signed-pieces",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 5000,
+    "priceRangeHigh": 15000,
+    "dataSource": "Estate sales + collector forums",
+    "notes": "7-8 piece set with serving dish. Color shift from Marigold to Amberina."
+  },
+  {
+    "entrySlug": "carnival-glass-bowls-collections-and-signed-pieces",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 2000,
+    "priceRangeHigh": 8000,
+    "dataSource": "Facebook Marketplace + local auctions",
+    "notes": "Mixed patterns, some coating wear. Still visually appealing when displayed."
+  },
+  {
+    "entrySlug": "windsor-chairs-american-seating-antiques",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 40000,
+    "priceRangeHigh": 120000,
+    "dataSource": "Furniture auctions + antique dealers",
+    "notes": "Matched set of 6 Windsors, 1700s–1800s, all joints tight, no wobble. Premium era."
+  },
+  {
+    "entrySlug": "windsor-chairs-american-seating-antiques",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 20000,
+    "priceRangeHigh": 50000,
+    "dataSource": "Estate sales + antique furniture dealers",
+    "notes": "Set of 4 Windsors, some loose spindles (repairable), solid structure."
+  },
+  {
+    "entrySlug": "windsor-chairs-american-seating-antiques",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 5000,
+    "priceRangeHigh": 20000,
+    "dataSource": "Facebook Marketplace + local auctions",
+    "notes": "Individual chairs or incomplete sets. Seat wear or minor cracks acceptable."
+  },
+  {
+    "entrySlug": "steiff-teddy-bears-identifying-collectible-vintage-bears",
+    "condition": "EXCELLENT",
+    "region": "NATIONAL",
+    "priceRangeLow": 300000,
+    "priceRangeHigh": 800000,
+    "dataSource": "Steiff collector auctions + specialized dealers",
+    "notes": "1902–1910 Steiff bear, button in ear, excellent condition, original outfit."
+  },
+  {
+    "entrySlug": "steiff-teddy-bears-identifying-collectible-vintage-bears",
+    "condition": "GOOD",
+    "region": "NATIONAL",
+    "priceRangeLow": 100000,
+    "priceRangeHigh": 300000,
+    "dataSource": "Vintage toy auctions + bear collector forums",
+    "notes": "1910–1930s Steiff, button present, minor fur matting, glass eyes intact."
+  },
+  {
+    "entrySlug": "steiff-teddy-bears-identifying-collectible-vintage-bears",
+    "condition": "FAIR",
+    "region": "NATIONAL",
+    "priceRangeLow": 20000,
+    "priceRangeHigh": 100000,
+    "dataSource": "Estate sales + online auctions",
+    "notes": "1950s–1970s Steiff or played-with earlier bears. Fur wear, seams open."
+  },
+  {
+    "entrySlug": "vintage-postcards-ephemera-local-history-collecting",
+    "condition": "EXCELLENT",
+    "region": "MIDWEST",
+    "priceRangeLow": 200,
+    "priceRangeHigh": 1500,
+    "dataSource": "Local history seller networks + eBay",
+    "notes": "Pre-1920 Grand Rapids postcard, pristine condition, landmark or street scene."
+  },
+  {
+    "entrySlug": "vintage-postcards-ephemera-local-history-collecting",
+    "condition": "GOOD",
+    "region": "MIDWEST",
+    "priceRangeLow": 100,
+    "priceRangeHigh": 800,
+    "dataSource": "Estate sales + Facebook Marketplace",
+    "notes": "1920s–1940s regional postcard, light postmark, no significant damage."
+  },
+  {
+    "entrySlug": "vintage-postcards-ephemera-local-history-collecting",
+    "condition": "FAIR",
+    "region": "MIDWEST",
+    "priceRangeLow": 50,
+    "priceRangeHigh": 300,
+    "dataSource": "Local history auctions + estate sales",
+    "notes": "Heavy postmark, creases, or staining. Still valuable to local history collectors."
+  }
+]
