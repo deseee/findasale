@@ -218,15 +218,26 @@ async function main() {
     .map(org => org.id);
 
   if (toDeleteOrgIds.length > 0) {
-    // Cascade delete via database
-    await prisma.$executeRawUnsafe(
-      `DELETE FROM "Sale" WHERE "organizerId" IN (${toDeleteOrgIds.map(() => '?').join(',')})`,
-      ...toDeleteOrgIds
-    );
+    // Find sales belonging to organizers we're removing
+    const salesToDelete = await prisma.sale.findMany({
+      where: { organizerId: { in: toDeleteOrgIds } },
+      select: { id: true },
+    });
+    const saleIdsToDelete = salesToDelete.map(s => s.id);
+
+    // Items → Sales → Organizers (order matters because Item.sale is not onDelete: Cascade)
+    if (saleIdsToDelete.length > 0) {
+      await prisma.item.deleteMany({
+        where: { saleId: { in: saleIdsToDelete } },
+      });
+      await prisma.sale.deleteMany({
+        where: { id: { in: saleIdsToDelete } },
+      });
+    }
     await prisma.organizer.deleteMany({
       where: { id: { in: toDeleteOrgIds } },
     });
-    console.log(`✅ Deleted ${toDeleteOrgIds.length} old organizer accounts and their sales`);
+    console.log(`✅ Deleted ${toDeleteOrgIds.length} old organizer accounts, ${saleIdsToDelete.length} sales, and their items`);
   }
 
   // Delete non-preserved users (except admins and organizers we're keeping)
