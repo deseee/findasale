@@ -644,6 +644,12 @@ export const getBidReviewQueue = async (req: AuthRequest, res: Response) => {
     const records = await prisma.bidIpRecord.findMany({
       take: 100,
       orderBy: { createdAt: 'desc' },
+      where: {
+        bid: {
+          user: { id: { not: '' } },
+          item: { id: { not: '' } },
+        },
+      },
       select: {
         id: true,
         bidId: true,
