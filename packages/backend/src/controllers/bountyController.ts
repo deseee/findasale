@@ -412,7 +412,7 @@ export const getMySubmissions = async (req: AuthRequest, res: Response) => {
     const submissions = await prisma.bountySubmission.findMany({
       where: {
         bounty: { userId },
-        ...(status ? { status: status as string } : { status: 'PENDING_REVIEW' }),
+        ...(status ? { status: status as string } : {}),
       },
       include: {
         bounty: { select: { id: true, description: true, offerPrice: true, createdAt: true } },

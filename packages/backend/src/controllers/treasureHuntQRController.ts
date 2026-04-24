@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
-import { awardXp, XP_AWARDS, checkDailyXpCap } from '../services/xpService';
+import { awardXp, XP_AWARDS, checkDailyXpCap, getRankXpMultiplier } from '../services/xpService';
 import { haversineDistance } from '../lib/placesService'; // Geofencing for QR scans
 
 /**
@@ -308,7 +308,8 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     let newRank: string | undefined;
     try {
       const dailyRemaining = await checkDailyXpCap(req.user.id, 'TREASURE_HUNT_SCAN');
-      const xpToAward = Math.min(XP_AWARDS.TREASURE_HUNT_SCAN, dailyRemaining);
+      const rankMultiplier = getRankXpMultiplier(req.user.explorerRank ?? 'INITIATE');
+      const xpToAward = Math.min(Math.round(XP_AWARDS.TREASURE_HUNT_SCAN * rankMultiplier), dailyRemaining);
       if (xpToAward > 0) {
         const xpResult = await awardXp(req.user.id, 'TREASURE_HUNT_SCAN', xpToAward, {
           saleId,
