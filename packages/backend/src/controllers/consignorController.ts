@@ -37,10 +37,10 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Organizer profile not found' });
     }
 
-    const { workspace } = result;
+    const { organizer, workspace } = result;
 
     // Check TEAMS tier
-    if (workspace.subscriptionTier !== 'TEAMS') {
+    if (organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
     }
 
@@ -90,10 +90,10 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Organizer profile not found' });
     }
 
-    const { workspace } = result;
+    const { organizer, workspace } = result;
 
     // Check TEAMS tier
-    if (workspace.subscriptionTier !== 'TEAMS') {
+    if (organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
     }
 
@@ -145,10 +145,10 @@ export const getConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Organizer profile not found' });
     }
 
-    const { workspace } = result;
+    const { organizer, workspace } = result;
 
     // Check TEAMS tier
-    if (workspace.subscriptionTier !== 'TEAMS') {
+    if (organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
     }
 
@@ -214,10 +214,10 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Organizer profile not found' });
     }
 
-    const { workspace } = result;
+    const { organizer, workspace } = result;
 
     // Check TEAMS tier
-    if (workspace.subscriptionTier !== 'TEAMS') {
+    if (organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
     }
 
@@ -281,10 +281,10 @@ export const deleteConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Organizer profile not found' });
     }
 
-    const { workspace } = result;
+    const { organizer, workspace } = result;
 
     // Check TEAMS tier
-    if (workspace.subscriptionTier !== 'TEAMS') {
+    if (organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
     }
 
@@ -353,10 +353,10 @@ export const runPayout = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Organizer profile not found' });
     }
 
-    const { workspace } = result;
+    const { organizer, workspace } = result;
 
     // Check TEAMS tier
-    if (workspace.subscriptionTier !== 'TEAMS') {
+    if (organizer.subscriptionTier !== 'TEAMS') {
       return res.status(403).json({ error: 'TEAMS subscription required' });
     }
 
