@@ -18,7 +18,7 @@ interface Subscription {
 export default function SubscriptionPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const { tier } = useOrganizerTier();
+  const { tier, tierLoading } = useOrganizerTier();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
@@ -84,7 +84,7 @@ export default function SubscriptionPage() {
     }
   };
 
-  if (loading) {
+  if (loading || tierLoading) {
     return (
       <>
         <Head>

@@ -867,14 +867,14 @@ const OrganizerDashboard = () => {
                 <div>
                   <p className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide">Your Storefront</p>
                   <p className="text-sm font-medium text-warm-900 dark:text-warm-100 truncate max-w-[200px] sm:max-w-xs">
-                    {typeof window !== 'undefined' ? `${window.location.origin}/organizer/storefront/${storefrontSlug}` : `/organizer/storefront/${storefrontSlug}`}
+                    {`https://finda.sale/organizer/storefront/${storefrontSlug}`}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 sm:ml-auto flex-shrink-0">
                 <button
                   onClick={async () => {
-                    const url = `${window.location.origin}/organizer/storefront/${storefrontSlug}`;
+                    const url = `https://finda.sale/organizer/storefront/${storefrontSlug}`;
                     await navigator.clipboard.writeText(url);
                     showToast('Storefront link copied!', 'success');
                   }}

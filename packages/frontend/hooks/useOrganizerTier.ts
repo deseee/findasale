@@ -24,27 +24,39 @@ function hasAccess(organizerTier: SubscriptionTier, requiredTier: SubscriptionTi
  * effect fires on every render, causing infinite-loop API hammering (S562 bug).
  */
 export function useOrganizerTier() {
-  const { user } = useAuth();
-  const tier = (user?.organizerTier || 'SIMPLE') as SubscriptionTier;
+  const { user, isLoading: authLoading } = useAuth();
+  // While auth is still initializing, return null tier to prevent flash of wrong plan.
+  // Once auth resolves, fall back to SIMPLE if no tier is set.
+  const tier = authLoading
+    ? null
+    : ((user?.organizerTier || 'SIMPLE') as SubscriptionTier);
 
   /**
-   * Check if organizer has access to a required tier feature
+   * Check if organizer has access to a required tier feature.
+   * Returns false while auth is loading (safe default — don't show gated features early).
    * @param requiredTier - The minimum tier required (PRO, TEAMS, etc.)
    * @returns true if organizer's tier >= requiredTier
    */
   const canAccess = useCallback(
-    (requiredTier: SubscriptionTier): boolean => hasAccess(tier, requiredTier),
+    (requiredTier: SubscriptionTier): boolean => {
+      if (!tier) return false;
+      return hasAccess(tier, requiredTier);
+    },
     [tier]
   );
 
   return {
     /**
-     * Current organizer's tier: SIMPLE, PRO, or TEAMS
+     * Current organizer's tier: SIMPLE, PRO, or TEAMS.
+     * null while auth is still loading — callers should guard on authLoading.
      */
     tier,
+    /** True while auth context is still resolving — gate any tier-dependent UI */
+    tierLoading: authLoading,
     canAccess,
     /**
-     * Convenience checks for common tiers
+     * Convenience checks for common tiers.
+     * All return false while loading.
      */
     isSimple: tier === 'SIMPLE',
     isPro: tier === 'PRO' || tier === 'TEAMS',
