@@ -28,6 +28,15 @@ export interface AITagResult {
   confidence?: number; // Camera Workflow v2: AI confidence score (0.0–1.0), defaults to 0.5
   suggestedTags?: string[]; // Sprint 1: Curated tags suggested by Haiku from Vision labels
   suggestedConditionGrade?: string; // #64: AI-suggested condition grade (S|A|B|C|D)
+  photoOrderIndices?: number[]; // Enhancement 2: Best-photo-first sorting — reordered photo indices by Vision quality
+}
+
+/** Photo with its computed quality score for best-photo-first sorting */
+interface PhotoWithScore {
+  index: number;
+  buffer: Buffer;
+  mimeType: string;
+  qualityScore: number;
 }
 
 // ── CB4: In-memory feedback stats (post-beta: migrate to DB table) ─────────────
@@ -457,6 +466,44 @@ export async function analyzeItemImage(
 }
 
 /**
+ * Enhancement 2: Compute a quality proxy for a photo based on Vision label scores.
+ * Uses the maximum score from Vision labelAnnotations as the "confidence" of the photo.
+ * Falls back to 0 if labels unavailable.
+ */
+async function computePhotoQualityScore(imageBase64: string): Promise<number> {
+  try {
+    const response = await axios.post(
+      `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
+      {
+        requests: [
+          {
+            image: { content: imageBase64 },
+            features: [
+              { type: 'LABEL_DETECTION', maxResults: 15 },
+            ],
+          },
+        ],
+      },
+      { timeout: 15000 }
+    );
+
+    const annotations = response.data.responses?.[0];
+    const labelAnnotations = annotations?.labelAnnotations ?? [];
+
+    // Extract max score from all labels
+    if (labelAnnotations.length === 0) {
+      return 0;
+    }
+
+    const maxScore = Math.max(...labelAnnotations.map((l: any) => l.score ?? 0));
+    return maxScore;
+  } catch {
+    // Quality score computation failed — default to 0 (non-blocking)
+    return 0;
+  }
+}
+
+/**
  * Analyze multiple photos of the same item using Google Vision + Claude Haiku.
  *
  * This function is optimized for Rapidfire and regular camera modes where
@@ -468,6 +515,8 @@ export async function analyzeItemImage(
  *   2. Pass ALL images + labels to Claude Haiku for multi-view analysis
  *   3. Map Vision labels → curated tags via Haiku (non-blocking)
  *   4. Suggest condition grade using primary photo (non-blocking)
+ *   5. Enhancement: Sort photos by Vision label confidence (best-photo-first)
+ *      and store order in Photo.orderIndex
  *
  * Returns null if cloud AI is not configured or cost ceiling exceeded.
  * Throws on API errors so the caller can handle/log them.
@@ -495,6 +544,39 @@ export async function analyzeItemImages(
     : buffers.map(() => 'image/jpeg');
 
   const imageBase64Array = buffers.map(buf => buf.toString('base64'));
+
+  // Enhancement 2: Compute quality score for each photo (best-photo-first sorting)
+  // This runs in parallel with subsequent analysis, non-blocking
+  let photoOrderIndices: number[] = Array.from({ length: buffers.length }, (_, i) => i);
+  let photosWithScores: PhotoWithScore[] | null = null;
+  try {
+    const photosWithQuality = await Promise.all(
+      buffers.map((buf, idx) =>
+        computePhotoQualityScore(imageBase64Array[idx])
+          .then(score => ({ index: idx, buffer: buf, mimeType: types[idx], qualityScore: score }))
+          .catch(() => ({ index: idx, buffer: buf, mimeType: types[idx], qualityScore: 0 }))
+      )
+    );
+
+    // Sort by quality score (descending) — highest score first
+    photosWithScores = photosWithQuality.sort((a, b) => b.qualityScore - a.qualityScore);
+
+    // Track the reordered indices
+    photoOrderIndices = photosWithScores.map(p => p.index);
+
+    // Reorder the buffers and types arrays for Haiku analysis
+    const reorderedBuffers = photosWithScores.map(p => p.buffer);
+    const reorderedTypes = photosWithScores.map(p => p.mimeType);
+
+    // Update arrays to use reordered versions
+    for (let i = 0; i < reorderedBuffers.length; i++) {
+      buffers[i] = reorderedBuffers[i];
+      types[i] = reorderedTypes[i];
+      imageBase64Array[i] = reorderedBuffers[i].toString('base64');
+    }
+  } catch {
+    // Quality score computation failed — proceed with original order (non-blocking)
+  }
 
   // ADR-069 Phase 1: Vision labels from ALL photos, not just [0]
   let visionLabels: string[] = [];
@@ -529,6 +611,11 @@ export async function analyzeItemImages(
     result.suggestedConditionGrade = await suggestConditionGrade(imageBase64Array[0], types[0]);
   } catch {
     // Condition grade suggestion failed — leave undefined
+  }
+
+  // Enhancement 2: Attach photo order indices for Photo.orderIndex field
+  if (photoOrderIndices.length > 0) {
+    result.photoOrderIndices = photoOrderIndices;
   }
 
   return result;
@@ -908,6 +995,49 @@ Base your price on actual secondary market demand, not retail pricing. Do not an
 
 // ── ADR-069 Phase 1: Clustering + Multi-Photo Vision Aggregation ─────────────
 
+/**
+ * Extract EXIF DateTimeOriginal/DateTime from JPEG base64 data.
+ * Falls back gracefully if EXIF is missing or unreadable.
+ * Returns null if no timestamp found.
+ */
+function extractExifTimestamp(imageBase64: string): Date | null {
+  try {
+    // Convert base64 to Buffer
+    const buffer = Buffer.from(imageBase64, 'base64');
+
+    // JPEG EXIF starts at 0xFF 0xE1 marker. Look for Exif header.
+    // Simplified approach: search for "Exif\0\0" and then look for DateTime/DateTimeOriginal
+    const exifSignature = Buffer.from([0xFF, 0xE1]);
+    let exifOffset = buffer.indexOf(exifSignature);
+
+    if (exifOffset === -1) {
+      return null; // No EXIF APP1 marker
+    }
+
+    // Look for DateTime or DateTimeOriginal tags in the EXIF data
+    // DateTime is typically in format: "YYYY:MM:DD HH:MM:SS"
+    const exifData = buffer.toString('binary', exifOffset, Math.min(exifOffset + 65536, buffer.length));
+
+    // Search for DateTime strings: pattern is "YYYY:MM:DD HH:MM:SS"
+    const dateRegex = /(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/;
+    const match = exifData.match(dateRegex);
+
+    if (match) {
+      const [, year, month, day, hour, minute, second] = match;
+      try {
+        return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`);
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  } catch {
+    // Extraction failed — return null (non-blocking, graceful fallback)
+    return null;
+  }
+}
+
 export interface ClusterResult {
   clusters: Array<{
     photoIndices: number[];
@@ -920,6 +1050,8 @@ export interface ClusterResult {
 /**
  * Cluster photos into groups (sets, bundles, identical items, obvious pairs).
  * Uses Haiku with multimodal images to identify logical groupings.
+ * Enhancement: Temporal EXIF clustering boost — photos taken close together in time
+ * are more likely to be the same item, passed as a weighting signal to the prompt.
  *
  * Fallback: on error, returns all ungrouped (one-item-per-photo behavior).
  */
@@ -944,7 +1076,54 @@ export async function clusterPhotos(imageBase64Array: string[]): Promise<Cluster
       },
     }));
 
-    const clusteringPrompt = `You are a batch item grouper for an estate sale app. Given N photos from an organizer's drop, identify logical groupings (matching sets, bundles, identical items, obvious pairs). A "set" is: same pattern/design, same manufacturer, intended to be used/sold together.
+    // Enhancement 1: Extract EXIF timestamps and compute temporal proximity hints
+    let timingHints = '';
+    try {
+      const timestamps: (Date | null)[] = imageBase64Array.map(base64 => extractExifTimestamp(base64));
+
+      // Find consecutive photos taken within ~30 seconds (likely same item from different angles)
+      const timingGroups: Array<{ indices: number[]; gapSeconds: number }> = [];
+      let currentGroup: number[] = [0];
+
+      for (let i = 1; i < timestamps.length; i++) {
+        if (timestamps[i] && timestamps[i - 1]) {
+          const gapMs = timestamps[i]!.getTime() - timestamps[i - 1]!.getTime();
+          const gapSeconds = Math.abs(gapMs) / 1000;
+
+          if (gapSeconds <= 30) {
+            // Same temporal group
+            currentGroup.push(i);
+          } else {
+            // New temporal group
+            if (currentGroup.length > 0) {
+              timingGroups.push({ indices: [...currentGroup], gapSeconds: 0 });
+            }
+            currentGroup = [i];
+          }
+        } else {
+          // Missing EXIF data for this photo
+          currentGroup.push(i);
+        }
+      }
+
+      // Add final group
+      if (currentGroup.length > 0) {
+        timingGroups.push({ indices: [...currentGroup], gapSeconds: 0 });
+      }
+
+      // Build timing hint string for the prompt
+      if (timingGroups.length > 0 && timingGroups.some(g => g.indices.length > 1)) {
+        const hints = timingGroups
+          .filter(g => g.indices.length > 1)
+          .map(g => `photos ${g.indices.join(',')} were taken within ~30 seconds of each other`)
+          .join('; ');
+        timingHints = `\n\nTemporal clustering hint: ${hints}. Use this as an additional grouping signal when photos were captured close together in time.`;
+      }
+    } catch {
+      // EXIF extraction failed gracefully — proceed without timing hints
+    }
+
+    const clusteringPrompt = `You are a batch item grouper for an estate sale app. Given N photos from an organizer's drop, identify logical groupings (matching sets, bundles, identical items, obvious pairs). A "set" is: same pattern/design, same manufacturer, intended to be used/sold together.${timingHints}
 
 Return JSON only:
 {
@@ -1026,4 +1205,3 @@ Confidence threshold: only cluster at >= 0.75. When in doubt, leave ungrouped.`;
     };
   }
 }
-

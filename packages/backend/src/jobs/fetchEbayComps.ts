@@ -60,6 +60,11 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
     console.log(`[fetchEbayComps] Item ${itemId}: fetched ${comps.count} results, median=$${comps.median}`);
 
     // Store/update in ItemCompLookup
+    // Feature #314: Also capture the first eBay listing's image URL for comparable display
+    const firstListingImageUrl = comps.listings && comps.listings.length > 0
+      ? comps.listings[0].imageUrl
+      : null;
+
     const now = new Date();
     const expireAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
@@ -69,6 +74,7 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
         ebayPrice: comps.median || null,
         ebayCondition: item.conditionGrade || null,
         ebayCategory: item.category || null,
+        ebayImageUrl: firstListingImageUrl,
         fetchedAt: now,
         expireAt,
       },
@@ -77,6 +83,7 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
         ebayPrice: comps.median || null,
         ebayCondition: item.conditionGrade || null,
         ebayCategory: item.category || null,
+        ebayImageUrl: firstListingImageUrl,
         fetchedAt: now,
         expireAt,
       },

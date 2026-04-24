@@ -851,6 +851,39 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       data: updateData
     });
 
+    // Feature #314: Log price overrides (fire-and-forget, don't block update if logging fails)
+    if (price !== undefined && item.saleId) {
+      try {
+        const newPrice = price ? parseFloat(price) : null;
+        const oldAiSuggested = item.aiSuggestedPrice ? parseFloat(item.aiSuggestedPrice.toString()) : null;
+
+        // Only log if price changed and is non-null
+        if (newPrice !== null && newPrice !== (item.price || null)) {
+          const sale = await prisma.sale.findUnique({
+            where: { id: item.saleId },
+            select: { organizerId: true }
+          });
+
+          if (sale) {
+            const delta = oldAiSuggested !== null ? (newPrice - oldAiSuggested) : null;
+            await prisma.priceOverrideLog.create({
+              data: {
+                itemId: id,
+                organizerId: sale.organizerId,
+                aiSuggestedPrice: oldAiSuggested,
+                organizerPrice: newPrice,
+                delta,
+                category: item.category || null,
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`[priceOverrideLog] Failed to log price override for item ${id}:`, err);
+        // Non-blocking: don't fail the update if logging fails
+      }
+    }
+
     // Feature #145: Award XP for condition rating (once per item, when first set)
     if (conditionGrade !== undefined && conditionGrade && !item.conditionGrade) {
       // Only award if conditionGrade was previously null/undefined and is now set to a non-null value
@@ -1029,6 +1062,29 @@ export const getBids = async (req: AuthRequest, res: Response) => {
     res.json(mappedBids);
   } catch (error) {
     console.error('Error fetching bids:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * ADR-069 Phase 2: Get top 3 eBay comparable sales for an item.
+ * GET /api/items/:id/ebay-comps
+ * Returns the most recent ItemCompLookup rows ordered by fetchedAt DESC.
+ */
+export const getItemEbayComps = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Fetch top 3 eBay comps for this item, ordered by fetchedAt DESC
+    const comps = await prisma.itemCompLookup.findMany({
+      where: { itemId: id },
+      orderBy: { fetchedAt: 'desc' },
+      take: 3,
+    });
+
+    res.json({ comps });
+  } catch (error) {
+    console.error('Error fetching eBay comps:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

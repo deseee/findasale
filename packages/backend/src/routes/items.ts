@@ -26,6 +26,7 @@ import {
   getRareFindsItems,
   applyOrganizerDiscount,
   removeOrganizerDiscount,
+  getItemEbayComps,
 } from '../controllers/itemController';
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
@@ -763,6 +764,7 @@ router.put('/:id', authenticate, updateItem);
 router.delete('/:id', authenticate, deleteItem);
 router.get('/:id/bids', optionalAuthenticate, getBids);
 router.post('/:id/bids', authenticate, bidRateLimiter, accountAgeGate, placeBid);
+router.get('/:id/ebay-comps', getItemEbayComps);
 router.post('/:id/analyze', authenticate, analyzeItemTags);
 router.post('/:itemId/close-auction', authenticate, closeAuctionEndpoint);
 
