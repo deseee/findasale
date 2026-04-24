@@ -112,6 +112,10 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
         commissionRate: new Decimal(rate),
         notes: notes || null,
       },
+      include: {
+        items: { where: { status: 'SOLD' }, select: { id: true, title: true, price: true } },
+        payouts: { select: { id: true, totalSales: true, commissionAmount: true, paidAt: true } },
+      },
     });
 
     return res.status(201).json(consignor);
@@ -244,6 +248,10 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
     const updated = await prisma.consignor.update({
       where: { id },
       data: updateData,
+      include: {
+        items: { where: { status: 'SOLD' }, select: { id: true, title: true, price: true } },
+        payouts: { select: { id: true, totalSales: true, commissionAmount: true, paidAt: true } },
+      },
     });
 
     return res.status(200).json(updated);
