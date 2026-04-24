@@ -26,6 +26,7 @@ import Skeleton from '../../../components/Skeleton';
 import { CURATED_TAGS } from '../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 import RapidCapture, { RapidItem } from '../../../components/RapidCapture';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
+import EncyclopediaInlineTip from '../../../components/EncyclopediaInlineTip';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -640,6 +641,13 @@ const EditItemPage = () => {
                   setFormData({ ...formData, price: e.target.value })
                 }
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+              />
+
+              {/* Encyclopedia Inline Tip — price guidance from Encyclopedia */}
+              <EncyclopediaInlineTip
+                category={formData.category}
+                tags={formData.tags}
+                title={formData.title}
               />
 
               {/* Price Research Panel — consolidated pricing tools */}

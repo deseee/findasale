@@ -201,3 +201,44 @@ export const getRevisions = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to fetch revisions' });
   }
 };
+
+/**
+ * GET /api/encyclopedia/match
+ * Match Encyclopedia entry based on item category, tags, and title.
+ * Used by inline tip component during item editing.
+ * Query params: category, tags (comma-separated), title
+ * Returns: { entry, benchmarks } | null
+ */
+export const matchEntry = async (req: Request, res: Response) => {
+  try {
+    const { category, tags, title } = req.query;
+
+    // Parse tags from comma-separated string
+    const tagArray = tags ? (tags as string).split(',').map(t => t.trim()).filter(Boolean) : [];
+
+    const result = await encyclopediaService.matchEntry(
+      title as string,
+      category as string,
+      tagArray
+    );
+
+    if (!result) {
+      return res.json(null);
+    }
+
+    // Format for client
+    res.set('Cache-Control', 'public, max-age=3600'); // 1 hour cache
+    res.json({
+      entry: {
+        id: result.entry.id,
+        slug: result.entry.slug,
+        title: result.entry.title,
+        category: result.entry.category,
+      },
+      benchmarks: result.benchmarks,
+    });
+  } catch (error) {
+    console.error('[Encyclopedia] Error matching entry:', error);
+    res.status(500).json({ message: 'Failed to match entry' });
+  }
+};

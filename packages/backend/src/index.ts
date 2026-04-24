@@ -203,6 +203,7 @@ import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Ti
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature #XXX: Retail Mode auto-renewal
 import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature #XXX: Referral reputation score recomputation
+import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';

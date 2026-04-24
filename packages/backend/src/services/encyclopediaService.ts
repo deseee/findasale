@@ -244,3 +244,80 @@ export async function getEntryRevisions(entryId: string, limit: number = 20): Pr
 
   return revisions;
 }
+
+/**
+ * Match Encyclopedia entry during item editing.
+ * Search strategy (in order of priority):
+ * 1. Exact slug match from title → toSlug(title)
+ * 2. Tag overlap: entries where tags array overlaps with query tags
+ * 3. Category match: entries in same category
+ *
+ * Returns the best matching PUBLISHED entry + its price benchmarks, or null.
+ */
+export async function matchEntry(
+  title?: string,
+  category?: string,
+  tags?: string[]
+): Promise<{ entry: any; benchmarks: any[] } | null> {
+  if (!title && !category && (!tags || tags.length === 0)) {
+    return null;
+  }
+
+  // Helper: slugify title
+  const toSlug = (s: string) =>
+    s
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+
+  // Strategy 1: Exact title slug match
+  if (title) {
+    const titleSlug = toSlug(title);
+    const exactMatch = await prisma.encyclopediaEntry.findUnique({
+      where: { slug: titleSlug },
+      include: { benchmarks: true },
+    });
+
+    if (exactMatch && exactMatch.status === 'PUBLISHED') {
+      return { entry: exactMatch, benchmarks: exactMatch.benchmarks };
+    }
+  }
+
+  // Strategy 2: Tag overlap + category
+  const whereCondition: any = { status: 'PUBLISHED' };
+  if (category) {
+    whereCondition.category = { contains: category, mode: 'insensitive' };
+  }
+
+  const entries = await prisma.encyclopediaEntry.findMany({
+    where: whereCondition,
+    include: { benchmarks: true },
+    take: 10, // Limit results for performance
+  });
+
+  if (tags && tags.length > 0) {
+    // Score by tag overlap
+    const scored = entries
+      .map(entry => {
+        const entryTagSet = new Set((entry.tags || []).map((t: string) => t.toLowerCase()));
+        const queryTagSet = new Set(tags.map(t => t.toLowerCase()));
+        const overlap = Array.from(queryTagSet).filter(t => entryTagSet.has(t)).length;
+        return { entry, overlap };
+      })
+      .filter(({ overlap }) => overlap > 0)
+      .sort((a, b) => b.overlap - a.overlap);
+
+    if (scored.length > 0) {
+      const best = scored[0];
+      return { entry: best.entry, benchmarks: best.entry.benchmarks };
+    }
+  }
+
+  // Strategy 3: Category match only (if tags didn't match)
+  if (category && entries.length > 0) {
+    return { entry: entries[0], benchmarks: entries[0].benchmarks };
+  }
+
+  return null;
+}

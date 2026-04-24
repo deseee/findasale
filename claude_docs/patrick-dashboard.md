@@ -1,4 +1,97 @@
-# Patrick's Dashboard — S555 Complete
+# Patrick's Dashboard — S556 Complete
+
+## 🔥 S556 — ADR-069 Phase 1: Burst clustering + Encyclopedia automation + eBay async comps
+
+**One-line summary:** Fully wired the camera → cluster → Encyclopedia pipeline. Photos now group into sets before items are created, Vision labels aggregate across all photos (not just the first one), eBay comps cache automatically after publish, and the Encyclopedia self-populates from two directions: Haiku writes stubs when it sees a new brand, and a weekly curator job promotes them to published after checking Wikipedia. A Wikidata importer seeds ~150–300 more brand entries on demand, and the listing flow now shows a price reference card from the Encyclopedia below the price input.
+
+### What shipped (6 dispatches)
+
+**D1 — Core pipeline (12 files)**
+- `schema.prisma` + migration `20260423120000_adr069_phase1_schema`: Item gets quantity/isSet/setRole/clusterConfidence; Photo gets photoRole/visionLabels/orderIndex; EncyclopediaEntry gets triggerItemId; new `ItemCompLookup` table for eBay comp cache. Migration deployed successfully (you ran migrate deploy + generate).
+- `batchAnalyzeController.ts`: cluster-first rewrite. Haiku groups all uploaded photos into sets in one multimodal call before any Item is created. Falls back to one-item-per-photo if Haiku errors. Silently auto-accepts — no "is this a set?" prompts per your locked decision.
+- `cloudAIService.ts`: Vision aggregation fixed (was only reading labels from the first photo — now reads all photos, deduplicates, caps at 20). webDetection enabled (free eBay/page-match signal). New `clusterPhotos()` function. Haiku prompt extended to return optional `newEncyclopediaStub` JSON field when it recognizes a new brand/pattern.
+- `valuationService.ts`: when internal comparables < 10, blends Haiku price (60%) with PriceBenchmark median (40%) as fallback. Method stored as `STATISTICAL_WITH_BENCHMARK`.
+- `encyclopediaService.ts` (new file): `createEncyclopediaStubIfNew()` — dedup by slug, creates AUTO_GENERATED entry + haiku_inferred PriceBenchmark in one transaction, fire-and-forget.
+- `createEncyclopediaStub.ts` job (new): setImmediate wrapper for the above.
+
+**D2 — Seed script (2 files)**
+- `seedEncyclopedia.ts` (new): reads the 20 markdown entries + 61 JSON benchmarks from `claude_docs/feature-notes/`, upserts by slug, marks all PUBLISHED, queries a real admin user for authorId (would have failed with hardcoded ID — fixed in-session). ESM `__dirname` polyfill added.
+- `packages/database/package.json`: `seed:encyclopedia` script added.
+- **⚠️ You still need to run this.** It failed mid-session due to the `__dirname` error — that's been fixed, so re-run should work.
+
+**D3 — Async eBay comps (3 files)**
+- `ebayController.ts`: core fetch logic extracted to exported `fetchEbayPriceComps()` so the job can call it directly.
+- `fetchEbayComps.ts` (new): 7-day cache via `ItemCompLookup`, fetches top 3 eBay listings, updates `aiSuggestedPrice` only when `item.price` is null (organizer-set prices never touched — D-005).
+- `itemController.ts`: `publishItem` now fires `fetchEbayCompsForItem` via `setImmediate` after item publishes.
+
+**D4 — Curator review automation (4 files)**
+- `curatorReviewJob.ts` (new): weekly cron (Sunday 3AM UTC). Grabs AUTO_GENERATED entries in batches of 20. Hits Wikipedia REST API (`/api/rest_v1/page/summary/{title}`) per entry. Price sanity check (must be ≥ $1 and ≤ $50,000). Passes → auto-promote to PUBLISHED. Wikipedia found but price bad → enrich + flag. No Wikipedia hit → leave unchanged for next week. 500ms rate limit between calls.
+- `index.ts`: curator cron registered.
+- `adminController.ts` + `routes/admin.ts`: three new admin endpoints — POST /api/admin/curator/run (full batch run), GET /api/admin/curator/status (counts by status), POST /api/admin/curator/run/:entryId (single entry override).
+
+**D5 — Wikidata bulk ingestion (2 files)**
+- `seedWikidata.ts` (new, 557 lines): 3 SPARQL queries against `query.wikidata.org` targeting collectible tableware brands, furniture/glass/ceramic makers, and vintage toys. Wikipedia REST API enrichment per result (300ms rate limit). Hardcoded fallback list of ~40 brands (Pyrex, Fire-King, Fiesta, Lenox, etc.) if SPARQL times out. Category mapping, default price ranges in cents, idempotent by slug. ESM __dirname polyfill.
+- `packages/database/package.json`: `seed:wikidata` script added.
+
+**D6 — Encyclopedia inline surface (6 files)**
+- `encyclopediaService.ts`: extended with `matchEntry()` — tries exact slug match from title first, then tag overlap scoring, then category fallback. Returns best PUBLISHED entry + benchmarks or null.
+- `encyclopediaController.ts` + `routes/encyclopedia.ts`: `GET /api/encyclopedia/match?title=&category=&tags=` — public (no auth), Cache-Control 1hr.
+- `useEncyclopediaMatch.ts` (new): 800ms debounced React Query hook. Only fires when category is set. Returns `{ entry, benchmarks, isLoading }` or null.
+- `EncyclopediaInlineTip.tsx` (new): amber/gold card. Shows USED condition price range from benchmarks (or first available condition). "View full guide →" link to `/encyclopedia/{slug}`. Dark mode support. Null renders when loading or no match.
+- `pages/organizer/edit-item/[id].tsx`: `EncyclopediaInlineTip` wired below the price input.
+
+### Two Patrick actions needed right now
+
+**Action 1 — Seed the Encyclopedia (run after push deploys):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+npm run seed:encyclopedia
+```
+Should output: "Parsed 20 encyclopedia entries / Loaded 61 price benchmark rows / Entries: inserted 20, skipped 0 / Benchmarks: inserted 61, skipped 0"
+
+**Action 2 — Seed Wikidata brands (run after encyclopedia seed completes):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+npm run seed:wikidata
+```
+This hits Wikidata + Wikipedia over the network — takes ~3-5 minutes. Will insert 150–300 additional brand stubs as AUTO_GENERATED entries. The weekly curator job will then promote the good ones to PUBLISHED automatically every Sunday.
+
+### Chrome QA queue (S557)
+
+After push + seeds run, verify:
+1. Drop 5+ similar photos in batch upload → expect 1 clustered Item (not 5 separate Items)
+2. `/encyclopedia` — should show 20+ entries after seed runs
+3. Edit any item with a category set → `EncyclopediaInlineTip` appears below price input with a price range
+4. `/api/admin/curator/run` → triggers curator job in Railway logs (POST as admin)
+5. Publish any item → Railway logs show `[fetchEbayComps]` within a few seconds
+
+### No decisions needed
+
+All architecture locked in ADR-069. No Patrick input needed before S557.
+
+## 📤 Push Block (S556 — D4/D5/D6 + wrap docs)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/jobs/curatorReviewJob.ts
+git add packages/backend/src/index.ts
+git add packages/backend/src/controllers/adminController.ts
+git add packages/backend/src/routes/admin.ts
+git add packages/database/prisma/seedWikidata.ts
+git add packages/database/package.json
+git add packages/backend/src/services/encyclopediaService.ts
+git add packages/backend/src/controllers/encyclopediaController.ts
+git add packages/backend/src/routes/encyclopedia.ts
+git add packages/frontend/hooks/useEncyclopediaMatch.ts
+git add packages/frontend/components/EncyclopediaInlineTip.tsx
+git add "packages/frontend/pages/organizer/edit-item/[id].tsx"
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S556: Encyclopedia automation — curator review job + Wikidata ingestion + inline listing surface"
+.\push.ps1
+```
+
+Note: The D1/D2/D3 files (batchAnalyzeController, cloudAIService, valuationService, encyclopediaService, createEncyclopediaStub, fetchEbayComps, ebayController, itemController, seedEncyclopedia, schema.prisma, migration) were in the earlier S556 push block. If you haven't pushed those yet, add them to the block above. If they're already on GitHub, this block is correct as-is.
 
 ## 🔥 S555 — Print-kit label fix + batching/pricing research + ADR-069 + Encyclopedia seed
 

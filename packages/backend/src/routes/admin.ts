@@ -21,6 +21,9 @@ import {
   createFeatureFlag,
   updateFeatureFlag,
   deleteFeatureFlag,
+  runCuratorReviewJob,
+  getCuratorStatus,
+  runCuratorReviewJobSingle,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -91,5 +94,10 @@ router.delete('/feature-flags/:id', deleteFeatureFlag);
 // D-XP-004 Phase 5: Referral fraud review endpoints
 router.get('/referral-fraud-signals', listFraudSignals);
 router.patch('/referral-fraud-signals/:signalId/review', reviewFraudSignal);
+
+// ADR-069 Phase 2: Curator review job — automated Encyclopedia promotion
+router.post('/curator/run', runCuratorReviewJob);
+router.get('/curator/status', getCuratorStatus);
+router.post('/curator/run/:entryId', runCuratorReviewJobSingle);
 
 export default router;
