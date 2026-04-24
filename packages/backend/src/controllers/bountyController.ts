@@ -3,8 +3,10 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
-import { awardXp, spendXp, getSpendableXp } from '../services/xpService';
-import { stripe } from '../lib/stripe';
+import { awardXp, spendXp, getSpendableXp, XP_AWARDS } from '../services/xpService';
+import { getStripe } from '../utils/stripe';
+
+const stripe = () => getStripe();
 
 /**
  * POST /api/bounties
