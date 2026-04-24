@@ -21,6 +21,9 @@ const HuntPassPage = () => {
 
   const huntPassPrice = 4.99;
 
+  // Check if user has active Hunt Pass
+  const hasActiveHuntPass = user?.huntPassActive && user?.huntPassExpiry && new Date(user.huntPassExpiry) > new Date();
+
   const handleSubscribeClick = () => {
     if (!user) {
       router.push('/login?redirect=/shopper/hunt-pass');
@@ -48,24 +51,40 @@ const HuntPassPage = () => {
           </div>
 
           {/* Price Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-12 border-2 border-purple-200 dark:border-purple-700">
-            <div className="text-center mb-8">
-              <div className="text-5xl font-bold text-purple-600 dark:text-purple-300 mb-2">
-                ${huntPassPrice.toFixed(2)}
+          {hasActiveHuntPass ? (
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg shadow-md p-8 mb-12 border-2 border-green-200 dark:border-green-700">
+              <div className="text-center mb-8">
+                <div className="text-5xl mb-4">✓</div>
+                <h2 className="text-3xl font-bold text-green-700 dark:text-green-300 mb-2">Hunt Pass Active</h2>
+                <p className="text-green-600 dark:text-green-400">You're earning 1.5x XP on every action</p>
               </div>
-              <p className="text-warm-600 dark:text-warm-400">per month</p>
-              <p className="text-sm text-warm-500 dark:text-warm-400 mt-2">
-                Cancel anytime. Charged monthly to your payment method.
-              </p>
+              <Link
+                href="/shopper/dashboard"
+                className="w-full block text-center py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors"
+              >
+                Back to Dashboard
+              </Link>
             </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-12 border-2 border-purple-200 dark:border-purple-700">
+              <div className="text-center mb-8">
+                <div className="text-5xl font-bold text-purple-600 dark:text-purple-300 mb-2">
+                  ${huntPassPrice.toFixed(2)}
+                </div>
+                <p className="text-warm-600 dark:text-warm-400">per month</p>
+                <p className="text-sm text-warm-500 dark:text-warm-400 mt-2">
+                  Cancel anytime. Charged monthly to your payment method.
+                </p>
+              </div>
 
-            <button
-              onClick={handleSubscribeClick}
-              className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
-            >
-              Upgrade to Hunt Pass
-            </button>
-          </div>
+              <button
+                onClick={handleSubscribeClick}
+                className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
+              >
+                Upgrade to Hunt Pass
+              </button>
+            </div>
+          )}
 
           {/* Benefits Section */}
           <div className="mb-12">
@@ -163,6 +182,9 @@ const HuntPassPage = () => {
                     <p className="text-warm-600 dark:text-warm-400">
                       More monthly coupon redemptions — 3 Standard, 3 Deluxe, and 2 Premium per month (vs 2/2/1 for free accounts).
                     </p>
+                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
+                      Standard: 2→3/mo | Deluxe: 2→3/mo | Premium: 1→2/mo
+                    </p>
                   </div>
                 </div>
               </div>
@@ -200,17 +222,19 @@ const HuntPassPage = () => {
           </div>
 
           {/* Bottom CTA */}
-          <div className="text-center">
-            <p className="text-warm-600 dark:text-warm-400 mb-4">
-              Ready to hunt smarter?
-            </p>
-            <button
-              onClick={handleSubscribeClick}
-              className="py-3 px-8 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors text-lg"
-            >
-              Upgrade to Hunt Pass
-            </button>
-          </div>
+          {!hasActiveHuntPass && (
+            <div className="text-center">
+              <p className="text-warm-600 dark:text-warm-400 mb-4">
+                Ready to hunt smarter?
+              </p>
+              <button
+                onClick={handleSubscribeClick}
+                className="py-3 px-8 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors text-lg"
+              >
+                Upgrade to Hunt Pass
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

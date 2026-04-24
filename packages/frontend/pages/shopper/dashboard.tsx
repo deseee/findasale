@@ -381,11 +381,6 @@ const ShopperDashboard = () => {
               </Link>
             </div>
           )}
-          {user && user.huntPassActive && (
-            <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-4 py-2 mb-6">
-              <span className="text-green-700 dark:text-green-300 text-sm">✓ Hunt Pass active — you're earning 1.5x XP</span>
-            </div>
-          )}
 
 
           {/* Tabs */}
