@@ -4,6 +4,22 @@ import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 
 /**
+ * Helper: Get organizer workspace from authenticated user
+ * Returns { organizer, workspace } or null if not found
+ */
+async function getOrganizerWorkspace(userId: string): Promise<{ organizer: any; workspace: any } | null> {
+  const organizer = await prisma.organizer.findUnique({
+    where: { userId },
+  });
+  if (!organizer) return null;
+
+  const workspace = await prisma.organizerWorkspace.findFirst({
+    where: { ownerId: organizer.id },
+  });
+  return workspace ? { organizer, workspace } : null;
+}
+
+/**
  * GET /api/consignors
  * List all consignors for the organizer's workspace
  * Requires: authenticate, TEAMS subscription
@@ -15,13 +31,13 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
     }
 
     // Get organizer's workspace
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
-    });
+    const result = await getOrganizerWorkspace(req.user.id);
 
-    if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+    if (!result) {
+      return res.status(404).json({ error: 'Organizer profile not found' });
     }
+
+    const { workspace } = result;
 
     // Check TEAMS tier
     if (workspace.subscriptionTier !== 'TEAMS') {
@@ -68,13 +84,13 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
     }
 
     // Get organizer's workspace
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
-    });
+    const result = await getOrganizerWorkspace(req.user.id);
 
-    if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+    if (!result) {
+      return res.status(404).json({ error: 'Organizer profile not found' });
     }
+
+    const { workspace } = result;
 
     // Check TEAMS tier
     if (workspace.subscriptionTier !== 'TEAMS') {
@@ -119,13 +135,13 @@ export const getConsignor = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
 
     // Get organizer's workspace
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
-    });
+    const result = await getOrganizerWorkspace(req.user.id);
 
-    if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+    if (!result) {
+      return res.status(404).json({ error: 'Organizer profile not found' });
     }
+
+    const { workspace } = result;
 
     // Check TEAMS tier
     if (workspace.subscriptionTier !== 'TEAMS') {
@@ -188,13 +204,13 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
     const { name, email, phone, commissionRate, notes } = req.body;
 
     // Get organizer's workspace
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
-    });
+    const result = await getOrganizerWorkspace(req.user.id);
 
-    if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+    if (!result) {
+      return res.status(404).json({ error: 'Organizer profile not found' });
     }
+
+    const { workspace } = result;
 
     // Check TEAMS tier
     if (workspace.subscriptionTier !== 'TEAMS') {
@@ -251,13 +267,13 @@ export const deleteConsignor = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
 
     // Get organizer's workspace
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
-    });
+    const result = await getOrganizerWorkspace(req.user.id);
 
-    if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+    if (!result) {
+      return res.status(404).json({ error: 'Organizer profile not found' });
     }
+
+    const { workspace } = result;
 
     // Check TEAMS tier
     if (workspace.subscriptionTier !== 'TEAMS') {
@@ -323,13 +339,13 @@ export const runPayout = async (req: AuthRequest, res: Response) => {
     }
 
     // Get organizer's workspace
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
-    });
+    const result = await getOrganizerWorkspace(req.user.id);
 
-    if (!workspace) {
-      return res.status(404).json({ error: 'Workspace not found' });
+    if (!result) {
+      return res.status(404).json({ error: 'Organizer profile not found' });
     }
+
+    const { workspace } = result;
 
     // Check TEAMS tier
     if (workspace.subscriptionTier !== 'TEAMS') {
