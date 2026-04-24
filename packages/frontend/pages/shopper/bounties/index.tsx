@@ -80,6 +80,12 @@ export default function ShopperBountiesPage() {
   });
   const [organizerSales, setOrganizerSales] = useState<Sale[]>([]);
   const [organizerItems, setOrganizerItems] = useState<Map<string, Item[]>>(new Map());
+  const [mounted, setMounted] = useState(false);
+
+  // Set mounted flag to enable client-side-only date formatting
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Load active bounties when page loads
   React.useEffect(() => {
@@ -576,10 +582,12 @@ export default function ShopperBountiesPage() {
                           <Target size={16} className="text-amber-500" />
                           <span>🏆 {bounty.xpReward} XP reward</span>
                         </div>
-                        <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                          <Clock size={16} className="text-gray-400" />
-                          <span>{new Date(bounty.createdAt).toLocaleDateString()}</span>
-                        </div>
+                        {mounted && (
+                          <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                            <Clock size={16} className="text-gray-400" />
+                            <span>{new Date(bounty.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        )}
                       </div>
 
                       {isExpanded && (

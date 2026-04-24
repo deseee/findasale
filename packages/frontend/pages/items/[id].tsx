@@ -163,7 +163,13 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [bidModalOpen, setBidModalOpen] = useState(false);
   const [scoutRevealModalOpen, setScoutRevealModalOpen] = useState(false);
   const [scoutRevealResults, setScoutRevealResults] = useState<Array<{ displayName: string; avatarUrl: string | null; savedAt: string }> | null>(null);
+  const [mounted, setMounted] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+
+  // Set mounted flag to enable client-side-only date comparisons
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Queries
   const {
@@ -846,7 +852,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                       )}
 
                       {/* Auction Item — Place Bid Button */}
-                      {isAuction && item.status === 'AVAILABLE' && item.auctionEndTime && new Date(item.auctionEndTime) > new Date() && !item.auctionClosed && (
+                      {isAuction && item.status === 'AVAILABLE' && item.auctionEndTime && mounted && new Date(item.auctionEndTime) > new Date() && !item.auctionClosed && (
                         <button
                           onClick={() => setBidModalOpen(true)}
                           disabled={!user}
@@ -879,7 +885,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
               {purchaseStatus?.hasPurchased && (
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4 bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                   <p className="text-green-700 dark:text-green-300 font-semibold text-center">✓ You own this item</p>
-                  {purchaseStatus?.purchasedAt && (
+                  {purchaseStatus?.purchasedAt && mounted && (
                     <p className="text-sm text-green-600 dark:text-green-400 text-center">
                       Purchased on {new Date(purchaseStatus.purchasedAt).toLocaleDateString()}
                     </p>

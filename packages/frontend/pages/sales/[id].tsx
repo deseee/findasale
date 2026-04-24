@@ -165,6 +165,12 @@ const SaleDetailPage = () => {
     message: string;
     onConfirm: () => void;
   }>({ open: false, title: '', message: '', onConfirm: () => {} });
+  const [mounted, setMounted] = useState(false);
+
+  // Set mounted flag to enable client-side-only date comparisons
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Refresh sale data every 5 seconds to pick up new bids and inventory changes
   useEffect(() => {
@@ -1204,7 +1210,7 @@ const SaleDetailPage = () => {
                           </span>
                         </div>
 
-                        {!isOrganizer && user && item.status === 'AVAILABLE' && item.auctionEndTime && new Date(item.auctionEndTime) > new Date() && (
+                        {!isOrganizer && user && item.status === 'AVAILABLE' && item.auctionEndTime && mounted && new Date(item.auctionEndTime) > new Date() && (
                           <div className="flex mb-2">
                             <input
                               type="number"
