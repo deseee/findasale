@@ -1038,13 +1038,20 @@ function extractExifTimestamp(imageBase64: string): Date | null {
   }
 }
 
+export interface ClusterPhoto {
+  index: number;
+  photoRole: 'FRONT' | 'BACK_STAMP' | 'DETAIL_DAMAGE' | 'LABEL_BRAND' | 'MULTI_ANGLE' | 'UNKNOWN';
+  roleReasoning?: string;
+}
+
 export interface ClusterResult {
   clusters: Array<{
     photoIndices: number[];
     detectedType: string;
     confidence: number;
+    photos?: ClusterPhoto[]; // Phase 2: per-photo role assignments
   }>;
-  ungrouped: number[];
+  ungrouped: Array<number | ClusterPhoto>; // Can be index number or full ClusterPhoto object
 }
 
 /**
@@ -1125,6 +1132,14 @@ export async function clusterPhotos(imageBase64Array: string[]): Promise<Cluster
 
     const clusteringPrompt = `You are a batch item grouper for an estate sale app. Given N photos from an organizer's drop, identify logical groupings (matching sets, bundles, identical items, obvious pairs). A "set" is: same pattern/design, same manufacturer, intended to be used/sold together.${timingHints}
 
+For each photo in each cluster AND each ungrouped photo, assign one of these roles:
+- FRONT: Best main angle for identifying the item visually (primary shot)
+- BACK_STAMP: Shows maker marks, stamps, brand labels, hallmarks, or interior features
+- DETAIL_DAMAGE: Close-up showing damage, wear, staining, repairs, or condition details
+- LABEL_BRAND: Text labels, barcodes, serial plates, price tags, product labels
+- MULTI_ANGLE: Alternate viewing angle not covered by other roles
+- UNKNOWN: You cannot confidently classify the photo's role
+
 Return JSON only:
 {
   "clusters": [
@@ -1133,10 +1148,33 @@ Return JSON only:
       "photoIndices": [0, 1, 2],
       "detectedType": "8-piece place setting",
       "confidence": 0.95,
-      "reasoning": "Matching dishes, same pattern, consistent lighting"
+      "reasoning": "Matching dishes, same pattern, consistent lighting",
+      "photos": [
+        {
+          "index": 0,
+          "photoRole": "FRONT",
+          "roleReasoning": "Straight-on marketing angle of stacked plates; best for visual identification"
+        },
+        {
+          "index": 1,
+          "photoRole": "BACK_STAMP",
+          "roleReasoning": "Underside view showing maker mark and brand stamp"
+        },
+        {
+          "index": 2,
+          "photoRole": "DETAIL_DAMAGE",
+          "roleReasoning": "Close-up of rim showing minor chipping and edge wear"
+        }
+      ]
     }
   ],
-  "ungrouped": [3, 4, 5]
+  "ungrouped": [
+    {
+      "index": 3,
+      "photoRole": "LABEL_BRAND",
+      "roleReasoning": "Original box label with product info"
+    }
+  ]
 }
 
 Confidence threshold: only cluster at >= 0.75. When in doubt, leave ungrouped.`;
@@ -1185,23 +1223,52 @@ Confidence threshold: only cluster at >= 0.75. When in doubt, leave ungrouped.`;
     // Ensure all clusters meet confidence threshold
     parsed.clusters = parsed.clusters.filter(c => c.confidence >= 0.75);
 
-    // Ensure all indices are valid
+    // Ensure all indices are valid and normalize ungrouped (convert numbers to ClusterPhoto objects if needed)
     const usedIndices = new Set<number>();
     parsed.clusters.forEach(c => c.photoIndices.forEach(idx => usedIndices.add(idx)));
-    parsed.ungrouped = parsed.ungrouped.filter(idx => !usedIndices.has(idx) && idx < imageBase64Array.length);
+
+    parsed.ungrouped = parsed.ungrouped
+      .filter(item => {
+        const idx = typeof item === 'number' ? item : item.index;
+        return !usedIndices.has(idx) && idx < imageBase64Array.length;
+      })
+      .map(item => {
+        // Normalize: if it's a number, wrap it as a ClusterPhoto with UNKNOWN role
+        if (typeof item === 'number') {
+          return {
+            index: item,
+            photoRole: 'UNKNOWN' as const,
+            roleReasoning: 'Not assigned a specific role',
+          };
+        }
+        // Ensure role is valid; default to UNKNOWN if missing or invalid
+        const validRoles = ['FRONT', 'BACK_STAMP', 'DETAIL_DAMAGE', 'LABEL_BRAND', 'MULTI_ANGLE', 'UNKNOWN'];
+        if (!validRoles.includes(item.photoRole)) {
+          item.photoRole = 'UNKNOWN';
+        }
+        return item as ClusterPhoto;
+      });
 
     // If no clusters formed, everything is ungrouped
     if (parsed.clusters.length === 0) {
-      parsed.ungrouped = Array.from({ length: imageBase64Array.length }, (_, i) => i);
+      parsed.ungrouped = Array.from({ length: imageBase64Array.length }, (_, i) => ({
+        index: i,
+        photoRole: 'UNKNOWN' as const,
+        roleReasoning: 'No clustering performed',
+      }));
     }
 
     return parsed;
   } catch (error: any) {
     console.warn('[cloudAIService] Clustering failed, falling back to one-item-per-photo:', error.message);
-    // Fallback: treat each photo as ungrouped
+    // Fallback: treat each photo as ungrouped with UNKNOWN role
     return {
       clusters: [],
-      ungrouped: Array.from({ length: imageBase64Array.length }, (_, i) => i),
+      ungrouped: Array.from({ length: imageBase64Array.length }, (_, i) => ({
+        index: i,
+        photoRole: 'UNKNOWN' as const,
+        roleReasoning: 'Clustering failed; defaulted to UNKNOWN',
+      })),
     };
   }
 }

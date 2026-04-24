@@ -910,23 +910,35 @@ model Item {
   @@index([tagColor]) // #310: Discount rule color tag lookup
 }
 
+// ADR-069 Phase 2: Photo role taxonomy
+enum PhotoRole {
+  FRONT
+  BACK_STAMP
+  DETAIL_DAMAGE
+  LABEL_BRAND
+  MULTI_ANGLE
+  UNKNOWN
+}
+
 // Camera Workflow v2: Photo model for multi-photo support (forward-looking schema)
 model Photo {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   itemId            String
-  item              Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item              Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
   url               String
   label             String? // "front" | "back" | "detail" — null for unlabeled (v3 future)
-  isPrimary         Boolean  @default(false)
-  autoEnhanced      Boolean  @default(false)
-  backgroundRemoved Boolean  @default(false)
+  isPrimary         Boolean   @default(false)
+  autoEnhanced      Boolean   @default(false)
+  backgroundRemoved Boolean   @default(false)
   // ADR-069 Phase 1: Photo role + Vision labels
-  photoRole         String? // "primary" | "detail" | "brand-label" | "condition-wide"
+  photoRole         PhotoRole @default(UNKNOWN) // Photo role: FRONT, BACK_STAMP, DETAIL_DAMAGE, LABEL_BRAND, MULTI_ANGLE, UNKNOWN
+  roleReasoning     String? // Haiku's explanation of why this role was assigned
   visionLabels      String[] @default([]) // Aggregated Vision API labels from this photo
   orderIndex        Int? // Explicit ordering if user reorders in review UI
-  createdAt         DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
   @@index([itemId])
+  @@index([photoRole])
 }
 
 model Favorite {
