@@ -80,7 +80,7 @@ const SHOPPER_TIERS_BASE: Record<ShopperTier, {
     minPurchase: 25,
     monthlyLimitStandard: 2,
     monthlyLimitHuntPass: 3,
-    label: 'Premium Deal',
+    label: 'Deluxe Deal',
     description: '$2.00 off $25+ purchases',
   },
   FIVE_OFF_FIFTY: {
@@ -89,7 +89,7 @@ const SHOPPER_TIERS_BASE: Record<ShopperTier, {
     minPurchase: 50,
     monthlyLimitStandard: 1,
     monthlyLimitHuntPass: 2,
-    label: 'Deluxe Deal',
+    label: 'Premium Deal',
     description: '$5.00 off $50+ purchases',
   },
 };
