@@ -148,9 +148,9 @@ const MessageThreadPage = () => {
         {messages.map((msg) => {
           const isMine = msg.sender.id === user.id;
           return (
-            <div key={msg.id} className={`flex ${isMine ? 'justify-end pr-2' : 'justify-start'}`}>
+            <div key={msg.id} className={`flex w-full ${isMine ? 'justify-end pr-2' : 'justify-start'}`}>
               <div
-                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-snug ${
+                className={`max-w-[75%] break-words px-4 py-2.5 rounded-2xl text-sm leading-snug ${
                   isMine
                     ? 'bg-amber-600 text-white rounded-br-sm'
                     : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 border border-warm-200 dark:border-gray-700 rounded-bl-sm'
