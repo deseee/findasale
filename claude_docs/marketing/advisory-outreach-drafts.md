@@ -44,15 +44,17 @@ Bucket 3 — Organizer-side voices: podcasts, newsletters, trade editors, associ
 ### 1. Reezy Resells — Michael Rezendes (~430–495k YouTube)
 Contact via reezyresells.com.
 
-> Michael —
->
-> I've been working on something for estate sale and auction organizers — the operators your audience sources from — and you came up in my head as one of the few people who'd see both sides of this clearly.
->
-> Not asking for a shoutout — just 90 seconds of your eyes on it and your honest read on whether it holds up. https://finda.sale/video
->
-> Fine to say "not for me."
->
-> — Patrick (Grand Rapids, MI)
+
+
+Reezy,
+I've been working on something for second hand sales and resellers that I'm hoping appeals to your audience. You came up in my head as someone who'd see both sides of this idea.
+Not asking for a shoutout — just 90 seconds of your eyes on it and an honest read on whether it holds up. https://finda.sale/video
+Fine to say "not for me."
+Also nice to see another veefriend doing well.  I still have my NFT somewhere.
+
+Cheers,
+Patrick
+
 
 ---
 
