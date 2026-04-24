@@ -132,11 +132,11 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #267 RSVP XP + Notifications | Fixed S531 — pending Chrome QA | Verify RSVP awards 2 XP + Discoveries notification appears | S531 |
-| #241 Brand Kit PDFs | ❌ STILL BROKEN S541 | S531 fixed auth only. Root cause: hrefs hardcoded as /api/brand-kit/... relative to Vercel frontend — no Next.js rewrite exists. Fix: change hrefs in brand-kit.tsx to use NEXT_PUBLIC_API_URL base. | S531 |
+| #267 RSVP XP + Notifications | ✅ Chrome-verified S563 — RESOLVED | RSVP button → "✓ You're going (2)", +2 XP in DB, bell shows "Going to this sale!" notification. ss_75714xiu8, ss_3284tp1pi | S531 |
+| #241 Brand Kit PDFs | ✅ Chrome-verified S563 — RESOLVED | All 4 endpoints return 200 application/pdf. URLs point to Railway backend correctly. ss_0623op91s | S531 |
 | #7 Shopper Referral Rewards | ✅ Chrome-verified S541 — RESOLVED | /shopper/referrals loads, real referral link (REF-0215DAB8), Copy + 5 share buttons, stats section present. ss_59914h5dd | S531 |
-| SettlementWizard fee % | Fixed S531 — pending Chrome QA | Verify Receipt step shows correct % (2%, not 200%) | S531 |
-| Per-sale analytics filter | Fixed S531 — pending Chrome QA | Select a sale from filter on /organizer/insights, verify stat cards update | S531 |
+| SettlementWizard fee % | ✅ Chrome-verified S563 — RESOLVED | Receipt shows Platform Fee (0%) correctly for sale with no Stripe revenue. No 200% shown. API confirms platformFeeAmount=0. ss_9199brc0p | S531 |
+| Per-sale analytics filter | ✅ Chrome-verified S563 — RESOLVED | Selecting sale → "Filtered to one sale" + cards update ($79.44→$27.29 + new per-sale metrics). ss_8173iewrh → ss_5482waky8 | S531 |
 | AvatarDropdown nav link | Fixed S531 — pending Chrome QA | As shopper, verify avatar dropdown shows "Explorer Profile" → /shopper/explorer-profile | S531 |
 | S529 storefront widget | Pushed — pending Chrome QA | Verify /organizer/dashboard shows Copy Link + View Storefront buttons | S529 |
 | S529 mobile nav rank | Pushed — mobile viewport required | Test mobile viewport, verify rank reads from useXpProfile (not hardcoded Scout) | S529 |
@@ -189,7 +189,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #52 Encyclopedia empty DB | Verified S555 via Chrome — infrastructure live, `EncyclopediaEntry` table has zero rows | S556 Dispatch 2 runs seedEncyclopedia.ts to insert 20 curated entries + 61 benchmarks; re-verify `/encyclopedia` list shows entries and at least one detail page renders markdown | S555 |
 | #54 Crowdsourced Appraisal empty DB | Verified S555 via Chrome — both `/shopper/appraisals` and `/organizer/appraisals` render correctly with empty state | Populates organically as organizers submit requests; submit-flow + community-response + consensus paths UNVERIFIED without a test account submitting real data on prod. Queue for beta cohort. | S555 |
 | S555 label fix — live print test | Patrick confirmed "labels look great" in-session after deploy | Optional: one more full-sheet Avery 18160 print at Actual Size / 100% to re-verify no regression after ADR-069 schema changes land in S556 | S555 |
-| #309 Consignor Portal Chrome QA | Nav links added S559, pending Chrome | TEAMS organizer → /organizer/consignors loads, create consignor, add items, run payout → payout record appears. Visit /consignor/portal/[token] (no auth) → items + payout history visible. | S559 |
+| #309 Consignor Portal Chrome QA | ✅ Chrome-verified S563 — RESOLVED | Page loads, create/update/delete ✅ (P1 include fix applied), portal is truly public. P2 remaining: native window.confirm() on delete, horizontal overflow on portal link + Delete button. | S559 |
 | #310 Color-tag Discount Rules Chrome QA | Nav links added S559, effectivePrice confirmed in code | TEAMS organizer → /organizer/color-rules, create rule (e.g. Red = 25% off, no date range). Assign tagColor to item. View item on sale detail → effectivePrice shown with strikethrough original. ColorKeyLegend present on sale page. | S559 |
 | #311 Locations Chrome QA | Nav links added S559, pending Chrome | TEAMS organizer → /organizer/locations, create 2 locations. Filter inventory by location. Transfer item from location A to B. Delete location with items → expect 409. LocationSelector dropdown on create-sale and edit-item. | S559 |
 | RETAIL tier gate (create-sale) | Fixed S559, pending Chrome QA | As FREE organizer: /organizer/create-sale → "Retail Store (TEAMS only)" greyed out + upgrade CTA visible. As TEAMS organizer → "Retail Store" selectable, no CTA. |
@@ -201,8 +201,9 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | /admin/items pagination overflow at 412px | ✅ Chrome-verified S562 — RESOLVED | Patrick confirmed all pagination buttons visible at 412px. Fix confirmed working. | S561 |
 | /organizer/locations — "Workspace not found" | ✅ UNBLOCKED S562 | TEAMS modal fix creates OrganizerWorkspace on completion — Alice will now have a workspace after next login + modal completion. Pending post-deploy Chrome QA. | S561 |
 | Hunt Pass CTA duplicate on shopper dashboard | ✅ Chrome-verified S562 — RESOLVED | DOM query confirmed single HP Active element. Duplicate was already resolved before session. | S561 |
-| Coupon slot counts mismatch (XP Store vs hunt-pass page) | 🔧 FIXED S562, pending Vercel deploy | `coupons.tsx` COUPON_TIERS labels swapped to match hunt-pass.tsx canonical values (Deluxe=2→3, Premium=1→2). Post-deploy: verify XP Store shows Standard/Deluxe/Premium with correct slot counts. | S561 |
-| /admin/encyclopedia action buttons cut off at viewport | 🔧 FIXED S562, pending Vercel deploy | `table-fixed` + explicit column widths + `whitespace-nowrap` on Actions td. Post-deploy: verify Promote/Reject visible without horizontal scroll. | S561 |
+| Coupon slot counts mismatch (XP Store vs hunt-pass page) | ✅ Chrome-verified S563 — RESOLVED | Standard 2/2/1, Deluxe 2/2/1, Premium 1/2/1 — matches hunt-pass.tsx canonical values for free accounts. ss_9882u2nc1 | S561 |
+| /admin/encyclopedia action buttons cut off at viewport | ✅ Chrome-verified S563 — RESOLVED | Promote/Reject buttons visible for all rows without horizontal scroll. ss_9224hod6b | S561 |
+| **BUG — P2 (systemic)** | 24 files use native window.confirm() | Chrome MCP blocks 60s on native dialogs. Fix needed: shared `<ConfirmDialog>` component. Files: CommandCenterCard, PreviewModal, admin/invites, add-items/[saleId], shopper/trails/[trailId], shopper/settings, add-items/review (×3), shopper/holds, webhooks, sales/[id] (×2), members, SaleChecklist, label-composer, dashboard (×3), edit-sale/[id], edit-item/[id], SyncQueueModal, pos, consignors | S563 |
 | **BUG — P2** | Orphaned referral code in localStorage | /refer/[code].tsx stores `pendingReferralCode` in localStorage then redirects. register.tsx only reads ref from URL param — never reads localStorage. If user navigates away before registering, code is orphaned. | S561 |
 | **BUG — P3** | /refer/[code] no auth check for logged-in users | Logged-in user visiting a referral link gets redirected to /register with no "already registered" message. | S561 |
 | **BUG — P3** | XP Store HP status flash on first render | On first render: shows "Hunt Pass Inactive". After hydration: corrects to "INITIATE · Hunt Pass Active". Hydration race condition. | S561 |
@@ -264,9 +265,16 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Work
 
-**S561 COMPLETE** — Batch QA pass (findings-only, no fixes). All 5 clusters documented in qa-backlog.md. Key findings: P1 TEAMS onboarding modal blocks every Alice login; P1 consignors.tsx double `/api/` prefix breaks all Consignor Portal API calls; P2 admin/items pagination overflow not fixed by S549; P2 Locations page "Workspace not found" (depends on TEAMS onboarding fix); multiple P2/P3 bugs logged. Full detail in qa-backlog.md Cluster 1–5.
+**S563 IN PROGRESS** — Chrome QA session continuing QA backlog.
 
-**PENDING:** Fix batch for all findings from S561 (no code was written during the QA pass — all items in qa-backlog.md are awaiting dispatch).
+**S563 completed so far:**
+- **QA #309 Consignors E2E** ✅ CHROME-VERIFIED — Page loads (no 500/403), Create works (P1 include fix shipped + verified ss_5631411wg), Update persists, Delete works (P2: native window.confirm() blocks Chrome MCP), Portal token retrieved, /consignor/portal/[token] is truly public, /organizer/locations loads without "Workspace not found". 
+- **QA Coupon Labels** ✅ CHROME-VERIFIED — /coupons XP Store shows Standard/Deluxe/Premium in correct order with 2/2/1 slots for free accounts (ss_9882u2nc1). Matches hunt-pass.tsx canonical values.
+- **QA Encyclopedia Overflow** ✅ CHROME-VERIFIED — /admin/encyclopedia Promote + Reject buttons visible for all rows without horizontal scroll (ss_9224hod6b).
+- **P1 fix shipped + verified** — `consignorController.ts` create/update now include `items` and `payouts` arrays in response (matching listConsignors shape). Prevents TypeError crash when frontend calls `.items.length`. Pushed by Patrick, Railway deployed, Chrome-verified.
+- **window.confirm() systemic audit** — 24 frontend files contain native `window.confirm()` calls. Chrome MCP times out after 60s waiting for native dialogs. Patrick had to manually click OK during delete test. Full list logged in summary. Pending: dispatch dev to build shared `<ConfirmDialog>` component + replace all 24 occurrences.
+
+**S561 COMPLETE** — Batch QA pass (findings-only, no fixes). All 5 clusters documented in qa-backlog.md. Key findings: P1 TEAMS onboarding modal blocks every Alice login; P1 consignors.tsx double `/api/` prefix breaks all Consignor Portal API calls; P2 admin/items pagination overflow not fixed by S549; P2 Locations page "Workspace not found" (depends on TEAMS onboarding fix); multiple P2/P3 bugs logged. Full detail in qa-backlog.md Cluster 1–5.
 
 ---
 
