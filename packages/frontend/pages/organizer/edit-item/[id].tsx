@@ -28,6 +28,7 @@ import RapidCapture, { RapidItem } from '../../../components/RapidCapture';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 import EncyclopediaInlineTip from '../../../components/EncyclopediaInlineTip';
 import EbayCompTiles from '../../../components/EbayCompTiles';
+import VoiceTagButton from '../../../components/VoiceTagButton';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -567,21 +568,33 @@ const EditItemPage = () => {
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">Tags</label>
 
               {/* BUG 4 FIX: Removed curated tag list (AI already suggests tags) */}
-              {/* Custom tag input */}
-              <input
-                type="text"
-                placeholder="Add a custom tag..."
-                className="w-full border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const value = (e.target as HTMLInputElement).value.trim();
-                    if (value && !formData.tags.includes(value)) {
-                      setFormData({ ...formData, tags: [...formData.tags, value] });
-                      (e.target as HTMLInputElement).value = '';
+              {/* Custom tag input + Voice-to-Tag button */}
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  placeholder="Add a custom tag..."
+                  className="flex-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const value = (e.target as HTMLInputElement).value.trim();
+                      if (value && !formData.tags.includes(value)) {
+                        setFormData({ ...formData, tags: [...formData.tags, value] });
+                        (e.target as HTMLInputElement).value = '';
+                      }
                     }
-                  }
-                }}
-              />
+                  }}
+                />
+                <VoiceTagButton
+                  onExtraction={(result) => {
+                    // Append extracted tags to the existing tags array, avoiding duplicates
+                    const newTags = result.tags.filter(tag => !formData.tags.includes(tag));
+                    if (newTags.length > 0) {
+                      setFormData({ ...formData, tags: [...formData.tags, ...newTags] });
+                    }
+                  }}
+                  className="flex-shrink-0"
+                />
+              </div>
 
               {/* Current tags display */}
               <div className="flex flex-wrap gap-1">
@@ -652,6 +665,16 @@ const EditItemPage = () => {
               />
               {/* eBay Comp Tiles — comparable sales reference */}
               {id && <EbayCompTiles itemId={id as string} />}
+
+              {/* Request Appraisal CTA */}
+              <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
+                <Link
+                  href="/organizer/appraisals?open=true"
+                  className="w-full inline-block text-center bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                  Request Appraisal for This Item
+                </Link>
+              </div>
 
               {/* Price Research Panel — consolidated pricing tools */}
               <div className="mt-3">
