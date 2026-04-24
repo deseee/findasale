@@ -141,7 +141,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     }
 
     // Populate category if valid and non-empty
-    if (result.category && CATEGORIES.includes(result.category)) {
+    if (result.category && CATEGORIES.includes(result.category as typeof CATEGORIES[number])) {
       if (!edits.category || shouldOverwrite) {
         setEdits((prev) => ({ ...prev, category: result.category }));
       }
