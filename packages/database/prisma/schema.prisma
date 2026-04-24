@@ -2850,16 +2850,27 @@ model PriceBenchmark {
 }
 
 // ADR-069 Phase 2: Async eBay comp lookup cache
+// Enhanced with fallback tiers and PriceCharting integration
 model ItemCompLookup {
   id              String    @id @default(cuid())
   itemId          String    @unique
   item            Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
+  // eBay comp data
   ebayListingId   String?
   ebayPrice       Float?
   ebayCondition   String?
   ebayCategory    String?
   ebayImageUrl    String?   // Gallery image URL from eBay listing
+
+  // Fallback tier tracking (Task 1)
+  fallbackTier    Int?      @default(1) // 1: title+category, 2: title only, 3: keywords+category, 4: category only
+
+  // PriceCharting integration (Task 2)
+  source          String?   @default("ebay") // "ebay" | "pricecharting" | "blended"
+  priceChartingId String?   // Product ID from PriceCharting
+  priceChartingPrice Float? // Price from PriceCharting
+  priceChartingConfidence String? // HIGH | MEDIUM | LOW
 
   fetchedAt       DateTime?
   expireAt        DateTime?
@@ -2868,6 +2879,7 @@ model ItemCompLookup {
 
   @@index([itemId])
   @@index([fetchedAt])
+  @@index([source])
 }
 
 model EncyclopediaReference {
