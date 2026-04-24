@@ -2,10 +2,6 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../../components/AuthContext';
-import { ArrowLeft, CheckCircle, XCircle, Clock, AlertTriangle, Image as ImageIcon } from 'lucide-react';
-import api from '../../../lib/api';
-import { useToast } from '../../../components/ToastContext';
-
 import { useRouter } from 'next/router';
 import { ArrowLeft, CheckCircle, XCircle, Clock, AlertTriangle, Image as ImageIcon, CreditCard } from 'lucide-react';
 import api from '../../../lib/api';
