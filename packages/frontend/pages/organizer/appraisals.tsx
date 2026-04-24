@@ -6,7 +6,7 @@
  * Tier gating: Community Feed (browse) accessible to all. Submit Request (create) requires PRO.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -52,6 +52,13 @@ const AppraisalsPage = () => {
     feedPage
   );
   const createMutation = useCreateAppraisal();
+
+  // Auto-open form if ?open=true query param is present (from edit-item CTA)
+  useEffect(() => {
+    if (router.query.open === 'true') {
+      setShowSubmitForm(true);
+    }
+  }, [router.query.open]);
 
   // Not used anymore (a la carte model), but keeping import for future reference
   // const { canAccess } = useOrganizerTier(); // Remove if no longer needed
