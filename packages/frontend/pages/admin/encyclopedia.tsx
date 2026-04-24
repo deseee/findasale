@@ -189,15 +189,15 @@ const AdminEncyclopedia = () => {
       {/* Entries List */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full table-fixed">
             <thead className="bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Title</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Category</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Triggered By</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Created</th>
-                <th className="px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Preview</th>
-                <th className="px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Actions</th>
+                <th className="w-[22%] px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Title</th>
+                <th className="w-[16%] px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Category</th>
+                <th className="w-[14%] px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Triggered By</th>
+                <th className="w-[12%] px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Created</th>
+                <th className="w-[20%] px-6 py-3 text-left text-sm font-medium text-warm-900 dark:text-warm-100">Preview</th>
+                <th className="w-[16%] px-6 py-3 text-center text-sm font-medium text-warm-900 dark:text-warm-100">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-warm-200 dark:divide-gray-700">
@@ -226,7 +226,7 @@ const AdminEncyclopedia = () => {
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400 max-w-sm truncate">
                     {getPreview(entry.content)}
                   </td>
-                  <td className="px-6 py-4 text-sm text-center">
+                  <td className="px-6 py-4 text-sm text-center whitespace-nowrap">
                     <div className="flex gap-2 justify-center">
                       <button
                         onClick={() => handlePromote(entry.id)}
