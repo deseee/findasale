@@ -17,12 +17,14 @@ import { useToast } from '../../components/ToastContext';
 import Tooltip from '../../components/Tooltip';
 import AddressAutocomplete from '../../components/AddressAutocomplete';
 import LocationSelector from '../../components/LocationSelector';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import Head from 'next/head';
 import Link from 'next/link';
 
 const CreateSalePage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const { canAccess } = useOrganizerTier();
   const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
 
@@ -233,8 +235,16 @@ const CreateSalePage = () => {
                 <option value="AUCTION">Auction</option>
                 <option value="FLEA_MARKET">Flea Market</option>
                 <option value="CONSIGNMENT">Consignment</option>
-                <option value="RETAIL">Retail Store</option>
+                <option value="RETAIL" disabled={!canAccess('TEAMS')}>
+                  {canAccess('TEAMS') ? 'Retail Store' : 'Retail Store (TEAMS only)'}
+                </option>
               </select>
+              {formData.saleType === 'RETAIL' && !canAccess('TEAMS') && (
+                <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+                  Retail Store is available on the TEAMS plan.{' '}
+                  <Link href="/pricing" className="underline font-medium">Upgrade to unlock</Link>
+                </p>
+              )}
             </div>
 
             {/* Basic Info */}
