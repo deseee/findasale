@@ -90,7 +90,7 @@ function extractEntries(markdown: string): ParsedEntry[] {
 
   for (const block of entryBlocks) {
     // Each entry starts with its title, then has a code block with frontmatter
-    const codeBlockRegex = /^([^\n]*)\n```\n([\s\S]*?)\n```/;
+    const codeBlockRegex = /^([^\n]*)\n+```\n([\s\S]*?)\n```/;
     const codeMatch = block.match(codeBlockRegex);
 
     if (codeMatch) {
