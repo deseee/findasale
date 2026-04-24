@@ -8,7 +8,7 @@ import type { GetServerSideProps } from 'next';
 export const getServerSideProps: GetServerSideProps = async () => {
   return {
     redirect: {
-      destination: '/organizer/settings',
+      destination: '/organizer/settings?tab=profile',
       permanent: false,
     },
   };

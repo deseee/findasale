@@ -295,7 +295,10 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
                 onClick={async () => {
                   try {
                     const url = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/sales/${saleId}/settlement/receipt`;
-                    const response = await fetch(url);
+                    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+                    const response = await fetch(url, {
+                      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                    });
                     if (!response.ok) throw new Error('Failed to download receipt');
                     const blob = await response.blob();
                     const downloadUrl = window.URL.createObjectURL(blob);

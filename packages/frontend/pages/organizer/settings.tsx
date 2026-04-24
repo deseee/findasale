@@ -152,6 +152,12 @@ const OrganizerSettingsPage = () => {
       setAiAssistanceEnabled(false);
     }
 
+    // Set active tab from query param (e.g. /organizer/settings?tab=profile)
+    const validTabs = ['payments', 'notifications', 'profile', 'subscription', 'appearance', 'verification', 'security', 'help', 'ebay'];
+    if (router.query.tab && validTabs.includes(router.query.tab as string)) {
+      setActiveTab(router.query.tab as any);
+    }
+
     // Check for eBay callback success
     if (router.query.ebay_connected === 'true') {
       showToast('eBay account connected successfully', 'success');
@@ -159,7 +165,7 @@ const OrganizerSettingsPage = () => {
       // Remove the query param
       router.replace('/organizer/settings?tab=ebay', undefined, { shallow: true });
     }
-  }, [router.query.ebay_connected, showToast, refetchEbayStatus, router]);
+  }, [router.query.ebay_connected, router.query.tab, showToast, refetchEbayStatus, router]);
 
   // Listen for background eBay enrichment completion — shows toast when GetItem pass finishes
   useEffect(() => {
