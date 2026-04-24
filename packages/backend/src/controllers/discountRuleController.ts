@@ -16,7 +16,7 @@ export const listDiscountRules = async (req: AuthRequest, res: Response) => {
 
     // Get organizer's workspace
     const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+      where: { ownerId: req.user.id },
     });
 
     if (!workspace) {
@@ -66,7 +66,7 @@ export const createDiscountRule = async (req: AuthRequest, res: Response) => {
 
     // Get organizer's workspace
     const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+      where: { ownerId: req.user.id },
     });
 
     if (!workspace) {
@@ -109,7 +109,7 @@ export const updateDiscountRule = async (req: AuthRequest, res: Response) => {
 
     // Get organizer's workspace
     const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+      where: { ownerId: req.user.id },
     });
 
     if (!workspace) {
@@ -166,7 +166,7 @@ export const deleteDiscountRule = async (req: AuthRequest, res: Response) => {
 
     // Get organizer's workspace
     const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { organizerId: req.user.id },
+      where: { ownerId: req.user.id },
     });
 
     if (!workspace) {
