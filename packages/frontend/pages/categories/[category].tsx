@@ -71,7 +71,7 @@ const CategoryPage = () => {
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                 cat === category
                   ? 'bg-amber-600 text-white'
-                  : 'bg-warm-200 text-warm-700 dark:text-warm-300 hover:bg-warm-300'
+                  : 'bg-warm-200 text-warm-800 dark:bg-gray-700 dark:text-gray-100 hover:bg-warm-300 dark:hover:bg-gray-600'
               }`}
             >
               {cat.charAt(0).toUpperCase() + cat.slice(1)}
