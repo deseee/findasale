@@ -638,7 +638,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 aria-label="Lighting indicator"
                 title={showLightingIndicator ? 'Lighting on' : 'Lighting off'}
               >
-                ☀
+                ◑
               </button>
 
               {/* Switch camera button */}
