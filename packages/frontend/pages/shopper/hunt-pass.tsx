@@ -22,7 +22,7 @@ const HuntPassPage = () => {
   const huntPassPrice = 4.99;
 
   // Check if user has active Hunt Pass
-  const hasActiveHuntPass = user?.huntPassActive && user?.huntPassExpiry && new Date(user.huntPassExpiry) > new Date();
+  const hasActiveHuntPass = user?.huntPassActive === true;
 
   const handleSubscribeClick = () => {
     if (!user) {
