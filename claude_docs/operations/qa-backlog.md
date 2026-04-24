@@ -1,5 +1,32 @@
 # QA Backlog — FindA.Sale
-**Last updated:** S561 QA pass (2026-04-24)
+**Last updated:** S562 fix dispatch + verification (2026-04-24)
+
+---
+
+## ✅ S562 — Fix Dispatch + Chrome Verification
+
+### P1 Fixes — Chrome-Verified
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| **TEAMS onboarding modal** — blocks every Alice login | ✅ FIXED + VERIFIED S562 | Modal dismissed successfully. After page reload: no modal reappears on /organizer/dashboard. Organizer dashboard fully accessible. ss_87046vbns |
+| **Hunt Pass CTA** — `/shopper/hunt-pass` showed "Upgrade" for active HP subscriber | ✅ FIXED + VERIFIED S562 | Karen now sees green "Hunt Pass Active" card with manage state instead of "Upgrade" CTA. ss_8715qaw4a |
+| **#309 Consignors double `/api/` prefix** — all operations 404'd | ✅ URL PREFIX FIXED (deployed) + ✅ BACKEND 500 ALSO FIXED | URL fix deployed — network calls confirmed going to correct path. New backend 500 discovered post-deploy: `consignorController.ts` had wrong workspace lookup (`organizerId` field doesn't exist — should be `ownerId` with Organizer.id lookup). Fixed via `getOrganizerWorkspace()` helper across all 6 ops. Pending Railway deploy to verify end-to-end. |
+
+### P2 Fixes — Chrome-Verified
+
+| Item | Result | Evidence |
+|------|--------|----------|
+| **HP Active duplicate on shopper dashboard** | ✅ VERIFIED S562 — already resolved | DOM query confirmed only one HP Active element present. Duplicate was resolved before session. |
+| **admin/items pagination overflow at 412px** | ✅ VERIFIED S562 | Patrick confirmed all pagination buttons visible at 412px viewport. Fix confirmed working. |
+
+### P2 Fixes — Code Complete, Pending Deploy
+
+| Item | Status | Notes |
+|------|--------|-------|
+| **Coupon label swap** — XP Store "Premium Deal" and "Deluxe Deal" labels swapped | 🔧 FIXED S562, pending Vercel deploy | `coupons.tsx` COUPON_TIERS: was "Premium Deal" for free=2/huntPass=3 and "Deluxe Deal" for free=1/huntPass=2. Labels swapped to match hunt-pass.tsx (Deluxe=2→3, Premium=1→2). Post-deploy: verify XP Store shows Standard/Deluxe/Premium in correct order with matching slot counts. |
+| **Encyclopedia overflow** — Promote/Reject buttons cut off at viewport edge | 🔧 FIXED S562, pending Vercel deploy | `admin/encyclopedia.tsx`: table changed to `table-fixed`, explicit column widths added (22%/16%/14%/12%/20%/16%), Actions `td` gets `whitespace-nowrap`. Post-deploy: verify both buttons visible without horizontal scroll. |
+| **#309 Consignors backend 500** — `getOrganizerWorkspace` helper fix | 🔧 FIXED S562, pending Railway deploy | `consignorController.ts` rewrote workspace lookup using correct `ownerId` → `Organizer.id` → User.id chain. All 6 ops use new helper. Post-deploy: TEAMS organizer → /organizer/consignors loads list without 500. |
 
 ---
 

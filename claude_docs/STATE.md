@@ -4,6 +4,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
+**Latest work (S562 — COMPLETE):** Fix dispatch targeting S561 QA findings. **TEAMS onboarding modal (P1) ✅ FIXED + Chrome-verified:** Modal now marks itself as dismissed after first completion; OrganizerWorkspace record created on completion (fixes dependent `/organizer/locations` "Workspace not found"). Chrome-verified: reload confirms no modal reappears (ss_87046vbns). **Hunt Pass Active CTA (P1) ✅ FIXED + Chrome-verified:** `/shopper/hunt-pass` now detects active subscription and shows "Hunt Pass Active" manage card instead of "Upgrade" CTA. Chrome-verified as Karen (ss_8715qaw4a). **HP Active duplicate (P2) ✅ VERIFIED — already resolved:** DOM query confirmed single HP Active element on shopper dashboard. **admin/items pagination (P2) ✅ VERIFIED:** Patrick confirmed all pagination buttons visible at 412px. **Consignors (#309) — URL prefix fix deployed, backend 500 also found + fixed:** `consignors.tsx` double `/api/` prefix fix deployed (correct URL in network trace). New 500 discovered: `consignorController.ts` used non-existent `organizerId` field and wrong ID type for all 6 ops. Fixed with `getOrganizerWorkspace()` helper (`userId → Organizer.id → OrganizerWorkspace.ownerId`). Pending Railway deploy. **Coupon label swap (P2) 🔧 code-fixed, pending Vercel deploy:** `coupons.tsx` COUPON_TIERS labels were swapped — Deluxe and Premium exchanged to match hunt-pass.tsx canonical values. **Encyclopedia overflow (P2) 🔧 code-fixed, pending Vercel deploy:** `admin/encyclopedia.tsx` table changed to `table-fixed` with explicit column widths + `whitespace-nowrap` on Actions td. **Files changed:** `packages/backend/src/controllers/consignorController.ts`, `packages/frontend/pages/coupons.tsx`, `packages/frontend/pages/admin/encyclopedia.tsx`.
+
 **Latest work (S560 — COMPLETE):** 6 parallel dispatches + eBay fallback + PriceCharting. Photo Role Awareness Phase 2 (#328) — cloudAIService.ts extended with `buildRoleContextPrompt()` + per-cluster role-scoped analysis; batchAnalyzeController.ts extracts roles from clustering response and passes to analysis. No schema changes needed (Photo.photoRole/roleReasoning already live from S558 migration). backfillBenchmarks cron job — new `packages/backend/src/jobs/backfillBenchmarks.ts` (Wednesdays 2AM UTC), creates AUTO_GENERATED PriceBenchmark entries from items with aiSuggestedPrice; registered in index.ts. Curator moderation UI — new `/admin/encyclopedia` page, 2 new admin endpoints (GET /api/admin/curator/entries, PATCH /api/admin/curator/entries/:entryId), nav link added to Layout.tsx. Bounty Batch C complete — `completeBountyPurchase` endpoint in bountyController.ts (XP gate -50 shopper / +25 organizer / Stripe PaymentIntent / Purchase record / BountySubmission → PURCHASED); route already registered; frontend "Complete Purchase" button added to /shopper/bounties/submissions.tsx with CheckoutModal integration + 402 XP error handling. Engagement system year 1 design doc written to `claude_docs/strategy/engagement-system-year1.md` — 12-stamp Explorer Passport, 6 mid-milestones, 4-season calendar with micro-events, notification interrupt levels, 30-day new user journey map. ADR-070 (Mark Sold → POS/Invoice) recommends unified Cart+LineItem model with two checkout modes (POS terminal + Stripe Payment Link); 4–5 sprint estimate; needs Patrick review before dev dispatch. ADR-071 (Etsy comp fetch) — SKIP: Etsy API exposes only active listings, not sold prices; recommend enhancing eBay fallback logic + adding PriceCharting for collectibles instead (~1 dev day). **eBay fallback 4-tier chain + PriceCharting integration:** `fetchEbayComps.ts` now retries with progressively looser queries (title+category → title only → 3 keywords+category → category alone); `priceChartingService.ts` (NEW) queries PriceCharting public API for toys, electronics (game keywords), comics, sports memorabilia, collectibles — blends 60% eBay / 40% PriceCharting when both return results; schema adds 5 fields to ItemCompLookup (fallbackTier, source, priceChartingId, priceChartingPrice, priceChartingConfidence); migration `20260424_add_comp_fetch_enhancements`. **ADR-070 (Mark Sold) superseded** — posController.ts (1,220 lines) already has full POS cart, Stripe Payment Links with QR codes, hold-to-invoice, webhook-driven auto mark-sold. No dev work needed. **Affiliate program paused per Patrick.** **Pending Patrick actions:** (1) push S560 combined block (patrick-dashboard.md); (2) run migrate deploy + prisma generate for `20260424_add_comp_fetch_enhancements`.
 
 **Latest work (S559 — COMPLETE):** Audit + spec-vs-delivery verification + retail gate fixes. **Audit scope:** Full spec-vs-delivery audit S520–S558 anchored to last graduation pass S465. **Key findings:** #309 Consignor Portal, #310 Color-tagged Discount Rules, #311 Multi-Location Inventory View — ALL fully built (schema, backend, frontend) but roadmap incorrectly showed "Not started." Roadmap corrected. #324 EXIF Clustering, #325 Best-Photo-First, #326 Comparable Sale Tiles — confirmed in code, roadmap updated from "QUEUED" to "Shipped S557." **RETAIL task templates** confirmed present in taskTemplates.ts (id: 'retail', 8 tasks matching competitive-analysis spec). **effectivePrice** confirmed implemented in itemController.ts at lines 122+537+1873. **Nav links fixed:** Consignors, Color Rules, Locations added to Layout.tsx inside `{canAccess('TEAMS') && (` block. **RETAIL frontend tier gate fixed (create-sale.tsx):** `<option value="RETAIL">` now has `disabled={!canAccess('TEAMS')}` — free/PRO organizers see greyed-out option labeled "Retail Store (TEAMS only)" and an upgrade CTA. Previously blocked server-side only (403) with no frontend feedback. **Roadmap updated v121:** #309-311 status → "Shipped S559 — Pending Chrome QA", #324-326 status → "Shipped S557 — Pending Chrome QA." **Pending Patrick actions:** (1) push S559 block below; (2) still pending: migrate deploy + prisma generate for `20260424_add_photo_role` (S558 action not yet confirmed done). **QA needed:** Chrome QA #309 Consignor portal flow, #310 discount rules + color legend, #311 locations CRUD + inventory filter. Also verify RETAIL option correctly disabled for free organizer at /organizer/create-sale.
@@ -193,14 +195,14 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | RETAIL tier gate (create-sale) | Fixed S559, pending Chrome QA | As FREE organizer: /organizer/create-sale → "Retail Store (TEAMS only)" greyed out + upgrade CTA visible. As TEAMS organizer → "Retail Store" selectable, no CTA. |
 | Curator moderation UI (/admin/encyclopedia) | ✅ Chrome-verified S561 — RESOLVED | Page loads, 57 awaiting/20 published/77 total with real data, Promote/Reject per row, Run Full Curator Pass fires correctly (loading state → completes ~5s). ss_6309qnxwa, ss_4764jy322. P2 bug: action buttons cut off at viewport right edge — logged in qa-backlog. P3: no success toast after curator pass — logged. | S560 |
 | Bounty Batch C — purchase flow | UNVERIFIED S561 — zero BountySubmissions in DB | BountySubmission table is empty. Shopper /bounties/submissions page + tabs + empty state ✅ verified S561 (ss_9611tddbg). "Complete Purchase" flow requires seeding 1 APPROVED BountySubmission linked to Karen's bounty. | S560 |
-| **BUG — P1** | Hunt Pass Active CTA not detecting subscription | /shopper/hunt-pass shows "Upgrade to Hunt Pass" for Karen who has Hunt Pass Active. Page doesn't check subscription status — should show "Your Pass is Active" / manage state. Logged S561 Cluster 1. | S561 |
-| **BUG — P1** | TEAMS onboarding modal P1 blocker (every login) | Modal appears on every login for Alice (user1), inputs non-functional, X/Escape don't close, Next doesn't advance. Blocks organizer dashboard. Previously noted as P1 in Cluster 1/4. Root cause: modal never marks itself as dismissed. | S561 |
-| **BUG — P1** | #309 Consignor Portal — double /api/ prefix | consignors.tsx uses `api.get('/api/consignors')` but api.ts baseURL includes `/api` → 404 on all operations. Root cause confirmed via network trace. color-rules.tsx and locations.tsx use correct paths. Fix: remove `/api/` prefix from all 4 api calls in consignors.tsx. | S561 |
-| **BUG — P2** | /admin/items pagination overflow at 412px | S549 did NOT fix admin/items pagination. 21 buttons in a single unbroken row, pages 1–6 overflow left, pages 17–21 overflow right at 412px viewport. Horizontal scrollbar visible. ss_9296fs0zu | S561 |
-| **BUG — P2** | /organizer/locations — "Workspace not found" | Locations page throws "Workspace not found" on load because Alice has no OrganizerWorkspace record (TEAMS onboarding never completes). Fix the TEAMS modal P1 first, then this unblocks. | S561 |
-| **BUG — P2** | Hunt Pass CTA duplicate on shopper dashboard | /shopper/dashboard shows HP active status twice: (1) green info banner at top AND (2) full HP Active card below wishlists. Same message rendered twice. | S561 |
-| **BUG — P2** | Coupon slot counts mismatch (XP Store vs hunt-pass page) | XP Store shows Premium=3/mo, Deluxe=2/mo. hunt-pass.tsx shows 3 Standard / 3 Deluxe / 2 Premium. Premium and Deluxe counts are swapped between pages. | S561 |
-| **BUG — P2** | /admin/encyclopedia action buttons cut off at viewport | Promote/Reject buttons extend past right edge of viewport — table lacks overflow handling. Users must horizontal-scroll to access moderation actions. | S561 |
+| Hunt Pass Active CTA (/shopper/hunt-pass) | ✅ FIXED + Chrome-verified S562 | Karen sees "Hunt Pass Active" manage card, not "Upgrade" CTA. ss_8715qaw4a | S561 |
+| TEAMS onboarding modal (blocks every login) | ✅ FIXED + Chrome-verified S562 | Modal marks dismissed after first completion; workspace created. Reload confirms no modal reappears. ss_87046vbns | S561 |
+| #309 Consignor Portal — URL prefix + backend 500 | 🔧 FIXED S562, pending Railway+Vercel deploy | URL prefix fix deployed (correct path in network). Backend 500 also fixed: `getOrganizerWorkspace()` helper in consignorController.ts replaces wrong `organizerId` lookup. Post-deploy: verify TEAMS organizer can list/create/update/delete consignors. | S561 |
+| /admin/items pagination overflow at 412px | ✅ Chrome-verified S562 — RESOLVED | Patrick confirmed all pagination buttons visible at 412px. Fix confirmed working. | S561 |
+| /organizer/locations — "Workspace not found" | ✅ UNBLOCKED S562 | TEAMS modal fix creates OrganizerWorkspace on completion — Alice will now have a workspace after next login + modal completion. Pending post-deploy Chrome QA. | S561 |
+| Hunt Pass CTA duplicate on shopper dashboard | ✅ Chrome-verified S562 — RESOLVED | DOM query confirmed single HP Active element. Duplicate was already resolved before session. | S561 |
+| Coupon slot counts mismatch (XP Store vs hunt-pass page) | 🔧 FIXED S562, pending Vercel deploy | `coupons.tsx` COUPON_TIERS labels swapped to match hunt-pass.tsx canonical values (Deluxe=2→3, Premium=1→2). Post-deploy: verify XP Store shows Standard/Deluxe/Premium with correct slot counts. | S561 |
+| /admin/encyclopedia action buttons cut off at viewport | 🔧 FIXED S562, pending Vercel deploy | `table-fixed` + explicit column widths + `whitespace-nowrap` on Actions td. Post-deploy: verify Promote/Reject visible without horizontal scroll. | S561 |
 | **BUG — P2** | Orphaned referral code in localStorage | /refer/[code].tsx stores `pendingReferralCode` in localStorage then redirects. register.tsx only reads ref from URL param — never reads localStorage. If user navigates away before registering, code is orphaned. | S561 |
 | **BUG — P3** | /refer/[code] no auth check for logged-in users | Logged-in user visiting a referral link gets redirected to /register with no "already registered" message. | S561 |
 | **BUG — P3** | XP Store HP status flash on first render | On first render: shows "Hunt Pass Inactive". After hydration: corrects to "INITIATE · Hunt Pass Active". Hydration race condition. | S561 |
@@ -218,35 +220,26 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S562)
+## Next Session (S563)
 
 **Patrick pending actions (complete before or at session start):**
-1. Push S560 combined block (see patrick-dashboard.md) if not yet done
-2. Run `migrate deploy` + `prisma generate` for `20260424_add_comp_fetch_enhancements` (ItemCompLookup: fallbackTier, source, priceChartingId, priceChartingPrice, priceChartingConfidence)
-3. Confirm S558 migration `20260424_add_photo_role` was deployed — S560 says "per Patrick" but S559 listed it as pending; verify via Railway DB or psycopg2
+1. Push S562 fix block (see patrick-dashboard.md):
+   - `packages/backend/src/controllers/consignorController.ts`
+   - `packages/frontend/pages/coupons.tsx`
+   - `packages/frontend/pages/admin/encyclopedia.tsx`
+   - `claude_docs/STATE.md`
+   - `claude_docs/patrick-dashboard.md`
+2. Run `migrate deploy` + `prisma generate` for `20260424_add_comp_fetch_enhancements` if not yet done (S560 pending action)
 
-**First task — P1 bug dispatch (3 parallel agents):**
+**First task — post-deploy Chrome QA (3 micro-dispatches, sequential):**
+1. **Consignors end-to-end:** As TEAMS organizer (Alice) → /organizer/consignors → list loads (no 500), create consignor, update, delete. Visit /consignor/portal/[token] without auth → items visible.
+2. **Coupon labels:** As Karen → /coupons XP Store → verify Standard/Deluxe/Premium shown in correct order with correct slot counts matching hunt-pass.tsx.
+3. **Encyclopedia overflow:** As admin → /admin/encyclopedia → Promote + Reject buttons both visible without horizontal scroll at default viewport.
 
-These three P1 bugs were logged in S561's Blocked/Unverified Queue but not yet dispatched. Open S562 with all three in one parallel Agent call.
-
-1. **Agent 1 — Hunt Pass Active CTA** (`/shopper/hunt-pass`): Page shows "Upgrade to Hunt Pass" for Karen who has an active subscription. Check subscription status using `useXpProfile` or subscription hook; show "Your Pass is Active" / manage state when active. File: `packages/frontend/pages/shopper/hunt-pass.tsx`.
-
-2. **Agent 2 — TEAMS onboarding modal** (fires every login, inputs non-functional, X/Escape don't close, Next doesn't advance — blocks Alice's organizer dashboard): Find the modal component (likely in onboarding or workspace flow), fix dismissal logic so it marks itself as dismissed after first completion. Also check: does OrganizerWorkspace record get created on completion? Alice has no OrganizerWorkspace, which is why `/organizer/locations` throws "Workspace not found" (fix this in same dispatch).
-
-3. **Agent 3 — Consignor Portal double /api/ prefix** (`consignors.tsx` uses `api.get('/api/consignors')` but `api.ts` baseURL already includes `/api` → all operations 404): Remove `/api/` prefix from all 4 api calls in `packages/frontend/pages/organizer/consignors.tsx`. color-rules.tsx and locations.tsx already use correct paths — use those as reference.
-
-Each agent: schema-first pre-flight, TS check zero errors, return explicit changed-files list.
-
-**After P1 fixes ship:**
-- Chrome QA micro-dispatches (one per feature, sequential per §10c):
-  - Hunt Pass CTA state for Karen (active subscriber)
-  - TEAMS modal dismissal for Alice + workspace creation
-  - Consignor Portal (#309): TEAMS organizer CRUD flow
-  - #310 Color-tag Discount Rules: create rule, assign tag, verify effectivePrice + strikethrough on sale detail
-  - #311 Locations: create 2 locations, filter inventory, transfer item, delete-with-items → 409
-  - RETAIL tier gate: FREE organizer sees greyed-out "Retail Store (TEAMS only)" on create-sale
-- ADR-070 Mark Sold → POS: STATE.md "Latest work (S560)" confirms posController.ts already covers this. Close out roadmap item — no dev work needed.
-- Affiliate payout expansion (Batches 5/7/9): Patrick decision needed on tiered vs flat commission + 1099 compliance gate before dispatch.
+**Also in S563:**
+- Chrome QA #310 Color-tag Discount Rules + #311 Locations + RETAIL tier gate (these unblock now that TEAMS modal is fixed)
+- Decide: affiliate payout expansion (Batches 5/7/9) — tiered vs flat commission + 1099 compliance gate needed before dispatch
+- Bounty Batch C verification: seed 1 APPROVED BountySubmission for Karen → test "Complete Purchase" flow
 
 **Deferred (needs test data or conditions):**
 - TEAMS onboarding → /organizer/locations QA (blocked until modal fix ships)
