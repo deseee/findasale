@@ -524,7 +524,8 @@ async function computePhotoQualityScore(imageBase64: string): Promise<number> {
 export async function analyzeItemImages(
   buffers: Buffer[],
   mimeTypes: string[] = [],
-  comps?: ComparableSale[]
+  comps?: ComparableSale[],
+  clusterPhotos?: ClusterPhoto[]
 ): Promise<AITagResult | null> {
   if (!isCloudAIAvailable()) return null;
 
@@ -596,8 +597,8 @@ export async function analyzeItemImages(
     // Vision API unavailable or quota exceeded — proceed without labels
   }
 
-  // Multi-image Haiku analysis
-  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, visionLabels, comps);
+  // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, visionLabels, comps, clusterPhotos);
 
   // Sprint 1: Add curated tag suggestions (non-blocking)
   try {
@@ -625,11 +626,47 @@ export async function analyzeItemImages(
  * Claude Haiku structured analysis for multiple images of the same item.
  * Passes all images in a single API call for holistic multi-view understanding.
  */
+/**
+ * Phase 2: Build role-context prompt sections based on cluster photo roles.
+ * Injects role-specific analysis guidance into per-cluster analysis.
+ */
+function buildRoleContextPrompt(clusterPhotos?: ClusterPhoto[]): string {
+  if (!clusterPhotos || clusterPhotos.length === 0) {
+    return '';
+  }
+
+  const roleContexts: string[] = [];
+  const uniqueRoles = new Set(clusterPhotos.map(p => p.photoRole));
+
+  if (uniqueRoles.has('BACK_STAMP')) {
+    roleContexts.push('These images show the back/underside. Look for maker marks, hallmarks, pottery marks, silver marks. CRITICAL for brand/maker ID and pricing. Prioritize text/marks for brand, category, origin.');
+  }
+
+  if (uniqueRoles.has('DETAIL_DAMAGE')) {
+    roleContexts.push('Close-up of condition issues — chips, cracks, crazing, staining, repairs, edge wear. Determines condition grade. Grade conservatively.');
+  }
+
+  if (uniqueRoles.has('LABEL_BRAND')) {
+    roleContexts.push('Contains text labels, barcodes, serial info. Extract brand names, model/style numbers, dates, care instructions. Higher priority than general Vision labels.');
+  }
+
+  if (uniqueRoles.has('MULTI_ANGLE')) {
+    roleContexts.push('Alternate perspective. Use to confirm details from primary shots.');
+  }
+
+  if (roleContexts.length === 0) {
+    return '';
+  }
+
+  return `\n\n=== PHOTO ROLE CONTEXT ===\n${roleContexts.join('\n')}\nUse role-based context above. Prioritize signals from specialized photos (BACK_STAMP for brand, DETAIL_DAMAGE for condition) over generic labels. If a photo role contradicts visual evidence, note internally but don't let role classification bias analysis of what is actually visible.`;
+}
+
 async function getHaikuAnalysisMultiImage(
   imageBase64Array: string[],
   mimeTypes: string[],
   visionLabels: string[],
-  comps?: ComparableSale[]
+  comps?: ComparableSale[],
+  clusterPhotos?: ClusterPhoto[]
 ): Promise<AITagResult> {
   const labelContext =
     visionLabels.length > 0
@@ -645,6 +682,8 @@ async function getHaikuAnalysisMultiImage(
   const compsContext = comps && comps.length > 0
     ? `\n\nRecent comparable sales for this category: ${comps.map(c => `"${c.title}" sold for $${c.price}`).join('; ')}. Use these as your primary pricing reference.`
     : '';
+
+  const roleContext = buildRoleContextPrompt(clusterPhotos);
 
   const imageCount = imageBase64Array.length;
   const multiImagePrompt = imageCount > 1
@@ -675,7 +714,7 @@ ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`
     // Add text prompt at the end
     contentArray.push({
       type: 'text',
-      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${sparseImageNote}${compsContext}
+      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${sparseImageNote}${compsContext}${roleContext}
 
 Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 

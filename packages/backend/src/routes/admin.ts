@@ -24,6 +24,8 @@ import {
   runCuratorReviewJob,
   getCuratorStatus,
   runCuratorReviewJobSingle,
+  getCuratorEntries,
+  updateCuratorEntry,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -99,5 +101,7 @@ router.patch('/referral-fraud-signals/:signalId/review', reviewFraudSignal);
 router.post('/curator/run', runCuratorReviewJob);
 router.get('/curator/status', getCuratorStatus);
 router.post('/curator/run/:entryId', runCuratorReviewJobSingle);
+router.get('/curator/entries', getCuratorEntries);
+router.patch('/curator/entries/:entryId', updateCuratorEntry);
 
 export default router;

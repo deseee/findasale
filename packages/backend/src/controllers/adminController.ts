@@ -936,3 +936,60 @@ export const runCuratorReviewJobSingle = async (req: AuthRequest, res: Response)
     res.status(500).json({ message: 'Failed to run curator review', error: error.message });
   }
 };
+
+// GET /api/admin/curator/entries — get all AUTO_GENERATED encyclopedia entries awaiting review
+export const getCuratorEntries = async (req: AuthRequest, res: Response) => {
+  try {
+    const entries = await prisma.encyclopediaEntry.findMany({
+      where: { status: 'AUTO_GENERATED' },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        category: true,
+        content: true,
+        triggerItemId: true,
+        createdAt: true,
+        status: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ entries });
+  } catch (error: any) {
+    console.error('Error fetching curator entries:', error);
+    res.status(500).json({ message: 'Failed to fetch curator entries', error: error.message });
+  }
+};
+
+// PATCH /api/admin/curator/entries/:entryId — update encyclopedia entry status (e.g., mark as REJECTED)
+export const updateCuratorEntry = async (req: AuthRequest, res: Response) => {
+  try {
+    const { entryId } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    if (!['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'FLAGGED', 'AUTO_GENERATED', 'UNDER_REVIEW', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    const updated = await prisma.encyclopediaEntry.update({
+      where: { id: entryId },
+      data: { status },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        status: true,
+      },
+    });
+
+    res.json(updated);
+  } catch (error: any) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ message: 'Encyclopedia entry not found' });
+    }
+    console.error('Error updating curator entry:', error);
+    res.status(500).json({ message: 'Failed to update curator entry', error: error.message });
+  }
+};

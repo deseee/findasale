@@ -17,7 +17,8 @@ import { AuthRequest } from '../middleware/auth';
 import {
   analyzeItemImages,
   isCloudAIAvailable,
-  clusterPhotos
+  clusterPhotos,
+  ClusterPhoto
 } from '../services/cloudAIService';
 import { prisma } from '../lib/prisma';
 import axios from 'axios';
@@ -205,6 +206,9 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           // Get images for this cluster
           const clusterImages = photoIndices.map(idx => downloadedImages[idx]);
 
+          // Phase 2: Build ClusterPhoto array for role-context analysis
+          const clusterPhotosForAnalysis: ClusterPhoto[] = [];
+
           // Create Photo records with roles (Phase 2)
           try {
             for (let i = 0; i < photoIndices.length; i++) {
@@ -218,6 +222,13 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               if (!validRoles.includes(photoRole)) {
                 photoRole = 'UNKNOWN';
               }
+
+              // Track for role-context analysis (Phase 2)
+              clusterPhotosForAnalysis.push({
+                index: i,
+                photoRole: photoRole as any,
+                roleReasoning: photoMetadata.roleReasoning,
+              });
 
               await prisma.photo.create({
                 data: {
@@ -239,7 +250,8 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             try {
               const imageBuffers = clusterImages.map(img => img.buffer);
               const mimeTypes = clusterImages.map(img => img.mimeType);
-              analysis = await analyzeItemImages(imageBuffers, mimeTypes);
+              // Phase 2: Pass clusterPhotos for role-context analysis
+              analysis = await analyzeItemImages(imageBuffers, mimeTypes, undefined, clusterPhotosForAnalysis);
             } catch (err: any) {
               console.error(`Cloud AI error for item ${itemId}:`, err.message);
             }

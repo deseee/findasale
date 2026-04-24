@@ -1021,6 +1021,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                         <Link href="/admin/invites" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                           <Users size={14} className="inline mr-2" /> Invites
                         </Link>
+                        <Link href="/admin/encyclopedia" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
+                          <BookOpen size={14} className="inline mr-2" /> Encyclopedia
+                        </Link>
                       </>
                     )}
 

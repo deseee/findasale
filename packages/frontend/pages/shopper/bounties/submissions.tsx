@@ -6,6 +6,11 @@ import { ArrowLeft, CheckCircle, XCircle, Clock, AlertTriangle, Image as ImageIc
 import api from '../../../lib/api';
 import { useToast } from '../../../components/ToastContext';
 
+import { useRouter } from 'next/router';
+import { ArrowLeft, CheckCircle, XCircle, Clock, AlertTriangle, Image as ImageIcon, CreditCard } from 'lucide-react';
+import api from '../../../lib/api';
+import { useToast } from '../../../components/ToastContext';
+import CheckoutModal from '../../../components/CheckoutModal';
 interface BountySubmission {
   id: string;
   bounty: {
@@ -57,7 +62,10 @@ export default function SubmissionsPage() {
     isSubmitting: false,
   });
   const [approvingId, setApprovingId] = useState<string | null>(null);
-
+  const [purchasingId, setPurchasingId] = useState<string | null>(null);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutSubmission, setCheckoutSubmission] = useState<BountySubmission | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   useEffect(() => {
     loadSubmissions();
   }, [activeFilter]);
@@ -121,6 +129,41 @@ export default function SubmissionsPage() {
     }
   };
 
+  const handleCompletePurchase = async (submission: BountySubmission) => {
+    try {
+      setPurchasingId(submission.id);
+      setCheckoutError(null);
+      const response = await api.post(`/bounties/submissions/${submission.id}/purchase`);
+      setCheckoutSubmission(submission);
+      setCheckoutOpen(true);
+      showToast('Ready to complete purchase. Please proceed with payment.', 'info');
+    } catch (error: any) {
+      console.error('Error initiating bounty purchase:', error);
+      if (error.response?.status === 402) {
+        setCheckoutError('You need at least 50 XP to complete this bounty purchase. Visit /coupons to earn more XP.');
+        showToast('Insufficient XP to complete this purchase', 'error');
+      } else {
+        const errorMsg = error.response?.data?.message || 'Failed to initiate purchase';
+        setCheckoutError(errorMsg);
+        showToast(errorMsg, 'error');
+      }
+    } finally {
+      setPurchasingId(null);
+    }
+  };
+
+  const handleCheckoutClose = () => {
+    setCheckoutOpen(false);
+    setCheckoutSubmission(null);
+    setCheckoutError(null);
+  };
+
+  const handleCheckoutSuccess = () => {
+    showToast('Purchase completed successfully!', 'success');
+    setCheckoutOpen(false);
+    setCheckoutSubmission(null);
+    loadSubmissions();
+  };
   const isExpiringSoon = (expiresAt: string): boolean => {
     const now = new Date();
     const expireDate = new Date(expiresAt);
@@ -359,11 +402,47 @@ export default function SubmissionsPage() {
                           </button>
                         </div>
                       )}
+
+                      {submission.status === 'APPROVED' && !expired && (
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleCompletePurchase(submission)}
+                            disabled={purchasingId === submission.id}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                          >
+                            <CreditCard size={16} />
+                            {purchasingId === submission.id ? 'Processing...' : 'Complete Purchase'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               );
             })}
+
+      {/* Checkout Modal for Bounty Purchase */}
+      {checkoutOpen && checkoutSubmission && (
+        <CheckoutModal
+          itemId={checkoutSubmission.item.id}
+          itemTitle={checkoutSubmission.item.title}
+          onClose={handleCheckoutClose}
+          onSuccess={handleCheckoutSuccess}
+        />
+      )}
+
+      {/* Insufficient XP Error */}
+      {checkoutError && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 shadow-lg">
+          <p className="text-sm text-red-700 dark:text-red-300">{checkoutError}</p>
+          <button
+            onClick={() => setCheckoutError(null)}
+            className="text-xs text-red-600 dark:text-red-400 hover:underline mt-2"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
           </div>
         )}
       </div>

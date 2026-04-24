@@ -204,6 +204,7 @@ import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJ
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature #XXX: Retail Mode auto-renewal
 import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature #XXX: Referral reputation score recomputation
 import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
+import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Phase 1: Backfill PriceBenchmark from Items with aiSuggestedPrice
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
