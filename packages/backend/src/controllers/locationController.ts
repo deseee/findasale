@@ -144,6 +144,12 @@ export const createLocation = async (req: AuthRequest, res: Response) => {
             email: true,
           },
         },
+        _count: {
+          select: {
+            items: true,
+            sales: true,
+          },
+        },
         createdAt: true,
         updatedAt: true,
       },
@@ -234,6 +240,12 @@ export const updateLocation = async (req: AuthRequest, res: Response) => {
             id: true,
             name: true,
             email: true,
+          },
+        },
+        _count: {
+          select: {
+            items: true,
+            sales: true,
           },
         },
         createdAt: true,
