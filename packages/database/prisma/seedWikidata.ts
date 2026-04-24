@@ -474,74 +474,71 @@ async function seedWikidata() {
 
     console.log('Inserting into database...');
 
-    const result = await prisma.$transaction(async (tx) => {
-      let entriesInserted = 0;
-      let entriesSkipped = 0;
-      let benchmarksInserted = 0;
+    // Run directly without transaction — Railway proxy latency causes P2028 timeout at 5s
+    let entriesInserted = 0;
+    let entriesSkipped = 0;
+    let benchmarksInserted = 0;
 
-      for (const { title, data } of allEntries) {
-        const slug = toSlug(title);
+    for (const { title, data } of allEntries) {
+      const slug = toSlug(title);
 
-        try {
-          // Check if slug already exists
-          const existing = await tx.encyclopediaEntry.findUnique({
-            where: { slug },
-          });
+      try {
+        // Check if slug already exists
+        const existing = await prisma.encyclopediaEntry.findUnique({
+          where: { slug },
+        });
 
-          if (existing) {
-            entriesSkipped++;
-            continue;
-          }
+        if (existing) {
+          entriesSkipped++;
+          continue;
+        }
 
-          // Create entry
-          const entry = await tx.encyclopediaEntry.create({
-            data: {
-              slug,
-              title: data.title,
-              subtitle: `Auto-generated from Wikidata`,
-              content: `## Overview\n\n${data.description}`,
-              category: data.category,
-              tags: data.tags,
-              status: 'AUTO_GENERATED',
-              authorId: SYSTEM_USER_ID,
-            },
-          });
+        // Create entry
+        const entry = await prisma.encyclopediaEntry.create({
+          data: {
+            slug,
+            title: data.title,
+            subtitle: `Auto-generated from Wikidata`,
+            content: `## Overview\n\n${data.description}`,
+            category: data.category,
+            tags: data.tags,
+            status: 'AUTO_GENERATED',
+            authorId: SYSTEM_USER_ID,
+          },
+        });
 
-          entriesInserted++;
+        entriesInserted++;
 
-          // Create paired price benchmark
-          await tx.priceBenchmark.create({
-            data: {
-              entryId: entry.id,
-              condition: 'USED',
-              region: 'National',
-              priceRangeLow: data.priceLow,
-              priceRangeHigh: data.priceHigh,
-              dataSource: 'haiku_inferred',
-            },
-          });
+        // Create paired price benchmark
+        await prisma.priceBenchmark.create({
+          data: {
+            entryId: entry.id,
+            condition: 'USED',
+            region: 'National',
+            priceRangeLow: data.priceLow,
+            priceRangeHigh: data.priceHigh,
+            dataSource: 'haiku_inferred',
+          },
+        });
 
-          benchmarksInserted++;
-        } catch (error) {
-          if (
-            error instanceof Error &&
-            error.message.includes('Unique constraint')
-          ) {
-            entriesSkipped++;
-          } else {
-            console.error(`  Error creating entry "${slug}":`, error);
-          }
+        benchmarksInserted++;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes('Unique constraint')
+        ) {
+          entriesSkipped++;
+        } else {
+          console.error(`  Error creating entry "${slug}":`, error);
         }
       }
-
-      return { entriesInserted, entriesSkipped, benchmarksInserted };
-    });
+    }
 
     console.log(`\n✅ Seed complete!`);
     console.log(
-      `   Entries: inserted ${result.entriesInserted}, skipped ${result.entriesSkipped} (duplicates)`
+      `   Entries: inserted ${entriesInserted}, skipped ${entriesSkipped} (duplicates)`
     );
-    console.log(`   Benchmarks: inserted ${result.benchmarksInserted}`);
+    console.log(`   Benchmarks: inserted ${benchmarksInserted}`);
   } catch (error) {
     console.error('\n❌ Seeding failed:', error);
     process.exit(1);
