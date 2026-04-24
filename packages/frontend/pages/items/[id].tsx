@@ -1163,6 +1163,3 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     return { props: { ogData: null } };
   }
 }
-Data: null } };
-  }
-}
