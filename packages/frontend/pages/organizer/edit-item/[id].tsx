@@ -27,6 +27,7 @@ import { CURATED_TAGS } from '../../../../shared/src'; // Sprint 1: Listing Fact
 import RapidCapture, { RapidItem } from '../../../components/RapidCapture';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 import EncyclopediaInlineTip from '../../../components/EncyclopediaInlineTip';
+import EbayCompTiles from '../../../components/EbayCompTiles';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -649,6 +650,8 @@ const EditItemPage = () => {
                 tags={formData.tags}
                 title={formData.title}
               />
+              {/* eBay Comp Tiles — comparable sales reference */}
+              {id && <EbayCompTiles itemId={id as string} />}
 
               {/* Price Research Panel — consolidated pricing tools */}
               <div className="mt-3">
