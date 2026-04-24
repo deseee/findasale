@@ -1,8 +1,28 @@
-# Patrick's Dashboard — S560 Complete
+# Patrick's Dashboard — S561 Complete (QA Pass)
 
-## 🔥 S560 — Photo Role Phase 2, backfillBenchmarks, Curator UI, Bounty Batch C, Engagement Design Doc, eBay Fallback + PriceCharting
+## 🔍 S561 — Batch QA Pass (findings documented, no fixes written)
 
-**One-line summary:** Seven dispatches total. Photo Role Awareness Phase 2 live. backfillBenchmarks cron added. Curator moderation UI at /admin/encyclopedia. Bounty Batch C complete. Engagement system Year 1 design doc written. eBay comp fetch upgraded to 4-tier fallback. PriceCharting.com integrated for toys/games/comics/collectibles pricing. ADR-070 superseded — POS is already fully built. Etsy skipped per ADR-071.
+**One-line summary:** Full product walkthrough across 5 clusters. 3 P1 bugs found, ~10 P2/P3 bugs logged. All findings in `claude_docs/operations/qa-backlog.md`. Nothing was fixed this session — the backlog is the output. Next session should be a fix dispatch targeting P1s first.
+
+---
+
+### Top bugs to fix next (priority order)
+
+**P1 — TEAMS onboarding modal blocks every Alice login** (`packages/frontend` — modal never marks dismissed). Inputs non-functional, X/Escape don't close. Blocks all TEAMS organizer testing.
+
+**P1 — Consignors.tsx double `/api/` prefix** (`packages/frontend/pages/organizer/consignors.tsx`). All 4 API calls have `/api/consignors` but api.ts baseURL already includes `/api`. Result: 404 on every Consignor Portal operation. Simple find-replace fix.
+
+**P2 — admin/items pagination overflow at mobile** — S549 did NOT fix this. 21 page buttons in a single row overflow both sides of the 412px viewport.
+
+**P2 — Hunt Pass CTA not detecting active subscription** — `/shopper/hunt-pass` shows "Upgrade" button even when Karen has Hunt Pass Active. Page doesn't check subscription state.
+
+**P2 — Coupon slot counts mismatch** — XP Store shows Premium=3/Deluxe=2 per month. hunt-pass.tsx shows 3 Standard / 3 Deluxe / 2 Premium. The two are swapped.
+
+**P2 — HP Active shown twice on shopper dashboard** — green banner AND full HP Active card both render simultaneously.
+
+**P2 — /organizer/locations "Workspace not found"** — depends on TEAMS modal fix above.
+
+---
 
 ---
 
@@ -76,8 +96,18 @@ npx prisma generate
 
 ---
 
-### S561 — what's next
+### S562 — what's next
 
-- Chrome QA on S559 items (#309 Consignor Portal, #310 Color-tag Discounts, #311 Locations, RETAIL gate)
-- Engagement system Year 1 dev dispatch (doc is ready — all decisions locked)
-- eBay fallback enhancement for parent-category matching (small follow-on if needed after testing)
+Fix dispatch for S561 QA findings. Recommended order:
+1. Fix TEAMS onboarding modal (P1) — unblocks TEAMS feature testing and workspace dependency
+2. Fix consignors.tsx double `/api/` prefix (P1) — simple find-replace, 1 file
+3. Fix Hunt Pass CTA subscription detection (P2)
+4. Fix coupon slot count mismatch (P2) — confirm correct values then patch one file
+5. Fix HP Active duplicate on dashboard (P2)
+6. Fix admin/items pagination mobile overflow (P2)
+7. Fix encyclopedia table overflow (P2)
+
+After fixes ship, verify bounty "Complete Purchase" flow by seeding 1 APPROVED BountySubmission for Karen.
+
+**S560 push block** (from previous session — if not yet pushed, it's still needed):
+See "Patrick action needed — Push S560" section below.

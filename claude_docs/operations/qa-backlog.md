@@ -1,20 +1,91 @@
 # QA Backlog — FindA.Sale
-**Last updated:** S531 wrap (2026-04-21)
+**Last updated:** S561 QA pass (2026-04-24)
 
 ---
 
-## 🔔 S531 Fixes — Pending Chrome QA
+## 🔍 S561 QA Findings — Batch Pass (findings-only, no fixes)
 
-All 6 fixes shipped S531. Vercel green. Push confirmed by Patrick. Verify each with Chrome MCP before clearing.
+### Cluster 1 — Nav & Auth Flows
 
-| # | Feature | Fix | What to Verify |
-|---|---------|-----|----------------|
-| #267 | RSVP Bonus XP | Routes were never registered in sales.ts + DISCOVERY notification missing from rsvpController | RSVP to a sale as Karen → 2 XP awards → Discoveries notification appears at /shopper/notifications |
-| #241 | Brand Kit PDFs | Routes used `authenticate`; browser `<a href>` sends no auth header → 404. Fixed to `optionalAuthenticate`; PRO gate stays in controller | Open /organizer/brand-kit as PRO organizer → click each of 4 PDF links → file downloads (not 404) |
-| #7 | Shopper Referral Rewards | Page /shopper/referrals didn't exist. Created using existing useReferral hook + backend endpoints | Navigate to /shopper/referrals → referral link displays → share buttons present → stats show |
-| #228 | SettlementWizard fee % | Backend returns commissionRate as integer (8 = 8%). Frontend was doing ×100 again showing 800%. Removed double-multiply | Open settlement wizard → Receipt step → fee shows "2%" or correct %, NOT "200%" |
-| per-sale | Analytics filter | Top stat cards always read aggregate `insights` state, ignoring selectedSaleId. Now conditionally shows PerformanceMetrics when sale selected. Stat cards now show Revenue / Net Revenue / Conversion Rate / Unique Buyers / Avg Cart Value | Select a sale from filter on /organizer/insights → stat cards change to per-sale data |
-| #266 | AvatarDropdown nav link | Hardcoded to /organizer/profile for all users. Now role-conditional | As shopper: avatar dropdown → shows "Explorer Profile" → /shopper/explorer-profile |
+| # | Item | Result | Evidence / Notes |
+|---|------|--------|-----------------|
+| S534 | AvatarDropdown "Explorer Profile" link (shopper) | ✅ | As Karen: dropdown shows "Explorer Profile" → /shopper/explorer-profile. Desktop ref_182 + mobile ref_219 both correct. ss_2914hd6om |
+| S534 | AvatarDropdown CONNECT → Explorer's Guild | ✅ | As Karen: Explorer's Guild → /shopper/guild-primer. As Alice: same. ss_13086r2t9, ss_1997oq62b |
+| S540 | AvatarDropdown CONNECT → Rewards | ✅ | As Karen: Rewards → /coupons. As Alice: Rewards → /coupons. Both correct. |
+| S542 | Explore nav dropdown | ✅ | Feed / Calendar / Wishlist present. ss_68267lu5f |
+| S534 | /shopper/guild-primer loads | ✅ | Title "Explorer's Guild", personalized rank bar (Initiate, 0 XP / 500 XP), Rank Journey section, How to Earn XP, XP table with Hunt Pass column. Dark mode ✅. ss_7558bifrd |
+| S534 | Guild Primer → Hunt Pass cross-link | ✅ | "Learn About Hunt Pass" → /shopper/hunt-pass present on page. ref_334 |
+| S534 | /shopper/hunt-pass loads — benefit cards | ✅ | All 5 cards: 1.5x XP, Treasure Hunt Pro (+10% QR XP ✅ S551), Golden Trophy Avatar Frame (separate card ✅ S551), Hunt Pass Leaderboard Badge (separate card ✅ S551), More Monthly Coupon Slots (3 Standard / 3 Deluxe / 2 Premium ✅ S551 corrected values). ss_02518ndp0 |
+| S544 | Hunt Pass Newsletter → "Coming Soon" amber badge | ✅ | Badge present on newsletter card. ss scroll |
+| S534 | Hunt Pass → Guild Primer cross-link | ✅ | "Learn how the Explorer's Guild works →" present. |
+| #275 | Hunt Pass cosmetics — nav avatar badge | ✅ | Small trophy badge visible at bottom-right of KA nav avatar. Amber ring effect present. |
+| **BUG** | Hunt Pass page CTA for active HP subscriber | ⚠️ P2 | Karen has "Hunt Pass Active" in dropdown but /shopper/hunt-pass shows "Upgrade to Hunt Pass" button — page doesn't detect existing subscription. Should show "Your Pass is Active" / manage state. |
+| **⚠️** | Karen XP shows 0 (was 80 XP in S530) | ⚠️ Note | Possible XP reset, data wipe from re-seed, or session/cache issue. Not blocking but worth watching. |
+| S541 | /shopper/referrals — "Share & Earn" page | ✅ | Title "Share & Earn", referral link REF-DE2E137A, Copy button, 5 share buttons (SMS/mobile/email/Twitter/link), "Your Referral Stats" section. ss_7068j0rym |
+| S540 | /coupons XP Store — shopper tab | ✅ | Standard ($0.75/100 XP/3mo), Premium ($2/200 XP/3mo), Deluxe ($5/500 XP/2mo) with "(Bonus Coupon Slots)" label. Rarity Boost (50 XP) present. Coming Soon: Hunt Pass Discount, Haul Visibility Boost, Seasonal Challenge Access, Username Color. INITIATE · Hunt Pass Active shown after hydration. ss_044759uso |
+| S540 | /coupons XP Store — organizer tab (as shopper) | ✅ | Organizer tab accessible per design ("Both tabs are open to everyone"). Discount Codes section shows $1-off 50 XP generator, Max 5/month. Correct copy. ss_044759uso |
+| **BUG** | XP Store HP status flash on initial render | ⚠️ P3 | On first render: shows "Hunt Pass Inactive". After hydration: corrects to "INITIATE · Hunt Pass Active". Hydration race condition. ss_137628494 vs ss_137628494 reload |
+| **BUG** | Coupon slot counts mismatch: XP Store vs hunt-pass.tsx | ⚠️ P2 | XP Store shows Premium Deal=3/month, Deluxe Deal=2/month. hunt-pass.tsx benefit card shows "3 Standard / 3 Deluxe / 2 Premium". Premium and Deluxe counts are swapped between the two pages. |
+| **BUG** | TEAMS workspace setup modal — P1 blocker on organizer dashboard | ❌ P1 | "Welcome to TEAMS!" modal appears on EVERY login for Alice (user1@example.com, TEAMS tier). Modal is fully non-functional: (1) input field does not accept keyboard input, (2) X button does not close modal, (3) Escape key does not close modal, (4) clicking outside modal does not close modal, (5) Next button does not advance even after value injected via JS. Blocks full organizer dashboard access on every login. ss_9308yac3s, ss_7645187sr |
+| S529 | Organizer dashboard widgets — visible behind modal | ✅ | Sale Progress (Cataloging, 9/39 tasks, 23%), Sale Pulse (0 Views/Saves/Questions), High-Value Items (empty state correct), Efficiency Coach (Photo→Published 1m, Sell-Through 10%), Bronze Organizer tier badge (1/4 sales to Silver), Past Sales section, Quick action bar (+ New Sale, + Items, POS, Holds, Ripples). All render. ss_3372tv44j, ss_5957w4ihk, ss_66188h4a4 |
+| S529 | Organizer dashboard — storefront/sharing widget interaction | UNVERIFIED | Dashboard content visible behind TEAMS modal but interactive testing blocked. Cannot click "Share", "More Options", or other CTAs while modal is present. |
+
+---
+
+### Cluster 3 — S540 Coupons / Rewards / Loyalty
+
+| # | Item | Result | Evidence / Notes |
+|---|------|--------|-----------------|
+| S540 | Rewards nav link — avatar dropdown CONNECT | ✅ | Karen: CONNECT → Rewards → /coupons confirmed. ss_0381z7ttc (dropdown), ss_8825uu903 (/coupons) |
+| S540 | Rewards nav link — code in 4 locations | ✅ | Layout.tsx confirmed: (1) organizer sidebar "Coupons" line 348, (2) shopper sidebar "Rewards" line 565, (3) avatar dropdown large "Rewards" line 1363, (4) mobile menu "Rewards" line 1582. All href="/coupons". |
+| **BUG** | Hunt Pass Active dedup on shopper dashboard | ⚠️ P2 | Dashboard shows HP active status twice: (1) green info banner "✓ Hunt Pass active — you're earning 1.5x XP" and (2) full "✅ Hunt Pass Active" card below wishlists. Same message rendered twice on same page. ss_02965cuvg (both visible on scroll) |
+| **BUG** | Orphan referral code in localStorage | ⚠️ P2 | `/refer/[code].tsx` stores `pendingReferralCode` in localStorage then redirects to `/register?ref=CODE`. However `register.tsx` only reads ref from URL param — never reads `pendingReferralCode` from localStorage. If user navigates away from /register URL, the stored code is orphaned and never consumed. |
+| **BUG** | /refer/[code] — no auth check for logged-in users | ⚠️ P3 | Logged-in user visiting a referral link (e.g. /refer/REF-DE2E137A) gets redirected to /register — no detection of existing session. Should redirect to home/dashboard with "You're already registered" message. ss_4420mas5w |
+
+---
+
+### Cluster 4 — S549 Mobile Overflow Fixes (412px viewport)
+
+| # | Item | Result | Evidence / Notes |
+|---|------|--------|-----------------|
+| S549 | /shopper/explorer-profile Add buttons | ✅ | Both Specialties and Keywords input+Add button rows fit cleanly within 412px viewport. No overflow, no clipping. ss_09767adts |
+| S549 | /organizer/edit-sale ENDED header | ✅ | "Edit Sale (Ended)" title + 3 action buttons (✓ ENDED, Reopen, Settle This Sale) all on one row, no overflow at 412px. ss_6453lmsjc |
+| S549 | /organizer/insights SELECT dropdown | ✅ | "Filter by sale" select: width=476px, right=492px < viewport=522px. No horizontal scroll (scrollWidth=508 < vw=522). No overflow. ss_4165p168c |
+| **BUG** | /admin/items pagination overflow — S549 NOT FIXED | ❌ P2 | 21 page buttons rendered in single unbroken row. At 412px: pages 1–6 overflow left edge (x=-218 to -20), pages 17–21 overflow right edge (right=529–726 > vw=522). Horizontal scrollbar visible. S549 fix did not address /admin/items pagination. ss_9296fs0zu |
+| **BUG** | /admin/items Price column truncated at 412px | ⚠️ P2 | Price values cut off on right side ($1x, $1x, $8x visible but not full amount). Table layout overflows viewport width, column truncated. |
+| S549 | /organizer/workspace tab bar | UNVERIFIED | "No workspace found. Create one first." — Alice (user1) has no OrganizerWorkspace record in DB. Cannot test tab bar without a configured workspace. Needs TEAMS onboarding to complete. |
+| **BUG** | TEAMS workspace onboarding modal persists every login | ⚠️ P2 | "Welcome to TEAMS!" modal appears on every login for Alice even after dismiss. Consistent with P1 bug noted in Cluster 1, but dismiss-on-reload aspect confirmed here: modal reappears after fresh login. |
+
+---
+
+### Cluster 5 — S550/S559/S560 New Features
+
+| # | Item | Result | Evidence / Notes |
+|---|------|--------|-----------------|
+| S550 | Affiliate backend routes | ✅ | Direct Railway calls to all 4 affiliate endpoints return 401 (auth-gated = routes deployed). No 404s. |
+| #309 | /organizer/consignors — Consignor Portal | ❌ P1 | All API calls 404. Root cause: consignors.tsx uses `api.get('/api/consignors')` but api.ts baseURL already includes `/api` → double prefix → `backend/api/api/consignors`. All 4 operations (list/create/update/delete) broken. Color-rules and locations pages use correct paths — consignors.tsx is the only file with this bug. |
+| #310 | /organizer/color-rules — Color Coding Rules | ✅ | Page loads, empty state correct ("No color coding rules yet"), "Add Rule" modal opens and renders correctly. Route confirmed functional. ss via JS React props verification |
+| #311 | /organizer/locations — Location Management | ⚠️ P2 | Page renders empty state and "Add Location" button, but on load throws "Workspace not found" error. Root cause: locations page requires OrganizerWorkspace record; Alice (user1) has no workspace (TEAMS modal never completes). Dependent on P1 TEAMS onboarding fix. |
+| S560 | /admin/encyclopedia — Curator UI page load | ✅ | Page loads with real data: 57 awaiting review, 20 published, 77 total entries. Entry list shows Title/Category/Triggered By/Created/Preview columns. ss_6309qnxwa |
+| S560 | /admin/encyclopedia — Promote/Reject buttons | ✅ | Each row has green "Promote" + red "Reject" action buttons. Confirmed via DOM inspection. |
+| S560 | /admin/encyclopedia — "Run Full Curator Pass" button | ✅ | Button fires correctly: goes disabled + text changes to "Running Curator Pass..." → completes in ~5s → resets to enabled. Route `POST /admin/curator/run` confirmed deployed (CSRF-gated 403 on direct call). ss_4764jy322 |
+| **BUG** | /admin/encyclopedia — action buttons cut off at viewport edge | ⚠️ P2 | Promote/Reject buttons are clipped at the right edge of the table — not visible without horizontal scroll. Table lacks overflow handling at default viewport width. |
+| **BUG** | /admin/encyclopedia — no success toast after Curator Pass | ⚠️ P3 | After "Run Full Curator Pass" completes, no success toast or confirmation message is shown. Silent success. onClick clears error state and refreshes data but never sets a success message. |
+| S550 | /shopper/bounties/submissions — page + empty state | ✅ | Navigated as Karen. Page loads: "My Bounty Submissions" title, subtitle correct, All/Pending/Approved/Declined tabs present, empty state "No submissions yet / Post a bounty and organizers will match items to it." renders correctly. ss_9611tddbg |
+| S550 | /shopper/bounties/submissions — "Complete Purchase" flow | UNVERIFIED | No BountySubmissions exist in DB (table empty). Cannot test APPROVED submission → "Complete Purchase" button flow. Needs test data seeded: 1 APPROVED BountySubmission linked to Karen's bounty. |
+
+---
+
+## ✅ S531 Fixes — Verified S561
+
+| # | Feature | Result | Evidence |
+|---|---------|--------|----------|
+| #266 | AvatarDropdown nav link | ✅ | As Karen: dropdown shows "Explorer Profile" → /shopper/explorer-profile. ss_2914hd6om (Cluster 1) |
+| #7 | Shopper Referral Rewards | ✅ | /shopper/referrals loads: "Share & Earn" title, referral link REF-DE2E137A, 5 share buttons, stats section. ss_7068j0rym |
+| #228 | SettlementWizard fee % | ✅ | Receipt step shows "Platform Fee (0%)" = -$0.00. NOT "200%". Bug is fixed. ss_1876ssi5u |
+| per-sale | Analytics filter | ✅ | Selected "ended" sale → header changed to "Filtered to one sale", stat cards showed Total Revenue $27.29 / Net Revenue $25.93 / Conversion Rate 20.0% / Unique Buyers 2 / Avg Cart Value $204.23. ss_0793lrq0p |
+| #241 | Brand Kit PDFs | ✅ | fetch() from brand-kit page with JWT → HTTP 200, content-type: application/pdf. All 4 links present: business-card, letterhead, social-headers, yard-sign. |
+| #267 | RSVP Bonus XP | ✅ | RSVPd to "Estate Sale: Vintage Textiles, Books, Home Furnishings" as Karen. PointsTransaction created: type=RSVP, points=2. Discoveries notification fired immediately: "Going to this sale!" (bell 4→5). ss_77974sk7l (RSVP confirmed), ss_1247c2s9h (Discoveries notification) |
 
 ---
 

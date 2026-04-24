@@ -191,8 +191,20 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #310 Color-tag Discount Rules Chrome QA | Nav links added S559, effectivePrice confirmed in code | TEAMS organizer → /organizer/color-rules, create rule (e.g. Red = 25% off, no date range). Assign tagColor to item. View item on sale detail → effectivePrice shown with strikethrough original. ColorKeyLegend present on sale page. | S559 |
 | #311 Locations Chrome QA | Nav links added S559, pending Chrome | TEAMS organizer → /organizer/locations, create 2 locations. Filter inventory by location. Transfer item from location A to B. Delete location with items → expect 409. LocationSelector dropdown on create-sale and edit-item. | S559 |
 | RETAIL tier gate (create-sale) | Fixed S559, pending Chrome QA | As FREE organizer: /organizer/create-sale → "Retail Store (TEAMS only)" greyed out + upgrade CTA visible. As TEAMS organizer → "Retail Store" selectable, no CTA. |
-| Curator moderation UI (/admin/encyclopedia) | New page S560, pending Chrome QA | As ADMIN: /admin/encyclopedia loads, shows AUTO_GENERATED entries list, "Promote to Published" button works, "Run Full Curator Pass" fires POST /api/admin/curator/run. | S560 |
-| Bounty Batch C — purchase flow | Built S560, pending QA with test data | Need a BountySubmission in APPROVED status. Shopper: click "Complete Purchase" → Stripe checkout completes → submission status → PURCHASED, XP deducted 50 from shopper, 25 awarded to organizer. Test 402 path: low-XP account should see "need 50 XP" error with /coupons link. | S560 |
+| Curator moderation UI (/admin/encyclopedia) | ✅ Chrome-verified S561 — RESOLVED | Page loads, 57 awaiting/20 published/77 total with real data, Promote/Reject per row, Run Full Curator Pass fires correctly (loading state → completes ~5s). ss_6309qnxwa, ss_4764jy322. P2 bug: action buttons cut off at viewport right edge — logged in qa-backlog. P3: no success toast after curator pass — logged. | S560 |
+| Bounty Batch C — purchase flow | UNVERIFIED S561 — zero BountySubmissions in DB | BountySubmission table is empty. Shopper /bounties/submissions page + tabs + empty state ✅ verified S561 (ss_9611tddbg). "Complete Purchase" flow requires seeding 1 APPROVED BountySubmission linked to Karen's bounty. | S560 |
+| **BUG — P1** | Hunt Pass Active CTA not detecting subscription | /shopper/hunt-pass shows "Upgrade to Hunt Pass" for Karen who has Hunt Pass Active. Page doesn't check subscription status — should show "Your Pass is Active" / manage state. Logged S561 Cluster 1. | S561 |
+| **BUG — P1** | TEAMS onboarding modal P1 blocker (every login) | Modal appears on every login for Alice (user1), inputs non-functional, X/Escape don't close, Next doesn't advance. Blocks organizer dashboard. Previously noted as P1 in Cluster 1/4. Root cause: modal never marks itself as dismissed. | S561 |
+| **BUG — P1** | #309 Consignor Portal — double /api/ prefix | consignors.tsx uses `api.get('/api/consignors')` but api.ts baseURL includes `/api` → 404 on all operations. Root cause confirmed via network trace. color-rules.tsx and locations.tsx use correct paths. Fix: remove `/api/` prefix from all 4 api calls in consignors.tsx. | S561 |
+| **BUG — P2** | /admin/items pagination overflow at 412px | S549 did NOT fix admin/items pagination. 21 buttons in a single unbroken row, pages 1–6 overflow left, pages 17–21 overflow right at 412px viewport. Horizontal scrollbar visible. ss_9296fs0zu | S561 |
+| **BUG — P2** | /organizer/locations — "Workspace not found" | Locations page throws "Workspace not found" on load because Alice has no OrganizerWorkspace record (TEAMS onboarding never completes). Fix the TEAMS modal P1 first, then this unblocks. | S561 |
+| **BUG — P2** | Hunt Pass CTA duplicate on shopper dashboard | /shopper/dashboard shows HP active status twice: (1) green info banner at top AND (2) full HP Active card below wishlists. Same message rendered twice. | S561 |
+| **BUG — P2** | Coupon slot counts mismatch (XP Store vs hunt-pass page) | XP Store shows Premium=3/mo, Deluxe=2/mo. hunt-pass.tsx shows 3 Standard / 3 Deluxe / 2 Premium. Premium and Deluxe counts are swapped between pages. | S561 |
+| **BUG — P2** | /admin/encyclopedia action buttons cut off at viewport | Promote/Reject buttons extend past right edge of viewport — table lacks overflow handling. Users must horizontal-scroll to access moderation actions. | S561 |
+| **BUG — P2** | Orphaned referral code in localStorage | /refer/[code].tsx stores `pendingReferralCode` in localStorage then redirects. register.tsx only reads ref from URL param — never reads localStorage. If user navigates away before registering, code is orphaned. | S561 |
+| **BUG — P3** | /refer/[code] no auth check for logged-in users | Logged-in user visiting a referral link gets redirected to /register with no "already registered" message. | S561 |
+| **BUG — P3** | XP Store HP status flash on first render | On first render: shows "Hunt Pass Inactive". After hydration: corrects to "INITIATE · Hunt Pass Active". Hydration race condition. | S561 |
+| **BUG — P3** | No success toast after "Run Full Curator Pass" | onClick clears error state + refreshes data but never sets a success message. Silent success with no user feedback. | S561 |
 | Photo Role Awareness Phase 2 | Backend only, no UI | Verify in Railway logs after a batch upload: clustering Haiku response should include `photos[]` with roles; per-cluster analysis prompt should include role-scoped sections. Check Photo records in DB for photoRole values post-upload. | S560 |
 | backfillBenchmarks cron | Runs Wednesday 2AM UTC | After Wednesday 2AM UTC: check Railway logs for `[backfillBenchmarks]` output showing processed/created/skipped counts. Can also trigger manually by calling the job directly if needed. | S560 | S559 |
 
@@ -206,84 +218,42 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S556)
+## Next Session (S562)
 
-**S556 is the ADR-069 implementation session — burst clustering + pricing wiring + Encyclopedia seed ingest. Parallel dispatch from the start.**
+**Patrick pending actions (complete before or at session start):**
+1. Push S560 combined block (see patrick-dashboard.md) if not yet done
+2. Run `migrate deploy` + `prisma generate` for `20260424_add_comp_fetch_enhancements` (ItemCompLookup: fallbackTier, source, priceChartingId, priceChartingPrice, priceChartingConfidence)
+3. Confirm S558 migration `20260424_add_photo_role` was deployed — S560 says "per Patrick" but S559 listed it as pending; verify via Railway DB or psycopg2
 
-**Patrick actions before S556 dispatch:**
-1. Push S555 wrap block (see patrick-dashboard.md) so ADR-069 v2 + seed content + label fix are all in git before dev reads them
-2. If printKitController.ts wasn't pushed mid-session: confirm it's in the wrap push block (Edit tool shows it's modified locally)
-3. No migrations required before S556 starts — the schema migration ships as part of Phase 1 dev work, not ahead of it
+**First task — P1 bug dispatch (3 parallel agents):**
 
-**Pre-flight (mandatory per §10 post-fix live verification):** Smoke-test the label-fix on the live print-kit page as the first action of S556 before dispatching. Print a small test batch and visually confirm titles are no longer truncated mid-word. If Patrick has already confirmed in-session (yes — "labels look great"), log that and skip to dispatch.
+These three P1 bugs were logged in S561's Blocked/Unverified Queue but not yet dispatched. Open S562 with all three in one parallel Agent call.
 
-**Parallel dispatch queue (three concurrent `Agent(subagent_type='general-purpose')` calls in one message per §7 parallel pattern):**
+1. **Agent 1 — Hunt Pass Active CTA** (`/shopper/hunt-pass`): Page shows "Upgrade to Hunt Pass" for Karen who has an active subscription. Check subscription status using `useXpProfile` or subscription hook; show "Your Pass is Active" / manage state when active. File: `packages/frontend/pages/shopper/hunt-pass.tsx`.
 
-**Dispatch 1 — ADR-069 Phase 1 core implementation (findasale-dev skill context embedded).** Scope: schema migration + burst clustering endpoint + Vision-fix + valuation→PriceBenchmark read + Haiku→Encyclopedia stub WRITE path. Files: `packages/database/prisma/schema.prisma` (Item additions, Photo activation, EncyclopediaEntry additions, PriceBenchmark additions, migration SQL), `packages/backend/src/controllers/batchAnalyzeController.ts` (cluster-first rewrite), `packages/backend/src/services/cloudAIService.ts` (new `clusterPhotos()`, fix `imageBase64Array[0]` at line 502, Haiku prompt must emit optional `new_encyclopedia_entry_stub` field), `packages/backend/src/services/valuationService.ts` (PriceBenchmark fallback query + blending), `packages/backend/src/services/encyclopediaService.ts` (NEW — dedup by slug, create entry+benchmark pair), `packages/backend/src/jobs/createEncyclopediaStub.ts` (NEW job), `packages/backend/src/jobs/processRapidDraft.ts` (Vision aggregation), `packages/backend/src/lib/tierEnforcement.ts` (set counts as 1). Read ADR-069 v2 in full first. Schema-first pre-flight gate mandatory per §8. TS check `npx tsc --noEmit --skipLibCheck` zero errors before return. Return explicit changed-files list. Do NOT push (subagent push ban per §11).
+2. **Agent 2 — TEAMS onboarding modal** (fires every login, inputs non-functional, X/Escape don't close, Next doesn't advance — blocks Alice's organizer dashboard): Find the modal component (likely in onboarding or workspace flow), fix dismissal logic so it marks itself as dismissed after first completion. Also check: does OrganizerWorkspace record get created on completion? Alice has no OrganizerWorkspace, which is why `/organizer/locations` throws "Workspace not found" (fix this in same dispatch).
 
-**Dispatch 2 — Encyclopedia seed ingest script (findasale-dev skill context embedded).** Scope: one-time script that reads `claude_docs/feature-notes/encyclopedia-seed-entries.md` (parse 20 YAML-frontmatter entries) + `pricebenchmark-seed.json` (61 rows), validates against schema, inserts via transaction. File: `packages/database/prisma/seedEncyclopedia.ts` (NEW) + add to package.json scripts. Use `status: 'PUBLISHED'` on all 20 entries (they're curated, not auto-generated). Handle slug-dedup (skip if exists) so re-running is idempotent. Can ship before Phase 1 dev completes — only depends on `EncyclopediaEntry.status` enum existing (check migration order). Return the insertion counts.
+3. **Agent 3 — Consignor Portal double /api/ prefix** (`consignors.tsx` uses `api.get('/api/consignors')` but `api.ts` baseURL already includes `/api` → all operations 404): Remove `/api/` prefix from all 4 api calls in `packages/frontend/pages/organizer/consignors.tsx`. color-rules.tsx and locations.tsx already use correct paths — use those as reference.
 
-**Dispatch 3 — Async eBay + Vision webDetection enablement (findasale-dev skill context embedded).** Scope: new `packages/backend/src/jobs/fetchEbayComps.ts` that fires after per-item Haiku analysis completes; persists to new `ItemCompLookup` table (schema addition); refactor existing `ebayController.getEbayPriceComps()` into callable-async form. Also enable `webDetection: true` in Vision API calls (grep all `visionClient.annotateImage` or `visionClient.labelDetection` calls and add the feature flag). Use `setImmediate` for now (no Redis in project per scout); note in return message if queue persistence becomes necessary. Cache lifetime: 7 days. Return changed-files list.
+Each agent: schema-first pre-flight, TS check zero errors, return explicit changed-files list.
 
-**After all three dispatches return:**
-1. Main session consolidates changed-files from all three agents
-2. Provide Patrick a single comprehensive push block (per §5 one-block-per-push rule)
-3. Immediately write the S556 QA scenarios (micro-dispatches per §10c): Chrome verify label printing still works post-schema-change; Chrome verify `/encyclopedia` shows 20 seeded entries; Chrome verify inventory add-items batch burst clusters correctly (drop 5+ similar photos, see 1 clustered Item)
-4. Schema migration: after Patrick pushes, Patrick runs `cd packages/database && $env:DATABASE_URL="[Railway URL]" ; npx prisma migrate deploy ; npx prisma generate` per §6 schema change protocol
+**After P1 fixes ship:**
+- Chrome QA micro-dispatches (one per feature, sequential per §10c):
+  - Hunt Pass CTA state for Karen (active subscriber)
+  - TEAMS modal dismissal for Alice + workspace creation
+  - Consignor Portal (#309): TEAMS organizer CRUD flow
+  - #310 Color-tag Discount Rules: create rule, assign tag, verify effectivePrice + strikethrough on sale detail
+  - #311 Locations: create 2 locations, filter inventory, transfer item, delete-with-items → 409
+  - RETAIL tier gate: FREE organizer sees greyed-out "Retail Store (TEAMS only)" on create-sale
+- ADR-070 Mark Sold → POS: STATE.md "Latest work (S560)" confirms posController.ts already covers this. Close out roadmap item — no dev work needed.
+- Affiliate payout expansion (Batches 5/7/9): Patrick decision needed on tiered vs flat commission + 1099 compliance gate before dispatch.
 
-**Token budget for S556:** Three parallel dev agents at ~400k tokens each ≈ 1.2M agent tokens; main session should stay under 150k context. At 80% main context, wrap instead of dispatching a fourth batch. ADR-069 Phase 2 (eBay cache table, backfillBenchmarks cron, curator moderation UI) is a separate future session.
-
-**Deferred to later session (not S556):**
-- ADR-069 Phase 2: `ItemCompLookup` if moved out of Dispatch 3, backfill cron `backfillBenchmarks.ts`, Etsy OAuth integration, curator moderation UI for reviewing AUTO_GENERATED entries
-- Legacy items backfill job (optional) to re-run Vision on existing photos with the fixed aggregator logic
-- Polish pass on `/encyclopedia` detail page rendering once seed entries are live (markdown rendering, ISR SEO)
-
----
-
-**Older queue (pre-S555, kept for reference):**
-
-**S554 — Game Design + Innovation Deep Dive: Engagement & Progression System**
-
-No code this session. Pure system design. Dispatch gamedesign + innovation agents with full context below.
-
-**Context files to read before dispatch:**
-- `packages/backend/src/services/xpService.ts` — XP awards, rank thresholds (Initiate:0/Scout:500/Ranger:2000/Sage:5000/GM:12000), seasonal reset floor, SEASONAL_CHALLENGE_ACCESS/COMPLETE sinks
-- `packages/backend/src/services/achievementService.ts` — 8 current achievements (FIRST_PURCHASE, FIVE_PURCHASES, FIRST_SALE_ATTENDED, FIRST_ITEM_LISTED, HUNDRED_ITEMS_LISTED, FIRST_SALE_CREATED, WEEKEND_WARRIOR, STREAK_3)
-- `packages/backend/src/services/challengeService.ts` — seasonal challenge system (Spring 2026 hardcoded, EASY/MEDIUM/HARD/MICRO_EVENT difficulties)
-- `packages/frontend/components/LoyaltyPassport.tsx` — stamp system (ATTEND_SALE/MAKE_PURCHASE/WRITE_REVIEW/REFER_FRIEND, BRONZE/SILVER/GOLD milestones)
-- `packages/frontend/pages/shopper/guild-primer.tsx` — how the system is currently explained to users
-- `packages/frontend/pages/shopper/achievements.tsx` — current achievements page
-
-**Design decisions needed from agents:**
-
-1. **Stamp + Achievement consolidation** — stamps and achievements are parallel systems doing the same job. Design how they merge into one "Explorer Passport" concept where achievements earn passport stamps. How many stamps total for a compelling collection? What categories? What triggers?
-
-2. **Mid-milestone cadence** — establish the full milestone map for all 5 ranks. Research suggests tiered spacing (not uniform 1,000 XP): ~1 mid per small gap, ~2 mids per large gap. Recommend the specific XP values, cosmetic type, and difficulty for each.
-
-3. **First-year seasonal calendar** — FindA.Sale has natural estate sale seasonality (Spring peak Mar–May, Fall peak Sep–Oct, slow Winter). Design 4 seasons with themes, challenge objectives (3–4 each), difficulty mix, seasonal cosmetic reward, and a mid-season micro-event. Align with real sale activity patterns.
-
-4. **Achievement notification moment** — currently achievements fire silently. Design the "moment" — what does the player see when they unlock an achievement or cross a milestone? Toast? Modal? Feed announcement? What's the right interrupt level for each tier (milestone vs achievement vs seasonal completion)?
-
-5. **Coherence audit** — how do all these systems (XP, ranks, stamps/achievements, seasonal challenges, Hunt Pass, mid-milestones) feel to a new user in their first 30 days? Map the new-user journey and identify where they'd hit a meaningful moment vs where there's dead air.
-
-**Deliverable:** A single consolidated design document (`claude_docs/strategy/engagement-system-year1.md`) covering all five decisions above, with enough specificity that dev can implement without further design input. No vague recommendations — actual XP values, actual stamp names, actual seasonal dates, actual cosmetic descriptions.
-
----
-
-**Parallel dispatch queue (added S551 — dispatch together once Patrick starts next session):**
-
-These items are independent (different files, no cross-dependencies) and should be dispatched as concurrent `Agent(subagent_type='general-purpose')` calls in a single message per CLAUDE.md §7 parallel pattern.
-
-1. **Trailblazer color map cleanup** — `packages/frontend/components/SmartBuyerWidget.tsx` lines 23–31. `RANK_COLORS` references stale rank names (EXPLORER, PATHFINDER, TRAILBLAZER, LEGEND) that don't exist in the live 5-rank system. Replace with the correct map: INITIATE, SCOUT, RANGER, SAGE, GRANDMASTER. P3 dead-code cleanup, ~10 lines.
-
-2. **Coupon tier Hunt Pass values — CODE FIX** — `packages/backend/src/controllers/couponController.ts` lines 253–255. Currently shipped values are `monthlyLimitHuntPass: 6, 6, 3` — Patrick confirmed S551 these are wrong. Correct values: `monthlyLimitHuntPass: 3, 3, 2`. Standard tier values stay as-is (`monthlyLimitStandard: 2, 2, 1`). Also re-think the "3x Monthly Coupon Slots" branding — the math is now 1.5x (tier 1+2) and 2x (tier 3), so drop the "3x" label or reframe. Verify no callers assume the old 6/6/3 numbers.
-
-3. **Hunt Pass page copy update — frame, badge, bonus, coupons (4 separate cards)** — `packages/frontend/pages/shopper/hunt-pass.tsx`. Three issues and one structural change:
-   - **Split badge and frame into two separate cards.** Today the 🎖️ "Exclusive Hunt Pass Badge" card conflates two different features. Split into:
-     - **Card A — Golden Trophy Avatar Frame** (new card): amber/gold ring around the avatar on nav + dropdown (HuntPassAvatarBadge.tsx shipped S544). Visual status marker on the profile photo itself.
-     - **Card B — Hunt Pass Leaderboard Badge** (rewrite existing): 🏆 badge shown next to the user's name on leaderboards.
-   - **Treasure Hunt Pro** (🎯 section) mentions the 100→150 scan cap but omits the **+10% XP bonus** on treasure hunt QR scans (shipped — itemController.ts recordQrScan applies +10% multiplier for Hunt Pass subscribers on top of rank multiplier). Add the +10% bonus line.
-   - **Add Coupon Slots benefit card** (new) with the CORRECTED 3/3/2 numbers (after item #2 code fix lands). Describe as more monthly coupon redemptions across the three XP-coupon tiers vs. free accounts.
+**Deferred (needs test data or conditions):**
+- TEAMS onboarding → /organizer/locations QA (blocked until modal fix ships)
+- Bounty Batch C purchase flow (blocked until BountySubmission seeded in DB)
+- #267 RSVP XP + notifications (requires Chrome QA with RSVP action)
+- backfillBenchmarks cron verification (runs Wednesday 2AM UTC — log check after next Wednesday)
+- Photo Role Awareness Phase 2 backend verification (Railway log check after batch upload)
 
 4. **Bounty redesign Batch A — Auto-match on item publish (highest value)** — Per `claude_docs/strategy/bounty-redesign-spec.md` §1 + §6a. Backend: `POST /api/bounties/:id/match` endpoint with fuzzy match scoring (60% confidence threshold locked, 25mi radius, category bonus, recency bonus, tag overlap). Frontend: post-publish match modal on `/organizer/add-items` showing top 3–5 matches with Submit CTA per bounty. Architect review may be needed for the fuzzy match algorithm approach.
 
@@ -301,9 +271,9 @@ These items are independent (different files, no cross-dependencies) and should 
 
 ## Current Work
 
-**S556 COMPLETE** — ADR-069 Phase 1 shipped. 12 files modified/created across 3 parallel dispatches. Push block + migration instructions provided. After Patrick pushes + migrates, run `npm run seed:encyclopedia` to populate the 20 curated Encyclopedia entries. See Current Status above for full detail.
+**S561 COMPLETE** — Batch QA pass (findings-only, no fixes). All 5 clusters documented in qa-backlog.md. Key findings: P1 TEAMS onboarding modal blocks every Alice login; P1 consignors.tsx double `/api/` prefix breaks all Consignor Portal API calls; P2 admin/items pagination overflow not fixed by S549; P2 Locations page "Workspace not found" (depends on TEAMS onboarding fix); multiple P2/P3 bugs logged. Full detail in qa-backlog.md Cluster 1–5.
 
-**S557 PENDING** — Chrome QA of Phase 1 + any fallout fixes. Priority: (1) smoke-test batch upload (drop 5 similar photos, verify 1 clustered Item); (2) verify `/encyclopedia` shows entries after seed; (3) verify item publishing triggers eBay fetch job in logs. ADR-069 Phase 2 (backfillBenchmarks cron, curator moderation UI) is a separate future session.
+**PENDING:** Fix batch for all findings from S561 (no code was written during the QA pass — all items in qa-backlog.md are awaiting dispatch).
 
 ---
 
@@ -318,6 +288,8 @@ These items are independent (different files, no cross-dependencies) and should 
 *(S540–S534 archive: see monthly-digest-2026-04.md — all complete and pushed)*
 
 ## Recent Sessions
+
+**S561 (2026-04-24, COMPLETE):** Batch QA pass — findings-only, no fixes written. 5 clusters completed. Cluster 1 (nav/auth): ✅ explorer-profile, guild-primer, hunt-pass, referrals, XP store, RSVP XP, settlement wizard, per-sale analytics — all verified. Bugs: Hunt Pass CTA doesn't detect active subscription (P2), XP store HP hydration flash (P3), coupon slot count mismatch across pages (P2), TEAMS onboarding modal P1 blocker (every login). Cluster 2: S531 fixes confirmed live. Cluster 3 (coupons/rewards): ✅ rewards nav link, /coupons shopper+organizer tabs. Bugs: HP active duplicate on dashboard (P2), orphan localStorage referral code (P2), no auth check on /refer/[code] (P3). Cluster 4 (S549 mobile): ✅ explorer-profile Add buttons, edit-sale ENDED header, insights SELECT dropdown all fixed at 412px. Bugs: /admin/items pagination overflow NOT fixed by S549 (P2), price column truncated (P2), workspace UNVERIFIED (no OrganizerWorkspace record). Cluster 5 (S550/S559/S560 features): ✅ affiliate routes deployed (401s), color-rules page, bounties/submissions empty state, curator UI with real data + Promote/Reject buttons + Run Full Curator Pass fires correctly. Bugs: consignors.tsx P1 double `/api/` prefix, locations.tsx P2 workspace dependency, encyclopedia action buttons cut off (P2), no curator pass success toast (P3). Bounty "Complete Purchase" UNVERIFIED — BountySubmission table empty. All findings in qa-backlog.md Cluster 1–5.
 
 **S552 (2026-04-22, IN PROGRESS):** Big parallel + design session. Push verified clean (S550+S551 both live). Admin price P0 fixed inline (purchase.amount/100→purchase.amount; Float is dollars). S551 parallel queue (6 agents all complete): SmartBuyerWidget rank names INITIATE/SCOUT/RANGER/SAGE/GRANDMASTER; coupon HP limits 6/6/3→3/3/2 + "Bonus Coupon Slots"; hunt-pass.tsx Avatar Frame + Leaderboard Badge split, +10% QR XP bonus, coupon slots card (3/3/2); Bounty Batch D (GET /api/bounties/organizer/submissions + organizer/bounties.tsx wired); Bounty Batch A (POST /api/bounties/match fuzzy match + BountyMatchModal.tsx new + add-items wired); Bounty Batch B (shopper/bounties/ restructured to directory, index.tsx + submissions.tsx new, approve/decline flow). guild-primer 2 stale copy fixes (Grandmaster HP "free forever" → "while active Grandmaster, lapses Jan 1"). Geofencing audit: Trails 100m geofenced ✅, QR scans/visits NO geofence ❌. XP economy design: confirmed no item reviews ever existed (Review keyed to saleId). Rejected $20 purchase floor (doesn't close arbitrage). Rejected hard monthly cap. Decided: tranche escrow (A:100/B:150/C:150/D:100 XP, D = trail OR own referral OR 2nd purchase) + silent reputation score (0.0–1.0 multiplier, active day one, 0.1 floor, ≥3 referral threshold, daily job). Referral tranche dev agent: schema.prisma (ReferralTranche + ReferrerReputationScore), referralTrancheService.ts (new), reputationScoreJob.ts (new), xpService.ts + authController + saleController + stripeController + trailController + referralService all modified. Condition grade S fixed Excellent→Mint in itemConstants.ts + ConditionBadge.tsx. Appraisal content: guide.tsx new "Community Appraisals" section + support.tsx 5 FAQ entries. roadmap.md updated (v118). 27+ files pending push + migration.
 
