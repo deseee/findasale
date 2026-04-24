@@ -343,6 +343,61 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
     if (teamsOnboardingComplete !== undefined) {
       updateData.teamsOnboardingComplete = teamsOnboardingComplete;
+
+      // If completing TEAMS onboarding, ensure OrganizerWorkspace exists
+      if (teamsOnboardingComplete === true) {
+        const organizer = await prisma.organizer.findUnique({
+          where: { userId: req.user.id },
+          select: { id: true, businessName: true }
+        });
+
+        if (organizer) {
+          // Check if workspace already exists for this organizer
+          const existingWorkspace = await prisma.organizerWorkspace.findUnique({
+            where: { ownerId: organizer.id }
+          });
+
+          // If no workspace exists, create one
+          if (!existingWorkspace) {
+            // Generate a slug from businessName or use a fallback
+            let slug = organizer.businessName
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '');
+
+            // Ensure slug is not empty (fallback to organizer ID prefix)
+            if (!slug) {
+              slug = `workspace-${organizer.id.substring(0, 8)}`;
+            }
+
+            try {
+              await prisma.organizerWorkspace.create({
+                data: {
+                  name: organizer.businessName,
+                  slug: slug,
+                  ownerId: organizer.id
+                }
+              });
+            } catch (err: any) {
+              // If slug already exists, append a random suffix
+              if (err.code === 'P2002' && err.meta?.target?.includes('slug')) {
+                const uniqueSuffix = Math.random().toString(36).substring(2, 8);
+                slug = `${slug}-${uniqueSuffix}`;
+                await prisma.organizerWorkspace.create({
+                  data: {
+                    name: organizer.businessName,
+                    slug: slug,
+                    ownerId: organizer.id
+                  }
+                });
+              } else {
+                // Log but don't fail the request — workspace creation is not critical
+                console.error('Error creating OrganizerWorkspace during TEAMS onboarding:', err);
+              }
+            }
+          }
+        }
+      }
     }
 
     const updated = await prisma.user.update({
