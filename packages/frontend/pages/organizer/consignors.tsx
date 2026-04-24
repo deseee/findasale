@@ -76,7 +76,7 @@ const ConsignorsPage: React.FC = () => {
   const fetchConsignors = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/api/consignors');
+      const response = await api.get('/consignors');
       setConsignors(response.data || []);
     } catch (error: any) {
       console.error('Error fetching consignors:', error);
@@ -146,11 +146,11 @@ const ConsignorsPage: React.FC = () => {
       };
 
       if (modalMode === 'create') {
-        const response = await api.post('/api/consignors', payload);
+        const response = await api.post('/consignors', payload);
         setConsignors(prev => [response.data, ...prev]);
         showToast('Consignor created', 'success');
       } else if (editingConsignor) {
-        const response = await api.put(`/api/consignors/${editingConsignor.id}`, payload);
+        const response = await api.put(`/consignors/${editingConsignor.id}`, payload);
         setConsignors(prev =>
           prev.map(c => (c.id === editingConsignor.id ? response.data : c))
         );
@@ -173,7 +173,7 @@ const ConsignorsPage: React.FC = () => {
 
     setIsDeleting(consignorId);
     try {
-      await api.delete(`/api/consignors/${consignorId}`);
+      await api.delete(`/consignors/${consignorId}`);
       setConsignors(prev => prev.filter(c => c.id !== consignorId));
       showToast('Consignor deleted', 'success');
     } catch (error: any) {

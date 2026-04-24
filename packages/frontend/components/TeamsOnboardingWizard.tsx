@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import { useAuth } from './AuthContext';
 import TeamSeatUpsellModal from './TeamSeatUpsellModal';
 
 interface InviteeWithRole {
@@ -17,10 +18,23 @@ interface TeamsOnboardingWizardProps {
 const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplete, onClose }) => {
   const router = useRouter();
   const { showToast } = useToast();
+  const { updateUser } = useAuth();
 
   // Wizard state
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
 
   // Step 1: Workspace Name
   const [workspaceName, setWorkspaceName] = useState('');
@@ -87,6 +101,32 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
     }
   };
 
+  const handleDismiss = async () => {
+    // If X is clicked, still mark the onboarding as complete to prevent re-appearing
+    try {
+      setIsLoading(true);
+      // Mark TEAMS onboarding as complete even if skipped
+      await api.patch('/users/me', {
+        teamsOnboardingComplete: true,
+      });
+
+      // Update user context immediately to reflect the change
+      updateUser({ teamsOnboardingComplete: true });
+
+      showToast('You can set up your workspace later', 'info');
+
+      if (onClose) {
+        onClose();
+      }
+    } catch (error: any) {
+      console.error('Error dismissing TEAMS onboarding:', error);
+      const msg = error.response?.data?.message || 'Failed to dismiss onboarding';
+      showToast(msg, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleComplete = async () => {
     setIsLoading(true);
     try {
@@ -134,6 +174,9 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
         teamsOnboardingComplete: true,
       });
 
+      // Update user context immediately to reflect the change
+      updateUser({ teamsOnboardingComplete: true });
+
       showToast('TEAMS workspace setup complete!', 'success');
 
       // Redirect to workspace management page
@@ -160,6 +203,9 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
         teamsOnboardingComplete: true,
       });
 
+      // Update user context immediately to reflect the change
+      updateUser({ teamsOnboardingComplete: true });
+
       showToast('TEAMS workspace setup complete!', 'success');
 
       // Redirect to workspace management page
@@ -185,14 +231,14 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Welcome to TEAMS!
           </h2>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              ✕
-            </button>
-          )}
+          <button
+            onClick={handleDismiss}
+            disabled={isLoading}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-50 cursor-pointer"
+            title="Close and skip for now"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Content */}

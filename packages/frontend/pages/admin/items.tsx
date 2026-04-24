@@ -239,7 +239,7 @@ const AdminItems = () => {
 
       {/* Pagination */}
       {pagination && pagination.pages > 1 && (
-        <div className="mt-6 flex justify-center gap-2">
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
           {Array.from({ length: pagination.pages }, (_, i) => i + 1).map(p => (
             <button
               key={p}
