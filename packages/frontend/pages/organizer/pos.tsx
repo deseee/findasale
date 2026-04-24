@@ -343,7 +343,9 @@ export default function POSPage() {
       .get<{ sales?: Sale[]; data?: Sale[] }>('/sales/mine')
       .then(res => {
         const all: Sale[] = res.data.sales ?? res.data.data ?? [];
-        const active = all.filter((s: Sale) => s.status === 'PUBLISHED');
+        const active = all
+          .filter((s: Sale) => s.status === 'PUBLISHED')
+          .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i); // dedup by id
         setSales(active);
         if (active.length === 1) setSelectedSaleId(active[0].id);
       })

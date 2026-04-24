@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvent } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvent, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 // Fix Leaflet's default icon paths
@@ -58,6 +58,16 @@ const MapClickHandler: React.FC<{
   return null;
 };
 
+// Forces Leaflet to recalculate container size after mount — fixes 1px tile bug
+const MapResizer: React.FC = () => {
+  const map = useMap();
+  useEffect(() => {
+    const timer = setTimeout(() => map.invalidateSize(), 100);
+    return () => clearTimeout(timer);
+  }, [map]);
+  return null;
+};
+
 const EntrancePinPickerInner: React.FC<EntrancePinPickerInnerProps> = ({
   saleAddress,
   saleLat,
@@ -90,17 +100,19 @@ const EntrancePinPickerInner: React.FC<EntrancePinPickerInnerProps> = ({
   };
 
   return (
+    <>
+      {/* Leaflet CSS — must be in browser context; placed at fragment root so React can hoist it */}
+      <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossOrigin=""
+      />
     <div className="space-y-4">
       {/* Map */}
       <div>
         <label className="block text-sm font-semibold mb-2">Entrance Location</label>
         <p className="text-xs text-gray-600 mb-2">Click on the map to mark the entrance or parking area</p>
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossOrigin=""
-        />
         <MapContainer
           center={[saleLat, saleLng]}
           zoom={15}
@@ -142,6 +154,8 @@ const EntrancePinPickerInner: React.FC<EntrancePinPickerInnerProps> = ({
 
           {/* Click handler */}
           <MapClickHandler onMapClick={handleMapClick} />
+          {/* Fixes 1px tile bug caused by deferred mount */}
+          <MapResizer />
         </MapContainer>
       </div>
 
@@ -177,6 +191,7 @@ const EntrancePinPickerInner: React.FC<EntrancePinPickerInnerProps> = ({
         </div>
       )}
     </div>
+    </>
   );
 };
 

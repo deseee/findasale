@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { submitFeedback, listFeedback, getFeedbackStats, createSuppression, listSuppressions } from '../controllers/feedbackController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, optionalAuthenticate } from '../middleware/auth';
 import { requireAdmin } from '../middleware/adminAuth';
 
 const router = Router();
 
 // Public endpoint — allows anonymous feedback
-router.post('/', submitFeedback);
+router.post('/', optionalAuthenticate, submitFeedback);
 
 // Suppression endpoints (auth required)
 router.post('/suppression', authenticate, createSuppression);

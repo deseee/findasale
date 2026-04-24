@@ -208,7 +208,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-xl border border-warm-200 dark:border-gray-700 z-50 py-2"
+          className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg dark:shadow-xl border border-warm-200 dark:border-gray-700 z-50 py-2 max-h-[calc(100vh-5rem)] overflow-y-auto"
           role="menu"
           aria-orientation="vertical"
           aria-labelledby="user-menu"

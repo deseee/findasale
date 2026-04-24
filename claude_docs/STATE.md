@@ -4,6 +4,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
+**Latest work (S567 — COMPLETE):** All-QA session. S566 smoke test + P1 + P2 bug fixes. **S566 smoke test (§10 mandatory):** `/organizer/profile` redirect now passes `?tab=profile` (was missing tab param). `/organizer/settings` `router.query.tab` reader added in `useEffect` so deep-links to `?tab=profile` actually pre-select the tab. `/shopper/settings` "Category Interests" heading corrected (was wrong label). `categories/[category].tsx` inactive category chip — added `dark:bg-gray-700 dark:text-gray-100` for dark mode contrast. `SettlementWizard.tsx` Download Receipt fetch — added `Authorization: Bearer <token>` header (fetch bypasses Axios interceptors; without it, Railway returns 401 and download silently fails). **P2 bug fixes:** `EntrancePinPickerInner.tsx` — Leaflet 1px tile bug fixed: Leaflet CSS `<link>` moved to fragment root, `MapResizer` component added that calls `map.invalidateSize()` after 100ms timeout. `useOrganizerTier.ts` — subscription flash fixed: hook now returns `null` tier while `authLoading=true` (was falling back to `'SIMPLE'` during auth init window, causing wrong plan flash for PRO/TEAMS users on subscription page). `subscription.tsx` — updated to gate spinner on `tierLoading`. `feedback.ts` — feedback route now uses `optionalAuthenticate` middleware so logged-in users get attribution in DB (was always null). `AvatarDropdown.tsx` — dropdown scrollable on overflow: added `max-h-[calc(100vh-5rem)] overflow-y-auto` (long menu extends off-screen on any viewport). `dashboard.tsx` — storefront URL hardcoded to `https://finda.sale` (was `window.location.origin` — showed Vercel preview domain when accessed from non-production URL). `pos.tsx` — sale dropdown dedup: added `.filter((s,i,arr) => arr.findIndex(x=>x.id===s.id)===i)` after status filter to prevent same sale appearing twice. **Needs Chrome QA (S567 UNVERIFIED):** right-panel overflow at 1104px (couldn't diagnose from static), "Most Wanted" dark mode, message bubble overflow. **Files changed:** `SettlementWizard.tsx`, `organizer/profile.tsx`, `organizer/settings.tsx`, `shopper/settings.tsx`, `categories/[category].tsx`, `EntrancePinPickerInner.tsx`, `useOrganizerTier.ts`, `organizer/subscription.tsx`, `backend/routes/feedback.ts`, `AvatarDropdown.tsx`, `organizer/dashboard.tsx`, `organizer/pos.tsx`.
+
 **Latest work (S566 — COMPLETE):** 5 parallel P1 bug fixes + 2 emergency production hotfixes. **`/admin/bid-review` API 500 ✅ FIXED:** Root cause was Prisma `include` + nested `select` at same level (invalid syntax). `getBidReviewQueue` in `adminController.ts` rewritten to full `select` syntax. **Settlement Receipt $0.00 + dead Download button ✅ FIXED:** `SettlementWizard.tsx` — `payoutAmount` state added, `useEffect` auto-populates from Commission tab on step 3, receipt sources from `clientPayout.amount ?? payoutAmount ?? netProceeds`. Download button rebuilt as `<button>` with fetch+blob handler. `ClientPayoutPanel.tsx` — `onPayoutRecorded` callback prop added so wizard tracks amount in real time. **`/shopper/profile` + `/shopper/collection` → 404 ✅ FIXED:** Two new redirect pages created (`pages/shopper/profile.tsx`, `pages/shopper/collection.tsx`) — both redirect to `/shopper/explorer-profile`. **Subscription dialog copy mismatch + Save Interests silent-fail ✅ FIXED:** `DowngradePreviewModal.tsx` copy aligned (consistent "Downgrade to Free" language). `shopper/settings.tsx` Save Interests adds success/error toast feedback. **React hydration #418 (Vercel build failure) ✅ FIXED:** Hydration agent had added duplicate `const [mounted, setMounted] = useState(false)` at line 166 of `pages/items/[id].tsx`; original was at line 292. Caused Vercel `Cannot redeclare block-scoped variable 'mounted'` build failure + hydration divergence. Removed duplicate. **Railway crash hotfix:** `adminController.ts` suffered `printf >>` append corruption — fragment line `pdating curator entry:', error);` left as standalone (prior session's truncation repair pattern gone wrong), compiled to `SyntaxError: Invalid or unexpected token` in Railway JS. Removed lines 1002-1005 with Edit tool. **Mass frontend restoration:** 15+ frontend files were locally truncated from prior agent sessions — restored to correct GitHub versions (no push needed, GitHub was authoritative): CommandCenterCard.tsx, encyclopedia.tsx, add-items/[saleId].tsx, add-items/[saleId]/review.tsx, Layout.tsx, RapidCapture.tsx, PreviewModal.tsx, appraisals.tsx, consignors.tsx, edit-item/[id].tsx, edit-sale/[id].tsx, members.tsx, sales/[id].tsx, bounties/index.tsx, hunt-pass.tsx, bounties/submissions.tsx. **Files changed:** `packages/backend/src/controllers/adminController.ts`, `packages/frontend/pages/items/[id].tsx`, `packages/frontend/components/SettlementWizard.tsx`, `packages/frontend/components/ClientPayoutPanel.tsx`, `packages/frontend/pages/shopper/profile.tsx` (NEW), `packages/frontend/pages/shopper/collection.tsx` (NEW), `packages/frontend/pages/shopper/settings.tsx`, `packages/frontend/components/DowngradePreviewModal.tsx`.
 
 **Latest prior work (S564 — COMPLETE):** Chrome QA (mobile S547/S549) + 2 backend bug fixes + camera improvements. **S547/S549 mobile viewport ✅ ALL VERIFIED** at ~454px: Past Sales card on /organizer/dashboard (no overflow, buttons fit one row); /organizer/edit-sale/[id] ENDED header (Edit Sale (Ended) + badge + buttons clean); /organizer/insights SELECT dropdown (max-w-full/min-w-0 working); /shopper/explorer-profile Add buttons (right edge 393px, no overflow); /organizer/workspace tab bar ADMIN/MANAGER/MEMBER/VIEWER (flex-wrap working, all 4 fit). **Camera:** Lighting pill made toggleable (off by default, icon ☀); brightness calc switched from mean → 80th-percentile so dark-colored items don't trigger false low-light warnings. **P1 ConfirmDialog:** Shared `<ConfirmDialog>` component built; all 24 native `window.confirm()` calls across 24 frontend files replaced. **Bug fixes (backend, inline, <20 lines):** (1) #261 QR rank multiplier — `getRankXpMultiplier` now called in `treasureHuntQRController.ts` (RANGER gets `Math.round(3 * 1.5) = 5 XP`, not flat 3 XP; import added); (2) Bounty All tab — `getMySubmissions` in `bountyController.ts` removed PENDING_REVIEW default filter so "All" tab returns all submissions. **React hydration #418** (button clicks silently fail across multiple pages) — confirmed widespread P1 bug but not fixed this session; needs dedicated investigation. **Files changed:** `packages/backend/src/controllers/treasureHuntQRController.ts`, `packages/backend/src/controllers/bountyController.ts`, `packages/frontend/components/camera/BrightnessIndicator.tsx`, `packages/frontend/components/ConfirmDialog.tsx` (new), all 24 files that had window.confirm() calls.
@@ -220,17 +222,17 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | **BUG — P2** | Settlement Payout Amount not pre-filled from Commission | Commission tab calculates "Client Receives" but value is not carried to Payout tab input. | S565 |
 | **BUG — P2** | POS shows "no active sales" when sales exist | POS false-negative empty state. Hydration or session state root cause. | S565 |
 | **BUG — P2** | POS search input doesn't filter items | Typing in item search box doesn't narrow list. | S565 |
-| **BUG — P2** | Subscription shows wrong status on first render | Stripe subscription status flashes wrong value before hydration corrects it. | S565 |
-| **BUG — P2** | Edit Sale map component failure (iframe 1px) | Entrance/Parking Pin iframe is 1px tall; 561px container is empty. Map library failed to initialize on `/organizer/edit-sale/[id]`. | S565 |
-| **BUG — P2** | Identical sale names in hold/POS dropdowns | Multiple entries with same display name, no disambiguating info (date/status/ID). | S565 |
-| **BUG — P2** | Admin Feedback entries have no user attribution | Feedback items show no submitter name/email. Admin cannot identify who wrote each piece. | S565 |
+| **BUG — P2** | Subscription status flash — ✅ FIXED S567 | `useOrganizerTier.ts` returns `null` tier while `authLoading=true`; `subscription.tsx` gates on `tierLoading`. Pending Chrome QA: load /organizer/subscription as PRO/TEAMS — verify no flash of wrong plan. | S565 |
+| **BUG — P2** | Edit Sale map 1px tiles — ✅ FIXED S567 | `EntrancePinPickerInner.tsx`: Leaflet CSS `<link>` moved to fragment root, `MapResizer` component calls `invalidateSize()` after 100ms. Pending Chrome QA: open edit-sale page with entrance pin, verify map tiles render full-height. | S565 |
+| **BUG — P2** | POS duplicate sale entries — ✅ FIXED S567 | `pos.tsx` sale list deduped by id after status filter. Pending Chrome QA: open POS, verify each sale appears once in dropdown. | S565 |
+| **BUG — P2** | Admin Feedback no attribution — ✅ FIXED S567 | `feedback.ts` route now uses `optionalAuthenticate` so logged-in users are attributed. Pending Chrome QA: submit feedback while logged in, verify user name/email appears in admin feedback list. | S565 |
 | **BUG — P2** | Site-wide right-panel overflow | Right column clips at ~1104px CSS on 2-column layout pages. Site-wide. | S565 |
 | **BUG — P2** | Message bubble text overflow | Message content overflows bubble container boundary. Missing overflow-hidden or break-words. | S565 |
 | **BUG — P2** | "Followed Organizers" label/content mismatch | Section shows data not matching its label. | S565 |
-| **BUG — P2** | Profile URL shows wrong domain | Public profile share URL shows localhost or staging domain instead of finda.sale. | S565 |
+| **BUG — P2** | Profile URL wrong domain — ✅ FIXED S567 | `dashboard.tsx` storefront widget now shows/copies `https://finda.sale/organizer/storefront/{slug}` instead of `window.location.origin`. Pending Chrome QA: verify storefront URL widget shows correct domain. | S565 |
 | **BUG — P2** | "Most Wanted" section not dark-mode adapted | Light-mode styles persist in dark mode. | S565 |
 | **BUG — P2** | Duplicate filter panel | Filter panel rendered twice on catalog/explorer page. | S565 |
-| **BUG — P2** | Avatar dropdown clips at viewport edge | Dropdown panel extends beyond right viewport edge. | S565 |
+| **BUG — P2** | Avatar dropdown viewport overflow — ✅ FIXED S567 | `AvatarDropdown.tsx` dropdown now has `max-h-[calc(100vh-5rem)] overflow-y-auto`. Pending Chrome QA: open avatar menu on mobile — verify scrollable, no off-screen content. | S565 |
 | **BUG — P2** | Orphaned referral code in localStorage | /refer/[code].tsx stores `pendingReferralCode` in localStorage then redirects. register.tsx only reads ref from URL param — never reads localStorage. If user navigates away before registering, code is orphaned. | S561 |
 | **BUG — P3** | /refer/[code] no auth check for logged-in users | Logged-in user visiting a referral link gets redirected to /register with no "already registered" message. | S561 |
 | **BUG — P3** | XP Store HP status flash on first render | On first render: shows "Hunt Pass Inactive". After hydration: corrects to "INITIATE · Hunt Pass Active". Hydration race condition. | S561 |
@@ -254,25 +256,30 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S567)
+## Next Session (S568)
 
 **Patrick pending actions (complete before or at session start):**
-1. Push S566 wrap block (below — STATE.md + patrick-dashboard.md + 8 code files)
+1. Push S567 wrap block (below — STATE.md + patrick-dashboard.md + 12 code files, split into two push blocks)
 2. Run `migrate deploy` + `prisma generate` for `20260424_add_comp_fetch_enhancements` if not yet done
 
-**Priority work for S567:**
-1. **Chrome QA smoke test of S566 fixes** (mandatory per §10 post-fix verification):
-   - `/admin/bid-review` — verify page loads + bid queue renders as admin
-   - Settlement wizard — advance to Payout step, verify amount auto-fills from Commission; advance to Receipt, verify Download button downloads
-   - `/shopper/profile` → should redirect to `/shopper/explorer-profile` (not 404)
-   - `/shopper/collection` → should redirect to `/shopper/explorer-profile` (not 404)
-   - Save Interests on `/shopper/settings` — verify toast appears on save
-   - Subscription downgrade modal — verify consistent "Free" language
-2. **Remaining P1 bugs (not fixed S566):**
-   - **React hydration #418 (systematic)** — `[id].tsx` duplicate removed, but QR button, POS dropdown, bounty tabs, hamburger still affected. Need systematic fix across all `new Date()` at render time usages.
-   - **`/organizer/profile` redirects to settings** — still not fixed
-   - **POS item dropdown + search unresponsive** — hydration dependent, fix with #418 batch
-3. **Remaining P2 bugs from S565 QA backlog:** right-panel overflow, edit-sale map iframe, POS false-negative, subscription status flash, admin feedback no attribution, duplicate filter panel, avatar dropdown clip.
+**Priority work for S568:**
+1. **Chrome QA smoke test of S567 fixes** (mandatory per §10 post-fix verification):
+   - `/organizer/edit-sale/[id]` entrance pin map — verify tiles render full-height (not 1px)
+   - `/organizer/subscription` as PRO/TEAMS user — verify no flash of wrong plan on load
+   - `/organizer/dashboard` storefront widget — verify URL shows `finda.sale` domain (not localhost/Vercel)
+   - `/organizer/pos` — open sale dropdown, verify each sale listed once (no duplicates)
+   - Avatar dropdown — open on mobile, verify scrollable and no off-screen cut-off
+   - Submit feedback while logged in, check `/admin/feedback` — verify user attribution appears
+   - S566 smoke test items still pending: `/admin/bid-review`, settlement wizard download, `/shopper/profile` + `/shopper/collection` redirects, Save Interests toast, subscription downgrade copy
+2. **Remaining P2 bugs (UNVERIFIED — need Chrome):**
+   - Right-panel overflow at ~1104px (2-column layout pages — could not diagnose from static analysis)
+   - Message bubble text overflow (no MessageBubble component found — may be in messaging flow)
+   - "Most Wanted" section dark mode issues on `/trending`
+   - Duplicate filter panel on catalog/explorer page
+   - "Followed Organizers" label/content mismatch
+3. **Remaining P1 bugs:**
+   - **React hydration #418 (systematic)** — QR button, POS dropdown, bounty tabs, hamburger still affected
+   - **POS item dropdown + search unresponsive** — hydration dependent
 
 **Continue QA backlog:**
 - Mobile viewport QA at 320px
@@ -304,6 +311,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 **Patrick decisions still open (from spec §8):** shopper price negotiation (default no), bounty auto-expiry default (60–90 days recommended, nullable today), message char limit (500 default). Not blockers — default values in spec.
 
 ## Current Work
+
+**S567 COMPLETE** — All-QA session. S566 smoke test (5 fixes) + 7 P2 bug fixes. 12 files changed across both halves. Remaining unverified: right-panel overflow, message bubble overflow, "Most Wanted" dark mode — need Chrome QA. Next: S568 smoke test of S567 fixes, then Chrome QA of remaining unverified items.
 
 **S566 COMPLETE** — 5 P1 bug fixes dispatched in parallel + 2 emergency production hotfixes (Vercel build failure + Railway crash). Both services green. All S565 P1 bugs fixed except `/organizer/profile` redirect and systematic hydration #418 (non-`[id].tsx` pages). 15+ frontend files restored from GitHub. Next: S567 Chrome smoke test of S566 fixes, then remaining P1 hydration work.
 
