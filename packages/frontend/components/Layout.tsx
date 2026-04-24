@@ -428,6 +428,19 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Users size={16} className="text-gray-500" />
                   <span>Workspace</span>
                 </Link>
+                <SectionHeader icon={Store} label="Retail" />
+                <Link href="/organizer/consignors" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Consignor portal and payouts management — TEAMS">
+                  <Users size={16} className="text-teal-500" />
+                  <span>Consignors</span>
+                </Link>
+                <Link href="/organizer/color-rules" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Color-tagged discount rules — TEAMS">
+                  <Tag size={16} className="text-teal-500" />
+                  <span>Color Rules</span>
+                </Link>
+                <Link href="/organizer/locations" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-location inventory view — TEAMS">
+                  <MapPin size={16} className="text-teal-500" />
+                  <span>Locations</span>
+                </Link>
               </>
             )}
 

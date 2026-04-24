@@ -1,37 +1,30 @@
-# Patrick's Dashboard — S558 Complete
+# Patrick's Dashboard — S559 Complete
 
-## 🔥 S558 — Photo Role Awareness + Voice-to-Tag surfaced + Appraisals entry point + roadmap cleanup
+## 🔥 S559 — Audit + Retail Gap fixes + RETAIL tier gate
 
-**One-line summary:** Photo Role Awareness Phase 1 shipped (PhotoRole enum embedded in clustering Haiku call, zero extra API calls). Voice-to-Tag now shows on edit-item AND in the camera PreviewModal. Appraisals pages now reachable. Roadmap corrected — Consignment moved out of Deferred, AI Planner nav note fixed, trigger-met pre-wires added to Patrick checklist.
+**One-line summary:** Full spec-vs-delivery audit S465–S558 complete. #309/#310/#311 (Consignor Portal, Color-tag Discounts, Multi-Location) confirmed fully built — roadmap was wrong. Nav links added for all three. RETAIL task templates confirmed in code. Frontend RETAIL gate fixed (free/PRO now see disabled option + upgrade CTA instead of server 403).
 
 ### What shipped
 
-- **Photo Role Awareness Phase 1 (#328)**: `PhotoRole` enum (FRONT/BACK_STAMP/DETAIL_DAMAGE/LABEL_BRAND/MULTI_ANGLE/UNKNOWN) added to schema + Photo model. Migration `20260424_add_photo_role`. Haiku clustering prompt now returns `photoRole` per photo — piggybacks on the existing call, no new API cost.
-- **Voice-to-Tag on edit-item (#42)**: Mic button added to the tags input section on edit-item. Speak item description, tags append automatically (deduped).
-- **Voice-to-Tag in PreviewModal (camera flow)**: Mic button added next to the description pencil icon in the camera review overlay. Speaks corrections into AI-tagged items. Low-confidence AI (< 0.6) = overwrite; high-confidence = append.
-- **Appraisals entry point (#330)**: "Request Appraisal for This Item" button on edit-item navigates to `/organizer/appraisals?open=true`, which auto-opens the create form. Nav links already existed in Layout.tsx.
-- **Roadmap v120**: Consignment Integration moved from Deferred → Building/Pending Chrome QA. AI Sale Planner Chat nav note corrected. 4 trigger-met pre-wires added to Patrick's checklist. 6 QA items added to Human Verification list.
+- **Nav links added (#309 Consignors, #310 Color Rules, #311 Locations)** — Layout.tsx TEAMS block now includes all three pages
+- **RETAIL frontend tier gate fixed (create-sale.tsx)** — "Retail Store" option disabled for non-TEAMS with "(TEAMS only)" label and upgrade CTA. Was server-side 403 only before.
+- **Roadmap v121** — #309-311 corrected from "Not started" to "Shipped S559 — Pending Chrome QA". #324-326 corrected from "QUEUED S557" to "Shipped S557 — Pending Chrome QA".
+- **Audit findings confirmed:** RETAIL task templates ✅ present (taskTemplates.ts, 8 tasks). effectivePrice ✅ confirmed in itemController.ts lines 122+537+1873. locationController ownerId bug ✅ fixed prior session. All backend controllers for #309-311 confirmed wired in index.ts.
 
-### Patrick actions needed
+### Patrick action needed — Push S559
 
-**Action 1 — Push S558 code:**
 ```powershell
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260424_add_photo_role/migration.sql
-git add packages/backend/src/services/cloudAIService.ts
-git add packages/backend/src/controllers/batchAnalyzeController.ts
-git add packages/frontend/pages/organizer/appraisals.tsx
-git add packages/frontend/pages/organizer/edit-item/[id].tsx
-git add packages/frontend/components/camera/PreviewModal.tsx
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/components/Layout.tsx
+git add packages/frontend/pages/organizer/create-sale.tsx
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: Photo Role Awareness Phase 1, Voice-to-Tag on edit-item + PreviewModal, appraisals entry point, roadmap v120"
+git commit -m "S559: RETAIL frontend tier gate, retail nav links (#309-311), roadmap v121 audit corrections"
 .\push.ps1
 ```
-⚠️ edit-item/[id].tsx was modified by two agents (appraisals CTA + voice-to-tag). Both changes should be in the file — verify with `git diff packages/frontend/pages/organizer/edit-item/[id].tsx` before pushing to confirm both are present.
 
-**Action 2 — Deploy Photo Role Awareness migration:**
+⚠️ S558 migration still pending — if you haven't run it yet:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -39,11 +32,15 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-### QA queue this session
-- Voice-to-Tag on edit-item: click mic, speak, verify tags appear
-- Voice-to-Tag in PreviewModal: in camera review, click mic, speak item name/description, verify fields populate
-- Appraisals: click "Request Appraisal for This Item" on edit-item, verify navigates to /organizer/appraisals with form open
-- Consignment Integration: in Patrick checklist (roadmap) — create consignor, assign item, verify payout calc
+### QA queue after push
+- **RETAIL gate:** As a free/PRO organizer on /organizer/create-sale — "Retail Store (TEAMS only)" should be greyed out, unselectable, with "Upgrade to unlock" CTA below. As TEAMS organizer — selectable normally.
+- **#309 Consignor portal:** As TEAMS organizer — /organizer/consignors loads, create a consignor, assign items, run payout. Visit /consignor/portal/[token] (no login) → items + payout history visible.
+- **#310 Color-tag discounts:** As TEAMS organizer — /organizer/color-rules, create a rule (e.g. Red = 25% off). Assign tagColor to an item. View on sale detail → strikethrough original + discounted price. Color legend visible.
+- **#311 Locations:** As TEAMS organizer — /organizer/locations, create 2 locations, assign items, filter inventory by location, transfer items between locations.
+
+### No decisions needed
+
+All changes are mechanical fixes from the audit. Next session can go straight to Chrome QA of #309-311 or dispatch available roadmap work.
 
 ### What shipped (6 dispatches)
 
