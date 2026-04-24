@@ -71,4 +71,19 @@ export const TASK_TEMPLATES: TaskTemplateCategory[] = [
       { title: 'Plan next sale', phase: 'post' },
     ],
   },
+  {
+    id: 'retail',
+    label: 'Retail',
+    emoji: '🛍️',
+    tasks: [
+      { title: 'Opening Procedures', phase: 'pre' },
+      { title: 'Donor/Consignor Intake', phase: 'during' },
+      { title: 'Inventory Pricing & Floor Placement', phase: 'during' },
+      { title: 'Color-Tag Rotation', phase: 'during' },
+      { title: 'End-of-Day Reconciliation', phase: 'post' },
+      { title: 'Closing Procedures', phase: 'post' },
+      { title: 'Weekly Review & Restock', phase: 'post' },
+      { title: 'Monthly Reporting & Payout Run', phase: 'post' },
+    ],
+  },
 ];
