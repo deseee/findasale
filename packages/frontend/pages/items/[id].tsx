@@ -163,13 +163,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
   const [bidModalOpen, setBidModalOpen] = useState(false);
   const [scoutRevealModalOpen, setScoutRevealModalOpen] = useState(false);
   const [scoutRevealResults, setScoutRevealResults] = useState<Array<{ displayName: string; avatarUrl: string | null; savedAt: string }> | null>(null);
-  const [mounted, setMounted] = useState(false);
   const socketRef = useRef<Socket | null>(null);
-
-  // Set mounted flag to enable client-side-only date comparisons
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Queries
   const {
@@ -1167,5 +1161,8 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   } catch {
     // Fail open — page still works, OG tags fall back to CSR version
     return { props: { ogData: null } };
+  }
+}
+Data: null } };
   }
 }

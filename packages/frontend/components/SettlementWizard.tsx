@@ -30,6 +30,7 @@ const WIZARD_STEPS = [
 export default function SettlementWizard({ saleId, saleType }: SettlementWizardProps) {
   const [step, setStep] = useState(0);
   const [showDonationModal, setShowDonationModal] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const config = getSaleTypeConfig(saleType);
@@ -77,6 +78,14 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
       ),
     enabled: !!saleId,
   });
+
+  // Auto-populate payout amount when advancing to Payout tab (step 3)
+  React.useEffect(() => {
+    if (step === 3 && settlement && !payoutAmount && !settlement.clientPayout) {
+      // Set payout amount to the calculated netProceeds from Commission tab
+      setPayoutAmount(settlement.netProceeds ?? 0);
+    }
+  }, [step, settlement, payoutAmount]);
 
   const closeMutation = useMutation({
     mutationFn: () =>
@@ -219,8 +228,9 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
           <ClientPayoutPanel
             saleId={saleId}
             clientLabel={config.clientLabel}
-            suggestedAmount={Math.max(0, settlement?.netProceeds ?? 0)}
+            suggestedAmount={payoutAmount ?? Math.max(0, settlement?.netProceeds ?? 0)}
             existingPayout={settlement?.clientPayout ?? null}
+            onPayoutRecorded={(amount) => setPayoutAmount(amount)}
           />
         )}
 
@@ -243,7 +253,9 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
               </div>
               <div className="border-t border-gray-200 dark:border-gray-600 pt-2 flex justify-between text-sm">
                 <span className="font-semibold text-gray-700 dark:text-gray-200">{config.clientLabel} Receives</span>
-                <span className="font-bold text-green-600 dark:text-green-400">${(settlement?.netProceeds ?? 0).toFixed(2)}</span>
+                <span className="font-bold text-green-600 dark:text-green-400">
+                  ${(settlement?.clientPayout?.amount ?? payoutAmount ?? settlement?.netProceeds ?? 0).toFixed(2)}
+                </span>
               </div>
             </div>
 
@@ -279,20 +291,37 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
             )}
 
             <div className="flex gap-2">
-              <a
-                href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/sales/${saleId}/settlement/receipt`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={async () => {
+                  try {
+                    const url = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/sales/${saleId}/settlement/receipt`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error('Failed to download receipt');
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = downloadUrl;
+                    link.download = `settlement-receipt-${saleId}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(downloadUrl);
+                  } catch (error) {
+                    console.error('Download failed:', error);
+                    showToast('Failed to download receipt', 'error');
+                  }
+                }}
                 className="flex-1 text-center py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors text-sm"
               >
                 Download Receipt
-              </a>
+              </button>
               <button
                 onClick={() => closeMutation.mutate()}
                 disabled={closeMutation.isPending}
                 className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 text-sm"
               >
                 {closeMutation.isPending ? 'Closing...' : 'Close Settlement'}
+
               </button>
             </div>
           </div>

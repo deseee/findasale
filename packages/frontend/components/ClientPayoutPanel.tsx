@@ -19,6 +19,7 @@ interface ClientPayoutPanelProps {
     method: string;
     paidAt?: string | null;
   } | null;
+  onPayoutRecorded?: (amount: number) => void;
 }
 
 export default function ClientPayoutPanel({
@@ -26,6 +27,7 @@ export default function ClientPayoutPanel({
   clientLabel,
   suggestedAmount,
   existingPayout,
+  onPayoutRecorded,
 }: ClientPayoutPanelProps) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -46,6 +48,8 @@ export default function ClientPayoutPanel({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settlement', saleId] });
       showToast('Payout recorded', 'success');
+      // Notify parent component of the recorded payout amount
+      onPayoutRecorded?.(parseFloat(form.amount));
     },
     onError: () => showToast('Failed to initiate payout', 'error'),
   });
@@ -189,7 +193,7 @@ export default function ClientPayoutPanel({
         <button
           type="submit"
           disabled={payoutMutation.isPending || !form.clientName || !form.amount}
-          className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+          className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transitransition-colors disabled:opacity-50"
         >
           {payoutMutation.isPending ? 'Processing...' : `Record ${clientLabel} Payout`}
         </button>

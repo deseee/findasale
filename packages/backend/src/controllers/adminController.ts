@@ -644,9 +644,15 @@ export const getBidReviewQueue = async (req: AuthRequest, res: Response) => {
     const records = await prisma.bidIpRecord.findMany({
       take: 100,
       orderBy: { createdAt: 'desc' },
-      include: {
+      select: {
+        id: true,
+        bidId: true,
+        ipAddress: true,
+        createdAt: true,
         bid: {
-          include: {
+          select: {
+            id: true,
+            amount: true,
             item: { select: { id: true, title: true, currentBid: true } },
             user: { select: { id: true, name: true, email: true } },
           }
@@ -990,6 +996,10 @@ export const updateCuratorEntry = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Encyclopedia entry not found' });
     }
     console.error('Error updating curator entry:', error);
+    res.status(500).json({ message: 'Failed to update curator entry', error: error.message });
+  }
+};
+pdating curator entry:', error);
     res.status(500).json({ message: 'Failed to update curator entry', error: error.message });
   }
 };
