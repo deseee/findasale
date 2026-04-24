@@ -149,99 +149,95 @@ async function seedEncyclopedia() {
       'fiestaware-dinnerware-complete-sets',
     ]);
 
-    // Insert entries and benchmarks in a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      let entriesInserted = 0;
-      let entriesSkipped = 0;
-      let benchmarksInserted = 0;
-      let benchmarksSkipped = 0;
+    // Insert entries and benchmarks directly (no transaction — Railway proxy latency causes P2028 timeout)
+    let entriesInserted = 0;
+    let entriesSkipped = 0;
+    let benchmarksInserted = 0;
+    let benchmarksSkipped = 0;
 
-      for (const entry of parsedEntries) {
-        const isFeatured = featuredSlugs.has(entry.slug);
+    for (const entry of parsedEntries) {
+      const isFeatured = featuredSlugs.has(entry.slug);
 
-        try {
-          const upsertedEntry = await tx.encyclopediaEntry.upsert({
-            where: { slug: entry.slug },
-            update: {
-              title: entry.title,
-              category: entry.category,
-              tags: entry.tags,
-              isFeatured,
-              status: 'PUBLISHED',
-              content: entry.content,
-            },
-            create: {
-              slug: entry.slug,
-              title: entry.title,
-              category: entry.category,
-              tags: entry.tags,
-              isFeatured,
-              status: 'PUBLISHED',
-              content: entry.content,
-              authorId: SYSTEM_USER_ID,
-            },
-          });
+      try {
+        const upsertedEntry = await prisma.encyclopediaEntry.upsert({
+          where: { slug: entry.slug },
+          update: {
+            title: entry.title,
+            category: entry.category,
+            tags: entry.tags,
+            isFeatured,
+            status: 'PUBLISHED',
+            content: entry.content,
+          },
+          create: {
+            slug: entry.slug,
+            title: entry.title,
+            category: entry.category,
+            tags: entry.tags,
+            isFeatured,
+            status: 'PUBLISHED',
+            content: entry.content,
+            authorId: SYSTEM_USER_ID,
+          },
+        });
 
-          entriesInserted++;
+        entriesInserted++;
 
-          // Insert associated price benchmarks
-          const entryBenchmarks = benchmarksBySlug.get(entry.slug) || [];
-          for (const benchmark of entryBenchmarks) {
-            try {
-              // Check if benchmark exists (no unique constraint defined yet)
-              const existing = await tx.priceBenchmark.findFirst({
-                where: {
+        // Insert associated price benchmarks
+        const entryBenchmarks = benchmarksBySlug.get(entry.slug) || [];
+        for (const benchmark of entryBenchmarks) {
+          try {
+            // Check if benchmark exists (no unique constraint defined yet)
+            const existing = await prisma.priceBenchmark.findFirst({
+              where: {
+                entryId: upsertedEntry.id,
+                condition: benchmark.condition,
+                region: benchmark.region,
+              },
+            });
+
+            if (existing) {
+              // Update if exists
+              await prisma.priceBenchmark.update({
+                where: { id: existing.id },
+                data: {
+                  priceRangeLow: benchmark.priceRangeLow,
+                  priceRangeHigh: benchmark.priceRangeHigh,
+                  dataSource: benchmark.dataSource,
+                },
+              });
+              benchmarksSkipped++;
+            } else {
+              // Create if doesn't exist
+              await prisma.priceBenchmark.create({
+                data: {
                   entryId: upsertedEntry.id,
                   condition: benchmark.condition,
                   region: benchmark.region,
+                  priceRangeLow: benchmark.priceRangeLow,
+                  priceRangeHigh: benchmark.priceRangeHigh,
+                  dataSource: benchmark.dataSource,
                 },
               });
-
-              if (existing) {
-                // Update if exists
-                await tx.priceBenchmark.update({
-                  where: { id: existing.id },
-                  data: {
-                    priceRangeLow: benchmark.priceRangeLow,
-                    priceRangeHigh: benchmark.priceRangeHigh,
-                    dataSource: benchmark.dataSource,
-                  },
-                });
-                benchmarksSkipped++;
-              } else {
-                // Create if doesn't exist
-                await tx.priceBenchmark.create({
-                  data: {
-                    entryId: upsertedEntry.id,
-                    condition: benchmark.condition,
-                    region: benchmark.region,
-                    priceRangeLow: benchmark.priceRangeLow,
-                    priceRangeHigh: benchmark.priceRangeHigh,
-                    dataSource: benchmark.dataSource,
-                  },
-                });
-                benchmarksInserted++;
-              }
-            } catch (error) {
-              console.error(`Failed to process benchmark for ${entry.slug}/${benchmark.condition}/${benchmark.region}:`, error);
-              benchmarksSkipped++;
+              benchmarksInserted++;
             }
-          }
-        } catch (error) {
-          if (error instanceof Error && error.message.includes('Unique constraint')) {
-            entriesSkipped++;
-          } else {
-            throw error;
+          } catch (error) {
+            console.error(`Failed to process benchmark for ${entry.slug}/${benchmark.condition}/${benchmark.region}:`, error);
+            benchmarksSkipped++;
           }
         }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('Unique constraint')) {
+          entriesSkipped++;
+        } else {
+          throw error;
+        }
       }
-
-      return { entriesInserted, entriesSkipped, benchmarksInserted, benchmarksSkipped };
-    });
+    }
 
     console.log(`\n✅ Seed complete!`);
-    console.log(`   Entries: inserted ${result.entriesInserted}, skipped ${result.entriesSkipped} (duplicates)`);
-    console.log(`   Benchmarks: inserted ${result.benchmarksInserted}, skipped ${result.benchmarksSkipped} (duplicates)`);
+    console.log(`   Entries: inserted ${entriesInserted}, skipped ${entriesSkipped} (duplicates)`);
+    console.log(`   Benchmarks: inserted ${benchmarksInserted}, skipped ${benchmarksSkipped} (duplicates)`);
   } catch (error) {
     console.error('Seeding failed:', error);
     process.exit(1);
