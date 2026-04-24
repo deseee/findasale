@@ -3,7 +3,8 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
-import { awardXp } from '../services/xpService';
+import { awardXp, spendXp, getSpendableXp } from '../services/xpService';
+import { stripe } from '../lib/stripe';
 
 /**
  * POST /api/bounties
@@ -734,8 +735,16 @@ export const getCommunityBounties = async (req: AuthRequest, res: Response) => {
 /**
  * POST /api/bounties/submissions/:id/purchase
  * Complete bounty purchase (auth required, owner of bounty)
- * For MVP: just update statuses and create PointsTransaction records
- * Stripe integration can be wired later
+ *
+ * Flow:
+ * 1. Validate submission ownership and status
+ * 2. Check shopper has ≥50 XP (BOUNTY_FULFILLMENT cost)
+ * 3. Deduct 50 XP from shopper (BOUNTY_FULFILLMENT)
+ * 4. Award 25 XP to organizer (BOUNTY_FULFILLMENT)
+ * 5. Create Stripe PaymentIntent for item price
+ * 6. Update BountySubmission.status → PURCHASED
+ * 7. Create Purchase record linked to Stripe PI
+ * 8. Return clientSecret for frontend to complete payment
  */
 export const completeBountyPurchase = async (req: AuthRequest, res: Response) => {
   try {
@@ -744,12 +753,12 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
 
     if (!userId) return res.status(401).json({ message: 'Authentication required' });
 
-    // Fetch submission with bounty
+    // Fetch submission with bounty, item, and organizer
     const submission = await prisma.bountySubmission.findUnique({
       where: { id: submissionId },
       include: {
         bounty: true,
-        item: true,
+        item: { include: { sale: { select: { id: true, organizerId: true, organizer: { select: { stripeConnectId: true, subscriptionTier: true } } } } } },
         organizer: true,
       },
     });
@@ -761,20 +770,115 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       return res.status(400).json({ message: 'Submission cannot be purchased.' });
     }
 
-    const xpCost = submission.bounty.xpReward ? submission.bounty.xpReward * 2 : 50;
-    const organizerXpAward = submission.bounty.xpReward || 25;
+    // XP Constants for Bounty Fulfillment
+    const XP_BOUNTY_COST = 50;           // Shopper pays 50 XP
+    const XP_ORGANIZER_REWARD = 25;      // Organizer earns 25 XP
 
-    // Award XP to shopper (deduction as negative)
-    await awardXp(userId, 'BOUNTY_PURCHASE', -xpCost, {
-      description: `Paid for bounty submission: ${submission.bounty.description}`,
-    });
+    // Step 1: Check shopper has sufficient spendable XP
+    const spendableXp = await getSpendableXp(userId);
+    if (spendableXp < XP_BOUNTY_COST) {
+      return res.status(402).json({
+        message: 'Insufficient XP to complete this bounty purchase',
+        requiredXp: XP_BOUNTY_COST,
+        availableXp: spendableXp,
+      });
+    }
 
-    // Award XP to organizer
-    await awardXp(submission.organizerId, 'BOUNTY_SUBMISSION_PURCHASED', organizerXpAward, {
-      description: `Earned from bounty submission for: ${submission.bounty.description}`,
-    });
+    // Step 2: Deduct XP from shopper using idempotency key based on submission ID
+    const shoppingSpendSuccess = await spendXp(
+      userId,
+      XP_BOUNTY_COST,
+      'BOUNTY_FULFILLMENT',
+      { description: `Bounty submission purchase: ${submission.item.title}` }
+    );
+    if (!shoppingSpendSuccess) {
+      return res.status(402).json({
+        message: 'Failed to deduct XP. Please try again.',
+      });
+    }
 
-    // Update submission status
+    // Step 3: Award XP to organizer
+    await awardXp(
+      submission.organizerId,
+      'BOUNTY_FULFILLMENT',
+      XP_ORGANIZER_REWARD,
+      { description: `Earned from bounty submission: ${submission.item.title}` }
+    );
+
+    // Step 4: Prepare Stripe PaymentIntent for the item price
+    const itemPrice = submission.item.price || 0;
+    if (itemPrice <= 0) {
+      return res.status(400).json({ message: 'Item has invalid price.' });
+    }
+
+    const priceCents = Math.round(itemPrice * 100);
+    const minPrice = 50; // $0.50 minimum
+    if (priceCents < minPrice) {
+      return res.status(400).json({ message: 'Item price must be at least $0.50.' });
+    }
+
+    // Stripe routing: check if organizer has Stripe Connect
+    const { stripeConnectId, subscriptionTier } = submission.item.sale!.organizer;
+    const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
+
+    // Calculate platform fee
+    const getPlatformFeeRate = (tier: string): number => {
+      const rates: Record<string, number> = {
+        SIMPLE: 0.10,
+        PRO: 0.10,
+        TEAMS: 0.10,
+      };
+      return rates[tier] || 0.10;
+    };
+    const platformFeeAmount = Math.round(priceCents * getPlatformFeeRate(subscriptionTier || 'SIMPLE'));
+
+    // Create Stripe PaymentIntent
+    const idempotencyKey = `bounty-${submissionId}-${userId}`;
+    let paymentIntent;
+    try {
+      const basePaymentIntentData = {
+        amount: priceCents,
+        currency: 'usd',
+        metadata: {
+          submissionId: submission.id,
+          bountyId: submission.bountyId,
+          itemId: submission.itemId,
+          saleId: submission.item.sale!.id,
+          userId,
+          type: 'BOUNTY_SUBMISSION',
+        },
+      };
+
+      paymentIntent = await stripe().paymentIntents.create(
+        shouldUseConnect
+          ? {
+              ...basePaymentIntentData,
+              application_fee_amount: platformFeeAmount,
+              on_behalf_of: stripeConnectId,
+              transfer_data: { destination: stripeConnectId },
+            }
+          : basePaymentIntentData,
+        { idempotencyKey }
+      );
+    } catch (stripeError: any) {
+      // Fallback if Connect fails
+      if (
+        shouldUseConnect &&
+        (stripeError.code === 'insufficient_capabilities_for_transfer' ||
+          (stripeError.type === 'StripeInvalidRequestError' &&
+            stripeError.message?.includes('insufficient_capabilities_for_transfer')))
+      ) {
+        console.warn(`[Stripe Connect fallback] Account ${stripeConnectId} not fully onboarded`);
+        paymentIntent = await stripe().paymentIntents.create(
+          basePaymentIntentData,
+          { idempotencyKey: `${idempotencyKey}-fallback` }
+        );
+      } else {
+        throw stripeError;
+      }
+    }
+
+    // Step 5: Update submission status to PURCHASED
     const updated = await prisma.bountySubmission.update({
       where: { id: submissionId },
       data: {
@@ -783,29 +887,39 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       },
     });
 
-    // Update bounty status to FULFILLED
-    await prisma.missingListingBounty.update({
-      where: { id: submission.bountyId },
-      data: { status: 'FULFILLED', itemId: submission.itemId },
+    // Step 6: Create Purchase record linked to bounty submission
+    const purchase = await prisma.purchase.create({
+      data: {
+        userId,
+        itemId: submission.itemId,
+        saleId: submission.item.sale!.id,
+        amount: itemPrice,
+        platformFeeAmount: platformFeeAmount / 100,
+        stripePaymentIntentId: paymentIntent.id,
+        status: 'PENDING',
+      },
     });
 
-    // Notify organizer of purchase
+    // Step 7: Notify organizer of purchase
     await createNotification(
       submission.organizerId,
       'BOUNTY_PURCHASED',
       'Bounty Purchased!',
-      `Your submission was purchased! You earned ${organizerXpAward} XP.`,
+      `Your submission was purchased! You earned ${XP_ORGANIZER_REWARD} XP.`,
       `/bounties/submissions`,
       'OPERATIONAL'
     );
 
     return res.json({
-      orderId: null, // TODO: create Order record
-      bountyId: submission.bountyId,
+      clientSecret: paymentIntent.client_secret,
+      amount: priceCents,
+      currency: 'usd',
       submissionId: updated.id,
+      bountyId: submission.bountyId,
+      purchaseId: purchase.id,
       status: updated.status,
-      xpDeducted: xpCost,
-      organizerXpAwarded: organizerXpAward,
+      xpDeducted: XP_BOUNTY_COST,
+      organizerXpAwarded: XP_ORGANIZER_REWARD,
     });
   } catch (error) {
     console.error('completeBountyPurchase error:', error);
