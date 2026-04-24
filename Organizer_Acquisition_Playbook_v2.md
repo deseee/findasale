@@ -161,11 +161,13 @@ Everything else from the v1 partner list is deferred.
 
 ## Influencers — Advisory First, Promotional Never
 
-**See `claude_docs/marketing/advisory-outreach-drafts.md` for 17 drafted messages.**
+**See `claude_docs/marketing/advisory-outreach-drafts.md` for 36 drafted messages.**
 
 The framing is: ask operators, industry voices, and resellers to critique the product — not to promote it. One outreach message per day, Patrick sends from his inbox/LinkedIn. Any promotional mention that follows is organic and earned, not asked for. This replaces v1's "Tier 1 influencer affiliate" section entirely — affiliate deals attached to creator outreach turn the ask into a sales pitch and destroy the critique-honest dynamic.
 
 **Time cost:** 1 message/day × 5 days/week = 15–20 minutes/week. A yes converts to one 30-minute call. A no costs nothing. The list compounds into an advisory bench over 6–12 months.
+
+**Gary Vee / VeeFriends orbit:** Two people on the list are from this world. Reezy Resells has the deepest connection — Gary is his stated biggest mentor, they did the Trash Talk challenge together, and Reezy is a confirmed VeeFriend NFT holder (Patrick is too — the personal connection is real, use it). Flea Market Flipper's growth was heavily driven by the Trash Talk era but has no confirmed direct relationship or VeeFriends connection — don't use that angle with them. Jordan Welch and Bolo Brothers (pending verification) are also Trash Talk-era cohort adjacent. **VeeFriends Discord / VeeCon:** If Patrick is active in VeeFriends community spaces, the secondary-market collector overlap is significant — member-to-member outreach there bypasses cold-contact dynamics entirely and costs nothing.
 
 **Resellers on the affiliate program track (separate from the advisory list):** if a creator is already a FindA.Sale organizer or shopper and asks about affiliate terms, they're routed into the existing Affiliate Program (tier-matched commission per affiliate-innovation-review-S550). Advisory relationships are not commercial; affiliate relationships are. Keep them cleanly separated.
 
@@ -286,7 +288,7 @@ Patrick touch on dev work: zero. Dispatched to findasale-dev, shipped as a batch
 
 ### Relationship work — ≤ 1 hour per week
 
-12. **Advisory outreach.** One message per day from `advisory-outreach-drafts.md`. 15–20 min/week.
+12. **Advisory outreach.** One message per day from `advisory-outreach-drafts.md` (36 drafted). 15–20 min/week. Verify Jordan Welch and Bolo Brothers for competing platforms before sending those two.
 13. **Partner outreach.** One email to each Facebook-group admin or ASEL chapter leader on a single afternoon. No ongoing nurture unless they engage. ~2 hours total, once.
 14. **Opportunistic ASEL + local presence.** Only if convenient.
 

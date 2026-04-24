@@ -77,11 +77,11 @@ function SettingsPage() {
       return response.data;
     },
     onSuccess: () => {
-      setSuccessMessage('Followed organizers saved!');
+      setSuccessMessage('Interests saved!');
       setTimeout(() => setSuccessMessage(''), 3000);
     },
     onError: () => {
-      setSuccessMessage('Failed to save interests');
+      setSuccessMessage('Failed to save interests. Please try again.');
       setTimeout(() => setSuccessMessage(''), 3000);
     }
   });

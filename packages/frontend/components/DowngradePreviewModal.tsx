@@ -39,7 +39,7 @@ export default function DowngradePreviewModal({ isOpen, onClose, preview, onConf
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-warm-900 rounded-2xl max-w-md w-full p-6">
-        <h2 className="text-xl font-semibold mb-2">Downgrade to SIMPLE</h2>
+        <h2 className="text-xl font-semibold mb-2">Downgrade to Free</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           You have {preview.totalItems} items. Here&apos;s what changes:
         </p>
@@ -85,7 +85,7 @@ export default function DowngradePreviewModal({ isOpen, onClose, preview, onConf
             disabled={confirming}
             className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-red-700"
           >
-            {confirming ? 'Processing...' : 'Downgrade to SIMPLE'}
+            {confirming ? 'Processing...' : 'Downgrade to Free'}
           </button>
         </div>
       </div>
