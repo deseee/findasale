@@ -1,72 +1,86 @@
-# Patrick's Dashboard — S562 Complete (Fix Dispatch + Verification)
+# Patrick's Dashboard — S563 Complete (QA Backlog — Consignors + Locations)
 
-## 🔧 S562 — What Got Fixed
+## ✅ S563 — What Got Verified
 
-**One-line summary:** Dispatched and Chrome-verified fixes for the top S561 bugs. TEAMS modal + Hunt Pass CTA + admin/items pagination all confirmed working. 3 code fixes ready to push (consignors backend, coupon labels, encyclopedia overflow) — pending deploy to verify end-to-end.
-
----
-
-### Verified working (no push needed)
-
-**TEAMS onboarding modal ✅ Chrome-verified** — Modal now dismisses permanently after first completion. OrganizerWorkspace record created on complete (unblocks `/organizer/locations` for Alice). Reload confirms no reappearance. ss_87046vbns
-
-**Hunt Pass Active CTA ✅ Chrome-verified** — Karen sees green "Hunt Pass Active" manage card on `/shopper/hunt-pass`. No more "Upgrade to Hunt Pass" for active subscribers. ss_8715qaw4a
-
-**HP Active duplicate ✅ Verified already resolved** — DOM confirms single HP Active element on shopper dashboard.
-
-**admin/items pagination ✅ Patrick-confirmed** — All pagination buttons visible at 412px viewport.
+**One-line summary:** Chrome QA confirmed #309 Consignor Portal end-to-end ✅ and #311 Locations basic CRUD ✅. locationController.ts `_count` fix shipped (POST/PUT crash fix). ~41 QA items remain in backlog.
 
 ---
 
-### Push needed — 3 files
+### Chrome-verified this session
+
+**#309 Consignor Portal ✅ PASS WITH NOTES**
+- List loads (no 500/403)
+- Create consignor works (P1 include fix verified)
+- Update persists
+- Delete works (workaround: `window.confirm = () => true` override)
+- Portal token retrieved via clipboard intercept
+- `/consignor/portal/[token]` renders without auth ✅
+- `/organizer/locations` loads without "Workspace not found" ✅
+- P1 remaining: delete uses native `window.confirm()` — systemic across 24 files, fix pending
+
+**#311 Locations CRUD ✅ PASS (basic)**
+- Root cause found + fixed: `createLocation` and `updateLocation` handlers were missing `_count: { select: { items: true, sales: true } }` in their `select` clauses → frontend crash on `.items` access
+- Fix pushed to GitHub (commit 50306cd) → Railway deployed
+- Chrome-verified: list loads, "Garage" created without crash, item/sale counts render
+- Advanced QA still pending: inventory filter, item transfer, delete-with-items (409), LocationSelector
+
+**#310 Discount Rules — backend fixed, blocked**
+- ownerId fix is live (backend)
+- No frontend page exists at `/organizer/color-rules` or `/organizer/discount-rules`
+- Chrome QA not possible until frontend management page is built
+
+---
+
+### Remaining P1 pending dispatch
+
+**window.confirm() systemic fix** — 24 frontend files use native `window.confirm()`. Chrome MCP freezes for 60s on native dialogs. This is the biggest QA workflow blocker. Fix: build shared `<ConfirmDialog>` React component and replace all 24 occurrences. Next QA session will hit this on every delete operation until it's fixed.
+
+Files affected: CommandCenterCard, PreviewModal, admin/invites, add-items/[saleId], shopper/trails/[trailId], shopper/settings, add-items/review (×3), shopper/holds, webhooks, sales/[id] (×2), members, SaleChecklist, label-composer, dashboard (×3), edit-sale/[id], edit-item/[id], SyncQueueModal, pos, **consignors**
+
+---
+
+## 📋 Push Block — S563 Wrap
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/consignorController.ts
-git add packages/frontend/pages/coupons.tsx
-git add packages/frontend/pages/admin/encyclopedia.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S562: consignorController workspace lookup fix; coupon label swap; encyclopedia table-fixed overflow fix"
+git add claude_docs/strategy/roadmap.md
+git commit -m "S563: STATE + dashboard + roadmap — #309 Chrome-verified, #311 basic CRUD verified, _count fix noted, #310 blocked (no frontend page)"
 .\push.ps1
 ```
 
-**After Railway deploys backend:**
-- `/organizer/consignors` should load without 500 for TEAMS organizer
-- Consignor create/update/delete should work
+---
 
-**After Vercel deploys frontend:**
-- `/coupons` XP Store: Standard / Deluxe / Premium in correct order with correct slot counts
-- `/admin/encyclopedia`: Promote + Reject buttons visible without horizontal scroll
+## 📊 QA Backlog Status
+
+**~41 items total**
+
+| Category | Count | Next action |
+|----------|-------|------------|
+| Chrome-ready (actionable) | ~29 | Continue sequential QA dispatches |
+| Blocked by test data | ~12 | Defer to beta cohort or seed data |
+
+**Top 5 next QA items:**
+1. **#266 AvatarDropdown shopper** — login user11, verify "Explorer Profile" link (quick, single test)
+2. **S529 storefront widget** — /organizer/dashboard Copy Link + View Storefront
+3. **S529 mobile nav rank** — mobile viewport, verify rank from useXpProfile
+4. **#311 Locations advanced** — inventory filter + transfer + LocationSelector
+5. **RETAIL tier gate** — free org at /organizer/create-sale → "Retail Store (TEAMS only)" greyed
 
 ---
 
-### What changed in each file
+## 🔧 Pending Patrick Actions
 
-**`consignorController.ts`** — All 6 operations had wrong workspace lookup (`organizerId` doesn't exist on schema; `ownerId` holds Organizer.id not User.id). Added `getOrganizerWorkspace(userId)` helper that does `User.id → Organizer → OrganizerWorkspace.ownerId`. All 6 ops now use this helper with null → 404 handling.
-
-**`coupons.tsx`** — COUPON_TIERS labels were swapped. Was: "Premium Deal" for free=2/huntPass=3, "Deluxe Deal" for free=1/huntPass=2. Now matches hunt-pass.tsx: Deluxe=2→3 coupons, Premium=1→2 coupons.
-
-**`admin/encyclopedia.tsx`** — Table changed to `w-full table-fixed` with explicit column widths (22%/16%/14%/12%/20%/16%). Actions `td` gets `whitespace-nowrap`. Prevents Promote/Reject buttons from being cut off at viewport edge.
+1. **Push the S563 wrap block above** (STATE.md + dashboard + roadmap)
+2. **Run migrate deploy + prisma generate** for `20260424_add_comp_fetch_enhancements` (S560 action, still pending if not done)
 
 ---
 
-## 📋 Still pending from prior sessions
+## 🏗️ Build Queue (not yet dispatched)
 
-**`20260424_add_comp_fetch_enhancements` migration** (S560) — if not yet run:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
----
-
-## 🔜 S563 — What's next
-
-1. Push S562 block above
-2. Post-deploy Chrome QA: consignors CRUD, coupon labels, encyclopedia overflow (sequential, per §10c)
-3. Chrome QA #310 Color Rules + #311 Locations + RETAIL tier gate (unblocked now TEAMS modal is fixed)
-4. Bounty Batch C: seed 1 APPROVED BountySubmission for Karen → test "Complete Purchase" flow
-5. Affiliate Batches 5/7/9: Patrick decision needed on tiered vs flat commission before dispatch
+- **window.confirm() → ConfirmDialog** (P1, systemic) — highest QA workflow impact
+- **#310 frontend page** — `/organizer/color-rules` management page (blocked Chrome QA for color discount rules)
+- **#311 advanced** — inventory filter + transfer endpoints (Chrome QA partially done)
+- **Affiliate Batches 5/7/9** — pending Patrick decision on tiered vs flat commission + 1099 compliance gate
+- **Bounty Batch C** — seed 1 APPROVED BountySubmission for Karen → test "Complete Purchase"
