@@ -180,7 +180,7 @@ export async function fetchEbayPriceComps(params: {
   count: number;
   suggestedPrice: number;
   compsRunAt: string;
-  listings: Array<{ title: string; price: number; condition: string; url: string }>;
+  listings: Array<{ title: string; price: number; condition: string; url: string; imageUrl?: string }>;
   isMockData?: boolean;
   message?: string;
 }> {
@@ -201,7 +201,7 @@ async function getEbayPriceComps(
   count: number;
   suggestedPrice: number;
   compsRunAt: string;
-  listings: Array<{ title: string; price: number; condition: string; url: string }>;
+  listings: Array<{ title: string; price: number; condition: string; url: string; imageUrl?: string }>;
   isMockData?: boolean;
   message?: string;
 }> {
@@ -301,6 +301,7 @@ async function getEbayPriceComps(
       price: parseFloat(item.price?.value || 0),
       condition: item.condition || 'Unknown',
       url: item.itemWebUrl || '',
+      imageUrl: item.image?.imageUrl || undefined,
     }));
 
     return {

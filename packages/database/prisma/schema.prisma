@@ -349,6 +349,8 @@ model Organizer {
   graceEndAt              DateTime? // When grace period expires (7 days from downgrade)
   graceTierBefore         String? // Tier before downgrade (PRO or TEAMS)
   graceNotificationsCount Int                    @default(0) // Count of grace period notifications sent (0-2)
+  // Feature #314: Price Override Logging — organizer pricing calibration
+  priceOverrideLogs       PriceOverrideLog[]
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 }
@@ -779,6 +781,7 @@ model Item {
   waitlist                   ItemWaitlist[]
   currency                   String                 @default("USD") // Batch 17: multi-currency groundwork
   priceHistory               ItemPriceHistory[]
+  priceOverrideLogs          PriceOverrideLog[]     // Feature #314: Organizer price change tracking
   draftStatus                String                 @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED — Rapidfire Mode item draft status
   aiErrorLog                 Json? // Rapidfire Mode AI error logging (JSON array of errors)
   optimisticLockVersion      Int                    @default(0) // Rapidfire Mode optimistic concurrency control
@@ -1764,6 +1767,24 @@ model ItemPriceHistory {
   createdAt DateTime @default(now())
 
   @@index([itemId])
+}
+
+// Feature #314: Price Override Logging — track organizer pricing decisions for learning/calibration
+model PriceOverrideLog {
+  id                String    @id @default(cuid())
+  itemId            String
+  item              Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  organizerId       String
+  organizer         Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  aiSuggestedPrice  Float?    // AI's recommended price (may be null if no AI suggestion)
+  organizerPrice    Float     // Organizer's set price
+  delta             Float?    // organizerPrice - aiSuggestedPrice; null if no AI price
+  category          String?   // Item category for future organizer calibration
+  createdAt         DateTime  @default(now())
+
+  @@index([itemId])
+  @@index([organizerId])
+  @@index([createdAt])
 }
 
 // Sprint 3: Shopper Loyalty Coupons — issued after each completed purchase
@@ -2826,6 +2847,7 @@ model ItemCompLookup {
   ebayPrice       Float?
   ebayCondition   String?
   ebayCategory    String?
+  ebayImageUrl    String?   // Gallery image URL from eBay listing
 
   fetchedAt       DateTime?
   expireAt        DateTime?

@@ -1,8 +1,35 @@
-# Patrick's Dashboard — S556 Complete
+# Patrick's Dashboard — S557 Complete
 
-## 🔥 S556 — ADR-069 Phase 1: Burst clustering + Encyclopedia automation + eBay async comps
+## 🔥 S557 — Photo workflow enhancements + roadmap update + architect spec
 
-**One-line summary:** Fully wired the camera → cluster → Encyclopedia pipeline. Photos now group into sets before items are created, Vision labels aggregate across all photos (not just the first one), eBay comps cache automatically after publish, and the Encyclopedia self-populates from two directions: Haiku writes stubs when it sees a new brand, and a weekly curator job promotes them to published after checking Wikipedia. A Wikidata importer seeds ~150–300 more brand entries on demand, and the listing flow now shows a price reference card from the Encyclopedia below the price input.
+**One-line summary:** Five photo pipeline improvements ship alongside the S556 work: EXIF timestamp clustering boost, best-photo-first sorting, eBay comp tiles on the pricing screen, price override logging, and the Photo Role Awareness architect spec. Roadmap updated through S557. video.html "Who is this for?" updated. Two migrations need deploy.
+
+### What shipped
+
+- **Temporal EXIF Clustering Boost** (`cloudAIService.ts`): Photos taken ≤30s apart get a timing hint passed to Haiku clustering. No new dependency — raw JPEG binary parsing.
+- **Best-Photo-First Sorting** (`cloudAIService.ts`): Vision label confidence scores used to sort cluster photos. Highest-quality photo → index 0 (primary display). Populates `Photo.orderIndex`.
+- **eBay Comparable Sale Tiles** (`EbayCompTiles.tsx` new, `useItemEbayComps.ts` new, `/api/items/:id/ebay-comps` new): Amber card shows 2–3 sold eBay listings with image/price/condition on the edit-item page, below the Encyclopedia tip. Renders nothing when no comps exist (expected in beta until items publish).
+- **eBay Image URL storage** (`fetchEbayComps.ts`, `schema.prisma`): `ebayImageUrl` field added to ItemCompLookup; fetchEbayComps now stores gallery image URL.
+- **Price Override Logging** (`itemController.ts`, `schema.prisma`): New `PriceOverrideLog` table. Every time an organizer changes the AI-suggested price, logs the delta by category. Foundation for per-organizer pricing calibration (Phase 2 uses the data).
+- **Photo Role Awareness spec** (`ADR-069-PHASE2-PHOTO-ROLE-AWARENESS.md`): Full architect spec — roles FRONT/BACK_STAMP/DETAIL_DAMAGE/LABEL_BRAND/MULTI_ANGLE/UNKNOWN embedded in the existing clustering Haiku call (no extra API call). Awaits your review before dev dispatch.
+- **Roadmap v119**: Features #319–#330 added, S553–S557 coverage complete.
+- **video.html**: "Who is this for?" now includes antique dealers and thrift stores.
+
+### Two Patrick actions needed
+
+**Action 1 — Deploy migrations:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**Action 2 — Review the Photo Role Awareness spec:**
+Open `claude_docs/architecture/ADR-069-PHASE2-PHOTO-ROLE-AWARENESS.md` and confirm you want to proceed with dev dispatch (M complexity, ~4–6 dev-days). Once approved, one dispatch handles it.
+
+### Appraisals gap (no action needed now — flagged)
+The Community Appraisals page is bare because there's no "Request Appraisal" button anywhere in the product. The backend tables (AppraisalRequest, AppraisalResponse, AppraisalConsensus) are all built. This is roadmap #330 — let me know when you want to add the entry point.
 
 ### What shipped (6 dispatches)
 
