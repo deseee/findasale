@@ -1755,7 +1755,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </div>
           </div>
           <div className="border-t border-warm-700 mt-8 pt-6 text-center text-warm-400">
-            <p>&copy; {new Date().getFullYear()} FindA.Sale. All rights reserved.</p>
+            <p>&copy; {isClient ? new Date().getFullYear() : '2026'} FindA.Sale. All rights reserved.</p>
           </div>
         </div>
       </footer>
