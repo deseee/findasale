@@ -29,6 +29,7 @@ import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 import EncyclopediaInlineTip from '../../../components/EncyclopediaInlineTip';
 import EbayCompTiles from '../../../components/EbayCompTiles';
 import VoiceTagButton from '../../../components/VoiceTagButton';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 
 const EditItemPage = () => {
   const router = useRouter();
@@ -82,6 +83,9 @@ const EditItemPage = () => {
   // D-XP-003: Organizer discount modal
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
   const [pendingXpToSpend, setPendingXpToSpend] = useState<number | null>(null);
+
+  // Confirm dialog state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const openDiscountModal = (xpToSpend: number) => {
     setPendingXpToSpend(xpToSpend);
@@ -1015,11 +1019,7 @@ const EditItemPage = () => {
               <button
                 type="button"
                 disabled={deleteMutation.isPending}
-                onClick={() => {
-                  if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
-                    deleteMutation.mutate();
-                  }
-                }}
+                onClick={() => setDeleteConfirmOpen(true)}
                 className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg disabled:opacity-50 transition-colors"
               >
                 {deleteMutation.isPending ? 'Deleting…' : '🗑️ Delete Item'}
@@ -1083,6 +1083,19 @@ const EditItemPage = () => {
               isAnalyzing={false}
             />
           ) : null}
+
+          <ConfirmDialog
+            isOpen={deleteConfirmOpen}
+            title="Delete Item"
+            message={`Delete "${item?.title || 'this item'}"? This cannot be undone.`}
+            confirmLabel="Delete"
+            onConfirm={() => {
+              setDeleteConfirmOpen(false);
+              deleteMutation.mutate();
+            }}
+            onCancel={() => setDeleteConfirmOpen(false)}
+            variant="danger"
+          />
         </div>
       </div>
     </>

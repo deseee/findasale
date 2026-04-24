@@ -49,6 +49,7 @@ import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
 import MyTeamsCard from '../../components/MyTeamsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
 import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Copy, Store } from 'lucide-react';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 // Selling Tools grid configuration (6 tools, tier-gated)
 const SELLING_TOOLS = [
@@ -121,6 +122,14 @@ const OrganizerDashboard = () => {
   const [welcomedWorkspace, setWelcomedWorkspace] = useState<string | null>(null);
   const [dismissedSharePrompts, setDismissedSharePrompts] = useState<Set<string>>(new Set());
   const hasAutoExpandedOtherSales = useRef(false);
+
+  // Confirm dialog state
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     setIsClient(true);
@@ -1120,17 +1129,23 @@ const OrganizerDashboard = () => {
                     )}
                     {activeSale.status === 'PUBLISHED' && (
                       <button
-                        onClick={async () => {
-                          const confirmed = window.confirm('Close this sale early? You can reopen it later from your dashboard.');
-                          if (!confirmed) return;
-                          try {
-                            await api.patch(`/sales/${activeSale!.id}/status`, { status: 'ENDED' });
-                            showToast('Sale closed — completing your settlement', 'success');
-                            setTimeout(() => router.push(`/organizer/settlement/${activeSale!.id}`), 800);
-                          } catch (error: any) {
-                            console.error('Failed to close sale:', error);
-                            showToast(error.response?.data?.message || 'Failed to close sale', 'error');
-                          }
+                        onClick={() => {
+                          setConfirmState({
+                            open: true,
+                            title: 'Close Sale',
+                            message: 'Close this sale early? You can reopen it later from your dashboard.',
+                            onConfirm: async () => {
+                              try {
+                                await api.patch(`/sales/${activeSale!.id}/status`, { status: 'ENDED' });
+                                showToast('Sale closed — completing your settlement', 'success');
+                                setTimeout(() => router.push(`/organizer/settlement/${activeSale!.id}`), 800);
+                              } catch (error: any) {
+                                console.error('Failed to close sale:', error);
+                                showToast(error.response?.data?.message || 'Failed to close sale', 'error');
+                              }
+                              setConfirmState(s => ({ ...s, open: false }));
+                            },
+                          });
                         }}
                         className="text-sm px-3 py-1 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-full hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
                         title="End your sale before the scheduled end date"
@@ -1535,24 +1550,31 @@ const OrganizerDashboard = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-2 sm:ml-4">
                           <button
-                            onClick={async () => {
-                              if (!window.confirm('Reopen this sale? It will become visible to shoppers again.')) return;
-                              try {
-                                await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
-                                showToast('Sale reopened', 'success');
-                                setTimeout(() => window.location.reload(), 1000);
-                              } catch (error: any) {
-                                // Feature #249: Handle concurrent sales tier limit (409)
-                                if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
-                                  const tierErr = error.response.data;
-                                  showToast(
-                                    `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
-                                    'error'
-                                  );
-                                } else {
-                                  showToast(error.response?.data?.message || 'Failed to reopen', 'error');
-                                }
-                              }
+                            onClick={() => {
+                              setConfirmState({
+                                open: true,
+                                title: 'Reopen Sale',
+                                message: 'Reopen this sale? It will become visible to shoppers again.',
+                                onConfirm: async () => {
+                                  try {
+                                    await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
+                                    showToast('Sale reopened', 'success');
+                                    setTimeout(() => window.location.reload(), 1000);
+                                  } catch (error: any) {
+                                    // Feature #249: Handle concurrent sales tier limit (409)
+                                    if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+                                      const tierErr = error.response.data;
+                                      showToast(
+                                        `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
+                                        'error'
+                                      );
+                                    } else {
+                                      showToast(error.response?.data?.message || 'Failed to reopen', 'error');
+                                    }
+                                  }
+                                  setConfirmState(s => ({ ...s, open: false }));
+                                },
+                              });
                             }}
                             className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-xs px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
                           >
@@ -1653,26 +1675,32 @@ const OrganizerDashboard = () => {
                         {sale.status === 'ENDED' && (
                           <>
                             <button
-                              onClick={async () => {
-                                const confirmed = window.confirm('Reopen this sale? It will become visible to shoppers again.');
-                                if (!confirmed) return;
-                                try {
-                                  await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
-                                  showToast('Sale reopened', 'success');
-                                  setTimeout(() => window.location.reload(), 1000);
-                                } catch (error: any) {
-                                  console.error('Failed to reopen sale:', error);
-                                  // Feature #249: Handle concurrent sales tier limit (409)
-                                  if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
-                                    const tierErr = error.response.data;
-                                    showToast(
-                                      `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
-                                      'error'
-                                    );
-                                  } else {
-                                    showToast(error.response?.data?.message || 'Failed to reopen sale', 'error');
-                                  }
-                                }
+                              onClick={() => {
+                                setConfirmState({
+                                  open: true,
+                                  title: 'Reopen Sale',
+                                  message: 'Reopen this sale? It will become visible to shoppers again.',
+                                  onConfirm: async () => {
+                                    try {
+                                      await api.patch(`/sales/${sale.id}/status`, { status: 'PUBLISHED' });
+                                      showToast('Sale reopened', 'success');
+                                      setTimeout(() => window.location.reload(), 1000);
+                                    } catch (error: any) {
+                                      console.error('Failed to reopen sale:', error);
+                                      // Feature #249: Handle concurrent sales tier limit (409)
+                                      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+                                        const tierErr = error.response.data;
+                                        showToast(
+                                          `You're running ${tierErr.current} active sale${tierErr.current !== 1 ? 's' : ''}. ${tierErr.tier} tier allows ${tierErr.limit}. Upgrade to run more.`,
+                                          'error'
+                                        );
+                                      } else {
+                                        showToast(error.response?.data?.message || 'Failed to reopen sale', 'error');
+                                      }
+                                    }
+                                    setConfirmState(s => ({ ...s, open: false }));
+                                  },
+                                });
                               }}
                               className="text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold text-sm px-3 py-1 border border-amber-300 dark:border-amber-600 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
                             >
@@ -1697,6 +1725,17 @@ const OrganizerDashboard = () => {
         </div>
       </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={() => {
+          confirmState.onConfirm();
+          setConfirmState(s => ({ ...s, open: false }));
+        }}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
     </>
   );
 };

@@ -24,6 +24,7 @@ import { useRouter } from 'next/router';
 import { ChevronDown, ChevronUp, Phone, Mail, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useMyWorkspace, useInviteMember } from '../../hooks/useWorkspace';
 import {
@@ -95,6 +96,9 @@ const OrganizerMembersPage = () => {
   const [editingProfile, setEditingProfile] = useState<EditState>({});
   const [editingAvailability, setEditingAvailability] = useState<AvailabilityEditState>({});
   const [removingStaffId, setRemovingStaffId] = useState<string | null>(null);
+  // Confirm dialog state
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [staffToRemove, setStaffToRemove] = useState<string | null>(null);
 
   // Workspace & staff queries
   const { data: workspace, isLoading: workspaceLoading } = useMyWorkspace();
@@ -240,15 +244,19 @@ const OrganizerMembersPage = () => {
     }
   };
 
-  const handleRemoveMember = async (staffId: string) => {
-    if (!window.confirm('Are you sure? This will remove the team member from your workspace.')) {
-      setRemovingStaffId(null);
-      return;
-    }
+  const handleRemoveMember = (staffId: string) => {
+    setStaffToRemove(staffId);
+    setRemoveConfirmOpen(true);
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!staffToRemove) return;
     try {
-      await removeStaffMutation.mutateAsync(staffId);
+      await removeStaffMutation.mutateAsync(staffToRemove);
       showToast('Team member removed', 'success');
       setRemovingStaffId(null);
+      setRemoveConfirmOpen(false);
+      setStaffToRemove(null);
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to remove team member', 'error');
     }
@@ -602,6 +610,19 @@ const OrganizerMembersPage = () => {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={removeConfirmOpen}
+        title="Remove Team Member"
+        message="Are you sure? This will remove the team member from your workspace."
+        confirmLabel="Remove"
+        onConfirm={confirmRemoveMember}
+        onCancel={() => {
+          setRemoveConfirmOpen(false);
+          setStaffToRemove(null);
+        }}
+        variant="danger"
+      />
     </>
   );
 };

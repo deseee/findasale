@@ -128,6 +128,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [showCornerGuides, setShowCornerGuides] = useState(true);
   const [showLevelIndicator, setShowLevelIndicator] = useState(true);
+  const [showLightingIndicator, setShowLightingIndicator] = useState(true);
   const [exposureCompensation, setExposureCompensation] = useState(0);
   const [whiteBalance, setWhiteBalance] = useState('auto');
   const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto' | 'torch'>('off');
@@ -628,6 +629,18 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 ═
               </button>
 
+              {/* Lighting indicator button */}
+              <button
+                onClick={() => setShowLightingIndicator(!showLightingIndicator)}
+                className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-base flex-shrink-0 ${
+                  showLightingIndicator ? 'bg-white text-black' : 'bg-white/10 text-white/60'
+                }`}
+                aria-label="Lighting indicator"
+                title={showLightingIndicator ? 'Lighting on' : 'Lighting off'}
+              >
+                ☀
+              </button>
+
               {/* Switch camera button */}
               <button
                 onClick={switchCamera}
@@ -864,7 +877,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               )}
 
               {/* Phase 3.5: Real-time brightness indicator */}
-              {cameraReady && videoRef.current && (
+              {cameraReady && videoRef.current && showLightingIndicator && (
                 <BrightnessIndicator videoRef={videoRef} isActive={cameraReady} />
               )}
 

@@ -1,13 +1,9 @@
 /**
- * BrightnessIndicator — Real-time viewfinder lighting guidance
+ * BrightnessIndicator component for real-time viewfinder lighting guidance.
  *
- * Displays a visual indicator (●●●●● / ●●●○○ / ●○○○○) and text guidance
- * based on sampled brightness from video feed.
- *
- * Usage:
- * - Pass videoRef from a <video> element
- * - Component samples brightness every 500ms
- * - Shows green (≥65%), yellow (40-65%), or red (<40%)
+ * Uses 80th-percentile brightness instead of mean brightness to prevent
+ * dark-colored items from triggering false low-light warnings when the
+ * overall scene is well-lit.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -27,7 +23,6 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
   useEffect(() => {
     if (!isActive || !videoRef.current) return;
 
-    // Delay 500ms to ensure video stream has painted first frame
     const timeoutId = setTimeout(() => {
       const interval = setInterval(() => {
         if (!videoRef.current || !canvasRef.current) return;
@@ -38,31 +33,35 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
           if (!ctx) return;
 
           const video = videoRef.current;
-          canvas.width = 64;
-          canvas.height = 64;
+          canvas.width = 160;
+          canvas.height = 160;
 
-          // Draw center sample area from video
           ctx.drawImage(
             video,
-            video.videoWidth / 2 - 32,
-            video.videoHeight / 2 - 32,
-            64,
-            64,
+            video.videoWidth / 2 - 80,
+            video.videoHeight / 2 - 80,
+            160,
+            160,
             0,
             0,
-            64,
-            64
+            160,
+            160
           );
 
-          const data = ctx.getImageData(0, 0, 64, 64).data;
-          let total = 0;
-          for (let i = 0; i < data.length; i += 4) {
-            total += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-          }
-          const avgRaw = total / (64 * 64);
-          const avgNormalized = (avgRaw / 255) * 100;
+          const data = ctx.getImageData(0, 0, 160, 160).data;
+          const luminances: number[] = [];
 
-          setBrightness(avgNormalized);
+          for (let i = 0; i < data.length; i += 4) {
+            const lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+            luminances.push(lum);
+          }
+
+          luminances.sort((a, b) => a - b);
+
+          const p80index = Math.floor(luminances.length * 0.8);
+          const p80brightness = (luminances[p80index] / 255) * 100;
+
+          setBrightness(p80brightness);
         } catch (err) {
           // Silently fail if video not ready
         }
@@ -85,10 +84,8 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
 
   return (
     <>
-      {/* Hidden canvas for sampling */}
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* Brightness indicator — single line, just below the mode hint */}
       <div className="absolute top-[79px] left-1/2 -translate-x-1/2 z-10 pointer-events-none whitespace-nowrap bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1.5 text-xs font-medium">
         <span className={tierInfo.color}>{tierInfo.dots}</span>
         <span className="text-white">{tierInfo.text}</span>

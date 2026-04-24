@@ -4,6 +4,7 @@ import { useToast } from './ToastContext';
 import api from '../lib/api';
 import SocialPostGenerator from './SocialPostGenerator';
 import BoostPurchaseModal from './BoostPurchaseModal';
+import ConfirmDialog from './ConfirmDialog';
 import { Clock, ShoppingCart } from 'lucide-react';
 import type { SaleMetrics } from '../types/commandCenter';
 
@@ -18,6 +19,7 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
   const [boostSaleId, setBoostSaleId] = useState<string | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const startDate = new Date(sale.startDate);
   const endDate = new Date(sale.endDate);
@@ -51,8 +53,6 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
   if (totalPending > 3) pendingBadgeColor = 'bg-red-500';
 
   const handleCloseSale = async () => {
-    const confirmed = window.confirm('Close this sale early? You can reopen it later from your dashboard.');
-    if (!confirmed) return;
     try {
       setIsClosing(true);
       await api.patch(`/sales/${sale.id}/status`, { status: 'ENDED' });
@@ -210,7 +210,7 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
                 </button>
 
                 <button
-                  onClick={handleCloseSale}
+                  onClick={() => setCloseConfirmOpen(true)}
                   disabled={isClosing}
                   className="text-sm px-3 py-1 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-full hover:bg-red-200 dark:hover:bg-red-800 transition-colors disabled:opacity-50"
                   title="End your sale before the scheduled end date"
@@ -273,6 +273,19 @@ const CommandCenterCard: React.FC<CommandCenterCardProps> = ({ sale }) => {
           onClose={() => setBoostSaleId(null)}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={closeConfirmOpen}
+        title="Close Sale"
+        message="Close this sale early? You can reopen it later from your dashboard."
+        confirmLabel="Close"
+        onConfirm={() => {
+          setCloseConfirmOpen(false);
+          handleCloseSale();
+        }}
+        onCancel={() => setCloseConfirmOpen(false)}
+        variant="danger"
+      />
     </>
   );
 };

@@ -24,6 +24,7 @@ import PublishCelebration from '../../../components/PublishCelebration';
 import AlaCartePublishModal from '../../../components/AlaCartePublishModal'; // #132: À La Carte
 import TreasureHuntQRManager from '../../../components/TreasureHuntQRManager'; // Feature #85
 import SaleCoverPhotoManager from '../../../components/SaleCoverPhotoManager';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 
 const EditSalePage = () => {
   const router = useRouter();
@@ -46,6 +47,14 @@ const EditSalePage = () => {
   const [isSettingLocation, setIsSettingLocation] = useState(false);
   const formInitialized = useRef(false); // prevent background refetches from resetting form
   const formDataRef = useRef<any>(null); // Capture current formData to avoid stale closure in mutations
+
+  // Confirm dialog state
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   const [formData, setFormData] = useState({
     title: '',
@@ -337,38 +346,46 @@ const EditSalePage = () => {
         return;
       }
 
-      const confirmMessage = sale.status === 'PUBLISHED'
-        ? 'Close this sale early? You can reopen it later from your dashboard.'
-        : sale.status === 'ENDED'
-        ? 'Reopen this sale? It will become visible to shoppers again.'
-        : 'Make this sale visible to shoppers on the map?';
+      const getConfirmMessage = (status: string) => {
+        if (status === 'PUBLISHED') return 'Close this sale early? You can reopen it later from your dashboard.';
+        if (status === 'ENDED') return 'Reopen this sale? It will become visible to shoppers again.';
+        return 'Make this sale visible to shoppers on the map?';
+      };
 
-      if (!window.confirm(confirmMessage)) {
-        setIsTogglingStatus(false);
-        return;
-      }
+      setConfirmState({
+        open: true,
+        title: 'Confirm Status Change',
+        message: getConfirmMessage(sale.status),
+        onConfirm: async () => {
+          try {
+            await api.patch(`/sales/${id}/status`, { status: newStatus });
 
-      await api.patch(`/sales/${id}/status`, { status: newStatus });
-
-      // Show celebration only when publishing (transitioning to PUBLISHED)
-      if (newStatus === 'PUBLISHED') {
-        setShowPublishCelebration(true);
-        showSurvey('OG-1');
-      } else {
-        showToast('Sale is now hidden', 'success');
-        // Refetch the sale data
-        await new Promise(resolve => setTimeout(resolve, 500));
-        router.push(`/organizer/edit-sale/${id}`);
-      }
+            // Show celebration only when publishing (transitioning to PUBLISHED)
+            if (newStatus === 'PUBLISHED') {
+              setShowPublishCelebration(true);
+              showSurvey('OG-1');
+            } else {
+              showToast('Sale is now hidden', 'success');
+              // Refetch the sale data
+              await new Promise(resolve => setTimeout(resolve, 500));
+              router.push(`/organizer/edit-sale/${id}`);
+            }
+          } catch (error: any) {
+            // Feature #249: Handle concurrent sales tier limit (409)
+            if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
+              setTierLimitError(error.response.data);
+              showToast(error.response.data.message, 'error');
+            } else {
+              showToast(error.response?.data?.message || 'Failed to update sale status', 'error');
+            }
+          } finally {
+            setIsTogglingStatus(false);
+            setConfirmState(s => ({ ...s, open: false }));
+          }
+        },
+      });
     } catch (error: any) {
-      // Feature #249: Handle concurrent sales tier limit (409)
-      if (error.response?.status === 409 && error.response?.data?.code === 'TIER_LIMIT_EXCEEDED') {
-        setTierLimitError(error.response.data);
-        showToast(error.response.data.message, 'error');
-      } else {
-        showToast(error.response?.data?.message || 'Failed to update sale status', 'error');
-      }
-    } finally {
+      console.error('Failed to toggle sale status:', error);
       setIsTogglingStatus(false);
     }
   };
@@ -1011,6 +1028,17 @@ const EditSalePage = () => {
           </form>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={() => confirmState.onConfirm()}
+        onCancel={() => {
+          setConfirmState(s => ({ ...s, open: false }));
+          setIsTogglingStatus(false);
+        }}
+      />
     </>
   );
 };

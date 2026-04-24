@@ -6,6 +6,7 @@ import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useToast } from '../../components/ToastContext';
 import { format, parseISO } from 'date-fns';
 import SaleSubscription from '../../components/SaleSubscription';
@@ -158,6 +159,12 @@ const SaleDetailPage = () => {
   const [photoUploadError, setPhotoUploadError] = useState('');
   const [photoUploading, setPhotoUploading] = useState(false);
   const photoInputRef = React.useRef<HTMLInputElement>(null);
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   // Refresh sale data every 5 seconds to pick up new bids and inventory changes
   useEffect(() => {
@@ -444,23 +451,28 @@ const SaleDetailPage = () => {
     }
   };
 
-  const handleRemovePhoto = async (indexToRemove: number) => {
+  const handleRemovePhoto = (indexToRemove: number) => {
     if (!sale) return;
-    const confirmed = window.confirm('Remove this photo?');
-    if (!confirmed) return;
-
-    try {
-      const updatedPhotoUrls = sale.photoUrls.filter((_, idx) => idx !== indexToRemove);
-      await api.put(`/sales/${sale.id}`, { photoUrls: updatedPhotoUrls });
-      queryClient.invalidateQueries({ queryKey: ['sale', id] });
-      showToast('Photo removed.', 'success');
-      // Reset main photo index if viewing deleted photo
-      if (currentPhotoIndex >= updatedPhotoUrls.length) {
-        setCurrentPhotoIndex(Math.max(0, updatedPhotoUrls.length - 1));
-      }
-    } catch {
-      showToast('Failed to remove photo. Please try again.', 'error');
-    }
+    setConfirmState({
+      open: true,
+      title: 'Remove Photo',
+      message: 'Remove this photo?',
+      onConfirm: async () => {
+        try {
+          const updatedPhotoUrls = sale.photoUrls.filter((_, idx) => idx !== indexToRemove);
+          await api.put(`/sales/${sale.id}`, { photoUrls: updatedPhotoUrls });
+          queryClient.invalidateQueries({ queryKey: ['sale', id] });
+          showToast('Photo removed.', 'success');
+          // Reset main photo index if viewing deleted photo
+          if (currentPhotoIndex >= updatedPhotoUrls.length) {
+            setCurrentPhotoIndex(Math.max(0, updatedPhotoUrls.length - 1));
+          }
+        } catch {
+          showToast('Failed to remove photo. Please try again.', 'error');
+        }
+        setConfirmState(s => ({ ...s, open: false }));
+      },
+    });
   };
 
   if (isLoading) {
@@ -1273,17 +1285,24 @@ const SaleDetailPage = () => {
                           {!!item.auctionEndTime && !item.auctionClosed && (
                             <button
                               onClick={() => {
-                                const confirmed = window.confirm(`End auction for "${item.title}"? The highest bidder will receive a payment link.`);
-                                if (confirmed) {
-                                  api.post(`/items/${item.id}/close-auction`)
-                                    .then(() => {
-                                      showToast('Auction closed successfully', 'success');
-                                      queryClient.invalidateQueries({ queryKey: ['sale', id] });
-                                    })
-                                    .catch((err: any) => {
-                                      showToast(err.response?.data?.message || 'Failed to close auction', 'error');
-                                    });
-                                }
+                                setConfirmState({
+                                  open: true,
+                                  title: 'End Auction',
+                                  message: `End auction for "${item.title}"? The highest bidder will receive a payment link.`,
+                                  onConfirm: () => {
+                                    api.post(`/items/${item.id}/close-auction`)
+                                      .then(() => {
+                                        showToast('Auction closed successfully', 'success');
+                                        queryClient.invalidateQueries({ queryKey: ['sale', id] });
+                                      })
+                                      .catch((err: any) => {
+                                        showToast(err.response?.data?.message || 'Failed to close auction', 'error');
+                                      })
+                                      .finally(() => {
+                                        setConfirmState(s => ({ ...s, open: false }));
+                                      });
+                                  },
+                                });
                               }}
                               className="text-red-600 hover:text-red-800 text-sm"
                             >
@@ -1502,6 +1521,14 @@ const SaleDetailPage = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={() => confirmState.onConfirm()}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
     </div>
   );
 };
