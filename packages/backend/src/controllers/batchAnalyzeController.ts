@@ -107,23 +107,30 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // Step 2: Cluster the photos (ADR-069 Phase 1)
-    let clusterGroups: Array<{ photoIndices: number[]; detectedType: string; confidence: number }> = [];
-    let ungroupedIndices: number[] = [];
+    // Step 2: Cluster the photos (ADR-069 Phase 1 + Phase 2)
+    let clusterGroups: Array<{ photoIndices: number[]; detectedType: string; confidence: number; photos?: any[] }> = [];
+    let ungroupedPhotos: any[] = [];
 
     try {
       const clusterResult = await clusterPhotos(downloadedImages.map(img => img.buffer.toString('base64')));
       clusterGroups = clusterResult.clusters || [];
-      ungroupedIndices = clusterResult.ungrouped || [];
+      ungroupedPhotos = clusterResult.ungrouped || [];
     } catch (clusterError) {
       console.warn('[batchAnalyzeController] Clustering failed, falling back to one-item-per-photo:', clusterError);
-      // Fallback: treat each photo as its own cluster
+      // Fallback: treat each photo as its own cluster with UNKNOWN role
       clusterGroups = downloadedImages.map((_, i) => ({
         photoIndices: [i],
         detectedType: 'Single Item',
         confidence: 0.5,
+        photos: [
+          {
+            index: i,
+            photoRole: 'UNKNOWN',
+            roleReasoning: 'Clustering failed; defaulted to UNKNOWN',
+          },
+        ],
       }));
-      ungroupedIndices = [];
+      ungroupedPhotos = [];
     }
 
     // Step 3: Create Item records for clusters + ungrouped photos
@@ -146,8 +153,16 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       }
     }
 
-    // For ungrouped indices, each becomes a solo item
-    for (const idx of ungroupedIndices) {
+    // For ungrouped photos, each becomes a solo item
+    const ungroupedPhotoMap: Map<number, any> = new Map();
+    for (const photoData of ungroupedPhotos) {
+      const idx = typeof photoData === 'number' ? photoData : photoData.index;
+      if (!ungroupedPhotoMap.has(idx)) {
+        ungroupedPhotoMap.set(idx, photoData);
+      }
+    }
+
+    for (const [_, photoData] of ungroupedPhotoMap) {
       try {
         const item = await prisma.item.create({
           data: {
@@ -170,10 +185,11 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
     const CONCURRENCY_LIMIT = 5;
     const allClusters = [
       ...clusterGroups.map((c, idx) => ({ ...c, itemId: itemIds[idx], type: 'cluster' as const })),
-      ...ungroupedIndices.map((idx, cidx) => ({
-        photoIndices: [idx],
+      ...Array.from(ungroupedPhotoMap.entries()).map(([origIdx, photoData], cidx) => ({
+        photoIndices: [origIdx],
         detectedType: 'Single Item',
         confidence: 0.5,
+        photos: [photoData],
         itemId: itemIds[clusterGroups.length + cidx],
         type: 'ungrouped' as const
       })),
@@ -184,10 +200,38 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
 
       const batchResults = await Promise.allSettled(
         batch.map(async (clusterSpec) => {
-          const { photoIndices, itemId } = clusterSpec;
+          const { photoIndices, itemId, photos: photoRoleData } = clusterSpec;
 
           // Get images for this cluster
           const clusterImages = photoIndices.map(idx => downloadedImages[idx]);
+
+          // Create Photo records with roles (Phase 2)
+          try {
+            for (let i = 0; i < photoIndices.length; i++) {
+              const photoIdx = photoIndices[i];
+              const photoUrl = downloadedImages[photoIdx].url;
+              const photoMetadata = photoRoleData?.[i] || { index: photoIdx, photoRole: 'UNKNOWN', roleReasoning: 'No role assigned' };
+
+              // Map photoRole string to enum value, defaulting to UNKNOWN if invalid
+              let photoRole: string = photoMetadata.photoRole || 'UNKNOWN';
+              const validRoles = ['FRONT', 'BACK_STAMP', 'DETAIL_DAMAGE', 'LABEL_BRAND', 'MULTI_ANGLE', 'UNKNOWN'];
+              if (!validRoles.includes(photoRole)) {
+                photoRole = 'UNKNOWN';
+              }
+
+              await prisma.photo.create({
+                data: {
+                  itemId,
+                  url: photoUrl,
+                  photoRole: photoRole as any, // TypeScript will enforce enum at compile time
+                  roleReasoning: photoMetadata.roleReasoning,
+                  isPrimary: i === 0, // First photo in cluster is primary
+                },
+              });
+            }
+          } catch (err: any) {
+            console.error(`Failed to create Photo records for item ${itemId}:`, err.message);
+          }
 
           let analysis: any = null;
 
