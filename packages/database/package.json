@@ -8,7 +8,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "prisma:seed": "prisma db seed",
-    "seed:encyclopedia": "ts-node --require tsconfig-paths/register prisma/seedEncyclopedia.ts"
+    "seed:encyclopedia": "ts-node --require tsconfig-paths/register prisma/seedEncyclopedia.ts",
+    "seed:wikidata": "ts-node --require tsconfig-paths/register prisma/seedWikidata.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

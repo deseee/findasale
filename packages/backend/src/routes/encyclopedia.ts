@@ -5,7 +5,8 @@ import {
   createEntry,
   voteOnEntry,
   updateEntry,
-  getRevisions
+  getRevisions,
+  matchEntry
 } from '../controllers/encyclopediaController';
 import { authenticate } from '../middleware/auth';
 
@@ -14,6 +15,7 @@ const router = Router();
 // Public routes (no auth required)
 router.get('/entries', listEntries);
 router.get('/entries/:slug', getEntryBySlug);
+router.get('/match', matchEntry); // Match entry by category/tags/title (for inline tip)
 
 // Protected routes (auth required)
 router.post('/entries', authenticate, createEntry);
