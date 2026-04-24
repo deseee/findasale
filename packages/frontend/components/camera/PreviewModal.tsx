@@ -15,6 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { useToast } from '../ToastContext';
 import api from '../../lib/api';
 import { CATEGORIES, CONDITIONS, CONDITION_LABELS } from '../../lib/itemConstants';
+import VoiceTagButton from '../VoiceTagButton';
 
 export interface PreviewModalProps {
   isOpen: boolean;
@@ -120,6 +121,41 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
       onDelete(item.id);
       onClose();
     }
+  };
+
+  const handleVoiceExtraction = (result: {
+    name: string;
+    tags: string[];
+    category: string;
+    estimatedPrice?: number;
+  }) => {
+    // Determine if we should overwrite based on AI confidence
+    const confidence = fullItem?.aiConfidence ?? 0.5;
+    const shouldOverwrite = confidence < 0.6;
+
+    // Populate title if extracted name is non-empty and we should overwrite
+    if (result.name) {
+      if (!edits.title || shouldOverwrite) {
+        setEdits((prev) => ({ ...prev, title: result.name }));
+      }
+    }
+
+    // Populate category if valid and non-empty
+    if (result.category && CATEGORIES.includes(result.category)) {
+      if (!edits.category || shouldOverwrite) {
+        setEdits((prev) => ({ ...prev, category: result.category }));
+      }
+    }
+
+    // Append tags to description if they exist
+    if (result.tags && result.tags.length > 0) {
+      const tagsText = result.tags.join(', ');
+      const currentDesc = edits.description || '';
+      const appendedDesc = currentDesc ? `${currentDesc}, ${tagsText}` : tagsText;
+      setEdits((prev) => ({ ...prev, description: appendedDesc }));
+    }
+
+    showToast(`Voice extraction complete: ${result.name}`, 'success');
   };
 
   return (
@@ -349,16 +385,23 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-warm-700 dark:text-warm-300">Description</label>
-                <button
-                  onClick={() =>
-                    setEditingField(
-                      editingField === 'description' ? null : 'description'
-                    )
-                  }
-                  className="text-amber-600 hover:text-amber-700 text-sm"
-                >
-                  ✏️
-                </button>
+                <div className="flex items-center gap-2">
+                  <VoiceTagButton
+                    onExtraction={handleVoiceExtraction}
+                    disabled={saving || loading}
+                    className="p-1"
+                  />
+                  <button
+                    onClick={() =>
+                      setEditingField(
+                        editingField === 'description' ? null : 'description'
+                      )
+                    }
+                    className="text-amber-600 hover:text-amber-700 text-sm"
+                  >
+                    ✏️
+                  </button>
+                </div>
               </div>
               {editingField === 'description' ? (
                 <textarea

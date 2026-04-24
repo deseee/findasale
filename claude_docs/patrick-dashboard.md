@@ -1,23 +1,37 @@
-# Patrick's Dashboard — S557 Complete
+# Patrick's Dashboard — S558 Complete
 
-## 🔥 S557 — Photo workflow enhancements + roadmap update + architect spec
+## 🔥 S558 — Photo Role Awareness + Voice-to-Tag surfaced + Appraisals entry point + roadmap cleanup
 
-**One-line summary:** Five photo pipeline improvements ship alongside the S556 work: EXIF timestamp clustering boost, best-photo-first sorting, eBay comp tiles on the pricing screen, price override logging, and the Photo Role Awareness architect spec. Roadmap updated through S557. video.html "Who is this for?" updated. Two migrations need deploy.
+**One-line summary:** Photo Role Awareness Phase 1 shipped (PhotoRole enum embedded in clustering Haiku call, zero extra API calls). Voice-to-Tag now shows on edit-item AND in the camera PreviewModal. Appraisals pages now reachable. Roadmap corrected — Consignment moved out of Deferred, AI Planner nav note fixed, trigger-met pre-wires added to Patrick checklist.
 
 ### What shipped
 
-- **Temporal EXIF Clustering Boost** (`cloudAIService.ts`): Photos taken ≤30s apart get a timing hint passed to Haiku clustering. No new dependency — raw JPEG binary parsing.
-- **Best-Photo-First Sorting** (`cloudAIService.ts`): Vision label confidence scores used to sort cluster photos. Highest-quality photo → index 0 (primary display). Populates `Photo.orderIndex`.
-- **eBay Comparable Sale Tiles** (`EbayCompTiles.tsx` new, `useItemEbayComps.ts` new, `/api/items/:id/ebay-comps` new): Amber card shows 2–3 sold eBay listings with image/price/condition on the edit-item page, below the Encyclopedia tip. Renders nothing when no comps exist (expected in beta until items publish).
-- **eBay Image URL storage** (`fetchEbayComps.ts`, `schema.prisma`): `ebayImageUrl` field added to ItemCompLookup; fetchEbayComps now stores gallery image URL.
-- **Price Override Logging** (`itemController.ts`, `schema.prisma`): New `PriceOverrideLog` table. Every time an organizer changes the AI-suggested price, logs the delta by category. Foundation for per-organizer pricing calibration (Phase 2 uses the data).
-- **Photo Role Awareness spec** (`ADR-069-PHASE2-PHOTO-ROLE-AWARENESS.md`): Full architect spec — roles FRONT/BACK_STAMP/DETAIL_DAMAGE/LABEL_BRAND/MULTI_ANGLE/UNKNOWN embedded in the existing clustering Haiku call (no extra API call). Awaits your review before dev dispatch.
-- **Roadmap v119**: Features #319–#330 added, S553–S557 coverage complete.
-- **video.html**: "Who is this for?" now includes antique dealers and thrift stores.
+- **Photo Role Awareness Phase 1 (#328)**: `PhotoRole` enum (FRONT/BACK_STAMP/DETAIL_DAMAGE/LABEL_BRAND/MULTI_ANGLE/UNKNOWN) added to schema + Photo model. Migration `20260424_add_photo_role`. Haiku clustering prompt now returns `photoRole` per photo — piggybacks on the existing call, no new API cost.
+- **Voice-to-Tag on edit-item (#42)**: Mic button added to the tags input section on edit-item. Speak item description, tags append automatically (deduped).
+- **Voice-to-Tag in PreviewModal (camera flow)**: Mic button added next to the description pencil icon in the camera review overlay. Speaks corrections into AI-tagged items. Low-confidence AI (< 0.6) = overwrite; high-confidence = append.
+- **Appraisals entry point (#330)**: "Request Appraisal for This Item" button on edit-item navigates to `/organizer/appraisals?open=true`, which auto-opens the create form. Nav links already existed in Layout.tsx.
+- **Roadmap v120**: Consignment Integration moved from Deferred → Building/Pending Chrome QA. AI Sale Planner Chat nav note corrected. 4 trigger-met pre-wires added to Patrick's checklist. 6 QA items added to Human Verification list.
 
-### Two Patrick actions needed
+### Patrick actions needed
 
-**Action 1 — Deploy migrations:**
+**Action 1 — Push S558 code:**
+```powershell
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260424_add_photo_role/migration.sql
+git add packages/backend/src/services/cloudAIService.ts
+git add packages/backend/src/controllers/batchAnalyzeController.ts
+git add packages/frontend/pages/organizer/appraisals.tsx
+git add packages/frontend/pages/organizer/edit-item/[id].tsx
+git add packages/frontend/components/camera/PreviewModal.tsx
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat: Photo Role Awareness Phase 1, Voice-to-Tag on edit-item + PreviewModal, appraisals entry point, roadmap v120"
+.\push.ps1
+```
+⚠️ edit-item/[id].tsx was modified by two agents (appraisals CTA + voice-to-tag). Both changes should be in the file — verify with `git diff packages/frontend/pages/organizer/edit-item/[id].tsx` before pushing to confirm both are present.
+
+**Action 2 — Deploy Photo Role Awareness migration:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -25,11 +39,11 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-**Action 2 — Review the Photo Role Awareness spec:**
-Open `claude_docs/architecture/ADR-069-PHASE2-PHOTO-ROLE-AWARENESS.md` and confirm you want to proceed with dev dispatch (M complexity, ~4–6 dev-days). Once approved, one dispatch handles it.
-
-### Appraisals gap (no action needed now — flagged)
-The Community Appraisals page is bare because there's no "Request Appraisal" button anywhere in the product. The backend tables (AppraisalRequest, AppraisalResponse, AppraisalConsensus) are all built. This is roadmap #330 — let me know when you want to add the entry point.
+### QA queue this session
+- Voice-to-Tag on edit-item: click mic, speak, verify tags appear
+- Voice-to-Tag in PreviewModal: in camera review, click mic, speak item name/description, verify fields populate
+- Appraisals: click "Request Appraisal for This Item" on edit-item, verify navigates to /organizer/appraisals with form open
+- Consignment Integration: in Patrick checklist (roadmap) — create consignor, assign item, verify payout calc
 
 ### What shipped (6 dispatches)
 

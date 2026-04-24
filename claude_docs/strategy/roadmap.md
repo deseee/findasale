@@ -85,8 +85,20 @@
 - [ ] Brand Voice Session — use brand-voice plugin to establish documented voice, tone, and messaging pillars before beta outreach and email sequences
 - [ ] Trademark filing — see Decisions Needed (#82)
 
+### Pre-Wire (Triggers Met)
+- [ ] Canary Deploy + Auto-Rollback: Add Vercel preview env + Railway staging slot config (trigger met — pre-beta stable)
+- [ ] Audit Automation Library: health-scout baseline JSON + test harness scaffold (trigger met)
+- [ ] Estate Planning Toolkit pre-wire: add `executorUserId` + `estateId` to Organizer schema (zero-build, zero UI)
+- [ ] QuickBooks pre-wire: add QB-compatible column ordering + account codes to existing CSV export
+
 ### Human Verification (Patrick must run)
 - [ ] **Auction E2E — Stripe test mode:** Set auction end time on a test item → click End Auction button → confirm winner notification sent → open Stripe checkout link → complete checkout → confirm organizer close notification fires. (Documented S279; feature shipped S278.)
+- [ ] **Consignment Integration**: Create a consignor, assign an item with consignmentSplitPct, run settlement, verify payout calc shows correct split
+- [ ] **Condition Guide (#206)**: Navigate to /condition-guide — verify page loads, dark mode, check if linked from any condition selector (not linked yet per roadmap)
+- [ ] **Settlement Hub (#228)**: Complete settlement with >0% commission rate, verify receipt step shows correct % (not 200x)
+- [ ] **Shopper Referral Rewards (#7)**: Navigate to /shopper/referrals, verify referral link, copy button, share buttons, stats display
+- [ ] **Voice-to-Tag (#42)**: On edit-item, click mic button in tags section, speak item description, verify tags populate
+- [ ] **Voice-to-Tag in PreviewModal**: On camera review, speak item description, verify title/category/description populate from voice
 
 ## Decisions Needed (Product Decisions Only — Patrick Sign-Off Required)
 
@@ -113,7 +125,7 @@ Features waiting on Patrick human QA to graduate. Items with both Claude QA ✅ 
 |  92 | NA | ✅ | ✅ | 📋 | ✅ | ✅ | Chrome-verified S494 | City Weekend Landing Pages | SHO | FREE | Human QA | S286: `/city/[city].tsx` ISR pages with Schema.org JSON-LD, Grand Rapids pre-generated, live. S494: fixed /city/grand-rapids 404 (getStaticProps was misreading `{ cities: [...] }` as plain array; `.find()` threw TypeError → notFound:true). Chrome-verified S494: page renders with sale count, sale cards, nearby cities. |
 | 204 | ✅ | ✅ | ✅ | 📋 | ✅ | ⬜ | WORKS | Unsubscribe / Preferences | SHO | FREE | Human QA | S286: `/unsubscribe` + `/api/unsubscribe`, preference toggles work  |
 | 206 | ✅ | ✅ | ✅ | 📋 | ✅ | ⬜ | WORKS | Condition Guide | SHO | FREE | Human QA | S288: `/condition-guide` educational page loads — not linked anywhere yet; needs dark mode treatment |
-| 214 | ✅ | ✅ | ✅ | 📋 | ✅ | ⬜ | WORKS | AI Sale Planner Chat | PUB | FREE | Human QA | S288: `/plan` page, public rate-limited. Chat works but scope too estate-sale-narrow — needs broader coverage. |
+| 214 | ✅ | ✅ | ✅ | 📋 | ✅ | ⬜ | WORKS | AI Sale Planner Chat | PUB | FREE | Human QA | S288: `/plan` page, public rate-limited. Chat works but scope too estate-sale-narrow — needs broader coverage. Linked in Layout.tsx organizer nav (lines 255, 263, 1045 — three nav locations). |
 |  59 | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | WORKS | Streak Rewards | SHO | FREE | Human QA — confirm StreakWidget renders on loyalty + dashboard | S346 StreakWidget confirmed present on /shopper/loyalty + /shopper/dashboard. |
 | 146 | ✅ | ✅ | ✅ | NA | ✅ | ⚠️ partial | Pending Chrome QA E2E | Item Holds / Reservations | BOTH | SIMPLE | Full E2E Chrome QA | Shipped S332–S340. HoldButton, GPS/QR gates, expiry cron, shopper notifications. HoldTimer countdown Chrome-verified S338. LeaveSaleWarning wired S364. |
 | 147 | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ partial | Pending Chrome QA E2E | Hold Duration Configuration | ORG | SIMPLE | Full E2E Chrome QA | Shipped S333. S389: Scout 30→45min fix. Rank-based durations + holdsEnabled toggle. |
@@ -235,7 +247,9 @@ Features that Patrick's human QA walkthrough confirmed are broken. Use the two-s
 | 325 | ⬜ | ⬜ | ⬜ | NA | ⬜ | ⬜ | QUEUED S557 | Best-Photo-First Sorting | ORG | FREE | Chrome QA: bulk upload → verify photos within cluster sorted by Vision detection confidence. Highest-quality photo becomes primary display (index 0). | S557: Photos sorted within cluster by Vision detection confidence score. Highest-quality photo becomes primary. orderIndex field populated per cluster. |
 | 326 | ⬜ | ⬜ | ⬜ | NA | ⬜ | ⬜ | QUEUED S557 | Comparable Sale Tiles | ORG | FREE | Chrome QA: edit-item page → verify eBay sold listing images displayed alongside AI price suggestion. ebayImageUrl from ItemCompLookup renders. | S557: eBay sold listing images displayed alongside AI price suggestion on edit-item page. ebayImageUrl added to ItemCompLookup. Builds trust in AI pricing. |
 | 327 | ✅ | ✅ | ⬜ | NA | ⬜ | ⬜ | QUEUED S557 | Organizer Price Calibration Logging | ORG | FREE | Chrome QA: organizer overrides AI price → verify logged to PriceOverrideLog with delta. Admin dashboard shows per-organizer pricing calibration trends. | S557: PriceOverrideLog table captures AI price vs organizer price delta per category. Foundation for per-organizer pricing calibration. Phase 1 = logging only. |
-| 328 | ⬜ | ⬜ | ⬜ | NA | ⬜ | ⬜ | QUEUED S557 | Photo Role Awareness (Phase 1) | ORG | FREE | Chrome QA: bulk upload → verify Haiku tags each photo with role (FRONT/BACK_STAMP/DETAIL_DAMAGE/LABEL_BRAND/MULTI_ANGLE). Per-cluster analysis uses roles for identification + condition grading. | S557: Clustering Haiku call extended to tag each photo with role. Per-cluster analysis uses roles to weight signals for identification and condition grading. ADR-069-PHASE2 spec written. |
+| 328 | ✅ | ✅ | ✅ | NA | ⬜ | ⬜ | Shipped S558 — Pending migration + Chrome QA | Photo Role Awareness (Phase 1) | ORG | FREE | Chrome QA: bulk upload → verify Haiku tags each photo with role (FRONT/BACK_STAMP/DETAIL_DAMAGE/LABEL_BRAND/MULTI_ANGLE). Per-cluster analysis uses roles for identification + condition grading. | S558: Clustering Haiku call extended to tag each photo with role. Per-cluster analysis uses roles to weight signals for identification and condition grading. Schema: PhotoRole enum + photoRole/roleReasoning on Photo model. Migration: 20260424_add_photo_role. |
+| 329 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | Pending Chrome QA | Consignment Integration | ORG | PRO | Chrome QA: create consignor, assign item to consignor, run settlement, verify payout calc | FULLY BUILT S533 — Consignor model, ConsignorPayout model, consignorController.ts. consignorId + consignmentSplitPct on Item. No nav link yet — needs entry point added. |
+| 330 | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | Shipped S558 — Pending Chrome QA | Appraisals Entry Point | ORG | PRO | Chrome QA: edit-item → verify appraisals CTA visible. /organizer/appraisals → verify nav link present, ?open=true auto-opens modal. | S558: appraisals CTA added to edit-item page. Auto-open via ?open=true query param on /organizer/appraisals. Nav links confirmed present in Layout.tsx (three locations). |
 
 
 ## TESTING — Active QA Queue
@@ -486,7 +500,6 @@ Infrastructure and internal systems. All code-verified. No browser QA needed.
 | Affiliate Program | ORG | TEAMS | Backend 60% built. Referral badges (SIMPLE) + loyalty passport integration worth exploring first. Full payouts deferred. | Schema fully built (AffiliateLink, AffiliateCode, AffiliatePayout, AffiliateReferral models + User.affiliateReferralCode). Backend partial: affiliateController.ts has link tracking only. Missing: payout calc engine, referral qualification, Stripe Connect payouts, cron job, 4 API endpoints, dashboard. S544 audit: ~13-17 days to complete. Awaiting architecture spec or phased dispatch decision. |
 | White-label MaaS | ORG | TEAMS | Business decision — beta validation first | After beta data |
 | Persistent Inventory (Cross-Sale Item Library) | ORG | PRO | Items that persist across multiple sales — organizer builds a master library, pulls items into each sale, unsold items carry over automatically. Designed for flea market vendors, antique booth operators, and recurring sale organizers. Requires new data model (items not bound to a single sale). `/organizer/inventory` is stubbed as "Coming Soon." | Schema pre-wired (persistentInventory bool + masterItemLibraryId FK on Item). Frontend: pages/organizer/inventory.tsx exists. Backend: itemInventoryController.ts exists. MasterItemLibrary model NOT yet in schema. Active business logic not yet wired. Status: Pre-wire + scaffolded, not full build. |
-| Consignment Integration | ORG | PRO | Thrift store POS — post-beta complexity | FULLY BUILT S533 — Consignor model, ConsignorPayout model, consignorController.ts all implemented. consignorId + consignmentSplitPct fields on Item. Not a pre-wire — feature is built. |
 | QuickBooks Integration | ORG | SIMPLE | CSV export covers 80% of need | When organizers ask — **pre-wire: add QB-compatible column ordering + account codes to existing CSV export; zero-build activation when demand arrives** |
 | Multi-metro expansion | ORG | SIMPLE | Beta validation first | After beta data |
 | BUSINESS_PLAN.md rewrite | PUB | TEAMS | Reflect national positioning and current fee/feature state | After beta data confirms positioning |
