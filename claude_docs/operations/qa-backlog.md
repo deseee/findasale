@@ -1,5 +1,89 @@
 # QA Backlog — FindA.Sale
-**Last updated:** S562 fix dispatch + verification (2026-04-24)
+**Last updated:** S565 QA-only pass — 46 bugs logged (2026-04-24)
+
+---
+
+## 🔍 S565 QA Findings — Full Site Pass (Batches 11–13, findings-only, no fixes)
+
+**Session scope:** Organizer-side (Settlement Hub, earnings, holds, ripples, plan, subscription, edit-sale) + Admin (dashboard, users, feedback, verification, bid-review, invites, sales). Shopper-side bugs from prior batches also included in totals below.
+
+**Total findings this session: 46** — 11 P1 / 15 P2 / 20 P3
+
+---
+
+### Batch 11 — Settlement Hub (`/organizer/settlement/[saleId]`)
+
+| Sev | Item | Notes |
+|-----|------|-------|
+| **P1** | **Receipt tab shows $0.00 "Client/Executor Receives"** | Receipt pulls from manually-entered Payout Amount field (default $0.00), not from Commission tab's calculated payout. Organizer must manually enter amount on Payout tab before Receipt is accurate. Fix path: auto-populate Payout Amount from Commission tab's "Client Receives" value when advancing to Payout step. |
+| **P1** | **"Download Receipt" button dead** | `querySelector('button')` textContent scan returned no "Download Receipt" element after advancing to Receipt tab. Receipt content renders (table with $0.00 values) but download action doesn't fire. Possible: button hidden, wrong selector, or not yet implemented. |
+| **P2** | **Payout Amount field not pre-filled** | Payout tab shows `$0.00` pre-filled. The Commission tab calculates "Client/Executor Receives" dynamically, but that value is never carried forward to the Payout Amount input. Every organizer must manually enter payout amount. |
+| **P3** | **Settlement "Next →" buttons are blue, not orange** | All 4 "Next →" tab-advance buttons use default blue (Tailwind `bg-blue-600`) instead of the site's orange brand color. Inconsistent with CTA style across rest of app. |
+
+---
+
+### Batch 12 — Organizer Support Pages
+
+| Sev | Item | Page | Notes |
+|-----|------|------|-------|
+| **P1** | **`/organizer/profile` redirects to `/organizer/settings`** | `/organizer/profile` | Navigating to organizer profile lands on Settings page. No dedicated organizer profile page exists at that URL — or the route is incorrectly aliased to settings. |
+| **P1** | **`/organizer/flash-deal/[saleId]` → 404** | `/organizer/flash-deal/[saleId]` | Page does not exist at this URL pattern. Flash deal feature may have moved or never had a dedicated route. |
+| **P1** | **POS item dropdown unresponsive** | `/organizer/pos` | Item add/search dropdown does not respond to clicks or keyboard input. Suspected hydration event-handler loss (same root cause as #418). |
+| **P1** | **Subscription "Downgrade to Free" dialog says "Downgrade to SIMPLE"** | `/organizer/subscription` | Button label says "Downgrade to Free" but the confirmation dialog heading says "Downgrade to SIMPLE" and the CTA inside the dialog also says "Downgrade to SIMPLE". Mismatched terminology — should be consistent. Free tier is named "Free" not "SIMPLE" for organizers. |
+| **P2** | **POS shows "No active sales" when sales exist** | `/organizer/pos` | POS page displays "no active sales" error state but organizer has at least one active sale. Suspected hydration or session state issue — same root cause pattern as #418. |
+| **P2** | **POS search input doesn't filter items** | `/organizer/pos` | Typing in the item search box doesn't narrow the item list. No filtering occurs. |
+| **P2** | **Subscription page: Stripe status wrong on first load** | `/organizer/subscription` | Initial render shows wrong subscription status (e.g., shows "Free" before hydration corrects it). Same hydration race condition as HP status on XP Store. |
+| **P2** | **Subscription page: contradictory UI** | `/organizer/subscription` | "Downgrade to Free" button is shown but the plan display area indicates organizer is already on a free-equivalent tier. Contradictory state — at minimum needs a clearer current-plan indicator. |
+| **P2** | **Edit Sale map component failure (iframe 1px)** | `/organizer/edit-sale/[saleId]` | Entrance/Parking Pin map section has a 1137×561px outer container div with no children, and the inner iframe renders at exactly 1px tall. Map library (Google Maps or Leaflet) failed to initialize. Entire map section is visually a blank 561px-tall empty box. |
+| **P2** | **Identical sale names in hold/POS dropdowns** | `/organizer/holds`, `/organizer/pos` | Dropdown to select a sale shows multiple entries with identical display names (e.g., "Estate Sale — Vintage Items" appears 2× or 3×). No disambiguating info (date, status, ID) shown. Organizer cannot tell which sale to pick. |
+| **P3** | **`/organizer` root → 404** | `/organizer` | Navigating to the organizer root path throws a 404. Should redirect to `/organizer/dashboard`. |
+| **P3** | **"Renews On" shows "Contact support"** | `/organizer/subscription` | Renewal date field shows "Contact support" instead of an actual date. Likely a null/missing `renewsAt` field falling through to a fallback string. |
+| **P3** | **RETAIL create-sale gate text** | `/organizer/create-sale` | RETAIL option disabled for free/PRO orgs as expected, but the UX text explaining the gate ("Retail Store (TEAMS only)") may not be visible — the upgrade CTA placement needs verification. Logged for Chrome QA confirmation. |
+
+---
+
+### Batch 13 — Admin Pages
+
+| Sev | Item | Page | Notes |
+|-----|------|------|-------|
+| **P1** | **`/admin/bid-review` API error (500)** | `/admin/bid-review` | Page loads the outer shell but the bid list fails with an API 500. The backend route for bid review is returning an error. Entire feature unusable. |
+| **P2** | **Admin Feedback: no user attribution** | `/admin/feedback` | Feedback entries show message content and timestamp but no user name, email, or identifier. Admin has no way to know who submitted each piece of feedback. |
+
+---
+
+### S565 Shopper-Side Findings (from Batches 1–10 prior session)
+
+| Sev | Item | Page | Notes |
+|-----|------|------|-------|
+| **P1** | **`/shopper/profile` → 404** | `/shopper/profile` | Shopper profile page returns 404. Correct URL may be `/shopper/explorer-profile` — if so, the wrong URL is in use somewhere (nav link, avatar dropdown, etc.). |
+| **P1** | **`/shopper/collection` → 404** | `/shopper/collection` | Collection page returns 404. Feature may not exist at this URL or has moved. |
+| **P1** | **Save Interests silent-fail** | `/shopper/settings` or interests flow | Clicking "Save" on interests/taste profile shows no feedback — no toast, no error, no confirmation. Either the save is silently failing or the feedback mechanism is missing. |
+| **P1** | **Site-wide hydration bug #418** | All pages with event handlers | `new Date()` at render time causes server/client DOM divergence. React discards server DOM on mismatch → physical mouse clicks fail (event handlers not attached). JS `.click()` workaround required throughout QA. Affects: QR "I Found It!" button, bounty tabs, hamburger menu, modal dismiss, map interactions, notification bell. P1 blocker for beta. |
+| **P2** | **Message bubble overflow** | `/shopper/messages` or messaging UI | Message text overflows the bubble container, extending past the bubble border. Layout bug, likely missing `overflow-hidden` or `break-words`. |
+| **P2** | **"Followed Organizers" label/content mismatch** | `/shopper/explorer-profile` or dashboard | Section labeled "Followed Organizers" shows content that doesn't match — either wrong data or wrong label. |
+| **P2** | **Wrong Profile URL domain** | Profile share / public URL | Shopper public profile URL displayed in UI shows wrong domain (localhost or staging domain instead of `finda.sale`). |
+| **P2** | **"Most Wanted" section not dark-mode adapted** | Shopper page | Most Wanted / bounties section uses light-mode styles that don't adapt in dark mode. Text/background contrast issues in dark mode. |
+| **P2** | **Duplicate filter panel** | Explorer / catalog page | Filter panel appears twice on page — likely a component rendered twice or a conditional rendering bug. |
+| **P2** | **Avatar dropdown clips at viewport edge** | All pages (avatar dropdown) | Avatar dropdown panel extends beyond right edge of viewport at certain widths. Content clipped. |
+| **P2** | **Site-wide right-panel overflow** | All pages with 2-column layout | Right column content extends beyond ~1104px CSS width, clipping at viewport edge on any screen narrower than layout assumes. Site-wide layout bug. |
+| **P3** | **Cancel button contrast** | Modal / dialog | "Cancel" button in modals has insufficient contrast — text barely visible against button background. |
+| **P3** | **PWA install banner obscures bottom-of-page content** | All pages | The PWA install banner (`.fixed.bottom-0`) sits above the bottom content area, physically blocking clicks near the bottom of the viewport site-wide. |
+| **P3** | **Bell badge count stale** | All pages (notification bell) | Bell badge count doesn't update after new notifications arrive in the same session. Requires page reload to see updated count. |
+| **P3** | **Search result count mismatch** | Search results page | Displayed result count doesn't match the actual number of results shown. Likely a stale count from a prior query. |
+| **P3** | **0-XP leaderboard has extra top padding** | `/shopper/leaderboard` or league | When showing users with 0 XP, the leaderboard table has excessive padding at the top of the list. Minor layout regression. |
+| **P3** | **"Enter card manually" has no feedback** | POS checkout or payment flow | Tapping "Enter card manually" option shows no response — no modal, no form, no error. Either not implemented or the click handler is broken. |
+| **P3** | **Sign-out is unbranded** | Any page (sign out action) | Sign-out action goes to a generic unbranded page or shows no transition/confirmation. Should have a branded post-sign-out experience. |
+| **P3** | **Toast notification clips at viewport edge** | All pages | Toast notifications render partially off-screen on some viewport widths. |
+| **P3** | **Newly added item sorts to bottom of list** | `/organizer/add-items/[saleId]` | After adding a new item, it appears at the bottom of the items list instead of the top (most-recently-added). Makes it hard to quickly find and review the item just created. |
+| **P3** | **Post-sale close toast is confusing** | After ending a sale | Toast message shown when a sale is closed is unclear — doesn't explain next steps (settle, archive, etc.). |
+| **P3** | **Survey "Submit" button wrong color** | Survey / feedback form | Submit button on survey form uses wrong color — not matching site button style. |
+| **P3** | **Print Kit shows wrong item count** | `/organizer/print-kit/[id]` | Item count displayed in print kit header doesn't match the actual number of items in the sale. |
+| **P3** | **Estate-exclusive language throughout site** | All pages | Copy refers to "estate sale" as the primary/only sale type in many places (nav, marketing copy, empty states, footer). Should use inclusive language covering all sale types (yard sales, auctions, flea markets, consignment). Recurring drift issue — flagged multiple sessions. |
+| **P3** | **Footer uses exclusive sale-type language** | Footer (all pages) | Same as above — footer copy assumes estate sale context only. |
+| **P3** | **WhatsApp share button missing logo** | Share sheet / share buttons | WhatsApp share option shows text "WhatsApp" without the WhatsApp brand icon/logo. All other share options have icons. |
+| **P3** | **Threads share card clips** | Share sheet | Threads share card content clips at edge of the share sheet container. Layout overflow. |
+
+---
 
 ---
 

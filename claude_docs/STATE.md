@@ -207,7 +207,30 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | Coupon slot counts mismatch (XP Store vs hunt-pass page) | ✅ Chrome-verified S563 — RESOLVED | Standard 2/2/1, Deluxe 2/2/1, Premium 1/2/1 — matches hunt-pass.tsx canonical values for free accounts. ss_9882u2nc1 | S561 |
 | /admin/encyclopedia action buttons cut off at viewport | ✅ Chrome-verified S563 — RESOLVED | Promote/Reject buttons visible for all rows without horizontal scroll. ss_9224hod6b | S561 |
 | **BUG — P2 (systemic)** | 24 files use native window.confirm() | ✅ FIXED S564 — shared `<ConfirmDialog>` component built + all 24 calls replaced. Pending push + Chrome QA smoke test. | S563 |
-| **BUG — P1 (hydration #418)** | React hydration error affects button clicks on multiple pages | "Text content does not match server-rendered HTML" causes React to skip attaching event handlers. Affected: "I Found It!" QR button, bounty tab clicks, hamburger menu, modal X dismiss. Workaround: direct fetch() with JWT from localStorage. Root cause likely date formatting SSR/CSR mismatch. Needs dedicated investigation before beta. | S564 |
+| **BUG — P1 (hydration #418)** | React hydration error affects button clicks on multiple pages | "Text content does not match server-rendered HTML" causes React to skip attaching event handlers. Affected: "I Found It!" QR button, bounty tab clicks, hamburger menu, modal X dismiss, POS dropdown, map interactions, notification bell. Workaround: direct fetch() with JWT from localStorage. Root cause: `new Date()` at render time causes SSR/CSR DOM divergence. Needs dedicated investigation before beta. | S564 |
+| **BUG — P1** | `/admin/bid-review` returns API 500 | Backend bid-review route failing entirely. Admin bid-review feature completely unusable. Needs Railway log investigation + controller fix. | S565 |
+| **BUG — P1** | Settlement Receipt shows $0.00 "Client/Executor Receives" | Receipt tab sources value from manually-entered Payout Amount (default $0.00), not from Commission tab's calculated payout. Fix: auto-populate Payout Amount from Commission result when advancing to Payout step. | S565 |
+| **BUG — P1** | Settlement "Download Receipt" button not functional | Button does not fire after advancing to Receipt tab. onClick not attached or button not rendered correctly. | S565 |
+| **BUG — P1** | `/shopper/profile` → 404 | Shopper profile page returns 404 at this URL. Correct URL may be `/shopper/explorer-profile` — fix routing or nav link. | S565 |
+| **BUG — P1** | `/shopper/collection` → 404 | Collection page returns 404. Feature may not exist or URL has changed. | S565 |
+| **BUG — P1** | Save Interests has no feedback | Clicking "Save" on interests/taste profile shows nothing — no toast, error, or confirmation. | S565 |
+| **BUG — P1** | POS item dropdown unresponsive to clicks | Item search/add dropdown doesn't respond. Hydration #418 likely root cause. | S565 |
+| **BUG — P1** | `/organizer/profile` redirects to settings | Organizer profile URL incorrectly routes to settings page. | S565 |
+| **BUG — P1** | Subscription "Downgrade to Free" dialog says "SIMPLE" | Button says "Downgrade to Free"; confirmation dialog says "Downgrade to SIMPLE". Inconsistent — fix copy. | S565 |
+| **BUG — P2** | Settlement Payout Amount not pre-filled from Commission | Commission tab calculates "Client Receives" but value is not carried to Payout tab input. | S565 |
+| **BUG — P2** | POS shows "no active sales" when sales exist | POS false-negative empty state. Hydration or session state root cause. | S565 |
+| **BUG — P2** | POS search input doesn't filter items | Typing in item search box doesn't narrow list. | S565 |
+| **BUG — P2** | Subscription shows wrong status on first render | Stripe subscription status flashes wrong value before hydration corrects it. | S565 |
+| **BUG — P2** | Edit Sale map component failure (iframe 1px) | Entrance/Parking Pin iframe is 1px tall; 561px container is empty. Map library failed to initialize on `/organizer/edit-sale/[id]`. | S565 |
+| **BUG — P2** | Identical sale names in hold/POS dropdowns | Multiple entries with same display name, no disambiguating info (date/status/ID). | S565 |
+| **BUG — P2** | Admin Feedback entries have no user attribution | Feedback items show no submitter name/email. Admin cannot identify who wrote each piece. | S565 |
+| **BUG — P2** | Site-wide right-panel overflow | Right column clips at ~1104px CSS on 2-column layout pages. Site-wide. | S565 |
+| **BUG — P2** | Message bubble text overflow | Message content overflows bubble container boundary. Missing overflow-hidden or break-words. | S565 |
+| **BUG — P2** | "Followed Organizers" label/content mismatch | Section shows data not matching its label. | S565 |
+| **BUG — P2** | Profile URL shows wrong domain | Public profile share URL shows localhost or staging domain instead of finda.sale. | S565 |
+| **BUG — P2** | "Most Wanted" section not dark-mode adapted | Light-mode styles persist in dark mode. | S565 |
+| **BUG — P2** | Duplicate filter panel | Filter panel rendered twice on catalog/explorer page. | S565 |
+| **BUG — P2** | Avatar dropdown clips at viewport edge | Dropdown panel extends beyond right viewport edge. | S565 |
 | **BUG — P2** | Orphaned referral code in localStorage | /refer/[code].tsx stores `pendingReferralCode` in localStorage then redirects. register.tsx only reads ref from URL param — never reads localStorage. If user navigates away before registering, code is orphaned. | S561 |
 | **BUG — P3** | /refer/[code] no auth check for logged-in users | Logged-in user visiting a referral link gets redirected to /register with no "already registered" message. | S561 |
 | **BUG — P3** | XP Store HP status flash on first render | On first render: shows "Hunt Pass Inactive". After hydration: corrects to "INITIATE · Hunt Pass Active". Hydration race condition. | S561 |
@@ -225,29 +248,38 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 **Database:** `packages/database/prisma/schema.prisma`, migrations in `migrations/` folder
 
-## Next Session (S565)
+## Next Session (S566)
 
 **Patrick pending actions (complete before or at session start):**
-1. Push S564 wrap block (below — STATE.md + patrick-dashboard.md + 2 backend controllers + BrightnessIndicator.tsx + ConfirmDialog.tsx + all 24 window.confirm() files)
-2. Run `migrate deploy` + `prisma generate` for `20260424_add_comp_fetch_enhancements` if not yet done (S560 pending action)
+1. Push S565 wrap block (below — STATE.md + patrick-dashboard.md + qa-backlog.md — docs only, no code)
+2. Push S564 wrap block if not yet done (2 backend controllers + BrightnessIndicator.tsx + ConfirmDialog.tsx + 24 window.confirm() files)
+3. Run `migrate deploy` + `prisma generate` for `20260424_add_comp_fetch_enhancements` if not yet done
 
-**First task — continue QA backlog:**
-1. **React hydration #418 (P1)** — Dispatch findasale-dev to investigate root cause. Affects: "I Found It!" QR scan button, bounty tab clicks, hamburger menu, modal dismiss. Likely date formatting SSR/CSR mismatch. Needs proper fix before beta — current workaround (direct fetch) is not scalable.
-2. **#266 AvatarDropdown shopper branch** — Login as user11 (shopper), open avatar dropdown, verify "Explorer Profile" link → `/shopper/explorer-profile`.
-3. **S529 items** — Storefront widget + mobile nav rank + card reader content. All pushed, not browser-verified.
-4. **#311 Locations advanced QA** — Inventory filter, item transfer, delete with items (409), LocationSelector.
-5. **RETAIL tier gate** — Free organizer /organizer/create-sale → "Retail Store (TEAMS only)" greyed + upgrade CTA.
-6. **ConfirmDialog smoke test** — Verify ConfirmDialog replaces window.confirm() on at least 2 pages (e.g., consignors delete + dashboard).
+**Priority P1 fixes to dispatch (from S565 findings):**
+1. **React hydration #418 (P1 — highest priority)** — Root cause: `new Date()` at render time causes SSR/CSR DOM mismatch; React discards server DOM, physical clicks fail. Affects QR scans, bounty tabs, hamburger, modals, map, notifications. Dispatch findasale-dev: fix date formatting to use stable server-safe values (e.g., timestamps not `new Date().toLocaleString()`).
+2. **`/admin/bid-review` API 500** — Backend route failing. Dispatch findasale-dev to check Railway logs + fix controller.
+3. **Settlement Receipt $0.00 payout** — Auto-populate Payout Amount from Commission tab's "Client Receives" value when user advances to Payout step. Dispatch findasale-dev.
+4. **Settlement "Download Receipt" dead button** — Dispatch findasale-dev to trace the button's onClick handler and fix.
+5. **`/shopper/profile` + `/shopper/collection` → 404** — Fix or redirect these URLs. Dispatch findasale-dev.
+6. **POS item dropdown + search unresponsive** — Hydration issue on POS page. Batch with hydration fix.
+7. **`/organizer/profile` redirects to settings** — Fix routing so `/organizer/profile` goes to the correct page.
+8. **Subscription "Downgrade to Free" label mismatch** — Button says "Free", dialog says "SIMPLE". Fix copy consistency.
+9. **Save Interests silent-fail** — Add error/success feedback. Dispatch findasale-dev.
+
+**Continue QA backlog (after P1 fixes dispatched):**
+- Mobile viewport QA at 320px using JS viewport resize (`window.innerWidth` manipulation or viewport meta override to 375px)
+- Multi-account flow testing: organizer-side dispatch + shopper-side dispatch separately (no login/logout cycling)
+- #311 Locations advanced QA (inventory filter, transfer, LocationSelector)
+- RETAIL tier gate Chrome verification
+- ConfirmDialog smoke test on consignors + dashboard delete
 
 **Decide:**
 - Affiliate payout expansion (Batches 5/7/9) — tiered vs flat + 1099 compliance gate
 - Bounty Batch C: seed 1 APPROVED BountySubmission for Karen to test "Complete Purchase" flow
 
 **Deferred (needs test data or conditions):**
-- TEAMS onboarding → /organizer/locations QA (blocked until modal fix ships)
 - Bounty Batch C purchase flow (blocked until BountySubmission seeded in DB)
-- #267 RSVP XP + notifications (requires Chrome QA with RSVP action)
-- backfillBenchmarks cron verification (runs Wednesday 2AM UTC — log check after next Wednesday)
+- backfillBenchmarks cron verification (runs Wednesday 2AM UTC)
 - Photo Role Awareness Phase 2 backend verification (Railway log check after batch upload)
 
 4. **Bounty redesign Batch A — Auto-match on item publish (highest value)** — Per `claude_docs/strategy/bounty-redesign-spec.md` §1 + §6a. Backend: `POST /api/bounties/:id/match` endpoint with fuzzy match scoring (60% confidence threshold locked, 25mi radius, category bonus, recency bonus, tag overlap). Frontend: post-publish match modal on `/organizer/add-items` showing top 3–5 matches with Submit CTA per bounty. Architect review may be needed for the fuzzy match algorithm approach.
@@ -265,6 +297,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 **Patrick decisions still open (from spec §8):** shopper price negotiation (default no), bounty auto-expiry default (60–90 days recommended, nullable today), message char limit (500 default). Not blockers — default values in spec.
 
 ## Current Work
+
+**S565 COMPLETE** — Full-site QA pass (findings-only, no fixes). 46 bugs logged to qa-backlog.md. See S565 in Recent Sessions for full bug inventory. Next: dispatch P1 fixes per priority list in Next Session.
 
 **S564 COMPLETE** — Mobile QA (S547/S549 all verified) + 2 backend bug fixes + camera + ConfirmDialog.
 
@@ -292,6 +326,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 *(S540–S534 archive: see monthly-digest-2026-04.md — all complete and pushed)*
 
 ## Recent Sessions
+
+**S565 (2026-04-24, COMPLETE):** Full-site Chrome QA pass — findings-only, no fixes written. Batches 11–13: Settlement Hub (5-tab wizard), organizer pages (earnings, holds, ripples, plan, subscription, edit-sale), admin pages (dashboard, users, feedback, verification, bid-review, invites, sales). **46 total bugs found:** 11 P1 / 15 P2 / 20 P3. Key P1 findings: (1) React hydration #418 confirmed site-wide — `new Date()` SSR/CSR mismatch causes physical clicks to fail across all event-handler-heavy pages; JS `.click()` workaround used throughout QA; (2) `/admin/bid-review` API 500 — entire feature broken; (3) Settlement Receipt shows $0.00 client payout — Payout Amount field not pre-filled from Commission tab; (4) "Download Receipt" button dead; (5) `/shopper/profile` + `/shopper/collection` → 404; (6) Save Interests silent-fail; (7) POS item dropdown unresponsive (hydration); (8) `/organizer/profile` redirects to settings; (9) Subscription "Downgrade to Free" dialog says "SIMPLE" (label mismatch); (10) `/organizer/flash-deal/[saleId]` → 404. Key P2 findings: site-wide right-panel overflow, map component failure on edit-sale, POS "no active sales" false negative, POS search non-functional, subscription wrong status on load, settlement payout not pre-filled, identical sale names in dropdowns, admin feedback has no user attribution. All 46 bugs in qa-backlog.md S565 section. No code changed this session. Mobile viewport JS resize technique confirmed (320px) and multi-account dispatch approach confirmed (separate organizer/shopper dispatches, no login/logout cycling). Session was docs-only wrap.
 
 **S564 (2026-04-24, COMPLETE):** Mobile QA (S547/S549) + 2 backend bug fixes + camera + ConfirmDialog. All 5 S549 mobile items Chrome-verified at ~454px (Past Sales card, ENDED header, insights SELECT, explorer-profile Add buttons, workspace tab bar — all no overflow). Camera: lighting pill toggleable (off by default); brightness switched from mean→80th-percentile (dark items no longer trigger false low-light warning). P1: ConfirmDialog component replaces all 24 native window.confirm() calls. Backend inline fixes: (1) treasureHuntQRController.ts — `getRankXpMultiplier` now called so RANGER gets 5 XP instead of flat 3; (2) bountyController.ts — `getMySubmissions` removes PENDING_REVIEW default so "All" tab returns all statuses. React hydration #418 confirmed P1 — button clicks silently fail across multiple pages; logged in queue for dedicated investigation. Files: 2 backend controllers + BrightnessIndicator.tsx + ConfirmDialog.tsx + 24 files (window.confirm replacements).
 
