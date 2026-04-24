@@ -14,6 +14,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import TierGate from '../../components/TierGate';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import Link from 'next/link';
 import { Trash2, Edit2, DollarSign, Copy, Check } from 'lucide-react';
 
@@ -47,6 +48,7 @@ const ConsignorsPage: React.FC = () => {
   const [modalMode, setModalMode] = useState<ModalMode>('closed');
   const [editingConsignor, setEditingConsignor] = useState<Consignor | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -167,14 +169,14 @@ const ConsignorsPage: React.FC = () => {
   };
 
   const handleDelete = async (consignorId: string, consignorName: string) => {
-    if (!window.confirm(`Delete consignor "${consignorName}"? This cannot be undone.`)) {
-      return;
-    }
+    setDeleteConfirm({ open: true, id: consignorId, name: consignorName });
+  };
 
-    setIsDeleting(consignorId);
+  const performDelete = async () => {
+    setIsDeleting(deleteConfirm.id);
     try {
-      await api.delete(`/consignors/${consignorId}`);
-      setConsignors(prev => prev.filter(c => c.id !== consignorId));
+      await api.delete(`/consignors/${deleteConfirm.id}`);
+      setConsignors(prev => prev.filter(c => c.id !== deleteConfirm.id));
       showToast('Consignor deleted', 'success');
     } catch (error: any) {
       console.error('Error deleting consignor:', error);
@@ -182,6 +184,7 @@ const ConsignorsPage: React.FC = () => {
       showToast(message, 'error');
     } finally {
       setIsDeleting(null);
+      setDeleteConfirm({ open: false, id: '', name: '' });
     }
   };
 
@@ -463,6 +466,16 @@ const ConsignorsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.open}
+        title="Delete Consignor"
+        message={`Delete consignor "${deleteConfirm.name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={performDelete}
+        onCancel={() => setDeleteConfirm({ open: false, id: '', name: '' })}
+        variant="danger"
+      />
     </TierGate>
   );
 };

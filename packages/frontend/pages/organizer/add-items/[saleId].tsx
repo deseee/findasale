@@ -41,6 +41,7 @@ import Link from 'next/link';
 import Skeleton from '../../../components/Skeleton';
 import RapidCapture from '../../../components/RapidCapture';
 import PreviewModal from '../../../components/camera/PreviewModal';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 import { useUploadQueue } from '../../../hooks/useUploadQueue';
 import { useVoiceInput } from '../../../hooks/useVoiceInput';
 import BulkConfirmModal from '../../../components/BulkConfirmModal';
@@ -299,6 +300,7 @@ const AddItemsDetailPage = () => {
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmTitle, setDeleteConfirmTitle] = useState<string>('');
   const [bulkPrice, setBulkPrice] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraAnalyzing, setCameraAnalyzing] = useState(false);
@@ -2206,9 +2208,8 @@ const AddItemsDetailPage = () => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
-                                deleteMutation.mutate(item.id);
-                              }
+                              setDeleteConfirmId(item.id);
+                              setDeleteConfirmTitle(item.title || 'this item');
                             }}
                             disabled={deleteMutation.isPending}
                             className="text-red-400 hover:text-red-600 transition-colors disabled:opacity-50 p-0.5 leading-none"
@@ -2638,6 +2639,25 @@ const AddItemsDetailPage = () => {
         itemId={matchingItemId || ''}
         itemTitle={matchingItemTitle}
         onClose={() => setBountyMatchOpen(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteConfirmId !== null}
+        title="Delete Item"
+        message={`Delete "${deleteConfirmTitle}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (deleteConfirmId) {
+            deleteMutation.mutate(deleteConfirmId);
+          }
+          setDeleteConfirmId(null);
+          setDeleteConfirmTitle('');
+        }}
+        onCancel={() => {
+          setDeleteConfirmId(null);
+          setDeleteConfirmTitle('');
+        }}
+        variant="danger"
       />
     </>
   );

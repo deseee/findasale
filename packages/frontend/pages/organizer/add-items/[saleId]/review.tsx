@@ -25,6 +25,7 @@ import NearMissNudge from '../../../../components/NearMissNudge'; // Feature 61
 import ItemPhotoManager from '../../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Phase 3
 import PriceResearchPanel from '../../../../components/PriceResearchPanel';
+import ConfirmDialog from '../../../../components/ConfirmDialog';
 import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 import RapidCapture, { RapidItem } from '../../../../components/RapidCapture';
 import EbayCategoryPicker from '../../../../components/EbayCategoryPicker';
@@ -212,6 +213,13 @@ const ReviewPage = () => {
   const [removedTagCounts, setRemovedTagCounts] = useState<Map<string, number>>(new Map());
   // Condition-adjusted pricing: track which item is currently refreshing its price
   const [refreshingPriceItemId, setRefreshingPriceItemId] = useState<string | null>(null);
+  // Confirm dialog state
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
 
   // Auto-enable buyer preview on mount if preview=true in query
   useEffect(() => {
@@ -923,9 +931,15 @@ const ReviewPage = () => {
                         </div>
                         <button
                           onClick={() => {
-                            if (window.confirm(`Delete ${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''}? This cannot be undone.`)) {
-                              deleteMutation.mutate(Array.from(selectedItems));
-                            }
+                            setConfirmState({
+                              open: true,
+                              title: 'Delete Items',
+                              message: `Delete ${selectedItems.size} item${selectedItems.size !== 1 ? 's' : ''}? This cannot be undone.`,
+                              onConfirm: () => {
+                                deleteMutation.mutate(Array.from(selectedItems));
+                                setConfirmState(s => ({ ...s, open: false }));
+                              },
+                            });
                           }}
                           disabled={deleteMutation.isPending}
                           className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded disabled:opacity-50"
@@ -1007,9 +1021,15 @@ const ReviewPage = () => {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
-                                    deleteMutation.mutate([item.id]);
-                                  }
+                                  setConfirmState({
+                                    open: true,
+                                    title: 'Delete Item',
+                                    message: `Delete "${item.title || 'this item'}"? This cannot be undone.`,
+                                    onConfirm: () => {
+                                      deleteMutation.mutate([item.id]);
+                                      setConfirmState(s => ({ ...s, open: false }));
+                                    },
+                                  });
                                 }}
                                 disabled={deleteMutation.isPending}
                                 className="sm:hidden text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-0.5 mt-1"
@@ -1134,9 +1154,15 @@ const ReviewPage = () => {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (window.confirm(`Delete "${item.title || 'this item'}"? This cannot be undone.`)) {
-                                    deleteMutation.mutate([item.id]);
-                                  }
+                                  setConfirmState({
+                                    open: true,
+                                    title: 'Delete Item',
+                                    message: `Delete "${item.title || 'this item'}"? This cannot be undone.`,
+                                    onConfirm: () => {
+                                      deleteMutation.mutate([item.id]);
+                                      setConfirmState(s => ({ ...s, open: false }));
+                                    },
+                                  });
                                 }}
                                 disabled={deleteMutation.isPending}
                                 className="text-red-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 p-1"
@@ -1642,6 +1668,15 @@ const ReviewPage = () => {
             isAnalyzing={false}
           />
         ) : null}
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={() => confirmState.onConfirm()}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+        variant="danger"
+      />
       </main>
     </>
   );

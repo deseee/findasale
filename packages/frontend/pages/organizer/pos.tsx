@@ -22,6 +22,7 @@ import jsQR from 'jsqr';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import api from '../../lib/api';
 import PosTierGates from '../../components/PosTierGates';
 import PosInvoiceModal from '../../components/PosInvoiceModal';
@@ -176,6 +177,13 @@ export default function POSPage() {
   const [holds, setHolds] = useState<HoldItem[]>([]);
   const [holdsLoading, setHoldsLoading] = useState(false);
   const [invoiceModalHold, setInvoiceModalHold] = useState<HoldItem | null>(null);
+  // Confirm dialog state
+  const [confirmState, setConfirmState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [loadedHold, setLoadedHold] = useState<HoldItem | null>(null);
   const [holdsRefreshInterval, setHoldsRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const [cancellingSalesId, setCancellingSalesId] = useState<string | null>(null);
@@ -1245,31 +1253,34 @@ export default function POSPage() {
 
   // ─── Cancel hold from POS ──────────────────────────────────────────────────────────────
 
-  const handleCancelHold = async (hold: HoldItem) => {
-    const confirmed = window.confirm(
-      `Cancel hold for ${hold.shopperName} on "${hold.itemTitle}"? This will release the item back to available.`,
-    );
-    if (!confirmed) return;
-
-    setCancellingSalesId(hold.reservationId);
-    try {
-      await api.delete(`/api/reservations/${hold.reservationId}`);
-      // Remove from holds list
-      setHolds(prev => prev.filter(h => h.reservationId !== hold.reservationId));
-      // Clear loaded hold if this was the one
-      if (loadedHold?.reservationId === hold.reservationId) {
-        setLoadedHold(null);
-        // Remove from cart
-        setCart([]);
-        setBuyerEmail('');
-      }
-      showToast(`Hold cancelled for ${hold.shopperName}`, 'success');
-    } catch (err) {
-      console.error('[pos] Cancel hold error:', err);
-      showToast('Failed to cancel hold', 'error');
-    } finally {
-      setCancellingSalesId(null);
-    }
+  const handleCancelHold = (hold: HoldItem) => {
+    setConfirmState({
+      open: true,
+      title: 'Cancel Hold',
+      message: `Cancel hold for ${hold.shopperName} on "${hold.itemTitle}"? This will release the item back to available.`,
+      onConfirm: async () => {
+        setCancellingSalesId(hold.reservationId);
+        try {
+          await api.delete(`/api/reservations/${hold.reservationId}`);
+          // Remove from holds list
+          setHolds(prev => prev.filter(h => h.reservationId !== hold.reservationId));
+          // Clear loaded hold if this was the one
+          if (loadedHold?.reservationId === hold.reservationId) {
+            setLoadedHold(null);
+            // Remove from cart
+            setCart([]);
+            setBuyerEmail('');
+          }
+          showToast(`Hold cancelled for ${hold.shopperName}`, 'success');
+        } catch (err) {
+          console.error('[pos] Cancel hold error:', err);
+          showToast('Failed to cancel hold', 'error');
+        } finally {
+          setCancellingSalesId(null);
+          setConfirmState(s => ({ ...s, open: false }));
+        }
+      },
+    });
   };
 
   const handleSendInvoice = async (reservationId: string, shopperEmail: string, miscItems?: CartItem[]) => {
@@ -2370,6 +2381,14 @@ export default function POSPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmState.open}
+        title={confirmState.title}
+        message={confirmState.message}
+        onConfirm={() => confirmState.onConfirm()}
+        onCancel={() => setConfirmState(s => ({ ...s, open: false }))}
+      />
     </>
   );
 }
