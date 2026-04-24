@@ -999,7 +999,3 @@ export const updateCuratorEntry = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to update curator entry', error: error.message });
   }
 };
-pdating curator entry:', error);
-    res.status(500).json({ message: 'Failed to update curator entry', error: error.message });
-  }
-};
