@@ -508,7 +508,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
             {/* Photo Section */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 min-w-0">
               {/* Main Photo */}
               <div
                 onClick={() => setIsLightboxOpen(true)}
@@ -545,7 +545,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
             </div>
 
             {/* Item Details */}
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-6 min-w-0">
               {/* Header */}
               <div>
                 <div className="flex items-center gap-3 mb-2">

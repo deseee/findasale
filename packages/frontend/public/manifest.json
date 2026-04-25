@@ -1,7 +1,7 @@
 {
   "name": "FindA.Sale",
   "short_name": "FindA.Sale",
-  "description": "Find estate sales and auctions near you. Shoppers discover deals, organizers manage sales.",
+  "description": "Find sales near you — estate sales, yard sales, auctions, flea markets and more. Shoppers discover deals, organizers manage sales.",
   "theme_color": "#D97706",
   "background_color": "#F9F7F4",
   "display": "standalone",
@@ -76,7 +76,7 @@
     {
       "name": "Browse Sales",
       "short_name": "Sales",
-      "description": "Browse upcoming estate sales near you",
+      "description": "Browse upcoming sales near you",
       "url": "/?source=pwa-shortcut",
       "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
     },

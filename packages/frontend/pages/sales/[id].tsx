@@ -754,7 +754,7 @@ const SaleDetailPage = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Photos & Map */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 min-w-0">
             {/* Main Photo Gallery */}
             {sale.photoUrls.length > 0 && (
               <div className="mb-8">
@@ -858,7 +858,7 @@ const SaleDetailPage = () => {
           </div>
 
           {/* Sidebar */}
-          <div className="lg:col-span-1 overflow-hidden">
+          <div className="lg:col-span-1 overflow-hidden min-w-0">
             {/* Share Buttons */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8 overflow-hidden">
               <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Share</h2>
