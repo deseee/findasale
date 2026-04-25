@@ -1,68 +1,61 @@
-# Patrick's Dashboard — S573 Complete (Nav Polish + QR Modal + Geofence UX + Parallel Dispatches)
+# Patrick's Dashboard — S574 Complete (Corruption Fixes + Pricing Engine Spec)
 
-## ✅ S573 — What Got Done
+## ✅ S574 — What Got Done
 
-**One-line summary:** Mobile/desktop nav polished (icon order, cart fix, Appearance toggle, breathing room), QR quick-access modal added to shopper dashboard + cart drawer, geofence 403 improved with amber XP explainer, Scanner Phase 2 spec ready for review, stale queue test data seeded, roadmap reconciled.
+**One-line summary:** Fixed two file corruptions that were blocking deployment (schema.prisma P1012 + Layout.tsx null bytes), forced Railway rebuild, and designed the full multi-source pricing engine architecture.
 
 ### Quick wins this session
 
 | Win | Notes |
 |---|---|
-| Mobile nav icon order fixed | Cart → Bell → QR Scanner → hamburger (was Clock → QR → Bell → hamburger) |
-| Appearance toggle on mobile | ThemeToggle now in mobile slide-in drawer (was desktop-only) |
-| Desktop nav breathing room | `mx-6` added to center nav + gap reduced throughout; Host a Sale / messages no longer squished |
-| QR modal on shopper dashboard | "My QR" tab → full-screen modal (Apple Wallet style). No more scrolling to bottom. |
-| Show My QR in cart drawer | Link in cart header header fires same full-screen QR modal |
-| Geofence 403 → amber XP explainer | "Allow location access to earn XP" + auto-retries after permission granted |
-| Scanner Phase 2 Architect spec | Full spec: model, API contract, funnel query, migration SQL, open questions |
-| 4 stale queue test accounts | tier-lapse-test@, low-xp-shopper@, charity sale, hold/reservation |
-| Roadmap reconciled | 9 rows → Chrome-verified S572; 5 new rows added for S572/S573 ships |
+| schema.prisma P1012 — 16 errors fixed | Duplicate models from Scanner Phase 2 agent; removed via Python byte surgery |
+| Layout.tsx null bytes removed | Affiliate agent had appended 700+ `\x00` bytes; Vercel showed "mmm..."; truncated clean |
+| Railway unblocked | Dockerfile.production cache-bust `2026-04-22a → 2026-04-25a` forced rebuild |
+| Pricing engine spec written | Full ADR at `claude_docs/feature-notes/pricing-engine-architecture.md` |
+| 30+ pricing sources evaluated | Research doc at `claude_docs/research/pricing-engine-multi-source-research.md` |
 
 ---
 
 ## ⏳ Pending Patrick Actions
 
-### 1. Push this session's code
+### 1. Push this session's files
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages\database\prisma\schema.prisma
 git add packages\frontend\components\Layout.tsx
-git add packages\frontend\pages\shopper\dashboard.tsx
-git add packages\frontend\components\CartDrawer.tsx
-git add "packages\frontend\pages\sales\[id]\treasure-hunt-qr\[clueId].tsx"
-git add packages\database\prisma\seed.ts
-git add claude_docs\strategy\roadmap.md
+git add packages\backend\Dockerfile.production
+git add claude_docs\feature-notes\pricing-engine-architecture.md
+git add claude_docs\research\pricing-engine-multi-source-research.md
 git add claude_docs\STATE.md
 git add claude_docs\patrick-dashboard.md
-git commit -m "S573: nav polish + QR modal + geofence UX + seed + roadmap"
+git commit -m "S574: fix schema/Layout corruptions + multi-source pricing engine spec"
 .\push.ps1
 ```
 
-### 2. Run seed to activate test accounts (optional — do before QA of stale queue items)
+### 2. Add Railway env vars (needed before Pricing Engine Phase 1 dispatch)
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-pnpm run prisma:seed
-```
+In Railway → backend service → Variables:
 
-Test accounts created:
-- **tier-lapse-test@example.com** — PRO organizer with expired/past_due subscription (test #75 Tier Lapse Logic)
-- **low-xp-shopper@example.com** — Shopper with guildXp:10 (test Rarity Boost XP gate)
-- Charity close sale with SaleDonation record (test #235 DonationModal)
-- Hold/reservation on active published sale (test #223 Holds)
+| Variable | Source | Notes |
+|---|---|---|
+| `KEEPA_API_KEY` | keepa.io → API Keys | Amazon price history |
+| `APIFY_API_KEY` | apify.com → Settings → API | EBTH scraping + Google Trends |
+| `DISCOGS_TOKEN` | discogs.com → Settings → Developers | Vinyl comps |
 
-### 3. Review Scanner Phase 2 Architect spec
+### 3. Answer 5 open questions before Dev dispatch
 
-The Architect agent produced a full spec. Key decisions needed before Dev dispatch:
+From the pricing engine spec:
 
-| Question | Options |
-|---|---|
-| **Retention policy?** | No archival (default) vs. auto-archive events >90 days |
-| **Real-time dashboard?** | Static (refresh on load) vs. WebSocket polling |
-| **Downstream action tracking?** | Scan only (Phase 2a) vs. scan + added-to-favorites + purchase (Phase 2b) |
-| **Off-domain QR tagging?** | Log raw `decodedUrl` (current) vs. parse domain + tag competitor |
+| # | Question | Default if no answer |
+|---|---|---|
+| 1 | **ASIN resolution UX** — show organizer "found matching Amazon product" confirmation, or silent? | Silent |
+| 2 | **Sleeper flag display** — amber "Sleeper Alert" badge on item edit page, or just affects price silently? | Silent |
+| 3 | **B-Stock cost ceiling** — enable at $5k MRR? Higher? Lower? | $5k MRR |
+| 4 | **Discogs scope** — vinyl only, or include CDs/cassettes from day one? | Vinyl only |
+| 5 | **Google Trends scraping** — comfortable using Apify ($0.30–$0.50/day) until official API affordable? | Apify OK |
 
-The `QRScannerEvent` model and `POST /api/qr-scanner/event` API are ready for Dev dispatch once you approve the retention/scope decisions.
+Say "dispatch pricing engine dev" once vars are added and you've reviewed the spec.
 
 ---
 
@@ -83,26 +76,26 @@ The `QRScannerEvent` model and `POST /api/qr-scanner/event` API are ready for De
 
 ---
 
-## 🏗 Scanner Phase 2 — Spec Summary (needs Patrick decision before Dev dispatch)
+## 💰 Pricing Engine — What We're Building
 
-**New model:** `QRScannerEvent` — tracks `SCAN_INITIATED / SCAN_DECODED_ON_DOMAIN / SCAN_DECODED_OFF_DOMAIN / SCAN_CAMERA_DENIED` per sale, with optional shopperId, deviceType, ipHash for dedup.
+The current pricing covers ~15-20% of inventory well (collectibles with PriceCharting/eBay). Everything else — furniture, tools, clothing, vinyl, sneakers, art — is off by 50-300% because flat depreciation doesn't account for brand value retention, sleeper collectibles, or trending demand.
 
-**New endpoint:** `POST /api/qr-scanner/event` — accepts saleId + eventType + optional auth. Anonymous scans supported (shopperId null).
+**The fix:** Tiered multi-source engine with weighted median, appreciation awareness, and toggleable sources.
 
-**New organizer view:** Scanner Funnel card on `/organizer/qr-codes` — total scans, on-domain conversion rate, camera-denied count, mobile vs desktop breakdown.
+**What's different from today:**
+- Brand Exception DB (65 brands like Le Creuset, Griswold, Herman Miller) — never apply depreciation curves to these
+- Sleeper Detection — Vision pipeline extended to flag Pyrex patterns, Griswold cast iron, Hull pottery, etc. before organizer lists it at $2
+- Trend Signals — Google Trends + eBay 7/30/90-day momentum for things going viral
+- Recency Decay — electronics from 2023 vs. furniture from 2023 depreciate at completely different rates
+- Asking vs. Sold — asking prices get 0.6x weight (they don't reflect what things actually sell for)
 
-**Migration:** Standard Prisma migration, zero-downtime, no backfill needed.
+**Sources enabled at launch (no extra cost to start):**
+PriceCharting (free tier), eBay enhanced (existing), EBTH via Apify, Keepa (Amazon), Discogs (vinyl), GSA Auctions (tools/equipment), Salvation Army table (floor pricing), Brand Exception DB, Sleeper Detection, Google Trends (Apify), eBay Momentum
 
-Say "dispatch Scanner Phase 2 dev" when ready.
+**Sources wired, disabled (flip the switch as we grow):**
+B-Stock, WorthPoint, StockX, HiBid, MaxSold, OfferUp, StorageTreasures
 
----
-
-## 🧪 Test Data State
-
-- **Karen Anderson (user11@example.com)** — RANGER (2055 XP), has 1 TreasureHuntQRScan row. Leave as Ranger test account.
-- **tier-lapse-test@example.com** — PRO organizer, subscriptionStatus: past_due (after seed)
-- **low-xp-shopper@example.com** — guildXp: 10, INITIATE rank (after seed)
-- All other seeded users unchanged.
+Spec: `claude_docs/feature-notes/pricing-engine-architecture.md`
 
 ---
 
@@ -110,22 +103,16 @@ Say "dispatch Scanner Phase 2 dev" when ready.
 
 | Area | Status |
 |------|--------|
-| Mobile nav icon order | ✅ Fixed S573 — push pending |
-| Appearance toggle on mobile | ✅ Fixed S573 — push pending |
-| Desktop nav spacing | ✅ Fixed S573 — push pending |
-| QR modal on shopper dashboard | ✅ Shipped S573 — push pending |
-| Show My QR in cart drawer | ✅ Shipped S573 — push pending |
-| Geofence 403 UX | ✅ Improved S573 — push pending |
-| Scanner Phase 2 | 📋 Architect spec ready — awaiting Patrick decision |
-| Stale queue test data | ✅ Seeded S573 — run prisma:seed to activate |
-| Roadmap | ✅ Reconciled S573 — 9 rows updated, 5 added |
-| Vercel build | ✅ Green |
-| Railway backend | ✅ Green |
+| schema.prisma | ✅ Corruption fixed S574 — push pending |
+| Layout.tsx | ✅ Null bytes removed S574 — push pending |
+| Railway backend | ✅ Green (cache-bust forced rebuild) |
+| Vercel frontend | ✅ Green |
+| Pricing engine spec | ✅ Written S574 — awaiting Patrick review + env vars |
+| Scanner Phase 2 spec | 📋 Ready — awaiting Patrick decision (retention/scope questions) |
+| Stale queue test data | ✅ Seeded S573 — run `prisma:seed` to activate |
 
 ---
 
-## ✅ S572 — Previous Session Summary
+## ✅ S573 — Previous Session Summary
 
-Audit + 3 parallel fixes + P0 Railway hotfix + comprehensive Chrome QA (9 ✅) + QR auto-claim + in-app QR scanner Phase 1.
-
-Key verified: Hydration #418, D-001 manifest, 1104px overflow, Encyclopedia detail, Settlement PDF, Shopper Referral #7, Flip Report #41 (live for 215 sessions while audits kept deferring it), iCal Export #184 (same), QR rank multiplier #261.
+Nav polish + QR modal + geofence UX + 4 parallel dispatches. Mobile top nav icon order fixed, Appearance toggle added to mobile drawer, desktop nav breathing room added, "My QR" tab opens full-screen Apple Wallet-style modal, cart drawer gets "Show My QR" link, geofence 403 upgraded to amber explainer with retry. Scanner Phase 2 spec ready. Roadmap reconciled (9 rows updated, 5 added).
