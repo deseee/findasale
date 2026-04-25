@@ -300,7 +300,7 @@ const salePhotoUrls = [
 
 async function main() {
   console.log('🌱 Starting database seed...');
-  const defaultPassword = await bcrypt.hash('password123', 10);
+  const defaultPassword = await bcrypt.hash('Seedy2025!', 10);
 
   // ── Clear data, preserving artifactmi@gmail.com and deseee@gmail.com ───────
   console.log('🗑️  Clearing existing data (preserving protected accounts)...');
@@ -1251,12 +1251,12 @@ async function main() {
   console.log(`  • User streaks:     4 records`);
   console.log(`  • Points tx:        6`);
   console.log(`  • Conversations:    up to 2 | Messages: up to 5`);
-  console.log('\n🔑 Test accounts (all passwords: password123):');
+  console.log('\n🔑 Test accounts (all passwords: Seedy2025!):');
   console.log('   user1@example.com     — ADMIN + SIMPLE organizer');
   console.log('   user2@example.com     — PRO organizer [TD-01: Stripe acct_test_user2]');
   console.log('   user3@example.com     — TEAMS organizer [TD-01: Stripe acct_test_user3]');
   console.log('   user11@example.com    — Shopper [TD-02: 6+ purchases, 10+ likes, badges, trail, reviews, holds]');
-  console.log('\n🔑 Real accounts (password: password123 locally):');
+  console.log('\n🔑 Real accounts (password: Seedy2025! locally):');
   console.log('   deseee@gmail.com      — ADMIN + TEAMS organizer (Patrick)');
   console.log('   artifactmi@gmail.com  — TEAMS organizer (Artifact MI)');
 }

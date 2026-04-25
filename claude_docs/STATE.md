@@ -86,7 +86,18 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- S576 QA pass — see ## Next Session for full dispatch list
+- S576 QA in progress — mid-session state below (account: Alice/TEAMS, password changed to Seedy2025! in seed.ts — DB re-seed still needed)
+
+**S576 QA findings so far (mid-session):**
+- **#332 Shopify ✅** Alice accesses page. **⚠️ P1: Bob (PRO) also gets full page — no TEAMS gate on /organizer/shopify.**
+- **#333 Stripe-connect ⚠️** Alice accesses page. **❌ P1: Bob (PRO) gets full page — no TEAMS gate.** **❌ P1: "Failed to load consignors" API error for ALL users.** **P2: page is light mode only (no dark mode).**
+- **#334 Markdown-cycles** — Alice ✅ sees full page. Bob (PRO) + Carol (SIMPLE) not yet tested.
+- **#338 PricingCompSummary** — UNVERIFIED: comp tile not found. Item had no stored comp data. Needs item with populated ItemCompLookup rows.
+- **#331 Voice-to-tag ⚠️ P2:** Button IS present and labeled "Record description". But icon is a generic avatar/ghost shape — NOT a mic — on BOTH the rapidfire camera thumbnail AND the edit-item page. Users have no way to know it triggers voice recording.
+- **#341 Multi-angle chips ✅** "Got the front — want another angle?" prompt with Back/Stamp / Damage Detail / Label/Brand / Skip → chips fire after photo capture. Chrome-verified ss_712994qo5.
+- **#336 Organizer-intent wins** — IN PROGRESS. Highball Glass item created via Rapidfire, AI set $3.5. Testing Suggest Price override behavior.
+- **#339 Refuse-to-fill** — partial evidence: Highball Glass (generic glass) had eBay category left BLANK by AI. Brand field also needs check.
+- **Seed password change:** seed.ts + auth integration tests updated (password123 → Seedy2025!). DB not yet re-seeded — test accounts still use old password until Patrick runs `pnpm run prisma:seed`.
 
 ## Schema & Infrastructure
 
@@ -262,24 +273,31 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S576 — QA pass.** Start with the Blocked/Unverified Queue above. Priority dispatch order (Chrome QA, sequential per §10c):
+**S576 — QA pass (IN PROGRESS).** Still on Alice batch.
 
-1. **#332 /organizer/shopify** — as Alice (TEAMS) → page loads, form renders, TEAMS gate confirmed; as Bob (PRO) → upgrade gate shows
-2. **#333 /organizer/stripe-connect** — as Alice (TEAMS) → page loads; as Bob (PRO) → gate shows
-3. **#334 /organizer/markdown-cycles** — as Bob (PRO) → page loads, create cycle form works; as Carol (SIMPLE) → PRO gate shows
-4. **#338 PricingCompSummary** — edit any item with comps → amber comp tile renders with "Based on N sources, median $X–$Y"
-5. **#228 Settlement fixes** — Settlement Wizard → Commission → Receipt → payout auto-populated → Download Receipt → confirm .pdf
-6. **#336 organizer-intent wins** — Rapidfire → type price BEFORE AI badge → save → verify organizer price not overwritten
-7. **#339 refuse-to-fill** — Rapidfire → ambiguous photo → verify brand + category left blank
-8. **#331 voice-to-tag thumbnails** — Rapidfire grid → mic on thumbnail → speak → verify saved
-9. **#341 multi-angle chips** — Rapidfire → first photo → verify chip row appears
-10. **#75 Tier Lapse** — login tier-lapse-test@example.com → verify lapse gate/banner
-11. **Rarity Boost XP gate** — login low-xp-shopper@example.com → /coupons → verify Rarity Boost button disabled
-12. **Holds countdown** — navigate to held item → verify countdown timer
-13. **#235 DonationModal** — as organizer → charity sale → verify wizard
-14. **Settlement Receipt PDF** — confirm .pdf download (S569 fix + S575 payout auto-populate)
-15. **AvatarDropdown guild link** — as shopper → avatar menu → "Explorer's Guild" → /shopper/guild-primer
-16. **S529 storefront widget** — /organizer/dashboard → Copy Link + View Storefront buttons visible
-17. **S529 mobile nav rank** — mobile viewport → hamburger nav → rank reads from useXpProfile
+1. ✅ **#332 /organizer/shopify** — Alice ✅. **P1 BUG: Bob (PRO) no gate — dispatch fix.**
+2. ✅ **#333 /organizer/stripe-connect** — Alice ✅. **P1 BUG: Bob no gate + "Failed to load consignors" API error. P2: light mode only — dispatch fixes.**
+3. 🔄 **#334 /organizer/markdown-cycles** — Alice ✅. Bob (PRO) + Carol (SIMPLE) still needed.
+4. UNVERIFIED **#338 PricingCompSummary** — No comp tile found; needs item with populated ItemCompLookup data.
+5. ⬜ **#228 Settlement fixes** — not yet tested
+6. 🔄 **#336 organizer-intent wins** — In progress on edit-item for Highball Glass (Rapidfire-created item)
+7. ⬜ **#339 refuse-to-fill** — partial: eBay category blank on glass item. Brand check pending.
+8. ⚠️ **#331 voice-to-tag thumbnails** — Button present but icon is avatar/ghost (NOT mic). P2 on both camera thumbnail + edit-item page.
+9. ✅ **#341 multi-angle chips** — chips confirmed ss_712994qo5
+10. ⬜ **#75 Tier Lapse** — login tier-lapse-test@example.com (password still password123 until reseed)
+11. ⬜ **Rarity Boost XP gate** — login low-xp-shopper@example.com
+12. ⬜ **Holds countdown** — navigate to held item
+13. ⬜ **#235 DonationModal** — charity sale wizard
+14. ⬜ **Settlement Receipt PDF** — confirm .pdf download
+15. ⬜ **AvatarDropdown guild link** — shopper → avatar → /shopper/guild-primer
+16. UNVERIFIED **S529 storefront widget** — not found on /organizer/dashboard
+17. ⬜ **S529 mobile nav rank** — mobile nav rank from useXpProfile
 
-**Patrick pending actions (none — all migrations ran S575. Vercel + Railway should be green).**
+**P1/P2 bugs to dispatch after QA completes:**
+- P1: /organizer/shopify — no TEAMS gate for PRO tier
+- P1: /organizer/stripe-connect — no TEAMS gate for PRO tier
+- P1: /organizer/stripe-connect — "Failed to load consignors" API 500 for all users
+- P2: /organizer/stripe-connect — light mode only (no dark: classes)
+- P2: Voice-to-tag button icon — avatar/ghost icon instead of mic (camera thumbnail + edit-item page)
+
+**Patrick pending actions:** Re-seed DB when ready: `cd packages/database && pnpm run prisma:seed` (updates test account passwords to Seedy2025!).
