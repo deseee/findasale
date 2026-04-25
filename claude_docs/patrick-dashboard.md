@@ -1,8 +1,35 @@
-# Patrick's Dashboard — S569 Complete (QA Session + Settlement Receipt PDF Fix)
+# Patrick's Dashboard — S570 Complete (UI Polish: Camera Icon, QR Position, Welcome Card)
 
-## ✅ S569 — What Got Done
+## ✅ S570 — What Got Done
 
-**One-line summary:** Chrome QA session — verified 6 backlog items, fixed Settlement Receipt PDF bug (backend now generates real PDF), confirmed decision needed on Rewards nav link.
+**One-line summary:** Three small UI improvements — camera icon on organizer + Items button, QR moved to top of shopper dashboard, welcome card now closeable.
+
+---
+
+## ✅ Changes This Session
+
+| Change | File | Notes |
+|--------|------|-------|
+| Camera icon in purple + Items button | `organizer/dashboard.tsx` | Both single-sale and multi-sale dropdown variants |
+| QR panel moved below RankHeroSection | `shopper/dashboard.tsx` | Was below ActionBar; now top of page |
+| Welcome card dismissible (×) | `shopper/dashboard.tsx` | Persists to localStorage |
+
+---
+
+## 📐 Label Sizes Research (no code yet)
+
+Current label composer: **Avery 5160 only** (1"×2.625", 30/sheet). Top candidates to add:
+
+| Label | Size | Per Sheet | Use case |
+|-------|------|-----------|----------|
+| Avery 5167 | 0.5"×1.75" | 80 | Jewelry, coins, small items |
+| Avery 5163 | 2"×4" | 10 | Furniture, large items |
+
+Say "add label sizes to the composer" to dispatch the backend/frontend work.
+
+---
+
+## Previous Session (S569)
 
 ---
 
