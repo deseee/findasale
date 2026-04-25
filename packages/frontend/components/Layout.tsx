@@ -783,12 +783,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
             {/* Desktop right-side nav (Saved, Messages, Profile + Auth) */}
             <div className="hidden lg:flex items-center space-x-4">
-              {!isClient ? (
-                <>
-                  <Link href="/login" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">Login</Link>
-                  <Link href="/register" className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-md">Register</Link>
-                </>
-              ) : user ? (
+              {user ? (
                 <>
                   <div className="relative">
                     <Link href="/messages" className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400" title="Messages">

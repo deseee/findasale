@@ -344,7 +344,7 @@ const AdminDashboard = () => {
         {activity && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Recent Purchases */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 min-w-0">
               <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-4">Recent Purchases</h3>
               <div className="space-y-3">
                 {activity.recentPurchases.length > 0 ? (
@@ -402,7 +402,7 @@ const AdminDashboard = () => {
             </div>
 
             {/* Recent Sales */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 lg:col-span-2">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 lg:col-span-2 min-w-0">
               <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-4">Recent Sales</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
