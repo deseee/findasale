@@ -572,7 +572,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                   {isAuction ? 'Current Bid' : 'Price'}
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  {item.markdownApplied && item.priceBeforeMarkdown ? (
+                  {item.priceBeforeMarkdown && item.priceBeforeMarkdown > currentPrice ? (
                     <>
                       <span className="text-2xl line-through text-gray-400 dark:text-gray-500">
                         ${item.priceBeforeMarkdown.toFixed(2)}

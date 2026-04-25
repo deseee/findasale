@@ -137,7 +137,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
         {/* Price */}
         {price && (
           <div className="mt-3 flex items-center gap-2">
-            {markdownApplied && priceBeforeMarkdown ? (
+            {priceBeforeMarkdown && priceBeforeMarkdown > price ? (
               <>
                 <span className="text-sm line-through text-gray-400 dark:text-gray-500">
                   ${priceBeforeMarkdown.toFixed(2)}

@@ -29,9 +29,24 @@ interface SalesResponse {
   message?: string;
 }
 
+interface QRFunnelData {
+  saleId: string;
+  funnel: {
+    totalScanInitiated: number;
+    decodedOnDomain: number;
+    decodedOffDomain: number;
+    cameraDenied: number;
+    conversionRate: number;
+  };
+  uniqueShoppers: number;
+  mobileScans: number;
+  desktopScans: number;
+}
+
 const QRCodesPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const [activeSaleId, setActiveSaleId] = React.useState<string | null>(null);
 
   // Fetch organizer's sales
   const { data: salesData = [], isLoading: salesLoading } = useQuery<SaleData[]>({
@@ -41,6 +56,27 @@ const QRCodesPage = () => {
       return (res.data as SalesResponse).data || res.data || [];
     },
     enabled: !!user,
+  });
+
+  // Set active sale to the first sale (or first active sale)
+  React.useEffect(() => {
+    if (salesData.length > 0 && !activeSaleId) {
+      // Prefer an active sale, otherwise just use the first one
+      const activeSale = salesData.find(
+        (sale) => sale.status === 'PUBLISHED' && isAfter(parseISO(sale.endDate), new Date())
+      );
+      setActiveSaleId(activeSale?.id || salesData[0].id);
+    }
+  }, [salesData, activeSaleId]);
+
+  // Fetch QR funnel data for the active sale
+  const { data: funnelData, isLoading: funnelLoading } = useQuery<QRFunnelData>({
+    queryKey: ['qr-funnel', activeSaleId],
+    queryFn: async () => {
+      const res = await api.get(`/qr-scanner/funnel?saleId=${activeSaleId}&days=7`);
+      return res.data;
+    },
+    enabled: !!activeSaleId,
   });
 
   // Calculate summary metrics
@@ -152,6 +188,160 @@ const QRCodesPage = () => {
                 {metrics.salesWithScans === 1 ? 'sale has' : 'sales have'} scans
               </p>
             </div>
+          </div>
+
+          {/* Scanner Funnel Card (Last 7 Days) */}
+          <div className="mb-12 p-6 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-lg font-bold mb-2">Scanner Funnel (Last 7 Days)</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {activeSaleId && salesData.find(s => s.id === activeSaleId)?.title}
+                </p>
+              </div>
+            </div>
+
+            {funnelLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+                <Skeleton className="h-12" />
+              </div>
+            ) : funnelData && funnelData.funnel.totalScanInitiated > 0 ? (
+              <div className="space-y-4">
+                {/* Scan Initiated */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Scan Initiated
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                      {funnelData.funnel.totalScanInitiated}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Landed on Site */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Landed on Site
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                      {funnelData.funnel.decodedOnDomain}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500"
+                      style={{
+                        width: `${(funnelData.funnel.decodedOnDomain / funnelData.funnel.totalScanInitiated) * 100}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Camera Denied */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Camera Denied
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                      {funnelData.funnel.cameraDenied}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-red-500"
+                      style={{
+                        width: `${(funnelData.funnel.cameraDenied / funnelData.funnel.totalScanInitiated) * 100}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Off Domain */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Left Site
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                      {funnelData.funnel.decodedOffDomain}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-amber-500"
+                      style={{
+                        width: `${(funnelData.funnel.decodedOffDomain / funnelData.funnel.totalScanInitiated) * 100}%`
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Conversion Rate Headline */}
+                <div className="mt-6 p-4 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    CONVERSION RATE
+                  </div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-50">
+                    {funnelData.funnel.conversionRate}%
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                    {funnelData.funnel.decodedOnDomain} of {funnelData.funnel.totalScanInitiated} scans landed on site
+                  </p>
+                </div>
+
+                {/* Device Breakdown */}
+                {(funnelData.mobileScans > 0 || funnelData.desktopScans > 0) && (
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Mobile
+                      </div>
+                      <div className="text-lg font-bold text-slate-900 dark:text-slate-50">
+                        {funnelData.mobileScans}
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Desktop
+                      </div>
+                      <div className="text-lg font-bold text-slate-900 dark:text-slate-50">
+                        {funnelData.desktopScans}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Unique Shoppers */}
+                {funnelData.uniqueShoppers > 0 && (
+                  <div className="mt-4 p-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Unique Shoppers
+                    </div>
+                    <div className="text-lg font-bold text-slate-900 dark:text-slate-50">
+                      {funnelData.uniqueShoppers}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50">
+                <p className="text-sm text-amber-700 dark:text-amber-200">
+                  No scanner data yet — share your sale QR code to start tracking engagement.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Per-Sale Breakdown */}

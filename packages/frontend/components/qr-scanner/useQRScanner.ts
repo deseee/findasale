@@ -5,14 +5,45 @@ export type QRScannerState = 'idle' | 'requesting' | 'scanning' | 'denied' | 'no
 
 interface UseQRScannerProps {
   onDecode?: (text: string) => void;
+  saleId?: string;
 }
 
-export const useQRScanner = ({ onDecode }: UseQRScannerProps = {}) => {
+export const useQRScanner = ({ onDecode, saleId }: UseQRScannerProps = {}) => {
   const [state, setState] = useState<QRScannerState>('idle');
   const [lastDecode, setLastDecode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Fire analytics events to QR scanner event endpoint
+  const fireScanEvent = useCallback(
+    async (
+      eventType: string,
+      extra?: { decodedUrl?: string }
+    ) => {
+      try {
+        const deviceType = /Mobi|Android/i.test(navigator.userAgent)
+          ? 'mobile'
+          : 'desktop';
+        const payload: Record<string, any> = {
+          eventType,
+          deviceType,
+          ...extra,
+        };
+        if (saleId) {
+          payload.saleId = saleId;
+        }
+        await fetch('/api/qr-scanner/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch {
+        // fire-and-forget — never block the scanner UX on analytics
+      }
+    },
+    [saleId]
+  );
 
   // Check if device has a camera
   const checkCameraAvailable = useCallback(async (): Promise<boolean> => {
@@ -30,6 +61,7 @@ export const useQRScanner = ({ onDecode }: UseQRScannerProps = {}) => {
     async (elementId: string) => {
       try {
         setState('requesting');
+        fireScanEvent('SCAN_INITIATED');
         setError(null);
         setLastDecode(null);
 
@@ -51,6 +83,19 @@ export const useQRScanner = ({ onDecode }: UseQRScannerProps = {}) => {
           (decodedText) => {
             setLastDecode(decodedText);
             setState('decoded');
+            // Fire analytics event based on domain match
+            const isOnDomain =
+              decodedText.includes('finda.sale') ||
+              decodedText.includes(window.location.hostname);
+            if (isOnDomain) {
+              fireScanEvent('SCAN_DECODED_ON_DOMAIN', {
+                decodedUrl: decodedText,
+              });
+            } else {
+              fireScanEvent('SCAN_DECODED_OFF_DOMAIN', {
+                decodedUrl: decodedText,
+              });
+            }
             if (onDecode) {
               onDecode(decodedText);
             }
@@ -65,6 +110,7 @@ export const useQRScanner = ({ onDecode }: UseQRScannerProps = {}) => {
         // Permission denied or other error
         if (err.name === 'NotAllowedError') {
           setState('denied');
+          fireScanEvent('SCAN_CAMERA_DENIED');
           setError('Camera access denied by user');
         } else if (err.name === 'NotFoundError') {
           setState('no-camera');
@@ -75,7 +121,7 @@ export const useQRScanner = ({ onDecode }: UseQRScannerProps = {}) => {
         }
       }
     },
-    [onDecode, checkCameraAvailable]
+    [onDecode, checkCameraAvailable, fireScanEvent]
   );
 
   // Stop the scanner

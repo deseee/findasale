@@ -241,6 +241,8 @@ model User {
   tranchesGiven         ReferralTranche[]        @relation("TranchesGiven")
   tranchesReceived      ReferralTranche[]        @relation("TranchesReceived")
   reputationScore       ReferrerReputationScore?
+  // QR Scanner Phase 2: scan event tracking
+  qrScannerEvents       QRScannerEvent[]         @relation("QRScannerEventShopper")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -690,6 +692,7 @@ model Sale {
   location                    Location?                @relation("LocationSales", fields: [locationId], references: [id], onDelete: SetNull)
   // #309: Consignor Portal payouts linked to this sale
   consignorPayouts            ConsignorPayout[]        @relation("ConsignorPayouts")
+  qrScannerEvents             QRScannerEvent[]         // QR Scanner Phase 2: scan analytics
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -3893,4 +3896,24 @@ model Location {
   updatedAt   DateTime           @updatedAt
 
   @@index([workspaceId])
+}
+
+// QR Scanner Phase 2: Scan analytics — track QR code engagement across sales
+model QRScannerEvent {
+  id          String    @id @default(cuid())
+  saleId      String
+  sale        Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  shopperId   String?
+  shopper     User?     @relation("QRScannerEventShopper", fields: [shopperId], references: [id], onDelete: SetNull)
+  eventType   String    // SCAN_INITIATED | SCAN_DECODED_ON_DOMAIN | SCAN_DECODED_OFF_DOMAIN | SCAN_CAMERA_DENIED
+  decodedUrl  String?
+  deviceType  String?   // "mobile" | "desktop"
+  userAgent   String?
+  ipHash      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([saleId, createdAt])
+  @@index([saleId, eventType])
+  @@index([shopperId, createdAt])
 }
