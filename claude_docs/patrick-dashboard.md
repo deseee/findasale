@@ -1,104 +1,73 @@
-# Patrick's Dashboard — S575 Complete (Big Build — QA Pass Next)
+# Patrick's Dashboard — S576 Complete (QA Pass Done — Bug Dispatch Next)
 
-## ✅ S575 — What Got Done
+## ✅ S576 QA Results
 
-**One-line summary:** Parallel build session — 9 features shipped, 3 compile errors fixed, 4 migrations deployed. Vercel + Railway green. S576 is all Chrome QA.
+**One-line summary:** 17 items tested. All S575 features verified. 2 P1 bugs found, 1 P2 bug, 4 UNVERIFIED carried forward. S577 is bug dispatch.
 
-### Quick wins this session
+### Verified ✅
 
-| Win | Notes |
+| Feature | Notes |
 |---|---|
-| #331 Voice-to-tag thumbnails | Mic button on each rapidfire thumbnail; speech saves description |
-| #341 Multi-angle prompt chips | First photo in rapidfire shows Back/Stamp, Damage Detail, Label/Brand, Skip chip row |
-| #336 Organizer-intent wins | Rapidfire: typing price/title before AI completes → organizer values not overwritten |
-| #339 Refuse-to-fill | Ambiguous photo → brand + category left blank when AI confidence < 0.6 |
-| #338 PricingCompSummary | edit-item page: amber "Based on N sources, median $X–$Y" comp tile |
-| #228 Settlement payout fix | Payout auto-populates from Commission tab; PDF download button rebuilt |
-| Consignor email notifications | sendConsignorItemSold, sendConsignorPayout, sendConsignorExpiryNotice via Resend |
-| consignorExpiryNoticeJob | Daily 2AM UTC — emails consignors about items 60–61 days old |
-| MarkdownCycle + /organizer/markdown-cycles | PRO-gated auto-markdown management; cron runs daily 3AM UTC |
-| Shopify integration + /organizer/shopify | TEAMS-gated; connect your Shopify store, push items, sync sold status |
-| Stripe Connect ACH + /organizer/stripe-connect | TEAMS-gated; Express account onboarding + ACH payout button for consignors |
-| 3 compile errors fixed | QRScannerModal TDZ, pricingSignalsController wrong import path, shopify.tsx ConfirmDialog wrong props |
-| Layout.tsx nav links patched | "Auto Markdown" added to PRO block, "Shopify" added to TEAMS block |
-| 4 migrations deployed | add_user_edited_fields, add_markdown_cycles, add_shopify, add_stripe_connect_ach |
+| #334 Markdown Cycles | All 3 tiers correct: TEAMS sees page, PRO sees page, SIMPLE sees PRO gate |
+| #336 Organizer-intent wins | Rapidfire: typing price before AI completes → organizer value saved, not overwritten |
+| #339 Refuse-to-fill | Ambiguous photo (generic glass) → brand + eBay category left blank by AI |
+| #341 Multi-angle chips | Chip row fires after first photo: Back/Stamp, Damage Detail, Label/Brand, Skip |
+| Rarity Boost XP gate | low-xp-shopper (10 XP): Rarity Boost button disabled with "not enough XP" message |
+| Settlement Receipt PDF | Download returns 200 OK with application/pdf header |
+| S529 mobile nav rank | Mobile nav shows "Initiate" from useXpProfile hook (not hardcoded "Scout") |
+| AvatarDropdown Explorer's Guild | CONNECT section has Explorer's Guild → /shopper/guild-primer ✅ (ss_1535lmtx4) |
 
 ---
 
-## ⏳ Pending Patrick Actions
+## ❌ Bugs Found (dispatching S577)
 
-**None.** All 4 migrations ran this session. Vercel and Railway should be green. S576 is a pure QA session — no code, no migrations, no pushes needed before starting.
+### P1: Settlement Payout Not Auto-Populated
+- **What's broken:** Settlement Wizard → Commission tab → Receipt step shows **$0.00** payout. The "Client / Executor Receives" line shows **$NaN**. This was claimed as fixed in S575 but is broken in production.
+- **Fix needed:** Wire CommissionPanel's `onPayoutRecorded` callback into SettlementWizard's payoutAmount state properly.
 
-**Optional (when ready to spend money on better comps):**
-- `KEEPA_API_KEY` from keepa.io → API Keys — adds Amazon price history. Engine works fine without it.
+### P1: Tier Lapse — No Warning, No Gate
+- **What's broken:** `tier-lapse-test@example.com` has PRO tier with `subscriptionStatus: past_due` in the DB and JWT. But the frontend completely ignores the `subscriptionStatus` field — no warning banner appears, and all PRO features are fully accessible.
+- **Fix needed:** Read `subscriptionStatus` in the frontend, show an amber warning banner when `past_due`. Whether to also *block* PRO features needs your call (see Patrick action below).
 
----
-
-## 📋 S576 QA Dispatch List (start here next session)
-
-Run these in order — Chrome QA, one at a time.
-
-| # | Feature | Account | URL | What to verify |
-|---|---------|---------|-----|----------------|
-| 1 | #332 Shopify page | Alice (TEAMS) then Bob (PRO) | /organizer/shopify | TEAMS: page + form render. PRO: upgrade gate shows |
-| 2 | #333 Stripe Connect | Alice (TEAMS) then Bob (PRO) | /organizer/stripe-connect | TEAMS: page loads. PRO: gate shows |
-| 3 | #334 Markdown Cycles | Bob (PRO) then Carol (SIMPLE) | /organizer/markdown-cycles | PRO: page + form. SIMPLE: PRO gate |
-| 4 | #338 PricingCompSummary | Any organizer | /organizer/edit-item/[any] | Amber comp tile "Based on N sources, median $X–$Y" |
-| 5 | #228 Settlement | Any organizer with a closed sale | Settlement Wizard | Commission → Receipt: payout auto-populated; Download → .pdf file |
-| 6 | #336 Organizer-intent | Any organizer | Rapidfire | Type price BEFORE AI badge → save → organizer value preserved |
-| 7 | #339 Refuse-to-fill | Any organizer | Rapidfire | Upload blurry/ambiguous photo → brand + category stay blank |
-| 8 | #331 Voice thumbnails | Any organizer | Rapidfire grid | Mic on thumbnail → speak → description saved |
-| 9 | #341 Multi-angle chips | Any organizer | Rapidfire | Upload first photo → chip row appears (Back/Stamp, Damage Detail, etc.) |
-| 10 | #75 Tier Lapse | tier-lapse-test@example.com | /organizer/dashboard | Lapse banner or downgrade gate triggers |
-| 11 | Rarity Boost gate | low-xp-shopper@example.com | /coupons | Rarity Boost button disabled with "not enough XP" |
-| 12 | Holds countdown | Karen or test shopper | Any held item | Countdown timer renders, hold expiry behavior works |
-| 13 | #235 DonationModal | Any organizer | Charity sale | 3-step wizard opens and flows |
-| 14 | Settlement Receipt PDF | Any organizer | /organizer/settlement/[id] | Click Download → .pdf (not .json), shows "Organizer Commission %" |
-| 15 | AvatarDropdown guild link | Karen (shopper) | Avatar menu | "Explorer's Guild" → /shopper/guild-primer |
-| 16 | S529 storefront widget | Any organizer | /organizer/dashboard | Copy Link + View Storefront buttons present |
-| 17 | S529 mobile nav rank | Karen | Mobile hamburger | Rank reads from useXpProfile (not hardcoded "Scout") |
+### P2: Voice-to-Tag Wrong Icon
+- **What's broken:** The voice recording button shows a **generic ghost/avatar shape** instead of a mic icon — on both the rapidfire grid thumbnails AND the edit-item page. Users have no way to know it triggers voice recording.
+- **Fix needed:** Swap icon to mic on both locations.
 
 ---
 
-## 💰 Pricing Engine — What's Live Now
+## ⚠️ UNVERIFIED — Carry to S577
 
-Phase 1 is deployed. The engine runs on every item publish and surfaces a weighted-median price suggestion from up to 7 concurrent sources.
-
-**Active sources (zero extra cost):**
-- PriceCharting — collectibles, games, toys
-- eBay enhanced — existing 4-tier fallback chain
-- Discogs — vinyl, CD, cassette, all audio formats
-- EBTH — estate sale comps via Vercel proxy (Railway → Vercel → EBTH)
-- GSA Auctions — tools, equipment, government surplus
-- Google Trends — trend signal multiplier (0.85–1.35x, 24h cache)
-- Salvation Army table — floor pricing fallback
-
-**Optional (add key to unlock):**
-- Keepa — Amazon price history (`KEEPA_API_KEY`)
-
-**Wired but disabled (toggle when ready):**
-B-Stock, WorthPoint, StockX, HiBid, MaxSold, OfferUp, StorageTreasures
-
-**Resilience:** Soft circuit breaker trips at 3 consecutive failures per source — source auto-disables, cron re-enables at 4AM UTC. `Promise.allSettled` means one dead source never crashes the batch.
+| Feature | Why Unverified | What's Needed |
+|---|---|---|
+| #338 PricingCompSummary | No test items have eBay comp data populated | Run eBay fetch on an item, or seed ItemCompLookup rows |
+| #235 DonationModal | Charity sale seeded but URL unknown | Query DB for saleType=CHARITY sale → navigate directly |
+| Holds countdown | Seeded hold not navigable during QA | Re-seed or find hold URL in DB |
+| S529 storefront widget | Copy Link + View Storefront not in DOM | Inspect organizer/dashboard.tsx — possibly regressed or removed |
 
 ---
 
-## 📊 Status Snapshot
+## ⏳ Patrick Action Needed Before S577
 
-| Area | Status |
-|------|--------|
-| Railway backend | ✅ Green |
-| Vercel frontend | ✅ Green (3 compile errors fixed S575) |
-| schema.prisma | ✅ Clean — all 4 S575 migrations deployed |
-| Pricing engine Phase 1 | ✅ Live |
-| Pricing engine Phase 2 UI | 📋 Deferred — sleeper + brand premium banners |
-| Shopify integration | ✅ Built S575 — Chrome QA pending |
-| Stripe Connect ACH | ✅ Built S575 — Chrome QA pending |
-| Auto Markdown cycles | ✅ Built S575 — Chrome QA pending |
-| Test data (seed accounts) | ✅ Seeded S575 — all 4 accounts live in Railway |
+**Tier Lapse gate decision:** When an organizer's account is `past_due`, should we:
+- **(A) Warning banner only** — amber banner at top of dashboard saying "Your subscription is past due. Update payment to avoid losing access." PRO features still work. (Simpler — 1–2 dev hours)
+- **(B) Hard gate** — Warning banner + block access to PRO-only features (shopify, stripe-connect, markdown cycles, etc.) until payment is resolved. (More complex — 4–6 dev hours)
+
+Which do you want?
+
+**Optional (low priority):**
+- `KEEPA_API_KEY` from keepa.io → API Keys — adds Amazon price history to the pricing engine. Works fine without it.
+- Run `pnpm run prisma:seed` from packages/database/ when ready to update test account passwords to Seedy2025!
 
 ---
 
-## ✅ S574 — Previous Session Summary
+## 📋 S577 Dispatch Plan
 
-Fixed two file corruptions (schema.prisma 16-error P1012, Layout.tsx null bytes). Built and deployed pricing engine Phase 1: 10 new backend files, 6 Prisma models, weighted median, soft circuit breaker, 7 active sources. Apify replaced with free google-trends-api + Vercel proxy for EBTH. Migration deployed, env vars set, Railway green.
+All independent — dispatch in parallel.
+
+| # | Task | Agent | Priority |
+|---|------|-------|---------|
+| 1 | Settlement payout auto-populate fix | findasale-dev | P1 |
+| 2 | Tier Lapse banner (+ gate if Patrick picks Option B) | findasale-dev | P1 |
+| 3 | #332 Shopify TEAMS gate for PRO users | findasale-dev | P1 |
+| 4 | #333 Stripe Connect TEAMS gate + consignors 500 fix | findasale-dev | P1 |
+| 5 | Voice-to-tag mic icon fix (2 locations) | findasale-dev | P2 |

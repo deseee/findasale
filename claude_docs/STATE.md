@@ -4,7 +4,9 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
-**Latest work (S575 — IN PROGRESS):** Seed run success + geofence decision locked + Scanner Phase 2 dispatched. **Seed run successful:** `prisma:seed` completed. Four test accounts now live in Railway: `tier-lapse-test@example.com` (PRO past_due — unblocks #75 Tier Lapse Logic), `low-xp-shopper@example.com` (guildXp=10 — unblocks Rarity Boost XP gate testing), charity sale with SaleDonation record (unblocks #235 DonationModal), hold/reservation on active sale (unblocks #146/#147 holds testing). Blocked/Unverified Queue items reduced from 4 → 0. **Geofence decision LOCKED:** Geofence is KEPT on treasure hunt QR flow. Already added to decisions-log.md D-007. **Scanner Phase 2 dispatched:** Implementation starting (QRScannerEvent model + backend endpoints + Scanner Funnel on /organizer/qr-codes). Add to roadmap as "Building S575 — Pending QA". **Patrick confirmed "nothing is deferred"** — items previously listed as blocked due to seed dependency are now unblocked.
+**Latest work (S576 — COMPLETE):** QA-only session — 17 items tested across organizer + shopper flows. Results: 8 ✅, 4 confirmed bugs (2 P1, 2 P2), 3 UNVERIFIED. **Confirmed bugs:** P1 — Settlement payout not auto-populated from Commission tab ($0.00 default, $NaN on "Client / Executor Receives" line, claimed shipped S575 but broken in prod); P1 — Tier Lapse: `tier-lapse-test@example.com` has `subscriptionStatus=past_due` in DB and JWT but frontend never reads the field — no warning banner, no feature restriction, full PRO access granted; P2 — Voice-to-tag icon is generic ghost/avatar shape on both rapidfire grid thumbnails AND edit-item page, not a mic (users have no way to know it's a voice trigger); **Verified ✅:** #334 Markdown Cycles (all 3 tiers: TEAMS/PRO/PRO-gate), #336 Organizer-intent wins (AI doesn't overwrite organizer price in Rapidfire), #339 Refuse-to-fill (blank brand+category on ambiguous photo), #341 Multi-angle chips (chip row fires after first photo), Rarity Boost XP gate (disabled at 10 XP), Settlement Receipt PDF (200 OK + application/pdf), S529 mobile nav rank (reads from useXpProfile — not hardcoded), AvatarDropdown Explorer's Guild link (CONNECT section → /shopper/guild-primer ss_1535lmtx4). **UNVERIFIED:** #338 PricingCompSummary (no items with populated ItemCompLookup in test data), #235 DonationModal (seeded charity sale not navigable without knowing direct URL), Holds/Reservations countdown (hold not found during navigation — seed may have expired), S529 storefront widget (Copy Link + View Storefront absent from DOM for Alice — possible regression vs S529 ship notes). **QA error corrected:** Initial #15 finding ("AvatarDropdown guild link missing") was wrong — Patrick caught it post-session. Link IS present and working. Corrected bugs to 2 P1, 1 P2 (voice icon). **Seed password note:** seed.ts updated (password123 → Seedy2025!) but DB not yet re-seeded — test accounts still use old password until Patrick runs `pnpm run prisma:seed`. No files changed (QA-only session). S577 is bug dispatch for all 4 confirmed bugs + 2 existing P1 tier gates from S575 (#332 Bob-no-gate, #333 Bob-no-gate + consignors 500).
+
+**Latest work (S575 — COMPLETE):** Seed run success + geofence decision locked + Scanner Phase 2 dispatched. **Seed run successful:** `prisma:seed` completed. Four test accounts now live in Railway: `tier-lapse-test@example.com` (PRO past_due — unblocks #75 Tier Lapse Logic), `low-xp-shopper@example.com` (guildXp=10 — unblocks Rarity Boost XP gate testing), charity sale with SaleDonation record (unblocks #235 DonationModal), hold/reservation on active sale (unblocks #146/#147 holds testing). Blocked/Unverified Queue items reduced from 4 → 0. **Geofence decision LOCKED:** Geofence is KEPT on treasure hunt QR flow. Already added to decisions-log.md D-007. **Scanner Phase 2 dispatched:** Implementation starting (QRScannerEvent model + backend endpoints + Scanner Funnel on /organizer/qr-codes). Add to roadmap as "Building S575 — Pending QA". **Patrick confirmed "nothing is deferred"** — items previously listed as blocked due to seed dependency are now unblocked.
 
 **Latest work (S574 — COMPLETE):** Two critical file corruptions fixed + multi-source pricing engine Phase 1 designed, built, and deployed to production. **schema.prisma corruption (P1012, 16 errors):** Fixed via Python byte surgery — removed 1909-byte duplicate block from Scanner Phase 2 agent. Final state: 170 models, all unique, `prisma validate` clean. **Layout.tsx null byte corruption:** Affiliate agent had appended 700+ `\x00` bytes — fixed via Python truncation. **Multi-source pricing engine spec:** Full ADR at `claude_docs/feature-notes/pricing-engine-architecture.md` — 6 new Prisma models, weighted median (not mean), recency decay `e^(-λt)`, adapter pattern with feature-flag-per-source, graceful degradation (`Promise.allSettled`), soft circuit breaker (3 failures → disable, 4AM UTC auto-recovery). **Apify removed entirely:** Google Trends via free `google-trends-api` npm package; EBTH via Vercel proxy route (`packages/frontend/pages/api/proxy/ebth.ts`) — Railway calls `https://finda.sale/api/proxy/ebth`, Vercel IPs hit EBTH, zero new accounts. **Phase 1 shipped (10 new backend files):** `signals.ts` (Google Trends + TrendSignal 24h cache), `circuit-breaker.ts` (soft CB + quota reset crons), `depreciation.ts` (category λ table), `orchestrator.ts` (3-tier cascade + `Promise.allSettled`), `adapters/registry.ts` (isConfigured() gate — missing env keys = adapter silently skipped), `adapters/keepa.ts`, `adapters/discogs.ts` (covers vinyl/CD/cassette/all audio), `adapters/ebth.ts` (axios+cheerio via Vercel proxy), `adapters/gsa.ts`, `jobs/pricingEngineCron.ts` (quota reset 3AM + CB recovery 4AM UTC). **Import bug found + fixed (Railway was crashing on boot):** Dev agent used `import prisma from '@findasale/database'` (workspace alias, doesn't resolve in Docker) in all 10 files. Fixed via bash sed to `import { prisma } from '[relative]/lib/prisma'` — zero TS errors after fix. **Railway green. Migration `20260425_add_pricing_engine` deployed. Env vars set:** `DISCOGS_TOKEN` (free Discogs API), `EBTH_WORKER_URL=https://finda.sale/api/proxy/ebth`. `KEEPA_API_KEY` optional (paid, engine works without it). **Files changed:** `packages/database/prisma/schema.prisma` (corruption fix + 6 pricing models), `packages/frontend/components/Layout.tsx` (null bytes removed), `packages/backend/Dockerfile.production` (cache-bust 2026-04-25b), `packages/backend/package.json` (cheerio + google-trends-api added), `packages/frontend/pages/api/proxy/ebth.ts` (NEW), `packages/backend/src/services/pricingEngine/*.ts` (5 NEW), `packages/backend/src/services/pricingEngine/adapters/*.ts` (5 NEW), `packages/backend/src/jobs/pricingEngineCron.ts` (NEW), `claude_docs/feature-notes/pricing-engine-architecture.md` (NEW + resilience section added), `claude_docs/research/pricing-engine-multi-source-research.md` (NEW). **Phase 2 deferred (locked decisions):** Sleeper alert + brand premium amber inline banners on edit-item and review/publish — UI surface only, no schema changes needed, dispatch when beta organizers are active.
 
@@ -86,18 +88,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- S576 QA in progress — mid-session state below (account: Alice/TEAMS, password changed to Seedy2025! in seed.ts — DB re-seed still needed)
-
-**S576 QA findings so far (mid-session):**
-- **#332 Shopify ✅** Alice accesses page. **⚠️ P1: Bob (PRO) also gets full page — no TEAMS gate on /organizer/shopify.**
-- **#333 Stripe-connect ⚠️** Alice accesses page. **❌ P1: Bob (PRO) gets full page — no TEAMS gate.** **❌ P1: "Failed to load consignors" API error for ALL users.** **P2: page is light mode only (no dark mode).**
-- **#334 Markdown-cycles** — Alice ✅ sees full page. Bob (PRO) + Carol (SIMPLE) not yet tested.
-- **#338 PricingCompSummary** — UNVERIFIED: comp tile not found. Item had no stored comp data. Needs item with populated ItemCompLookup rows.
-- **#331 Voice-to-tag ⚠️ P2:** Button IS present and labeled "Record description". But icon is a generic avatar/ghost shape — NOT a mic — on BOTH the rapidfire camera thumbnail AND the edit-item page. Users have no way to know it triggers voice recording.
-- **#341 Multi-angle chips ✅** "Got the front — want another angle?" prompt with Back/Stamp / Damage Detail / Label/Brand / Skip → chips fire after photo capture. Chrome-verified ss_712994qo5.
-- **#336 Organizer-intent wins** — IN PROGRESS. Highball Glass item created via Rapidfire, AI set $3.5. Testing Suggest Price override behavior.
-- **#339 Refuse-to-fill** — partial evidence: Highball Glass (generic glass) had eBay category left BLANK by AI. Brand field also needs check.
-- **Seed password change:** seed.ts + auth integration tests updated (password123 → Seedy2025!). DB not yet re-seeded — test accounts still use old password until Patrick runs `pnpm run prisma:seed`.
+- S576 QA COMPLETE — S577 is bug dispatch for 4 confirmed bugs + 2 P1 tier gates from S575.
 
 ## Schema & Infrastructure
 
@@ -172,10 +163,10 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | SettlementWizard fee % | ✅ Chrome-verified S563 — RESOLVED | Receipt shows Platform Fee (0%) correctly for sale with no Stripe revenue. No 200% shown. API confirms platformFeeAmount=0. ss_9199brc0p | S531 |
 | Per-sale analytics filter | ✅ Chrome-verified S563 — RESOLVED | Selecting sale → "Filtered to one sale" + cards update ($79.44→$27.29 + new per-sale metrics). ss_8173iewrh → ss_5482waky8 | S531 |
 | AvatarDropdown nav link | Fixed S531 — pending Chrome QA | As shopper, verify avatar dropdown shows "Explorer Profile" → /shopper/explorer-profile | S531 |
-| S529 storefront widget | Pushed — pending Chrome QA | Verify /organizer/dashboard shows Copy Link + View Storefront buttons | S529 |
+| S529 storefront widget | UNVERIFIED S576 — Copy Link + View Storefront buttons NOT found in DOM for Alice (/organizer/dashboard). Possible regression vs S529 ship notes. DECISION NEEDED: fix regression or confirm feature was removed. | Re-inspect organizer/dashboard.tsx for storefront URL widget; check git log for any removal | S529 |
 | S529 mobile nav rank | Pushed — mobile viewport required | Test mobile viewport, verify rank reads from useXpProfile (not hardcoded Scout) | S529 |
 | S529 card reader content | Pushed — pending Chrome QA | Verify /faq, /guide, /support show S700/S710 hardware only (no Tap to Pay, no M2) | S529 |
-| #235 DonationModal | ✅ Seeded S575 — charity sale with SaleDonation record in Railway DB | Chrome QA: navigate to charity sale as organizer, verify DonationModal 3-step wizard opens | S575 |
+| #235 DonationModal | UNVERIFIED S576 — seeded charity sale exists in DB but not navigable without knowing direct URL/sale ID. Need to find sale URL. | Query DB for charity saleType sale → navigate directly; or create test charity sale as Alice | S575 |
 | #251 priceBeforeMarkdown | Needs live data | Need item with markdownApplied=true to verify crossed-out display | S526 |
 | Organizer Insights runtime | User-specific error | Test as Alice (user1) — Bob loads fine, error must be account-specific | S528 |
 | #275 Hunt Pass Cosmetics | Karen has no Hunt Pass | Need Hunt Pass subscriber to verify amber avatar ring + 🏆 leaderboard badge | S530 |
@@ -186,15 +177,15 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #257 Scout Hold Duration | Karen is INITIATE | Needs Scout+ account to test 45-min hold | S530 |
 | #268 Trail Completion XP | Karen's trail has 0 stops | Need trail with all stops completed | S530 |
 | #261 Treasure Hunt XP Rank Multiplier | Needs QR scan | Ranger+ account + live sale QR scan | S530 |
-| #75 Tier Lapse Logic | ✅ Seeded S575 — tier-lapse-test@example.com (PRO past_due) | Chrome QA: navigate as tier-lapse-test organizer, verify lapse logic triggers correctly | S575 |
+| #75 Tier Lapse Logic | ❌ FAILED S576 — no warning banner, no feature restriction. Frontend never reads `subscriptionStatus` field. DB + JWT correct but UI ignores it. Dispatch fix S577. | Needs banner component + subscriptionStatus gate in Layout.tsx or organizer page wrapper | S575 |
 | Guild Primer (/shopper/guild-primer) | New page — pending Chrome QA | Verify all sections render, dark mode, personalized bar (logged in), cross-link to /hunt-pass | S534 |
 | Hunt Pass slim CTA (/shopper/hunt-pass) | Refactored — pending Chrome QA | Verify hero, price card, 4 benefits, CTA buttons, cross-link to /guild-primer | S534 |
 | Layout.tsx mobile nav guild link | Updated — pending Chrome QA | Mobile hamburger: Explorer's Guild should link to /shopper/guild-primer not /loyalty | S534 |
-| AvatarDropdown guild link | Updated — pending Chrome QA | CONNECT section: Explorer's Guild → /shopper/guild-primer | S534 |
+| AvatarDropdown guild link | ✅ Chrome-verified S576 — Explorer's Guild link present in AvatarDropdown CONNECT section. Navigates correctly to /shopper/guild-primer. Page loads with personalized rank card. ss_1535lmtx4. | — | S534 |
 | RankUpModal dark mode | Fixed — pending Chrome QA | "New Perks Unlocked" box should use dark:bg-gray-700 (not too-light sage) | S534 |
 | S540 Rewards nav link (4 locations) | Pushed — pending Chrome QA | As shopper (Karen): verify "Rewards" link → /coupons in desktop sidebar Connect, mobile in-sale tools, mobile shopper-only nav, AvatarDropdown shopper branch | S540 |
 | S540 Rarity Boost on /coupons | ✅ Chrome-verified S541 — RESOLVED | Shopper tab: "Activate Rarity Boost (50 XP)" active, modal opens with sale list + search. Cost shows 50 XP correctly. ss_4737i417x | S540 |
-| S540 Rarity Boost insufficient XP | ✅ Seeded S575 — low-xp-shopper@example.com (guildXp=10) | Chrome QA: log in as low-xp-shopper, verify Rarity Boost button disabled at 10 XP | S575 |
+| S540 Rarity Boost insufficient XP | ✅ Chrome-verified S576 — Rarity Boost button disabled at 10 XP. "Not enough XP" message shown. | — | S575 |
 | S540 Organizer view of /coupons | ✅ Chrome-verified S541 — RESOLVED | Organizer sees Shopper Discount Codes + tier cards; Rarity Boost absent. ss_56564zsz7 | S540 |
 | S540 Loyalty redirect | ✅ Chrome-verified S541 — RESOLVED | /shopper/loyalty → /coupons instantly, no flash. ss_8103rmsqm | S540 |
 | /organizer/sales "Unable to load sales" (P0) | ✅ RESOLVED S545 — was auth-crash symptom from tasteProfile P2022. Patrick confirmed "working". | — | S544 |
@@ -232,7 +223,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #311 Locations — advanced (filter/transfer/LocationSelector) | ✅ Chrome-verified S569 — RESOLVED | Transfer flow: select item → choose destination → confirm → table updates → persists after reload. Add Location modal opens with correct fields. TEAMS gate confirmed (Carol sees upgrade gate). | S563 |
 | RETAIL tier gate (create-sale) | ✅ Chrome-verified S569 — RESOLVED | Carol (SIMPLE): "Retail Store (TEAMS only)" disabled=true, visually greyed (ss_0686irvu4). Alice (TEAMS): "Retail Store" disabled=false. Both sides verified. | S559 |
 | Curator moderation UI (/admin/encyclopedia) | ✅ Chrome-verified S561 — RESOLVED | Page loads, 57 awaiting/20 published/77 total with real data, Promote/Reject per row, Run Full Curator Pass fires correctly (loading state → completes ~5s). ss_6309qnxwa, ss_4764jy322. P2 bug: action buttons cut off at viewport right edge — logged in qa-backlog. P3: no success toast after curator pass — logged. | S560 |
-| Bounty Batch C — purchase flow | ✅ Seeded S575 — hold/reservation on active sale | Chrome QA: test holds/reservations after seed, verify countdown timer works | S575 |
+| Bounty Batch C + Holds countdown | UNVERIFIED S576 — Hold not navigable during QA (seed may have expired or attached to wrong sale). Re-test S577 with fresh hold. | Re-seed or create hold manually; navigate to held item as shopper and verify countdown timer | S575 |
 | Hunt Pass Active CTA (/shopper/hunt-pass) | ✅ FIXED + Chrome-verified S562 | Karen sees "Hunt Pass Active" manage card, not "Upgrade" CTA. ss_8715qaw4a | S561 |
 | TEAMS onboarding modal (blocks every login) | ✅ FIXED + Chrome-verified S562 | Modal marks dismissed after first completion; workspace created. Reload confirms no modal reappears. ss_87046vbns | S561 |
 | #309 Consignor Portal — URL prefix + backend 500 | ✅ Chrome-verified S563 — RESOLVED | URL prefix + backend 500 both fixed and deployed. Chrome-verified S563: list/create/update/delete all working, portal public. P1 note: consignors delete uses native window.confirm() (systemic bug, 24 files). | S561 |
@@ -245,21 +236,23 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | **BUG — P1 (hydration #418)** | ✅ FIXED S566 (partial) — `[id].tsx` duplicate `mounted` declaration removed; Vercel build unblocked. Remaining #418 instances (QR button, bounty tabs, POS dropdown, hamburger, notification bell) still need systematic fix across all affected pages. | Pending Chrome QA on affected pages | S564 |
 | **BUG — P1** | `/admin/bid-review` — ✅ FIXED S566 — full `select` syntax replaces `include`+nested `select` in `getBidReviewQueue`. | Pending Chrome QA as admin | S565 |
 | **BUG — P1** | Settlement Receipt $0.00 + dead Download button — ✅ FIXED S566 — `SettlementWizard.tsx` auto-populates payoutAmount from Commission tab, download rebuilt as fetch+blob button. | Pending Chrome QA after Railway redeploy | S565 |
-| **S575 — #336 organizer-intent wins** | rapidfire mode — organizer types price before AI completes | Chrome QA: in Rapidfire, type title + price BEFORE AI badge updates → verify organizer values not overwritten | S575 |
-| **S575 — #339 refuse-to-fill** | ambiguous photo → brand/category left blank | Chrome QA: upload truly ambiguous photo → verify brand + category stay empty when confidence < 0.6 | S575 |
-| **S575 — #338 PricingCompSummary** | edit-item page → comp summary display | Chrome QA: open edit-item for an item with comps → verify "Based on N sources, median $X–$Y" amber block appears | S575 |
-| **S575 — #228 Settlement fixes** | payout auto-populates + PDF download | Chrome QA: Settlement Wizard → Commission tab → Receipt step → verify payout amount auto-populated → click Download Receipt → confirm .pdf not .json | S575 |
-| **S575 — #331 voice-to-tag thumbnails** | rapidfire grid mic button | Chrome QA: rapidfire grid → mic button on individual thumbnail → speak description → verify saved | S575 |
-| **S575 — #341 multi-angle prompt chips** | first photo role chips in rapidfire | Chrome QA: rapidfire → upload first photo → verify chip row appears (Back/Stamp, Damage Detail, Label/Brand, Skip) | S575 |
-| **S575 — #334 /organizer/markdown-cycles** | PRO-gated markdown cycle management | Chrome QA: as PRO organizer → /organizer/markdown-cycles → verify page loads, create cycle form works, PRO gate confirmed | S575 |
-| **S575 — #332 /organizer/shopify** | TEAMS-gated Shopify connection | Chrome QA: as TEAMS organizer → /organizer/shopify → verify page loads, connect form renders, TEAMS gate blocks PRO | S575 |
-| **S575 — #333 /organizer/stripe-connect** | TEAMS-gated ACH payout onboarding | Chrome QA: as TEAMS organizer → /organizer/stripe-connect → verify page loads, TEAMS gate confirmed | S575 |
+| **S575 — #336 organizer-intent wins** | ✅ Chrome-verified S576 — AI does NOT overwrite organizer-typed price. Highball Glass: AI $3.50 → organizer typed $25 → saved $25. | — | S575 |
+| **S575 — #339 refuse-to-fill** | ✅ Chrome-verified S576 — Ambiguous photos: brand + eBay category both blank when confidence < 0.6. | — | S575 |
+| **S575 — #338 PricingCompSummary** | UNVERIFIED S576 — No items with populated ItemCompLookup rows in test data. Comp tile absent. | Need to run eBay fetch on an item or seed ItemCompLookup rows directly | S575 |
+| **S575 — #228 Settlement fixes** | ⚠️ PARTIAL S576 — PDF download ✅ (200 OK, application/pdf). But payout NOT auto-populated ($0.00 default; receipt shows $NaN for "Client / Executor Receives"). ❌ P1 bug dispatched S577. | Fix CommissionPanel → SettlementWizard payout auto-populate logic | S575 |
+| **S575 — #331 voice-to-tag thumbnails** | ⚠️ P2 S576 — Button present on both locations but icon is ghost/avatar shape, not mic. Users can't tell it's voice. ❌ P2 bug dispatched S577. | Fix icon to mic on rapidfire grid thumbnail AND edit-item page | S575 |
+| **S575 — #341 multi-angle prompt chips** | ✅ Chrome-verified S576 — chip row fires after first photo (Back/Stamp, Damage Detail, Label/Brand, Skip). ss_712994qo5. | — | S575 |
+| **S575 — #334 /organizer/markdown-cycles** | ✅ Chrome-verified S576 — Alice (TEAMS): page + form ✅. Bob (PRO): page + form ✅. Carol (SIMPLE): PRO gate shown. | — | S575 |
+| **S575 — #332 /organizer/shopify** | ⚠️ PARTIAL S576 — Alice (TEAMS) ✅. ❌ P1: Bob (PRO) gets full page — no TEAMS gate. Bug dispatched S577. | Add TEAMS guard to /organizer/shopify frontend + backend | S575 |
+| **S575 — #333 /organizer/stripe-connect** | ⚠️ PARTIAL S576 — Alice (TEAMS) ✅. ❌ P1: Bob (PRO) gets full page — no TEAMS gate. ❌ P1: "Failed to load consignors" API error for ALL users. P2: light mode only. Bugs dispatched S577. | TEAMS guard + consignors API fix + dark mode | S575 |
 | **#75 Tier Lapse Logic** | ✅ Seeded S575 — tier-lapse-test@example.com (PRO past_due) | Chrome QA: login as tier-lapse-test@example.com, navigate to /organizer/dashboard → verify lapse banner or downgrade gate triggers | S575 |
 | **Rarity Boost insufficient XP** | ✅ Seeded S575 — low-xp-shopper@example.com (guildXp=10) | Chrome QA: login → /coupons → Rarity Boost button → verify disabled with "not enough XP" message | S575 |
 | **Holds/Reservations countdown** | ✅ Seeded S575 — hold on active sale | Chrome QA: navigate to held item as shopper → verify countdown timer rendering and hold expiry behavior | S575 |
 | **#235 DonationModal** | ✅ Seeded S575 — charity sale with SaleDonation record | Chrome QA: as organizer → find charity sale → verify DonationModal 3-step wizard opens and flows | S575 |
 
 ## Recent Sessions
+
+**S576 (2026-04-25) — COMPLETE:** QA-only session. 17 items tested. 8 ✅ (Markdown Cycles all tiers, Organizer-intent wins, Refuse-to-fill, Multi-angle chips, Rarity Boost XP gate, Settlement Receipt PDF, S529 mobile nav rank, #333 Alice page). 4 confirmed bugs: P1 Settlement payout $0.00/$NaN (claimed shipped S575, broken in prod), P1 Tier Lapse no banner + full PRO access despite past_due, P2 voice-to-tag icon wrong (ghost not mic), P2 AvatarDropdown no guild link. 3 UNVERIFIED: #338 PricingCompSummary (no comp data in test items), #235 DonationModal (can't navigate to charity sale), Holds countdown (hold not found). Storefront widget UNVERIFIED — possible regression. S577 is bug dispatch for all confirmed bugs.
 
 **S575 (2026-04-25) — COMPLETE:** Big parallel build session. Fixed 3 compile errors. Shipped: #331 voice-to-tag per thumbnail in RapidCapture, #341 multi-angle role prompt chips in rapidfire, #336 organizer-intent wins (rapidfire price/title not overwritten by AI), #339 refuse-to-fill (low-confidence fields left blank), #338 PricingCompSummary comp tile in edit-item, #228 Settlement payout auto-populate + PDF download, consignor email notifications (sendConsignorItemSold/Payout/ExpiryNotice via Resend), consignorExpiryNoticeJob (daily 2AM UTC), markdownCycleCron (daily 3AM UTC), MarkdownCycle CRUD + /organizer/markdown-cycles (PRO gate), ShopifyService + controller + /organizer/shopify (TEAMS gate), StripeConnect ACH + /organizer/stripe-connect (TEAMS gate), ACHPayoutButton component. 3 compile fixes: QRScannerModal.tsx TDZ (markCompleted removed from deps array), pricingSignalsController.ts `../db` → `../lib/prisma`, shopify.tsx ConfirmDialog wrong props. Layout.tsx nav links patched inline: "Auto Markdown" (PRO block) + "Shopify" (TEAMS block). Migrations deployed: add_markdown_cycles, add_shopify, add_stripe_connect_ach, add_user_edited_fields. Roadmap: Persistent Inventory entry updated → TEAMS-only scope.
 
@@ -273,30 +266,25 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S576 — QA pass (IN PROGRESS).** Still on Alice batch.
+**S577 — Bug dispatch.** QA complete. Dispatch all confirmed bugs in parallel.
 
-1. ✅ **#332 /organizer/shopify** — Alice ✅. **P1 BUG: Bob (PRO) no gate — dispatch fix.**
-2. ✅ **#333 /organizer/stripe-connect** — Alice ✅. **P1 BUG: Bob no gate + "Failed to load consignors" API error. P2: light mode only — dispatch fixes.**
-3. 🔄 **#334 /organizer/markdown-cycles** — Alice ✅. Bob (PRO) + Carol (SIMPLE) still needed.
-4. UNVERIFIED **#338 PricingCompSummary** — No comp tile found; needs item with populated ItemCompLookup data.
-5. ⬜ **#228 Settlement fixes** — not yet tested
-6. 🔄 **#336 organizer-intent wins** — In progress on edit-item for Highball Glass (Rapidfire-created item)
-7. ⬜ **#339 refuse-to-fill** — partial: eBay category blank on glass item. Brand check pending.
-8. ⚠️ **#331 voice-to-tag thumbnails** — Button present but icon is avatar/ghost (NOT mic). P2 on both camera thumbnail + edit-item page.
-9. ✅ **#341 multi-angle chips** — chips confirmed ss_712994qo5
-10. ⬜ **#75 Tier Lapse** — login tier-lapse-test@example.com (password still password123 until reseed)
-11. ⬜ **Rarity Boost XP gate** — login low-xp-shopper@example.com
-12. ⬜ **Holds countdown** — navigate to held item
-13. ⬜ **#235 DonationModal** — charity sale wizard
-14. ⬜ **Settlement Receipt PDF** — confirm .pdf download
-15. ⬜ **AvatarDropdown guild link** — shopper → avatar → /shopper/guild-primer
-16. UNVERIFIED **S529 storefront widget** — not found on /organizer/dashboard
-17. ⬜ **S529 mobile nav rank** — mobile nav rank from useXpProfile
+**P1 dispatch queue (findasale-dev):**
+1. **Settlement payout auto-populate** — SettlementWizard.tsx: payout amount not flowing from CommissionPanel to Receipt step. $0.00 shown, receipt shows $NaN for "Client / Executor Receives". Fix the onPayoutRecorded → payoutAmount state wire.
+2. **Tier Lapse (#75)** — Frontend never reads `subscriptionStatus` field from JWT/API. Need: (a) read subscriptionStatus in auth context or organizer layout, (b) show amber warning banner when `subscriptionStatus === 'past_due'`, (c) decide if features should be gated or just warned — DECISION NEEDED from Patrick before implementing gate.
+3. **#332 Shopify TEAMS gate** — Bob (PRO) gets full /organizer/shopify page. Add TEAMS guard to frontend route + backend controller.
+4. **#333 Stripe Connect TEAMS gate + consignors 500** — Bob (PRO) gets full /organizer/stripe-connect. Also: "Failed to load consignors" API error for ALL users — investigate consignorController endpoint used by stripe-connect page.
 
-**P1/P2 bugs to dispatch after QA completes:**
-- P1: /organizer/shopify — no TEAMS gate for PRO tier
-- P1: /organizer/stripe-connect — no TEAMS gate for PRO tier
-- P1: /organizer/stripe-connect — "Failed to load consignors" API 500 for all users
+**P2 dispatch queue (same batch):**
+5. **Voice-to-tag icon** — Replace ghost/avatar icon with mic icon on (a) rapidfire grid thumbnail and (b) edit-item page voice button. Both locations need the fix.
+
+**UNVERIFIED — carry forward:**
+- #338 PricingCompSummary — needs item with populated ItemCompLookup rows (run eBay fetch or seed directly)
+- #235 DonationModal — query DB for charity sale URL, navigate directly
+- Holds countdown — re-seed or find hold in DB
+- S529 storefront widget — inspect organizer/dashboard.tsx source, check if widget was removed
+
+**Patrick action needed before S577:**
+- Tier Lapse gate decision: should `past_due` block PRO features, or just show a warning banner? (banner-only is much simpler to ship)
 - P2: /organizer/stripe-connect — light mode only (no dark: classes)
 - P2: Voice-to-tag button icon — avatar/ghost icon instead of mic (camera thumbnail + edit-item page)
 
