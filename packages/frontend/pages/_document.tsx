@@ -8,7 +8,7 @@ export default function Document() {
         <link rel="manifest" href="/manifest.json" />
 
         {/* Theme color — warm amber accent */}
-        <meta name="theme-color" content="#D97706" />
+        <meta name="theme-color" content="#F97316" />
 
         {/* iOS PWA support */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -23,7 +23,7 @@ export default function Document() {
         <link rel="icon" href="/favicon.ico" />
 
         {/* Tile for Windows */}
-        <meta name="msapplication-TileColor" content="#D97706" />
+        <meta name="msapplication-TileColor" content="#F97316" />
         <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
         <meta name="msapplication-config" content="none" />
 
