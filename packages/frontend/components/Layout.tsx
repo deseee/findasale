@@ -70,6 +70,7 @@ import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
 import OfflineIndicator from './OfflineIndicator'; // Feature #69: Local-First Offline Mode
 import AvatarDropdown from './AvatarDropdown';
 import BecomeOrganizerModal from './BecomeOrganizerModal';
+import QRScannerButton from './qr-scanner/QRScannerButton';
 import { useShopperCart } from '../hooks/useShopperCart';
 import { useCart } from '../context/CartContext';
 import CartDrawer from './CartDrawer';
@@ -798,6 +799,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     )}
                   </div>
                   <div className="border-l border-warm-300 dark:border-gray-700 pl-4 flex items-center gap-2">
+                    {!['/login', '/register', '/forgot-password'].includes(router.pathname) && !router.pathname.startsWith('/organizer') && (
+                      <QRScannerButton variant="compact" />
+                    )}
                     <CartIcon />
                     <NotificationBell />
                     {isLowBandwidth && (
