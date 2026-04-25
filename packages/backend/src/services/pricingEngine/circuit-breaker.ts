@@ -3,7 +3,7 @@
  * Phase 1: Track failures, disable sources on threshold, auto-recover
  */
 
-import prisma from '@findasale/database';
+import { prisma } from '../../lib/prisma';
 
 const FAILURE_THRESHOLD = 3; // Disable after 3 consecutive failures
 const FAILURE_WINDOW_MINUTES = 60; // Track failures over the last hour

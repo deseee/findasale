@@ -13,7 +13,7 @@ import { analyzeItem } from './signals';
 import { applyWeighting, calculateWeightedMedian, calculateConfidence } from './weighting';
 import { getDepreciationCurve, applyDepreciation } from './depreciation';
 import { adapterRegistry } from './adapters/registry';
-import prisma from '@findasale/database';
+import { prisma } from '../../lib/prisma';
 
 /**
  * Main entry point: Estimate price for an item

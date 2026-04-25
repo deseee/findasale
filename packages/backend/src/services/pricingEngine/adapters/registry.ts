@@ -3,7 +3,7 @@
  */
 
 import { PricingAdapter } from './base';
-import prisma from '@findasale/database';
+import { prisma } from '../../../lib/prisma';
 
 // Import all adapters
 import { PriceChartingAdapter } from './pricecharting';

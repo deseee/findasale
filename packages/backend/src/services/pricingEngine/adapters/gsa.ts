@@ -5,7 +5,7 @@
 import { PricingAdapter } from './base';
 import { PricingRequest, SourceResult } from '../types';
 import { resetFailureCounter, recordAdapterFailure, checkQuota } from '../circuit-breaker';
-import prisma from '@findasale/database';
+import { prisma } from '../../../lib/prisma';
 
 const GSA_CATEGORIES = ['Tools', 'Equipment', 'Furniture', 'Office'];
 
