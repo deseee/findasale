@@ -86,16 +86,15 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- Chrome QA the S528 features (see QA queue below)
-- Insights page runtime error (/organizer/insights "failed to load") — pre-existing, needs Railway log check
+- S576 QA pass — see ## Next Session for full dispatch list
 
 ## Schema & Infrastructure
 
-**Key models:** Sale, Item, User, Organizer, WorkspaceRole, SaleAssignment, PrepTask, ShopMode, FeatureFlag, ReferralFraudSignal
+**Key models:** Sale, Item, User, Organizer, WorkspaceRole, SaleAssignment, PrepTask, ShopMode, FeatureFlag, ReferralFraudSignal, MarkdownCycle, ShopifyListing, QRScannerEvent
 
-**Active jobs:** shopAutoRenewJob (daily 1AM UTC), referralRewardAgeGateJob (daily), auctionJob, ebayEndedListingsSyncCron, challengeService, curatorReviewJob (weekly Sunday 3AM UTC — auto-promotes AUTO_GENERATED Encyclopedia entries), fetchEbayComps (fire-and-forget per published item)
+**Active jobs:** shopAutoRenewJob (daily 1AM UTC), referralRewardAgeGateJob (daily), auctionJob, ebayEndedListingsSyncCron, challengeService, curatorReviewJob (weekly Sunday 3AM UTC), fetchEbayComps (fire-and-forget per published item), markdownCycleCron (daily 3AM UTC), consignorExpiryNoticeCron (daily 2AM UTC)
 
-**Pending migrations:** none. **Deployed:** `20260425_add_pricing_engine` — ✅ deployed S574 (Patrick ran migrate deploy; 6 pricing engine models live: PricingSourceConfig, PriceBenchmarkV2, PriceComparable, TrendSignal, BrandException, SleeperPattern). `20260424_add_comp_fetch_enhancements` — ✅ deployed S560 (ItemCompLookup: fallbackTier, source, priceChartingId, priceChartingPrice, priceChartingConfidence). `20260424_add_photo_role` — ✅ deployed S560 (PhotoRole enum + photoRole/roleReasoning on Photo). `20260423120000_adr069_phase1_schema` — ✅ deployed S556 (ItemCompLookup, Item clustering fields, Photo vision fields, EncyclopediaEntry.triggerItemId). `20260425_add_referralreward_createdat` — ✅ deployed S571 (ReferralReward.createdAt column live, referralRewardAgeGateJob no longer crashes).
+**Pending migrations:** none. **Deployed S575:** `20260425_add_user_edited_fields` ✅ (userEditedFields TEXT[] on Item), `20260425_add_markdown_cycles` ✅ (MarkdownCycle model), `20260425_add_shopify` ✅ (ShopifyListing model + Organizer shopify fields), `add_stripe_connect_ach` ✅ (Organizer stripeConnect fields + Consignor stripeAccountId). **Previously deployed:** `20260425_add_pricing_engine` ✅ S574, `20260424_add_comp_fetch_enhancements` ✅ S560, `20260424_add_photo_role` ✅ S560, `20260423120000_adr069_phase1_schema` ✅ S556, `20260425_add_referralreward_createdat` ✅ S571.
 
 **Environment requirements:** STRIPE_TEST_SECRET_KEY, NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY (needed for checklist test QA)
 
@@ -234,4 +233,53 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | **BUG — P2 (systemic)** | 24 files use native window.confirm() | ✅ FIXED S564 — shared `<ConfirmDialog>` component built + all 24 calls replaced. Pending push + Chrome QA smoke test. | S563 |
 | **BUG — P1 (hydration #418)** | ✅ FIXED S566 (partial) — `[id].tsx` duplicate `mounted` declaration removed; Vercel build unblocked. Remaining #418 instances (QR button, bounty tabs, POS dropdown, hamburger, notification bell) still need systematic fix across all affected pages. | Pending Chrome QA on affected pages | S564 |
 | **BUG — P1** | `/admin/bid-review` — ✅ FIXED S566 — full `select` syntax replaces `include`+nested `select` in `getBidReviewQueue`. | Pending Chrome QA as admin | S565 |
-| **BUG — P1** | Settlement Receipt $0.00 + dead Download button — ✅ FIXED S566 — `SettlementWizard.tsx` auto-populates payoutAmount, download rebuilt wi
+| **BUG — P1** | Settlement Receipt $0.00 + dead Download button — ✅ FIXED S566 — `SettlementWizard.tsx` auto-populates payoutAmount from Commission tab, download rebuilt as fetch+blob button. | Pending Chrome QA after Railway redeploy | S565 |
+| **S575 — #336 organizer-intent wins** | rapidfire mode — organizer types price before AI completes | Chrome QA: in Rapidfire, type title + price BEFORE AI badge updates → verify organizer values not overwritten | S575 |
+| **S575 — #339 refuse-to-fill** | ambiguous photo → brand/category left blank | Chrome QA: upload truly ambiguous photo → verify brand + category stay empty when confidence < 0.6 | S575 |
+| **S575 — #338 PricingCompSummary** | edit-item page → comp summary display | Chrome QA: open edit-item for an item with comps → verify "Based on N sources, median $X–$Y" amber block appears | S575 |
+| **S575 — #228 Settlement fixes** | payout auto-populates + PDF download | Chrome QA: Settlement Wizard → Commission tab → Receipt step → verify payout amount auto-populated → click Download Receipt → confirm .pdf not .json | S575 |
+| **S575 — #331 voice-to-tag thumbnails** | rapidfire grid mic button | Chrome QA: rapidfire grid → mic button on individual thumbnail → speak description → verify saved | S575 |
+| **S575 — #341 multi-angle prompt chips** | first photo role chips in rapidfire | Chrome QA: rapidfire → upload first photo → verify chip row appears (Back/Stamp, Damage Detail, Label/Brand, Skip) | S575 |
+| **S575 — #334 /organizer/markdown-cycles** | PRO-gated markdown cycle management | Chrome QA: as PRO organizer → /organizer/markdown-cycles → verify page loads, create cycle form works, PRO gate confirmed | S575 |
+| **S575 — #332 /organizer/shopify** | TEAMS-gated Shopify connection | Chrome QA: as TEAMS organizer → /organizer/shopify → verify page loads, connect form renders, TEAMS gate blocks PRO | S575 |
+| **S575 — #333 /organizer/stripe-connect** | TEAMS-gated ACH payout onboarding | Chrome QA: as TEAMS organizer → /organizer/stripe-connect → verify page loads, TEAMS gate confirmed | S575 |
+| **#75 Tier Lapse Logic** | ✅ Seeded S575 — tier-lapse-test@example.com (PRO past_due) | Chrome QA: login as tier-lapse-test@example.com, navigate to /organizer/dashboard → verify lapse banner or downgrade gate triggers | S575 |
+| **Rarity Boost insufficient XP** | ✅ Seeded S575 — low-xp-shopper@example.com (guildXp=10) | Chrome QA: login → /coupons → Rarity Boost button → verify disabled with "not enough XP" message | S575 |
+| **Holds/Reservations countdown** | ✅ Seeded S575 — hold on active sale | Chrome QA: navigate to held item as shopper → verify countdown timer rendering and hold expiry behavior | S575 |
+| **#235 DonationModal** | ✅ Seeded S575 — charity sale with SaleDonation record | Chrome QA: as organizer → find charity sale → verify DonationModal 3-step wizard opens and flows | S575 |
+
+## Recent Sessions
+
+**S575 (2026-04-25) — COMPLETE:** Big parallel build session. Fixed 3 compile errors. Shipped: #331 voice-to-tag per thumbnail in RapidCapture, #341 multi-angle role prompt chips in rapidfire, #336 organizer-intent wins (rapidfire price/title not overwritten by AI), #339 refuse-to-fill (low-confidence fields left blank), #338 PricingCompSummary comp tile in edit-item, #228 Settlement payout auto-populate + PDF download, consignor email notifications (sendConsignorItemSold/Payout/ExpiryNotice via Resend), consignorExpiryNoticeJob (daily 2AM UTC), markdownCycleCron (daily 3AM UTC), MarkdownCycle CRUD + /organizer/markdown-cycles (PRO gate), ShopifyService + controller + /organizer/shopify (TEAMS gate), StripeConnect ACH + /organizer/stripe-connect (TEAMS gate), ACHPayoutButton component. 3 compile fixes: QRScannerModal.tsx TDZ (markCompleted removed from deps array), pricingSignalsController.ts `../db` → `../lib/prisma`, shopify.tsx ConfirmDialog wrong props. Layout.tsx nav links patched inline: "Auto Markdown" (PRO block) + "Shopify" (TEAMS block). Migrations deployed: add_markdown_cycles, add_shopify, add_stripe_connect_ach, add_user_edited_fields. Roadmap: Persistent Inventory entry updated → TEAMS-only scope.
+
+**S574 (2026-04-25) — COMPLETE:** Two critical file corruptions fixed + multi-source pricing engine Phase 1 designed, built, deployed. schema.prisma 16-error corruption fixed via Python byte surgery. Layout.tsx null byte corruption fixed. Multi-source pricing engine: 6 Prisma models, weighted median, recency decay, graceful degradation, soft circuit breaker. Apify replaced with free google-trends-api + Vercel proxy for EBTH. 10 new backend pricing engine files shipped. Import bug (workspace alias) fixed via bash sed. Railway green. Migration 20260425_add_pricing_engine deployed. DISCOGS_TOKEN + EBTH_WORKER_URL env vars set.
+
+**S573 (2026-04-25) — COMPLETE:** Nav polish + QR modal + geofence UX + 4 parallel dispatches. Mobile top nav: cart icon, corrected icon order. Mobile drawer: ThemeToggle row added. Desktop nav gap reduced. "My QR" tab → full-screen dark modal. CartDrawer "Show My QR" link. Geofence 403 → amber error with retry CTA. Scanner Phase 2 spec written. Stale queue seeds dispatched. Roadmap reconciliation (9 rows Chrome-verified S572 + 5 new rows).
+
+**S572 (2026-04-25) — COMPLETE:** Audit + 3 parallel fixes + P0 Railway hotfix + comprehensive Chrome QA + QR auto-claim + in-app scanner Phase 1 + scanner relocation. Hydration #418 root-cause fixed (Layout.tsx SSR conditional). D-001 manifest inclusive copy. Right-panel 1104px overflow fixed. Encyclopedia.ts routes hotfix via MCP. 9 Chrome-verified features. QR auto-claim shipped (auto-fires foundMutation on mount). ADR-072 scanner spec locked. Scanner Phase 1: useQRScanner + QRScannerModal + QRScannerButton. html5-qrcode added. Scanner relocated to mobile top-header utility row.
+
+**S571 (2026-04-25) — COMPLETE:** QA continuation + 2 bugs fixed + P0 migration. Encyclopedia list Chrome-verified (20 real entries). Encyclopedia detail bug fixed (res.json({ entry })). ReferralReward.createdAt P2022 fixed via ALTER TABLE migration. Files: encyclopediaController.ts, 20260425_add_referralreward_createdat migration.
+
+## Next Session
+
+**S576 — QA pass.** Start with the Blocked/Unverified Queue above. Priority dispatch order (Chrome QA, sequential per §10c):
+
+1. **#332 /organizer/shopify** — as Alice (TEAMS) → page loads, form renders, TEAMS gate confirmed; as Bob (PRO) → upgrade gate shows
+2. **#333 /organizer/stripe-connect** — as Alice (TEAMS) → page loads; as Bob (PRO) → gate shows
+3. **#334 /organizer/markdown-cycles** — as Bob (PRO) → page loads, create cycle form works; as Carol (SIMPLE) → PRO gate shows
+4. **#338 PricingCompSummary** — edit any item with comps → amber comp tile renders with "Based on N sources, median $X–$Y"
+5. **#228 Settlement fixes** — Settlement Wizard → Commission → Receipt → payout auto-populated → Download Receipt → confirm .pdf
+6. **#336 organizer-intent wins** — Rapidfire → type price BEFORE AI badge → save → verify organizer price not overwritten
+7. **#339 refuse-to-fill** — Rapidfire → ambiguous photo → verify brand + category left blank
+8. **#331 voice-to-tag thumbnails** — Rapidfire grid → mic on thumbnail → speak → verify saved
+9. **#341 multi-angle chips** — Rapidfire → first photo → verify chip row appears
+10. **#75 Tier Lapse** — login tier-lapse-test@example.com → verify lapse gate/banner
+11. **Rarity Boost XP gate** — login low-xp-shopper@example.com → /coupons → verify Rarity Boost button disabled
+12. **Holds countdown** — navigate to held item → verify countdown timer
+13. **#235 DonationModal** — as organizer → charity sale → verify wizard
+14. **Settlement Receipt PDF** — confirm .pdf download (S569 fix + S575 payout auto-populate)
+15. **AvatarDropdown guild link** — as shopper → avatar menu → "Explorer's Guild" → /shopper/guild-primer
+16. **S529 storefront widget** — /organizer/dashboard → Copy Link + View Storefront buttons visible
+17. **S529 mobile nav rank** — mobile viewport → hamburger nav → rank reads from useXpProfile
+
+**Patrick pending actions (none — all migrations ran S575. Vercel + Railway should be green).**

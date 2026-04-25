@@ -1,52 +1,62 @@
-# Patrick's Dashboard — S574 Complete (Pricing Engine Phase 1 Live)
+# Patrick's Dashboard — S575 Complete (Big Build — QA Pass Next)
 
-## ✅ S574 — What Got Done
+## ✅ S575 — What Got Done
 
-**One-line summary:** Fixed two file corruptions, designed and shipped the full multi-source pricing engine Phase 1, removed Apify entirely, migration deployed, Railway green.
+**One-line summary:** Parallel build session — 9 features shipped, 3 compile errors fixed, 4 migrations deployed. Vercel + Railway green. S576 is all Chrome QA.
 
 ### Quick wins this session
 
 | Win | Notes |
 |---|---|
-| schema.prisma P1012 — 16 errors fixed | Duplicate models from Scanner Phase 2 agent; removed via Python byte surgery |
-| Layout.tsx null bytes removed | Affiliate agent had appended 700+ `\x00` bytes; truncated clean |
-| Pricing engine Phase 1 live | 10 new backend files: orchestrator, circuit breaker, 5 adapters, signals, cron |
-| Apify removed entirely | Google Trends via free npm package; EBTH via Vercel proxy (no new accounts) |
-| Import bug fixed + Railway green | Dev agent used wrong workspace alias; sed-fixed across all 10 files; Railway booted clean |
-| Migration deployed | `20260425_add_pricing_engine` — 6 pricing models live in Railway DB |
-| Env vars set | `DISCOGS_TOKEN` + `EBTH_WORKER_URL` active; `KEEPA_API_KEY` optional when ready |
+| #331 Voice-to-tag thumbnails | Mic button on each rapidfire thumbnail; speech saves description |
+| #341 Multi-angle prompt chips | First photo in rapidfire shows Back/Stamp, Damage Detail, Label/Brand, Skip chip row |
+| #336 Organizer-intent wins | Rapidfire: typing price/title before AI completes → organizer values not overwritten |
+| #339 Refuse-to-fill | Ambiguous photo → brand + category left blank when AI confidence < 0.6 |
+| #338 PricingCompSummary | edit-item page: amber "Based on N sources, median $X–$Y" comp tile |
+| #228 Settlement payout fix | Payout auto-populates from Commission tab; PDF download button rebuilt |
+| Consignor email notifications | sendConsignorItemSold, sendConsignorPayout, sendConsignorExpiryNotice via Resend |
+| consignorExpiryNoticeJob | Daily 2AM UTC — emails consignors about items 60–61 days old |
+| MarkdownCycle + /organizer/markdown-cycles | PRO-gated auto-markdown management; cron runs daily 3AM UTC |
+| Shopify integration + /organizer/shopify | TEAMS-gated; connect your Shopify store, push items, sync sold status |
+| Stripe Connect ACH + /organizer/stripe-connect | TEAMS-gated; Express account onboarding + ACH payout button for consignors |
+| 3 compile errors fixed | QRScannerModal TDZ, pricingSignalsController wrong import path, shopify.tsx ConfirmDialog wrong props |
+| Layout.tsx nav links patched | "Auto Markdown" added to PRO block, "Shopify" added to TEAMS block |
+| 4 migrations deployed | add_user_edited_fields, add_markdown_cycles, add_shopify, add_stripe_connect_ach |
 
 ---
 
 ## ⏳ Pending Patrick Actions
 
-- **Scanner Phase 2 in progress** — QRScannerEvent analytics backend + Funnel card on /organizer/qr-codes. Await push block from this session before next step.
-- Run `prisma migrate deploy` + `prisma generate` after Scanner Phase 2 push (new QRScannerEvent table).
+**None.** All 4 migrations ran this session. Vercel and Railway should be green. S576 is a pure QA session — no code, no migrations, no pushes needed before starting.
 
 **Optional (when ready to spend money on better comps):**
 - `KEEPA_API_KEY` from keepa.io → API Keys — adds Amazon price history. Engine works fine without it.
 
-**Phase 2 (deferred — dispatch when beta organizers are active):**
-- Sleeper alert + brand premium amber inline banners on edit-item and review/publish pages
-
 ---
 
-## 📋 Blocked / Unverified Queue
+## 📋 S576 QA Dispatch List (start here next session)
 
-| Feature | Reason | What's Needed | Session Added |
-|---------|--------|---------------|---------------|
-| #75 Tier Lapse Logic | ✅ Seed ran S575 — tier-lapse-test@example.com ready | Chrome QA | S575 |
-| Rarity Boost XP gate | ✅ Seed ran S575 — low-xp-shopper@example.com ready | Chrome QA | S575 |
-| #235 DonationModal | ✅ Seed ran S575 — charity sale seeded | Chrome QA | S575 |
-| #223 Holds / Reservations | ✅ Seed ran S575 — hold records seeded | Chrome QA | S575 |
-| #54 Crowdsourced Appraisal | Deferred to beta cohort | Wait for first beta organizers | S570 |
-| Bounty Batch C | BountySubmission INSERT needs data | Needs test organizer with active bounty | S571 |
-| QR Scanner Phase 1 Chrome QA | Not yet browser-tested | Navigate to sale QR → test scan flow | S573 |
-| Nav polish Chrome QA | Not yet browser-tested | Check mobile icon order + Appearance toggle | S573 |
-| QR modal Chrome QA | Not yet browser-tested | Test "My QR" tab + cart drawer link | S573 |
-| Geofence UX Chrome QA | Not yet browser-tested | Deny location on clueId page, verify amber card | S573 |
-| Pricing engine output QA | First live test | Publish an item, check `/api/pricing/suggest` returns multi-source result | S574 |
-| QR Scanner Phase 2 | Dispatched S575 — pending dev return | Chrome QA after ship | S575 |
+Run these in order — Chrome QA, one at a time.
+
+| # | Feature | Account | URL | What to verify |
+|---|---------|---------|-----|----------------|
+| 1 | #332 Shopify page | Alice (TEAMS) then Bob (PRO) | /organizer/shopify | TEAMS: page + form render. PRO: upgrade gate shows |
+| 2 | #333 Stripe Connect | Alice (TEAMS) then Bob (PRO) | /organizer/stripe-connect | TEAMS: page loads. PRO: gate shows |
+| 3 | #334 Markdown Cycles | Bob (PRO) then Carol (SIMPLE) | /organizer/markdown-cycles | PRO: page + form. SIMPLE: PRO gate |
+| 4 | #338 PricingCompSummary | Any organizer | /organizer/edit-item/[any] | Amber comp tile "Based on N sources, median $X–$Y" |
+| 5 | #228 Settlement | Any organizer with a closed sale | Settlement Wizard | Commission → Receipt: payout auto-populated; Download → .pdf file |
+| 6 | #336 Organizer-intent | Any organizer | Rapidfire | Type price BEFORE AI badge → save → organizer value preserved |
+| 7 | #339 Refuse-to-fill | Any organizer | Rapidfire | Upload blurry/ambiguous photo → brand + category stay blank |
+| 8 | #331 Voice thumbnails | Any organizer | Rapidfire grid | Mic on thumbnail → speak → description saved |
+| 9 | #341 Multi-angle chips | Any organizer | Rapidfire | Upload first photo → chip row appears (Back/Stamp, Damage Detail, etc.) |
+| 10 | #75 Tier Lapse | tier-lapse-test@example.com | /organizer/dashboard | Lapse banner or downgrade gate triggers |
+| 11 | Rarity Boost gate | low-xp-shopper@example.com | /coupons | Rarity Boost button disabled with "not enough XP" |
+| 12 | Holds countdown | Karen or test shopper | Any held item | Countdown timer renders, hold expiry behavior works |
+| 13 | #235 DonationModal | Any organizer | Charity sale | 3-step wizard opens and flows |
+| 14 | Settlement Receipt PDF | Any organizer | /organizer/settlement/[id] | Click Download → .pdf (not .json), shows "Organizer Commission %" |
+| 15 | AvatarDropdown guild link | Karen (shopper) | Avatar menu | "Explorer's Guild" → /shopper/guild-primer |
+| 16 | S529 storefront widget | Any organizer | /organizer/dashboard | Copy Link + View Storefront buttons present |
+| 17 | S529 mobile nav rank | Karen | Mobile hamburger | Rank reads from useXpProfile (not hardcoded "Scout") |
 
 ---
 
@@ -77,17 +87,18 @@ B-Stock, WorthPoint, StockX, HiBid, MaxSold, OfferUp, StorageTreasures
 
 | Area | Status |
 |------|--------|
-| schema.prisma | ✅ Corruption fixed S574 — live |
-| Layout.tsx | ✅ Null bytes removed S574 — live |
 | Railway backend | ✅ Green |
-| Vercel frontend | ✅ Green |
-| Pricing engine Phase 1 | ✅ Live — migration deployed, env vars set |
+| Vercel frontend | ✅ Green (3 compile errors fixed S575) |
+| schema.prisma | ✅ Clean — all 4 S575 migrations deployed |
+| Pricing engine Phase 1 | ✅ Live |
 | Pricing engine Phase 2 UI | 📋 Deferred — sleeper + brand premium banners |
-| Scanner Phase 2 spec | 📋 Ready — awaiting Patrick decision |
-| Stale queue test data | ✅ Seeded S573 — run `prisma:seed` to activate |
+| Shopify integration | ✅ Built S575 — Chrome QA pending |
+| Stripe Connect ACH | ✅ Built S575 — Chrome QA pending |
+| Auto Markdown cycles | ✅ Built S575 — Chrome QA pending |
+| Test data (seed accounts) | ✅ Seeded S575 — all 4 accounts live in Railway |
 
 ---
 
-## ✅ S573 — Previous Session Summary
+## ✅ S574 — Previous Session Summary
 
-Nav polish + QR modal + geofence UX + 4 parallel dispatches. Mobile top nav icon order fixed, Appearance toggle added to mobile drawer, desktop nav breathing room added, "My QR" tab opens full-screen Apple Wallet-style modal, cart drawer gets "Show My QR" link, geofence 403 upgraded to amber explainer with retry. Scanner Phase 2 spec ready. Roadmap reconciled (9 rows updated, 5 added).
+Fixed two file corruptions (schema.prisma 16-error P1012, Layout.tsx null bytes). Built and deployed pricing engine Phase 1: 10 new backend files, 6 Prisma models, weighted median, soft circuit breaker, 7 active sources. Apify replaced with free google-trends-api + Vercel proxy for EBTH. Migration deployed, env vars set, Railway green.
