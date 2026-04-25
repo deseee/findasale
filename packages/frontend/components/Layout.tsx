@@ -798,7 +798,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       </span>
                     )}
                   </div>
-                  <div className="border-l border-warm-300 dark:border-gray-700 pl-4 flex items-center gap-2">
+                  <div className="border-l border-warm-300 dark:border-gray-700 pl-3 flex items-center gap-1">
                     {!['/login', '/register', '/forgot-password'].includes(router.pathname) && !router.pathname.startsWith('/organizer') && (
                       <QRScannerButton variant="compact" />
                     )}
@@ -820,20 +820,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               )}
             </div>
 
-            {/* Mobile: notification bell (if logged in) + QR scanner + theme toggle + hamburger */}
+            {/* Mobile: cart + notification bell + QR scanner + hamburger */}
             <div className="lg:hidden flex items-center gap-1">
               {isClient && user && (
                 <>
-                  <div className="relative">
-                    <Link href="/shopper/holds" className="p-2 rounded-md text-warm-500 dark:text-warm-300 hover:text-amber-600 dark:hover:text-amber-400" title="My Holds">
-                      <Clock size={20} />
-                    </Link>
-                    {holdCount > 0 && (
-                      <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-[9px] font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 dark:bg-red-700 rounded-full">
-                        {holdCount > 99 ? '99+' : holdCount}
-                      </span>
-                    )}
-                  </div>
+                  <CartIcon />
                   <NotificationBell />
                   {!['/login', '/register', '/forgot-password'].includes(router.pathname) && !router.pathname.startsWith('/organizer') && (
                     <QRScannerButton variant="compact" />
@@ -1682,9 +1673,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </>
                   )}
                 </div>
+                <div className="flex items-center justify-between px-3 py-2 text-sm text-warm-900 dark:text-warm-100">
+                  <span>Appearance</span>
+                  <ThemeToggle compact={true} />
+                </div>
                 <button
                   onClick={handleLogout}
-                  className="block w-full text-left px-3 py-2 mt-3 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
+                  className="block w-full text-left px-3 py-2 mt-1 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md"
                 >
                   Logout
                 </button>
