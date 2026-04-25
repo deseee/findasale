@@ -40,6 +40,29 @@ const CluePage = () => {
     enabled: !!id && !!clueId && !!user,
   });
 
+  // Retry with location prompt helper
+  const retryWithLocationPrompt = async () => {
+    setGeofenceBlocked(false);
+
+    // Prompt the user for location permission
+    if (navigator.geolocation) {
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+        });
+        // Got position, retry the mutation
+        foundMutation.mutate();
+      } catch (err) {
+        console.info('User denied location or geolocation unavailable');
+        // Retry anyway — let the backend handle it
+        foundMutation.mutate();
+      }
+    } else {
+      // Geolocation not supported, retry anyway
+      foundMutation.mutate();
+    }
+  };
+
   // Mark found mutation
   const foundMutation = useMutation({
     mutationFn: async () => {
@@ -196,19 +219,19 @@ const CluePage = () => {
 
                   {/* Geofence retry — fires when 403 returned (location denied or out of range) */}
                   {geofenceBlocked && !foundMutation.isPending && (
-                    <div className="w-full bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-lg p-4 space-y-3">
-                      <p className="text-sm text-red-900 dark:text-red-200">
-                        📍 We need your location to confirm you're at the sale. Make sure location is allowed in your browser, then try again.
+                    <div className="w-full bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 rounded-xl p-4 space-y-3">
+                      <p className="text-sm text-amber-900 dark:text-amber-100 font-semibold">
+                        📍 Your location couldn't be verified
+                      </p>
+                      <p className="text-sm text-amber-800 dark:text-amber-200">
+                        Allow location access to earn XP for this find. Your position helps us confirm you're at the sale venue.
                       </p>
                       <button
                         type="button"
-                        onClick={() => {
-                          setGeofenceBlocked(false);
-                          foundMutation.mutate();
-                        }}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition"
+                        onClick={retryWithLocationPrompt}
+                        className="w-full bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition"
                       >
-                        📍 Allow location &amp; try again
+                        📍 Enable Location &amp; Try Again
                       </button>
                     </div>
                   )}

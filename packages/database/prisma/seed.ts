@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -1016,6 +1017,157 @@ async function main() {
   }
 
   console.log('✅ Created completed sale with 2 items and 2 PAID purchases');
+
+  // ── QA Test Data: Blocked/Unverified Queue Scenarios ────────────────────────
+
+  // #75 — Tier Lapse Logic: PRO organizer with expired subscription
+  console.log('⏰ Creating tier lapse test data for #75...');
+  const lapseTestUser = await prisma.user.create({
+    data: {
+      email: 'tier-lapse-test@example.com',
+      password: defaultPassword,
+      name: 'Lapse Test Organizer',
+      role: 'ORGANIZER',
+      roles: ['USER', 'ORGANIZER'],
+      phone: '616-555-9901',
+      referralCode: `REF-LAPSE-${uuidv4().substring(0, 8).toUpperCase()}`,
+    },
+  });
+
+  const lapseOrganizer = await prisma.organizer.create({
+    data: {
+      userId: lapseTestUser.id,
+      businessName: 'Lapsed PRO Estate Sales',
+      phone: '616-555-9901',
+      address: '9999 Expired St, Grand Rapids, MI 49503',
+      bio: 'Testing tier lapse behavior with expired subscription',
+      subscriptionTier: 'PRO',
+      subscriptionStatus: 'past_due', // Subscription expired
+      trialEndsAt: new Date(now.getTime() - 30 * 86400000), // Expired 30 days ago
+      stripeSubscriptionId: 'sub_test_lapse_expired',
+    },
+  });
+
+  console.log(`✅ Created tier lapse test organizer: tier-lapse-test@example.com`);
+
+  // Rarity Boost gate: Low-XP shopper (under 50 XP threshold for RARITY_BOOST sink)
+  console.log('🔮 Creating low-XP shopper for rarity boost gate test #236...');
+  const lowXpShopper = await prisma.user.create({
+    data: {
+      email: 'low-xp-shopper@example.com',
+      password: defaultPassword,
+      name: 'Novice Explorer',
+      role: 'USER',
+      roles: ['USER'],
+      phone: '616-555-9902',
+      referralCode: `REF-LOWXP-${uuidv4().substring(0, 8).toUpperCase()}`,
+      guildXp: 10, // Only 10 XP — far below 50 XP cost for rarity boost
+      explorerRank: 'INITIATE', // Lowest rank
+      lastXpActivityAt: new Date(now.getTime() - 7 * 86400000), // Last activity 1 week ago
+    },
+  });
+
+  console.log(`✅ Created low-XP shopper: low-xp-shopper@example.com (10 XP, INITIATE rank)`);
+
+  // #235 — DonationModal: CHARITY sale ready to close
+  console.log('🎁 Creating charity sale for donation modal test #235...');
+  const charityOrg = organizers[5]; // Use an existing organizer
+  const charityStartDate = new Date(now);
+  charityStartDate.setDate(charityStartDate.getDate() - 1);
+  const charityEndDate = new Date(now);
+  charityEndDate.setHours(charityEndDate.getHours() + 2); // Ending very soon
+
+  const charitySale = await prisma.sale.create({
+    data: {
+      organizerId: charityOrg.id,
+      title: 'Charity Estate Liquidation - Closing Soon',
+      description: 'All proceeds benefit the Grand Rapids Children\'s Museum. Closing in 2 hours!',
+      startDate: charityStartDate,
+      endDate: charityEndDate,
+      address: '3847 Charity Lane',
+      city: citiesByOrganizer[5],
+      state: statesByOrganizer[5],
+      zip: zipsByState[statesByOrganizer[5]][5 % zipsByState[statesByOrganizer[5]].length],
+      lat: SEED_CONFIG.centerLat + 0.03,
+      lng: SEED_CONFIG.centerLng + 0.03,
+      status: 'PUBLISHED',
+      publishedAt: new Date(now.getTime() - 86400000),
+      photoUrls: [salePhotoUrls[3]],
+      tags: ['charity', 'fundraiser', 'closing-soon'],
+      saleType: 'ESTATE', // CHARITY flag would be via donation relation, not saleType enum
+    },
+  });
+
+  // Create donation record for this sale
+  const charityDonation = await prisma.saleDonation.create({
+    data: {
+      saleId: charitySale.id,
+      organizerId: charityOrg.id,
+      charityName: 'Grand Rapids Children\'s Museum',
+      charityEin: '38-1234567',
+      charityAddress: '123 Museum Dr, Grand Rapids, MI 49503',
+      totalEstimatedValue: new Decimal('2500.00'),
+      notes: 'Estate sale proceeds support youth science programs',
+    },
+  });
+
+  // Create items for charity sale
+  const charityItems = [];
+  const charityItemSpecs = [
+    { title: 'Set of 6 Mid-Century Dining Chairs', price: 450.00 },
+    { title: 'Vintage Persian Area Rug', price: 600.00 },
+    { title: 'Collection of Vintage Glassware', price: 200.00 },
+  ];
+
+  for (const spec of charityItemSpecs) {
+    const item = await prisma.item.create({
+      data: {
+        saleId: charitySale.id,
+        title: spec.title,
+        description: `Quality ${spec.title.toLowerCase()}. Proceeds benefit charity.`,
+        price: spec.price,
+        status: 'AVAILABLE',
+        category: 'furniture',
+        condition: 'excellent',
+        photoUrls: [photosByCategory.furniture[Math.floor(Math.random() * photosByCategory.furniture.length)]],
+        embedding: [],
+      },
+    });
+    charityItems.push(item);
+  }
+
+  console.log(`✅ Created CHARITY sale: ${charitySale.id} (ends in 2 hours, 3 items for donation testing)`);
+
+  // #223 — Holds/Reservations: Sale with reserved items
+  console.log('📌 Creating holds/reservations for test #223...');
+  const holdTestSale = publishedSales[3] || sales[10]; // Use a published active sale
+  const holdTestItems = items
+    .filter((i: any) => i.saleId === holdTestSale.id && i.status === 'AVAILABLE')
+    .slice(0, 2);
+
+  if (holdTestItems.length > 0) {
+    // Create a reservation for the first item
+    const holdUser = users[15]; // Use an existing shopper
+    const reservationExpiry = new Date(now);
+    reservationExpiry.setHours(reservationExpiry.getHours() + 48);
+
+    const reservation = await prisma.itemReservation.create({
+      data: {
+        itemId: holdTestItems[0].id,
+        userId: holdUser.id,
+        status: 'CONFIRMED',
+        expiresAt: reservationExpiry,
+        holdDurationMinutes: 48 * 60,
+        note: 'Test hold — reserved for QA testing',
+        fraudScore: 0.0,
+        fraudFlags: [],
+      },
+    });
+
+    console.log(`✅ Created item reservation: ${holdTestItems[0].id} held by user15 until ${reservationExpiry.toISOString()}`);
+  } else {
+    console.log('⚠️  No available items in holdTestSale for reservation (may be sold out) — test #223 incomplete');
+  }
 
   // ── Summary ───────────────────────────────────────────────────────────────
   const totalPurchases = purchasesCreated.length + 6;
