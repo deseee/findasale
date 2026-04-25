@@ -45,6 +45,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
   const cart = useShopperCart(user?.id);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [shareStatus, setShareStatus] = useState<'idle' | 'sharing' | 'shared' | 'error'>('idle');
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
 
   const { data: holds = [], isLoading, refetch } = useQuery({
     queryKey: ['my-holds-full'],
@@ -54,6 +56,20 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     },
     enabled: isOpen,
     refetchInterval: 30000,
+  });
+
+  // Fetch shopper QR code
+  useQuery({
+    queryKey: ['shopper-qr'],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const response = await api.get(`/users/qr/${user.id}`);
+      if (response.data?.qrCodeDataUrl) {
+        setShopperQRCodeDataUrl(response.data.qrCodeDataUrl);
+      }
+      return response.data;
+    },
+    enabled: isOpen && !!user?.id,
   });
 
   const cancelMutation = useMutation({
@@ -155,7 +171,17 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-warm-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-warm-900 dark:text-gray-50">My Cart</h2>
+          <div className="flex flex-col">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-gray-50">My Cart</h2>
+            {shopperQRCodeDataUrl && (
+              <button
+                onClick={() => setShowQrModal(true)}
+                className="text-xs font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 mt-1 text-left"
+              >
+                Show My QR
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="p-2 rounded-md text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
@@ -426,6 +452,47 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* QR Modal */}
+        {showQrModal && shopperQRCodeDataUrl && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowQrModal(false)}
+          >
+            <div
+              className="bg-gray-900 dark:bg-gray-950 rounded-lg p-6 max-w-sm w-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-white">Your QR Code</h2>
+                <button
+                  onClick={() => setShowQrModal(false)}
+                  className="p-1 rounded-md text-gray-400 hover:text-white transition-colors"
+                  aria-label="Close QR modal"
+                >
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex justify-center mb-6">
+                <img
+                  src={shopperQRCodeDataUrl}
+                  alt="Your personal QR code for checkout"
+                  className="w-56 h-56 border-4 border-amber-600 rounded-lg"
+                />
+              </div>
+              <p className="text-center text-sm text-gray-300">
+                Show this to the organizer at checkout
+              </p>
             </div>
           </div>
         )}
