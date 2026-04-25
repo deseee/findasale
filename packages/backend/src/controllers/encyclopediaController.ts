@@ -59,28 +59,18 @@ export const createEntry = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { title, subtitle, content, category, tags, references } = req.body;
+    const { slug, title, content, category, tags } = req.body;
 
-    // Validation
-    if (!title || !content || !category) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
-    if (content.length < 500) {
-      return res.status(400).json({ message: 'Content must be at least 500 characters' });
-    }
-
-    if (tags && tags.length > 10) {
-      return res.status(400).json({ message: 'Maximum 10 tags allowed' });
+    if (!slug || !title || !content || !category) {
+      return res.status(400).json({ message: 'slug, title, content, and category are required' });
     }
 
     const entry = await encyclopediaService.createEntry(req.user.id, {
+      slug,
       title,
-      subtitle,
       content,
       category,
-      tags,
-      references
+      tags: tags || [],
     });
 
     res.status(201).json({
@@ -92,7 +82,7 @@ export const createEntry = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: any) {
     console.error('[Encyclopedia] Error creating entry:', error);
-    if (error.message === 'Entry with this slug already exists') {
+    if (error.message?.includes('already exists')) {
       return res.status(409).json({ message: error.message });
     }
     res.status(500).json({ message: 'Failed to create entry' });
@@ -112,14 +102,14 @@ export const voteOnEntry = async (req: AuthRequest, res: Response) => {
     const { slug } = req.params;
     const { helpful } = req.body;
 
+    if (typeof helpful !== 'boolean') {
+      return res.status(400).json({ message: 'helpful must be a boolean' });
+    }
+
     // Find entry by slug to get ID
     const entry = await encyclopediaService.getEntryBySlug(slug, req.user.id);
     if (!entry) {
       return res.status(404).json({ message: 'Entry not found' });
-    }
-
-    if (typeof helpful !== 'boolean') {
-      return res.status(400).json({ message: 'helpful must be boolean' });
     }
 
     const result = await encyclopediaService.voteOnEntry(entry.id, req.user.id, helpful);
@@ -142,43 +132,33 @@ export const updateEntry = async (req: AuthRequest, res: Response) => {
     }
 
     const { entryId } = req.params;
-    const { title, subtitle, content, category, tags, changeNote } = req.body;
+    const { title, content, category, tags, changeNote } = req.body;
 
-    // P1-A: Verify ownership before allowing update
+    // Verify ownership or admin role
     const entry = await encyclopediaService.getEntry(entryId);
     if (!entry) {
       return res.status(404).json({ message: 'Entry not found' });
     }
     if (entry.authorId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ message: 'Unauthorized' });
+      return res.status(403).json({ message: 'Not authorized to edit this entry' });
     }
 
-    const result = await encyclopediaService.updateEntry(
-      entryId,
-      req.user.id,
-      req.user.role,
-      {
-        title,
-        subtitle,
-        content,
-        category,
-        tags,
-        changeNote
-      }
-    );
+    const result = await encyclopediaService.updateEntry(entryId, {
+      title,
+      content,
+      category,
+      tags,
+    });
 
     res.json({
-      revisionId: result.revisionId,
+      success: true,
       entryId: result.id,
-      changeNote: result.revisions?.[0]?.changeNote,
-      createdAt: result.revisions?.[0]?.createdAt
+      updatedAt: result.updatedAt,
+      changeNote,
     });
   } catch (error: any) {
     console.error('[Encyclopedia] Error updating entry:', error);
-    if (error.message === 'Unauthorized') {
-      return res.status(403).json({ message: error.message });
-    }
-    if (error.message === 'Entry not found') {
+    if (error.message?.includes('not found')) {
       return res.status(404).json({ message: error.message });
     }
     res.status(500).json({ message: 'Failed to update entry' });
@@ -189,11 +169,12 @@ export const updateEntry = async (req: AuthRequest, res: Response) => {
  * GET /api/encyclopedia/entries/:entryId/revisions
  * Get revision history for entry
  */
-export const getRevisions = async (req: AuthRequest, res: Response) => {
+export const getEntryRevisions = async (req: AuthRequest, res: Response) => {
   try {
     const { entryId } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
 
-    const revisions = await encyclopediaService.getEntryRevisions(entryId);
+    const revisions = await encyclopediaService.getEntryRevisions(entryId, limit);
 
     res.json({ revisions });
   } catch (error) {
@@ -204,39 +185,21 @@ export const getRevisions = async (req: AuthRequest, res: Response) => {
 
 /**
  * GET /api/encyclopedia/match
- * Match Encyclopedia entry based on item category, tags, and title.
- * Used by inline tip component during item editing.
- * Query params: category, tags (comma-separated), title
- * Returns: { entry, benchmarks } | null
+ * Match encyclopedia entry to an item being edited
+ * Used by item editor to show relevant guides
  */
-export const matchEntry = async (req: Request, res: Response) => {
+export const matchEntry = async (req: AuthRequest, res: Response) => {
   try {
-    const { category, tags, title } = req.query;
+    const { title, category, tags } = req.query;
+    const tagList = tags ? (tags as string).split(',').filter(Boolean) : [];
 
-    // Parse tags from comma-separated string
-    const tagArray = tags ? (tags as string).split(',').map(t => t.trim()).filter(Boolean) : [];
-
-    const result = await encyclopediaService.matchEntry(
+    const match = await encyclopediaService.matchEntry(
       title as string,
       category as string,
-      tagArray
+      tagList
     );
 
-    if (!result) {
-      return res.json(null);
-    }
-
-    // Format for client
-    res.set('Cache-Control', 'public, max-age=3600'); // 1 hour cache
-    res.json({
-      entry: {
-        id: result.entry.id,
-        slug: result.entry.slug,
-        title: result.entry.title,
-        category: result.entry.category,
-      },
-      benchmarks: result.benchmarks,
-    });
+    res.json(match || { entry: null, benchmarks: [] });
   } catch (error) {
     console.error('[Encyclopedia] Error matching entry:', error);
     res.status(500).json({ message: 'Failed to match entry' });
