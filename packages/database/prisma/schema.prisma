@@ -352,6 +352,8 @@ model Organizer {
   graceTierBefore         String? // Tier before downgrade (PRO or TEAMS)
   graceNotificationsCount Int                    @default(0) // Count of grace period notifications sent (0-2)
   // Feature #314: Price Override Logging — organizer pricing calibration
+  // Feature #XXX: Automatic Markdown Cycles (PRO Tier) — time-based price reductions
+  markdownCycles          MarkdownCycle[]
   priceOverrideLogs       PriceOverrideLog[]
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
@@ -694,6 +696,8 @@ model Sale {
   consignorPayouts            ConsignorPayout[]        @relation("ConsignorPayouts")
   // QR Scanner Phase 2: scan analytics
   qrScannerEvents             QRScannerEvent[]
+  // Feature #XXX: Automatic Markdown Cycles (PRO Tier) — time-based price reductions
+  markdownCycles          MarkdownCycle[]
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -4041,6 +4045,31 @@ model Location {
   @@index([workspaceId])
 }
 // QR Scanner Phase 2: Scan analytics — track QR code engagement across sales
+
+// Feature #XXX: Automatic Markdown Cycles (PRO Tier)
+// Time-based automatic price reductions. Organizers define when prices drop by percentage.
+// Example: 10% off after 5 days, 20% off after 10 days.
+// Can be workspace-wide (saleId=null) or scoped to a specific sale (saleId set).
+// The cron job applies markdown at query-time by checking createdAt vs daysUntilFirst/daysUntilSecond.
+model MarkdownCycle {
+  id              String   @id @default(cuid())
+  organizerId     String
+  organizer       Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  saleId          String?  // null = applies to all organizer sales; set = applies only to this sale
+  sale            Sale?    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  daysUntilFirst  Int      // days after item creation before first markdown applies
+  firstPct        Int      // first markdown percentage (e.g. 10 = 10% off)
+  daysUntilSecond Int?     // optional: days after item creation before second markdown applies
+  secondPct       Int?     // optional: second markdown percentage
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizerId])
+  @@index([saleId])
+  @@index([organizerId, isActive])
+}
+
 model QRScannerEvent {
   id          String    @id @default(cuid())
   saleId      String

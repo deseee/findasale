@@ -84,7 +84,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
   React.useEffect(() => {
     if (step === 3 && settlement && !settlement.clientPayout) {
       // Always sync the current netProceeds to payoutAmount for display
-      const calculatedPayout = settlement.netProceeds ?? settlement.totalRevenue - settlement.totalExpenses ?? 0;
+      const calculatedPayout = settlement.netProceeds ?? (settlement.totalRevenue - settlement.totalExpenses);
       setPayoutAmount(calculatedPayout);
     }
   }, [step, settlement]);
