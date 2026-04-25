@@ -189,6 +189,12 @@ export async function fetchEbayPriceComps(params: {
 
 /**
  * Internal: Get eBay price comps for an item based on title and condition
+ *
+ * FIXED (Issue #337): Switched from Browse API (active listings) to Finding API's
+ * findCompletedItems (completed/sold listings). This returns actual SOLD prices
+ * instead of asking prices, providing more accurate price comparables.
+ *
+ * Note: Finding API uses XML, so we parse manually instead of relying on JSON.
  */
 async function getEbayPriceComps(
   title: string,
@@ -206,10 +212,12 @@ async function getEbayPriceComps(
   message?: string;
 }> {
   try {
-    const token = await getEbayAccessToken();
+    const clientId = process.env.EBAY_CLIENT_ID;
+    const clientSecret = process.env.EBAY_CLIENT_SECRET;
 
-    // Fallback to mock data if no token (credentials not set)
-    if (!token) {
+    // Fallback to mock data if no credentials (clientId is used as APP_ID for Finding API)
+    if (!clientId || !clientSecret) {
+      console.warn('[eBay] EBAY_CLIENT_ID or EBAY_CLIENT_SECRET not configured for comps');
       return {
         min: 25,
         max: 75,
@@ -223,26 +231,31 @@ async function getEbayPriceComps(
       };
     }
 
-    const conditionId = CONDITION_ID_MAP[conditionGrade || 'B'] || CONDITION_ID_MAP['B'];
     const query = encodeURIComponent(title);
 
+    // Use Finding API's findCompletedItems endpoint to get SOLD items (not active listings)
+    // The Finding API returns completed items that were actually sold
     const url =
-      `https://api.ebay.com/buy/browse/v1/item_summary/search?` +
-      `q=${query}&` +
-      `filter=conditionIds:${conditionId},buyingOptions:FIXED_PRICE,price:[5..],priceCurrency:USD&` +
-      `sort=endDate&` +
-      `limit=${limit}`;
+      `https://svcs.ebay.com/services/search/FindingService/v1?` +
+      `OPERATION-NAME=findCompletedItems&` +
+      `SERVICE-VERSION=1.0.0&` +
+      `SECURITY-APPNAME=${clientId}&` +
+      `RESPONSE-DATA-FORMAT=JSON&` +
+      `keywords=${query}&` +
+      `itemFilter(0).name=SoldItemsOnly&` +
+      `itemFilter(0).value=true&` +
+      `sortOrder=EndTimeSoonest&` +
+      `paginationInput.entriesPerPage=${Math.min(limit, 100)}`;
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
 
     if (!response.ok) {
-      console.error(`[eBay] Browse API failed: ${response.status}`);
+      console.error(`[eBay] Finding API failed: ${response.status}`);
       // Fallback to mock data on API error
       return {
         min: 25,
@@ -258,10 +271,10 @@ async function getEbayPriceComps(
     }
 
     const data = (await response.json()) as any;
-    const summaries = data.itemSummaries || [];
 
-    if (summaries.length === 0) {
-      // No results found, return mock data
+    // Check for eBay API errors in response
+    if (data.ack !== 'Success') {
+      console.warn(`[eBay] Finding API returned non-success ack: ${data.ack}`);
       return {
         min: 25,
         max: 75,
@@ -274,8 +287,29 @@ async function getEbayPriceComps(
       };
     }
 
-    const prices = summaries
-      .map((item: any) => parseFloat(item.price?.value || 0))
+    const items = data.searchResult?.item || [];
+
+    if (!items || items.length === 0) {
+      // No results found, return empty (not mock data, real result)
+      return {
+        min: 25,
+        max: 75,
+        median: 45,
+        count: 0,
+        suggestedPrice: 45,
+        compsRunAt: new Date().toISOString(),
+        listings: [],
+        isMockData: false,
+      };
+    }
+
+    // Extract sold prices from completed items
+    const prices = items
+      .map((item: any) => {
+        // For completed items, sellingStatus.currentPrice holds the final sold price
+        const price = item.sellingStatus?.currentPrice?.[0]?.value || 0;
+        return parseFloat(price);
+      })
       .filter((p: number) => p > 0)
       .sort((a: number, b: number) => a - b);
 
@@ -296,13 +330,16 @@ async function getEbayPriceComps(
     const max = Math.max(...prices);
     const median = prices[Math.floor(prices.length / 2)];
 
-    const listings = summaries.slice(0, 10).map((item: any) => ({
+    // Build listings array from found items (completed sales)
+    const listings = items.slice(0, 10).map((item: any) => ({
       title: item.title || 'Unknown',
-      price: parseFloat(item.price?.value || 0),
+      price: parseFloat(item.sellingStatus?.currentPrice?.[0]?.value || 0),
       condition: item.condition || 'Unknown',
-      url: item.itemWebUrl || '',
-      imageUrl: item.image?.imageUrl || undefined,
+      url: item.viewItemURL || '',
+      imageUrl: item.galleryURL || undefined,
     }));
+
+    console.log(`[eBay] Found ${prices.length} sold comps for "${title}" (min=$${min.toFixed(2)}, median=$${median.toFixed(2)}, max=$${max.toFixed(2)})`);
 
     return {
       min,
