@@ -1,8 +1,78 @@
-# Patrick's Dashboard — S572 Complete (Audit + 3 Parallel Fixes + P0 Railway Hotfix)
+# Patrick's Dashboard — S572 Complete (Audit + Fixes + P0 Hotfix + 9-Item Chrome QA + QR Scanner Phase 1)
 
 ## ✅ S572 — What Got Done
 
-**One-line summary:** Audited backlog post-S571, dispatched 3 parallel fixes (hydration #418, D-001 estate language, 1104px overflow), and shipped P0 routes/encyclopedia hotfix via MCP after Railway crashed on `getRevisions`-not-exported mismatch.
+**One-line summary:** Audit found rubber-stamped items, three parallel fixes shipped (hydration #418, D-001 manifest, 1104px overflow), P0 Railway hotfix landed mid-session, comprehensive Chrome QA verified 9 features end-to-end including 2 that the audit had wrongly flagged as deploy-pending for 215+ sessions, QR auto-claim removed manual button, and Phase 1 of the in-app QR scanner shipped with mobile placement next to the notification bell.
+
+### Quick wins this session
+
+| Win | Notes |
+|---|---|
+| Hydration #418 killed | Layout.tsx SSR/CSR DOM divergence fixed; bell, hamburger, user menu, modal dismiss, QR button all fire post-hydration |
+| Settlement PDF + Org Commission label live | Verified via `Content-Type: application/pdf` on Download Receipt API + visible "Organizer Commission (35%)" |
+| Encyclopedia detail live | `/encyclopedia/vintage-postcards-ephemera-local-history-collecting` renders 3,665-char article |
+| #41 Flip Report — was never broken | 215 sessions of "pending Railway deploy" status was wrong; page was live the whole time |
+| #184 iCal Export — was never broken | Same — lives as "📆 Add to Calendar" on sale detail pages, not `/organizer/calendar` |
+| #261 QR rank multiplier verified | Karen seeded to RANGER, scan returned `xpEarned: 5` (math: round(3 × 1.5) = 5) |
+| QR scanner Phase 1 shipped | html5-qrcode-based, mobile next to bell, desktop next to cart, hidden on auth + organizer routes |
+| P0 Railway hotfix landed mid-session | Routes/controller export mismatch, fixed via MCP push (b20b0526) |
+
+### Decisions locked this session
+
+- **D-001 / D-007 carryover** confirmed compliant in codebase (only manifest.json had drift)
+- **QR auto-claim** — security agent flagged QR + geofence both needed; manual "I Found It!" button removed; auto-fire on page load
+- **In-app QR scanner placement** — mobile top-header utility row (next to notification bell), desktop nav row (next to cart). NOT bottom-nav (wasted real estate), NOT cart (wrong context), NOT FAB (visual noise). Trending stays — no compelling replacement feature exists today
+- **Scanner first-time coaching** — single `localStorage.qrScannerSeen` flag, light tooltip + modal hint
+- **Scanner desktop visibility** — yes; webcam-absent state shows "Your device doesn't have a camera — try this on your phone"
+- **Scanner analytics** — yes, deferred to Phase 2; will integrate with existing `/organizer/qr-codes` page as a Scanner Funnel section
+
+---
+
+## ⏳ Pending Patrick Decisions / Next Session
+
+| Item | What's Needed |
+|------|---|
+| **QR Treasure Hunt UX redundancy** | Geofence still rejects shoppers who deny browser location. Auto-claim helps; retry CTA mitigates further. Decide: is organizer-printed QR (physical placement proof) sufficient security to drop the geofence entirely? |
+| **Scanner Phase 2 — analytics funnel** | New `QRScannerEvent` table + backend POST + Scanner Funnel card on `/organizer/qr-codes` showing scan_initiated / scan_decoded_on_domain / scan_decoded_off_domain / scan_camera_denied. Phase 1 already feeds existing `qrScanCount` via the `/found` endpoint |
+| **Stale Unverified Queue cleanup** | Six items data-blocked, ordered cheapest-first to unblock with seed work: #75 Tier Lapse Logic (lapsed PRO subscriber UPDATE), Rarity Boost gating (low-XP shopper account), #235 DonationModal (charity-close sale UPDATE), #223 Holds (Reservation INSERT), Bounty Batch C (BountySubmission INSERT), #54 Crowdsourced Appraisal (defer to beta) |
+| **Roadmap reconciliation** | Many roadmap rows still reflect pre-S572 status. At minimum these should flip to "Chrome-verified S572": Hydration #418, D-001 inclusive language, 1104px overflow, Encyclopedia detail, Settlement PDF, Shopper Referral (#7), Flip Report (#41), iCal Export (#184), QR rank multiplier (#261). New rows for: QR auto-claim, In-app QR scanner Phase 1, ADR-072 |
+| **BottomTabNav admin/index 1104px QA** | Right-panel fix was preventive on `admin/index.tsx`; needs Chrome verification as Alice on next session |
+
+---
+
+## 🩹 Known UX Risks Surfaced
+
+- **Geofence + auto-claim:** shopper who blocks browser geolocation gets 403 on the auto-fire. Mitigated by inline retry CTA; not eliminated. See QR Treasure Hunt UX redundancy decision above.
+- **Scanner camera permission denial recovery:** modal shows browser-settings instructions + Try Again button. Not auto-recovered if user fixes permission outside the modal — they have to retry manually.
+
+---
+
+## 🧪 Test Data State (do not revert without thinking)
+
+- **Karen Anderson (user11@example.com)** — promoted from Scout (536 XP) to RANGER (2055 XP) for #261 multiplier verification. Has 1 TreasureHuntQRScan row against the "Under the cabinet" clue. Patrick: leave as Ranger test account.
+- All other seeded users unchanged.
+
+---
+
+## 📦 Memory Saved
+
+`feedback_audit_find_live_url.md` — future audits open the live URL before trusting "pending deploy" status flags. Triggered by S572 finding two items rotting in backlog for 215+ sessions while audits kept re-deferring them.
+
+---
+
+## 🚀 Push Block — Wrap Docs
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs\STATE.md
+git add claude_docs\patrick-dashboard.md
+git commit -m "S572 wrap: STATE + dashboard"
+.\push.ps1
+```
+
+---
+
+## 📜 Older Session Detail (pre-wrap reference)
 
 ### Changes This Session
 
