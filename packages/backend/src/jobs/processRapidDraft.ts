@@ -155,15 +155,18 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       }
 
       // Success: Update item with AI tags and set to PENDING_REVIEW
+      // D-006: Respect organizer-edited fields — do NOT overwrite fields in userEditedFields array
+      const userEdited = item.userEditedFields || [];
       await prisma.item.update({
         where: { id: itemId },
         data: {
-          title: aiResult.title || item.title,
-          description: aiResult.description || item.description,
-          category: aiResult.category || item.category,
-          condition: aiResult.condition || item.condition,
+          title: !userEdited.includes('title') ? (aiResult.title || item.title) : item.title,
+          description: !userEdited.includes('description') ? (aiResult.description || item.description) : item.description,
+          category: !userEdited.includes('category') ? (aiResult.category || item.category) : item.category,
+          condition: !userEdited.includes('condition') ? (aiResult.condition || item.condition) : item.condition,
+          brand: !userEdited.includes('brand') ? (aiResult.brand || item.brand) : item.brand,
           conditionGrade: aiResult.suggestedConditionGrade || item.conditionGrade,
-          price: refinedPrice ?? item.price,
+          price: !userEdited.includes('price') ? (refinedPrice ?? item.price) : item.price,
           tags: aiResult.tags || [],
           isAiTagged: true,
           aiConfidence: aiResult.confidence ?? 0.5,

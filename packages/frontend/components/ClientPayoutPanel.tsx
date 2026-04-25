@@ -2,7 +2,7 @@
  * Client Payout Panel — Feature #228
  * Payout form: client info, amount, method selector, "Send Payout" button
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
@@ -38,6 +38,16 @@ export default function ClientPayoutPanel({
     amount: existingPayout?.amount?.toString() || suggestedAmount.toFixed(2),
     method: 'MANUAL' as 'STRIPE_CONNECT' | 'MANUAL',
   });
+
+  // Update amount field when suggestedAmount changes (e.g., when navigating from Commission to Payout)
+  useEffect(() => {
+    if (!existingPayout && suggestedAmount > 0) {
+      setForm((prev) => ({
+        ...prev,
+        amount: suggestedAmount.toFixed(2),
+      }));
+    }
+  }, [suggestedAmount, existingPayout]);
 
   const payoutMutation = useMutation({
     mutationFn: (data: typeof form) =>

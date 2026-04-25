@@ -752,10 +752,22 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Build update object
     const updateData: any = {};
 
+    // Track which fields the organizer is explicitly editing (D-006)
+    const fieldsBeingEdited: string[] = [];
+
     // Only update fields that are explicitly provided
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
-    if (price !== undefined) updateData.price = price ? parseFloat(price) : null;
+    if (title !== undefined) {
+      updateData.title = title;
+      fieldsBeingEdited.push('title');
+    }
+    if (description !== undefined) {
+      updateData.description = description;
+      fieldsBeingEdited.push('description');
+    }
+    if (price !== undefined) {
+      updateData.price = price ? parseFloat(price) : null;
+      fieldsBeingEdited.push('price');
+    }
 
     // Feature #57: Rarity is always auto-assigned from price — organizers cannot override it
     if (price !== undefined) {
@@ -774,10 +786,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (bidIncrement !== undefined) updateData.bidIncrement = bidIncrement ? parseFloat(bidIncrement) : null;
     if (auctionEndTime !== undefined) updateData.auctionEndTime = auctionEndTime ? new Date(auctionEndTime) : null;
     if (status !== undefined) updateData.status = status;
-    if (category !== undefined) updateData.category = category || null;
     if (ebayCategoryId !== undefined) updateData.ebayCategoryId = ebayCategoryId || null;
     if (ebayCategoryName !== undefined) updateData.ebayCategoryName = ebayCategoryName || null;
-    if (condition !== undefined) updateData.condition = condition || null;
     if (conditionGrade !== undefined) updateData.conditionGrade = conditionGrade || null; // #145: Persist condition grade
     if (tags !== undefined) updateData.tags = tags; // #145: Persist tags from review page
     if (backgroundRemoved !== undefined) updateData.backgroundRemoved = backgroundRemoved === true || backgroundRemoved === 'true'; // #145: Persist background removal state
@@ -845,6 +855,14 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (bestOfferMinimumAmt !== undefined) updateData.bestOfferMinimumAmt = bestOfferMinimumAmt === null ? null : Number(bestOfferMinimumAmt);
     if (ebaySecondaryCategoryId !== undefined) updateData.ebaySecondaryCategoryId = ebaySecondaryCategoryId || null;
     if (ebaySubtitle !== undefined) updateData.ebaySubtitle = ebaySubtitle ? String(ebaySubtitle).substring(0, 55) : null;
+
+    // D-006: Update userEditedFields array to track which fields organizer has explicitly set
+    // This prevents AI results from overwriting organizer-set values during rapid processing
+    if (fieldsBeingEdited.length > 0) {
+      const currentEdited = item.userEditedFields || [];
+      const mergedEdited = Array.from(new Set([...currentEdited, ...fieldsBeingEdited]));
+      updateData.userEditedFields = mergedEdited;
+    }
 
     const updatedItem = await prisma.item.update({
       where: { id },
@@ -2403,5 +2421,82 @@ export const removeOrganizerDiscount = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[removeOrganizerDiscount] Error:', error);
     res.status(500).json({ message: 'Server error while removing discount' });
+  }
+};
+
+/**
+ * Feature #338: Get comp summary for an item
+ * GET /api/items/:id/comp-summary
+ * Returns multi-source pricing data: sourceCount, medianLow, medianHigh, lastUpdated
+ * Auth: organizer JWT required
+ */
+export const getCompSummary = async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthRequest;
+    const { id: itemId } = req.params;
+
+    // Verify authenticated user is an organizer
+    if (!authReq.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Fetch item with sale and organizer details
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Verify organizer ownership
+    if (item.sale!.organizer.userId !== authReq.user.id) {
+      return res.status(403).json({ message: 'You do not own this item' });
+    }
+
+    // Fetch ItemCompLookup for this item
+    const compLookup = await prisma.itemCompLookup.findUnique({
+      where: { itemId },
+    });
+
+    // If no comp data exists yet, return empty response
+    if (!compLookup) {
+      return res.status(200).json({
+        sourceCount: 0,
+        medianLow: null,
+        medianHigh: null,
+        lastUpdated: null,
+      });
+    }
+
+    // Extract priceRange from pricingResultJson if available
+    let medianLow: number | null = null;
+    let medianHigh: number | null = null;
+
+    if (compLookup.pricingResultJson && typeof compLookup.pricingResultJson === 'object') {
+      const result = compLookup.pricingResultJson as any;
+      if (result.priceRange) {
+        // priceRange contains low and high in cents
+        medianLow = Math.round(result.priceRange.low / 100 * 100) / 100; // Convert cents to dollars
+        medianHigh = Math.round(result.priceRange.high / 100 * 100) / 100;
+      }
+    }
+
+    // Count actual sources consulted (filter out null/undefined)
+    const sourceCount = compLookup.sourcesConsulted?.length || 0;
+
+    // Format lastUpdated date
+    const lastUpdated = compLookup.dataFreshness ? compLookup.dataFreshness.toISOString() : null;
+
+    res.status(200).json({
+      sourceCount,
+      medianLow,
+      medianHigh,
+      lastUpdated,
+    });
+  } catch (error) {
+    console.error('[getCompSummary] Error:', error);
+    res.status(500).json({ message: 'Server error fetching comp summary' });
   }
 };
