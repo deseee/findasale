@@ -4,7 +4,7 @@
 
 import { PricingAdapter } from './base';
 import { PricingRequest, SourceResult } from '../types';
-import prisma from '@findasale/database';
+import { prisma } from '../../../lib/prisma';
 import { recordAdapterFailure, resetFailureCounter, checkQuota, recordApiUsage } from '../circuit-breaker';
 import axios from 'axios';
 import * as cheerio from 'cheerio';

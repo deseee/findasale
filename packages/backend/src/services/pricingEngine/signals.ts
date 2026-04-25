@@ -5,7 +5,7 @@
  */
 
 import { PricingRequest, SignalResult } from './types';
-import prisma from '@findasale/database';
+import { prisma } from '../../lib/prisma';
 import googleTrends from 'google-trends-api';
 
 /**

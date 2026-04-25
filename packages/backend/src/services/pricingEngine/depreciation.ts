@@ -4,7 +4,7 @@
  */
 
 import { SourceResult } from './types';
-import prisma from '@findasale/database';
+import { prisma } from '../../lib/prisma';
 
 export interface DepreciationCurve {
   category: string;

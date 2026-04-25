@@ -5,7 +5,7 @@
 import { PricingAdapter } from './base';
 import { PricingRequest, SourceResult } from '../types';
 import { resetFailureCounter, recordAdapterFailure, checkQuota, recordApiUsage } from '../circuit-breaker';
-import prisma from '@findasale/database';
+import { prisma } from '../../../lib/prisma';
 import axios from 'axios';
 
 export class DiscogsAdapter implements PricingAdapter {
