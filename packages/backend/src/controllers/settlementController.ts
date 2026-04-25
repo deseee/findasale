@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import PDFDocument from 'pdfkit';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -393,40 +394,84 @@ export const getSettlementReceipt = async (req: AuthRequest, res: Response) => {
     });
     if (!settlement) return res.status(404).json({ message: 'No settlement found.' });
 
-    // Return receipt data (PDF generation handled by frontend or a separate service)
-    return res.json({
-      sale: {
-        id: sale.id,
-        title: sale.title,
-        saleType: sale.saleType,
-        startDate: sale.startDate.toISOString(),
-        endDate: sale.endDate.toISOString(),
-        address: sale.address,
-      },
-      settlement: {
-        totalRevenue: toNumber(settlement.totalRevenue),
-        platformFeeAmount: toNumber(settlement.platformFeeAmount),
-        totalExpenses: toNumber(settlement.totalExpenses),
-        netProceeds: toNumber(settlement.netProceeds),
-        commissionRate: toNumber(settlement.commissionRate),
-        settledAt: settlement.settledAt?.toISOString() ?? null,
-      },
-      expenses: settlement.expenses.map((e) => ({
-        category: e.category,
-        description: e.description,
-        amount: toNumber(e.amount),
-        vendorName: e.vendorName,
-      })),
-      clientPayout: settlement.clientPayout
-        ? {
-            clientName: settlement.clientPayout.clientName,
-            amount: toNumber(settlement.clientPayout.amount),
-            status: settlement.clientPayout.status,
-            method: settlement.clientPayout.method,
-            paidAt: settlement.clientPayout.paidAt?.toISOString() ?? null,
-          }
-        : null,
-    });
+    // Generate PDF
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="settlement-receipt-${saleId}.pdf"`);
+    doc.pipe(res);
+
+    // Header
+    doc.fontSize(20).font('Helvetica-Bold').text('Settlement Receipt', { align: 'center' });
+    doc.fontSize(12).font('Helvetica').text(sale.title, { align: 'center' });
+    doc.moveDown();
+
+    // Sale info
+    doc.fontSize(11).font('Helvetica-Bold').text('Sale Information');
+    doc.fontSize(10).font('Helvetica');
+    doc.text(`Sale Type: ${sale.saleType?.replace('_', ' ') || 'N/A'}`);
+    doc.text(`Start Date: ${sale.startDate.toLocaleDateString()}`);
+    doc.text(`End Date: ${sale.endDate.toLocaleDateString()}`);
+    if (sale.address) {
+      doc.text(`Address: ${sale.address}`);
+    }
+    doc.moveDown();
+
+    // Financial summary table
+    doc.fontSize(11).font('Helvetica-Bold').text('Financial Summary');
+    doc.fontSize(10).font('Helvetica');
+    const colX1 = 50;
+    const colX2 = 450;
+    doc.text('Total Revenue', colX1, doc.y, { width: 200 });
+    doc.text(`$${toNumber(settlement.totalRevenue)?.toFixed(2) ?? '0.00'}`, colX2, doc.y - 10, { align: 'right' });
+    doc.moveDown(0.5);
+
+    const commRate = toNumber(settlement.commissionRate) ?? 0;
+    doc.text(`Organizer Commission (${Math.round(commRate)}%)`, colX1, doc.y, { width: 200 });
+    doc.text(`-$${toNumber(settlement.platformFeeAmount)?.toFixed(2) ?? '0.00'}`, colX2, doc.y - 10, { align: 'right' });
+    doc.moveDown(0.5);
+
+    doc.text('Expenses', colX1, doc.y, { width: 200 });
+    doc.text(`-$${toNumber(settlement.totalExpenses)?.toFixed(2) ?? '0.00'}`, colX2, doc.y - 10, { align: 'right' });
+    doc.moveDown(0.5);
+
+    doc.font('Helvetica-Bold').text('Net Proceeds', colX1, doc.y, { width: 200 });
+    doc.text(`$${toNumber(settlement.netProceeds)?.toFixed(2) ?? '0.00'}`, colX2, doc.y - 10, { align: 'right' });
+    doc.moveDown();
+
+    // Expenses list
+    if (settlement.expenses && settlement.expenses.length > 0) {
+      doc.fontSize(11).font('Helvetica-Bold').text('Expenses');
+      doc.fontSize(9).font('Helvetica');
+      settlement.expenses.forEach((expense) => {
+        doc.text(`• ${expense.description} - $${toNumber(expense.amount)?.toFixed(2) ?? '0.00'}`);
+        if (expense.vendorName) {
+          doc.text(`  Vendor: ${expense.vendorName}`, { indent: 20 });
+        }
+      });
+      doc.moveDown();
+    }
+
+    // Client payout
+    if (settlement.clientPayout) {
+      doc.fontSize(11).font('Helvetica-Bold').text('Client Payout');
+      doc.fontSize(10).font('Helvetica');
+      doc.text(`Name: ${settlement.clientPayout.clientName}`);
+      doc.text(`Amount: $${toNumber(settlement.clientPayout.amount)?.toFixed(2) ?? '0.00'}`);
+      doc.text(`Method: ${settlement.clientPayout.method}`);
+      doc.text(`Status: ${settlement.clientPayout.status}`);
+      if (settlement.clientPayout.paidAt) {
+        doc.text(`Paid: ${new Date(settlement.clientPayout.paidAt).toLocaleDateString()}`);
+      }
+      doc.moveDown();
+    }
+
+    // Footer
+    doc.fontSize(9).font('Helvetica').text(
+      `Generated by FindA.Sale on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`,
+      { align: 'center' }
+    );
+
+    doc.end();
   } catch (error) {
     console.error('getSettlementReceipt error:', error);
     return res.status(500).json({ message: 'Failed to generate receipt.' });
