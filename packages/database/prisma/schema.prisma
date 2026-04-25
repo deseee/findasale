@@ -692,7 +692,8 @@ model Sale {
   location                    Location?                @relation("LocationSales", fields: [locationId], references: [id], onDelete: SetNull)
   // #309: Consignor Portal payouts linked to this sale
   consignorPayouts            ConsignorPayout[]        @relation("ConsignorPayouts")
-  qrScannerEvents             QRScannerEvent[]         // QR Scanner Phase 2: scan analytics
+  // QR Scanner Phase 2: scan analytics
+  qrScannerEvents             QRScannerEvent[]
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -3850,6 +3851,141 @@ model ConsignorPayout {
   totalSales       Decimal    @db.Decimal(10, 2) // sum of sold item prices for this consignor
   commissionAmount Decimal    @db.Decimal(10, 2) // totalSales * commissionRate / 100
   netPayout        Decimal    @db.Decimal(10, 2) // = commissionAmount (extensible for future deductions)
+  method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER"
+  paidAt           DateTime?
+  notes            String?
+  createdAt        DateTime   @default(now())
+
+  @@index([consignorId])
+  @@index([saleId])
+}
+
+// #310: Color-tagged Discount Rules
+// Organizer assigns a color tag to items; matching active rule sets effectivePrice.
+// Price resolution is query-time in itemController — not cached on Item.
+model DiscountRule {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  workspace       OrganizerWorkspace @relation("WorkspaceDiscountRules", fields: [workspaceId], references: [id], onDelete: Cascade)
+  tagColor        String             // hex e.g. "#EF4444" or named label e.g. "red"
+  label           String             // human label e.g. "25% Off — Red Tag"
+  discountPercent Decimal            @db.Decimal(5, 2) // e.g. 25.00
+  activeFrom      DateTime?          // null = always active
+  activeTo        DateTime?          // null = no expiry
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([workspaceId])
+  @@index([workspaceId, tagColor]) // for fast rule lookup at item-list time
+}
+
+// #311: Multi-Location Inventory View
+// Locations represent physical stores/warehouses within a TEAMS workspace.
+// Items and Sales can be assigned to a location for filtered inventory views.
+model Location {
+  id          String             @id @default(cuid())
+  workspaceId String
+  workspace   OrganizerWorkspace @relation("WorkspaceLocations", fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  address     String?
+  phone       String?
+  managerId   String?            // User.id of the manager for this location
+  manager     User?              @relation("LocationManager", fields: [managerId], references: [id], onDelete: SetNull)
+  sales       Sale[]             @relation("LocationSales")
+  items       Item[]             @relation("LocationItems")
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([workspaceId])
+}
+
+// QR Scanner Phase 2: Scan analytics — track QR code engagement across sales
+model QRScannerEvent {
+  id          String    @id @default(cuid())
+  saleId      String
+  sale        Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  shopperId   String?
+  shopper     User?     @relation("QRScannerEventShopper", fields: [shopperId], references: [id], onDelete: SetNull)
+  eventType   String    // SCAN_INITIATED | SCAN_DECODED_ON_DOMAIN | SCAN_DECODED_OFF_DOMAIN | SCAN_CAMERA_DENIED
+  decodedUrl  String?
+  deviceType  String?   // "mobile" | "desktop"
+  userAgent   String?
+  ipHash      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([saleId, createdAt])
+  @@index([saleId, eventType])
+  @@index([shopperId, createdAt])
+}l    @db.Decimal(10, 2) // = commissionAmount (extensible for future deductions)
+  method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER"
+  paidAt           DateTime?
+  notes            String?
+  createdAt        DateTime   @default(now())
+
+  @@index([consignorId])
+  @@index([saleId])
+}
+
+// #310: Color-tagged Discount Rules
+// Organizer assigns a color tag to items; matching active rule sets effectivePrice.
+// Price resolution is query-time in itemController — not cached on Item.
+model DiscountRule {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  workspace       OrganizerWorkspace @relation("WorkspaceDiscountRules", fields: [workspaceId], references: [id], onDelete: Cascade)
+  tagColor        String             // hex e.g. "#EF4444" or named label e.g. "red"
+  label           String             // human label e.g. "25% Off — Red Tag"
+  discountPercent Decimal            @db.Decimal(5, 2) // e.g. 25.00
+  activeFrom      DateTime?          // null = always active
+  activeTo        DateTime?          // null = no expiry
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([workspaceId])
+  @@index([workspaceId, tagColor]) // for fast rule lookup at item-list time
+}
+
+// #311: Multi-Location Inventory View
+// Locations represent physical stores/warehouses within a TEAMS workspace.
+// Items and Sales can be assigned to a location for filtered inventory views.
+model Location {
+  id          String             @id @default(cuid())
+  workspaceId String
+  workspace   OrganizerWorkspace @relation("WorkspaceLocations", fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  address     String?
+  phone       String?
+  managerId   String?            // User.id of the manager for this location
+  manager     User?              @relation("LocationManager", fields: [managerId], references: [id], onDelete: SetNull)
+  sales       Sale[]             @relation("LocationSales")
+  items       Item[]             @relation("LocationItems")
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([workspaceId])
+}
+
+// QR Scanner Phase 2: Scan analytics — track QR code engagement across sales
+model QRScannerEvent {
+  id          String    @id @default(cuid())
+  saleId      String
+  sale        Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  shopperId   String?
+  shopper     User?     @relation("QRScannerEventShopper", fields: [shopperId], references: [id], onDelete: SetNull)
+  eventType   String    // SCAN_INITIATED | SCAN_DECODED_ON_DOMAIN | SCAN_DECODED_OFF_DOMAIN | SCAN_CAMERA_DENIED
+  decodedUrl  String?
+  deviceType  String?   // "mobile" | "desktop"
+  userAgent   String?
+  ipHash      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([saleId, createdAt])
+  @@index([saleId, eventType])
+  @@index([shopperId, createdAt])
+}
+l    @db.Decimal(10, 2) // = commissionAmount (extensible for future deductions)
   method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER"
   paidAt           DateTime?
   notes            String?

@@ -330,6 +330,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <DollarSign size={16} className="text-amber-500" />
               <span>Earnings</span>
             </Link>
+            <Link href="/organizer/affiliate" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Earn commissions by referring other organizers">
+              <Gift size={16} className="text-amber-500" />
+              <span>Affiliate Program</span>
+            </Link>
             <Link href="/organizer/members" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <UserPlus size={16} className="text-amber-500" />
               <span>Team Members</span>
@@ -1771,3 +1775,4 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 };
 
 export default Layout;
+                                                                                                                                                                                                                                                                                                         
