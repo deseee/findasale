@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S570 Complete (UI Polish: Camera Icon, QR Position, Welcome Card)
+# Patrick's Dashboard — S571 Complete (Encyclopedia QA + 2 Bug Fixes + Migration)
 
-## ✅ S570 — What Got Done
+## ✅ S571 — What Got Done
 
-**One-line summary:** Three small UI improvements — camera icon on organizer + Items button, QR moved to top of shopper dashboard, welcome card now closeable.
+**One-line summary:** Encyclopedia Chrome-verified live, two bugs fixed (detail page wrapper + referralRewardAgeGate P2022), migration deployed.
 
 ---
 
@@ -10,30 +10,39 @@
 
 | Change | File | Notes |
 |--------|------|-------|
-| Camera icon in purple + Items button | `organizer/dashboard.tsx` | Both single-sale and multi-sale dropdown variants |
-| QR panel moved below RankHeroSection | `shopper/dashboard.tsx` | Was below ActionBar; now top of page |
-| Welcome card dismissible (×) | `shopper/dashboard.tsx` | Persists to localStorage |
-
----
-
-## 📐 Label Sizes Research (no code yet)
-
-Current label composer: **Avery 5160 only** (1"×2.625", 30/sheet). Top candidates to add:
-
-| Label | Size | Per Sheet | Use case |
-|-------|------|-----------|----------|
-| Avery 5167 | 0.5"×1.75" | 80 | Jewelry, coins, small items |
-| Avery 5163 | 2"×4" | 10 | Furniture, large items |
-
-Say "add label sizes to the composer" to dispatch the backend/frontend work.
-
----
-
-## Previous Session (S569)
+| Encyclopedia detail: wrap in `{ entry }` | `encyclopediaController.ts` | Hook expected `{ entry: ... }`, controller was returning raw object → "Article Not Found" |
+| ReferralReward.createdAt migration | `migrations/20260425_.../migration.sql` | Missing column; job was crashing every cycle with P2022 |
 
 ---
 
 ## ✅ Chrome QA Verified This Session
+
+| Feature | Result | Notes |
+|---------|--------|-------|
+| /encyclopedia list | ✅ PASS | 20 entries showing — Vintage Postcards, Steiff Bears, Windsor Chairs, etc. (ss_5619utc2r) |
+
+---
+
+## ⏳ Pending Chrome QA (Next Session First Task)
+
+| Item | URL | What to verify |
+|------|-----|----------------|
+| Encyclopedia detail page | `/encyclopedia/vintage-postcards-ephemera-local-history-collecting` | Should now render article content (not "Article Not Found") — needs Railway to redeploy d77cff42 |
+| Settlement Receipt PDF | `/organizer/settlement/[saleId]` → Receipt tab | Download Receipt → `.pdf` file, label reads "Organizer Commission (X%)" |
+
+---
+
+## 🩺 P0 Fixed: referralRewardAgeGateCron Crash
+
+The job was failing every cycle:
+```
+PrismaClientKnownRequestError: The column `ReferralReward.createdAt` does not exist
+```
+`createdAt` was in `schema.prisma` but never in the original create-table SQL. Migration `20260425_add_referralreward_createdat` added the column. Patrick ran `migrate deploy` — ✅ resolved.
+
+---
+
+## ✅ S570 Chrome QA Verified
 
 | Feature | Result | Notes |
 |---------|--------|-------|
