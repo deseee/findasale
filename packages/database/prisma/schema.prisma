@@ -3956,6 +3956,25 @@ model PrepTask {
   @@index([assigneeId])
 }
 
+// QR Scanner Phase 2: Analytics event tracking
+model QRScannerEvent {
+  id          String   @id @default(cuid())
+  eventType   String   // scan_initiated | scan_decoded_on_domain | scan_decoded_off_domain | scan_camera_denied | scan_completed
+  saleId      String?
+  shopperId   String?
+  decodedUrl  String?
+  deviceType  String? // mobile | desktop
+  createdAt   DateTime @default(now())
+
+  sale    Sale?  @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  shopper User?  @relation("QRScannerEventShopper", fields: [shopperId], references: [id], onDelete: SetNull)
+
+  @@index([eventType, createdAt])
+  @@index([saleId, eventType])
+  @@index([saleId, createdAt])
+  @@index([shopperId, createdAt])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Retail Gap Features — TEAMS tier only (#309, #310, #311) — S533
 // ─────────────────────────────────────────────────────────────────────────────

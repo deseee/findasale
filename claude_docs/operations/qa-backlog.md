@@ -15,8 +15,8 @@
 
 | Sev | Item | Notes |
 |-----|------|-------|
-| **P1** | **Receipt tab shows $0.00 "Client/Executor Receives"** | Receipt pulls from manually-entered Payout Amount field (default $0.00), not from Commission tab's calculated payout. Organizer must manually enter amount on Payout tab before Receipt is accurate. Fix path: auto-populate Payout Amount from Commission tab's "Client Receives" value when advancing to Payout step. |
-| **P1** | **"Download Receipt" button dead** | `querySelector('button')` textContent scan returned no "Download Receipt" element after advancing to Receipt tab. Receipt content renders (table with $0.00 values) but download action doesn't fire. Possible: button hidden, wrong selector, or not yet implemented. |
+| **P1** | **Receipt tab shows $0.00 "Client/Executor Receives"** | **FIXED S566** — SettlementWizard.tsx auto-populates payoutAmount from Commission step. Receipt step sources clientPayout.amount ?? payoutAmount. |
+| **P1** | **"Download Receipt" button dead** | **FIXED S569** — Download rebuilt with fetch+blob handler. Backend pdfkit PDF generation + proper `Content-Type: application/pdf`. |
 | **P2** | **Payout Amount field not pre-filled** | Payout tab shows `$0.00` pre-filled. The Commission tab calculates "Client/Executor Receives" dynamically, but that value is never carried forward to the Payout Amount input. Every organizer must manually enter payout amount. |
 | **P3** | **Settlement "Next →" buttons are blue, not orange** | All 4 "Next →" tab-advance buttons use default blue (Tailwind `bg-blue-600`) instead of the site's orange brand color. Inconsistent with CTA style across rest of app. |
 
@@ -26,16 +26,16 @@
 
 | Sev | Item | Page | Notes |
 |-----|------|------|-------|
-| **P1** | **`/organizer/profile` redirects to `/organizer/settings`** | `/organizer/profile` | Navigating to organizer profile lands on Settings page. No dedicated organizer profile page exists at that URL — or the route is incorrectly aliased to settings. |
-| **P1** | **`/organizer/flash-deal/[saleId]` → 404** | `/organizer/flash-deal/[saleId]` | Page does not exist at this URL pattern. Flash deal feature may have moved or never had a dedicated route. |
-| **P1** | **POS item dropdown unresponsive** | `/organizer/pos` | Item add/search dropdown does not respond to clicks or keyboard input. Suspected hydration event-handler loss (same root cause as #418). |
-| **P1** | **Subscription "Downgrade to Free" dialog says "Downgrade to SIMPLE"** | `/organizer/subscription` | Button label says "Downgrade to Free" but the confirmation dialog heading says "Downgrade to SIMPLE" and the CTA inside the dialog also says "Downgrade to SIMPLE". Mismatched terminology — should be consistent. Free tier is named "Free" not "SIMPLE" for organizers. |
-| **P2** | **POS shows "No active sales" when sales exist** | `/organizer/pos` | POS page displays "no active sales" error state but organizer has at least one active sale. Suspected hydration or session state issue — same root cause pattern as #418. |
-| **P2** | **POS search input doesn't filter items** | `/organizer/pos` | Typing in the item search box doesn't narrow the item list. No filtering occurs. |
-| **P2** | **Subscription page: Stripe status wrong on first load** | `/organizer/subscription` | Initial render shows wrong subscription status (e.g., shows "Free" before hydration corrects it). Same hydration race condition as HP status on XP Store. |
-| **P2** | **Subscription page: contradictory UI** | `/organizer/subscription` | "Downgrade to Free" button is shown but the plan display area indicates organizer is already on a free-equivalent tier. Contradictory state — at minimum needs a clearer current-plan indicator. |
-| **P2** | **Edit Sale map component failure (iframe 1px)** | `/organizer/edit-sale/[saleId]` | Entrance/Parking Pin map section has a 1137×561px outer container div with no children, and the inner iframe renders at exactly 1px tall. Map library (Google Maps or Leaflet) failed to initialize. Entire map section is visually a blank 561px-tall empty box. |
-| **P2** | **Identical sale names in hold/POS dropdowns** | `/organizer/holds`, `/organizer/pos` | Dropdown to select a sale shows multiple entries with identical display names (e.g., "Estate Sale — Vintage Items" appears 2× or 3×). No disambiguating info (date, status, ID) shown. Organizer cannot tell which sale to pick. |
+| **P1** | **`/organizer/profile` redirects to `/organizer/settings`** | `/organizer/profile` | **FIXED S566** — New redirect page `/shopper/profile` created; organizer/profile tab param now respected in useEffect. |
+| **P1** | **`/organizer/flash-deal/[saleId]` → 404** | `/organizer/flash-deal/[saleId]` | ⚠️ Not yet addressed — route does not exist. |
+| **P1** | **POS item dropdown unresponsive** | `/organizer/pos` | **FIXED S572** — Hydration #418 root-cause fixed in Layout.tsx SSR conditional. Event handlers now attach correctly. |
+| **P1** | **Subscription "Downgrade to Free" dialog says "Downgrade to SIMPLE"** | `/organizer/subscription` | **FIXED S566** — DowngradePreviewModal.tsx copy aligned to "Downgrade to Free" consistently. |
+| **P2** | **POS shows "No active sales" when sales exist** | `/organizer/pos` | **FIXED S567** — hydration #418 fix + storefront URL fix + sale dedup filter. |
+| **P2** | **POS search input doesn't filter items** | `/organizer/pos` | **FIXED S572** — Hydration #418 root-cause in Layout.tsx fixed. Event handlers now work. |
+| **P2** | **Subscription page: Stripe status wrong on first load** | `/organizer/subscription` | **FIXED S567** — useOrganizerTier hook now returns null tier during authLoading; subscription.tsx gates spinner. |
+| **P2** | **Subscription page: contradictory UI** | `/organizer/subscription` | ⚠️ Status unclear — related to subscription tier display edge cases. |
+| **P2** | **Edit Sale map component failure (iframe 1px)** | `/organizer/edit-sale/[saleId]` | **FIXED S567** — Leaflet CSS in fragment root + MapResizer component with invalidateSize() timeout. |
+| **P2** | **Identical sale names in hold/POS dropdowns** | `/organizer/holds`, `/organizer/pos` | **FIXED S567** — Sale dedup filter in pos.tsx; dropdown shows unique sales. |
 | **P3** | **`/organizer` root → 404** | `/organizer` | Navigating to the organizer root path throws a 404. Should redirect to `/organizer/dashboard`. |
 | **P3** | **"Renews On" shows "Contact support"** | `/organizer/subscription` | Renewal date field shows "Contact support" instead of an actual date. Likely a null/missing `renewsAt` field falling through to a fallback string. |
 | **P3** | **RETAIL create-sale gate text** | `/organizer/create-sale` | RETAIL option disabled for free/PRO orgs as expected, but the UX text explaining the gate ("Retail Store (TEAMS only)") may not be visible — the upgrade CTA placement needs verification. Logged for Chrome QA confirmation. |
@@ -46,8 +46,8 @@
 
 | Sev | Item | Page | Notes |
 |-----|------|------|-------|
-| **P1** | **`/admin/bid-review` API error (500)** | `/admin/bid-review` | Page loads the outer shell but the bid list fails with an API 500. The backend route for bid review is returning an error. Entire feature unusable. |
-| **P2** | **Admin Feedback: no user attribution** | `/admin/feedback` | Feedback entries show message content and timestamp but no user name, email, or identifier. Admin has no way to know who submitted each piece of feedback. |
+| **P1** | **`/admin/bid-review` API error (500)** | `/admin/bid-review` | **FIXED S566** — Full `select` syntax replaces `include`+nested `select`. Prisma syntax error resolved. |
+| **P2** | **Admin Feedback: no user attribution** | `/admin/feedback` | **FIXED S567** — `optionalAuthenticate` middleware added so logged-in feedback gets user attribution. |
 
 ---
 
@@ -55,10 +55,10 @@
 
 | Sev | Item | Page | Notes |
 |-----|------|------|-------|
-| **P1** | **`/shopper/profile` → 404** | `/shopper/profile` | Shopper profile page returns 404. Correct URL may be `/shopper/explorer-profile` — if so, the wrong URL is in use somewhere (nav link, avatar dropdown, etc.). |
-| **P1** | **`/shopper/collection` → 404** | `/shopper/collection` | Collection page returns 404. Feature may not exist at this URL or has moved. |
-| **P1** | **Save Interests silent-fail** | `/shopper/settings` or interests flow | Clicking "Save" on interests/taste profile shows no feedback — no toast, no error, no confirmation. Either the save is silently failing or the feedback mechanism is missing. |
-| **P1** | **Site-wide hydration bug #418** | All pages with event handlers | `new Date()` at render time causes server/client DOM divergence. React discards server DOM on mismatch → physical mouse clicks fail (event handlers not attached). JS `.click()` workaround required throughout QA. Affects: QR "I Found It!" button, bounty tabs, hamburger menu, modal dismiss, map interactions, notification bell. P1 blocker for beta. |
+| **P1** | **`/shopper/profile` → 404** | `/shopper/profile` | **FIXED S566** — Redirect page created `/pages/shopper/profile.tsx` → `/shopper/explorer-profile`. |
+| **P1** | **`/shopper/collection` → 404** | `/shopper/collection` | **FIXED S566** — Redirect page created `/pages/shopper/collection.tsx` → `/shopper/explorer-profile`. |
+| **P1** | **Save Interests silent-fail** | `/shopper/settings` or interests flow | **FIXED S566** — `shopper/settings.tsx` now shows success/error toast on Save Interests action. |
+| **P1** | **Site-wide hydration bug #418** | All pages with event handlers | **FIXED S572** — `Layout.tsx` SSR conditional simplified to `user ? userNav : loginLinks` (matches server+client). Event handlers now attach. Remaining scattered instances on QR/bounty/POS/hamburger/bell need audit. |
 | **P2** | **Message bubble overflow** | `/shopper/messages` or messaging UI | Message text overflows the bubble container, extending past the bubble border. Layout bug, likely missing `overflow-hidden` or `break-words`. |
 | **P2** | **"Followed Organizers" label/content mismatch** | `/shopper/explorer-profile` or dashboard | Section labeled "Followed Organizers" shows content that doesn't match — either wrong data or wrong label. |
 | **P2** | **Wrong Profile URL domain** | Profile share / public URL | Shopper public profile URL displayed in UI shows wrong domain (localhost or staging domain instead of `finda.sale`). |
@@ -84,6 +84,19 @@
 | **P3** | **Threads share card clips** | Share sheet | Threads share card content clips at edge of the share sheet container. Layout overflow. |
 
 ---
+
+---
+
+## S575 — QA Unblocked by Seed
+
+**Seed run completed successfully.** The following QA blockers are now resolved:
+
+| Item | Status | What's Live |
+|------|--------|------------|
+| #75 Tier Lapse Logic | ✅ Unblocked | `tier-lapse-test@example.com` (PRO past_due) seeded in Railway. Test account ready for organizer-side tier lapse flow. |
+| Rarity Boost XP gate | ✅ Unblocked | `low-xp-shopper@example.com` (guildXp=10) seeded in Railway. Test account ready to verify Rarity Boost button disabled at low XP. |
+| #235 DonationModal | ✅ Unblocked | Charity sale with SaleDonation record seeded in Railway. Test account ready to verify DonationModal 3-step wizard opens on settlement. |
+| #223 Holds / Reservations | ✅ Unblocked | Hold/reservation records on active sale seeded in Railway. Test account ready for hold expiry countdown + payment flow. |
 
 ---
 

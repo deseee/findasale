@@ -103,6 +103,7 @@ import exportRouter from './routes/export';             // Sprint 2: Export feat
 import socialRouter from './routes/social';             // Sprint 2: Social template generator
 import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
 import pricingRoutes from './routes/pricing';           // Phase S574: Multi-source pricing engine
+import pricingSignalsRoutes from './routes/pricingSignals'; // Pricing signals: sleeper patterns & brand premiums
 import hubRoutes from './routes/hubs';                  // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 import voiceRoutes from './routes/voice';                // Feature #42: Voice-to-tag extraction
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
@@ -412,6 +413,7 @@ app.use('/api/auth', authLimiter, authRoutes); // stricter rate limit on auth
 app.use('/api/auth/passkey', passkeyRoutes); // Feature #19: Passkey/WebAuthn routes (authLimiter already applied via /api/auth mount above)
 app.use('/api/sales', saleRoutes);
 app.use('/api/items', itemRoutes);
+app.use('/api/items', pricingSignalsRoutes);            // Pricing signals: sleeper patterns & brand premiums
 app.use('/api/pricing', pricingRoutes);                 // Phase S574: Multi-source pricing engine
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/users', userRoutes);

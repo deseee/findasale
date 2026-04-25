@@ -20,7 +20,8 @@
 
 ## ⏳ Pending Patrick Actions
 
-Nothing required — session is fully wrapped and deployed.
+- **Scanner Phase 2 in progress** — QRScannerEvent analytics backend + Funnel card on /organizer/qr-codes. Await push block from this session before next step.
+- Run `prisma migrate deploy` + `prisma generate` after Scanner Phase 2 push (new QRScannerEvent table).
 
 **Optional (when ready to spend money on better comps):**
 - `KEEPA_API_KEY` from keepa.io → API Keys — adds Amazon price history. Engine works fine without it.
@@ -34,10 +35,10 @@ Nothing required — session is fully wrapped and deployed.
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| #75 Tier Lapse Logic | No lapsed PRO account | ✅ Seeded S573 — run `prisma:seed` | S572 |
-| Rarity Boost XP gate | No low-XP shopper | ✅ Seeded S573 — run `prisma:seed` | S572 |
-| #235 DonationModal | No charity sale | ✅ Seeded S573 — run `prisma:seed` | S572 |
-| #223 Holds / Reservations | No hold records | ✅ Seeded S573 — run `prisma:seed` | S572 |
+| #75 Tier Lapse Logic | ✅ Seed ran S575 — tier-lapse-test@example.com ready | Chrome QA | S575 |
+| Rarity Boost XP gate | ✅ Seed ran S575 — low-xp-shopper@example.com ready | Chrome QA | S575 |
+| #235 DonationModal | ✅ Seed ran S575 — charity sale seeded | Chrome QA | S575 |
+| #223 Holds / Reservations | ✅ Seed ran S575 — hold records seeded | Chrome QA | S575 |
 | #54 Crowdsourced Appraisal | Deferred to beta cohort | Wait for first beta organizers | S570 |
 | Bounty Batch C | BountySubmission INSERT needs data | Needs test organizer with active bounty | S571 |
 | QR Scanner Phase 1 Chrome QA | Not yet browser-tested | Navigate to sale QR → test scan flow | S573 |
@@ -45,6 +46,7 @@ Nothing required — session is fully wrapped and deployed.
 | QR modal Chrome QA | Not yet browser-tested | Test "My QR" tab + cart drawer link | S573 |
 | Geofence UX Chrome QA | Not yet browser-tested | Deny location on clueId page, verify amber card | S573 |
 | Pricing engine output QA | First live test | Publish an item, check `/api/pricing/suggest` returns multi-source result | S574 |
+| QR Scanner Phase 2 | Dispatched S575 — pending dev return | Chrome QA after ship | S575 |
 
 ---
 

@@ -5,6 +5,14 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-04-25 (S575) — QR Treasure Hunt Geofence: KEPT (Not Dropping)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** Geofence requirement on `/sales/[id]/treasure-hunt-qr/[clueId]` stays. Physical QR scan alone is not sufficient proof-of-presence. The amber retry card with location-permission prompt (shipped S573) is the UX mitigation for shoppers who initially deny location. This supersedes the "DECISION NEEDED for next session: QR Treasure Hunt UX redundancy" note from S572. Do not remove geofence from `markClueFound` endpoint or clueId.tsx.
+
+---
+
 ## 2026-04-22 (S550) — Phone Verification NOT Required for REFERRAL_FIRST_PURCHASE XP (500 XP)
 
 **Status:** LOCKED
