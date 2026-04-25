@@ -53,6 +53,7 @@ const ShopperDashboard = () => {
   const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(true);
   const [hasSeenGuildOnboarding, setHasSeenGuildOnboarding] = useState(false);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
 
   // Handle hash-based tab navigation on mount and when hash changes
   useEffect(() => {
@@ -85,6 +86,14 @@ const ShopperDashboard = () => {
     const seen = localStorage.getItem('explorer_guild_onboarded');
     if (seen) {
       setHasSeenGuildOnboarding(true);
+    }
+  }, []);
+
+  // Load welcome card dismissal state from localStorage
+  useEffect(() => {
+    const dismissed = localStorage.getItem('finda_welcome_dismissed');
+    if (dismissed === 'true') {
+      setWelcomeDismissed(true);
     }
   }, []);
 
@@ -139,6 +148,11 @@ const ShopperDashboard = () => {
         alert('Referral link copied to clipboard!');
       });
     }
+  };
+
+  const handleDismissWelcome = () => {
+    localStorage.setItem('finda_welcome_dismissed', 'true');
+    setWelcomeDismissed(true);
   };
 
   if (!isLoading && !user) {
@@ -276,9 +290,16 @@ const ShopperDashboard = () => {
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Above the fold: State-aware hero section */}
-          {isNewShopper ? (
+          {isNewShopper && !welcomeDismissed ? (
             // State A: New shopper
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-8 mb-8 text-center">
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-8 mb-8 text-center">
+              <button
+                onClick={handleDismissWelcome}
+                className="absolute top-3 right-3 text-warm-400 dark:text-warm-600 hover:text-warm-600 dark:hover:text-warm-400 transition-colors"
+                aria-label="Dismiss welcome card"
+              >
+                ×
+              </button>
               <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome to treasure hunting!</h1>
               <p className="text-lg text-warm-600 dark:text-warm-400 mb-6">Explore nearby sales, add your favorite items, and discover unique treasures.</p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -338,17 +359,7 @@ const ShopperDashboard = () => {
             )}
           </div>
 
-          {/* 1b. Explorer's Guild Onboarding Card (for INITIATE users) */}
-          {xpProfile && xpProfile.explorerRank === 'INITIATE' && !hasSeenGuildOnboarding && (
-            <ExplorerGuildOnboardingCard
-              onDismiss={() => setHasSeenGuildOnboarding(true)}
-            />
-          )}
-
-          {/* 2. Action buttons row (Browse Sales, Collections, Purchase History, Treasure Trails, My QR) */}
-          <ActionBar className="mb-8" onQrClick={() => setQrOpen(!qrOpen)} />
-
-          {/* 3. QR expanded panel (immediately below buttons, only when qrOpen === true) */}
+          {/* 1a. QR expanded panel (immediately below RankHeroSection, only when qrOpen === true) */}
           {shopperQRCodeDataUrl && qrOpen && (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-6 mb-8 w-full">
               <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
@@ -366,6 +377,16 @@ const ShopperDashboard = () => {
               </p>
             </div>
           )}
+
+          {/* 1b. Explorer's Guild Onboarding Card (for INITIATE users) */}
+          {xpProfile && xpProfile.explorerRank === 'INITIATE' && !hasSeenGuildOnboarding && (
+            <ExplorerGuildOnboardingCard
+              onDismiss={() => setHasSeenGuildOnboarding(true)}
+            />
+          )}
+
+          {/* 2. Action buttons row (Browse Sales, Collections, Purchase History, Treasure Trails, My QR) */}
+          <ActionBar className="mb-8" onQrClick={() => setQrOpen(!qrOpen)} />
 
           {/* 4. Hunt Pass CTA strip (keep it slim) */}
           {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' && (
