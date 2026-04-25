@@ -113,7 +113,7 @@ describe('Auth Controller Integration Tests', () => {
 
     it('should reject duplicate email with 409', async () => {
       const email = 'auth-test-duplicate@example.com';
-      const password = await bcrypt.hash('password123', 10);
+      const password = await bcrypt.hash('Seedy2025!', 10);
 
       // Create first user
       await prisma.user.create({
@@ -161,7 +161,7 @@ describe('Auth Controller Integration Tests', () => {
 
     it('should promote user to ORGANIZER if valid invite code provided', async () => {
       const email = 'auth-test-invite-org@example.com';
-      const password = await bcrypt.hash('password123', 10);
+      const password = await bcrypt.hash('Seedy2025!', 10);
       const inviteCode = 'TESTINVITE001';
 
       // Get the invite
@@ -196,7 +196,7 @@ describe('Auth Controller Integration Tests', () => {
 
     it('should set roles array with correct value', async () => {
       const email = 'auth-test-roles@example.com';
-      const password = await bcrypt.hash('password123', 10);
+      const password = await bcrypt.hash('Seedy2025!', 10);
 
       const user = await prisma.user.create({
         data: {
@@ -265,7 +265,7 @@ describe('Auth Controller Integration Tests', () => {
 
     it('should prevent auto-linking of existing password accounts', async () => {
       const email = 'auth-test-prevent-autolink@example.com';
-      const password = await bcrypt.hash('password123', 10);
+      const password = await bcrypt.hash('Seedy2025!', 10);
 
       // Create existing password-based account
       const existingUser = await prisma.user.create({
@@ -351,7 +351,7 @@ describe('Auth Controller Integration Tests', () => {
 
     it('should handle tokenVersion for JWT invalidation', async () => {
       const email = 'auth-test-token-version@example.com';
-      const password = await bcrypt.hash('password123', 10);
+      const password = await bcrypt.hash('Seedy2025!', 10);
 
       const user = await prisma.user.create({
         data: {
@@ -393,7 +393,7 @@ describe('Auth Controller Integration Tests', () => {
   describe('roles array handling', () => {
     it('should handle new roles array format', async () => {
       const email = 'auth-test-roles-new@example.com';
-      const password = await bcrypt.hash('password123', 10);
+      const password = await bcrypt.hash('Seedy2025!', 10);
 
       const user = await prisma.user.create({
         data: {
@@ -411,7 +411,7 @@ describe('Auth Controller Integration Tests', () => {
 
     it('should fallback to single role if roles array is empty', async () => {
       const email = 'auth-test-roles-fallback@example.com';
-      const password = await bcrypt.hash('password123', 10);
+      const password = await bcrypt.hash('Seedy2025!', 10);
 
       const user = await prisma.user.create({
         data: {
