@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-04-25a
+# cache-bust: 2026-04-25b
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
