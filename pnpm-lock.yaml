@@ -235,6 +235,9 @@ importers:
       fuse.js:
         specifier: ^7.0.0
         version: 7.1.0
+      html5-qrcode:
+        specifier: ^2.3.4
+        version: 2.3.8
       jsonwebtoken:
         specifier: ^9.0.0
         version: 9.0.3
@@ -6529,6 +6532,10 @@ packages:
       dom-serializer: 2.0.0
       htmlparser2: 8.0.2
       selderee: 0.11.0
+    dev: false
+
+  /html5-qrcode@2.3.8:
+    resolution: {integrity: sha512-jsr4vafJhwoLVEDW3n1KvPnCCXWaQfRng0/EEYk1vNcQGcG/htAdhJX0be8YyqMoSz7+hZvOZSTAepsabiuhiQ==}
     dev: false
 
   /htmlparser2@10.1.0:

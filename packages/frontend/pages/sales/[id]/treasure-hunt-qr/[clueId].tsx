@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -27,6 +27,8 @@ const CluePage = () => {
   const { id, clueId } = router.query;
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const hasAutoClaimedRef = useRef(false);
+  const [geofenceBlocked, setGeofenceBlocked] = useState(false);
 
   // Fetch clue details
   const { data: clue, isLoading: clueLoading } = useQuery({
@@ -80,14 +82,37 @@ const CluePage = () => {
       } else {
         showToast(`You already found this clue! (${data.totalProgress})`, 'info');
       }
+      // Auto-redirect after 2.5 seconds
+      setTimeout(() => {
+        router.push(`/sales/${id}`);
+      }, 2500);
     },
     onError: (error: any) => {
-      showToast(
-        error.response?.data?.message || 'Failed to mark clue as found',
-        'error'
-      );
+      const statusCode = error.response?.status;
+      if (statusCode === 403) {
+        setGeofenceBlocked(true);
+        showToast('Location required — tap "Try again" to allow location access', 'error');
+      } else if (statusCode === 409) {
+        showToast('You already found this one!', 'info');
+        setTimeout(() => {
+          router.push(`/sales/${id}`);
+        }, 1500);
+      } else {
+        showToast(
+          error.response?.data?.message || 'Failed to mark clue as found',
+          'error'
+        );
+      }
     },
   });
+
+  // Auto-claim on page load (after clue loads)
+  useEffect(() => {
+    if (!clueLoading && clue && !hasAutoClaimedRef.current && !foundMutation.isPending) {
+      hasAutoClaimedRef.current = true;
+      foundMutation.mutate();
+    }
+  }, [clueLoading, clue]);
 
   const isLoading = authLoading || clueLoading;
 
@@ -161,21 +186,32 @@ const CluePage = () => {
                     </div>
                   )}
 
-                  {/* Found Button */}
-                  <button
-                    onClick={() => foundMutation.mutate()}
-                    disabled={foundMutation.isPending}
-                    className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50 transition-all"
-                  >
-                    {foundMutation.isPending ? (
-                      <>
-                        <span className="inline-block animate-spin mr-2">⚙️</span>
-                        Submitting...
-                      </>
-                    ) : (
-                      '✨ I Found It!'
-                    )}
-                  </button>
+                  {/* Recording find status */}
+                  {foundMutation.isPending && (
+                    <div className="w-full bg-gradient-to-r from-amber-100 to-amber-50 dark:from-amber-900/20 dark:to-amber-900/10 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 font-semibold py-3 px-4 rounded-lg flex items-center justify-center">
+                      <span className="inline-block animate-spin mr-2">⚙️</span>
+                      Recording your find...
+                    </div>
+                  )}
+
+                  {/* Geofence retry — fires when 403 returned (location denied or out of range) */}
+                  {geofenceBlocked && !foundMutation.isPending && (
+                    <div className="w-full bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-lg p-4 space-y-3">
+                      <p className="text-sm text-red-900 dark:text-red-200">
+                        📍 We need your location to confirm you're at the sale. Make sure location is allowed in your browser, then try again.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGeofenceBlocked(false);
+                          foundMutation.mutate();
+                        }}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition"
+                      >
+                        📍 Allow location &amp; try again
+                      </button>
+                    </div>
+                  )}
 
                   {/* Cross-promo to Photo Station */}
                   <Link href={`/sales/${id}/photo-station`} className="inline-flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400 hover:underline mt-3">
@@ -185,7 +221,7 @@ const CluePage = () => {
                   {/* Instructions */}
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded-lg">
                     <p className="text-sm text-blue-900 dark:text-blue-200">
-                      💡 <strong>Hint:</strong> Look carefully around the sale venue. When you spot the item, click "I Found It!" to earn XP.
+                      💡 <strong>Hint:</strong> Look carefully around the sale venue. We're recording your find automatically!
                     </p>
                   </div>
                 </>
