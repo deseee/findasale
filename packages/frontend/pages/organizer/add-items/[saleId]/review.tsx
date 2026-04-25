@@ -297,7 +297,8 @@ const ReviewPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
       showToast('Items published successfully!', 'success');
-      router.push(`/organizer/add-items/${saleId}`);
+      // Auto-reopen camera for batch workflow: pass query params to signal intent
+      router.push(`/organizer/add-items/${saleId}?openCamera=1&captureMode=rapidfire`);
     },
     onError: (error: any) => {
       const message = error.response?.data?.message || 'Failed to publish items';
