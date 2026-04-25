@@ -252,15 +252,14 @@ const ShopifyPage: React.FC = () => {
 
       {/* Disconnect Confirmation Dialog */}
       <ConfirmDialog
-        open={disconnectConfirm}
+        isOpen={disconnectConfirm}
         title="Disconnect Shopify"
         message="Are you sure you want to disconnect your Shopify account? Your items will no longer be synced."
-        confirmText="Disconnect"
-        cancelText="Cancel"
-        isLoading={disconnecting}
+        confirmLabel="Disconnect"
+        cancelLabel="Cancel"
         onConfirm={handleDisconnect}
         onCancel={() => setDisconnectConfirm(false)}
-        isDangerous
+        variant="danger"
       />
     </TierGate>
   );
