@@ -18,6 +18,7 @@ import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 3
 import PriceResearchPanel from '../../../components/PriceResearchPanel';
+import PricingCompSummary from '../../../components/PricingCompSummary'; // Feature #338: Multi-source comp summary
 import PricingSignalBanners from '../../../components/PricingSignalBanners';
 import ItemPriceHistoryChart from '../../../components/ItemPriceHistoryChart';
 import LocationSelector from '../../../components/LocationSelector';
@@ -670,6 +671,9 @@ const EditItemPage = () => {
               />
               {/* eBay Comp Tiles — comparable sales reference */}
               {id && <EbayCompTiles itemId={id as string} />}
+
+              {/* Feature #338: Multi-source pricing comp summary */}
+              {id && <PricingCompSummary itemId={id as string} />}
 
               {/* Request Appraisal CTA */}
               <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">

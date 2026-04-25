@@ -794,6 +794,7 @@ model Item {
   backgroundRemoved          Boolean                @default(false) // Background removal applied
   faceDetected               Boolean                @default(false) // Face detected in image
   autoEnhanced               Boolean                @default(false) // Auto-enhancement applied
+  userEditedFields           String[]               @default([]) // Fields explicitly edited by organizer (D-006: prevents AI overwrites)
   photos                     Photo[] // Multi-photo support (forward-looking)
   // Feature #25: Item Library — organizer-owned items across sales
   libraryId                  String? // Links to future LibraryItem table; for now just namespace

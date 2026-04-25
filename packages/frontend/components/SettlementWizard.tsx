@@ -80,12 +80,14 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
   });
 
   // Auto-populate payout amount when advancing to Payout tab (step 3)
+  // Also sync payout amount to Receipt tab display
   React.useEffect(() => {
-    if (step === 3 && settlement && !payoutAmount && !settlement.clientPayout) {
-      // Set payout amount to the calculated netProceeds from Commission tab
-      setPayoutAmount(settlement.netProceeds ?? 0);
+    if (step === 3 && settlement && !settlement.clientPayout) {
+      // Always sync the current netProceeds to payoutAmount for display
+      const calculatedPayout = settlement.netProceeds ?? settlement.totalRevenue - settlement.totalExpenses ?? 0;
+      setPayoutAmount(calculatedPayout);
     }
-  }, [step, settlement, payoutAmount]);
+  }, [step, settlement]);
 
   const closeMutation = useMutation({
     mutationFn: () =>
@@ -293,13 +295,21 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
             <div className="flex gap-2">
               <button
                 onClick={async () => {
+                  const button = document.activeElement as HTMLButtonElement;
+                  const originalText = button?.textContent || 'Download Receipt';
                   try {
+                    if (button) button.disabled = true;
+                    if (button) button.textContent = 'Downloading...';
+
                     const url = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/sales/${saleId}/settlement/receipt`;
                     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
                     const response = await fetch(url, {
                       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                     });
-                    if (!response.ok) throw new Error('Failed to download receipt');
+                    if (!response.ok) {
+                      const errorText = await response.text();
+                      throw new Error(`HTTP ${response.status}: ${errorText}`);
+                    }
                     const blob = await response.blob();
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
@@ -309,12 +319,18 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
                     link.click();
                     document.body.removeChild(link);
                     window.URL.revokeObjectURL(downloadUrl);
+                    showToast('Receipt downloaded successfully', 'success');
                   } catch (error) {
                     console.error('Download failed:', error);
                     showToast('Failed to download receipt', 'error');
+                  } finally {
+                    if (button) {
+                      button.disabled = false;
+                      button.textContent = originalText;
+                    }
                   }
                 }}
-                className="flex-1 text-center py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors text-sm"
+                className="flex-1 text-center py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors text-sm disabled:opacity-50"
               >
                 Download Receipt
               </button>

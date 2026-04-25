@@ -21,7 +21,7 @@ const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-2025100
 export interface AITagResult {
   title: string;
   description: string;
-  category: string;
+  category?: string; // Task #339: Optional if confidence < 0.6
   condition: string;
   suggestedPrice: number;
   tags: string[];
@@ -29,6 +29,7 @@ export interface AITagResult {
   suggestedTags?: string[]; // Sprint 1: Curated tags suggested by Haiku from Vision labels
   suggestedConditionGrade?: string; // #64: AI-suggested condition grade (S|A|B|C|D)
   photoOrderIndices?: number[]; // Enhancement 2: Best-photo-first sorting — reordered photo indices by Vision quality
+  brand?: string; // Task #339: Optional if confidence < 0.6
 }
 
 /** Photo with its computed quality score for best-photo-first sorting */
@@ -224,6 +225,12 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
       const fieldCount = [parsed.title, parsed.description, parsed.category, parsed.condition, parsed.suggestedPrice]
         .filter(f => f != null && f !== '').length;
       parsed.confidence = 0.4 + (fieldCount / 5) * 0.4; // 0.4–0.8 range based on completeness
+    }
+    // Task #339: Low-confidence refuse-to-fill for brand + category
+    // If confidence < 0.6, clear brand and category to prevent mislabeling
+    if (parsed.confidence < 0.6) {
+      parsed.category = undefined;
+      parsed.brand = undefined;
     }
     return parsed;
   } catch (error: any) {
@@ -777,6 +784,12 @@ Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0
       const fieldCount = [parsed.title, parsed.description, parsed.category, parsed.condition, parsed.suggestedPrice]
         .filter(f => f != null && f !== '').length;
       parsed.confidence = 0.4 + (fieldCount / 5) * 0.4; // 0.4–0.8 range based on completeness
+    }
+    // Task #339: Low-confidence refuse-to-fill for brand + category
+    // If confidence < 0.6, clear brand and category to prevent mislabeling
+    if (parsed.confidence < 0.6) {
+      parsed.category = undefined;
+      parsed.brand = undefined;
     }
 
     return parsed;
