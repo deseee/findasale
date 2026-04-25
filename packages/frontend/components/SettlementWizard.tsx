@@ -244,7 +244,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
                 <span className="text-gray-900 dark:text-white">${(settlement?.totalRevenue ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Platform Fee ({Math.round(settlement?.commissionRate ?? organizer?.commissionRate ?? 0.1)}%)</span>
+                <span className="text-gray-600 dark:text-gray-400">Organizer Commission ({Math.round(settlement?.commissionRate ?? organizer?.commissionRate ?? 0)}%)</span>
                 <span className="text-blue-600 dark:text-blue-400">-${(settlement?.platformFeeAmount ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
@@ -304,7 +304,7 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
                     link.href = downloadUrl;
-                    link.download = `settlement-receipt-${saleId}.json`;
+                    link.download = `settlement-receipt-${saleId}.pdf`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
