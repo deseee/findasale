@@ -43,16 +43,16 @@ Only 3 vars needed — Apify is gone entirely:
 | `KEEPA_API_KEY` | keepa.io → API Keys | Paid (optional) | Amazon price history — engine works without it |
 | `EBTH_WORKER_URL` | Your CF Worker URL (see below) | Free | EBTH estate sale comps via Cloudflare proxy |
 
-### 3. Deploy EBTH Cloudflare Worker (one-time, 10 minutes, free)
+### 3. Add one Railway env var to activate EBTH
 
-EBTH scraping routes through a Cloudflare Worker so EBTH sees Cloudflare's IPs, not Railway's.
+The EBTH scraping proxy is a Vercel API route (`/api/proxy/ebth`) — already in the codebase, deploys with the next push. EBTH sees Vercel's IPs, not Railway's. No new accounts needed.
 
-1. Go to [workers.cloudflare.com](https://workers.cloudflare.com) → create free account
-2. Create new Worker → paste content from `packages/backend/src/services/pricingEngine/workers/ebth-proxy.worker.js`
-3. Deploy → copy the URL (e.g. `https://ebth-proxy.your-name.workers.dev`)
-4. Add to Railway: `EBTH_WORKER_URL=https://ebth-proxy.your-name.workers.dev`
+After pushing, add to Railway → backend → Variables:
+```
+EBTH_WORKER_URL=https://finda.sale/api/proxy/ebth
+```
 
-Google Trends works automatically — no key, no setup, already live in the code.
+That's it. Google Trends works automatically — no key, no setup.
 
 ---
 

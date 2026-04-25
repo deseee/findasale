@@ -765,7 +765,7 @@ vintage_camera_leica:   hints="leica,leicaflex,elmarit,summicron,leitz wetzlar",
 
 6. **Google Trends** — Use `google-trends-api` npm package (free, no key). Already implemented in signals.ts.
 
-7. **EBTH scraping** — Cloudflare Workers proxy (free tier). Railway calls our own CF Worker; EBTH sees Cloudflare's distributed edge IPs, not our Railway IP. Worker script at `packages/backend/src/services/pricingEngine/workers/ebth-proxy.worker.js`.
+7. **EBTH scraping** — Vercel API route proxy (`/api/proxy/ebth`). Railway calls `https://finda.sale/api/proxy/ebth?q=...`; Vercel's servers make the request to EBTH. EBTH sees Vercel's IPs, not Railway's. No new accounts — uses existing Vercel deployment. Set `EBTH_WORKER_URL=https://finda.sale/api/proxy/ebth` in Railway.
 
 8. **No Apify dependency** — Apify removed entirely. All sources use free APIs, static tables, or CF Worker-proxied scraping.
 
