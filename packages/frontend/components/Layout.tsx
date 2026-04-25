@@ -57,6 +57,9 @@ import {
   Smartphone,
   CheckCircle,
   Wifi,
+  CreditCard,
+  TrendingDown,
+  ShoppingBag,
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
@@ -406,6 +409,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <ShieldAlert size={16} className="text-purple-400" />
                   <span>Fraud Signals</span>
                 </Link>
+                <Link href="/organizer/markdown-cycles" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Automatic time-based price reductions — PRO">
+                  <TrendingDown size={16} className="text-purple-400" />
+                  <span>Auto Markdown</span>
+                </Link>
               </>
             )}
             <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals — also available as à la carte">
@@ -445,6 +452,14 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <Link href="/organizer/locations" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-location inventory view — TEAMS">
                   <MapPin size={16} className="text-teal-500" />
                   <span>Locations</span>
+                </Link>
+                <Link href="/organizer/shopify" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Cross-list items to your Shopify store — TEAMS">
+                  <ShoppingBag size={16} className="text-teal-500" />
+                  <span>Shopify</span>
+                </Link>
+                <Link href="/organizer/stripe-connect" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="ACH bank transfers for consignors — TEAMS">
+                  <CreditCard size={16} className="text-teal-500" />
+                  <span>ACH Payouts</span>
                 </Link>
               </>
             )}

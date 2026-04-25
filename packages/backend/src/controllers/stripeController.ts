@@ -23,6 +23,7 @@ import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98:
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
+import { markShopifyItemSold } from '../services/shopifyService'; // Feature #XXX: Shopify Cross-Listing
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
@@ -694,6 +695,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     where: { id: item.id },
                     data: { status: 'SOLD' },
                   });
+
+                  // Fire-and-forget: mark sold on Shopify if listed there
+                  markShopifyItemSold(item.id).catch(err =>
+                    console.error('[Shopify] Failed to mark item sold:', err)
+                  );
 
                   // Fire-and-forget: end eBay listing if item was pushed there
                   endEbayListingIfExists(item.id).catch(err =>

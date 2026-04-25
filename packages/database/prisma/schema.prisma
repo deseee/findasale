@@ -272,6 +272,8 @@ model Organizer {
   sales                   Sale[]
   saleTemplates           SaleTemplate[]
   stripeConnectId         String?
+  stripeConnectAccountId  String? // ACH Consignor Payouts — platform account ID for transfers
+  stripeConnectEnabled    Boolean                @default(false) // ACH Consignor Payouts — whether feature is enabled
   // Phase 17: Reputation
   reputationTier          String                 @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
   avgRating               Float?
@@ -355,6 +357,11 @@ model Organizer {
   // Feature #XXX: Automatic Markdown Cycles (PRO Tier) — time-based price reductions
   markdownCycles          MarkdownCycle[]
   priceOverrideLogs       PriceOverrideLog[]
+  // Feature #XXX: Shopify Cross-Listing (TEAMS tier)
+  shopifyAccessToken      String?
+  shopifyShopDomain       String? // e.g. "myshop.myshopify.com"
+  shopifyEnabled          Boolean                @default(false)
+  shopifyListings         ShopifyListing[]
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 }
@@ -857,6 +864,8 @@ model Item {
   // Feature #244 Phase 2: eBay listing tracking
   ebayListingId              String? // eBay listing ID after successful publish; used for Phase 3 sync
   ebayOfferId                String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
+  // Feature #XXX: Shopify Cross-Listing
+  shopifyListing           ShopifyListing?
   ebayCategoryId             String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
   ebayCategoryName           String? // eBay leaf category name (e.g. "Guitar Amplifiers") — user-friendly display name for eBay category selected
   ebayNeedsReview            Boolean                @default(false) // Set true when all category suggestions fail 25005 — organizer must set category manually
@@ -1218,6 +1227,25 @@ model Follow {
 }
 
 // Phase 21: Item reservation/hold system
+// Feature #XXX: Shopify Cross-Listing — stores Shopify product mapping
+model ShopifyListing {
+  id               String   @id @default(cuid())
+  itemId           String   @unique
+  item             Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  organizerId      String
+  organizer        Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  shopifyProductId String
+  shopifyVariantId String?
+  syncedAt         DateTime @default(now())
+  status           String   @default("ACTIVE") // ACTIVE, SOLD, REMOVED
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([itemId])
+  @@index([organizerId])
+  @@index([status])
+}
+
 model ItemReservation {
   id                  String       @id @default(cuid())
   itemId              String       @unique // one active hold per item
@@ -3978,6 +4006,8 @@ model Consignor {
   commissionRate Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
   notes          String?            @db.Text
   portalToken    String             @unique @default(cuid()) // capability URL token — permanent for MVP
+  stripeAccountId String?            // Consignor Stripe Express account for ACH payouts
+  stripeOnboarded Boolean            @default(false) // Whether consignor completed Stripe onboarding
   items          Item[]             @relation("ConsignorItems")
   payouts        ConsignorPayout[]
   createdAt      DateTime           @default(now())
@@ -3997,7 +4027,8 @@ model ConsignorPayout {
   totalSales       Decimal    @db.Decimal(10, 2) // sum of sold item prices for this consignor
   commissionAmount Decimal    @db.Decimal(10, 2) // totalSales * commissionRate / 100
   netPayout        Decimal    @db.Decimal(10, 2) // = commissionAmount (extensible for future deductions)
-  method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER"
+  method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER" | "ACH"
+  stripeTransferId String?    // Stripe transfer ID for ACH payouts
   paidAt           DateTime?
   notes            String?
   createdAt        DateTime   @default(now())
