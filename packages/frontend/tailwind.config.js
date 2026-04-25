@@ -23,14 +23,14 @@ module.exports = {
           900: '#1A1A1A',  // primary text (17:1 contrast on warm-100)
         },
         amber: {
-          DEFAULT: '#D97706',  // accent / CTA
+          DEFAULT: '#F97316',  // accent / CTA
           50: '#FFFBEB',
           100: '#FEF3C7',
           200: '#FDE68A',
           300: '#FCD34D',
           400: '#FBBF24',
           500: '#F59E0B',
-          600: '#D97706',  // primary accent
+          600: '#F97316',  // primary accent
           700: '#B45309',
           800: '#92400E',
           900: '#78350F',

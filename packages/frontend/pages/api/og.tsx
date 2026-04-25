@@ -44,7 +44,7 @@ export default async function handler(req: NextRequest) {
                 right: 30,
                 fontSize: 24,
                 fontWeight: 'bold',
-                color: '#D97706',
+                color: '#F97316',
               }}
             >
               FindA.Sale
@@ -87,7 +87,7 @@ export default async function handler(req: NextRequest) {
                     style={{
                       fontSize: 44,
                       fontWeight: 'bold',
-                      color: '#D97706',
+                      color: '#F97316',
                     }}
                   >
                     {price}
@@ -115,7 +115,7 @@ export default async function handler(req: NextRequest) {
                 style={{
                   width: '120px',
                   height: '2px',
-                  backgroundColor: '#D97706',
+                  backgroundColor: '#F97316',
                   marginTop: '20px',
                 }}
               />
@@ -166,7 +166,7 @@ export default async function handler(req: NextRequest) {
               right: 30,
               fontSize: 28,
               fontWeight: 'bold',
-              color: '#D97706',
+              color: '#F97316',
             }}
           >
             FindA.Sale
@@ -232,7 +232,7 @@ export default async function handler(req: NextRequest) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  backgroundColor: '#D97706',
+                  backgroundColor: '#F97316',
                   color: '#fef3c7',
                   padding: '10px 20px',
                   borderRadius: '8px',
@@ -249,7 +249,7 @@ export default async function handler(req: NextRequest) {
               style={{
                 width: '120px',
                 height: '2px',
-                backgroundColor: '#D97706',
+                backgroundColor: '#F97316',
                 marginTop: '8px',
               }}
             />
