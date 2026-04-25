@@ -695,7 +695,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </div>
 
             {/* Desktop nav */}
-            <nav className="hidden lg:flex items-center space-x-4" aria-label="Main navigation">
+            <nav className="hidden lg:flex items-center space-x-3 mx-6" aria-label="Main navigation">
               {/* Static nav links for all users (includes discovery pages and utilities) */}
               {staticNavLinks.map(({ href, label }) => (
                 <Link key={href} href={href} className="text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400">{label}</Link>
@@ -783,7 +783,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </nav>
 
             {/* Desktop right-side nav (Saved, Messages, Profile + Auth) */}
-            <div className="hidden lg:flex items-center space-x-4">
+            <div className="hidden lg:flex items-center space-x-3">
               {user ? (
                 <>
                   <div className="relative">
