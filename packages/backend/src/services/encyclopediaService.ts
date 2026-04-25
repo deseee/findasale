@@ -94,16 +94,27 @@ export async function createEncyclopediaStubsIfNew(stubs: NewEncyclopediaStub[])
  * List Encyclopedia entries with pagination and filtering.
  */
 export async function listEntries(
-  page: number = 1,
-  limit: number = 20,
-  category?: string
+  params: { page?: number; limit?: number; category?: string; search?: string; sort?: 'recent' | 'popular' | 'trending' },
+  _userId?: string
 ): Promise<{ entries: any[]; total: number }> {
+  const { page = 1, limit = 20, category, search, sort = 'recent' } = params;
   const skip = (page - 1) * limit;
 
   const where: any = { status: 'PUBLISHED' };
-  if (category) {
+  if (category && category !== 'All') {
     where.category = { contains: category, mode: 'insensitive' };
   }
+  if (search) {
+    where.OR = [
+      { title: { contains: search, mode: 'insensitive' } },
+      { content: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+
+  const orderBy =
+    sort === 'popular' ? { helpfulVotes: { _count: 'desc' as const } } :
+    sort === 'trending' ? { updatedAt: 'desc' as const } :
+    { createdAt: 'desc' as const };
 
   const [entries, total] = await Promise.all([
     prisma.encyclopediaEntry.findMany({
@@ -111,7 +122,7 @@ export async function listEntries(
       skip,
       take: limit,
       include: { author: { select: { name: true } } },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
     }),
     prisma.encyclopediaEntry.count({ where }),
   ]);
