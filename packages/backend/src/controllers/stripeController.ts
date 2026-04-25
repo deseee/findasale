@@ -23,6 +23,7 @@ import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98:
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
+import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
 
@@ -1190,7 +1191,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
             try {
               const saleData = await prisma.sale.findUnique({
                 where: { id: soldItem.saleId! },
-                include: { organizer: { include: { user: { select: { email: true, name: true } } } } },
+                include: {
+                  organizer: { include: { user: { select: { email: true, name: true } } } },
+                  items: { where: { id: paymentIntent.metadata.itemId }, select: { consignorId: true } }
+                },
               });
               if (saleData?.organizer?.user) {
                 setImmediate(() => {
@@ -1203,6 +1207,32 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     saleId: soldItem.saleId!,
                   }).catch(err => console.warn('[alert] Failed to send item sold email:', err));
                 });
+              }
+
+              // Feature #309: Send email to consignor if item has consignor
+              const soldItemWithConsignor = saleData?.items?.[0];
+              if (soldItemWithConsignor?.consignorId) {
+                try {
+                  const consignor = await prisma.consignor.findUnique({
+                    where: { id: soldItemWithConsignor.consignorId },
+                  });
+                  if (consignor?.email) {
+                    const consignorPayout = soldItem.price ? (soldItem.price * (100 - Number(consignor.commissionRate))) / 100 : 0;
+                    setImmediate(() => {
+                      sendConsignorItemSold({
+                        consignorName: consignor.name,
+                        consignorEmail: consignor.email,
+                        itemName: soldItem.title,
+                        itemPrice: soldItem.price || 0,
+                        consignorPayout,
+                        organizerName: saleData.organizer.user.name,
+                        saleId: soldItem.saleId!,
+                      }).catch(err => console.warn('[consignor-email] Failed to send item sold email:', err));
+                    });
+                  }
+                } catch (err) {
+                  console.warn('[consignor-email] Failed to fetch consignor data:', err);
+                }
               }
             } catch (err) {
               console.warn('[alert] Failed to fetch sale for item sold alert:', err);

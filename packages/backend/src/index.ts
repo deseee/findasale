@@ -166,6 +166,7 @@ import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay T
 import luckyRollRoutes from './routes/lucky-roll';             // Phase 2b: Lucky Roll — weekly XP gacha
 import crewsRoutes from './routes/crews';                       // Phase 2a: Explorer's Guild — Crew Creation
 import discountRuleRoutes from './routes/discountRules';        // Feature #310: Color-tagged Discount Rules
+import markdownCycleRoutes from './routes/markdownCycles';       // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
 import locationRoutes from './routes/locations';                 // #311: Multi-Location Inventory View
 import qrScannerRoutes from './routes/qrScanner';                // QR Scanner Phase 2: scan analytics
 import { authenticate } from './middleware/auth';
@@ -199,6 +200,7 @@ import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // A
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
+import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
@@ -206,6 +208,7 @@ import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSet
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature #XXX: Retail Mode auto-renewal
+import { scheduleConsignorExpiryNoticeCron } from './jobs/consignorExpiryNoticeJob'; // Feature #309: Consignor expiry notices
 import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature #XXX: Referral reputation score recomputation
 import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
 import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Phase 1: Backfill PriceBenchmark from Items with aiSuggestedPrice
@@ -520,6 +523,7 @@ app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Ph
 app.use('/api/lucky-roll', luckyRollRoutes);                               // Phase 2b: Lucky Roll — weekly XP gacha
 app.use('/api/crews', crewsRoutes);                                        // Phase 2a: Explorer's Guild — Crew Creation
 app.use('/api/discount-rules', discountRuleRoutes);                         // Feature #310: Color-tagged Discount Rules
+app.use('/api/markdown-cycles', markdownCycleRoutes);                       // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
 app.use('/api/locations', locationRoutes);                                   // #311: Multi-Location Inventory View
 app.use('/api/qr-scanner', qrScannerRoutes);                                 // QR Scanner Phase 2: scan analytics
 
@@ -573,12 +577,16 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #91: Register auto-markdown cron
   scheduleMarkdownCron();
+  scheduleMarkdownCycleCron();
 
   // Feature #XXX: Register retail auto-renewal cron (daily at 1 AM UTC)
   scheduleRetailAutoRenewCron();
 
   // Feature #XXX: Register referral reputation score recomputation cron (daily at 2 AM UTC)
   scheduleReputationScoreCron();
+
+  // Feature #309: Register consignor expiry notice cron (daily at 2 AM UTC)
+  scheduleConsignorExpiryNoticeCron();
 
   // Feature #244 Phase 3: Register eBay sold sync cron (every 15 minutes — polling fallback)
   startEbaySoldSyncCron();
