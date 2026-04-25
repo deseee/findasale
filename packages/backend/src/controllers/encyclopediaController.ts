@@ -42,7 +42,7 @@ export const getEntryBySlug = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Entry not found' });
     }
 
-    res.json(entry);
+    res.json({ entry });
   } catch (error) {
     console.error('[Encyclopedia] Error fetching entry:', error);
     res.status(500).json({ message: 'Failed to fetch entry' });
