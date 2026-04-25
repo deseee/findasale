@@ -820,7 +820,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               )}
             </div>
 
-            {/* Mobile: notification bell (if logged in) + theme toggle + hamburger */}
+            {/* Mobile: notification bell (if logged in) + QR scanner + theme toggle + hamburger */}
             <div className="lg:hidden flex items-center gap-1">
               {isClient && user && (
                 <>
@@ -835,6 +835,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     )}
                   </div>
                   <NotificationBell />
+                  {!['/login', '/register', '/forgot-password'].includes(router.pathname) && !router.pathname.startsWith('/organizer') && (
+                    <QRScannerButton variant="compact" />
+                  )}
                 </>
               )}
               <button

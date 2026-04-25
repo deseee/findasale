@@ -4,7 +4,6 @@ import { useRouter } from 'next/router';
 import { Calendar, TrendingUp, Zap, Heart } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import useUnreadMessages from '../hooks/useUnreadMessages';
-import QRScannerButton from './qr-scanner/QRScannerButton';
 
 /**
  * BottomTabNav — Phase 25 mobile bottom navigation
@@ -119,19 +118,12 @@ const BottomTabNav = () => {
     },
   ];
 
-  // QRScannerButton rendered separately — not in tabs array
-  // Current 5 tabs already fill mobile space; adding scanner as 6th tab would crowd UI
-  // Scanner mounts directly in the nav flex row below instead
-
   const isActive = (tab: TabExtended) => {
     return tab.matchPaths.some((path) => {
       if (path === '/') return router.pathname === '/';
       return router.pathname.startsWith(path);
     });
   };
-
-  // Check if QR scanner should be shown (not on auth pages or organizer routes)
-  const shouldShowScanner = !['/login', '/register', '/forgot-password'].includes(router.pathname) && !router.pathname.startsWith('/organizer');
 
   return (
     <>
@@ -193,13 +185,6 @@ const BottomTabNav = () => {
               </Link>
             );
           })}
-
-          {/* QR Scanner button — Note: BottomTabNav currently has 5 tabs at mobile viewport capacity.
-              The scanner is mounted here conditionally, but 6 items in the nav bar will slightly compress labels.
-              Patrick may want to replace one existing tab with the scanner instead. */}
-          {shouldShowScanner && (
-            <QRScannerButton variant="tab" />
-          )}
         </div>
       </nav>
 
