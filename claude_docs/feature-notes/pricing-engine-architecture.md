@@ -216,6 +216,91 @@ export interface RawComp {
 
 ---
 
+## Resilience Design
+
+### Graceful Adapter Degradation
+The orchestrator wraps every adapter call in an individual try/catch. A failed adapter is dropped silently and the remaining sources proceed. "Failed" means: threw an exception, returned an empty array, OR timed out. The orchestrator logs the error and increments `PricingSourceConfig.consecutiveFailures`. If all Tier 1 adapters fail, it falls through to Tier 2. If all Tier 2 adapters fail, it falls through to Tier 3 (Salvation Army table — static, always available). The response will still return a valid `PricingResult` with confidence `FLOOR` rather than a 503, except in the pathological case where the DB itself is unavailable.
+
+```typescript
+// orchestrator.ts — parallel fetch with per-adapter error isolation
+async function fetchFromAdapters(adapters: PricingAdapter[], query: PricingQuery): Promise<FetchResult[]> {
+  const results = await Promise.allSettled(
+    adapters.map(async (adapter) => {
+      const comps = await withTimeout(adapter.fetchComps(query), ADAPTER_TIMEOUT_MS);
+      return { sourceId: adapter.sourceId, comps };
+    })
+  );
+
+  const successful: FetchResult[] = [];
+  for (const [i, result] of results.entries()) {
+    if (result.status === 'fulfilled') {
+      successful.push(result.value);
+      // Reset failure counter on success
+      void resetFailureCounter(adapters[i].sourceId);
+    } else {
+      // Log + increment circuit breaker
+      void recordAdapterFailure(adapters[i].sourceId, result.reason);
+    }
+  }
+  return successful;
+}
+```
+
+### Per-Adapter Timeout
+Every adapter call is wrapped in a 5-second timeout. If the adapter doesn't respond in time, the promise rejects with a `TimeoutError` and is treated as a failure (increments `consecutiveFailures`). The timeout is configurable via env var `PRICING_ADAPTER_TIMEOUT_MS` (default: 5000). Apify-based adapters (EBTH, Google Trends) get a separate `PRICING_APIFY_TIMEOUT_MS` (default: 12000) since scraper warm-up is slower.
+
+```typescript
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`TimeoutError: adapter exceeded ${ms}ms`)), ms)
+    ),
+  ]);
+}
+```
+
+### Soft Circuit Breaker
+When `consecutiveFailures >= 5`, the source is automatically disabled: `enabled = false`, `disabledAt = now()`, `lastFailureAt = now()`. A Railway-logged warning fires (not a crash — just a `console.warn` with sourceId and failure reason). The registry skips disabled sources, so no further calls are made until manually re-enabled in the `PricingSourceConfig` DB row.
+
+Auto-reset: A daily health-check cron calls `adapter.isAvailable()` for all disabled sources. If it returns `true`, the circuit resets: `enabled = true`, `consecutiveFailures = 0`, `disabledAt = null`.
+
+```typescript
+// circuit-breaker.ts
+const CIRCUIT_TRIP_THRESHOLD = 5;
+
+async function recordAdapterFailure(sourceId: string, error: unknown): Promise<void> {
+  const config = await prisma.pricingSourceConfig.update({
+    where: { sourceId },
+    data: {
+      consecutiveFailures: { increment: 1 },
+      lastFailureAt: new Date(),
+    },
+  });
+  console.error(`[pricing] adapter ${sourceId} failed:`, error);
+
+  if (config.consecutiveFailures >= CIRCUIT_TRIP_THRESHOLD) {
+    await prisma.pricingSourceConfig.update({
+      where: { sourceId },
+      data: { enabled: false, disabledAt: new Date() },
+    });
+    console.warn(`[pricing] CIRCUIT TRIPPED: ${sourceId} disabled after ${CIRCUIT_TRIP_THRESHOLD} consecutive failures. Re-enable via PricingSourceConfig.`);
+  }
+}
+
+async function resetFailureCounter(sourceId: string): Promise<void> {
+  await prisma.pricingSourceConfig.update({
+    where: { sourceId },
+    data: { consecutiveFailures: 0 },
+  });
+}
+```
+
+### Quota Guard
+Before calling a paid adapter, check `apiUsedToday < apiQuotaDaily` (if quota is set). If at limit, skip the adapter for this request — do not trip the circuit breaker. Reset `apiUsedToday = 0` daily via cron.
+
+---
+
 ## Weighting Model (weighting.ts)
 
 ```typescript
@@ -520,12 +605,14 @@ estimatePrice(item):
 
 ---
 
-### Phase 2: Signal Layer (S576)
-- Google Trends API integration (free) — query by category/brand, cache 24h in TrendSignal
+### Phase 2: Signal Layer + UI Surface (S576)
+- ✅ Google Trends — already implemented in signals.ts (google-trends-api npm, no key)
 - eBay momentum: compute 7/30/90-day moving averages from comp cache, detect acceleration
 - Expand SleeperPattern seed to 50+ patterns
 - Daily cron: refresh trend signals for top 50 categories
 - Weekly cron: batch sleeper detection on newly listed items
+- **UI: Sleeper alert banner** — amber inline notification on edit-item and review & publish when SleeperPattern match detected (locked decision Q2)
+- **UI: Brand premium banner** — same amber inline notification on edit-item and review & publish when BrandException raises estimate (locked decision Q3)
 
 ---
 
@@ -664,28 +751,36 @@ vintage_camera_leica:   hints="leica,leicaflex,elmarit,summicron,leitz wetzlar",
 
 ---
 
-## Open Questions for Patrick
+## Decisions Locked (S574)
 
-1. **ASIN resolution**: When an organizer uploads a photo and the AI identifies "KitchenAid stand mixer," should the system auto-search Amazon for the ASIN, or require the organizer to confirm the model? (affects Keepa integration depth)
+1. **ASIN resolution** — Silent. Keepa runs in the background with no organizer prompt. If ASIN is found and price returned, it feeds the weighted estimate without surfacing the Amazon match to the user.
 
-2. **Sleeper confidence threshold**: When a sleeper pattern is detected, should we show the organizer the flag proactively ("this may be worth more — check here") or just quietly use the higher estimate? Recommend: show it.
+2. **Sleeper alert display** — Surface it. Both edit-item page and the review & publish flow show an amber notification when a sleeper pattern is detected. Less noise than a modal — an inline banner/badge with "This item may be worth more than the suggested price" and a link to check. Phase 2 UI work.
 
-3. **Cost ceiling for Phase 3**: B-Stock API is $500-2k/month. At what monthly revenue level should we flip that switch? Suggest: $5k MRR.
+3. **Brand premium display** — Same as sleeper. Amber inline notification on edit-item and review & publish when a BrandException match raises the estimate. Not a popup, just a banner.
 
-4. **Discogs for non-vinyl**: Discogs also has pricing for some collectibles. Should the Discogs adapter be limited to vinyl only, or expanded?
+4. **B-Stock activation threshold** — $5k MRR. Flip `enabled = true` in PricingSourceConfig for 'bstock' when we hit $5k MRR.
 
-5. **Google Trends access**: Google Trends doesn't have an official public API — it requires a scraping approach (via `pytrends` or SerpAPI). Confirm this is acceptable before Phase 2 dispatch.
+5. **Discogs scope** — All audio formats. Vinyl, CDs, cassettes, tapes all covered. Discogs API is free, so no reason to limit.
+
+6. **Google Trends** — Use `google-trends-api` npm package (free, no key). Already implemented in signals.ts.
+
+7. **EBTH scraping** — Cloudflare Workers proxy (free tier). Railway calls our own CF Worker; EBTH sees Cloudflare's distributed edge IPs, not our Railway IP. Worker script at `packages/backend/src/services/pricingEngine/workers/ebth-proxy.worker.js`.
+
+8. **No Apify dependency** — Apify removed entirely. All sources use free APIs, static tables, or CF Worker-proxied scraping.
 
 ---
 
 ## Environment Variables Required (Railway)
 
 ```
-KEEPA_API_KEY=         # keepa.com — sign up at keepa.com/api
-APIFY_API_KEY=         # apify.com — existing if already using for EBTH
+KEEPA_API_KEY=         # keepa.com — sign up at keepa.com/api (paid, optional — engine works without it)
 DISCOGS_TOKEN=         # discogs.com/settings/developers — free personal access token
+EBTH_WORKER_URL=       # your CF Worker URL after deploying ebth-proxy.worker.js (free)
 # GSA Auctions API: no key required (public REST API)
 # Salvation Army: no API (static table, seeded in DB)
+# Google Trends: no key required (google-trends-api npm package, free)
+# APIFY_API_KEY: REMOVED — no longer needed
 ```
 
 ---

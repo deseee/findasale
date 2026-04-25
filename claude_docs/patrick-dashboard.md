@@ -33,29 +33,26 @@ git commit -m "S574: fix schema/Layout corruptions + multi-source pricing engine
 .\push.ps1
 ```
 
-### 2. Add Railway env vars (needed before Pricing Engine Phase 1 dispatch)
+### 2. Add Railway env vars
 
-In Railway → backend service → Variables:
+Only 3 vars needed — Apify is gone entirely:
 
-| Variable | Source | Notes |
-|---|---|---|
-| `KEEPA_API_KEY` | keepa.io → API Keys | Amazon price history |
-| `APIFY_API_KEY` | apify.com → Settings → API | EBTH scraping + Google Trends |
-| `DISCOGS_TOKEN` | discogs.com → Settings → Developers | Vinyl comps |
+| Variable | Source | Cost | Notes |
+|---|---|---|---|
+| `DISCOGS_TOKEN` | discogs.com → Settings → Developers | Free | Vinyl/CD/cassette comps |
+| `KEEPA_API_KEY` | keepa.io → API Keys | Paid (optional) | Amazon price history — engine works without it |
+| `EBTH_WORKER_URL` | Your CF Worker URL (see below) | Free | EBTH estate sale comps via Cloudflare proxy |
 
-### 3. Answer 5 open questions before Dev dispatch
+### 3. Deploy EBTH Cloudflare Worker (one-time, 10 minutes, free)
 
-From the pricing engine spec:
+EBTH scraping routes through a Cloudflare Worker so EBTH sees Cloudflare's IPs, not Railway's.
 
-| # | Question | Default if no answer |
-|---|---|---|
-| 1 | **ASIN resolution UX** — show organizer "found matching Amazon product" confirmation, or silent? | Silent |
-| 2 | **Sleeper flag display** — amber "Sleeper Alert" badge on item edit page, or just affects price silently? | Silent |
-| 3 | **B-Stock cost ceiling** — enable at $5k MRR? Higher? Lower? | $5k MRR |
-| 4 | **Discogs scope** — vinyl only, or include CDs/cassettes from day one? | Vinyl only |
-| 5 | **Google Trends scraping** — comfortable using Apify ($0.30–$0.50/day) until official API affordable? | Apify OK |
+1. Go to [workers.cloudflare.com](https://workers.cloudflare.com) → create free account
+2. Create new Worker → paste content from `packages/backend/src/services/pricingEngine/workers/ebth-proxy.worker.js`
+3. Deploy → copy the URL (e.g. `https://ebth-proxy.your-name.workers.dev`)
+4. Add to Railway: `EBTH_WORKER_URL=https://ebth-proxy.your-name.workers.dev`
 
-Say "dispatch pricing engine dev" once vars are added and you've reviewed the spec.
+Google Trends works automatically — no key, no setup, already live in the code.
 
 ---
 
