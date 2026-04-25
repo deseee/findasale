@@ -52,6 +52,7 @@ const ShopperDashboard = () => {
   const [referralLink, setReferralLink] = useState<string | null>(null);
   const [shopperQRCodeDataUrl, setShopperQRCodeDataUrl] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(true);
+  const [showQrModal, setShowQrModal] = useState(false);
   const [hasSeenGuildOnboarding, setHasSeenGuildOnboarding] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
 
@@ -378,6 +379,47 @@ const ShopperDashboard = () => {
             </div>
           )}
 
+          {/* QR Modal */}
+          {showQrModal && shopperQRCodeDataUrl && (
+            <div
+              className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4"
+              onClick={() => setShowQrModal(false)}
+            >
+              <div
+                className="bg-gray-900 dark:bg-gray-950 rounded-lg p-6 max-w-sm w-full shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-white">Your QR Code</h2>
+                  <button
+                    onClick={() => setShowQrModal(false)}
+                    className="p-1 rounded-md text-gray-400 hover:text-white transition-colors"
+                    aria-label="Close QR modal"
+                  >
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex justify-center mb-6">
+                  <img
+                    src={shopperQRCodeDataUrl}
+                    alt="Your personal QR code for checkout"
+                    className="w-56 h-56 border-4 border-amber-600 rounded-lg"
+                  />
+                </div>
+                <p className="text-center text-sm text-gray-300">
+                  Show this to the organizer at checkout
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* 1b. Explorer's Guild Onboarding Card (for INITIATE users) */}
           {xpProfile && xpProfile.explorerRank === 'INITIATE' && !hasSeenGuildOnboarding && (
             <ExplorerGuildOnboardingCard
@@ -386,7 +428,7 @@ const ShopperDashboard = () => {
           )}
 
           {/* 2. Action buttons row (Browse Sales, Collections, Purchase History, Treasure Trails, My QR) */}
-          <ActionBar className="mb-8" onQrClick={() => setQrOpen(!qrOpen)} />
+          <ActionBar className="mb-8" onQrClick={() => setShowQrModal(true)} />
 
           {/* 4. Hunt Pass CTA strip (keep it slim) */}
           {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' && (
