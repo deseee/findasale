@@ -102,6 +102,7 @@ import viewersRouter from './routes/viewers';           // Feature 34: Hype Mete
 import exportRouter from './routes/export';             // Sprint 2: Export features
 import socialRouter from './routes/social';             // Sprint 2: Social template generator
 import tagRouter from './routes/tags';                  // Sprint 3: Tag-based SEO endpoints
+import pricingRoutes from './routes/pricing';           // Phase S574: Multi-source pricing engine
 import hubRoutes from './routes/hubs';                  // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 import voiceRoutes from './routes/voice';                // Feature #42: Voice-to-tag extraction
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
@@ -197,6 +198,7 @@ import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // A
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
+import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
@@ -410,6 +412,7 @@ app.use('/api/auth', authLimiter, authRoutes); // stricter rate limit on auth
 app.use('/api/auth/passkey', passkeyRoutes); // Feature #19: Passkey/WebAuthn routes (authLimiter already applied via /api/auth mount above)
 app.use('/api/sales', saleRoutes);
 app.use('/api/items', itemRoutes);
+app.use('/api/pricing', pricingRoutes);                 // Phase S574: Multi-source pricing engine
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/stripe', stripeRoutes);
@@ -585,6 +588,10 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   registerEbayNotificationSubscription().catch(err =>
     console.warn('[eBay Notify Setup] Non-fatal startup error:', err.message)
   );
+
+  // Phase S574: Register pricing engine crons (quota reset at 3 AM, recovery at 4 AM UTC)
+  scheduleQuotaResetCron();
+  scheduleCircuitBreakerRecoveryCron();
 
   // Feature #75: Tier grace period finalization cron
   startTierGraceCron();

@@ -2884,6 +2884,147 @@ model ItemCompLookup {
   @@index([itemId])
   @@index([fetchedAt])
   @@index([source])
+
+  // Multi-source pricing result (Phase 1)
+  pricingResultJson   Json?    // Serialized PricingResult for audit trail
+  estimatedPrice      BigInt?  // Final recommended price (cents)
+  priceConfidence     String?  // "HIGH" | "MEDIUM" | "LOW" | "FLOOR"
+  tierUsed            Int?     // which tier (1, 2, 3) was the final price from?
+  sourcesConsulted    String[] // which sources were queried (even if they returned no data)
+
+  // Signal flags
+  isTrending          Boolean  @default(false)
+  trendMultiplier     Float    @default(1.0)
+  isBrandPremium      Boolean  @default(false)
+  brandPremiumName    String?
+  isSleeperDetected   Boolean  @default(false)
+  sleeperCategory     String?
+  isAppreciating      Boolean  @default(false)
+
+  // Metadata
+  depreciationCurveApplied String? // which category curve was used
+  compsFound          Int      @default(0) // how many actual comps were found
+  dataFreshness       DateTime? // last updated
+}
+
+// Multi-Source Pricing Engine — Phase 1
+// Feature flags for all pricing sources
+model PricingSourceConfig {
+  id                  String   @id @default(cuid())
+  sourceId            String   @unique // "ebay", "pricecharting", "ebth", "keepa", "discogs", "gsa", etc.
+  enabled             Boolean  @default(false)
+  tier                Int?     // 1, 2, 3 (not applicable for signal sources)
+  apiKey              String?  // API key if needed
+  apiQuotaDaily       Int?     // Daily API quota limit
+  apiUsedToday        Int      @default(0) // Requests used today
+  lastResetAt         DateTime @default(now()) // When daily quota was last reset
+  costPerCall         Float?   // Cost per API call in USD
+  consecutiveFailures Int      @default(0) // Circuit breaker counter
+  disabledAt          DateTime? // When this source was disabled by circuit breaker
+  lastFailureAt       DateTime? // Timestamp of last failure
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([sourceId])
+  @@index([tier, enabled])
+}
+
+// Brands/patterns that hold or appreciate (not subject to normal depreciation)
+model BrandException {
+  id                  String   @id @default(cuid())
+  brand               String   // "Le Creuset", "Herman Miller", "Griswold", etc.
+  category            String   // "Cookware", "Furniture", "Cast Iron", etc.
+  appreciationMode    String   @default("APPRECIATION") // "APPRECIATION" | "HOLD" | "SLOW_DEPRECIATION"
+  depreciationRate    Float?   // if SLOW_DEPRECIATION: yearly rate (e.g., 0.05 = 5%/year)
+  trendMultiplier     Float    @default(1.0) // base multiplier if trending
+  notes               String?  // Context for why this brand is an exception
+  sources             String[] // Which sources validate this exception
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([brand])
+  @@index([category])
+  @@index([appreciationMode])
+}
+
+// AI-detected collectible patterns in photos that increase value
+model SleeperPattern {
+  id                  String   @id @default(cuid())
+  patternName         String   // "Griswold Markings", "Pyrex Pattern (Gold Leaf)", etc.
+  category            String   // "Cast Iron", "Glassware", "Clothing", "Pottery", etc.
+  indicatorTokens     String[] // AI vision labels that suggest this pattern
+  confirmationPrompt  String   // Claude prompt to confirm pattern
+  priceMultiplier     Float    @default(1.5) // multiply base price by this if detected
+  linkedBrand         String?  // FK to BrandException.brand, if applicable
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([category])
+  @@index([patternName])
+}
+
+// Cached comparable sales from all sources
+model PricingComp {
+  id                  String   @id @default(cuid())
+  itemId              String?  // FK to Item.id; nullable for population via search
+  sourceId            String   // "ebay", "ebth", "keepa", "discogs", etc.
+  externalListingId   String   // ID from the source
+  externalUrl         String?  // Link back to source listing
+  title               String   // Listing title
+  price               BigInt   // in USD cents
+  isSoldPrice         Boolean  @default(true) // true=actual sale; false=asking price
+  saleDate            DateTime // when the item sold or was listed
+  condition           String?  // "USED", "NEW", "REFURBISHED", etc.
+  category            String?  // source's category
+  brand               String?  // if detected
+  confidence          Float    @default(0.5) // 0.0-1.0: confidence this is a true comp
+  sampleSize          Int      @default(1) // how many similar listings this comp is based on
+  comparabilityScore  Float    @default(0.7) // 0.0-1.0: how closely this matches the target item
+  fetchedAt           DateTime @default(now())
+  expireAt            DateTime // 24 hours from fetchedAt
+  createdAt           DateTime @default(now())
+
+  @@index([itemId])
+  @@index([sourceId])
+  @@index([saleDate])
+  @@index([expireAt])
+  @@unique([sourceId, externalListingId])
+}
+
+// Google Trends + eBay momentum signals
+model TrendSignal {
+  id                  String   @id @default(cuid())
+  category            String   // "Furniture", "Electronics", "Clothing", etc.
+  searchTerm          String   // what we're tracking
+  signal              String   // "GOOGLE_TRENDS" | "EBAY_MOMENTUM"
+  trendType           String   // "UP" | "DOWN" | "FLAT" | "SPIKE"
+  trendStrength       Float    // 0.0-1.0 or multiplier (1.1 = 10% price boost)
+  dataPoints          Int      // how many data points this is based on
+  period              String   // "7d", "30d", "90d"
+  fetchedAt           DateTime @default(now())
+  expireAt            DateTime // 7 days from fetchedAt
+  createdAt           DateTime @default(now())
+
+  @@index([category])
+  @@index([signal])
+  @@index([trendType])
+  @@index([expireAt])
+}
+
+// Depreciation curves per category
+model CategoryDepreciation {
+  id                  String   @id @default(cuid())
+  category            String   @unique // "Furniture", "Tools", "Electronics", etc.
+  baseAgeYears        Int      @default(1) // reference age (e.g., 1 year old)
+  baseRetentionRate   Float    @default(0.80) // what % of price is retained after baseAgeYears
+  curve               String   @default("EXPONENTIAL") // "EXPONENTIAL" | "LINEAR" | "STEPPED"
+  minRetentionRate    Float    @default(0.05) // floor: don't depreciate below 5%
+  specialCases        String[] // ["BRAND_PREMIUM", "SLEEPER_DETECTION", "TREND_MULTIPLIER"]
+  notes               String?  // Context for this curve
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([category])
 }
 
 model EncyclopediaReference {
