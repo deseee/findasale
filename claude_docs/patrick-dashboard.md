@@ -1,58 +1,32 @@
-# Patrick's Dashboard — S574 Complete (Corruption Fixes + Pricing Engine Spec)
+# Patrick's Dashboard — S574 Complete (Pricing Engine Phase 1 Live)
 
 ## ✅ S574 — What Got Done
 
-**One-line summary:** Fixed two file corruptions that were blocking deployment (schema.prisma P1012 + Layout.tsx null bytes), forced Railway rebuild, and designed the full multi-source pricing engine architecture.
+**One-line summary:** Fixed two file corruptions, designed and shipped the full multi-source pricing engine Phase 1, removed Apify entirely, migration deployed, Railway green.
 
 ### Quick wins this session
 
 | Win | Notes |
 |---|---|
 | schema.prisma P1012 — 16 errors fixed | Duplicate models from Scanner Phase 2 agent; removed via Python byte surgery |
-| Layout.tsx null bytes removed | Affiliate agent had appended 700+ `\x00` bytes; Vercel showed "mmm..."; truncated clean |
-| Railway unblocked | Dockerfile.production cache-bust `2026-04-22a → 2026-04-25a` forced rebuild |
-| Pricing engine spec written | Full ADR at `claude_docs/feature-notes/pricing-engine-architecture.md` |
-| 30+ pricing sources evaluated | Research doc at `claude_docs/research/pricing-engine-multi-source-research.md` |
+| Layout.tsx null bytes removed | Affiliate agent had appended 700+ `\x00` bytes; truncated clean |
+| Pricing engine Phase 1 live | 10 new backend files: orchestrator, circuit breaker, 5 adapters, signals, cron |
+| Apify removed entirely | Google Trends via free npm package; EBTH via Vercel proxy (no new accounts) |
+| Import bug fixed + Railway green | Dev agent used wrong workspace alias; sed-fixed across all 10 files; Railway booted clean |
+| Migration deployed | `20260425_add_pricing_engine` — 6 pricing models live in Railway DB |
+| Env vars set | `DISCOGS_TOKEN` + `EBTH_WORKER_URL` active; `KEEPA_API_KEY` optional when ready |
 
 ---
 
 ## ⏳ Pending Patrick Actions
 
-### 1. Push this session's files
+Nothing required — session is fully wrapped and deployed.
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages\database\prisma\schema.prisma
-git add packages\frontend\components\Layout.tsx
-git add packages\backend\Dockerfile.production
-git add claude_docs\feature-notes\pricing-engine-architecture.md
-git add claude_docs\research\pricing-engine-multi-source-research.md
-git add claude_docs\STATE.md
-git add claude_docs\patrick-dashboard.md
-git commit -m "S574: fix schema/Layout corruptions + multi-source pricing engine spec"
-.\push.ps1
-```
+**Optional (when ready to spend money on better comps):**
+- `KEEPA_API_KEY` from keepa.io → API Keys — adds Amazon price history. Engine works fine without it.
 
-### 2. Add Railway env vars
-
-Only 3 vars needed — Apify is gone entirely:
-
-| Variable | Source | Cost | Notes |
-|---|---|---|---|
-| `DISCOGS_TOKEN` | discogs.com → Settings → Developers | Free | Vinyl/CD/cassette comps |
-| `KEEPA_API_KEY` | keepa.io → API Keys | Paid (optional) | Amazon price history — engine works without it |
-| `EBTH_WORKER_URL` | Your CF Worker URL (see below) | Free | EBTH estate sale comps via Cloudflare proxy |
-
-### 3. Add one Railway env var to activate EBTH
-
-The EBTH scraping proxy is a Vercel API route (`/api/proxy/ebth`) — already in the codebase, deploys with the next push. EBTH sees Vercel's IPs, not Railway's. No new accounts needed.
-
-After pushing, add to Railway → backend → Variables:
-```
-EBTH_WORKER_URL=https://finda.sale/api/proxy/ebth
-```
-
-That's it. Google Trends works automatically — no key, no setup.
+**Phase 2 (deferred — dispatch when beta organizers are active):**
+- Sleeper alert + brand premium amber inline banners on edit-item and review/publish pages
 
 ---
 
@@ -70,29 +44,30 @@ That's it. Google Trends works automatically — no key, no setup.
 | Nav polish Chrome QA | Not yet browser-tested | Check mobile icon order + Appearance toggle | S573 |
 | QR modal Chrome QA | Not yet browser-tested | Test "My QR" tab + cart drawer link | S573 |
 | Geofence UX Chrome QA | Not yet browser-tested | Deny location on clueId page, verify amber card | S573 |
+| Pricing engine output QA | First live test | Publish an item, check `/api/pricing/suggest` returns multi-source result | S574 |
 
 ---
 
-## 💰 Pricing Engine — What We're Building
+## 💰 Pricing Engine — What's Live Now
 
-The current pricing covers ~15-20% of inventory well (collectibles with PriceCharting/eBay). Everything else — furniture, tools, clothing, vinyl, sneakers, art — is off by 50-300% because flat depreciation doesn't account for brand value retention, sleeper collectibles, or trending demand.
+Phase 1 is deployed. The engine runs on every item publish and surfaces a weighted-median price suggestion from up to 7 concurrent sources.
 
-**The fix:** Tiered multi-source engine with weighted median, appreciation awareness, and toggleable sources.
+**Active sources (zero extra cost):**
+- PriceCharting — collectibles, games, toys
+- eBay enhanced — existing 4-tier fallback chain
+- Discogs — vinyl, CD, cassette, all audio formats
+- EBTH — estate sale comps via Vercel proxy (Railway → Vercel → EBTH)
+- GSA Auctions — tools, equipment, government surplus
+- Google Trends — trend signal multiplier (0.85–1.35x, 24h cache)
+- Salvation Army table — floor pricing fallback
 
-**What's different from today:**
-- Brand Exception DB (65 brands like Le Creuset, Griswold, Herman Miller) — never apply depreciation curves to these
-- Sleeper Detection — Vision pipeline extended to flag Pyrex patterns, Griswold cast iron, Hull pottery, etc. before organizer lists it at $2
-- Trend Signals — Google Trends + eBay 7/30/90-day momentum for things going viral
-- Recency Decay — electronics from 2023 vs. furniture from 2023 depreciate at completely different rates
-- Asking vs. Sold — asking prices get 0.6x weight (they don't reflect what things actually sell for)
+**Optional (add key to unlock):**
+- Keepa — Amazon price history (`KEEPA_API_KEY`)
 
-**Sources enabled at launch (no extra cost to start):**
-PriceCharting (free tier), eBay enhanced (existing), EBTH via Apify, Keepa (Amazon), Discogs (vinyl), GSA Auctions (tools/equipment), Salvation Army table (floor pricing), Brand Exception DB, Sleeper Detection, Google Trends (Apify), eBay Momentum
-
-**Sources wired, disabled (flip the switch as we grow):**
+**Wired but disabled (toggle when ready):**
 B-Stock, WorthPoint, StockX, HiBid, MaxSold, OfferUp, StorageTreasures
 
-Spec: `claude_docs/feature-notes/pricing-engine-architecture.md`
+**Resilience:** Soft circuit breaker trips at 3 consecutive failures per source — source auto-disables, cron re-enables at 4AM UTC. `Promise.allSettled` means one dead source never crashes the batch.
 
 ---
 
@@ -100,12 +75,13 @@ Spec: `claude_docs/feature-notes/pricing-engine-architecture.md`
 
 | Area | Status |
 |------|--------|
-| schema.prisma | ✅ Corruption fixed S574 — push pending |
-| Layout.tsx | ✅ Null bytes removed S574 — push pending |
-| Railway backend | ✅ Green (cache-bust forced rebuild) |
+| schema.prisma | ✅ Corruption fixed S574 — live |
+| Layout.tsx | ✅ Null bytes removed S574 — live |
+| Railway backend | ✅ Green |
 | Vercel frontend | ✅ Green |
-| Pricing engine spec | ✅ Written S574 — awaiting Patrick review + env vars |
-| Scanner Phase 2 spec | 📋 Ready — awaiting Patrick decision (retention/scope questions) |
+| Pricing engine Phase 1 | ✅ Live — migration deployed, env vars set |
+| Pricing engine Phase 2 UI | 📋 Deferred — sleeper + brand premium banners |
+| Scanner Phase 2 spec | 📋 Ready — awaiting Patrick decision |
 | Stale queue test data | ✅ Seeded S573 — run `prisma:seed` to activate |
 
 ---
