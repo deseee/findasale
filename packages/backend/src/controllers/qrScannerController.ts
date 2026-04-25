@@ -24,7 +24,7 @@ export const recordQRScanEvent = async (
     const { saleId, eventType, decodedUrl, deviceType } = req.body;
 
     // Validate eventType — valid values per ADR-072
-    const validEventTypes = ['SCAN_INITIATED', 'SCAN_DECODED_ON_DOMAIN', 'SCAN_DECODED_OFF_DOMAIN', 'SCAN_CAMERA_DENIED'];
+    const validEventTypes = ['SCAN_INITIATED', 'SCAN_DECODED_ON_DOMAIN', 'SCAN_DECODED_OFF_DOMAIN', 'SCAN_CAMERA_DENIED', 'SCAN_COMPLETED'];
     if (!eventType || !validEventTypes.includes(eventType)) {
       console.warn('[qrScannerController] Invalid eventType:', eventType);
       // Fire-and-forget: return 200 to not block frontend

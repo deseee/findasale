@@ -18,6 +18,7 @@ import { useOrganizerTier } from '../../../hooks/useOrganizerTier';
 import ItemPhotoManager from '../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../components/PriceSuggestion'; // CD2 Phase 3
 import PriceResearchPanel from '../../../components/PriceResearchPanel';
+import PricingSignalBanners from '../../../components/PricingSignalBanners';
 import ItemPriceHistoryChart from '../../../components/ItemPriceHistoryChart';
 import LocationSelector from '../../../components/LocationSelector';
 import Head from 'next/head';
@@ -704,6 +705,9 @@ const EditItemPage = () => {
 
               {/* Price History Chart */}
               {id && <ItemPriceHistoryChart itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
+
+              {/* Pricing Signals: Sleeper patterns & brand premiums */}
+              {id && <PricingSignalBanners itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
             </div>
 
             <div>

@@ -5,10 +5,11 @@ export type QRScannerState = 'idle' | 'requesting' | 'scanning' | 'denied' | 'no
 
 interface UseQRScannerProps {
   onDecode?: (text: string) => void;
+  onCompleted?: () => void;
   saleId?: string;
 }
 
-export const useQRScanner = ({ onDecode, saleId }: UseQRScannerProps = {}) => {
+export const useQRScanner = ({ onDecode, onCompleted, saleId }: UseQRScannerProps = {}) => {
   const [state, setState] = useState<QRScannerState>('idle');
   const [lastDecode, setLastDecode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -162,11 +163,20 @@ export const useQRScanner = ({ onDecode, saleId }: UseQRScannerProps = {}) => {
     };
   }, []);
 
+  // Fire scan completion event (when user navigates to the scanned URL)
+  const markCompleted = useCallback(() => {
+    fireScanEvent('SCAN_COMPLETED');
+    if (onCompleted) {
+      onCompleted();
+    }
+  }, [fireScanEvent, onCompleted]);
+
   return {
     state,
     lastDecode,
     error,
     start,
     stop,
+    markCompleted,
   };
 };

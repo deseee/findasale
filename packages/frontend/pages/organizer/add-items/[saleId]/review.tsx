@@ -25,6 +25,7 @@ import NearMissNudge from '../../../../components/NearMissNudge'; // Feature 61
 import ItemPhotoManager from '../../../../components/ItemPhotoManager'; // Phase 16
 import PriceSuggestion from '../../../../components/PriceSuggestion'; // CD2 Phase 3
 import PriceResearchPanel from '../../../../components/PriceResearchPanel';
+import PricingSignalBanners from '../../../../components/PricingSignalBanners';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import { CURATED_TAGS } from '../../../../../shared/src'; // Sprint 1: Listing Factory tag vocabulary
 import RapidCapture, { RapidItem } from '../../../../components/RapidCapture';
@@ -1377,6 +1378,11 @@ const ReviewPage = () => {
                                       collapsed={true}
                                       onPriceSelect={(price) => handleEditChange(item.id, 'price', price)}
                                     />
+                                  </div>
+
+                                  {/* Pricing Signals: Sleeper patterns & brand premiums */}
+                                  <div className="mt-3">
+                                    <PricingSignalBanners itemId={item.id} currentPrice={editState.price} />
                                   </div>
                                 </div>
 

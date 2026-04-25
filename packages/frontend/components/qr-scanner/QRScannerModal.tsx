@@ -32,6 +32,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
           // In-app navigation
           setShowCheckmark(true);
           setTimeout(() => {
+            markCompleted();
             const pathname = url.pathname + url.search;
             router.push(pathname);
             onClose();
@@ -51,10 +52,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
         stop();
       }
     },
-    [router, onClose, showToast]
+    [router, onClose, showToast, markCompleted]
   );
 
-  const { state, error, start, stop } = useQRScanner({ onDecode: handleDecode });
+  const { state, error, start, stop, markCompleted } = useQRScanner({ onDecode: handleDecode });
 
   // Set localStorage flag on first open
   useEffect(() => {
