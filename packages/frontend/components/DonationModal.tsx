@@ -43,7 +43,7 @@ export default function DonationModal({
   // Donation mutation
   const donationMutation = useMutation({
     mutationFn: () =>
-      api.post(`/api/organizers/sales/${saleId}/donate`, {
+      api.post(`/organizers/sales/${saleId}/donate`, {
         charityName,
         charityEin,
         charityAddress,
@@ -68,7 +68,7 @@ export default function DonationModal({
   // Fetch donation to get receipt URL
   const { data: donation } = useQuery({
     queryKey: ['recent-donation', saleId],
-    queryFn: () => api.get(`/api/organizers/sales/${saleId}/donations`).then((r) => r.data.donations[0]),
+    queryFn: () => api.get(`/organizers/sales/${saleId}/donations`).then((r) => r.data.donations[0]),
     enabled: step === 2,
     staleTime: 0,
   });
@@ -95,7 +95,7 @@ export default function DonationModal({
 
   const handleDownloadReceipt = () => {
     if (donation) {
-      const receiptUrl = `/api/organizers/donations/${donation.id}/receipt`;
+      const receiptUrl = `/organizers/donations/${donation.id}/receipt`;
       window.open(receiptUrl, '_blank');
       showToast('Receipt downloaded!', 'success');
       onSuccess?.();

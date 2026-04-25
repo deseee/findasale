@@ -788,7 +788,7 @@ const ReviewPage = () => {
                         </p>
                         <div className="text-amber-700 font-bold text-sm mt-1 flex items-center gap-1">
                           {item.price != null ? (
-                            item.markdownApplied && item.priceBeforeMarkdown ? (
+                            item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
                               <>
                                 <span className="line-through text-gray-400 dark:text-gray-500 text-xs">
                                   ${item.priceBeforeMarkdown.toFixed(2)}
@@ -1071,7 +1071,7 @@ const ReviewPage = () => {
                               <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm sm:text-base line-clamp-2 sm:line-clamp-1">{item.title}</p>
                               <p className="text-xs sm:text-sm text-warm-600 dark:text-warm-400 flex items-center gap-1 flex-wrap">
                                 {item.price != null ? (
-                                  item.markdownApplied && item.priceBeforeMarkdown ? (
+                                  item.priceBeforeMarkdown && item.priceBeforeMarkdown > item.price ? (
                                     <>
                                       <span className="line-through text-gray-400 dark:text-gray-500 text-xs">
                                         ${item.priceBeforeMarkdown.toFixed(2)}
