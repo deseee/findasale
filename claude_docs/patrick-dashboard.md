@@ -1,4 +1,69 @@
-# Patrick's Dashboard — S571 Complete (Encyclopedia QA + 2 Bug Fixes + Migration)
+# Patrick's Dashboard — S572 Complete (Audit + 3 Parallel Fixes + P0 Railway Hotfix)
+
+## ✅ S572 — What Got Done
+
+**One-line summary:** Audited backlog post-S571, dispatched 3 parallel fixes (hydration #418, D-001 estate language, 1104px overflow), and shipped P0 routes/encyclopedia hotfix via MCP after Railway crashed on `getRevisions`-not-exported mismatch.
+
+### Changes This Session
+
+| Change | File | Notes |
+|--------|------|-------|
+| **P0 Railway hotfix** — pushed via MCP as commit `b20b0526` | `packages/backend/src/routes/encyclopedia.ts` | Routes imported `getRevisions`; controller exports `getEntryRevisions`. Renamed import → match. Container was crashing on boot. |
+| **Hydration #418 fix** | `packages/frontend/components/Layout.tsx` | Header nav was rendering different DOM server vs client (`!isClient ? login : user ? userNav : login`), causing React to lose event handler refs after hydration. Simplified to `user ? userNav : login`. Should fix QR button, hamburger, notification bell, modal dismiss, bounty tabs. |
+| **D-001 estate language cleanup** | `packages/frontend/public/manifest.json` | Only PWA manifest had estate-only framing. App description and shortcut copy now mention all sale types. Codebase otherwise compliant. |
+| **Right-panel overflow @ 1104px** | `pages/sales/[id].tsx`, `pages/items/[id].tsx`, `pages/admin/index.tsx` | Grid columns missing `min-w-0` → between lg (1024px) and xl (1280px), columns couldn't shrink below content width. Added `min-w-0` to grid children. |
+
+### Audit Findings (already-fixed items I initially flagged as outstanding — corrected)
+
+| Originally flagged | Actually | Source session |
+|---|---|---|
+| Settlement Hub #228 (3 P1 bugs) | RESOLVED | S566 + S569 + S570 |
+| TEAMS workspace setup modal | RESOLVED | S562 |
+| #311 Locations Advanced | RESOLVED | S569 |
+| Rewards nav decision (S570) | RESOLVED | S571 (`/shopper/loyalty` redirects to `/coupons`, in nav) |
+
+### Still Outstanding (next session)
+
+| Item | Status | Blocked on |
+|---|---|---|
+| Encyclopedia detail page Chrome QA | Pending | Railway redeploy of d77cff42 |
+| Settlement PDF download Chrome QA | Pending | Railway redeploy of S569 backend |
+| #41 Flip Report + #184 iCal Export | Pending Railway deploy since S355/S356 (~215 sessions) | Likely Dockerfile cache-bust unblocks |
+| Right-panel 1104px Chrome verification | Code-fixed S572 | Live verify after deploy |
+| Stale Unverified Queue (8 items) | Data-blocked | Test data seeding pass needed |
+
+---
+
+## 🚨 PUSH BLOCK — Resolves Railway crash + ships S572 fixes
+
+**Step 1 — Delete the local untracked migration file (it's already on GitHub):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+Remove-Item -LiteralPath "packages\database\prisma\migrations\20260425_add_referralreward_createdat\migration.sql" -Force
+Remove-Item -LiteralPath "packages\database\prisma\migrations\20260425_add_referralreward_createdat" -Force
+```
+
+**Step 2 — Discard local encyclopediaController.ts edits (drift from prior agents; GitHub is authoritative):**
+```powershell
+git checkout HEAD -- packages\backend\src\controllers\encyclopediaController.ts
+```
+
+**Step 3 — Stage S572 fixes + wrap docs and push:**
+```powershell
+git add packages\frontend\components\Layout.tsx
+git add packages\frontend\public\manifest.json
+git add packages\frontend\pages\sales\[id].tsx
+git add packages\frontend\pages\items\[id].tsx
+git add packages\frontend\pages\admin\index.tsx
+git add claude_docs\STATE.md
+git add claude_docs\patrick-dashboard.md
+git commit -m "S572: hydration #418 fix + D-001 manifest + 1104px overflow + wrap"
+.\push.ps1
+```
+
+This will fetch my MCP routes hotfix (b20b0526), pull bb362669 (your S571 controller fix) along, and push the S572 commit. Railway redeploys clean.
+
+---
 
 ## ✅ S571 — What Got Done
 
