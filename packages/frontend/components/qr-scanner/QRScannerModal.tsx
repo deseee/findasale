@@ -52,7 +52,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
         stop();
       }
     },
-    [router, onClose, showToast, markCompleted]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [router, onClose, showToast]
   );
 
   const { state, error, start, stop, markCompleted } = useQRScanner({ onDecode: handleDecode });
