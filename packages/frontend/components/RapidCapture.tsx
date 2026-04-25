@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import BrightnessIndicator from './camera/BrightnessIndicator';
+import { useVoiceInput } from '../hooks/useVoiceInput';
 
 /**
  * RapidCapture — Phase 14b camera overlay (refactored)
@@ -31,6 +32,7 @@ export interface RapidItem {
   aiError?: string;
   photoUrls?: string[];
   autoEnhanced?: boolean;
+  pendingPhotoRole?: 'FRONT' | 'BACK_STAMP' | 'DETAIL_DAMAGE' | 'LABEL_BRAND';
 }
 
 interface RapidCaptureProps {
@@ -136,6 +138,14 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [levelAngle, setLevelAngle] = useState(0);
   const [deviceSupportsOrientation, setDeviceSupportsOrientation] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Feature #331: Voice-to-tag state (per-thumbnail mic)
+  const [voiceItemId, setVoiceItemId] = useState<string | null>(null);
+  const [voiceIndicator, setVoiceIndicator] = useState<{ itemId: string; showing: boolean } | null>(null);
+  
+  // Feature #341: Multi-angle role prompts state
+  const [showMultiAnglePrompt, setShowMultiAnglePrompt] = useState(false);
+  const [pendingPhotoRole, setPendingPhotoRole] = useState<string | null>(null);
+  const [firstPhotoTaken, setFirstPhotoTaken] = useState(false);
 
   const isRapidfire = mode === 'rapidfire';
   const inAddMode = addingToItemId !== null;
@@ -324,6 +334,12 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         // Only call onPhotoCapture in rapidfire mode — regular mode defers to Analyze button
         if (isRapidfire) {
           onPhotoCapture?.(photo);
+          
+          // Feature #341: Show multi-angle prompt after first photo in rapidfire mode
+          if (!firstPhotoTaken) {
+            setFirstPhotoTaken(true);
+            setShowMultiAnglePrompt(true);
+          }
         }
 
         if (isRegularMode) {
@@ -347,6 +363,55 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     });
     setSelectedIndex(null);
   }, []);
+
+  // Feature #331: Handle voice input for a specific item and PATCH description
+  const handleVoiceInput = useCallback(async (itemId: string, transcript: string) => {
+    if (!transcript.trim()) {
+      return;
+    }
+    
+    try {
+      // PATCH /api/items/:id with description from transcript
+      const response = await fetch(`/api/items/${itemId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') : ''}`,
+        },
+        body: JSON.stringify({ description: transcript }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to update item: ${response.statusText}`);
+      }
+      
+      // Show success indicator on thumbnail
+      setVoiceIndicator({ itemId, showing: true });
+      setTimeout(() => setVoiceIndicator({ itemId, showing: false }), 2000);
+      
+    } catch (error) {
+      console.error('[RapidCapture] Voice input error:', error);
+    }
+  }, []);
+
+  // Feature #341: Handle multi-angle chip selection
+  const handleSelectPhotoRole = useCallback((role: string | null) => {
+    setPendingPhotoRole(role);
+    if (role === null) {
+      // Skip — dismiss prompt
+      setShowMultiAnglePrompt(false);
+    }
+    // If a role is selected, keep prompt open so next photo can be captured with that role
+    // The prompt will auto-dismiss after the second photo is taken
+  }, []);
+
+  // Feature #341: Auto-dismiss prompt after photo 2 in rapidfire
+  useEffect(() => {
+    if (isRapidfire && showMultiAnglePrompt && photos.length >= 2) {
+      setShowMultiAnglePrompt(false);
+      setPendingPhotoRole(null);
+    }
+  }, [isRapidfire, showMultiAnglePrompt, photos.length]);
 
   // Toggle torch (phone LED flash)
   const toggleTorch = useCallback(async (forceState?: boolean) => {
@@ -1198,6 +1263,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       >
                         {isAddingTo ? '×' : '+'}
                       </button>
+
+                      {/* Feature #331: Voice-to-tag mic button (bottom-left corner, only rapidfire) */}
+                      {isRapidfire && (
+                        <VoiceTagButtonThumbnail
+                          itemId={item.id}
+                          isRecording={voiceItemId === item.id}
+                          onVoiceInput={handleVoiceInput}
+                          showIndicator={voiceIndicator?.itemId === item.id && voiceIndicator.showing}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -1256,6 +1331,59 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 <div className="w-12 h-12 rounded-full bg-white" />
               )}
             </button>
+
+            {/* Feature #341: Multi-angle role prompt (after first photo in rapidfire mode) */}
+            {isRapidfire && showMultiAnglePrompt && (
+              <div className="absolute bottom-24 left-0 right-0 mx-auto max-w-xs px-4">
+                <div className="bg-black/80 backdrop-blur rounded-lg p-4 border border-white/10">
+                  <div className="text-white text-sm font-medium mb-3 text-center">
+                    Got the front — want another angle?
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <button
+                      onClick={() => handleSelectPhotoRole('BACK_STAMP')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        pendingPhotoRole === 'BACK_STAMP'
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-white/20 text-white hover:bg-white/30'
+                      }`}
+                      title="Capture back or stamp"
+                    >
+                      Back/Stamp
+                    </button>
+                    <button
+                      onClick={() => handleSelectPhotoRole('DETAIL_DAMAGE')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        pendingPhotoRole === 'DETAIL_DAMAGE'
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-white/20 text-white hover:bg-white/30'
+                      }`}
+                      title="Capture damage or detail"
+                    >
+                      Damage Detail
+                    </button>
+                    <button
+                      onClick={() => handleSelectPhotoRole('LABEL_BRAND')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        pendingPhotoRole === 'LABEL_BRAND'
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-white/20 text-white hover:bg-white/30'
+                      }`}
+                      title="Capture label or brand"
+                    >
+                      Label/Brand
+                    </button>
+                    <button
+                      onClick={() => handleSelectPhotoRole(null)}
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold bg-sage-600/40 text-white hover:bg-sage-600/60 transition-all"
+                      title="Skip to next item"
+                    >
+                      Skip →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1304,5 +1432,91 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     </div>
   );
 };
+
+
+/**
+ * VoiceTagButtonThumbnail — Lightweight inline voice input button for thumbnail
+ * Used in rapidfire mode to capture description for a specific item
+ */
+interface VoiceTagButtonThumbnailProps {
+  itemId: string;
+  isRecording: boolean;
+  onVoiceInput: (itemId: string, transcript: string) => void;
+  showIndicator: boolean;
+}
+
+const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
+  itemId,
+  isRecording,
+  onVoiceInput,
+  showIndicator,
+}) => {
+  const { isSupported, isListening, transcript, startListening, stopListening } = useVoiceInput();
+  const [recordingState, setRecordingState] = useState<'idle' | 'listening' | 'processing'>('idle');
+
+  const handleToggle = async () => {
+    if (recordingState === 'idle') {
+      setRecordingState('listening');
+      await startListening();
+    } else if (recordingState === 'listening') {
+      await stopListening();
+      setRecordingState('processing');
+      
+      // Send the transcript
+      if (transcript.trim()) {
+        onVoiceInput(itemId, transcript);
+      }
+      
+      setTimeout(() => {
+        setRecordingState('idle');
+      }, 500);
+    }
+  };
+
+  if (!isSupported) {
+    return null;
+  }
+
+  return (
+    <div className="absolute -bottom-1.5 -left-1.5">
+      {/* Success indicator */}
+      {showIndicator && (
+        <div className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white animate-pulse">
+          ✓
+        </div>
+      )}
+      
+      {/* Mic button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          handleToggle();
+        }}
+        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white transition-all z-10 shadow-md ${
+          recordingState === 'listening'
+            ? 'bg-red-500 animate-pulse'
+            : recordingState === 'processing'
+            ? 'bg-amber-500'
+            : 'bg-blue-600 hover:bg-blue-700'
+        }`}
+        aria-label={recordingState === 'listening' ? 'Stop recording' : 'Record description'}
+        title={recordingState === 'listening' ? 'Listening...' : 'Record description with voice'}
+      >
+        {recordingState === 'processing' ? (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10" strokeWidth="2" strokeOpacity="0.25" />
+            <path d="M12 2a10 10 0 0 1 0 20" strokeWidth="2" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4z" />
+            <path d="M5.5 9.643a5.5 5.5 0 0 0 9 0" />
+          </svg>
+        )}
+      </button>
+    </div>
+  );
+};
+
 
 export default RapidCapture;
