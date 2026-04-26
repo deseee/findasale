@@ -88,7 +88,30 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- S577 COMPLETE — 5 bugs fixed (Settlement payout, Shopify #332, Stripe Connect #333, voice icon, Tier Lapse #75). All 4 UNVERIFIED items unblocked via DB patches. S578 is full Chrome QA.
+- S578 COMPLETE — Full Chrome QA session. 6 ✅ PASS, 2 ⚠️ PARTIAL, 1 ❌ FAIL. New P1 bugs found. S579 is bug dispatch for all P1s + roadmap update.
+- S577 COMPLETE — 5 bugs fixed (Settlement payout, Shopify #332, Stripe Connect #333, voice icon, Tier Lapse #75). All 4 UNVERIFIED items unblocked via DB patches.
+
+## S578 QA Results — New Bugs Found
+
+**S578 Chrome QA summary (9 items tested):**
+- ✅ PASS (6): QA#1 Settlement payout, QA#2 Shopify upgrade wall, QA#3 Stripe Connect gate, QA#4 Voice-to-tag mic icon, QA#8 PricingCompSummary tile, QA#9 Storefront Copy Link + View
+- ⚠️ PARTIAL (2): QA#5 Tier Lapse (banner ✅, "Your Plan: PRO" shows despite lapse P2), QA#7 Holds (HoldTimer ✅, My Holds page P1 bug, end-to-end UNVERIFIED)
+- ❌ FAIL (1): QA#6 DonationModal (wrong API URL → 404, donation section never renders)
+
+**P1 bugs from Railway logs + QA (S579 dispatch queue):**
+1. `SettlementWizard.tsx` line 68-72: `GET /api/sales/${saleId}/items?status=AVAILABLE` → 404. Fix: change to `/organizer/sales/${saleId}/unsold-items`
+2. `packages/backend/src/routes/reservations.ts`: missing `GET /shopper` route — My Holds page always empty
+3. `GET /api/api/items/:id/similar` → 404 (double `/api/api/` prefix bug)
+4. `GET /api/items/:id/ebay-comps` → 500 (Railway logs)
+5. `GET /api/items/:id/price-history` → 404
+6. `GET /api/workspace` → 404
+7. `GET /api/brand-kit/organizers/me` → 404
+8. `GET /api/locations` → 404
+9. `GET /api/discount-rules` → 403 on charity sale page load
+
+**P2 bugs from S578:**
+- Payout confirmation card: white background in dark mode; Recipient/Amount/Method values not rendering
+- Tier Lapse dashboard: "Your Plan: PRO" label showing despite `isLapsed=true` state
 
 ## Schema & Infrastructure
 
@@ -163,10 +186,10 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | SettlementWizard fee % | ✅ Chrome-verified S563 — RESOLVED | Receipt shows Platform Fee (0%) correctly for sale with no Stripe revenue. No 200% shown. API confirms platformFeeAmount=0. ss_9199brc0p | S531 |
 | Per-sale analytics filter | ✅ Chrome-verified S563 — RESOLVED | Selecting sale → "Filtered to one sale" + cards update ($79.44→$27.29 + new per-sale metrics). ss_8173iewrh → ss_5482waky8 | S531 |
 | AvatarDropdown nav link | Fixed S531 — pending Chrome QA | As shopper, verify avatar dropdown shows "Explorer Profile" → /shopper/explorer-profile | S531 |
-| S529 storefront widget | ✅ ROOT CAUSE FOUND S577 — Not a regression. Widget gated on storefrontSlug (line 862 dashboard.tsx). Alice's customStorefrontSlug was NULL → widget hidden. DB patched S577: set to 'kellys-estate-sales'. Pending Chrome QA. | Login as user1@example.com → /organizer/dashboard → verify Copy Link + View Storefront appear | S529 |
+| S529 storefront widget | ✅ Chrome-verified S578 — RESOLVED. Copy Link on dashboard notification fires green toast "Sale link copied". Eye icon on sale card navigates to public sale page /sales/cmoezk1k0002013p7s8h76yxi with correct title, address, dates, PUBLISHED badge. More Options → /organizer/promote/[saleId] (full share hub). ss_2266yban5, ss_21359mono | — | S529 |
 | S529 mobile nav rank | Pushed — mobile viewport required | Test mobile viewport, verify rank reads from useXpProfile (not hardcoded Scout) | S529 |
 | S529 card reader content | Pushed — pending Chrome QA | Verify /faq, /guide, /support show S700/S710 hardware only (no Tap to Pay, no M2) | S529 |
-| #235 DonationModal | ✅ UNBLOCKED S577 — Sale found in DB: ID cmoezlc8s00q413p74kjv2r9a, "Charity Estate Liquidation - Closing Soon", ESTATE type with SaleDonation record, PUBLISHED. Organizer: user6@example.com. Pending Chrome QA. | Login as user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → verify DonationModal 3-step wizard | S575 |
+| #235 DonationModal | ❌ P1 BUG FOUND S578 — SettlementWizard.tsx line 68-72 fetches `GET /api/sales/${saleId}/items?status=AVAILABLE` which returns 404 (route does not exist). Correct route is `GET /api/organizer/sales/${saleId}/unsold-items`. availableItems.length always 0 → donation section never renders. Fix: update URL in SettlementWizard.tsx. | S579 bug dispatch: SettlementWizard.tsx line 68-72 URL fix | S575 |
 | #251 priceBeforeMarkdown | Needs live data | Need item with markdownApplied=true to verify crossed-out display | S526 |
 | Organizer Insights runtime | User-specific error | Test as Alice (user1) — Bob loads fine, error must be account-specific | S528 |
 | #275 Hunt Pass Cosmetics | Karen has no Hunt Pass | Need Hunt Pass subscriber to verify amber avatar ring + 🏆 leaderboard badge | S530 |
@@ -223,7 +246,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #311 Locations — advanced (filter/transfer/LocationSelector) | ✅ Chrome-verified S569 — RESOLVED | Transfer flow: select item → choose destination → confirm → table updates → persists after reload. Add Location modal opens with correct fields. TEAMS gate confirmed (Carol sees upgrade gate). | S563 |
 | RETAIL tier gate (create-sale) | ✅ Chrome-verified S569 — RESOLVED | Carol (SIMPLE): "Retail Store (TEAMS only)" disabled=true, visually greyed (ss_0686irvu4). Alice (TEAMS): "Retail Store" disabled=false. Both sides verified. | S559 |
 | Curator moderation UI (/admin/encyclopedia) | ✅ Chrome-verified S561 — RESOLVED | Page loads, 57 awaiting/20 published/77 total with real data, Promote/Reject per row, Run Full Curator Pass fires correctly (loading state → completes ~5s). ss_6309qnxwa, ss_4764jy322. P2 bug: action buttons cut off at viewport right edge — logged in qa-backlog. P3: no success toast after curator pass — logged. | S560 |
-| Bounty Batch C + Holds countdown | ✅ UNBLOCKED S577 — Active ItemReservation found in DB: Paul Martin (user16@example.com), item "Vintage Craftsman Hand Tools Lot", sale "Fine Art & Antiques Auction", expires 2026-04-27. Pending Chrome QA. | Login as user16@example.com (Seedy2025!) → /sales/cmoezk0ou001m13p7y7esjr18 → verify countdown timer on reserved item | S575 |
+| Holds countdown | ⚠️ PARTIAL S578 — HoldTimer component renders correctly on item detail page when item.status=RESERVED (seeded via DB). My Holds page (`/shopper/holds`) always shows "No active holds" — P1 bug: frontend calls `GET /api/reservations/shopper` which returns 404 (route does not exist in reservations.ts). End-to-end Place Hold button flow UNVERIFIED (DB was seeded manually, Place Hold button click not tested). S579 bug dispatch needed: add GET /shopper route to reservations.ts. | S579: fix reservations.ts + re-verify end-to-end Place Hold flow | S575 |
 | Hunt Pass Active CTA (/shopper/hunt-pass) | ✅ FIXED + Chrome-verified S562 | Karen sees "Hunt Pass Active" manage card, not "Upgrade" CTA. ss_8715qaw4a | S561 |
 | TEAMS onboarding modal (blocks every login) | ✅ FIXED + Chrome-verified S562 | Modal marks dismissed after first completion; workspace created. Reload confirms no modal reappears. ss_87046vbns | S561 |
 | #309 Consignor Portal — URL prefix + backend 500 | ✅ Chrome-verified S563 — RESOLVED | URL prefix + backend 500 both fixed and deployed. Chrome-verified S563: list/create/update/delete all working, portal public. P1 note: consignors delete uses native window.confirm() (systemic bug, 24 files). | S561 |
