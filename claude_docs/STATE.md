@@ -88,6 +88,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
+- S579 COMPLETE — 4 parallel bug dispatches. 8 files fixed. All 9 P1s addressed + 2 P2s. 3 backend 404s (workspace, locations, price-history) confirmed registered in index.ts — root cause unclear, needs Chrome QA post-deploy. S580 is Chrome QA of all S579 fixes.
 - S578 COMPLETE — Full Chrome QA session. 6 ✅ PASS, 2 ⚠️ PARTIAL, 1 ❌ FAIL. New P1 bugs found. S579 is bug dispatch for all P1s + roadmap update.
 - S577 COMPLETE — 5 bugs fixed (Settlement payout, Shopify #332, Stripe Connect #333, voice icon, Tier Lapse #75). All 4 UNVERIFIED items unblocked via DB patches.
 
@@ -275,6 +276,10 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S579 (2026-04-25) — COMPLETE:** 4 parallel bug dispatches for all S578-found bugs. 8 files modified. Backend: reservations.ts (added GET /shopper for My Holds), brandKit.ts + controller (added GET /organizers/me), discountRules.ts + discountRuleController.ts (GET made public so charity sale page doesn't 403), itemController.ts (ebay-comps 500 fixed — findMany→findUnique on @unique field + BigInt serialization). Frontend: SettlementWizard.tsx (URL fixed → /api/items/?saleId=... + client filter; payout card property paths fixed), SimilarItems.tsx (removed hardcoded /api/ prefix causing double /api/api/), organizer/dashboard.tsx (isLapsed destructured from useOrganizerTier + amber "(Payment Required)" label on plan card). No migrations. ⚠️ workspace/locations/price-history 404s — agent confirmed these ARE registered in index.ts; root cause of 404 unclear, needs Chrome QA post-deploy. S580 is full Chrome QA pass on all 8 fixed files.
+
+**S578 (2026-04-25) — COMPLETE:** Full Chrome QA. 6 ✅, 2 ⚠️ PARTIAL, 1 ❌ (DonationModal 404). Discovered 9 P1 backend bugs via Railway logs (route gaps, 500s, 403) + 2 P2 frontend bugs. All queued for S579 dispatch.
+
 **S577 (2026-04-25) — COMPLETE:** Bug dispatch + data unblock session. 5 bugs fixed in parallel: Settlement payout (useEffect now syncs from clientPayout.amount), Shopify #332 TEAMS gate (frontend upgrade wall + backend 403 on all 4 endpoints), Stripe Connect #333 TEAMS gate + consignors 500 (Decimal serialization fix), voice-to-tag icon (mic SVG in VoiceTagButton.tsx + RapidCapture.tsx), Tier Lapse #75 hard gate (AuthContext decodes subscriptionLapsed, useOrganizerTier.ts canAccess() returns false when lapsed, Layout.tsx amber sticky banner). 4 UNVERIFIED items unblocked via DB: #235 charity sale URL found (cmoezlc8s00q413p74kjv2r9a, user6@example.com), Holds active ItemReservation found (user16@example.com, /sales/cmoezk0ou001m13p7y7esjr18), #338 comp row seeded for Alice's Hermès Silk Scarf item (cmoezkryx00gu13p7l9knzclq), S529 storefront widget root cause found (Alice's customStorefrontSlug was NULL — set to 'kellys-estate-sales' in DB). No migrations. S578 is full Chrome QA.
 
 **S576 (2026-04-25) — COMPLETE:** QA-only session. 17 items tested. 8 ✅ (Markdown Cycles all tiers, Organizer-intent wins, Refuse-to-fill, Multi-angle chips, Rarity Boost XP gate, Settlement Receipt PDF, S529 mobile nav rank, #333 Alice page). 4 confirmed bugs: P1 Settlement payout $0.00/$NaN, P1 Tier Lapse no banner + full PRO access despite past_due, P2 voice-to-tag icon wrong (ghost not mic), P2 AvatarDropdown no guild link (corrected — link IS present). 3 UNVERIFIED: #338 PricingCompSummary, #235 DonationModal, Holds countdown. S577 was bug dispatch.
@@ -291,17 +296,17 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S578 — Full Chrome QA.** All S577 bugs dispatched and coded. Run sequential Chrome tests (one at a time — shared browser instance rule).
+**S580 — Chrome QA of all S579 fixes.** Push S579 block first, wait for Railway + Vercel deploy.
 
-**QA order (sequential Chrome, one per dispatch):**
-1. **Settlement payout** — user1@example.com (Alice, Seedy2025!) → /organizer/settlements → open Settlement Wizard → Commission tab → Receipt step → verify payout amount is NOT $0.00/$NaN
-2. **Shopify #332** — user2@example.com (Bob PRO, Seedy2025!) → /organizer/shopify → verify TEAMS upgrade wall shown, no full page content
-3. **Stripe Connect #333** — user2@example.com (Bob PRO) → /organizer/stripe-connect → verify TEAMS gate. Then user1@example.com (Alice TEAMS) → verify consignors load without 500 error
-4. **Voice-to-tag icon** — user1@example.com → RapidCapture (add item, rapidfire mode) → confirm mic icon on thumbnails. Also /organizer/edit-item/[any item] → confirm mic icon on voice button
-5. **Tier Lapse #75** — tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → amber banner visible + PRO features blocked (shopify, stripe-connect, markdown cycles, etc.)
-6. **#235 DonationModal** — user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → verify DonationModal renders and charity UI present
-7. **Holds countdown** — user16@example.com (Seedy2025!) → /sales/cmoezk0ou001m13p7y7esjr18 → verify ItemReservation countdown visible (reservation expires 2026-04-27)
-8. **#338 PricingCompSummary** — user1@example.com → /organizer/edit-item/cmoezkryx00gu13p7l9knzclq (Hermès Silk Scarf) → verify PricingCompSummary component renders with seeded comp data
-9. **S529 Storefront widget** — user1@example.com → /organizer/dashboard → verify Copy Link + View Storefront buttons visible (Alice's slug patched to 'kellys-estate-sales')
+**QA order (sequential Chrome, one at a time):**
+1. **My Holds** — user16@example.com (Seedy2025!) → /shopper/holds → verify page shows active hold (not empty "No active holds")
+2. **SettlementWizard URL fix** — user1@example.com (Alice) → /organizer/settlements → open wizard for any sale → Step 1 donation items should load (not blank)
+3. **Payout confirmation card** — same wizard → Commission tab → record payout → Receipt step → verify Recipient/Amount/Method values render, card has dark mode background
+4. **ebay-comps** — user1@example.com → /organizer/edit-item/[any item with comps] → verify comp tile loads (not 500)
+5. **SimilarItems** — any public item page → scroll to Similar Items → verify section loads (not 404)
+6. **Tier lapse label** — tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → verify plan label shows "PRO (Payment Required)" in amber (not just "PRO")
+7. **Discount rules on charity sale** — user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → verify page loads without 403 error in console
+8. **Brand kit** — user1@example.com → /organizer/brand-kit → verify page loads (was 404 on /organizers/me)
+9. **workspace/locations/price-history 404s** — user1@example.com → check network tab on /organizer/dashboard and /organizer/locations for 404s on these endpoints; report what's still broken
 
-**Patrick pending actions:** None required before S578 starts.
+**Patrick pending actions:** Push S579 block below before S580 starts.

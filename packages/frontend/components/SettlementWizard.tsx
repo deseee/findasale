@@ -68,13 +68,15 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
   const { data: availableItems = [] } = useQuery({
     queryKey: ['sale-available-items', saleId],
     queryFn: () =>
-      api.get(`/sales/${saleId}/items?status=AVAILABLE`).then((r) =>
-        (r.data.items || []).map((item: any) => ({
-          id: item.id,
-          title: item.title,
-          price: item.price,
-          condition: item.condition,
-        }))
+      api.get(`/items/?saleId=${saleId}`).then((r) =>
+        (r.data || [])
+          .filter((item: any) => item.status === 'AVAILABLE')
+          .map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            price: item.price,
+            condition: item.condition,
+          }))
       ),
     enabled: !!saleId,
   });
@@ -267,16 +269,16 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
             </div>
 
             {/* Payout details */}
-            {settlement?.clientPayoutStripeTransferId && (
+            {settlement?.clientPayout?.stripeTransferId && (
               <div className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 rounded p-2 mb-4 break-all font-mono">
-                Transfer ID: {settlement.clientPayoutStripeTransferId}
+                Transfer ID: {settlement.clientPayout.stripeTransferId}
               </div>
             )}
 
-            {settlement?.clientPayoutFailureReason && (
+            {settlement?.clientPayout?.failureReason && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4">
                 <p className="text-sm font-semibold text-red-800 dark:text-red-300">Payout Failed</p>
-                <p className="text-sm text-red-700 dark:text-red-400 mt-1">{settlement.clientPayoutFailureReason}</p>
+                <p className="text-sm text-red-700 dark:text-red-400 mt-1">{settlement.clientPayout.failureReason}</p>
               </div>
             )}
 

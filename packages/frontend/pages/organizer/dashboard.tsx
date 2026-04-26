@@ -81,7 +81,7 @@ const OrganizerDashboard = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
-  const { isSimple, canAccess } = useOrganizerTier();
+  const { isSimple, canAccess, isLapsed } = useOrganizerTier();
   const { data: existingWorkspace, isLoading: workspaceLoading } = useMyWorkspace();
   const [isClient, setIsClient] = useState(false);
   const [openQRSale, setOpenQRSale] = useState<string | null>(null);
@@ -843,17 +843,17 @@ const OrganizerDashboard = () => {
           )}
 
           {isClient && user?.organizerTier === 'PRO' && (
-            <div className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border border-teal-200 dark:border-teal-800 rounded-lg p-6 mb-8">
+            <div className={`bg-gradient-to-r ${isLapsed ? 'from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800' : 'from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border border-teal-200 dark:border-teal-800'} rounded-lg p-6 mb-8`}>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: PRO</h3>
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Scale with your team — TEAMS is $79/mo</p>
-                  <p className="text-sm text-warm-700 dark:text-warm-300">
-                    <strong>TEAMS includes:</strong> Shared workspace • Team members • Collaboration tools
+                  <h3 className={`text-lg font-bold mb-1 ${isLapsed ? 'text-amber-900 dark:text-amber-100' : 'text-warm-900 dark:text-warm-100'}`}>Your Plan: PRO {isLapsed && '(Payment Required)'}</h3>
+                  <p className={`text-sm mb-3 ${isLapsed ? 'text-amber-600 dark:text-amber-400' : 'text-warm-600 dark:text-warm-400'}`}>{isLapsed ? 'Your subscription payment is overdue. Renew now to restore full access.' : 'Scale with your team — TEAMS is $79/mo'}</p>
+                  <p className={`text-sm ${isLapsed ? 'text-amber-700 dark:text-amber-300' : 'text-warm-700 dark:text-warm-300'}`}>
+                    {isLapsed ? <strong>You are temporarily on SIMPLE tier.</strong> : <><strong>TEAMS includes:</strong> Shared workspace • Team members • Collaboration tools</>}
                   </p>
                 </div>
-                <Link href="/organizer/pricing" className="flex-shrink-0 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
-                  Learn about TEAMS
+                <Link href={isLapsed ? "/organizer/subscription" : "/organizer/pricing"} className={`flex-shrink-0 px-6 py-2 text-white font-medium rounded-lg transition-colors whitespace-nowrap ${isLapsed ? 'bg-amber-600 hover:bg-amber-700' : 'bg-teal-600 hover:bg-teal-700'}`}>
+                  {isLapsed ? 'Renew Now' : 'Learn about TEAMS'}
                 </Link>
               </div>
             </div>
