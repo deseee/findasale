@@ -145,7 +145,7 @@ const ShopperHoldsPage = () => {
                           </p>
                         </div>
                         {hold.item.price && (
-                          <p className="text-lg font-bold text-amber-700 dark:text-amber-500 mt-2">${(hold.item.price / 100).toFixed(2)}</p>
+                          <p className="text-lg font-bold text-amber-700 dark:text-amber-500 mt-2">${hold.item.price.toFixed(2)}</p>
                         )}
                         <div className="mt-3">
                           <HoldTimer expiresAt={hold.expiresAt} onExpiry={() => handleHoldExpiry(hold.id)} />
