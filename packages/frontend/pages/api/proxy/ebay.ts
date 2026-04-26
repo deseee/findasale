@@ -49,6 +49,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       const data = await ebayRes.json();
+      if (!ebayRes.ok) {
+        console.error('[ebay-proxy/token] eBay returned', ebayRes.status, JSON.stringify(data));
+      }
       res.setHeader('Cache-Control', 'no-store');
       return res.status(ebayRes.status).json(data);
     } catch (err: any) {
