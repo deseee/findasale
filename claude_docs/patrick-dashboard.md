@@ -1,73 +1,62 @@
-# Patrick's Dashboard — S576 Complete (QA Pass Done — Bug Dispatch Next)
+# Patrick's Dashboard — S577 Complete → S578 Chrome QA Next
 
-## ✅ S576 QA Results
+## ✅ S577 Complete — All Bugs Fixed
 
-**One-line summary:** 17 items tested. All S575 features verified. 2 P1 bugs found, 1 P2 bug, 4 UNVERIFIED carried forward. S577 is bug dispatch.
-
-### Verified ✅
-
-| Feature | Notes |
-|---|---|
-| #334 Markdown Cycles | All 3 tiers correct: TEAMS sees page, PRO sees page, SIMPLE sees PRO gate |
-| #336 Organizer-intent wins | Rapidfire: typing price before AI completes → organizer value saved, not overwritten |
-| #339 Refuse-to-fill | Ambiguous photo (generic glass) → brand + eBay category left blank by AI |
-| #341 Multi-angle chips | Chip row fires after first photo: Back/Stamp, Damage Detail, Label/Brand, Skip |
-| Rarity Boost XP gate | low-xp-shopper (10 XP): Rarity Boost button disabled with "not enough XP" message |
-| Settlement Receipt PDF | Download returns 200 OK with application/pdf header |
-| S529 mobile nav rank | Mobile nav shows "Initiate" from useXpProfile hook (not hardcoded "Scout") |
-| AvatarDropdown Explorer's Guild | CONNECT section has Explorer's Guild → /shopper/guild-primer ✅ (ss_1535lmtx4) |
+All 5 bugs from the S576 QA pass have been dispatched and coded. 4 previously-UNVERIFIED items have been unblocked with data. S578 is Chrome verification.
 
 ---
 
-## ❌ Bugs Found (dispatching S577)
+## S577 Fixes (Pending Chrome QA)
 
-### P1: Settlement Payout Not Auto-Populated
-- **What's broken:** Settlement Wizard → Commission tab → Receipt step shows **$0.00** payout. The "Client / Executor Receives" line shows **$NaN**. This was claimed as fixed in S575 but is broken in production.
-- **Fix needed:** Wire CommissionPanel's `onPayoutRecorded` callback into SettlementWizard's payoutAmount state properly.
-
-### P1: Tier Lapse — No Warning, No Gate
-- **What's broken:** `tier-lapse-test@example.com` has PRO tier with `subscriptionStatus: past_due` in the DB and JWT. But the frontend completely ignores the `subscriptionStatus` field — no warning banner appears, and all PRO features are fully accessible.
-- **Fix needed:** Read `subscriptionStatus` in the frontend, show an amber warning banner when `past_due`. Whether to also *block* PRO features needs your call (see Patrick action below).
-
-### P2: Voice-to-Tag Wrong Icon
-- **What's broken:** The voice recording button shows a **generic ghost/avatar shape** instead of a mic icon — on both the rapidfire grid thumbnails AND the edit-item page. Users have no way to know it triggers voice recording.
-- **Fix needed:** Swap icon to mic on both locations.
+| # | Fix | Status |
+|---|-----|--------|
+| P1 | Settlement payout auto-populate | Coded — pending Chrome QA |
+| P1 | Tier Lapse hard gate + amber banner | Coded — pending Chrome QA |
+| P1 | #332 Shopify TEAMS gate (frontend + backend) | Coded — pending Chrome QA |
+| P1 | #333 Stripe Connect TEAMS gate + consignors 500 | Coded — pending Chrome QA |
+| P2 | Voice-to-tag mic icon (2 locations) | Coded — pending Chrome QA |
 
 ---
 
-## ⚠️ UNVERIFIED — Carry to S577
+## S578 Chrome QA Checklist (9 items, sequential)
 
-| Feature | Why Unverified | What's Needed |
-|---|---|---|
-| #338 PricingCompSummary | No test items have eBay comp data populated | Run eBay fetch on an item, or seed ItemCompLookup rows |
-| #235 DonationModal | Charity sale seeded but URL unknown | Query DB for saleType=CHARITY sale → navigate directly |
-| Holds countdown | Seeded hold not navigable during QA | Re-seed or find hold URL in DB |
-| S529 storefront widget | Copy Link + View Storefront not in DOM | Inspect organizer/dashboard.tsx — possibly regressed or removed |
+| # | What to verify | Account | URL |
+|---|----------------|---------|-----|
+| 1 | Settlement payout: Receipt shows real dollar amount (not $0/$NaN) | user1@example.com (Alice) | /organizer/settlements |
+| 2 | Shopify TEAMS gate: Bob (PRO) sees upgrade wall | user2@example.com (Bob) | /organizer/shopify |
+| 3 | Stripe Connect gate: Bob blocked; Alice's consignors load | user2 then user1 | /organizer/stripe-connect |
+| 4 | Voice button shows mic icon (not ghost) | user1@example.com | RapidCapture + edit-item |
+| 5 | Tier Lapse: amber banner + PRO features blocked | tier-lapse-test@example.com | /organizer/dashboard |
+| 6 | #235 DonationModal renders on charity sale | user6@example.com | /sales/cmoezlc8s00q413p74kjv2r9a |
+| 7 | Holds countdown visible | user16@example.com | /sales/cmoezk0ou001m13p7y7esjr18 |
+| 8 | #338 PricingCompSummary renders with comp data | user1@example.com (Alice) | /organizer/edit-item/cmoezkryx00gu13p7l9knzclq |
+| 9 | S529 Storefront widget: Copy Link + View Storefront visible | user1@example.com (Alice) | /organizer/dashboard |
 
----
-
-## ⏳ Patrick Action Needed Before S577
-
-**Tier Lapse gate decision:** When an organizer's account is `past_due`, should we:
-- **(A) Warning banner only** — amber banner at top of dashboard saying "Your subscription is past due. Update payment to avoid losing access." PRO features still work. (Simpler — 1–2 dev hours)
-- **(B) Hard gate** — Warning banner + block access to PRO-only features (shopify, stripe-connect, markdown cycles, etc.) until payment is resolved. (More complex — 4–6 dev hours)
-
-Which do you want?
-
-**Optional (low priority):**
-- `KEEPA_API_KEY` from keepa.io → API Keys — adds Amazon price history to the pricing engine. Works fine without it.
-- Run `pnpm run prisma:seed` from packages/database/ when ready to update test account passwords to Seedy2025!
+All test accounts use password: **Seedy2025!**
 
 ---
 
-## 📋 S577 Dispatch Plan
+## ⏳ Patrick Action Needed
 
-All independent — dispatch in parallel.
+None. S578 can start immediately.
 
-| # | Task | Agent | Priority |
-|---|------|-------|---------|
-| 1 | Settlement payout auto-populate fix | findasale-dev | P1 |
-| 2 | Tier Lapse banner (+ gate if Patrick picks Option B) | findasale-dev | P1 |
-| 3 | #332 Shopify TEAMS gate for PRO users | findasale-dev | P1 |
-| 4 | #333 Stripe Connect TEAMS gate + consignors 500 fix | findasale-dev | P1 |
-| 5 | Voice-to-tag mic icon fix (2 locations) | findasale-dev | P2 |
+---
+
+## Code Push Still Needed (S577 files)
+
+If you haven't pushed S577 code yet:
+
+```powershell
+git add packages/frontend/components/SettlementWizard.tsx
+git add packages/frontend/pages/organizer/shopify.tsx
+git add packages/backend/src/controllers/shopifyController.ts
+git add packages/backend/src/controllers/consignorController.ts
+git add packages/frontend/pages/organizer/stripe-connect.tsx
+git add packages/frontend/components/VoiceTagButton.tsx
+git add packages/frontend/components/camera/RapidCapture.tsx
+git add packages/frontend/components/AuthContext.tsx
+git add packages/frontend/hooks/useOrganizerTier.ts
+git add packages/frontend/components/Layout.tsx
+git commit -m "S577: settlement payout fix, shopify/stripe-connect TEAMS gates, consignors 500, mic icon, tier lapse hard gate"
+.\push.ps1
+```

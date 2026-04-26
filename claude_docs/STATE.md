@@ -268,26 +268,17 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S577 — Bug dispatch.** QA complete. Dispatch all confirmed bugs in parallel.
+**S578 — Full Chrome QA.** All S577 bugs dispatched and coded. Run sequential Chrome tests (one at a time — shared browser instance rule).
 
-**P1 dispatch queue (findasale-dev):**
-1. **Settlement payout auto-populate** — SettlementWizard.tsx: payout amount not flowing from CommissionPanel to Receipt step. $0.00 shown, receipt shows $NaN for "Client / Executor Receives". Fix the onPayoutRecorded → payoutAmount state wire.
-2. **Tier Lapse (#75)** — Frontend never reads `subscriptionStatus` field from JWT/API. Need: (a) read subscriptionStatus in auth context or organizer layout, (b) show amber warning banner when `subscriptionStatus === 'past_due'`, (c) decide if features should be gated or just warned — DECISION NEEDED from Patrick before implementing gate.
-3. **#332 Shopify TEAMS gate** — Bob (PRO) gets full /organizer/shopify page. Add TEAMS guard to frontend route + backend controller.
-4. **#333 Stripe Connect TEAMS gate + consignors 500** — Bob (PRO) gets full /organizer/stripe-connect. Also: "Failed to load consignors" API error for ALL users — investigate consignorController endpoint used by stripe-connect page.
+**QA order (sequential Chrome, one per dispatch):**
+1. **Settlement payout** — user1@example.com (Alice, Seedy2025!) → /organizer/settlements → open Settlement Wizard → Commission tab → Receipt step → verify payout amount is NOT $0.00/$NaN
+2. **Shopify #332** — user2@example.com (Bob PRO, Seedy2025!) → /organizer/shopify → verify TEAMS upgrade wall shown, no full page content
+3. **Stripe Connect #333** — user2@example.com (Bob PRO) → /organizer/stripe-connect → verify TEAMS gate. Then user1@example.com (Alice TEAMS) → verify consignors load without 500 error
+4. **Voice-to-tag icon** — user1@example.com → RapidCapture (add item, rapidfire mode) → confirm mic icon on thumbnails. Also /organizer/edit-item/[any item] → confirm mic icon on voice button
+5. **Tier Lapse #75** — tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → amber banner visible + PRO features blocked (shopify, stripe-connect, markdown cycles, etc.)
+6. **#235 DonationModal** — user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → verify DonationModal renders and charity UI present
+7. **Holds countdown** — user16@example.com (Seedy2025!) → /sales/cmoezk0ou001m13p7y7esjr18 → verify ItemReservation countdown visible (reservation expires 2026-04-27)
+8. **#338 PricingCompSummary** — user1@example.com → /organizer/edit-item/cmoezkryx00gu13p7l9knzclq (Hermès Silk Scarf) → verify PricingCompSummary component renders with seeded comp data
+9. **S529 Storefront widget** — user1@example.com → /organizer/dashboard → verify Copy Link + View Storefront buttons visible (Alice's slug patched to 'kellys-estate-sales')
 
-**P2 dispatch queue (same batch):**
-5. **Voice-to-tag icon** — Replace ghost/avatar icon with mic icon on (a) rapidfire grid thumbnail and (b) edit-item page voice button. Both locations need the fix.
-
-**UNVERIFIED — carry forward:**
-- #338 PricingCompSummary — needs item with populated ItemCompLookup rows (run eBay fetch or seed directly)
-- #235 DonationModal — query DB for charity sale URL, navigate directly
-- Holds countdown — re-seed or find hold in DB
-- S529 storefront widget — inspect organizer/dashboard.tsx source, check if widget was removed
-
-**Patrick action needed before S577:**
-- Tier Lapse gate decision: should `past_due` block PRO features, or just show a warning banner? (banner-only is much simpler to ship)
-- P2: /organizer/stripe-connect — light mode only (no dark: classes)
-- P2: Voice-to-tag button icon — avatar/ghost icon instead of mic (camera thumbnail + edit-item page)
-
-**Patrick pending actions:** Re-seed DB when ready: `cd packages/database && pnpm run prisma:seed` (updates test account passwords to Seedy2025!).
+**Patrick pending actions:** None required before S578 starts.
