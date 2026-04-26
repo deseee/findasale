@@ -99,8 +99,28 @@ export default function SaleOGMeta({
     organizerName: sale.organizer?.businessName,
   });
 
+  // Sale type label mapping
+  const SALE_TYPE_LABELS: Record<string, string> = {
+    ESTATE: 'Estate Sale',
+    YARD: 'Yard Sale',
+    GARAGE: 'Garage Sale',
+    MOVING: 'Moving Sale',
+    DOWNSIZING: 'Downsizing Sale',
+    AUCTION: 'Auction',
+    FLEA_MARKET: 'Flea Market',
+    SWAP_MEET: 'Swap Meet',
+    POPUP: 'Pop-Up Sale',
+    LIQUIDATION: 'Liquidation Sale',
+    CHARITY: 'Charity Sale',
+    RETAIL: 'Retail Store',
+    ONLINE: 'Online Sale',
+    CONSIGNMENT: 'Consignment Sale',
+    BOOTH: 'Vendor Booth',
+    BUSINESS_CORPORATE: 'Corporate Sale',
+  };
+
   // Default description
-  const saleTypeLabel = sale.saleType || 'Sale';
+  const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType || ''] ?? 'Sale';
   const metaDescription =
     description ||
     sale.description ||
