@@ -88,7 +88,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- S579 COMPLETE — 4 parallel bug dispatches. 8 files fixed. All 9 P1s addressed + 2 P2s. 3 backend 404s (workspace, locations, price-history) confirmed registered in index.ts — root cause unclear, needs Chrome QA post-deploy. S580 is Chrome QA of all S579 fixes.
+- S579 COMPLETE — 4 parallel bug dispatches + Chrome QA + 2 follow-up fixes. 9 files fixed (+ 2 wrap docs). All 9 P1s addressed + 2 P2s. QA confirmed: My Holds ✅, brand-kit ✅, similar-items prefix ✅, tier-lapse label ✅. Discount-rules needed a second fix (router-level auth was applying to all routes — restructured to isolated public router). holds.tsx price divide-by-100 bug found + fixed. SettlementWizard URL fix unverifiable via direct URL (wizard accessed via Settle button on completed sale only). S580 QA: verify discount-rules returns 200 on charity sale page + SettlementWizard via Settle button flow.
 - S578 COMPLETE — Full Chrome QA session. 6 ✅ PASS, 2 ⚠️ PARTIAL, 1 ❌ FAIL. New P1 bugs found. S579 is bug dispatch for all P1s + roadmap update.
 - S577 COMPLETE — 5 bugs fixed (Settlement payout, Shopify #332, Stripe Connect #333, voice icon, Tier Lapse #75). All 4 UNVERIFIED items unblocked via DB patches.
 
@@ -276,7 +276,7 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
-**S579 (2026-04-25) — COMPLETE:** 4 parallel bug dispatches for all S578-found bugs. 8 files modified. Backend: reservations.ts (added GET /shopper for My Holds), brandKit.ts + controller (added GET /organizers/me), discountRules.ts + discountRuleController.ts (GET made public so charity sale page doesn't 403), itemController.ts (ebay-comps 500 fixed — findMany→findUnique on @unique field + BigInt serialization). Frontend: SettlementWizard.tsx (URL fixed → /api/items/?saleId=... + client filter; payout card property paths fixed), SimilarItems.tsx (removed hardcoded /api/ prefix causing double /api/api/), organizer/dashboard.tsx (isLapsed destructured from useOrganizerTier + amber "(Payment Required)" label on plan card). No migrations. ⚠️ workspace/locations/price-history 404s — agent confirmed these ARE registered in index.ts; root cause of 404 unclear, needs Chrome QA post-deploy. S580 is full Chrome QA pass on all 8 fixed files.
+**S579 (2026-04-25) — COMPLETE:** 4 parallel bug dispatches + Chrome QA + 2 follow-up fixes. 9 code files changed. Backend: reservations.ts (GET /shopper for My Holds), brandKit.ts (GET /organizers/me), discountRules.ts (restructured to isolated public router — first pass still 401 due to router.use(authenticate) on all routes; fixed second pass), discountRuleController.ts (optional saleId param), itemController.ts (ebay-comps 500 — findMany→findUnique + BigInt serialization). Frontend: SettlementWizard.tsx (URL + payout card property paths), SimilarItems.tsx (double /api/ prefix removed), organizer/dashboard.tsx (isLapsed → amber "(Payment Required)" label), shopper/holds.tsx (price divide-by-100 bug caught in QA). Chrome QA: My Holds ✅, brand-kit ✅, similar-items URL ✅, tier-lapse label ✅, discount-rules patched (re-QA needed). SettlementWizard URL fix unverifiable via direct URL — test via Settle button on a completed sale. workspace/locations/price-history 404s still unresolved — registered in index.ts but controllers may be crashing. No migrations.
 
 **S578 (2026-04-25) — COMPLETE:** Full Chrome QA. 6 ✅, 2 ⚠️ PARTIAL, 1 ❌ (DonationModal 404). Discovered 9 P1 backend bugs via Railway logs (route gaps, 500s, 403) + 2 P2 frontend bugs. All queued for S579 dispatch.
 
@@ -296,17 +296,15 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S580 — Chrome QA of all S579 fixes.** Push S579 block first, wait for Railway + Vercel deploy.
+**S580 — Remaining QA + workspace/locations/price-history investigation.**
 
-**QA order (sequential Chrome, one at a time):**
-1. **My Holds** — user16@example.com (Seedy2025!) → /shopper/holds → verify page shows active hold (not empty "No active holds")
-2. **SettlementWizard URL fix** — user1@example.com (Alice) → /organizer/settlements → open wizard for any sale → Step 1 donation items should load (not blank)
-3. **Payout confirmation card** — same wizard → Commission tab → record payout → Receipt step → verify Recipient/Amount/Method values render, card has dark mode background
-4. **ebay-comps** — user1@example.com → /organizer/edit-item/[any item with comps] → verify comp tile loads (not 500)
-5. **SimilarItems** — any public item page → scroll to Similar Items → verify section loads (not 404)
-6. **Tier lapse label** — tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → verify plan label shows "PRO (Payment Required)" in amber (not just "PRO")
-7. **Discount rules on charity sale** — user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → verify page loads without 403 error in console
-8. **Brand kit** — user1@example.com → /organizer/brand-kit → verify page loads (was 404 on /organizers/me)
-9. **workspace/locations/price-history 404s** — user1@example.com → check network tab on /organizer/dashboard and /organizer/locations for 404s on these endpoints; report what's still broken
+S579 QA completed this session: My Holds ✅, brand-kit ✅, similar-items URL ✅, tier-lapse label ✅, holds price fix ✅.
+
+**Still needs QA in S580 (after pushing this block):**
+1. **Discount rules** — user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → verify GET /api/discount-rules returns 200 (not 401) in network tab
+2. **SettlementWizard URL** — user1@example.com (Alice) → /organizer/dashboard → find a completed sale → click Settle button → verify Step 1 items list loads (not blank)
+3. **workspace/locations/price-history** — user1@example.com → /organizer/locations → if still 404, dispatch backend investigation to find what crashes inside those controllers
+
+**Patrick pending actions:** Push S579 block below.
 
 **Patrick pending actions:** Push S579 block below before S580 starts.

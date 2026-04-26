@@ -10,18 +10,23 @@ import {
 const router = Router();
 
 // GET /api/discount-rules — public read (for displaying discounts on sale pages)
+// Define public route without auth middleware
 router.get('/', listDiscountRules);
 
-// All other routes require authentication
-router.use(authenticate);
+// Create a separate router for protected routes (POST, PUT, DELETE)
+const protectedRouter = Router();
+protectedRouter.use(authenticate);
 
 // POST /api/discount-rules
-router.post('/', createDiscountRule);
+protectedRouter.post('/', createDiscountRule);
 
 // PUT /api/discount-rules/:id
-router.put('/:id', updateDiscountRule);
+protectedRouter.put('/:id', updateDiscountRule);
 
 // DELETE /api/discount-rules/:id
-router.delete('/:id', deleteDiscountRule);
+protectedRouter.delete('/:id', deleteDiscountRule);
+
+// Mount protected routes on main router
+router.use(protectedRouter);
 
 export default router;
