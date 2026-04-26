@@ -26,7 +26,7 @@ protectedRouter.put('/:id', updateDiscountRule);
 // DELETE /api/discount-rules/:id
 protectedRouter.delete('/:id', deleteDiscountRule);
 
-// Mount protected routes on main router
+// Mount protected routes
 router.use(protectedRouter);
 
 export default router;
