@@ -1,5 +1,8 @@
 import './instrument'; // must be first — initializes Sentry before all other imports
-import { setDefaultResultOrder } from 'dns';
+import { setDefaultResultOrder, setServers } from 'dns';
+// Force Google public DNS — bypasses Railway's internal resolver which fails to
+// resolve some external domains (e.g. api.ebay.com) in the us-east4 region.
+setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 setDefaultResultOrder('ipv4first');
 import dotenv from 'dotenv';
 import path from 'path';
