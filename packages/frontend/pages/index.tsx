@@ -55,6 +55,24 @@ interface SearchResults {
 
 type DateFilter = 'all' | 'upcoming' | 'this-weekend' | 'this-month';
 
+const SALE_TYPE_OPTIONS = [
+  { value: '', label: 'All Types' },
+  { value: 'ESTATE', label: 'Estate Sale' },
+  { value: 'YARD', label: 'Yard Sale' },
+  { value: 'GARAGE', label: 'Garage Sale' },
+  { value: 'MOVING', label: 'Moving Sale' },
+  { value: 'DOWNSIZING', label: 'Downsizing Sale' },
+  { value: 'AUCTION', label: 'Auction' },
+  { value: 'FLEA_MARKET', label: 'Flea Market' },
+  { value: 'SWAP_MEET', label: 'Swap Meet' },
+  { value: 'CONSIGNMENT', label: 'Consignment' },
+  { value: 'POPUP', label: 'Pop-Up Sale' },
+  { value: 'LIQUIDATION', label: 'Liquidation Sale' },
+  { value: 'CHARITY', label: 'Charity Sale' },
+  { value: 'RETAIL', label: 'Retail Store' },
+  { value: 'ONLINE', label: 'Online Sale' },
+];
+
 const SaleCardSkeleton = () => (
   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card hover:shadow-card-hover transition-shadow duration-300 overflow-hidden flex flex-col h-full">
     <Skeleton className="w-full h-48 rounded-none" />
@@ -79,6 +97,7 @@ const HomePage = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [saleTypeFilter, setSaleTypeFilter] = useState('');
   const [isSavingSearch, setIsSavingSearch] = useState(false);
   const resultsRef = useRef<HTMLHeadingElement>(null);
 
@@ -114,9 +133,11 @@ const HomePage = () => {
 
   // Search API query — call backend FTS when searchQuery is >= 2 chars
   const { data: searchResults, isLoading: isSearching } = useQuery({
-    queryKey: ['search', searchQuery],
+    queryKey: ['search', searchQuery, saleTypeFilter],
     queryFn: async () => {
-      const res = await api.get('/search', { params: { q: searchQuery, type: 'all', limit: 20 } });
+      const params: any = { q: searchQuery, type: 'all', limit: 20 };
+      if (saleTypeFilter) params.saleType = saleTypeFilter;
+      const res = await api.get('/search', { params });
       return res.data as SearchResults;
     },
     enabled: searchQuery.trim().length >= 2,
@@ -125,10 +146,6 @@ const HomePage = () => {
 
   useEffect(() => {
     // Auto-locate only when permission is already granted.
-    // iOS Safari: calling getCurrentPosition without a user gesture and without
-    // checking permissions first can trigger the system dialog at wrong time,
-    // or return PERMISSION_DENIED before the user sees the prompt.
-    // Map page uses the same pattern — only auto-locate if already granted.
     if (navigator.geolocation) {
       navigator.permissions
         ?.query({ name: 'geolocation' as PermissionName })
@@ -138,14 +155,11 @@ const HomePage = () => {
               (position) => {
                 setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
               },
-              () => {} // granted but position failed — silent, non-blocking
+              () => {}
             );
           }
-          // 'prompt' or 'denied' — do nothing; user can request via map page
         })
-        .catch(() => {
-          // Permissions API not available (older iOS) — skip auto-locate
-        });
+        .catch(() => {});
     }
 
     // Record visit streak silently
@@ -174,18 +188,20 @@ const HomePage = () => {
       );
     }
 
+    if (saleTypeFilter) {
+      result = result.filter((s) => s.saleType === saleTypeFilter);
+    }
+
     if (dateFilter !== 'all') {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-      // H4: Weekend = Saturday+Sunday of the current week.
-      // Handles edge cases: Sunday (weekend already started), Saturday (today), weekday (next Saturday).
-      const day = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
+      const day = now.getDay();
       const satDiff = day === 0 ? -1 : day === 6 ? 0 : 6 - day;
       const weekendStart = new Date(todayStart);
-      weekendStart.setDate(weekendStart.getDate() + satDiff); // This Saturday
+      weekendStart.setDate(weekendStart.getDate() + satDiff);
       const weekendEnd = new Date(weekendStart);
-      weekendEnd.setDate(weekendEnd.getDate() + 1); // This Sunday
+      weekendEnd.setDate(weekendEnd.getDate() + 1);
       weekendEnd.setHours(23, 59, 59, 999);
 
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -208,7 +224,7 @@ const HomePage = () => {
     }
 
     return result;
-  }, [sales, searchQuery, dateFilter]);
+  }, [sales, searchQuery, saleTypeFilter, dateFilter]);
 
   const handleSaveSearch = async () => {
     if (!searchQuery.trim()) {
@@ -220,9 +236,7 @@ const HomePage = () => {
     try {
       await api.post('/saved-searches', {
         query: searchQuery.trim(),
-        filters: {
-          dateFilter,
-        },
+        filters: { dateFilter },
       });
       showToast('Search saved!', 'success');
     } catch (error: any) {
@@ -247,7 +261,6 @@ const HomePage = () => {
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="FindA.Sale — Find Sales Near You" />
         <meta name="twitter:description" content="Browse sales near you - estate sales, garage sales, yard sales, auctions, and more. Bid, buy, and discover unique items from local sales." />
-        {/* Structured data — Organization + WebSite schema for Google */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -333,11 +346,10 @@ const HomePage = () => {
           {/* CD2 Phase 2: Treasure Hunt Banner */}
           <TreasureHuntBanner />
 
-
           {/* Sales Near You Card */}
           <section className="mb-12">
             <div>
-              <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full">
+              <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col">
                 {/* Map Section */}
                 {!isLoading && sales && sales.length > 0 && (
                   <div className="w-full" style={{ height: '220px' }}>
@@ -382,9 +394,9 @@ const HomePage = () => {
             </div>
           </section>
 
-          {/* Date Filter Pills */}
+          {/* Filter Bar: When + Sale Type */}
           <section className="mb-6">
-            <div className="flex items-center gap-3 overflow-x-auto pb-2 -mx-4 px-4">
+            <div className="flex flex-wrap items-center gap-3 overflow-x-auto pb-2 -mx-4 px-4">
               <span className="text-sm font-medium text-warm-600 dark:text-gray-400 whitespace-nowrap">When:</span>
               {(['all', 'upcoming', 'this-weekend', 'this-month'] as DateFilter[]).map((f) => (
                 <button
@@ -400,12 +412,21 @@ const HomePage = () => {
                   {f === 'all' ? 'All' : f === 'upcoming' ? 'Upcoming' : f === 'this-weekend' ? 'This Weekend' : 'This Month'}
                 </button>
               ))}
+              <span className="text-sm font-medium text-warm-600 dark:text-gray-400 whitespace-nowrap ml-2">Type:</span>
+              <select
+                value={saleTypeFilter}
+                onChange={(e) => setSaleTypeFilter(e.target.value)}
+                className="px-3 py-2 rounded-full text-sm font-medium border border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors"
+              >
+                {SALE_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             </div>
           </section>
 
           {/* Featured Sales / Search Results */}
           <section>
-            {/* Show search results when query >= 2 chars */}
             {searchQuery.trim().length >= 2 ? (
               <>
                 <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
@@ -420,7 +441,6 @@ const HomePage = () => {
                   </div>
                 ) : (searchResults?.items?.length ?? 0) + (searchResults?.sales?.length ?? 0) > 0 ? (
                   <>
-                    {/* Item Results Grid */}
                     {searchResults?.items && searchResults.items.length > 0 && (
                       <div className="mb-12">
                         <h3 className="font-heading text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Items</h3>
@@ -428,7 +448,6 @@ const HomePage = () => {
                           {searchResults.items.map((item) => (
                             <Link key={item.id} href={`/sales/${item.sale.id}`}>
                               <a className="group rounded-lg border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full hover:shadow-card-hover transition-shadow duration-300">
-                                {/* Item Photo */}
                                 <div className="w-full h-48 bg-warm-100 dark:bg-gray-700 relative overflow-hidden">
                                   {item.photoUrls && item.photoUrls.length > 0 ? (
                                     <img
@@ -443,7 +462,6 @@ const HomePage = () => {
                                     </div>
                                   )}
                                 </div>
-                                {/* Item Info */}
                                 <div className="p-4 space-y-2 flex flex-col flex-1">
                                   <h3 className="font-medium text-warm-900 dark:text-gray-100 line-clamp-2 group-hover:text-sage-600 dark:group-hover:text-sage-400 transition-colors">
                                     {item.title}
@@ -454,14 +472,9 @@ const HomePage = () => {
                                     </p>
                                   )}
                                 </div>
-                                {/* Sale Footer */}
                                 <div className="px-4 py-3 border-t border-warm-200 dark:border-gray-700 space-y-1">
-                                  <p className="text-xs font-medium text-warm-600 dark:text-gray-400">
-                                    {item.sale.title}
-                                  </p>
-                                  <p className="text-xs text-warm-500 dark:text-gray-500">
-                                    {item.sale.city} · View Sale →
-                                  </p>
+                                  <p className="text-xs font-medium text-warm-600 dark:text-gray-400">{item.sale.title}</p>
+                                  <p className="text-xs text-warm-500 dark:text-gray-500">{item.sale.city} · View Sale →</p>
                                 </div>
                               </a>
                             </Link>
@@ -470,7 +483,6 @@ const HomePage = () => {
                       </div>
                     )}
 
-                    {/* Sale Results */}
                     {searchResults?.sales && searchResults.sales.length > 0 && (
                       <div>
                         <h3 className="font-heading text-lg font-semibold text-warm-900 dark:text-gray-100 mb-4">Sales</h3>
@@ -492,7 +504,6 @@ const HomePage = () => {
               </>
             ) : (
               <>
-                {/* Regular Featured Sales view (when not searching) */}
                 <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
                   <div className="flex items-center gap-3 flex-wrap">
                     {feedData?.personalized && (
@@ -534,7 +545,7 @@ const HomePage = () => {
                   </div>
                 ) : (
                   <div>
-                    {dateFilter !== 'all' ? (
+                    {dateFilter !== 'all' || saleTypeFilter ? (
                       <div>
                         <EmptyState
                           icon="🏷️"
@@ -544,7 +555,7 @@ const HomePage = () => {
                         <div className="flex justify-center mt-6">
                           <button
                             type="button"
-                            onClick={() => { setSearchQuery(''); setDateFilter('all'); }}
+                            onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter(''); }}
                             className="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
                           >
                             Clear all filters
@@ -553,7 +564,7 @@ const HomePage = () => {
                       </div>
                     ) : (
                       <EmptyState
-                        icon="📭"
+                        icon="💭"
                         heading="No sales yet in your area"
                         subtext="Great sales are coming soon! Check back daily or sign up to receive alerts when new sales open near you."
                       />
