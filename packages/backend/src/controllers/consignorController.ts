@@ -58,7 +58,17 @@ export const listConsignors = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    return res.status(200).json(consignors);
+    // Convert Decimal fields to strings for JSON serialization
+    const serialized = consignors.map((c) => ({
+      ...c,
+      payouts: c.payouts.map((p) => ({
+        ...p,
+        totalSales: p.totalSales.toString(),
+        commissionAmount: p.commissionAmount.toString(),
+      })),
+    }));
+
+    return res.status(200).json(serialized);
   } catch (error) {
     console.error('[listConsignors] Error:', error);
     return res.status(500).json({ error: 'Failed to list consignors' });

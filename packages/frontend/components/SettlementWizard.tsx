@@ -82,10 +82,15 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
   // Auto-populate payout amount when advancing to Payout tab (step 3)
   // Also sync payout amount to Receipt tab display
   React.useEffect(() => {
-    if (step === 3 && settlement && !settlement.clientPayout) {
-      // Always sync the current netProceeds to payoutAmount for display
-      const calculatedPayout = settlement.netProceeds ?? (settlement.totalRevenue - settlement.totalExpenses);
-      setPayoutAmount(calculatedPayout);
+    if (settlement) {
+      if (settlement.clientPayout?.amount) {
+        // If payout already exists, use that amount
+        setPayoutAmount(settlement.clientPayout.amount as unknown as number);
+      } else if (step === 3 && !settlement.clientPayout) {
+        // If on payout step and no payout exists yet, use netProceeds
+        const calculatedPayout = settlement.netProceeds ?? (settlement.totalRevenue - settlement.totalExpenses);
+        setPayoutAmount(calculatedPayout as unknown as number);
+      }
     }
   }, [step, settlement]);
 

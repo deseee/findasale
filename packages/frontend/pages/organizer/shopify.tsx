@@ -14,7 +14,7 @@ import Head from 'next/head';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
-import TierGate from '../../components/TierGate';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Link from 'next/link';
 import { Loader2, Check, X, ExternalLink } from 'lucide-react';
@@ -29,6 +29,7 @@ const ShopifyPage: React.FC = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+  const { tier } = useOrganizerTier();
 
   const [status, setStatus] = useState<ShopifyStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +45,43 @@ const ShopifyPage: React.FC = () => {
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
+  }
+
+  // Non-TEAMS: show tier upgrade wall
+  if (!authLoading && tier !== 'TEAMS') {
+    return (
+      <>
+        <Head>
+          <title>Shopify Integration - FindA.Sale</title>
+          <meta name="description" content="Upgrade to TEAMS to enable Shopify integration" />
+        </Head>
+        <div className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800 flex items-center justify-center px-4">
+          <div className="text-center max-w-md">
+            <div className="text-6xl mb-6">🛍️</div>
+            <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-100 mb-4">
+              Shopify Integration
+            </h1>
+            <p className="text-lg text-warm-700 dark:text-gray-400 mb-8">
+              Upgrade to TEAMS to automatically list your items on your Shopify store.
+            </p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
+              <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
+                <strong>TEAMS feature</strong> — Cross-list items to Shopify with automatic inventory syncing
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Current tier: <strong>{tier}</strong>
+              </p>
+            </div>
+            <Link
+              href="/organizer/pricing"
+              className="inline-block px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+            >
+              Upgrade to TEAMS
+            </Link>
+          </div>
+        </div>
+      </>
+    );
   }
 
   // Fetch Shopify status on mount
@@ -114,11 +152,7 @@ const ShopifyPage: React.FC = () => {
   };
 
   return (
-    <TierGate
-      requiredTier="TEAMS"
-      featureName="Shopify Integration"
-      description="Automatically list your items on your Shopify store. Available on TEAMS and above."
-    >
+    <>
       <Head>
         <title>Shopify Integration — FindA.Sale</title>
         <meta name="description" content="Manage Shopify cross-listing for your sales" />
@@ -261,7 +295,7 @@ const ShopifyPage: React.FC = () => {
         onCancel={() => setDisconnectConfirm(false)}
         variant="danger"
       />
-    </TierGate>
+    </>
   );
 };
 

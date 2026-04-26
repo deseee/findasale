@@ -87,7 +87,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { canAccess } = useOrganizerTier();
+  const { canAccess, isLapsed } = useOrganizerTier();
   const { isLowBandwidth } = useNetworkQuality();
   const cart = useShopperCart(user?.id);
   const { items: cartItems } = cart;
@@ -1717,6 +1717,25 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         className="flex-grow pt-[92px] md:pt-16 pb-15 md:pb-0"
         tabIndex={-1}
       >
+        {/* Feature #75: Tier Lapse Banner — hard gate for past_due organizers */}
+        {isClient && isOrganizer && isLapsed && (
+          <div className="bg-amber-50 dark:bg-amber-950/40 border-b-2 border-amber-300 dark:border-amber-700 px-4 py-3 sticky top-[92px] md:top-16 z-40">
+            <div className="container mx-auto flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1">
+                <ShieldAlert size={20} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  Your subscription payment failed. Update your billing to restore access.
+                </p>
+              </div>
+              <Link
+                href="/organizer/subscription"
+                className="flex-shrink-0 font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline whitespace-nowrap"
+              >
+                Update billing →
+              </Link>
+            </div>
+          </div>
+        )}
         {children}
       </div>
 
