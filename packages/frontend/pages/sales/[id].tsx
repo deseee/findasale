@@ -989,17 +989,6 @@ const SaleDetailPage = () => {
           <LiveFeedTicker saleId={sale.id} />
         </div>
 
-        {/* Reviews Section */}
-        <div className="mb-8">
-          <ReviewsSection
-            mode="sale"
-            saleId={sale.id}
-            saleStatus={sale.status}
-            avgRating={sale.organizer.avgRating}
-            totalReviews={sale.organizer.reviewCount}
-          />
-        </div>
-
         {/* Location Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>

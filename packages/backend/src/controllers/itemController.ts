@@ -2511,47 +2511,61 @@ export const getCompSummary = async (req: Request, res: Response) => {
 };
 
 /**
- * BUG 4 FIX: Get similar items for a given item
+ * Get similar items for a given item
  * GET /api/items/:id/similar
- * Returns items in the same category, limit 6
- * Public endpoint — no auth required
+ * Returns up to 6 items in the same category from active sales, excluding the current item
  */
 export const getSimilarItems = async (req: Request, res: Response) => {
   try {
     const { id: itemId } = req.params;
 
-    // Fetch current item to get category and status
     const currentItem = await prisma.item.findUnique({
       where: { id: itemId },
-      select: { id: true, category: true, status: true },
+      select: { id: true, category: true },
     });
 
     if (!currentItem) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Query similar items: same category, AVAILABLE or PUBLISHED status, exclude current item
     const similarItems = await prisma.item.findMany({
       where: {
         category: currentItem.category,
         status: { in: ['AVAILABLE', 'PUBLISHED'] },
         id: { not: itemId },
         isActive: true,
+        saleId: { not: null },
       },
       select: {
         id: true,
         title: true,
         price: true,
         photoUrls: true,
-        category: true,
         condition: true,
-        tags: true,
+        saleId: true,
+        sale: {
+          select: {
+            title: true,
+            city: true,
+          },
+        },
       },
       take: 6,
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json({ items: similarItems });
+    const items = similarItems.map(item => ({
+      id: item.id,
+      title: item.title,
+      price: item.price,
+      photoUrl: item.photoUrls[0] ?? null,
+      condition: item.condition,
+      saleId: item.saleId!,
+      saleName: item.sale?.title ?? '',
+      city: item.sale?.city ?? '',
+    }));
+
+    res.json({ items, total: items.length });
   } catch (error) {
     console.error('[getSimilarItems] Error:', error);
     res.status(500).json({ message: 'Server error fetching similar items' });
