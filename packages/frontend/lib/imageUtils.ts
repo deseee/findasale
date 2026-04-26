@@ -87,3 +87,38 @@ export const getPortrait3x4Url = (url: string): string => {
   if (!isCloudinaryUrl(url)) return url;
   return insertTransform(url, 'c_fill,ar_3:4,w_800,q_auto,f_webp');
 };
+
+/**
+ * eBay CDN domains whose images are blocked by Chrome tracking protection
+ * in incognito / private browsing mode.
+ */
+const EBAY_IMAGE_DOMAINS = [
+  'i.ebayimg.com',
+  'ir.ebaystatic.com',
+  'thumbs.ebaystatic.com',
+];
+
+const isEbayImageUrl = (url: string): boolean => {
+  try {
+    const { hostname } = new URL(url);
+    return EBAY_IMAGE_DOMAINS.some(
+      d => hostname === d || hostname.endsWith('.' + d)
+    );
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Returns a safe display URL for any item image.
+ * eBay CDN URLs are routed through /api/image-proxy to bypass
+ * Chrome Enhanced Tracking Protection in incognito mode.
+ * Cloudinary and all other URLs are returned unchanged.
+ */
+export const getItemImageUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (isEbayImageUrl(url)) {
+    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+};
