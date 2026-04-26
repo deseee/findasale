@@ -120,6 +120,13 @@ interface Sale {
   unlocksAt?: string;
   minutesUntilUnlock?: number;
   userRank?: string;
+  // Feature #85: Treasure Hunt QR
+  treasureHuntEnabled?: boolean;
+  treasureHuntQRClues?: Array<{
+    id: string;
+    clueText: string;
+    category?: string;
+  }>;
 }
 
 interface Bid {
@@ -930,6 +937,20 @@ const SaleDetailPage = () => {
                     <p className="text-sm text-emerald-600 dark:text-emerald-400">Snap a pic at this sale and earn 5 XP</p>
                   </div>
                   <svg className="ml-auto w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                </div>
+              </Link>
+            )}
+
+            {/* Treasure Hunt card — shopper only, not organizer */}
+            {user && !isOrganizer && sale.treasureHuntEnabled && (
+              <Link href={`/sales/${sale.id}/treasure-hunt-qr/progress`} className="block bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-8 hover:shadow-md transition">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">🎯</span>
+                  <div>
+                    <p className="font-semibold text-amber-800 dark:text-amber-200">Treasure Hunt</p>
+                    <p className="text-sm text-amber-600 dark:text-amber-400">Clues hidden around the sale</p>
+                  </div>
+                  <svg className="ml-auto w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </div>
               </Link>
             )}

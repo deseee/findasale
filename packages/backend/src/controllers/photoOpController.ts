@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { awardXp, XP_AWARDS } from '../services/xpService';
+import { haversineDistance } from '../lib/placesService';
 
 // Validation schemas
 const createStationSchema = z.object({
@@ -341,15 +342,25 @@ export const photoStationScan = async (req: AuthRequest, res: Response) => {
     }
 
     const { saleId } = req.params;
+    const { lat, lng } = req.body; // Optional geolocation from frontend
 
-    // Verify sale exists
+    // Verify sale exists and fetch location for geofencing
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true },
+      select: { id: true, lat: true, lng: true },
     });
 
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    // Geofence check: if client provided lat/lng, enforce 100m radius from sale location
+    if (lat !== undefined && lng !== undefined && sale.lat !== null && sale.lng !== null) {
+      const distance = haversineDistance(lat, lng, sale.lat, sale.lng);
+      const MAX_DISTANCE = 100; // 100 meters
+      if (distance > MAX_DISTANCE) {
+        return res.status(403).json({ message: 'You must be at the sale to earn XP here.' });
+      }
     }
 
     // Check if user has already scanned this photo station
