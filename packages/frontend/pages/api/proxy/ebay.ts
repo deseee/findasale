@@ -20,7 +20,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 const EBAY_BASE = 'https://api.ebay.com';
 
-// Disable Next.js body parsing — we forward raw bytes for Mode 2 so that
+// Disable Next.js body parsing — we forward the raw body for Mode 2 so that
 // application/x-www-form-urlencoded bodies (eBay token refresh) survive intact.
 // Auto-parsing then JSON.stringify-ing them mangled the form body into JSON
 // while leaving the Content-Type form-encoded — eBay rejected → fetch threw → 502.
@@ -30,17 +30,17 @@ export const config = {
   },
 };
 
-// Returns Uint8Array (not Buffer) so the value is type-compatible with fetch's
-// BodyInit. Buffer extends Uint8Array at runtime, but TS's Buffer<ArrayBufferLike>
-// type does not unify with BodyInit on Node 22+.
-async function readRawBody(req: NextApiRequest): Promise<Uint8Array | undefined> {
+// Returns a UTF-8 string. Every eBay endpoint we proxy uses text bodies
+// (JSON or application/x-www-form-urlencoded), so string is the right shape
+// and is unconditionally a valid fetch BodyInit (avoids the
+// Uint8Array<ArrayBufferLike> vs. Uint8Array<ArrayBuffer> Node 22 type mismatch).
+async function readRawBody(req: NextApiRequest): Promise<string | undefined> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
   if (chunks.length === 0) return undefined;
-  const buf = Buffer.concat(chunks);
-  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  return Buffer.concat(chunks).toString('utf-8');
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -96,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (val) forwardHeaders[key] = Array.isArray(val) ? val[0] : val;
   }
 
-  // Forward raw body bytes unchanged. Never JSON.stringify a form-encoded body.
+  // Forward the raw body unchanged. Never JSON.stringify a form-encoded body.
   const body = req.method !== 'GET' && req.method !== 'HEAD'
     ? await readRawBody(req)
     : undefined;
