@@ -89,14 +89,7 @@ const HomePage = () => {
     }
   }, [router.isReady, router.query.q]);
 
-  // Auto-scroll to results when search query is active
-  useEffect(() => {
-    if (searchQuery.trim().length >= 2 && resultsRef.current) {
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 0);
-    }
-  }, [searchQuery]);
+  // Auto-scroll removed — was causing jarring jump on every keystroke
 
   const { data: feedData, isLoading, isError, refetch } = useQuery({
     queryKey: ['feed', userLocation?.lat, userLocation?.lng],
@@ -560,7 +553,7 @@ const HomePage = () => {
                       </div>
                     ) : (
                       <EmptyState
-                        icon="📭"
+                        icon="💭"
                         heading="No sales yet in your area"
                         subtext="Great sales are coming soon! Check back daily or sign up to receive alerts when new sales open near you."
                       />
