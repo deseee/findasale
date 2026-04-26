@@ -285,6 +285,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S589 (2026-04-26) — COMPLETE:** eBay DNS bypass via Vercel proxy + eBay image incognito fix + roadmap stale corrections. **Root cause confirmed:** Railway's network blocks DNS resolution for api.ebay.com at the infrastructure level — not fixable in code (dns.setServers, dns.setDefaultResultOrder, https.request all tried and confirmed ineffective). **Solution: Vercel proxy.** Created `pages/api/proxy/ebay.ts` with two modes: Mode 1 (`?action=token`) — Vercel fetches OAuth token using its own EBAY_CLIENT_ID/SECRET; Mode 2 (`?path=/...`) — general forward proxy that forwards headers + body to api.ebay.com. `getEbayAccessToken()` now calls `${FRONTEND_URL}/api/proxy/ebay?action=token`. `refreshEbayAccessToken()` now routes token refresh through `?path=/identity/v1/oauth2/token`. **eBay image incognito fix:** Chrome Enhanced Tracking Protection blocks `i.ebayimg.com` in incognito/tracking-protection. Fixed with backend image proxy at `GET /api/image-proxy?url=` (new `imageProxyController.ts` + `imageProxy.ts`). `getItemImageUrl()` added to `imageUtils.ts` — rewrites eBay CDN URLs to go through Railway. Wired into `ItemCard.tsx`. **Roadmap corrections:** #332–335 confirmed built via grep, updated from Queued → "Shipped — Pending Chrome QA (S589)". **Current eBay status (⚠️ UNRESOLVED):** EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_PROXY_SECRET set in Vercel env vars by Patrick. Still getting 500 from Vercel proxy — Vercel needs redeploy to bake in the new env vars (Vercel dashboard → Deployments → latest → Redeploy). Additionally: even once token works, `ebaySoldSyncCron.ts` calls `api.ebay.com` directly for the actual sync API calls — those need the same proxy treatment (currently only token flows are proxied). **Files changed:** `packages/frontend/pages/api/proxy/ebay.ts` (NEW), `packages/backend/src/controllers/ebayController.ts`, `packages/backend/src/controllers/imageProxyController.ts` (NEW), `packages/backend/src/routes/imageProxy.ts` (NEW), `packages/backend/src/index.ts`, `packages/frontend/lib/imageUtils.ts`, `packages/frontend/components/ItemCard.tsx`, `packages/backend/src/jobs/ebayNotificationSetup.ts`, `packages/backend/Dockerfile.production`, `claude_docs/strategy/roadmap.md`.
+
 **S585 (2026-04-26) — COMPLETE:** #310 Color-tag Discount Rules — 3 P0 bugs fixed + full Chrome QA. **Bug 1 (pre-S585):** Write endpoints (`createDiscountRule`, `updateDiscountRule`, `deleteDiscountRule`) used `req.user.id` (User ID) instead of `req.user.organizerProfile?.id` (Organizer ID) — all CRUD operations silently failed for valid TEAMS users. **Bug 2 (pre-S585):** Tier check used `workspace.subscriptionTier` — column does not exist on `OrganizerWorkspace`; correct field is `Organizer.tier`. **Bug 3 (this session):** GET route uses `optionalAuthenticate` which calls `prisma.user.findUnique()` with NO `organizer` include → `req.user.organizerProfile` is always undefined → `organizerProfile?.id` = undefined → fallback `prisma.organizer.findFirst()` threw early return. Fix: added `{ where: { userId: req.user.id } }` fallback lookup in `listDiscountRules`. Confirmed `Organizer.userId @unique` in schema before using it. MCP-pushed SHA `a8d80db`. **Chrome QA — all 4 CRUD ops verified:** LIST ✅ (rule renders with color swatch, label "30% Off — Red Tag", 30%, edit/delete icons), CREATE ✅ (rule created prior session — confirmed in DB via psycopg2), EDIT ✅ (modal pre-populates with existing values, label+discount updated, green toast, UI refreshed immediately), DELETE ✅ (inline confirm guard fires, rule removed, empty state "No discount rules yet" + "Create your first rule" CTA renders). **Files changed:** `packages/backend/src/controllers/discountRuleController.ts` (MCP-pushed mid-session — not in pushblock).
 
 **S584 (2026-04-26) — COMPLETE:** QA-only session — 5 items verified from Blocked/Unverified Queue. **#280 Condition Rating XP** ✅ — Bob changed conditionGrade (Fair→Good) on Vintage Socket Set via /organizer/edit-item/[id] → CONDITION_RATING PointsTransaction +5 XP, guild-primer 0→5 XP confirmed. **#255 Rank-Up Notifications** ✅ — low-xp-shopper (495 XP) visited sale → 500 XP → RANK_UP notification "You've reached SCOUT!" in bell (ss_7480h4qzw). **#257 Scout Hold Duration** ✅ — Karen (RANGER) placed hold → 60-minute timer confirmed. **#275 Hunt Pass Cosmetics** ✅ — 🏆 leaderboard badge + orange avatar ring. **#75 Tier Lapse** ✅ — red banner verified. Supplementary: password-reset low-xp-shopper@example.com via DB (bcrypt), found organizer item edit URL is /organizer/edit-item/[id] (not /organizer/add-items/.../[itemId]). Still UNVERIFIED: Settlement PDF (needs ENDED sale), #268 Trail Completion (physical QR), #278 Treasure Hunt Pro (QR scan). 0 code files changed.
@@ -313,14 +315,39 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S589 — QA S588 features + DonationModal P1 fix + roadmap work.**
+**S590 — Two-session audit (S588 + S589) + eBay full resolution.**
 
-Priority queue:
-1. **QA S588 features** — Chrome QA: photo station geofence (deny location → amber block card), scan → share link fetch → share button → click tracking. Verify Treasure Hunt sidebar card appears on sale detail page for shoppers.
-2. **#235 DonationModal P1** — SettlementWizard.tsx line 68-72: `GET /api/sales/${saleId}/items?status=AVAILABLE` returns 404. Correct route is `GET /api/organizer/sales/${saleId}/unsold-items`. Single-line fix, dispatch findasale-dev.
-3. **#75 Tier Lapse Logic** — Pending Chrome QA: login as tier-lapse-test@example.com (Seedy2025!) → verify amber lapsed banner + PRO features gated.
-4. **Roadmap next builds** — Check roadmap.md for next priority items.
+### Immediate first actions (before anything else):
 
-**Passwords:** All test accounts use Seedy2025! (low-xp-shopper password also set to Seedy2025! via DB S584)
+1. **Vercel redeploy** — Go to vercel.com → findasale → Deployments → latest deployment → three-dot menu → **Redeploy**. This bakes in EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_PROXY_SECRET that were set last session. Without this, eBay proxy still returns 500.
 
-**No push block needed** — S588 was pushed and migrated by Patrick this session.
+2. **Watch Railway logs** — After Vercel redeploy, wait for next 15-min eBay sync. Should see `[eBay Sync] Starting sync cycle` without 500/ENOTFOUND errors. If 500 persists, check Vercel function logs for `[ebay-proxy/token]` error body.
+
+### eBay full audit (primary S590 task):
+
+The token flow is now proxied, but the **actual sync API calls** in `ebaySoldSyncCron.ts` still call `api.ebay.com` directly (not just token — the order fetching, item lookup, etc.). Need to:
+- Read `packages/backend/src/jobs/ebaySoldSyncCron.ts` and find every direct `api.ebay.com` fetch call
+- Route each through Vercel proxy Mode 2 (`?path=/...`)
+- Check `ebayNotificationSetup.ts` same (destination registration calls)
+- Verify eBay image proxy working in Chrome incognito (navigate to a sale with eBay items → incognito → confirm images load)
+
+### Two-session audit scope (S588 + S589):
+
+**S588 delivered:** Photo station geofence, verified share XP system, Treasure Hunt sidebar card, visit idempotency fix. **Chrome QA still pending:** photo station geofence deny → amber block card; scan → share link → click tracking; Treasure Hunt sidebar card on sale detail.
+
+**S589 delivered:** Vercel eBay proxy (token + refresh routes), backend image proxy (incognito fix), roadmap stale status corrections (#332–335). **Still outstanding:** Vercel redeploy needed, sync cron direct calls need proxying.
+
+### Other pending items:
+- **#75 Tier Lapse Chrome QA** — Login as tier-lapse-test@example.com (Seedy2025!) → verify amber banner + PRO features gated
+- **Hunt Pass status inconsistency (P2)** — XP Store shows "Hunt Pass Inactive" for Karen but AvatarDropdown shows "Hunt Pass Active"
+
+**Passwords:** All test accounts use Seedy2025!
+
+**S589 push block (wrap docs only — all code was pushed mid-session):**
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git add claude_docs/strategy/roadmap.md
+git commit -m "wrap: S589 — eBay Vercel proxy + image proxy incognito fix"
+.\push.ps1
+```
