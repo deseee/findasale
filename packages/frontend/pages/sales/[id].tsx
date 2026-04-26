@@ -150,6 +150,8 @@ const SaleDetailPage = () => {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [downloadingKit, setDownloadingKit] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(24);
+  const [currentItemPage, setCurrentItemPage] = useState(1);
   const [messageModalOpen, setMessageModalOpen] = useState(false);
   const { openCart } = useCart();
   const [showLeaveWarning, setShowLeaveWarning] = useState(false);
@@ -591,15 +593,28 @@ const SaleDetailPage = () => {
               <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
                 {format(saleStartDate, 'MMM d, yyyy h:mm a')} - {format(saleEndDate, 'MMM d, yyyy h:mm a')}
               </p>
-              {sale.status && (
-                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                  sale.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' :
-                  sale.status === 'upcoming' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200' :
-                  'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                }`}>
-                  {sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
-                </span>
-              )}
+              <div className="flex flex-wrap gap-2 mt-2">
+                {sale.status && (
+                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                    sale.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' :
+                    sale.status === 'upcoming' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200' :
+                    'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                  }`}>
+                    {sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
+                  </span>
+                )}
+                {sale.saleType && (
+                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                    sale.saleType === 'AUCTION' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200' :
+                    sale.saleType === 'ESTATE_SALE' ? 'bg-sage-100 dark:bg-sage-900/30 text-sage-800 dark:text-sage-200' :
+                    sale.saleType === 'YARD_SALE' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200' :
+                    sale.saleType === 'FLEA_MARKET' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200' :
+                    'bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-gray-300'
+                  }`}>
+                    {sale.saleType.replace(/_/g, ' ')}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex flex-col gap-2">
               <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
@@ -647,21 +662,6 @@ const SaleDetailPage = () => {
           </div>
         )}
 
-        {/* Sale Type Badge — L-001 */}
-        {sale.saleType && (
-          <div className="mb-8">
-            <span className={`inline-block px-4 py-2 rounded-full text-sm font-semibold ${
-              sale.saleType === 'AUCTION' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200' :
-              sale.saleType === 'ESTATE_SALE' ? 'bg-sage-100 dark:bg-sage-900/30 text-sage-800 dark:text-sage-200' :
-              sale.saleType === 'YARD_SALE' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200' :
-              sale.saleType === 'FLEA_MARKET' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200' :
-              'bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-gray-300'
-            }`}>
-              {sale.saleType.replace(/_/g, ' ')}
-            </span>
-          </div>
-        )}
-
         {/* Organizer Info Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex items-start justify-between">
@@ -705,14 +705,14 @@ const SaleDetailPage = () => {
                 {user ? (
                   <button
                     onClick={() => setMessageModalOpen(true)}
-                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded font-medium transition-colors"
+                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
                   >
                     Message Organizer
                   </button>
                 ) : (
                   <Link
                     href="/login"
-                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded font-medium text-center transition-colors"
+                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg font-medium text-center transition-colors"
                   >
                     Sign in to Message
                   </Link>
@@ -727,20 +727,20 @@ const SaleDetailPage = () => {
               <div className="flex flex-col gap-2">
                 <button
                   onClick={() => router.push(`/organizer/edit-sale/${sale.id}`)}
-                  className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded font-medium transition-colors"
+                  className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
                 >
                   Edit Sale
                 </button>
                 <button
                   onClick={() => setIsImportModalOpen(true)}
-                  className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded font-medium transition-colors"
+                  className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
                 >
                   Import Items
                 </button>
                 <button
                   onClick={handleDownloadMarketingKit}
                   disabled={downloadingKit}
-                  className="px-4 py-2 bg-purple-600 dark:bg-purple-700 hover:bg-purple-700 dark:hover:bg-purple-600 text-white rounded font-medium disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-purple-600 dark:bg-purple-700 hover:bg-purple-700 dark:hover:bg-purple-600 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
                 >
                   {downloadingKit ? 'Generating...' : 'Download Kit'}
                 </button>
@@ -801,14 +801,14 @@ const SaleDetailPage = () => {
                   </div>
                 )}
 
-                {/* Organizer photo management controls */}
-                {isOrganizer && (
-                  <div className="mt-4 space-y-3">
-                    {photoUploadError && (
-                      <p className="text-red-500 text-sm">{photoUploadError}</p>
-                    )}
-                    <div className="flex items-center gap-3">
-                      {sale.photoUrls.length < 6 && (
+                {/* Photo controls row — Add Photos (organizer) + Take a Tour (all) */}
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  {isOrganizer && (
+                    <>
+                      {photoUploadError && (
+                        <p className="w-full text-red-500 text-sm">{photoUploadError}</p>
+                      )}
+                      {sale.photoUrls.length < 6 ? (
                         <>
                           <button
                             type="button"
@@ -828,24 +828,22 @@ const SaleDetailPage = () => {
                             onChange={(e) => handlePhotoUpload(e.target.files)}
                           />
                         </>
-                      )}
-                      {sale.photoUrls.length >= 6 && (
+                      ) : (
                         <span className="text-sm text-warm-600 dark:text-gray-400">
                           Max 6 photos reached
                         </span>
                       )}
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  onClick={() => setTourOpen(true)}
-                  className="mt-4 inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
-                  aria-label={`Take a tour of ${sale.title}`}
-                >
-                  <span>\ud83c\udfac</span>
-                  <span>Take a Tour</span>
-                </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setTourOpen(true)}
+                    className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                    aria-label={`Take a tour of ${sale.title}`}
+                  >
+                    <span>\ud83c\udfac</span>
+                    <span>Take a Tour</span>
+                  </button>
+                </div>
               </div>
             )}
             {/* About This Sale */}
@@ -883,7 +881,7 @@ const SaleDetailPage = () => {
                       window.open(url, '_blank');
                     }
                   }}
-                  className="flex items-center justify-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
+                  className="flex items-center justify-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="18" cy="5" r="3" />
@@ -901,7 +899,7 @@ const SaleDetailPage = () => {
                     const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
                     window.open(url, '_blank');
                   }}
-                  className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                  className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
                 >
                   <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -916,7 +914,7 @@ const SaleDetailPage = () => {
                     const url = `https://twitter.com/intent/tweet?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}&text=${encodeURIComponent(text)}`;
                     window.open(url, '_blank');
                   }}
-                  className="flex items-center bg-blue-400 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded"
+                  className="flex items-center bg-blue-400 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg"
                 >
                   <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M8.29 20c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
@@ -947,7 +945,7 @@ const SaleDetailPage = () => {
                       showToast('Clipboard not available', 'error');
                     }
                   }}
-                  className="flex items-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                  className="flex items-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 3 3 0 004.242 0l3-3a3 3 0 00-4.242-4.242l-3 3a3 3 0 000 4.242 1 1 0 101.414-1.414 1 1 0 010-1.414l3-3z" clipRule="evenodd" />
@@ -991,6 +989,61 @@ const SaleDetailPage = () => {
           <LiveFeedTicker saleId={sale.id} />
         </div>
 
+        {/* Reviews Section */}
+        <div className="mb-8">
+          <ReviewsSection
+            mode="sale"
+            saleId={sale.id}
+            saleStatus={sale.status}
+            avgRating={sale.organizer.avgRating}
+            totalReviews={sale.organizer.reviewCount}
+          />
+        </div>
+
+        {/* Location Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
+          {sale.lat && sale.lng ? (
+            <SaleMap
+              singlePin={{
+                lat: sale.lat,
+                lng: sale.lng,
+                label: `${sale.title} \u2014 ${sale.address}, ${sale.city}, ${sale.state}`,
+              }}
+              entrancePin={sale.entranceLat && sale.entranceLng ? {
+                lat: sale.entranceLat,
+                lng: sale.entranceLng,
+                note: sale.entranceNote,
+              } : undefined}
+              photoOpStations={photoOpStations}
+              height="360px"
+            />
+          ) : (
+            <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+              <p className="text-warm-500 dark:text-gray-400">Location not available</p>
+            </div>
+          )}
+          <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
+            {sale.address}, {sale.city}, {sale.state} {sale.zip}
+          </p>
+          {sale.address && sale.city && sale.state && (
+            <button
+              onClick={() => {
+                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                  `${sale.address}, ${sale.city}, ${sale.state}`
+                )}`;
+                window.open(mapsUrl, '_blank');
+              }}
+              className="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2h-2a2 2 0 00-2 2v6m-6-10l3-3m0 0l3 3m-3-3v10" />
+              </svg>
+              Plan My Route in Maps
+            </button>
+          )}
+        </div>
+
         {/* Items Section — D-006: First full-width section after About/Photo grid */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
@@ -1001,7 +1054,7 @@ const SaleDetailPage = () => {
               <div className="flex space-x-2">
                 <Link
                   href={`/organizer/add-items/${sale.id}`}
-                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -1011,6 +1064,23 @@ const SaleDetailPage = () => {
               </div>
             )}
           </div>
+
+          {/* Per-page selector */}
+          {sale.items.length > 12 && (
+            <div className="flex items-center justify-end gap-2 mb-2">
+              <label className="text-sm text-warm-600 dark:text-gray-400">Show:</label>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentItemPage(1); }}
+                className="text-sm border border-warm-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                <option value={12}>12 per page</option>
+                <option value={24}>24 per page</option>
+                <option value={48}>48 per page</option>
+                <option value={0}>Show all</option>
+              </select>
+            </div>
+          )}
 
           {/* CD2 Phase 1: Scarcity + Social Proof Stats Bar */}
           {sale.items.length > 0 && (() => {
@@ -1054,7 +1124,7 @@ const SaleDetailPage = () => {
               <p className="text-sm font-medium text-warm-700 dark:text-gray-200 mb-2">Filter by category:</p>
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setSelectedCategory(null)}
+                  onClick={() => { setSelectedCategory(null); setCurrentItemPage(1); }}
                   className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                     selectedCategory === null
                       ? 'bg-amber-600 text-white'
@@ -1069,7 +1139,7 @@ const SaleDetailPage = () => {
                     return (
                       <button
                         key={normalizedCategory}
-                        onClick={() => setSelectedCategory(normalizedCategory as string)}
+                        onClick={() => { setSelectedCategory(normalizedCategory as string); setCurrentItemPage(1); }}
                         className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                           selectedCategory === normalizedCategory
                             ? 'bg-amber-600 text-white'
@@ -1101,7 +1171,7 @@ const SaleDetailPage = () => {
               {isOrganizer && (
                 <Link
                   href={`/organizer/add-items/${sale.id}`}
-                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -1110,21 +1180,32 @@ const SaleDetailPage = () => {
                 </Link>
               )}
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sale.items
-                .filter(
-                  (item) =>
-                    selectedCategory === null || item.category?.toLowerCase() === selectedCategory
-                )
-                .sort((a, b) => {
-                  // Sort: available items first, sold items last
-                  if (a.status === 'SOLD' && b.status !== 'SOLD') return 1;
-                  if (a.status !== 'SOLD' && b.status === 'SOLD') return -1;
-                  // Within same status, sort by price (ascending) or createdAt
-                  return 0;
-                })
-                .map((item) => (
+          ) : (() => {
+            const filteredSorted = sale.items
+              .filter(
+                (item) =>
+                  selectedCategory === null || item.category?.toLowerCase() === selectedCategory
+              )
+              .sort((a, b) => {
+                if (a.status === 'SOLD' && b.status !== 'SOLD') return 1;
+                if (a.status !== 'SOLD' && b.status === 'SOLD') return -1;
+                return 0;
+              });
+            const effectivePerPage = itemsPerPage === 0 ? filteredSorted.length : itemsPerPage;
+            const totalPages = effectivePerPage > 0 ? Math.ceil(filteredSorted.length / effectivePerPage) : 1;
+            const pagedItems = filteredSorted.slice(
+              (currentItemPage - 1) * effectivePerPage,
+              currentItemPage * effectivePerPage
+            );
+            return (
+              <>
+                {filteredSorted.length > 12 && (
+                  <p className="text-sm text-warm-500 dark:text-gray-400 mb-4">
+                    Showing {Math.min(currentItemPage * effectivePerPage, filteredSorted.length) - (currentItemPage - 1) * effectivePerPage} of {filteredSorted.length} items
+                  </p>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {pagedItems.map((item) => (
                 <div key={item.id} className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800 h-full flex flex-col">
                   <div className="relative aspect-square overflow-hidden">
                     <Link href={`/items/${item.id}`} className="block h-full">
@@ -1356,9 +1437,48 @@ const SaleDetailPage = () => {
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+                  ))}
+                </div>
+                {totalPages > 1 && (
+                  <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setCurrentItemPage(p => Math.max(1, p - 1))}
+                      disabled={currentItemPage === 1}
+                      className="px-3 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 text-sm font-medium text-warm-900 dark:text-gray-100 disabled:opacity-40 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      ← Prev
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === totalPages || Math.abs(p - currentItemPage) <= 1)
+                      .map((p, idx, arr) => (
+                        <React.Fragment key={p}>
+                          {idx > 0 && arr[idx - 1] !== p - 1 && (
+                            <span className="text-warm-400 dark:text-gray-500 px-1">…</span>
+                          )}
+                          <button
+                            onClick={() => setCurrentItemPage(p)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                              p === currentItemPage
+                                ? 'bg-amber-600 text-white'
+                                : 'border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-100 hover:bg-warm-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        </React.Fragment>
+                      ))}
+                    <button
+                      onClick={() => setCurrentItemPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentItemPage === totalPages}
+                      className="px-3 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 text-sm font-medium text-warm-900 dark:text-gray-100 disabled:opacity-40 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Feature #47: UGC Photo Gallery */}
@@ -1373,61 +1493,6 @@ const SaleDetailPage = () => {
             <UGCPhotoGallery photos={ugcPhotos} loading={ugcLoading} />
           </div>
         )}
-
-        {/* Reviews Section */}
-        <div className="mb-8">
-          <ReviewsSection
-            mode="sale"
-            saleId={sale.id}
-            saleStatus={sale.status}
-            avgRating={sale.organizer.avgRating}
-            totalReviews={sale.organizer.reviewCount}
-          />
-        </div>
-
-        {/* Location Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
-          {sale.lat && sale.lng ? (
-            <SaleMap
-              singlePin={{
-                lat: sale.lat,
-                lng: sale.lng,
-                label: `${sale.title} \u2014 ${sale.address}, ${sale.city}, ${sale.state}`,
-              }}
-              entrancePin={sale.entranceLat && sale.entranceLng ? {
-                lat: sale.entranceLat,
-                lng: sale.entranceLng,
-                note: sale.entranceNote,
-              } : undefined}
-              photoOpStations={photoOpStations}
-              height="360px"
-            />
-          ) : (
-            <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-              <p className="text-warm-500 dark:text-gray-400">Location not available</p>
-            </div>
-          )}
-          <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
-            {sale.address}, {sale.city}, {sale.state} {sale.zip}
-          </p>
-          {sale.address && sale.city && sale.state && (
-            <button
-              onClick={() => {
-                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                  `${sale.address}, ${sale.city}, ${sale.state}`
-                )}`;
-                window.open(mapsUrl, '_blank');
-              }}
-              className="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2h-2a2 2 0 00-2 2v6m-6-10l3-3m0 0l3 3m-3-3v10" />
-              </svg>
-              Plan My Route in Maps
-            </button>
-          )}
-        </div>
 
         {/* Feature #84: Approach Notes — day-of info for shoppers */}
         {approachNotes && approachNotes.notes && (
