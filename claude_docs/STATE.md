@@ -88,8 +88,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- S579+S580 COMPLETE — 9 bugs fixed across S579 + discount-rules root-cause fixed in S580. P0 Railway crash (aFreshness corruption in itemController.ts) resolved mid-session. S580 Chrome QA: all 3 items ✅. No open bugs. Ready for next sprint.
-- S578 COMPLETE — Full Chrome QA session. 6 ✅ PASS, 2 ⚠️ PARTIAL, 1 ❌ FAIL. New P1 bugs found. All dispatched in S579.
+- S580 EXTENDED + COMPLETE — Post-wrap Chrome QA confirmed: similar items double-prefix ✅ live (GET /api/items/[id]/similar → 200, no double prefix). New P2 found: POST /api/points/track-visit → 404 (route not registered in backend; frontend fires on every sale page view from sales/[id].tsx line 198). No migrations. Next sprint: S581 full QA backlog sweep.
+- S579+S580 COMPLETE — 9 bugs fixed across S579 + discount-rules root-cause fixed in S580. P0 Railway crash (aFreshness corruption in itemController.ts) resolved mid-session. S580 Chrome QA: all 3 items ✅. No open bugs.
 - S577 COMPLETE — 5 bugs fixed (Settlement payout, Shopify #332, Stripe Connect #333, voice icon, Tier Lapse #75). All 4 UNVERIFIED items unblocked via DB patches.
 
 ## S579/S580 Results — All Resolved
@@ -109,6 +109,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Discount rules → 200: GET route was missing `optionalAuthenticate` so `req.user` was always null; added middleware + return `[]` instead of 403 for non-TEAMS organizers
 - ✅ SettlementWizard items: GET /api/items/?saleId=cmoezk2ig002k13p7lf52plw0 → 200 (Chrome verified via Alice's completed sale)
 - ✅ workspace/locations 404: now 403 tier gate (correct behavior — TEAMS-only feature, not a crash)
+- ✅ Similar items double prefix: Chrome-verified in session extension — GET /api/items/[id]/similar → 200 (no /api/api/ prefix). Network request #19 confirmed.
+- ⚠️ P2 NEW: POST /api/points/track-visit → 404 — frontend fires on every sale detail page view (sales/[id].tsx line 198), no backend route exists (`/api/points` not mounted in index.ts). XP for sale visits silently never awarded.
 
 ## Schema & Infrastructure
 
@@ -292,15 +294,41 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S580 — Remaining QA + workspace/locations/price-history investigation.**
+**S581 — Full QA backlog sweep.**
 
-S579 QA completed this session: My Holds ✅, brand-kit ✅, similar-items URL ✅, tier-lapse label ✅, holds price fix ✅.
+S580 extended is complete. No code changes pending. Push the wrap block below, then start S581 fresh.
 
-**Still needs QA in S580 (after pushing this block):**
-1. **Discount rules** — user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → verify GET /api/discount-rules returns 200 (not 401) in network tab
-2. **SettlementWizard URL** — user1@example.com (Alice) → /organizer/dashboard → find a completed sale → click Settle button → verify Step 1 items list loads (not blank)
-3. **workspace/locations/price-history** — user1@example.com → /organizer/locations → if still 404, dispatch backend investigation to find what crashes inside those controllers
+**S581 QA backlog — ordered by priority (Chrome MCP, sequential):**
 
-**Patrick pending actions:** Push S579 block below.
+**Tier 1 — S577 fixes, never Chrome-verified:**
+1. **#75 Tier Lapse** — login as tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → verify amber lapse banner + PRO features gated
+2. **Voice-to-tag mic icon** — login as Alice → /organizer/add-items/[saleId]/review OR edit-item → verify mic icon (not ghost/avatar) in RapidCapture thumbnails + edit-item tags input
+3. **Shopify #332 TEAMS gate** — login as Bob (user2, PRO) → /organizer/shopify → verify upgrade wall shows (not feature access)
+4. **Stripe Connect #333** — login as Bob (PRO) → /organizer/stripe-connect → verify TEAMS gate. Then as Alice (TEAMS) → verify consignors load without 500
+5. **Settlement payout auto-populate** — login as Alice → completed sale → Settle button → Commission tab → verify payout auto-populates on Receipt step (no $0.00/$NaN)
 
-**Patrick pending actions:** Push S579 block below before S580 starts.
+**Tier 2 — Seeded items, pending verification:**
+6. **#338 PricingCompSummary** — login as Alice (user1@example.com) → /organizer/edit-item/cmoezkryx00gu13p7l9knzclq → verify eBay comp tile renders below price input
+7. **#235 DonationModal** — login as user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → Settle → verify DonationModal 3-step wizard opens and flows
+8. **Holds countdown** — login as user16@example.com (Seedy2025!) → /sales/cmoezk0ou001m13p7y7esjr18 → find held item → verify countdown timer + My Holds page shows the hold
+
+**Tier 3 — Navigation + UX items:**
+9. **AvatarDropdown shopper** — login as Karen (user11@example.com, Seedy2025!) → avatar dropdown → verify "Explorer Profile" link → /shopper/explorer-profile (not /organizer/profile)
+10. **S540 Rewards nav link** — as Karen → verify "Rewards" link → /coupons appears in desktop sidebar Connect section, mobile in-sale tools, mobile nav, avatar dropdown
+11. **S529 card reader** — /faq → verify only S700/S710 hardware shown (no Tap to Pay, no M2)
+12. **Guild Primer** — /shopper/guild-primer → verify all sections render, dark mode clean, personalized rank bar when logged in
+13. **Hunt Pass slim CTA** — /shopper/hunt-pass → verify hero, price card, 4 benefits, CTA buttons
+14. **Layout.tsx mobile nav guild link** — mobile hamburger → Explorer's Guild → verify goes to /shopper/guild-primer (not /loyalty)
+
+**Tier 4 — Specific feature verifications:**
+15. **Encyclopedia detail** — /encyclopedia/vintage-postcards-ephemera-local-history-collecting → verify article content renders (not "Article Not Found")
+16. **Settlement Receipt PDF** — Alice → completed sale → Settlement → Download Receipt → verify file is .pdf (not .json), shows "Organizer Commission (X%)" label
+17. **Admin bid-review** — login as admin (user1) → /admin/bid-review → verify page loads without crash (Prisma include fix S566)
+18. **RankUpModal dark mode** — /shopper/guild-primer → check dark mode on "New Perks Unlocked" box (should be dark:bg-gray-700)
+
+**New P2 to fix (from this session):**
+- POST /api/points/track-visit → 404 — register `/api/points` route in index.ts or stub the endpoint so sale visits don't silently 404
+
+**Patrick pending actions:** Push wrap block below, then start S581.
+
+**Passwords for S581 QA:** All test accounts use Seedy2025!
