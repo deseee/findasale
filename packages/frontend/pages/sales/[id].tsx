@@ -705,14 +705,14 @@ const SaleDetailPage = () => {
                 {user ? (
                   <button
                     onClick={() => setMessageModalOpen(true)}
-                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+                    className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
                   >
                     Message Organizer
                   </button>
                 ) : (
                   <Link
                     href="/login"
-                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg font-medium text-center transition-colors"
+                    className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium text-center transition-colors"
                   >
                     Sign in to Message
                   </Link>
@@ -733,14 +733,14 @@ const SaleDetailPage = () => {
                 </button>
                 <button
                   onClick={() => setIsImportModalOpen(true)}
-                  className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
                 >
                   Import Items
                 </button>
                 <button
                   onClick={handleDownloadMarketingKit}
                   disabled={downloadingKit}
-                  className="px-4 py-2 bg-purple-600 dark:bg-purple-700 hover:bg-purple-700 dark:hover:bg-purple-600 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
                 >
                   {downloadingKit ? 'Generating...' : 'Download Kit'}
                 </button>
@@ -814,7 +814,7 @@ const SaleDetailPage = () => {
                             type="button"
                             onClick={() => photoInputRef.current?.click()}
                             disabled={photoUploading}
-                            className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
+                            className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
                           >
                             <span>+</span>
                             <span>{photoUploading ? 'Uploading…' : 'Add Photos'}</span>
@@ -837,7 +837,7 @@ const SaleDetailPage = () => {
                   )}
                   <button
                     onClick={() => setTourOpen(true)}
-                    className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
                     aria-label={`Take a tour of ${sale.title}`}
                   >
                     <span>\ud83c\udfac</span>
@@ -881,7 +881,7 @@ const SaleDetailPage = () => {
                       window.open(url, '_blank');
                     }
                   }}
-                  className="flex items-center justify-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg"
+                  className="flex items-center justify-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="18" cy="5" r="3" />
@@ -899,7 +899,7 @@ const SaleDetailPage = () => {
                     const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
                     window.open(url, '_blank');
                   }}
-                  className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
+                  className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg"
                 >
                   <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
@@ -914,7 +914,7 @@ const SaleDetailPage = () => {
                     const url = `https://twitter.com/intent/tweet?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}&text=${encodeURIComponent(text)}`;
                     window.open(url, '_blank');
                   }}
-                  className="flex items-center bg-blue-400 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg"
+                  className="flex items-center bg-blue-400 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-lg"
                 >
                   <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M8.29 20c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
@@ -945,7 +945,7 @@ const SaleDetailPage = () => {
                       showToast('Clipboard not available', 'error');
                     }
                   }}
-                  className="flex items-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg"
+                  className="flex items-center bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 3 3 0 004.242 0l3-3a3 3 0 00-4.242-4.242l-3 3a3 3 0 000 4.242 1 1 0 101.414-1.414 1 1 0 010-1.414l3-3z" clipRule="evenodd" />
@@ -1023,7 +1023,7 @@ const SaleDetailPage = () => {
                 )}`;
                 window.open(mapsUrl, '_blank');
               }}
-              className="mt-4 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+              className="mt-4 w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2h-2a2 2 0 00-2 2v6m-6-10l3-3m0 0l3 3m-3-3v10" />
@@ -1043,7 +1043,7 @@ const SaleDetailPage = () => {
               <div className="flex space-x-2">
                 <Link
                   href={`/organizer/add-items/${sale.id}`}
-                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center"
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -1160,7 +1160,7 @@ const SaleDetailPage = () => {
               {isOrganizer && (
                 <Link
                   href={`/organizer/add-items/${sale.id}`}
-                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg inline-flex items-center"
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
@@ -1393,14 +1393,14 @@ const SaleDetailPage = () => {
                             <>
                               <button
                                 onClick={() => handleBuyNow(item.id, item.title)}
-                                className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
+                                className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-2 rounded-lg"
                               >
                                 Buy Now
                               </button>
                               {item.price !== null && (
                                 <button
                                   onClick={() => handleAddToCart(item)}
-                                  className={`text-sm px-3 py-1 rounded font-medium transition-colors ${
+                                  className={`text-sm px-3 py-2 rounded-lg font-medium transition-colors ${
                                     shopperCart.items.some((ci) => ci.id === item.id)
                                       ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 cursor-default'
                                       : 'border border-amber-600 dark:border-amber-500 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
@@ -1416,7 +1416,7 @@ const SaleDetailPage = () => {
                           {(sale.isAuctionSale || item.listingType === 'AUCTION') && item.auctionEndTime && (
                             <button
                               onClick={() => setBiddingItemId(item.id)}
-                              className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-1 rounded"
+                              className="bg-amber-600 hover:bg-amber-700 text-white text-sm px-3 py-2 rounded-lg"
                             >
                               Place Bid
                             </button>
@@ -1567,13 +1567,13 @@ const SaleDetailPage = () => {
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowSwitchSaleModal(false)}
-                className="px-4 py-2 rounded border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-900 dark:text-gray-50 hover:bg-warm-100 dark:hover:bg-gray-700 transition-colors"
               >
                 Keep Current Cart
               </button>
               <button
                 onClick={handleConfirmSwitchSale}
-                className="px-4 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
               >
                 Start New Cart
               </button>
