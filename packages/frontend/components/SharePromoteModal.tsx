@@ -74,6 +74,14 @@ const getSaleTypeLabel = (saleType?: string): string => {
     CONSIGNMENT: 'consignment sale',
     CHARITY: 'charity sale',
     BUSINESS_CORPORATE: 'corporate sale',
+    GARAGE: 'garage sale',
+    MOVING: 'moving sale',
+    DOWNSIZING: 'downsizing sale',
+    SWAP_MEET: 'swap meet',
+    POPUP: 'pop-up sale',
+    LIQUIDATION: 'liquidation sale',
+    ONLINE: 'online sale',
+    BOOTH: 'vendor booth',
   };
   return labels[saleType] || 'sale';
 };
@@ -87,6 +95,14 @@ const getHashtagsForSaleType = (saleType?: string): string => {
     CONSIGNMENT: '#consignment #thrifting #findasale',
     CHARITY: '#charity #yardsale #findasale',
     BUSINESS_CORPORATE: '#corporate #businesssale #findasale',
+    GARAGE: '#garagesale #yardsale #findasale',
+    MOVING: '#movingsale #yardsale #findasale',
+    DOWNSIZING: '#downsizing #estatesale #findasale',
+    SWAP_MEET: '#swapmeet #shoplocal #findasale',
+    POPUP: '#popupshop #shoplocal #findasale',
+    LIQUIDATION: '#liquidationsale #deals #findasale',
+    ONLINE: '#onlinesale #shoplocal #findasale',
+    BOOTH: '#vendorbooth #shoplocal #findasale',
   };
   return hashtagMap[saleType ?? ''] || '#garagesale #yardsale #estatesale #findasale';
 };

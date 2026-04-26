@@ -235,6 +235,15 @@ const CreateSalePage = () => {
                 <option value="AUCTION">Auction</option>
                 <option value="FLEA_MARKET">Flea Market</option>
                 <option value="CONSIGNMENT">Consignment</option>
+                <option value="GARAGE">Garage Sale</option>
+                <option value="MOVING">Moving Sale</option>
+                <option value="DOWNSIZING">Downsizing Sale</option>
+                <option value="SWAP_MEET">Swap Meet</option>
+                <option value="POPUP">Pop-Up Sale</option>
+                <option value="LIQUIDATION">Liquidation Sale</option>
+                <option value="CHARITY">Charity Sale</option>
+                <option value="ONLINE">Online Sale</option>
+                <option value="BOOTH">Vendor Booth</option>
                 <option value="RETAIL" disabled={!canAccess('TEAMS')}>
                   {canAccess('TEAMS') ? 'Retail Store' : 'Retail Store (TEAMS only)'}
                 </option>

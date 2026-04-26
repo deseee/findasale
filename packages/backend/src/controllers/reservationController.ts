@@ -15,6 +15,7 @@ const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
 // Feature #121: GPS radius by sale type (meters)
 function getGpsRadiusBySaleType(saleType: string): number {
   switch (saleType?.toUpperCase()) {
+    case 'BOOTH':
     case 'YARD':
     case 'FLEA_MARKET': return 150;
     case 'AUCTION':     return 400;
