@@ -135,6 +135,7 @@ import verificationRoutes from './routes/verification';       // Feature #16: Ve
 import lootLogRoutes from './routes/lootLog';                 // Feature #50: Loot Log
 import ugcPhotoRoutes from './routes/ugcPhotos';              // Feature #47: UGC Photo Tags
 import photoOpRoutes from './routes/photoOps';                // Feature #39: Photo Op Stations
+import shareLinksRouter from './routes/shareLinks';           // Feature #XXX: Verified Social Share XP System
 import achievementRoutes from './routes/achievements';        // Features #58-59: Achievement Badges & Streak Rewards
 import fraudRoutes from './routes/fraud';                     // Feature #17: Bid Bot Detector
 import trailRoutes from './routes/trails';                    // Feature #48: Treasure Trail Route Builder
@@ -496,6 +497,7 @@ app.use('/api/flip-report', flipReportRoutes);                       // Feature 
 app.use('/api/verification', verificationRoutes);                    // Feature #16: Verified Organizer Badge
 app.use('/api/loot-log', lootLogRoutes);                             // Feature #50: Loot Log
 app.use('/api/ugc-photos', ugcPhotoRoutes);                          // Feature #47: UGC Photo Tags
+app.use('/api', shareLinksRouter);                                   // Feature #XXX: Verified Social Share XP System
 app.use('/api/health', healthRoutes);                                // Feature #20: Proactive Degradation Mode
 app.use('/api/achievements', achievementRoutes);                     // Features #58-59: Achievement Badges & Streak Rewards
 app.use('/api/fraud', fraudRoutes);                                  // Feature #17: Bid Bot Detector

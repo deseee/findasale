@@ -354,14 +354,19 @@ export const photoStationScan = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Sale not found' });
     }
 
-    // Geofence check: if client provided lat/lng, enforce 100m radius from sale location
-    if (lat !== undefined && lng !== undefined && sale.lat !== null && sale.lng !== null) {
+    // Geofence check: HARD requirement when sale has coordinates
+    if (sale.lat !== null && sale.lng !== null) {
+      // Sale has coordinates set — require client coords and enforce 100m radius
+      if (lat === undefined || lng === undefined) {
+        return res.status(403).json({ message: 'Location access is required to earn XP at this Photo Station.' });
+      }
       const distance = haversineDistance(lat, lng, sale.lat, sale.lng);
       const MAX_DISTANCE = 100; // 100 meters
       if (distance > MAX_DISTANCE) {
         return res.status(403).json({ message: 'You must be at the sale to earn XP here.' });
       }
     }
+    // Sale has no coordinates set — allow scan without coords (graceful fallback)
 
     // Check if user has already scanned this photo station
     const existingScan = await prisma.pointsTransaction.findFirst({
@@ -406,5 +411,74 @@ export const photoStationScan = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('[photoOp] photoStationScan error:', error);
     res.status(500).json({ message: 'Server error while processing scan' });
+  }
+};
+
+/**
+ * POST /api/sales/:saleId/photo-ops/share-xp
+ * Award XP for sharing a sale externally (idempotent)
+ * One-time per sale per user, verified after native share completes
+ * Auth: authenticated shopper only
+ */
+export const awardShareXp = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const { saleId } = req.params;
+
+    // Verify sale exists
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { id: true },
+    });
+
+    if (!sale) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
+    // Check if user has already earned SHARE XP for this sale (idempotency)
+    const existingShare = await prisma.pointsTransaction.findFirst({
+      where: {
+        userId: req.user.id,
+        saleId,
+        type: 'SHARE',
+      },
+    });
+
+    if (existingShare) {
+      // Already earned, return idempotent 200 response
+      return res.json({
+        xpAwarded: 0,
+        alreadyShared: true,
+        message: 'You have already earned XP for sharing this sale.',
+      });
+    }
+
+    // Award XP for share
+    let xpAwarded = 0;
+    try {
+      const xpResult = await awardXp(req.user.id, 'SHARE', XP_AWARDS.SHARE, {
+        saleId,
+        description: `Social share of sale: ${saleId}`,
+      });
+      if (xpResult) {
+        xpAwarded = xpResult.xpAwarded;
+      }
+    } catch (err) {
+      console.warn('[photoOp] Failed to award share XP:', err);
+      // Don't fail the request — return what we tried
+    }
+
+    // Return success with awarded amount
+    res.status(200).json({
+      xpAwarded,
+      alreadyShared: false,
+      message: `You earned ${xpAwarded} XP for sharing!`,
+    });
+  } catch (error) {
+    console.error('[photoOp] awardShareXp error:', error);
+    res.status(500).json({ message: 'Server error while awarding share XP' });
   }
 };

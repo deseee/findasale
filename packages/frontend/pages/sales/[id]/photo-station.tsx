@@ -10,8 +10,17 @@ import Head from 'next/head';
 interface PhotoStationScanResponse {
   alreadyScanned: boolean;
   xpAwarded: number;
-  shareXp: number;
+  shareXp?: number;
   message: string;
+}
+
+interface ShareLinkResponse {
+  id: string;
+  code: string;
+  url: string;
+  totalClicks: number;
+  uniqueClicks: number;
+  totalXpAwarded: number;
 }
 
 interface GeolocationCoords {
@@ -45,6 +54,16 @@ const PhotoStationPage = () => {
     enabled: !!id,
   });
 
+  // Fetch or generate share link for this sale
+  const { data: shareLink, isLoading: shareLinkLoading } = useQuery({
+    queryKey: ['share-link', id],
+    queryFn: async () => {
+      const response = await api.post(`/sales/${id}/share-link`, {});
+      return response.data as ShareLinkResponse;
+    },
+    enabled: !!id && !!user && hasScanned && !scanData?.alreadyScanned,
+  });
+
   // Scan mutation
   const scanMutation = useMutation({
     mutationFn: async (coords: GeolocationCoords | null) => {
@@ -58,7 +77,7 @@ const PhotoStationPage = () => {
         showToast("You've already scanned this photo station.", 'info');
       } else if (data.xpAwarded > 0) {
         showToast(
-          `You earned ${data.xpAwarded} XP! Share to earn ${data.shareXp} more.`,
+          `You earned ${data.xpAwarded} XP!`,
           'success'
         );
       }
@@ -77,9 +96,9 @@ const PhotoStationPage = () => {
       setRequestingLocation(true);
 
       if (!navigator.geolocation) {
-        // No geolocation support — allow scan without coords
+        // No geolocation support — cannot scan, show warning
         setRequestingLocation(false);
-        scanMutation.mutate(null);
+        setGeolocationDenied(true);
         return;
       }
 
@@ -93,19 +112,14 @@ const PhotoStationPage = () => {
         },
         (error) => {
           setRequestingLocation(false);
-          // User denied location or error occurred
-          if (error.code === error.PERMISSION_DENIED) {
-            setGeolocationDenied(true);
-          } else {
-            // Other geolocation errors — allow scan without coords
-            scanMutation.mutate(null);
-          }
+          // User denied location or error occurred — cannot scan without coords
+          setGeolocationDenied(true);
         }
       );
     }
   }, [id, user, hasScanned, geolocationDenied, requestingLocation]);
 
-  const isLoading = authLoading || saleLoading || scanMutation.isPending || requestingLocation;
+  const isLoading = authLoading || saleLoading || scanMutation.isPending || requestingLocation || shareLinkLoading;
 
   const handleRetryGeolocation = () => {
     setGeolocationDenied(false);
@@ -118,9 +132,9 @@ const PhotoStationPage = () => {
   }
 
   const handleShare = async () => {
-    if (!user || !scanData) return;
+    if (!user || !scanData || !shareLink) return;
 
-    const shareUrl = `https://finda.sale/sales/${id}`;
+    const shareUrl = shareLink.url;
     const shareText = `Check out this sale on FindA.Sale: ${sale?.title || 'A great sale'}`;
 
     try {
@@ -131,16 +145,17 @@ const PhotoStationPage = () => {
           text: shareText,
           url: shareUrl,
         });
+        // Share succeeded — XP awarded server-side on click
         setSharedOnce(true);
-        showToast(`You earned ${scanData.shareXp} XP for sharing!`, 'success');
+        showToast('Link shared! Earn XP when others click it.', 'success');
       } else {
         // Fallback: copy to clipboard
         await navigator.clipboard.writeText(shareUrl);
         setSharedOnce(true);
-        showToast('Link copied! Share to earn XP.', 'success');
+        showToast('Link copied! Share it to earn XP.', 'success');
       }
     } catch (error: any) {
-      // User cancelled share dialog — don't award XP, don't show error
+      // User cancelled share dialog — don't set sharedOnce, don't show error
       if (error?.name === 'AbortError') return;
       console.error('Share failed:', error);
       showToast('Failed to share', 'error');
@@ -183,15 +198,15 @@ const PhotoStationPage = () => {
                   <div className="flex items-start gap-3">
                     <span className="text-2xl flex-shrink-0">📍</span>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Allow Location Access</h3>
+                      <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Location Access Required</h3>
                       <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
-                        Enable location services to earn XP at this Photo Station. You must be at the sale to scan.
+                        Location access is required to earn XP at this Photo Station. Tap below to allow location access.
                       </p>
                       <button
                         onClick={handleRetryGeolocation}
                         className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white rounded-lg font-medium transition-colors text-sm"
                       >
-                        Enable Location
+                        Allow Location
                       </button>
                     </div>
                   </div>
@@ -234,7 +249,7 @@ const PhotoStationPage = () => {
                       {/* XP Display */}
                       <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl text-center border border-amber-200 dark:border-amber-700">
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                          XP Earned
+                          XP Earned at Station
                         </p>
                         <p className="text-4xl font-bold text-amber-600 dark:text-amber-400">
                           +{scanData.xpAwarded}
@@ -244,15 +259,33 @@ const PhotoStationPage = () => {
                       {/* Share Button */}
                       <button
                         onClick={handleShare}
-                        disabled={sharedOnce}
+                        disabled={sharedOnce || !shareLink}
                         className={`w-full px-6 py-4 font-semibold rounded-xl transition flex items-center justify-center gap-2 ${
-                          sharedOnce
+                          sharedOnce || !shareLink
                             ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
                             : 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white'
                         }`}
                       >
-                        {sharedOnce ? '✓ Shared' : `Share Sale (+${scanData.shareXp} XP)`}
+                        {sharedOnce ? '✓ Shared' : 'Share Your Link (+2 XP per verified click)'}
                       </button>
+
+                      {/* Share Link Stats */}
+                      {shareLink && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-center">
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Clicks</p>
+                            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">
+                              {shareLink.uniqueClicks}
+                            </p>
+                          </div>
+                          <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-center">
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">XP Earned</p>
+                            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                              +{shareLink.totalXpAwarded}
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Info */}
                       <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
