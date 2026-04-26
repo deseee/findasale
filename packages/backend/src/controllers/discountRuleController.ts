@@ -39,9 +39,14 @@ export const listDiscountRules = async (req: AuthRequest, res: Response) => {
         return res.status(401).json({ message: 'Authentication required' });
       }
 
-      // Get organizer's workspace
+      // Get organizer's workspace using organizerProfile.id (not req.user.id, which is userId)
+      const organizerId = req.user.organizerProfile?.id;
+      if (!organizerId) {
+        return res.status(403).json({ message: 'Not an organizer' });
+      }
+
       const workspace = await prisma.organizerWorkspace.findFirst({
-        where: { ownerId: req.user.id },
+        where: { ownerId: organizerId },
       });
 
       if (!workspace) {

@@ -28,6 +28,7 @@ import {
   removeOrganizerDiscount,
   getItemEbayComps,
   getCompSummary,
+  getSimilarItems,
 } from '../controllers/itemController';
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
@@ -112,6 +113,10 @@ router.delete('/:itemId/organizer-discount', authenticate, removeOrganizerDiscou
 // Feature #338: Multi-source pricing comp summary
 // Declared before /:id to prevent param capture
 router.get('/:id/comp-summary', authenticate, getCompSummary);
+
+// BUG 4: Similar items recommendation
+// Declared before /:id to prevent param capture
+router.get('/:id/similar', getSimilarItems);
 
 // Phase 1: Batch Operations Toolkit — Status-safe validation + dry-run + tags operation
 // Declared before /:id to prevent 'bulk' being captured as an item ID.
