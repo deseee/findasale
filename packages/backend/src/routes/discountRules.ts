@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticate, optionalAuthenticate } from '../middleware/auth';
 import {
   listDiscountRules,
   createDiscountRule,
@@ -9,9 +9,9 @@ import {
 
 const router = Router();
 
-// GET /api/discount-rules — public read (for displaying discounts on sale pages)
-// Define public route without auth middleware
-router.get('/', listDiscountRules);
+// GET /api/discount-rules — public read (saleId path) or authenticated organizer read
+// optionalAuthenticate sets req.user if a valid JWT is present, but doesn't block unauthenticated requests
+router.get('/', optionalAuthenticate, listDiscountRules);
 
 // Create a separate router for protected routes (POST, PUT, DELETE)
 const protectedRouter = Router();
