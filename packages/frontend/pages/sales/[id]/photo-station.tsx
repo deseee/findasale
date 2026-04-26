@@ -14,6 +14,11 @@ interface PhotoStationScanResponse {
   message: string;
 }
 
+interface GeolocationCoords {
+  lat: number;
+  lng: number;
+}
+
 interface Sale {
   id: string;
   title: string;
@@ -27,6 +32,8 @@ const PhotoStationPage = () => {
   const [hasScanned, setHasScanned] = useState(false);
   const [scanData, setScanData] = useState<PhotoStationScanResponse | null>(null);
   const [sharedOnce, setSharedOnce] = useState(false);
+  const [geolocationDenied, setGeolocationDenied] = useState(false);
+  const [requestingLocation, setRequestingLocation] = useState(false);
 
   // Fetch sale data
   const { data: sale, isLoading: saleLoading } = useQuery({
@@ -40,8 +47,8 @@ const PhotoStationPage = () => {
 
   // Scan mutation
   const scanMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api.post(`/sales/${id}/photo-ops/photo-station-scan`, {});
+    mutationFn: async (coords: GeolocationCoords | null) => {
+      const response = await api.post(`/sales/${id}/photo-ops/photo-station-scan`, coords || {});
       return response.data as PhotoStationScanResponse;
     },
     onSuccess: (data) => {
@@ -64,14 +71,46 @@ const PhotoStationPage = () => {
     },
   });
 
-  // Auto-scan on mount
+  // Request geolocation and auto-scan on mount
   useEffect(() => {
-    if (id && user && !hasScanned) {
-      scanMutation.mutate();
-    }
-  }, [id, user, hasScanned]);
+    if (id && user && !hasScanned && !geolocationDenied && !requestingLocation) {
+      setRequestingLocation(true);
 
-  const isLoading = authLoading || saleLoading || scanMutation.isPending;
+      if (!navigator.geolocation) {
+        // No geolocation support — allow scan without coords
+        setRequestingLocation(false);
+        scanMutation.mutate(null);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setRequestingLocation(false);
+          scanMutation.mutate({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          setRequestingLocation(false);
+          // User denied location or error occurred
+          if (error.code === error.PERMISSION_DENIED) {
+            setGeolocationDenied(true);
+          } else {
+            // Other geolocation errors — allow scan without coords
+            scanMutation.mutate(null);
+          }
+        }
+      );
+    }
+  }, [id, user, hasScanned, geolocationDenied, requestingLocation]);
+
+  const isLoading = authLoading || saleLoading || scanMutation.isPending || requestingLocation;
+
+  const handleRetryGeolocation = () => {
+    setGeolocationDenied(false);
+    setRequestingLocation(true);
+  };
 
   if (!authLoading && !user) {
     router.push('/login');
@@ -139,6 +178,25 @@ const PhotoStationPage = () => {
 
             {/* Content */}
             <div className="p-8 space-y-6">
+              {geolocationDenied && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl flex-shrink-0">📍</span>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">Allow Location Access</h3>
+                      <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+                        Enable location services to earn XP at this Photo Station. You must be at the sale to scan.
+                      </p>
+                      <button
+                        onClick={handleRetryGeolocation}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 text-white rounded-lg font-medium transition-colors text-sm"
+                      >
+                        Enable Location
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {isLoading ? (
                 <div className="flex justify-center items-center py-12">
                   <div className="w-10 h-10 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"></div>
