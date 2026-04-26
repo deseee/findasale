@@ -78,6 +78,7 @@ const SearchPage = () => {
   const [tab, setTab] = useState<SearchTab>('all');
   const [visualResults, setVisualResults] = useState<VisualSearchData | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   // Initialize filters from URL query params
   const [filters, setFilters] = useState<SearchFilters>({
@@ -212,6 +213,8 @@ const SearchPage = () => {
               aria-label="Search sales and items"
               className="flex-1 px-4 py-3 border border-warm-300 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100"
               autoFocus={!q}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
             />
             <button
               type="submit"
@@ -220,7 +223,7 @@ const SearchPage = () => {
               Search
             </button>
           </div>
-          <SearchSuggestions query={q} isOpen={!q} onSelectSuggestion={(suggestion) => {
+          <SearchSuggestions query={q} isOpen={searchFocused && !q} onSelectSuggestion={(suggestion) => {
             router.push(`/search?q=${encodeURIComponent(suggestion)}`);
           }} />
         </form>
