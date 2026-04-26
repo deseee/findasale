@@ -43,7 +43,7 @@ export const listDiscountRules = async (req: AuthRequest, res: Response) => {
       // Get organizer's workspace using organizerProfile.id (not req.user.id, which is userId)
       const organizerId = req.user.organizerProfile?.id;
       if (!organizerId) {
-        return res.status(403).json({ message: 'Not an organizer' });
+        return res.json([]);
       }
 
       const workspace = await prisma.organizerWorkspace.findFirst({
@@ -54,9 +54,9 @@ export const listDiscountRules = async (req: AuthRequest, res: Response) => {
         return res.status(403).json({ message: 'Workspace not found' });
       }
 
-      // Tier check: TEAMS only
+      // Non-TEAMS organizers simply have no discount rules → return empty array
       if (workspace.subscriptionTier !== 'TEAMS') {
-        return res.status(403).json({ message: 'TEAMS subscription required' });
+        return res.json([]);
       }
 
       workspaceId = workspace.id;
