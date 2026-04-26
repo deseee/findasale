@@ -1,4 +1,6 @@
 import './instrument'; // must be first — initializes Sentry before all other imports
+import { setDefaultResultOrder } from 'dns';
+setDefaultResultOrder('ipv4first');
 import dotenv from 'dotenv';
 import path from 'path';
 import http from 'http'; // V1: needed to attach Socket.io alongside Express
@@ -173,6 +175,7 @@ import discountRuleRoutes from './routes/discountRules';        // Feature #310:
 import markdownCycleRoutes from './routes/markdownCycles';       // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
 import locationRoutes from './routes/locations';                 // #311: Multi-Location Inventory View
 import qrScannerRoutes from './routes/qrScanner';                // QR Scanner Phase 2: scan analytics
+import imageProxyRoutes from './routes/imageProxy';              // Image proxy for eBay CDN images
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -534,6 +537,7 @@ app.use('/api/discount-rules', discountRuleRoutes);                         // F
 app.use('/api/markdown-cycles', markdownCycleRoutes);                       // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
 app.use('/api/locations', locationRoutes);                                   // #311: Multi-Location Inventory View
 app.use('/api/qr-scanner', qrScannerRoutes);                                 // QR Scanner Phase 2: scan analytics
+app.use('/api', imageProxyRoutes);                                              // Image proxy for eBay CDN images
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {

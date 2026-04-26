@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getOptimizedUrl, getLqipUrl, getThumbnailUrl } from '../lib/imageUtils';
+import { getOptimizedUrl, getLqipUrl, getThumbnailUrl, getItemImageUrl } from '../lib/imageUtils';
 import { formatCategoryLabel } from '../lib/itemConstants';
 import Skeleton from './Skeleton';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
@@ -139,7 +139,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
   const { isLowBandwidth } = useNetworkQuality();
 
   // Resolve primary photo URL (photoUrls array takes precedence, fallback to photoUrl)
-  const primaryPhotoUrl = ((item as any).photoUrls?.[0]) || (item as any).photoUrl || null;
+  // Route eBay CDN URLs through /api/image-proxy to bypass Chrome tracking protection in incognito
+  const primaryPhotoUrl = getItemImageUrl(((item as any).photoUrls?.[0]) || (item as any).photoUrl || null);
 
   // Calculate image URLs based on optimization mode
   let lqipUrl_calc: string | null = null;

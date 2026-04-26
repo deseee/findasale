@@ -3469,7 +3469,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const finalDesc = descClean || conditionDesc;
           if (finalDesc) backfill.description = finalDesc;
           const pictureUrls = xmlAll(itemBlock, 'PictureURL');
-          if (pictureUrls.length > 0) backfill.photoUrls = pictureUrls;
+          if (pictureUrls.length > 0) {
+            backfill.photoUrls = pictureUrls;
+          }
           if (!item.conditionGrade) {
             const conditionId = xmlVal(itemBlock, 'ConditionID') || '';
             const condMapEnrich: Record<string, string> = { '1000': 'S', '1500': 'S', '1750': 'A', '2000': 'A', '2500': 'A', '3000': 'A', '4000': 'B', '5000': 'C', '6000': 'D', '7000': 'D' };
