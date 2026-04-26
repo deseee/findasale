@@ -300,30 +300,30 @@ const SearchPage = () => {
           </>
         )}
 
-        {/* Text search results */}
-        {q && q.length >= 2 && (
-          <>
-            <div className="flex gap-6">
-              {/* Desktop filter sidebar — FTS facets on items tab, generic panel elsewhere */}
-              {!isMobile && tab === 'items' ? (
-                <FilterSidebar
-                  filters={itemFilters}
-                  facets={itemData?.facets ?? null}
-                  onChange={updateItemFilters}
-                  onClear={clearItemFilters}
-                />
-              ) : !isMobile ? (
-                <SearchFilterPanel
-                  filters={filters}
-                  onFiltersChange={handleFiltersChange}
-                  categories={CATEGORIES}
-                  resultCount={data?.items?.length}
-                  isMobile={false}
-                />
-              ) : null}
+        {/* Two-column layout: desktop sidebar always visible, results gated by query length */}
+        <div className="flex gap-6">
+          {/* Desktop filter sidebar — FTS facets on items tab, generic panel elsewhere */}
+          {!isMobile && tab === 'items' ? (
+            <FilterSidebar
+              filters={itemFilters}
+              facets={itemData?.facets ?? null}
+              onChange={updateItemFilters}
+              onClear={clearItemFilters}
+            />
+          ) : !isMobile ? (
+            <SearchFilterPanel
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+              categories={CATEGORIES}
+              resultCount={data?.items?.length}
+              isMobile={false}
+            />
+          ) : null}
 
-              {/* Main content area */}
-              <div className="flex-1 min-w-0">
+          {/* Main content area — results gated by query */}
+          <div className="flex-1 min-w-0">
+            {q && q.length >= 2 && (
+              <>
                 {/* Tabs */}
                 <div className="flex gap-6 mb-6 border-b border-warm-200 dark:border-gray-700">
                   {(['all', 'sales', 'items'] as SearchTab[]).map((t) => (
@@ -473,24 +473,10 @@ const SearchPage = () => {
                     )}
                   </>
                 )}
-              </div>
-            </div>
-          </>
-        )}
-      </main>
-    </div>
-  );
-};
-
-export default SearchPage;                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </>
-        )}
+              </>
+            )}
+          </div>
+        </div>
       </main>
     </div>
   );
