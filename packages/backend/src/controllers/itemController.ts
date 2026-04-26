@@ -2556,16 +2556,4 @@ export const getSimilarItems = async (req: Request, res: Response) => {
     console.error('[getSimilarItems] Error:', error);
     res.status(500).json({ message: 'Server error fetching similar items' });
   }
-};aFreshness ? compLookup.dataFreshness.toISOString() : null;
-
-    res.status(200).json({
-      sourceCount,
-      medianLow,
-      medianHigh,
-      lastUpdated,
-    });
-  } catch (error) {
-    console.error('[getCompSummary] Error:', error);
-    res.status(500).json({ message: 'Server error fetching comp summary' });
-  }
 };
