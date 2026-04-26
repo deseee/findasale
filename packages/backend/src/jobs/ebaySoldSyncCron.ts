@@ -100,7 +100,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
 
     // Build filter for eBay Fulfillment API
     // If we've synced before, only fetch orders created since last sync
-    let filter = 'orderfulfillmentstatus:{FULFILLED|IN_PROGRESS|NOT_STARTED}';
+    let filter = 'orderpaymentstatus:{PAID}';
     if (freshConnection?.lastEbaySoldSyncAt) {
       const startDate = freshConnection.lastEbaySoldSyncAt.toISOString();
       const endDate = new Date().toISOString();
