@@ -1,38 +1,68 @@
 /**
- * eBay API Proxy — Vercel API Route (Option B fallback)
+ * eBay API Proxy — Vercel API Route
  *
- * Railway backend calls this endpoint; Vercel's IPs make the request to api.ebay.com.
- * Railway's datacenter IPs are blocked by eBay's DNS/firewall; Vercel's are not.
+ * Two modes:
  *
- * Usage (from Railway backend):
- *   POST /api/proxy/ebay?path=/identity/v1/oauth2/token
- *   Headers: X-Proxy-Secret, Authorization, Content-Type
- *   Body: forwarded as-is to eBay
+ * 1. Token mode (POST /api/proxy/ebay?action=token)
+ *    Vercel uses its own EBAY_CLIENT_ID/SECRET to get a token from eBay.
+ *    Railway never needs to reach api.ebay.com for auth.
+ *
+ * 2. General proxy mode (any method /api/proxy/ebay?path=/some/ebay/path)
+ *    Forwards headers + body from Railway to api.ebay.com.
+ *    Railway passes the Bearer token it got from action=token.
  *
  * Security: requests must include X-Proxy-Secret matching EBAY_PROXY_SECRET env var.
  * Set EBAY_PROXY_SECRET in both Vercel and Railway environment variables.
+ *
+ * Vercel also needs: EBAY_CLIENT_ID, EBAY_CLIENT_SECRET (copy from Railway).
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const EBAY_BASE = 'https://api.ebay.com';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Auth gate — shared secret between Railway and Vercel
+  // Auth gate
   const proxySecret = process.env.EBAY_PROXY_SECRET;
   if (proxySecret && req.headers['x-proxy-secret'] !== proxySecret) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  // Determine target eBay path
-  const { path } = req.query;
+  const { action, path } = req.query;
+
+  // ── Mode 1: Token (Vercel fetches with its own credentials) ─────────────
+  if (action === 'token') {
+    const clientId = process.env.EBAY_CLIENT_ID;
+    const clientSecret = process.env.EBAY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(500).json({ error: 'eBay credentials not configured in Vercel env' });
+    }
+
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    try {
+      const ebayRes = await fetch(`${EBAY_BASE}/identity/v1/oauth2/token`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
+      });
+
+      const data = await ebayRes.json();
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(ebayRes.status).json(data);
+    } catch (err: any) {
+      console.error('[ebay-proxy/token] Error:', err.message);
+      return res.status(502).json({ error: err.message });
+    }
+  }
+
+  // ── Mode 2: General proxy ─────────────────────────────────────────────────
   const ebayPath = Array.isArray(path) ? path[0] : path;
   if (!ebayPath || !ebayPath.startsWith('/')) {
     return res.status(400).json({ error: 'Missing or invalid path parameter' });
   }
 
-  const ebayUrl = `${EBAY_BASE}${ebayPath}`;
-
-  // Forward relevant headers (strip hop-by-hop and proxy headers)
   const forwardHeaders: Record<string, string> = {};
   const allowedHeaders = ['authorization', 'content-type', 'x-ebay-c-marketplace-id', 'accept'];
   for (const key of allowedHeaders) {
@@ -40,38 +70,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (val) forwardHeaders[key] = Array.isArray(val) ? val[0] : val;
   }
 
+  const body = req.method !== 'GET' && req.method !== 'HEAD'
+    ? JSON.stringify(req.body)
+    : undefined;
+  if (body && !forwardHeaders['content-type']) {
+    forwardHeaders['content-type'] = 'application/json';
+  }
+
   try {
-    const upstreamRes = await fetch(ebayUrl, {
+    const upstreamRes = await fetch(`${EBAY_BASE}${ebayPath}`, {
       method: req.method ?? 'GET',
       headers: forwardHeaders,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? await getRawBody(req) : undefined,
+      body,
     });
 
-    const contentType = upstreamRes.headers.get('content-type') ?? 'application/json';
-    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Type', upstreamRes.headers.get('content-type') ?? 'application/json');
     res.setHeader('Cache-Control', 'no-store');
-    res.status(upstreamRes.status);
-
-    const body = await upstreamRes.text();
-    res.send(body);
+    const text = await upstreamRes.text();
+    return res.status(upstreamRes.status).send(text);
   } catch (err: any) {
     console.error('[ebay-proxy] Upstream error:', err.message);
-    res.status(502).json({ error: 'eBay proxy upstream error', message: err.message });
+    return res.status(502).json({ error: err.message });
   }
 }
-
-/** Read the raw request body as a Buffer then convert to string. */
-async function getRawBody(req: NextApiRequest): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', (chunk: Buffer) => { data += chunk.toString(); });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
-  });
-}
-
-export const config = {
-  api: {
-    bodyParser: false, // We read raw body manually to forward as-is
-  },
-};
