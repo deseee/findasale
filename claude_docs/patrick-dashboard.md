@@ -1,50 +1,49 @@
-# Patrick's Dashboard — S585 ✅
+# Patrick's Dashboard — S586 ✅
 
-## Status: #310 Discount Rules — 3 P0 Bugs Fixed + Full Chrome QA
+## Status: Search UX + 9 New Sale Types Shipped
 
-S585 diagnosed and fixed 3 root-cause bugs in the discount rules backend, then Chrome-verified all 4 CRUD operations end-to-end. Feature is fully functional.
+S586 fixed the /search page layout, homepage UX regressions, and added 9 new sale types across the full stack. No migrations needed.
 
 ---
 
-## S585 Results
+## S586 Results
 
 | Item | Result | Notes |
 |------|--------|-------|
-| #310 LIST | ✅ VERIFIED | Rule renders with color swatch, label, discount %, edit/delete icons |
-| #310 CREATE | ✅ VERIFIED | Rule created + confirmed in DB |
-| #310 EDIT | ✅ VERIFIED | Modal pre-populates, "30% Off — Red Tag" + 30% saved, green toast, UI updated |
-| #310 DELETE | ✅ VERIFIED | Inline confirm guard, rule removed, empty state + "Create your first rule" CTA |
-| Settlement PDF | ⚠️ UNVERIFIED | Requires ENDED sale + SaleSettlement with valid saleId |
-| #268 Trail Completion | ⚠️ UNVERIFIED | Requires physical QR scan at trail stops |
-| #278 Treasure Hunt Pro | ⚠️ UNVERIFIED | Requires QR scan at active treasure hunt |
+| Homepage hero | ✅ DONE | Orange gradient, reduced padding |
+| Homepage map | ✅ DONE | Explicit 220px height fix |
+| Homepage search jump | ✅ DONE | Auto-scroll useEffect removed |
+| Homepage Type filter | ✅ DONE | "Type:" dropdown in filter bar |
+| /search merge conflict | ✅ DONE | HEAD version kept, filter sidebar always visible |
+| Search suggestions on load | ✅ DONE | Only shows when input is focused |
+| /search sidebar pushed down | ✅ DONE | Empty state moved inside flex container |
+| 9 new sale types | ✅ DONE | Full stack: Zod, dashboard config, forms, map, share copy, OG meta, GPS radius |
+| BOOTH type + copy | ✅ DONE | "Vendor Booth" — antique booth, flea booth, farmers market vendor |
 
 ---
 
-## Root Causes Fixed (3 P0 bugs in discountRuleController.ts)
+## New Sale Types Added
 
-1. **userId vs organizerId** — Write endpoints used `req.user.id` (User table ID) instead of `req.user.organizerProfile?.id` (Organizer table ID). All CRUD silently failed.
-2. **Non-existent column** — Tier check used `workspace.subscriptionTier` (column doesn't exist on OrganizerWorkspace). Correct field: `Organizer.tier`.
-3. **Missing DB join on GET** — GET route uses `optionalAuthenticate` which never joins the organizer table → `organizerProfile` always undefined → list always returned `[]`. Fix: userId fallback lookup added.
+GARAGE, MOVING, DOWNSIZING, SWAP_MEET, POPUP, LIQUIDATION, CHARITY, ONLINE, BOOTH
 
-Controller fix was MCP-pushed mid-session (SHA `a8d80db`). **No pushblock needed for code.**
+RETAIL remains TEAMS-gated. BUSINESS_CORPORATE (backend-only, pre-existing) left as-is — likely B2B artifact, possibly redundant with LIQUIDATION. Decide if it should stay or be cleaned up.
 
 ---
 
 ## Wrap Push Block
 
-STATE.md and patrick-dashboard.md were edited locally. Push these wrap docs:
-
 ```powershell
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "wrap: S585 — #310 discount rules QA complete, 3 P0 bugs fixed"
+git commit -m "wrap: S586 — 9 new sale types, search UX fixes, homepage fixes"
 .\push.ps1
 ```
 
 ---
 
-## S586 Priorities
+## S587 Priorities
 
-1. Settlement PDF — end a sale and verify PDF download
-2. New feature work from roadmap (#310 COMPLETE)
-3. #278 Treasure Hunt Pro and #268 Trail Completion remain infrastructure-blocked
+1. Verify new sale types appear correctly in organizer create-sale dropdown on live site
+2. Verify /search sidebar stays aligned on first load (no more push-down)
+3. Settlement PDF — still UNVERIFIED (requires ENDED sale + SaleSettlement record)
+4. S577 bug backlog: settlement payout $0, tier lapse gate, voice icon, #332/#333 Bob tier gates
