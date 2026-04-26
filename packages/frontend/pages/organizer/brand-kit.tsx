@@ -55,6 +55,13 @@ const BrandKitPage = () => {
   });
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string>('');
+
+  // Read JWT from localStorage after mount (localStorage not available during SSR)
+  useEffect(() => {
+    const t = localStorage.getItem('token') || localStorage.getItem('authToken') || '';
+    setAuthToken(t);
+  }, []);
 
   // Redirect if not authenticated or not an organizer
   if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -497,28 +504,28 @@ const BrandKitPage = () => {
                   /* Download buttons grid */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/business-card?token=${(user as any)?.token || ''}`}
+                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/business-card?token=${authToken}`}
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Business Cards</h3>
                       <p className="text-xs text-warm-600 dark:text-warm-400">10 cards per page (3.5" × 2")</p>
                     </a>
                     <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/letterhead?token=${(user as any)?.token || ''}`}
+                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/letterhead?token=${authToken}`}
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Letterhead Template</h3>
                       <p className="text-xs text-warm-600 dark:text-warm-400">Blank page ready for printing</p>
                     </a>
                     <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/social-headers?token=${(user as any)?.token || ''}`}
+                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/social-headers?token=${authToken}`}
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Social Headers</h3>
                       <p className="text-xs text-warm-600 dark:text-warm-400">Facebook, Instagram, Twitter templates</p>
                     </a>
                     <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/yard-sign?token=${(user as any)?.token || ''}`}
+                      href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/yard-sign?token=${authToken}`}
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Branded Yard Sign</h3>
