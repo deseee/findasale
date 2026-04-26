@@ -8,7 +8,7 @@
  *    Railway never needs to reach api.ebay.com for auth.
  *
  * 2. General proxy mode (any method /api/proxy/ebay?path=/some/ebay/path)
- *    Forwards headers + body from Railway to api.ebay.com.
+ *    Forwards headers + raw body bytes from Railway to api.ebay.com unchanged.
  *    Railway passes the Bearer token it got from action=token.
  *
  * Security: requests must include X-Proxy-Secret matching EBAY_PROXY_SECRET env var.
@@ -19,6 +19,24 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const EBAY_BASE = 'https://api.ebay.com';
+
+// Disable Next.js body parsing — we forward raw bytes for Mode 2 so that
+// application/x-www-form-urlencoded bodies (eBay token refresh) survive intact.
+// Auto-parsing then JSON.stringify-ing them mangled the form body into JSON
+// while leaving the Content-Type form-encoded — eBay rejected → fetch threw → 502.
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+async function readRawBody(req: NextApiRequest): Promise<Buffer | undefined> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Auth gate
@@ -73,12 +91,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (val) forwardHeaders[key] = Array.isArray(val) ? val[0] : val;
   }
 
+  // Forward raw body bytes unchanged. Never JSON.stringify a form-encoded body.
   const body = req.method !== 'GET' && req.method !== 'HEAD'
-    ? JSON.stringify(req.body)
+    ? await readRawBody(req)
     : undefined;
-  if (body && !forwardHeaders['content-type']) {
-    forwardHeaders['content-type'] = 'application/json';
-  }
 
   try {
     const upstreamRes = await fetch(`${EBAY_BASE}${ebayPath}`, {
@@ -87,12 +103,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       body,
     });
 
+    const text = await upstreamRes.text();
+    if (!upstreamRes.ok) {
+      console.error(
+        '[ebay-proxy] Upstream',
+        upstreamRes.status,
+        'on',
+        ebayPath,
+        '— body:',
+        text.slice(0, 500),
+      );
+    }
     res.setHeader('Content-Type', upstreamRes.headers.get('content-type') ?? 'application/json');
     res.setHeader('Cache-Control', 'no-store');
-    const text = await upstreamRes.text();
     return res.status(upstreamRes.status).send(text);
   } catch (err: any) {
-    console.error('[ebay-proxy] Upstream error:', err.message);
+    console.error('[ebay-proxy] Upstream fetch threw:', err.message, '— path:', ebayPath);
     return res.status(502).json({ error: err.message });
   }
 }
