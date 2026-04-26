@@ -40,10 +40,16 @@ export const listDiscountRules = async (req: AuthRequest, res: Response) => {
         return res.status(401).json({ message: 'Authentication required' });
       }
 
-      // Get organizer's workspace using organizerProfile.id (not req.user.id, which is userId)
-      const organizerId = req.user.organizerProfile?.id;
+      // Get organizer ID — optionalAuthenticate doesn't include organizer relation,
+      // so fall back to a direct lookup by userId if organizerProfile isn't attached
+      let organizerId = req.user.organizerProfile?.id;
       if (!organizerId) {
-        return res.json([]);
+        const org = await prisma.organizer.findFirst({
+          where: { userId: req.user.id },
+          select: { id: true },
+        });
+        if (!org) return res.json([]);
+        organizerId = org.id;
       }
 
       // Non-TEAMS organizers have no discount rules → return empty array
