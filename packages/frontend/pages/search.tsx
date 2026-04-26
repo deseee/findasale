@@ -87,6 +87,7 @@ const SearchPage = () => {
     category: '',
     saleStatus: 'all',
     sortBy: 'recent',
+    saleType: '',
   });
 
   const q = ((router.query.q as string) || '').trim();
@@ -101,8 +102,9 @@ const SearchPage = () => {
     const category = (router.query.category as string) || '';
     const saleStatus = (router.query.saleStatus as string || 'all') as any;
     const sortBy = (router.query.sortBy as string || 'recent') as any;
+    const saleType = (router.query.saleType as string) || '';
 
-    setFilters({ priceMin, priceMax, condition, category, saleStatus, sortBy });
+    setFilters({ priceMin, priceMax, condition, category, saleStatus, sortBy, saleType });
 
     // Detect mobile
     setIsMobile(window.innerWidth < 768);
@@ -121,6 +123,7 @@ const SearchPage = () => {
       if (filters.category) params.category = filters.category;
       if (filters.saleStatus !== 'all') params.saleStatus = filters.saleStatus;
       if (filters.sortBy !== 'recent') params.sortBy = filters.sortBy;
+      if (filters.saleType) params.saleType = filters.saleType;
 
       const res = await api.get('/search', { params });
       return res.data as { query: string; sales: any[]; items: any[] };
@@ -140,6 +143,7 @@ const SearchPage = () => {
     if (newFilters.category) queryParams.set('category', newFilters.category);
     if (newFilters.saleStatus !== 'all') queryParams.set('saleStatus', newFilters.saleStatus);
     if (newFilters.sortBy !== 'recent') queryParams.set('sortBy', newFilters.sortBy);
+    if (newFilters.saleType) queryParams.set('saleType', newFilters.saleType);
 
     router.push(`/search?${queryParams.toString()}`, undefined, { shallow: true });
   };
@@ -465,6 +469,20 @@ const SearchPage = () => {
                             </Link>
                           ))}
                         </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default SearchPage;                        </div>
                       </div>
                     )}
                   </>

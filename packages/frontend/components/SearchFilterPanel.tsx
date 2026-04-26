@@ -11,6 +11,7 @@ export interface SearchFilters {
   category: string;
   saleStatus: 'all' | 'active' | 'upcoming';
   sortBy: 'recent' | 'price_asc' | 'price_desc' | 'ending_soon';
+  saleType: string;
 }
 
 interface SearchFilterPanelProps {
@@ -43,6 +44,24 @@ const DEFAULT_CATEGORIES = [
   'Other',
 ];
 
+const SALE_TYPE_OPTIONS = [
+  { value: '', label: 'All Types' },
+  { value: 'ESTATE', label: 'Estate Sale' },
+  { value: 'YARD', label: 'Yard Sale' },
+  { value: 'GARAGE', label: 'Garage Sale' },
+  { value: 'MOVING', label: 'Moving Sale' },
+  { value: 'DOWNSIZING', label: 'Downsizing Sale' },
+  { value: 'AUCTION', label: 'Auction' },
+  { value: 'FLEA_MARKET', label: 'Flea Market' },
+  { value: 'SWAP_MEET', label: 'Swap Meet' },
+  { value: 'CONSIGNMENT', label: 'Consignment' },
+  { value: 'POPUP', label: 'Pop-Up Sale' },
+  { value: 'LIQUIDATION', label: 'Liquidation Sale' },
+  { value: 'CHARITY', label: 'Charity Sale' },
+  { value: 'RETAIL', label: 'Retail Store' },
+  { value: 'ONLINE', label: 'Online Sale' },
+];
+
 const SORT_OPTIONS = [
   { value: 'recent', label: 'Most Recent' },
   { value: 'price_asc', label: 'Price: Low to High' },
@@ -72,6 +91,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     filters.condition ? 1 : 0,
     filters.category ? 1 : 0,
     filters.saleStatus !== 'all' ? 1 : 0,
+    filters.saleType ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const handlePriceMinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,6 +132,10 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     onFiltersChange({ ...filters, sortBy: e.target.value as any });
   };
 
+  const handleSaleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    onFiltersChange({ ...filters, saleType: e.target.value });
+  };
+
   const handleClearFilters = () => {
     setPriceMinInput('');
     setPriceMaxInput('');
@@ -122,6 +146,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
       category: '',
       saleStatus: 'all',
       sortBy: 'recent',
+      saleType: '',
     });
   };
 
@@ -178,6 +203,22 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
           {categories.map((cat) => (
             <option key={cat} value={cat}>
               {cat}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Sale Type */}
+      <div>
+        <h3 className="font-semibold text-warm-900 dark:text-gray-200 mb-3">Sale Type</h3>
+        <select
+          value={filters.saleType}
+          onChange={handleSaleTypeChange}
+          className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
+        >
+          {SALE_TYPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
@@ -252,6 +293,53 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
   if (!isMobile) {
     return (
       <div className="w-64 flex-shrink-0 pr-6">
+        <div className="sticky top-20">
+          <h2 className="text-lg font-semibold text-warm-900 mb-6">Filters</h2>
+          {filterContent}
+          {resultCount !== undefined && (
+            <p className="text-xs text-warm-500 mt-6">
+              {resultCount} item{resultCount !== 1 ? 's' : ''} found with these filters
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Mobile slide-down panel
+  return (
+    <div className="mb-6">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-3 bg-white border border-warm-300 rounded-lg hover:bg-warm-50 transition-colors flex items-center justify-between text-warm-900 font-medium"
+      >
+        <div className="flex items-center gap-2">
+          <span>Filters</span>
+          {activeFilterCount > 0 && (
+            <span className="inline-flex items-center justify-center w-5 h-5 bg-amber-500 text-white text-xs rounded-full font-bold">
+              {activeFilterCount}
+            </span>
+          )}
+        </div>
+        <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+
+      {isOpen && (
+        <div className="mt-4 p-4 bg-white border border-warm-200 rounded-lg space-y-4">
+          {filterContent}
+          {resultCount !== undefined && (
+            <p className="text-xs text-warm-500">
+              {resultCount} item{resultCount !== 1 ? 's' : ''} found
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SearchFilterPanel;
+-64 flex-shrink-0 pr-6">
         <div className="sticky top-20">
           <h2 className="text-lg font-semibold text-warm-900 mb-6">Filters</h2>
           {filterContent}
