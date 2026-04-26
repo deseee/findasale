@@ -46,16 +46,22 @@ export const listDiscountRules = async (req: AuthRequest, res: Response) => {
         return res.json([]);
       }
 
+      // Non-TEAMS organizers have no discount rules → return empty array
+      // Check Organizer.tier (OrganizerWorkspace has no subscriptionTier column)
+      const organizer = await prisma.organizer.findUnique({
+        where: { id: organizerId },
+        select: { tier: true },
+      });
+      if (organizer?.tier !== 'TEAMS') {
+        return res.json([]);
+      }
+
       const workspace = await prisma.organizerWorkspace.findFirst({
         where: { ownerId: organizerId },
       });
 
+      // No workspace = TEAMS organizer without workspace setup → return empty array
       if (!workspace) {
-        return res.status(403).json({ message: 'Workspace not found' });
-      }
-
-      // Non-TEAMS organizers simply have no discount rules → return empty array
-      if (workspace.subscriptionTier !== 'TEAMS') {
         return res.json([]);
       }
 
@@ -98,18 +104,28 @@ export const createDiscountRule = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'discountPercent must be a number between 0 and 100' });
     }
 
+    // Get organizer ID from profile (req.user.id is userId, not organizerId)
+    const organizerId = req.user.organizerProfile?.id;
+    if (!organizerId) {
+      return res.status(403).json({ message: 'Organizer profile not found' });
+    }
+
+    // Tier check: TEAMS only — use Organizer.tier (OrganizerWorkspace has no subscriptionTier)
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { tier: true },
+    });
+    if (organizer?.tier !== 'TEAMS') {
+      return res.status(403).json({ message: 'TEAMS subscription required' });
+    }
+
     // Get organizer's workspace
     const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { ownerId: req.user.id },
+      where: { ownerId: organizerId },
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Workspace not found' });
-    }
-
-    // Tier check: TEAMS only
-    if (workspace.subscriptionTier !== 'TEAMS') {
-      return res.status(403).json({ message: 'TEAMS subscription required' });
+      return res.status(403).json({ message: 'Workspace not found. Please contact support.' });
     }
 
     // Create rule
@@ -141,18 +157,28 @@ export const updateDiscountRule = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { tagColor, label, discountPercent, activeFrom, activeTo } = req.body;
 
+    // Get organizer ID from profile (req.user.id is userId, not organizerId)
+    const organizerId = req.user.organizerProfile?.id;
+    if (!organizerId) {
+      return res.status(403).json({ message: 'Organizer profile not found' });
+    }
+
+    // Tier check: TEAMS only — use Organizer.tier (OrganizerWorkspace has no subscriptionTier)
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { tier: true },
+    });
+    if (organizer?.tier !== 'TEAMS') {
+      return res.status(403).json({ message: 'TEAMS subscription required' });
+    }
+
     // Get organizer's workspace
     const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { ownerId: req.user.id },
+      where: { ownerId: organizerId },
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Workspace not found' });
-    }
-
-    // Tier check: TEAMS only
-    if (workspace.subscriptionTier !== 'TEAMS') {
-      return res.status(403).json({ message: 'TEAMS subscription required' });
+      return res.status(403).json({ message: 'Workspace not found. Please contact support.' });
     }
 
     // Verify rule belongs to this workspace
@@ -198,18 +224,28 @@ export const deleteDiscountRule = async (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
 
+    // Get organizer ID from profile (req.user.id is userId, not organizerId)
+    const organizerId = req.user.organizerProfile?.id;
+    if (!organizerId) {
+      return res.status(403).json({ message: 'Organizer profile not found' });
+    }
+
+    // Tier check: TEAMS only — use Organizer.tier (OrganizerWorkspace has no subscriptionTier)
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { tier: true },
+    });
+    if (organizer?.tier !== 'TEAMS') {
+      return res.status(403).json({ message: 'TEAMS subscription required' });
+    }
+
     // Get organizer's workspace
     const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { ownerId: req.user.id },
+      where: { ownerId: organizerId },
     });
 
     if (!workspace) {
-      return res.status(403).json({ message: 'Workspace not found' });
-    }
-
-    // Tier check: TEAMS only
-    if (workspace.subscriptionTier !== 'TEAMS') {
-      return res.status(403).json({ message: 'TEAMS subscription required' });
+      return res.status(403).json({ message: 'Workspace not found. Please contact support.' });
     }
 
     // Verify rule belongs to this workspace
