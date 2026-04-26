@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import https from 'https';
 import express, { Request, Response } from 'express';
 import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
@@ -129,23 +130,43 @@ export async function getEbayAccessToken(): Promise<string | null> {
       return ebayTokenCache.token;
     }
 
-    // Request new token
+    // Request new token using https.request (not fetch/undici) so that
+    // dns.setServers(['8.8.8.8']) in index.ts is actually respected.
+    // undici (native fetch) has its own DNS resolver that ignores dns.setServers().
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const response = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
+    const postBody = 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope';
+
+    const data = await new Promise<any>((resolve, reject) => {
+      const req = https.request(
+        {
+          hostname: 'api.ebay.com',
+          path: '/identity/v1/oauth2/token',
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': Buffer.byteLength(postBody),
+          },
+        },
+        (res) => {
+          let raw = '';
+          res.on('data', (chunk) => { raw += chunk; });
+          res.on('end', () => {
+            if (res.statusCode && res.statusCode >= 400) {
+              console.error(`[eBay] Token fetch failed: ${res.statusCode}`);
+              resolve(null);
+            } else {
+              try { resolve(JSON.parse(raw)); } catch { resolve(null); }
+            }
+          });
+        }
+      );
+      req.on('error', reject);
+      req.write(postBody);
+      req.end();
     });
 
-    if (!response.ok) {
-      console.error(`[eBay] Token fetch failed: ${response.status}`);
-      return null;
-    }
-
-    const data = (await response.json()) as any;
+    if (!data) return null;
     const expiresIn = data.expires_in || 7200; // Default 2 hours
 
     ebayTokenCache = {
@@ -154,8 +175,15 @@ export async function getEbayAccessToken(): Promise<string | null> {
     };
 
     return ebayTokenCache.token;
-  } catch (error) {
-    console.error('[eBay] Token fetch error:', error);
+  } catch (error: any) {
+    // Suppress verbose stack for known Railway→eBay network block (ENOTFOUND api.ebay.com).
+    // Log a single terse line instead of a full stack trace.
+    const isNetworkBlock = error?.cause?.code === 'ENOTFOUND' && error?.cause?.hostname === 'api.ebay.com';
+    if (isNetworkBlock) {
+      console.warn('[eBay] api.ebay.com unreachable from Railway — eBay sync disabled until proxy routing resolved');
+    } else {
+      console.error('[eBay] Token fetch error:', error);
+    }
     return null;
   }
 }
