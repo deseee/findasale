@@ -17,7 +17,6 @@ const SaleRSVPButton: React.FC<SaleRSVPButtonProps> = ({ saleId, onRSVPChange })
   const [count, setCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch current RSVP status
   useEffect(() => {
     const fetchStatus = async () => {
       try {
@@ -26,7 +25,6 @@ const SaleRSVPButton: React.FC<SaleRSVPButtonProps> = ({ saleId, onRSVPChange })
         setCount(response.data.count);
       } catch (error) {
         console.error('Failed to fetch RSVP status:', error);
-        // If not authenticated, just fetch count
         try {
           const countResponse = await api.get(`/sales/${saleId}/rsvp/count`);
           setCount(countResponse.data.count);
@@ -52,7 +50,6 @@ const SaleRSVPButton: React.FC<SaleRSVPButtonProps> = ({ saleId, onRSVPChange })
       const response = await api.post(`/sales/${saleId}/rsvp`);
       const newIsGoing = response.data.isGoing;
 
-      // Refetch count after toggling
       const countResponse = await api.get(`/sales/${saleId}/rsvp/count`);
       const newCount = countResponse.data.count;
 
@@ -64,7 +61,7 @@ const SaleRSVPButton: React.FC<SaleRSVPButtonProps> = ({ saleId, onRSVPChange })
       }
 
       if (newIsGoing) {
-        showToast('✓ You\'re going!', 'success');
+        showToast("✓ You're going!", 'success');
       } else {
         showToast('RSVP cancelled', 'info');
       }
@@ -80,11 +77,11 @@ const SaleRSVPButton: React.FC<SaleRSVPButtonProps> = ({ saleId, onRSVPChange })
     <button
       onClick={handleToggleRSVP}
       disabled={isLoading}
-      className={`px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2 ${
+      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 ${
         isGoing
-          ? 'bg-green-100 text-green-800 hover:bg-green-200'
-          : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-      } disabled:opacity-50`}
+          ? 'border border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-800/40'
+          : 'bg-amber-600 hover:bg-amber-700 text-white'
+      }`}
     >
       {isGoing ? (
         <>

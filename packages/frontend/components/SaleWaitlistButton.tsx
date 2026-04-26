@@ -46,7 +46,7 @@ export default function SaleWaitlistButton({ saleId }: Props) {
   });
 
   if (!user) return null;
-  if (isLoading) return <div className="h-9 w-36 animate-pulse bg-gray-100 rounded-lg" />;
+  if (isLoading) return <div className="h-9 w-36 animate-pulse bg-gray-100 dark:bg-gray-700 rounded-lg" />;
 
   const onWaitlist = status?.onWaitlist ?? false;
   const count = status?.count ?? 0;
@@ -56,10 +56,10 @@ export default function SaleWaitlistButton({ saleId }: Props) {
       <button
         onClick={() => onWaitlist ? leaveMutation.mutate() : joinMutation.mutate()}
         disabled={joinMutation.isPending || leaveMutation.isPending}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg border text-sm font-medium transition-colors ${
           onWaitlist
-            ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            ? 'border-gray-400 dark:border-gray-500 bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+            : 'border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
         }`}
         aria-label={onWaitlist ? 'Leave new items waitlist' : 'Join new items waitlist'}
       >
@@ -69,11 +69,11 @@ export default function SaleWaitlistButton({ saleId }: Props) {
         </svg>
         {onWaitlist ? 'Watching for new items' : 'Notify me of new items'}
         {count > 0 && (
-          <span className="ml-1 text-xs text-gray-500">({count})</span>
+          <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">({count})</span>
         )}
       </button>
       {feedback && (
-        <p className="mt-2 text-xs text-green-700">{feedback}</p>
+        <p className="mt-2 text-xs text-green-700 dark:text-green-400">{feedback}</p>
       )}
     </div>
   );

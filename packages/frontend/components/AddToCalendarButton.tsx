@@ -83,7 +83,7 @@ END:VCALENDAR`;
   return (
     <button
       onClick={handleDownloadICS}
-      className="px-6 py-3 rounded-lg font-semibold bg-blue-100 text-blue-800 hover:bg-blue-200 transition flex items-center gap-2"
+      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium text-sm transition-colors"
     >
       📆 Add to Calendar
     </button>

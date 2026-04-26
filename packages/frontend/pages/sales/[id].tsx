@@ -705,14 +705,14 @@ const SaleDetailPage = () => {
                 {user ? (
                   <button
                     onClick={() => setMessageModalOpen(true)}
-                    className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
+                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg transition-colors"
                   >
                     Message Organizer
                   </button>
                 ) : (
                   <Link
                     href="/login"
-                    className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium text-center transition-colors"
+                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg text-center transition-colors"
                   >
                     Sign in to Message
                   </Link>
@@ -733,14 +733,14 @@ const SaleDetailPage = () => {
                 </button>
                 <button
                   onClick={() => setIsImportModalOpen(true)}
-                  className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
+                  className="px-4 py-2 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg transition-colors"
                 >
                   Import Items
                 </button>
                 <button
                   onClick={handleDownloadMarketingKit}
                   disabled={downloadingKit}
-                  className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-600 text-white rounded-lg font-medium disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-purple-600 dark:bg-purple-700 hover:bg-purple-700 dark:hover:bg-purple-600 text-white rounded-lg disabled:opacity-50 transition-colors"
                 >
                   {downloadingKit ? 'Generating...' : 'Download Kit'}
                 </button>
@@ -1023,7 +1023,7 @@ const SaleDetailPage = () => {
                 )}`;
                 window.open(mapsUrl, '_blank');
               }}
-              className="mt-4 w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium text-sm transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2h-2a2 2 0 00-2 2v6m-6-10l3-3m0 0l3 3m-3-3v10" />
