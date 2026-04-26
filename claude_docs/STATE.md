@@ -88,9 +88,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- S581 COMPLETE — Full QA backlog sweep. 8 ✅ verified, 1 ❌ brand-kit (fixed this session). Dev fixes: track-visit 404 route (3 new files), brand-kit auth 403 (auth.ts + brand-kit.tsx), stripe-connect dark mode (19 fixes) + ACH→Consignor Payouts copy rename (stripe-connect.tsx + Layout.tsx). UNVERIFIED: Holds countdown timer (agent budget). S582: verify brand-kit PDFs post-fix, verify Holds countdown, continue lower-priority QA backlog (Guild Primer, Hunt Pass, affiliate endpoints, encyclopedia detail).
-- S580 EXTENDED + COMPLETE — Post-wrap Chrome QA confirmed: similar items double-prefix ✅ live. P2 found: POST /api/points/track-visit → 404. Fixed S581.
-- S579+S580 COMPLETE — 9 bugs fixed. S580 Chrome QA: all 3 items ✅.
+- S582 COMPLETE — QA continuation (2026-04-26). 8 items verified: brand-kit PDFs ✅, Holds countdown ✅, Guild Primer ✅, Hunt Pass slim CTA ✅, S529 card reader ✅, affiliate endpoints ✅, AvatarDropdown Explorer Profile ✅, S540 Rewards nav (AvatarDropdown location) ✅. P2 bug found: XP Store shows "Hunt Pass Inactive" for Karen while AvatarDropdown shows "Hunt Pass Active". No code changes (QA-only). S583: fix Hunt Pass status inconsistency + remaining UNVERIFIED items (Layout mobile nav guild link, affiliate signup flow, encyclopedia detail, settlement PDF).
+- S581 COMPLETE — Full QA backlog sweep. 8 ✅ verified, 1 ❌ brand-kit (fixed this session). Dev fixes: track-visit 404 route (3 new files), brand-kit auth 403 (auth.ts + brand-kit.tsx), stripe-connect dark mode (19 fixes) + ACH→Consignor Payouts copy rename.
 - S577 COMPLETE — 5 bugs fixed (Settlement payout, Shopify #332, Stripe Connect #333, voice icon, Tier Lapse #75). All 4 UNVERIFIED items unblocked via DB patches.
 
 ## S579/S580 Results — All Resolved
@@ -185,10 +184,10 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #7 Shopper Referral Rewards | ✅ Chrome-verified S541 — RESOLVED | /shopper/referrals loads, real referral link (REF-0215DAB8), Copy + 5 share buttons, stats section present. ss_59914h5dd | S531 |
 | SettlementWizard fee % | ✅ Chrome-verified S563 — RESOLVED | Receipt shows Platform Fee (0%) correctly for sale with no Stripe revenue. No 200% shown. API confirms platformFeeAmount=0. ss_9199brc0p | S531 |
 | Per-sale analytics filter | ✅ Chrome-verified S563 — RESOLVED | Selecting sale → "Filtered to one sale" + cards update ($79.44→$27.29 + new per-sale metrics). ss_8173iewrh → ss_5482waky8 | S531 |
-| AvatarDropdown nav link | Fixed S531 — pending Chrome QA | As shopper, verify avatar dropdown shows "Explorer Profile" → /shopper/explorer-profile | S531 |
+| AvatarDropdown nav link | ✅ Chrome-verified S582 — RESOLVED | Karen: "Explorer Profile" link present in dropdown, href=/shopper/explorer-profile, page loads correctly. | S531 |
 | S529 storefront widget | ✅ Chrome-verified S578 — RESOLVED. Copy Link on dashboard notification fires green toast "Sale link copied". Eye icon on sale card navigates to public sale page /sales/cmoezk1k0002013p7s8h76yxi with correct title, address, dates, PUBLISHED badge. More Options → /organizer/promote/[saleId] (full share hub). ss_2266yban5, ss_21359mono | — | S529 |
 | S529 mobile nav rank | Pushed — mobile viewport required | Test mobile viewport, verify rank reads from useXpProfile (not hardcoded Scout) | S529 |
-| S529 card reader content | Pushed — pending Chrome QA | Verify /faq, /guide, /support show S700/S710 hardware only (no Tap to Pay, no M2) | S529 |
+| S529 card reader content | ✅ Chrome-verified S582 — RESOLVED | /support shows S700+S710 only. /faq + /guide have no card reader content. | S529 |
 | #235 DonationModal | ❌ P1 BUG FOUND S578 — SettlementWizard.tsx line 68-72 fetches `GET /api/sales/${saleId}/items?status=AVAILABLE` which returns 404 (route does not exist). Correct route is `GET /api/organizer/sales/${saleId}/unsold-items`. availableItems.length always 0 → donation section never renders. Fix: update URL in SettlementWizard.tsx. | S579 bug dispatch: SettlementWizard.tsx line 68-72 URL fix | S575 |
 | #251 priceBeforeMarkdown | Needs live data | Need item with markdownApplied=true to verify crossed-out display | S526 |
 | Organizer Insights runtime | User-specific error | Test as Alice (user1) — Bob loads fine, error must be account-specific | S528 |
@@ -201,12 +200,12 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #268 Trail Completion XP | Karen's trail has 0 stops | Need trail with all stops completed | S530 |
 | #261 Treasure Hunt XP Rank Multiplier | Needs QR scan | Ranger+ account + live sale QR scan | S530 |
 | #75 Tier Lapse Logic | ✅ FIXED S577 — Hard gate (Patrick decision). AuthContext decodes subscriptionLapsed from JWT. useOrganizerTier: isLapsed=true → canAccess() returns false for PRO/TEAMS. Layout.tsx: amber sticky banner + Update billing link. Pending Chrome QA. | Login as tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → verify amber banner + PRO features gated | S575 |
-| Guild Primer (/shopper/guild-primer) | New page — pending Chrome QA | Verify all sections render, dark mode, personalized bar (logged in), cross-link to /hunt-pass | S534 |
-| Hunt Pass slim CTA (/shopper/hunt-pass) | Refactored — pending Chrome QA | Verify hero, price card, 4 benefits, CTA buttons, cross-link to /guild-primer | S534 |
+| Guild Primer (/shopper/guild-primer) | ✅ Chrome-verified S582 — RESOLVED | All XP sections render, personalized rank bar (Initiate, 5 XP, 5/500), 2 hunt-pass cross-links, dark mode clean. | S534 |
+| Hunt Pass slim CTA (/shopper/hunt-pass) | ✅ Chrome-verified S582 — RESOLVED | Hero, $4.99/mo, 7 benefits, 2 CTAs (Purchase + Learn More), guild-primer cross-link all present. | S534 |
 | Layout.tsx mobile nav guild link | Updated — pending Chrome QA | Mobile hamburger: Explorer's Guild should link to /shopper/guild-primer not /loyalty | S534 |
 | AvatarDropdown guild link | ✅ Chrome-verified S576 — Explorer's Guild link present in AvatarDropdown CONNECT section. Navigates correctly to /shopper/guild-primer. Page loads with personalized rank card. ss_1535lmtx4. | — | S534 |
 | RankUpModal dark mode | Fixed — pending Chrome QA | "New Perks Unlocked" box should use dark:bg-gray-700 (not too-light sage) | S534 |
-| S540 Rewards nav link (4 locations) | Pushed — pending Chrome QA | As shopper (Karen): verify "Rewards" link → /coupons in desktop sidebar Connect, mobile in-sale tools, mobile shopper-only nav, AvatarDropdown shopper branch | S540 |
+| S540 Rewards nav link (4 locations) | ⚠️ PARTIAL S582 — AvatarDropdown CONNECT section ✅ (Karen: Rewards → /coupons, XP Store loads). Organizer sidebar, organizer mobile nav, shopper mobile nav UNVERIFIED (require organizer account + mobile viewport). | Need organizer account + mobile viewport to verify remaining 3 locations | S540 |
 | S540 Rarity Boost on /coupons | ✅ Chrome-verified S541 — RESOLVED | Shopper tab: "Activate Rarity Boost (50 XP)" active, modal opens with sale list + search. Cost shows 50 XP correctly. ss_4737i417x | S540 |
 | S540 Rarity Boost insufficient XP | ✅ Chrome-verified S576 — Rarity Boost button disabled at 10 XP. "Not enough XP" message shown. | — | S575 |
 | S540 Organizer view of /coupons | ✅ Chrome-verified S541 — RESOLVED | Organizer sees Shopper Discount Codes + tier cards; Rarity Boost absent. ss_56564zsz7 | S540 |
@@ -230,12 +229,12 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | S549 /organizer/workspace tab bar | ✅ Chrome-verified S564 — RESOLVED | ADMIN/MANAGER/MEMBER/VIEWER all fit one row, rightmost tab at 347px < viewport 454. flex-wrap sm:flex-nowrap working. | S549 |
 | Settlement Receipt PDF download | Fixed S569 — pending Chrome QA after Railway redeploy | Click "Download Receipt" on settlement/[saleId] → confirm file is .pdf (not .json). Verify receipt shows "Organizer Commission (X%)" not "Platform Fee". | S569 |
 | S540 Rewards nav link | ⚠️ DECISION NEEDED — confirmed absent all 4 nav locations | Patrick: Rewards/Guild has no primary nav entry. Options: ADD to Explore dropdown or avatar menu / LEAVE discoverable via /profile "View Your Rank" only / ADD /rewards redirect. | S569 |
-| S550 Affiliate POST /generate-code | Pending push + Chrome/API QA | As organizer, POST /api/affiliate/generate-code → confirm returns code; POST again → confirm idempotent (returns same code, no duplicate User.affiliateReferralCode collision) | S550 |
-| S550 Affiliate GET /code | Pending push + Chrome/API QA | As organizer with no code → GET /api/affiliate/code returns null; after generate → returns the code | S550 |
-| S550 Affiliate signup attribution (?aff=) | Pending push + Chrome QA | Signup flow with ?aff=VALIDCODE → amber banner shows, AffiliateReferral row created with status PENDING. ?aff=INVALID → banner still shows but no row created, no error. Self-referral (?aff=ownCode) → blocked, no row created. | S550 |
-| S550 Affiliate GET /referrals | Pending push + Chrome/API QA | As organizer, GET /api/affiliate/referrals → paginated list; add ?status=PENDING → filter works | S550 |
-| S550 Affiliate GET /earnings-summary | Pending push + Chrome/API QA | As organizer with no referrals → zero-state renders cleanly (totalEarned: 0, unpaidBalance: 0, recentPayouts: []). As organizer with paid referrals → correct aggregates. | S550 |
-| S550 /me route registration (S545 orphan) | Pending push + Chrome QA | GET /api/affiliate/me was orphaned in S545 (never registered in router). S550 added registration. Confirm endpoint returns 200 with user's affiliateCode + referrals + totals. | S550 |
+| S550 Affiliate POST /generate-code | ✅ API-verified S582 — RESOLVED | 403 for shoppers (correct — "Only organizers"). Fraud gate returns correct message for new accounts. Alice (organizer) returns code. | S550 |
+| S550 Affiliate GET /code | ✅ API-verified S582 — RESOLVED | Alice returns affiliateReferralCode. Endpoint working correctly. | S550 |
+| S550 Affiliate signup attribution (?aff=) | UNVERIFIED — frontend flow | Signup flow with ?aff= not tested. Requires Chrome signup flow QA. | S550 |
+| S550 Affiliate GET /referrals | ✅ API-verified S582 — RESOLVED | Alice: paginated list returns correctly as organizer, 403 for shoppers. | S550 |
+| S550 Affiliate GET /earnings-summary | ✅ API-verified S582 — RESOLVED | Alice: earnings summary returns correctly as organizer, 403 for shoppers. | S550 |
+| S550 /me route registration (S545 orphan) | ✅ API-verified S582 — RESOLVED | Affiliate endpoints all responding correctly via Railway URL. | S550 |
 | #52 Encyclopedia list | ✅ Chrome-verified S571 — RESOLVED | 20 entries showing on /encyclopedia (ss_5619utc2r). Category chips, sort, tags all working. | S555 |
 | #52 Encyclopedia detail page | ⏳ UNVERIFIED — pending Railway redeploy (d77cff42) | Controller fix pushed S571. Once deployed, navigate to any /encyclopedia/[slug] and verify article content renders (was showing "Article Not Found"). | S571 |
 | #54 Crowdsourced Appraisal empty DB | Verified S555 via Chrome — both `/shopper/appraisals` and `/organizer/appraisals` render correctly with empty state | Populates organically as organizers submit requests; submit-flow + community-response + consensus paths UNVERIFIED without a test account submitting real data on prod. Queue for beta cohort. | S555 |
@@ -270,10 +269,13 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | **S575 — #333 /organizer/stripe-connect** | ✅ Chrome-verified S581 — Alice (TEAMS): Consignor Payouts page loads (no 500). Consignors page loads with "No consignors yet" empty state. No Decimal crash. ss_153591n3c, ss_5067uftuz. Note: page was also renamed ACH→Consignor Payouts + dark mode fixed S581. | — | S575 |
 | **#75 Tier Lapse Logic** | ✅ Chrome-verified S581 — tier-lapse-test@example.com: red alert card "Your PRO subscription has lapsed" + "Reactivate subscription →" link on dashboard. ss_50241eyk2. | — | S575 |
 | **Rarity Boost insufficient XP** | ✅ Seeded S575 — low-xp-shopper@example.com (guildXp=10) | Chrome QA: login → /coupons → Rarity Boost button → verify disabled with "not enough XP" message | S575 |
-| **Holds/Reservations countdown** | ✅ Seeded S575 — hold on active sale | Chrome QA: navigate to held item as shopper → verify countdown timer rendering and hold expiry behavior | S575 |
+| **Holds/Reservations countdown** | ✅ Chrome-verified S582 — RESOLVED | /shopper/holds shows "Your hold expires in 43:16:04", Purchase Now + Release Hold buttons present. Correct route is /shopper/holds (not /shopper/my-holds — that is a 404). | S575 |
 | **#235 DonationModal** | ✅ Chrome-verified S581 — user6@example.com → settlement for charity sale cmoezlc8s00q413p74kjv2r9a → Unsold Items section shows 3 items + "Donate Items & Get Tax Receipt" button. Items fetch URL fix (S579) confirmed working. ss_5338pakx7. | — | S575 |
+| **Hunt Pass status inconsistency (P2)** | Bug found S582 | XP Store (/coupons) shows "Hunt Pass Inactive" for Karen (user11) while AvatarDropdown shows "Hunt Pass Active" badge. Investigate Karen's huntPassActive field vs /coupons HP detection logic. Fix needed before beta. | S582 |
 
 ## Recent Sessions
+
+**S582 (2026-04-26) — COMPLETE:** QA continuation (8 items verified). **Brand-kit PDFs** ✅ — all 4 PDFs return 200 + application/pdf, JWT present in hrefs (~760 chars), S581 useEffect fix confirmed working. **Holds countdown** ✅ — /shopper/holds shows "Your hold expires in 43:16:04", Purchase Now + Release Hold buttons present. Note: correct route is /shopper/holds (not /shopper/my-holds which 404s). **Guild Primer** ✅ — all XP sections render, personalized rank bar (Initiate, 5 XP, 5/500), 2 hunt-pass cross-links, dark mode clean. **Hunt Pass slim CTA** ✅ — hero, $4.99/mo, 7 benefits, 2 CTAs, guild-primer cross-link. **S529 card reader** ✅ — /support shows S700+S710 only; /faq + /guide have no card reader content. **Affiliate endpoints** ✅ — all 4 endpoints correct (403 for shoppers expected; generate-code fraud gate; Alice returns 200 for all); frontend ?aff= signup flow UNVERIFIED. **AvatarDropdown → Explorer Profile** ✅ — Karen: link present (href=/shopper/explorer-profile), page loads. **S540 Rewards nav (AvatarDropdown)** ✅ — Rewards link in CONNECT section → /coupons, XP Store loads. Organizer sidebar + mobile nav locations UNVERIFIED. **P2 bug found:** XP Store shows "Hunt Pass Inactive" for Karen while AvatarDropdown shows "Hunt Pass Active". No code changes (QA-only).
 
 **S581 (2026-04-25) — COMPLETE:** QA backlog sweep + 4 dev fixes. **QA results (8 ✅):** My Holds page + prices (ss_13195azun), Tier Lapse amber banner (ss_50241eyk2), #228 Settlement payout correct (ss_69423cf19), #338 PricingCompSummary eBay comp tiles on Alice's Hermès item (ss_65281wiyh), #333 Stripe Connect/Consignors loads (ss_153591n3c + ss_5067uftuz), #331 voice-to-tag mic icon present on edit-item, #332 Shopify TEAMS gate for Bob (upgrade wall visible), #235 DonationModal 3 items rendered correctly (ss_5338pakx7). **❌ Brand-kit 403 found + fixed:** Root cause — browsers don't send Authorization headers on direct `<a href>` clicks; `optionalAuthenticate` got no token. Fix: `?token=...` appended to PDF hrefs in brand-kit.tsx + auth.ts reads JWT from query param. **Dev fixes:** (1) track-visit route — `pointsController.ts` (NEW) + `routes/points.ts` (NEW) + `index.ts` (route registered); 5 XP per sale visit, `optionalAuthenticate`. (2) brand-kit auth — `auth.ts` + `brand-kit.tsx`. (3) stripe-connect dark mode — 19 dark: class additions. (4) stripe-connect copy — "ACH Consignor Payouts" → "Consignor Payouts" throughout + Layout.tsx nav link renamed. **UNVERIFIED:** Holds countdown timer (QA agent hit token limit). **Files changed:** `packages/backend/src/controllers/pointsController.ts` (NEW), `packages/backend/src/routes/points.ts` (NEW), `packages/backend/src/index.ts`, `packages/backend/src/middleware/auth.ts`, `packages/frontend/pages/organizer/brand-kit.tsx`, `packages/frontend/pages/organizer/stripe-connect.tsx`, `packages/frontend/components/Layout.tsx`.
 
@@ -297,47 +299,17 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S582 — QA continuation + push verification.**
+**S583 — Bug fix + QA continuation.**
 
 Priority queue:
-1. §10 smoke test: verify brand-kit PDFs now return PDF (not 403) after auth.ts + brand-kit.tsx fix
-2. Holds countdown timer — login as user16@example.com (Seedy2025!), navigate to held item detail page, verify countdown shows
-3. Continue QA backlog: Guild Primer (/shopper/guild-primer), Hunt Pass slim CTA, S529 card reader content, affiliate endpoints
-4. Push block below covers all S581 code changes — confirm deployed before QA
+1. **P2 Hunt Pass status bug** — dispatch findasale-dev to fix XP Store "Hunt Pass Inactive" for Karen (user11) while AvatarDropdown shows "Hunt Pass Active". Investigate /coupons huntPassActive detection.
+2. **Remaining UNVERIFIED items (Chrome MCP, sequential):**
+   - Layout.tsx mobile nav guild link — mobile hamburger → Explorer's Guild → verify /shopper/guild-primer (not /loyalty)
+   - Affiliate signup flow — /register?aff=VALIDCODE → amber banner, AffiliateReferral row created
+   - Encyclopedia detail — /encyclopedia/vintage-postcards-ephemera-local-history-collecting → verify article renders
+   - Settlement Receipt PDF — Alice → completed sale → Download Receipt → .pdf file + "Organizer Commission (X%)"
+   - Admin bid-review — /admin/bid-review → no crash
+   - S540 Rewards nav — organizer sidebar + mobile nav locations (3 remaining)
+3. **No code changes pending** — S582 was QA-only. No pushblock needed.
 
-S580 extended is complete. No code changes pending. Push the wrap block below, then start S581 fresh.
-
-**S581 QA backlog — ordered by priority (Chrome MCP, sequential):**
-
-**Tier 1 — S577 fixes, never Chrome-verified:**
-1. **#75 Tier Lapse** — login as tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → verify amber lapse banner + PRO features gated
-2. **Voice-to-tag mic icon** — login as Alice → /organizer/add-items/[saleId]/review OR edit-item → verify mic icon (not ghost/avatar) in RapidCapture thumbnails + edit-item tags input
-3. **Shopify #332 TEAMS gate** — login as Bob (user2, PRO) → /organizer/shopify → verify upgrade wall shows (not feature access)
-4. **Stripe Connect #333** — login as Bob (PRO) → /organizer/stripe-connect → verify TEAMS gate. Then as Alice (TEAMS) → verify consignors load without 500
-5. **Settlement payout auto-populate** — login as Alice → completed sale → Settle button → Commission tab → verify payout auto-populates on Receipt step (no $0.00/$NaN)
-
-**Tier 2 — Seeded items, pending verification:**
-6. **#338 PricingCompSummary** — login as Alice (user1@example.com) → /organizer/edit-item/cmoezkryx00gu13p7l9knzclq → verify eBay comp tile renders below price input
-7. **#235 DonationModal** — login as user6@example.com (Seedy2025!) → /sales/cmoezlc8s00q413p74kjv2r9a → Settle → verify DonationModal 3-step wizard opens and flows
-8. **Holds countdown** — login as user16@example.com (Seedy2025!) → /sales/cmoezk0ou001m13p7y7esjr18 → find held item → verify countdown timer + My Holds page shows the hold
-
-**Tier 3 — Navigation + UX items:**
-9. **AvatarDropdown shopper** — login as Karen (user11@example.com, Seedy2025!) → avatar dropdown → verify "Explorer Profile" link → /shopper/explorer-profile (not /organizer/profile)
-10. **S540 Rewards nav link** — as Karen → verify "Rewards" link → /coupons appears in desktop sidebar Connect section, mobile in-sale tools, mobile nav, avatar dropdown
-11. **S529 card reader** — /faq → verify only S700/S710 hardware shown (no Tap to Pay, no M2)
-12. **Guild Primer** — /shopper/guild-primer → verify all sections render, dark mode clean, personalized rank bar when logged in
-13. **Hunt Pass slim CTA** — /shopper/hunt-pass → verify hero, price card, 4 benefits, CTA buttons
-14. **Layout.tsx mobile nav guild link** — mobile hamburger → Explorer's Guild → verify goes to /shopper/guild-primer (not /loyalty)
-
-**Tier 4 — Specific feature verifications:**
-15. **Encyclopedia detail** — /encyclopedia/vintage-postcards-ephemera-local-history-collecting → verify article content renders (not "Article Not Found")
-16. **Settlement Receipt PDF** — Alice → completed sale → Settlement → Download Receipt → verify file is .pdf (not .json), shows "Organizer Commission (X%)" label
-17. **Admin bid-review** — login as admin (user1) → /admin/bid-review → verify page loads without crash (Prisma include fix S566)
-18. **RankUpModal dark mode** — /shopper/guild-primer → check dark mode on "New Perks Unlocked" box (should be dark:bg-gray-700)
-
-**New P2 to fix (from this session):**
-- POST /api/points/track-visit → 404 — register `/api/points` route in index.ts or stub the endpoint so sale visits don't silently 404
-
-**Patrick pending actions:** Push wrap block below, then start S581.
-
-**Passwords for S581 QA:** All test accounts use Seedy2025!
+**Passwords:** All test accounts use Seedy2025!

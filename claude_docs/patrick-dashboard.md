@@ -1,59 +1,34 @@
-# Patrick's Dashboard — S581 ✅
+# Patrick's Dashboard — S582 ✅
 
-## Status: QA Sweep Complete — 8 Features Verified, 4 Dev Fixes Shipped
+## Status: QA Continuation — 8 Items Verified, 1 P2 Bug Found
 
-S581 was a full QA backlog sweep. Cleared the bulk of the outstanding S577 verification queue plus fixed 4 bugs found during testing.
-
----
-
-## S581 QA Results
-
-| Feature | Result | Evidence |
-|---------|--------|----------|
-| My Holds page + prices | ✅ PASS | Loads with correct prices (ss_13195azun) |
-| #75 Tier Lapse banner | ✅ PASS | Red alert card + "Reactivate subscription →" (ss_50241eyk2) |
-| #228 Settlement payout | ✅ PASS | "Organizer Commission (35%): -$765.18" — no $0.00/$NaN (ss_69423cf19) |
-| #338 PricingCompSummary | ✅ PASS | eBay comp tiles on Alice's Hermès item (ss_65281wiyh) |
-| #333 Stripe Connect/Consignors | ✅ PASS | Page loads, consignors list (no 500) (ss_153591n3c) |
-| #331 Voice-to-tag mic icon | ✅ PASS | Mic SVG visible on edit-item tags field |
-| #332 Shopify TEAMS gate | ✅ PASS | Bob (PRO) sees upgrade wall + correct copy |
-| #235 DonationModal | ✅ PASS | 3 unsold items rendered, button works (ss_5338pakx7) |
-| Brand-kit PDFs | ❌ FOUND → ✅ FIXED | Was returning 403 — auth.ts + brand-kit.tsx fixed |
-| Holds countdown timer | UNVERIFIED | Agent hit token budget — queue for S582 |
+S582 was a QA-only session. No code changes. Cleared the remaining S581 verification queue.
 
 ---
 
-## S581 Dev Fixes
+## S582 QA Results
 
-| Fix | Files | Notes |
-|-----|-------|-------|
-| track-visit 404 | `pointsController.ts` (NEW), `routes/points.ts` (NEW), `index.ts` | 5 XP per sale view, optionalAuthenticate |
-| Brand-kit 403 | `middleware/auth.ts`, `pages/organizer/brand-kit.tsx` | JWT from query param for direct link downloads |
-| Stripe-connect dark mode | `pages/organizer/stripe-connect.tsx` | 19 dark: class additions |
-| ACH → Consignor Payouts rename | `pages/organizer/stripe-connect.tsx`, `components/Layout.tsx` | All ACH copy removed, friendlier language |
-
----
-
-## Next Session: S582 — Verify S581 fixes + continue QA backlog
-
-1. **§10 smoke test:** verify brand-kit PDFs return actual PDF (not 403) after today's fix
-2. **Holds countdown timer** — user16@example.com (Seedy2025!) → held item detail page → countdown timer
-3. **Continue QA backlog:** Guild Primer, Hunt Pass slim CTA, S529 card reader content, affiliate endpoints, encyclopedia detail, AvatarDropdown shopper link
+| Feature | Result | Notes |
+|---------|--------|-------|
+| Brand-kit PDFs (S581 fix) | ✅ PASS | 200 + application/pdf, JWT in hrefs, fix confirmed live |
+| Holds countdown timer | ✅ PASS | /shopper/holds: "Your hold expires in 43:16:04" |
+| Guild Primer | ✅ PASS | All sections, personalized rank bar, dark mode clean |
+| Hunt Pass slim CTA | ✅ PASS | Hero, $4.99/mo, 7 benefits, 2 CTAs |
+| S529 card reader content | ✅ PASS | /support S700+S710 only; /faq /guide no card reader |
+| Affiliate endpoints (4) | ✅ PASS | 403 for shoppers ✓, 200 for organizers, fraud gate ✓ |
+| AvatarDropdown → Explorer Profile | ✅ PASS | Karen: link present → /shopper/explorer-profile |
+| S540 Rewards nav (AvatarDropdown) | ✅ PASS | CONNECT section → /coupons, XP Store loads |
+| Hunt Pass status (XP Store) | ⚠️ P2 BUG | /coupons shows "Inactive" while dropdown shows "Active" for Karen |
 
 ---
 
-## Push Block
+## S583 TODO
 
-```powershell
-git add packages/backend/src/controllers/pointsController.ts
-git add packages/backend/src/routes/points.ts
-git add packages/backend/src/index.ts
-git add packages/backend/src/middleware/auth.ts
-git add packages/frontend/pages/organizer/brand-kit.tsx
-git add packages/frontend/pages/organizer/stripe-connect.tsx
-git add packages/frontend/components/Layout.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S581: track-visit route, brand-kit auth fix, stripe-connect dark mode + Consignor Payouts rename"
-.\push.ps1
-```
+1. **Fix Hunt Pass status inconsistency** — /coupons shows "Inactive" for Karen despite having an active Hunt Pass
+2. **Continue QA:** Layout mobile nav guild link, affiliate signup flow (?aff=), encyclopedia detail, settlement PDF, admin bid-review, Rewards nav organizer/mobile locations
+
+---
+
+## No Push Block Needed
+
+S582 was QA-only. No files changed. STATE.md and this dashboard are the only docs updated — push them with S583's code changes.

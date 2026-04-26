@@ -4,7 +4,10 @@ import { ExplorerRank } from '../components/RankBadge';
 
 export interface XpProfileData {
   guildXp: number;
+  spendableXp: number;
   explorerRank: ExplorerRank;
+  huntPassActive: boolean;
+  huntPassExpiry: string | null;
   rankProgress: {
     currentXp: number;
     nextRankXp: number;

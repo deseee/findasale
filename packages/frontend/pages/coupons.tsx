@@ -183,7 +183,8 @@ const CouponsPage = () => {
 
   const coupons = couponsData?.coupons ?? [];
   const spendableXp = xpProfile?.spendableXp ?? 0;
-  const huntPassActive = xpProfile?.huntPassActive ?? false;
+  // Use JWT-sourced huntPassActive (same source as AvatarDropdown) to prevent stale /api/xp/profile divergence
+  const huntPassActive = user?.huntPassActive ?? false;
 
   const organizerCanGenerate = spendableXp >= 50 && !organizerGenerateMutation.isPending;
 
