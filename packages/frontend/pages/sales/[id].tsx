@@ -616,7 +616,7 @@ const SaleDetailPage = () => {
                 )}
               </div>
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 w-full md:w-auto">
               <SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} />
               <AddToCalendarButton
                 saleId={sale.id}
@@ -857,105 +857,6 @@ const SaleDetailPage = () => {
 
           {/* Sidebar */}
           <div className="lg:col-span-1 overflow-hidden min-w-0">
-            {/* Share Buttons */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8 overflow-hidden">
-              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Share</h2>
-              <div className="flex flex-col gap-2">
-                {/* Primary Share Button using Web Share API */}
-                <button
-                  onClick={async () => {
-                    const shareData = {
-                      title: sale.title,
-                      text: `Check out this sale: ${sale.title}`,
-                      url: typeof window !== 'undefined' ? window.location.href : '',
-                    };
-                    if (navigator.share) {
-                      try {
-                        await navigator.share(shareData);
-                      } catch (error) {
-                        // User cancelled or error occurred; silently fail
-                      }
-                    } else {
-                      // Fallback: open Facebook intent URL
-                      const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
-                      window.open(url, '_blank');
-                    }
-                  }}
-                  className="flex items-center justify-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="18" cy="5" r="3" />
-                    <circle cx="6" cy="12" r="3" />
-                    <circle cx="18" cy="19" r="3" />
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                  </svg>
-                  Share
-                </button>
-
-                {/* Facebook Share */}
-                <button
-                  onClick={() => {
-                    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`;
-                    window.open(url, '_blank');
-                  }}
-                  className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg"
-                >
-                  <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                  </svg>
-                  Facebook
-                </button>
-
-                {/* Twitter Share */}
-                <button
-                  onClick={() => {
-                    const text = `Check out this sale: ${sale.title}`;
-                    const url = `https://twitter.com/intent/tweet?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}&text=${encodeURIComponent(text)}`;
-                    window.open(url, '_blank');
-                  }}
-                  className="flex items-center bg-blue-400 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-lg"
-                >
-                  <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M8.29 20c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
-                  </svg>
-                  Twitter
-                </button>
-
-                {/* Post to Nextdoor Button */}
-                <button
-                  onClick={() => {
-                    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.clipboard) {
-                        const getSaleTypeLabel = (saleType?: string): string => {
-                        const labels: Record<string, string> = {
-                          ESTATE: 'estate sale',
-                          YARD: 'yard sale',
-                          AUCTION: 'auction',
-                          FLEA_MARKET: 'flea market',
-                          CONSIGNMENT: 'consignment sale',
-                          CHARITY: 'charity sale',
-                          BUSINESS_CORPORATE: 'corporate sale',
-                        };
-                        return (saleType ? labels[saleType] : undefined) || 'sale';
-                      };
-                      const postText = `Check out this ${getSaleTypeLabel(sale.saleType)} on FindA.Sale!\n\n${sale.title}\n${sale.address}, ${sale.city}, ${sale.state}\n${format(new Date(sale.startDate), 'MMM d, yyyy h:mm a')} - ${format(new Date(sale.endDate), 'MMM d, yyyy h:mm a')}\n\n${window.location.origin}/sales/${sale.id}`;
-                      navigator.clipboard.writeText(postText);
-                      showToast('Post text copied to clipboard! Paste it into Nextdoor.', 'success');
-                    } else {
-                      showToast('Clipboard not available', 'error');
-                    }
-                  }}
-                  className="flex items-center bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 3 3 0 004.242 0l3-3a3 3 0 00-4.242-4.242l-3 3a3 3 0 000 4.242 1 1 0 101.414-1.414 1 1 0 010-1.414l3-3z" clipRule="evenodd" />
-                    <path fillRule="evenodd" d="M14.586 10.586a2 2 0 012.828 0 3 3 0 010 4.242l-3 3a3 3 0 01-4.242 0 1 1 0 101.414 1.414 1 1 0 001.414 0l3-3a1 1 0 000-1.414 1 1 0 00-1.414 0l-3 3a1 1 0 101.414 1.414 3 3 0 010-4.242 1 1 0 000-1.414z" clipRule="evenodd" />
-                  </svg>
-                  Nextdoor
-                </button>
-              </div>
-            </div>
-
             {/* CD2-P2: QR Code for print marketing — organizer only */}
             {isOrganizer && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8 overflow-hidden">
