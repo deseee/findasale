@@ -30,12 +30,17 @@ export const config = {
   },
 };
 
-async function readRawBody(req: NextApiRequest): Promise<Buffer | undefined> {
+// Returns Uint8Array (not Buffer) so the value is type-compatible with fetch's
+// BodyInit. Buffer extends Uint8Array at runtime, but TS's Buffer<ArrayBufferLike>
+// type does not unify with BodyInit on Node 22+.
+async function readRawBody(req: NextApiRequest): Promise<Uint8Array | undefined> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
-  return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+  if (chunks.length === 0) return undefined;
+  const buf = Buffer.concat(chunks);
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
