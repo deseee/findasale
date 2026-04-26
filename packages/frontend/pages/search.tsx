@@ -482,18 +482,4 @@ const SearchPage = () => {
   );
 };
 
-export default SearchPage;                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-      </main>
-    </div>
-  );
-};
-
 export default SearchPage;
