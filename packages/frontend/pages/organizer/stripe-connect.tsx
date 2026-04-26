@@ -83,8 +83,8 @@ const ACHPayoutsPage: React.FC = () => {
   // Show loading state while tier is being determined
   if (tierLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
+      <div className="flex items-center justify-center min-h-screen dark:bg-gray-900">
+        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
       </div>
     );
   }
@@ -96,7 +96,7 @@ const ACHPayoutsPage: React.FC = () => {
         <Head>
           <title>Upgrade to TEAMS - FindA.Sale</title>
         </Head>
-        <div className="min-h-screen bg-gray-50 py-12 px-4">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
           <div className="max-w-2xl mx-auto">
             <div className="mb-8">
               <Link href="/organizer/settlement">
@@ -106,14 +106,14 @@ const ACHPayoutsPage: React.FC = () => {
               </Link>
             </div>
 
-            <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-8 text-center">
-              <h2 className="text-2xl font-bold text-amber-900 mb-3">TEAMS Subscription Required</h2>
-              <p className="text-amber-800 mb-6">
-                ACH consignor payouts are available only for TEAMS tier subscribers.
-                Upgrade to unlock this feature and manage consignor payments at scale.
+            <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-lg p-8 text-center">
+              <h2 className="text-2xl font-bold text-amber-900 dark:text-amber-100 mb-3">TEAMS Subscription Required</h2>
+              <p className="text-amber-800 dark:text-amber-200 mb-6">
+                Consignor payouts are available only for TEAMS tier subscribers.
+                Upgrade to unlock direct payout management for your consignors.
               </p>
               <Link href="/organizer/subscription">
-                <a className="inline-block px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-medium">
+                <a className="inline-block px-6 py-3 bg-amber-600 dark:bg-amber-700 text-white rounded-lg hover:bg-amber-700 dark:hover:bg-amber-800 transition font-medium">
                   Upgrade to TEAMS
                 </a>
               </Link>
@@ -126,8 +126,8 @@ const ACHPayoutsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading consignors...</div>
+      <div className="flex items-center justify-center min-h-screen dark:bg-gray-900">
+        <div className="text-gray-600 dark:text-gray-400">Loading consignors...</div>
       </div>
     );
   }
@@ -135,10 +135,10 @@ const ACHPayoutsPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>ACH Consignor Payouts - FindA.Sale</title>
+        <title>Consignor Payouts - FindA.Sale</title>
       </Head>
 
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-8">
@@ -147,9 +147,9 @@ const ACHPayoutsPage: React.FC = () => {
                 ← Back to Settlement Hub
               </a>
             </Link>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">ACH Consignor Payouts</h1>
-            <p className="text-gray-600">
-              Manage ACH bank transfers for your consignors. Bank transfers are processed within 1-2 business days.
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Consignor Payouts</h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Send payouts directly to your consignors' bank accounts. Transfers are processed within 1–2 business days.
             </p>
           </div>
 
@@ -163,14 +163,14 @@ const ACHPayoutsPage: React.FC = () => {
           {/* Success message */}
           {success && (
             <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-              ✓ Consignor onboarding completed! They can now receive ACH payouts.
+              ✓ Consignor onboarding completed! They can now receive payouts.
             </div>
           )}
 
           {/* Consignors list */}
           {consignors.length === 0 ? (
-            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-              <p className="text-gray-600 mb-4">No consignors yet.</p>
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-12 text-center">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">No consignors yet.</p>
               <Link href="/organizer/settlement">
                 <a className="text-blue-600 hover:text-blue-700">Go to Settlement Hub</a>
               </Link>
@@ -180,17 +180,17 @@ const ACHPayoutsPage: React.FC = () => {
               {consignors.map((consignor) => (
                 <div
                   key={consignor.consignorId}
-                  className="bg-white rounded-lg border border-gray-200 p-6 flex items-center justify-between"
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 flex items-center justify-between"
                 >
                   <div>
-                    <h3 className="font-semibold text-gray-900">{consignor.name}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">{consignor.name}</h3>
                     {consignor.email && (
-                      <p className="text-sm text-gray-600">{consignor.email}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{consignor.email}</p>
                     )}
                     <div className="mt-2">
                       {consignor.stripeOnboarded ? (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                          ✓ Ready for ACH Payouts
+                          ✓ Ready to Receive Payouts
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
@@ -205,7 +205,7 @@ const ACHPayoutsPage: React.FC = () => {
                       onClick={() => handleInviteToACH(consignor.consignorId)}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                     >
-                      Invite to ACH
+                      Set Up Payouts
                     </button>
                   )}
                 </div>
@@ -214,18 +214,18 @@ const ACHPayoutsPage: React.FC = () => {
           )}
 
           {/* Info box */}
-          <div className="mt-12 bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 className="font-semibold text-blue-900 mb-2">How ACH Payouts Work</h3>
-            <ul className="text-sm text-blue-800 space-y-2">
-              <li>• Consignors must complete their Stripe account onboarding first</li>
-              <li>• Payments are processed as ACH bank transfers (1-2 business days)</li>
-              <li>• Consignors receive direct deposits to their linked bank account</li>
-              <li>• Requires TEAMS tier subscription</li>
+          <div className="mt-12 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
+            <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">How Consignor Payouts Work</h3>
+            <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
+              <li>• Consignors complete a quick one-time Stripe account setup</li>
+              <li>• Payouts are sent directly to their linked bank account</li>
+              <li>• Transfers typically arrive within 1–2 business days</li>
+              <li>• Available on TEAMS tier only</li>
             </ul>
           </div>
 
           {/* Compliance notes */}
-          <div className="mt-6 bg-gray-100 rounded-lg p-4 text-xs text-gray-600">
+          <div className="mt-6 bg-gray-100 dark:bg-gray-800 rounded-lg p-4 text-xs text-gray-600 dark:text-gray-400">
             <p className="mb-2">
               <strong>Compliance:</strong> Stripe will require identity verification for consignors at $500 lifetime threshold.
               1099-NEC tax reporting required for consignors earning $600+/year.

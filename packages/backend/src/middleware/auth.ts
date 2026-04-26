@@ -17,12 +17,23 @@ export interface AuthRequest extends Request {
 
 export const optionalAuthenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    // Try Authorization header first
+    let token = null;
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+
+    // Fallback to query parameter for routes accessed via <a href> (PDF downloads, etc.)
+    // where Authorization header is not automatically sent by the browser
+    if (!token && req.query.token) {
+      token = req.query.token as string;
+    }
+
+    if (!token) {
       return next(); // No token — proceed as unauthenticated
     }
 
-    const token = authHeader.split(' ')[1];
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) return next();
     const decoded = jwt.verify(token, jwtSecret) as { id: string; role?: string; roles?: string[] };

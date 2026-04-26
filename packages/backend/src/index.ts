@@ -109,6 +109,7 @@ import hubRoutes from './routes/hubs';                  // Feature #40+#44: Sale
 import voiceRoutes from './routes/voice';                // Feature #42: Voice-to-tag extraction
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
 import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
+import pointsRoutes from './routes/points';                    // XP tracking: sale visits
 import consignorRoutes from './routes/consignors';       // Feature #309: Consignor Portal & Payouts
 import healthRoutes from './routes/health';              // Feature #20: Proactive Degradation Mode
 import nudgeRoutes from './routes/nudges';                // Feature 61: Near-Miss Nudges
@@ -472,6 +473,7 @@ app.use('/api/tags', tagRouter);                                 // Sprint 3: Ta
 app.use(hubRoutes);                                              // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 app.use('/api/voice', voiceRoutes);                              // Feature #42: Voice-to-tag extraction
 app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
+app.use('/api/points', pointsRoutes);                       // XP tracking: sale visits
 app.use('/api/consignors', consignorRoutes);                     // Feature #309: Consignor Portal & Payouts
 app.use('/api/reminders', reminderRoutes);                       // Sale Reminders — email notifications
 app.use('/api/nudges', nudgeRoutes);                             // Feature 61: Near-Miss Nudges

@@ -88,8 +88,9 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- S580 EXTENDED + COMPLETE — Post-wrap Chrome QA confirmed: similar items double-prefix ✅ live (GET /api/items/[id]/similar → 200, no double prefix). New P2 found: POST /api/points/track-visit → 404 (route not registered in backend; frontend fires on every sale page view from sales/[id].tsx line 198). No migrations. Next sprint: S581 full QA backlog sweep.
-- S579+S580 COMPLETE — 9 bugs fixed across S579 + discount-rules root-cause fixed in S580. P0 Railway crash (aFreshness corruption in itemController.ts) resolved mid-session. S580 Chrome QA: all 3 items ✅. No open bugs.
+- S581 COMPLETE — Full QA backlog sweep. 8 ✅ verified, 1 ❌ brand-kit (fixed this session). Dev fixes: track-visit 404 route (3 new files), brand-kit auth 403 (auth.ts + brand-kit.tsx), stripe-connect dark mode (19 fixes) + ACH→Consignor Payouts copy rename (stripe-connect.tsx + Layout.tsx). UNVERIFIED: Holds countdown timer (agent budget). S582: verify brand-kit PDFs post-fix, verify Holds countdown, continue lower-priority QA backlog (Guild Primer, Hunt Pass, affiliate endpoints, encyclopedia detail).
+- S580 EXTENDED + COMPLETE — Post-wrap Chrome QA confirmed: similar items double-prefix ✅ live. P2 found: POST /api/points/track-visit → 404. Fixed S581.
+- S579+S580 COMPLETE — 9 bugs fixed. S580 Chrome QA: all 3 items ✅.
 - S577 COMPLETE — 5 bugs fixed (Settlement payout, Shopify #332, Stripe Connect #333, voice icon, Tier Lapse #75). All 4 UNVERIFIED items unblocked via DB patches.
 
 ## S579/S580 Results — All Resolved
@@ -260,19 +261,21 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | **BUG — P1** | Settlement Receipt $0.00 + dead Download button — ✅ FIXED S566 — `SettlementWizard.tsx` auto-populates payoutAmount from Commission tab, download rebuilt as fetch+blob button. | Pending Chrome QA after Railway redeploy | S565 |
 | **S575 — #336 organizer-intent wins** | ✅ Chrome-verified S576 — AI does NOT overwrite organizer-typed price. Highball Glass: AI $3.50 → organizer typed $25 → saved $25. | — | S575 |
 | **S575 — #339 refuse-to-fill** | ✅ Chrome-verified S576 — Ambiguous photos: brand + eBay category both blank when confidence < 0.6. | — | S575 |
-| **S575 — #338 PricingCompSummary** | ✅ UNBLOCKED S577 — ItemCompLookup seeded in DB: item "Hermès Silk Scarf Lot" (cmoezkryx00gu13p7l9knzclq), owned by user1@example.com (Alice). Pending Chrome QA. | Login as user1@example.com (Seedy2025!) → /organizer/edit-item/cmoezkryx00gu13p7l9knzclq → verify comp tile appears | S575 |
-| **S575 — #228 Settlement fixes** | ✅ FIXED S577 — useEffect now syncs payoutAmount whenever clientPayout.amount exists (not just on step 3 when no payout). Pending Chrome QA. | Login as Alice → Settlement Wizard → Commission tab → verify Receipt shows correct payout (no $0.00/$NaN) | S575 |
-| **S575 — #331 voice-to-tag thumbnails** | ✅ FIXED S577 — VoiceTagButton.tsx + RapidCapture.tsx: mic SVG replaced ghost icon. Pending Chrome QA. | RapidCapture grid thumbnails + edit-item page → verify mic icon visible | S575 |
+| **S575 — #338 PricingCompSummary** | ✅ Chrome-verified S581 — eBay comp tiles showing on Alice's Hermès Silk Scarf item: "$24.99, USED, Sold on eBay" with footer "Price data from 3 sources · Last updated 4/25/2026". ss_65281wiyh. | — | S575 |
+| **S575 — #228 Settlement fixes** | ✅ Chrome-verified S581 — Receipt shows "Organizer Commission (35%): -$765.18" correctly. No $0.00/$NaN. ss_69423cf19. | — | S575 |
+| **S575 — #331 voice-to-tag thumbnails** | ✅ Chrome-verified S581 — Mic icon visible on edit-item tags field (Bob's account). Icon is recognizable microphone SVG. | — | S575 |
 | **S575 — #341 multi-angle prompt chips** | ✅ Chrome-verified S576 — chip row fires after first photo (Back/Stamp, Damage Detail, Label/Brand, Skip). ss_712994qo5. | — | S575 |
 | **S575 — #334 /organizer/markdown-cycles** | ✅ Chrome-verified S576 — Alice (TEAMS): page + form ✅. Bob (PRO): page + form ✅. Carol (SIMPLE): PRO gate shown. | — | S575 |
-| **S575 — #332 /organizer/shopify** | ✅ FIXED S577 — Frontend: canAccess('TEAMS') gate + upgrade CTA for non-TEAMS. Backend: 403 on all 4 endpoints for non-TEAMS. Pending Chrome QA. | Login as Bob (PRO) → /organizer/shopify → verify upgrade wall shows | S575 |
-| **S575 — #333 /organizer/stripe-connect** | ✅ FIXED S577 — TEAMS gate added to frontend. Consignors 500 root cause: Decimal fields (totalSales, commissionAmount) not serialized — fixed with .toString(). Pending Chrome QA. | Login as Bob (PRO) → verify TEAMS gate. Login as Alice (TEAMS) → verify consignors load. | S575 |
-| **#75 Tier Lapse Logic** | ✅ Seeded S575 — tier-lapse-test@example.com (PRO past_due) | Chrome QA: login as tier-lapse-test@example.com, navigate to /organizer/dashboard → verify lapse banner or downgrade gate triggers | S575 |
+| **S575 — #332 /organizer/shopify** | ✅ Chrome-verified S581 — Bob (PRO) sees upgrade gate: "Upgrade to TEAMS to automatically list your items on your Shopify store." + "Upgrade to TEAMS" CTA. Form not visible. | — | S575 |
+| **S575 — #333 /organizer/stripe-connect** | ✅ Chrome-verified S581 — Alice (TEAMS): Consignor Payouts page loads (no 500). Consignors page loads with "No consignors yet" empty state. No Decimal crash. ss_153591n3c, ss_5067uftuz. Note: page was also renamed ACH→Consignor Payouts + dark mode fixed S581. | — | S575 |
+| **#75 Tier Lapse Logic** | ✅ Chrome-verified S581 — tier-lapse-test@example.com: red alert card "Your PRO subscription has lapsed" + "Reactivate subscription →" link on dashboard. ss_50241eyk2. | — | S575 |
 | **Rarity Boost insufficient XP** | ✅ Seeded S575 — low-xp-shopper@example.com (guildXp=10) | Chrome QA: login → /coupons → Rarity Boost button → verify disabled with "not enough XP" message | S575 |
 | **Holds/Reservations countdown** | ✅ Seeded S575 — hold on active sale | Chrome QA: navigate to held item as shopper → verify countdown timer rendering and hold expiry behavior | S575 |
-| **#235 DonationModal** | ✅ Seeded S575 — charity sale with SaleDonation record | Chrome QA: as organizer → find charity sale → verify DonationModal 3-step wizard opens and flows | S575 |
+| **#235 DonationModal** | ✅ Chrome-verified S581 — user6@example.com → settlement for charity sale cmoezlc8s00q413p74kjv2r9a → Unsold Items section shows 3 items + "Donate Items & Get Tax Receipt" button. Items fetch URL fix (S579) confirmed working. ss_5338pakx7. | — | S575 |
 
 ## Recent Sessions
+
+**S581 (2026-04-25) — COMPLETE:** QA backlog sweep + 4 dev fixes. **QA results (8 ✅):** My Holds page + prices (ss_13195azun), Tier Lapse amber banner (ss_50241eyk2), #228 Settlement payout correct (ss_69423cf19), #338 PricingCompSummary eBay comp tiles on Alice's Hermès item (ss_65281wiyh), #333 Stripe Connect/Consignors loads (ss_153591n3c + ss_5067uftuz), #331 voice-to-tag mic icon present on edit-item, #332 Shopify TEAMS gate for Bob (upgrade wall visible), #235 DonationModal 3 items rendered correctly (ss_5338pakx7). **❌ Brand-kit 403 found + fixed:** Root cause — browsers don't send Authorization headers on direct `<a href>` clicks; `optionalAuthenticate` got no token. Fix: `?token=...` appended to PDF hrefs in brand-kit.tsx + auth.ts reads JWT from query param. **Dev fixes:** (1) track-visit route — `pointsController.ts` (NEW) + `routes/points.ts` (NEW) + `index.ts` (route registered); 5 XP per sale visit, `optionalAuthenticate`. (2) brand-kit auth — `auth.ts` + `brand-kit.tsx`. (3) stripe-connect dark mode — 19 dark: class additions. (4) stripe-connect copy — "ACH Consignor Payouts" → "Consignor Payouts" throughout + Layout.tsx nav link renamed. **UNVERIFIED:** Holds countdown timer (QA agent hit token limit). **Files changed:** `packages/backend/src/controllers/pointsController.ts` (NEW), `packages/backend/src/routes/points.ts` (NEW), `packages/backend/src/index.ts`, `packages/backend/src/middleware/auth.ts`, `packages/frontend/pages/organizer/brand-kit.tsx`, `packages/frontend/pages/organizer/stripe-connect.tsx`, `packages/frontend/components/Layout.tsx`.
 
 **S579 (2026-04-25) — COMPLETE:** 4 parallel bug dispatches + Chrome QA + 2 follow-up fixes. 9 code files changed. Backend: reservations.ts (GET /shopper for My Holds), brandKit.ts (GET /organizers/me), discountRules.ts (restructured to isolated public router — first pass still 401 due to router.use(authenticate) on all routes; fixed second pass), discountRuleController.ts (optional saleId param), itemController.ts (ebay-comps 500 — findMany→findUnique + BigInt serialization). Frontend: SettlementWizard.tsx (URL + payout card property paths), SimilarItems.tsx (double /api/ prefix removed), organizer/dashboard.tsx (isLapsed → amber "(Payment Required)" label), shopper/holds.tsx (price divide-by-100 bug caught in QA). Chrome QA: My Holds ✅, brand-kit ✅, similar-items URL ✅, tier-lapse label ✅, discount-rules patched (re-QA needed). SettlementWizard URL fix unverifiable via direct URL — test via Settle button on a completed sale. workspace/locations/price-history 404s still unresolved — registered in index.ts but controllers may be crashing. No migrations.
 
@@ -294,7 +297,13 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S581 — Full QA backlog sweep.**
+**S582 — QA continuation + push verification.**
+
+Priority queue:
+1. §10 smoke test: verify brand-kit PDFs now return PDF (not 403) after auth.ts + brand-kit.tsx fix
+2. Holds countdown timer — login as user16@example.com (Seedy2025!), navigate to held item detail page, verify countdown shows
+3. Continue QA backlog: Guild Primer (/shopper/guild-primer), Hunt Pass slim CTA, S529 card reader content, affiliate endpoints
+4. Push block below covers all S581 code changes — confirm deployed before QA
 
 S580 extended is complete. No code changes pending. Push the wrap block below, then start S581 fresh.
 
