@@ -54,7 +54,6 @@ interface SearchResults {
 }
 
 type DateFilter = 'all' | 'upcoming' | 'this-weekend' | 'this-month';
-type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'consignment';
 
 const SaleCardSkeleton = () => (
   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-card hover:shadow-card-hover transition-shadow duration-300 overflow-hidden flex flex-col h-full">
@@ -80,7 +79,6 @@ const HomePage = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [saleTypeFilter, setSaleTypeFilter] = useState<SaleTypeFilter>('all');
   const [isSavingSearch, setIsSavingSearch] = useState(false);
   const resultsRef = useRef<HTMLHeadingElement>(null);
 
@@ -166,17 +164,6 @@ const HomePage = () => {
     }
   }, []);
 
-  // Helper function to determine sale type from saleType field
-  const getSaleType = (sale: Sale): string => {
-    const t = (sale.saleType || '').toUpperCase();
-    if (t === 'ESTATE') return 'estate';
-    if (t === 'YARD') return 'yard';
-    if (t === 'AUCTION') return 'auction';
-    if (t === 'FLEA_MARKET') return 'flea-market';
-    if (t === 'CONSIGNMENT') return 'consignment';
-    return 'other';
-  };
-
   // Client-side filtering
   const filteredSales = useMemo(() => {
     if (!sales) return [];
@@ -227,12 +214,8 @@ const HomePage = () => {
       });
     }
 
-    if (saleTypeFilter !== 'all') {
-      result = result.filter((s) => getSaleType(s) === saleTypeFilter);
-    }
-
     return result;
-  }, [sales, searchQuery, dateFilter, saleTypeFilter]);
+  }, [sales, searchQuery, dateFilter]);
 
   const handleSaveSearch = async () => {
     if (!searchQuery.trim()) {
@@ -246,7 +229,6 @@ const HomePage = () => {
         query: searchQuery.trim(),
         filters: {
           dateFilter,
-          saleTypeFilter,
         },
       });
       showToast('Search saved!', 'success');
@@ -359,31 +341,9 @@ const HomePage = () => {
           <TreasureHuntBanner />
 
 
-          {/* Sales Near You Card + Sale Type Filters Grid */}
-          <section className="mb-12 grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column: Sale Type Filter Chips */}
-            <div className="lg:col-span-1 flex flex-col">
-              <h3 className="font-heading text-sm font-semibold text-warm-700 dark:text-gray-300 mb-3 uppercase tracking-wide">Sale Type</h3>
-              <div className="space-y-2">
-                {(['all', 'estate', 'yard', 'auction', 'flea-market', 'consignment'] as SaleTypeFilter[]).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setSaleTypeFilter(type)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      saleTypeFilter === type
-                        ? 'bg-sage-600 text-white shadow-md'
-                        : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 border border-warm-300 dark:border-gray-700 hover:border-sage-400 hover:text-sage-600 dark:hover:text-sage-400'
-                    }`}
-                  >
-                    {type === 'all' ? 'All Types' : type === 'estate' ? 'Estate' : type === 'yard' ? 'Yard' : type === 'auction' ? 'Auction' : type === 'flea-market' ? 'Flea Market' : 'Consignment'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Right Column: Sales Near You Card */}
-            <div className="lg:col-span-2">
+          {/* Sales Near You Card */}
+          <section className="mb-12">
+            <div>
               <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col h-full">
                 {/* Map Section */}
                 {!isLoading && sales && sales.length > 0 && (
@@ -581,7 +541,7 @@ const HomePage = () => {
                   </div>
                 ) : (
                   <div>
-                    {dateFilter !== 'all' || saleTypeFilter !== 'all' ? (
+                    {dateFilter !== 'all' ? (
                       <div>
                         <EmptyState
                           icon="🏷️"
@@ -591,7 +551,7 @@ const HomePage = () => {
                         <div className="flex justify-center mt-6">
                           <button
                             type="button"
-                            onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter('all'); }}
+                            onClick={() => { setSearchQuery(''); setDateFilter('all'); }}
                             className="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
                           >
                             Clear all filters
