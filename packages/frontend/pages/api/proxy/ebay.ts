@@ -43,6 +43,16 @@ async function readRawBody(req: NextApiRequest): Promise<string | undefined> {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
+// Pack diagnostic fields into a short, single-line prefix so Vercel's runtime
+// log table doesn't truncate the actual root cause (ENOTFOUND, AbortError, etc.).
+function describeError(err: any): string {
+  const code = err?.code ?? '';
+  const name = err?.name ?? 'Error';
+  const cause = err?.cause?.code ?? err?.cause?.message ?? '';
+  const msg = (err?.message ?? '').slice(0, 200);
+  return `[${name}${code ? `:${code}` : ''}${cause ? `/cause=${cause}` : ''}] ${msg}`;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Auth gate
   const proxySecret = process.env.EBAY_PROXY_SECRET;
@@ -78,8 +88,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.setHeader('Cache-Control', 'no-store');
       return res.status(ebayRes.status).json(data);
     } catch (err: any) {
-      console.error('[ebay-proxy/token] Error:', err.message);
-      return res.status(502).json({ error: err.message });
+      console.error('[ebay-proxy/token] threw', describeError(err));
+      return res.status(502).json({ error: describeError(err) });
     }
   }
 
@@ -123,7 +133,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.setHeader('Cache-Control', 'no-store');
     return res.status(upstreamRes.status).send(text);
   } catch (err: any) {
-    console.error('[ebay-proxy] Upstream fetch threw:', err.message, '— path:', ebayPath);
-    return res.status(502).json({ error: err.message });
+    console.error('[ebay-proxy] threw on', ebayPath, describeError(err));
+    return res.status(502).json({ error: describeError(err) });
   }
 }
