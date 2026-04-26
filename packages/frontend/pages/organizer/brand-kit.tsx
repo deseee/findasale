@@ -497,7 +497,7 @@ const BrandKitPage = () => {
                       href="/pricing"
                       className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
                     >
-                      Upgrade to PRO →
+                      Upgrade to PRO &rarr;
                     </Link>
                   </div>
                 ) : (
@@ -508,7 +508,7 @@ const BrandKitPage = () => {
                       className="p-4 bg-warm-100 dark:bg-gray-700 border border-warm-300 dark:border-gray-600 rounded-lg hover:bg-warm-200 dark:hover:bg-gray-600 transition-colors text-left cursor-pointer"
                     >
                       <h3 className="font-semibold text-warm-900 dark:text-warm-100 mb-1">Download Business Cards</h3>
-                      <p className="text-xs text-warm-600 dark:text-warm-400">10 cards per page (3.5" × 2")</p>
+                      <p className="text-xs text-warm-600 dark:text-warm-400">10 cards per page (3.5" &times; 2")</p>
                     </a>
                     <a
                       href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/brand-kit/organizer/letterhead?token=${authToken}`}
