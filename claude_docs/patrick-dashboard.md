@@ -1,6 +1,6 @@
-# Patrick's Dashboard — S588 ✅
+# Patrick's Dashboard — S588 ✅ COMPLETE
 
-## Status: eBay Sync Fixed + WorkspaceMember Crash Fixed
+## Status: Verified Share XP System + Photo Station Geofence + Pushed & Migrated
 
 ---
 
@@ -8,54 +8,24 @@
 
 | Item | Result | Notes |
 |------|--------|-------|
-| eBay sold sync filter fix | ✅ DONE | Was filtering `orderfulfillmentstatus:{FULFILLED\|IN_PROGRESS}` — missed freshly sold items. Now uses `creationdate` range only — returns all paid orders |
-| WorkspaceMember crash (code) | ✅ DONE | `workspaceController.ts` — both queries now skip orphaned members (INNER JOIN via `workspace: { id: { not: '' } }`) |
-| WorkspaceMember crash (DB) | ✅ MIGRATION READY | `20260426_fix_workspacemember_cascade` — deletes orphans + re-adds FK with CASCADE |
-| Photo Op Stations (#39) | ✅ COMMITTED | 5 files from prior session committed — controller, XP wiring, frontend page |
+| Photo station geofence | ✅ DONE | Location required before scan; 100m haversine enforced backend; amber block card when denied |
+| Treasure Hunt sidebar card | ✅ DONE | Amber card on sale detail page sidebar (shopper-only), links to progress page |
+| Sale visit idempotency | ✅ DONE | VISIT XP no longer awarded on every page reload |
+| Verified share XP system | ✅ DONE | 2 XP per authenticated click, 20 XP cap, unique per-user links |
+| SaleShareLink + SaleShareLinkClick | ✅ DONE | Schema + migration deployed |
+| Push + migration | ✅ COMPLETE | Patrick pushed and ran prisma migrate deploy this session |
 
 ---
 
-## Pending Patrick Action — Required
+## No Pending Patrick Actions
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-```
-
-This deletes orphaned WorkspaceMember rows and fixes the FK constraint. Until this runs, the code fix prevents crashes but the stale rows remain in the DB.
+Everything is live. No push block needed.
 
 ---
 
-## Wrap Push Block
+## Next Up (S589)
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-
-git add packages/backend/src/controllers/photoOpController.ts
-git add packages/backend/src/controllers/pointsController.ts
-git add packages/backend/src/index.ts
-git add packages/database/prisma/schema.prisma
-git add packages/frontend/pages/sales/[id]/photo-station.tsx
-git commit -m "feat: photo op stations (#39) — controller, XP wiring, frontend page"
-
-git add packages/backend/src/jobs/ebaySoldSyncCron.ts
-git add packages/backend/src/controllers/workspaceController.ts
-git add packages/database/prisma/migrations/20260426_fix_workspacemember_cascade/migration.sql
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix: eBay sold sync date-range filter + WorkspaceMember orphan crash + cascade migration"
-
-.\push.ps1
-```
-
----
-
-## eBay Sync — What to Watch
-
-After migration deploys, the next 15-minute cron cycle should pick up the Nintendo Power eBay sale and mark it SOLD. Watch Railway logs for:
-```
-[eBay Sync] Item ... marked SOLD — eBay order ...
-```
-
-The `ENOTFOUND api.ebay.com` error at startup is a transient Railway DNS issue — not a code bug, retries automatically.
+1. **QA S588** — Chrome test: photo station geofence deny → amber card, scan → share link → click tracking
+2. **DonationModal P1 fix** — Single-line fix in SettlementWizard.tsx (wrong API route — `items?status=AVAILABLE` → `unsold-items`)
+3. **Tier Lapse QA (#75)** — Login as tier-lapse-test@example.com (Seedy2025!) → verify amber lapsed banner + features gated
+4. **Roadmap next** — Check roadmap.md for next priority builds
