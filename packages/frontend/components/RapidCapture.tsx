@@ -1508,9 +1508,9 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
             <path d="M12 2a10 10 0 0 1 0 20" strokeWidth="2" />
           </svg>
         ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4z" />
-            <path d="M5.5 9.643a5.5 5.5 0 0 0 9 0" />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+            <path d="M17 16.91c-1.48 1.46-3.51 2.36-5.76 2.36s-4.29-.9-5.77-2.36l-1.44 1.44c1.96 1.97 4.68 3.19 7.2 3.19s5.25-1.22 7.2-3.19l-1.43-1.44z" />
           </svg>
         )}
       </button>
