@@ -2509,3 +2509,63 @@ export const getCompSummary = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error fetching comp summary' });
   }
 };
+
+/**
+ * BUG 4 FIX: Get similar items for a given item
+ * GET /api/items/:id/similar
+ * Returns items in the same category, limit 6
+ * Public endpoint — no auth required
+ */
+export const getSimilarItems = async (req: Request, res: Response) => {
+  try {
+    const { id: itemId } = req.params;
+
+    // Fetch current item to get category and status
+    const currentItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { id: true, category: true, status: true },
+    });
+
+    if (!currentItem) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Query similar items: same category, AVAILABLE or PUBLISHED status, exclude current item
+    const similarItems = await prisma.item.findMany({
+      where: {
+        category: currentItem.category,
+        status: { in: ['AVAILABLE', 'PUBLISHED'] },
+        id: { not: itemId },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        title: true,
+        price: true,
+        photoUrls: true,
+        category: true,
+        condition: true,
+        tags: true,
+      },
+      take: 6,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ items: similarItems });
+  } catch (error) {
+    console.error('[getSimilarItems] Error:', error);
+    res.status(500).json({ message: 'Server error fetching similar items' });
+  }
+};aFreshness ? compLookup.dataFreshness.toISOString() : null;
+
+    res.status(200).json({
+      sourceCount,
+      medianLow,
+      medianHigh,
+      lastUpdated,
+    });
+  } catch (error) {
+    console.error('[getCompSummary] Error:', error);
+    res.status(500).json({ message: 'Server error fetching comp summary' });
+  }
+};

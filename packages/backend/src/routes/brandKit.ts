@@ -19,10 +19,11 @@ const router = Router();
 // Authenticated: GET /api/brand-kit/organizers/me
 // Fetch current organizer's brand kit (authenticated)
 router.get('/organizers/me', authenticate, (req: Request, res: Response) => {
-  if (!req.user?.organizerId) {
+  const organizerId = (req as any).user?.organizerProfile?.id;
+  if (!organizerId) {
     return res.status(403).json({ message: 'Not an organizer' });
   }
-  return getBrandKit({ ...req, params: { id: req.user.organizerId } } as any, res);
+  return getBrandKit({ ...req, params: { id: organizerId } } as any, res);
 });
 
 // Public: GET /api/brand-kit/organizers/:id
