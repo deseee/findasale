@@ -57,16 +57,16 @@ const FollowOrganizerButton: React.FC<Props> = ({ organizerId, organizerName, si
         mutation.mutate();
       }}
       disabled={isLoading}
-      className={`flex items-center gap-1 font-semibold rounded-lg transition border ${
+      className={`flex items-center gap-1 font-medium rounded-lg transition border disabled:opacity-50 ${
         isFollowing
-          ? 'bg-white text-amber-700 border-amber-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300'
-          : 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
-      } disabled:opacity-50 ${btnSm ? 'text-xs px-2 py-1' : 'text-sm px-3 py-1.5'}`}
+          ? 'bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-700'
+          : 'bg-transparent text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+      } ${btnSm ? 'text-xs px-2 py-1' : 'text-sm px-3 py-1.5 min-h-[36px]'}`}
       title={isFollowing ? `Unfollow ${organizerName}` : `Follow ${organizerName}`}
     >
       {isFollowing ? '✓ Following' : '+ Follow'}
     </button>
   );
-};
+}
 
 export default FollowOrganizerButton;

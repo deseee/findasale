@@ -112,11 +112,11 @@ const RemindMeButton: React.FC<RemindMeButtonProps> = ({ saleId, saleName, disab
     <button
       onClick={handleClick}
       disabled={isProcessing || disabled}
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
         isActive
-          ? 'bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-800/40 dark:text-amber-100'
-          : 'bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-800/40 dark:text-green-100'
-      } disabled:opacity-50 disabled:cursor-not-allowed`}
+          ? 'border-gray-400 dark:border-gray-500 bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          : 'border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+      }`}
       title={
         disabled
           ? 'Reminders not available for this sale'
