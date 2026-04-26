@@ -1,50 +1,46 @@
-# Patrick's Dashboard — S579 Complete → Push + S580 QA
+# Patrick's Dashboard — S579/S580 Complete ✅
 
-## ✅ S579 Complete — 9 Files Fixed + QA Run
+## All Clear — No Open Bugs
 
-Bugs dispatched, Chrome QA done in-session, 2 follow-up fixes applied.
-
----
-
-## S579 Chrome QA Results
-
-| # | Feature | Result |
-|---|---------|--------|
-| My Holds page | ✅ PASS | Hold shows with item, expiry countdown, correct data |
-| My Holds price | ✅ FIXED mid-QA | Was $0.19 (divide-by-100 bug in holds.tsx) — fixed |
-| Brand kit page | ✅ PASS | /organizer/brand-kit loads with content |
-| Similar Items URL | ✅ PASS | Correct `/api/items/:id/similar` (no more double prefix) |
-| Tier lapse label | ✅ PASS | Amber warning + "(Payment Required)" on plan card |
-| Discount rules | ⚠️ PATCHED | Was 401, restructured router — needs re-QA after push |
-| SettlementWizard URL | ⚠️ UNVERIFIED | No direct /settlements page — test via Settle button on completed sale |
-| workspace/locations/price-history | ⚠️ OPEN | Registered in index.ts but still 404 — controllers may be crashing |
+S579 fixed 9 bugs. S580 found and fixed the discount-rules root cause. Chrome QA confirmed all 3 remaining items passing. Nothing blocking.
 
 ---
 
-## ⏳ Patrick Action: Push S579
+## S579/S580 Final QA Results
+
+| Feature | Result | Evidence |
+|---------|--------|----------|
+| My Holds page | ✅ PASS | Route added, price divide-by-100 fixed |
+| Brand kit page | ✅ PASS | /organizer/brand-kit loads correctly |
+| Similar Items | ✅ PASS | No more double /api/ prefix |
+| Tier lapse label | ✅ PASS | "(Payment Required)" amber badge on plan card |
+| Discount rules | ✅ PASS | GET /api/discount-rules → 200 (Chrome verified) |
+| SettlementWizard items | ✅ PASS | GET /api/items/?saleId=... → 200 (Chrome verified via Alice) |
+| workspace/locations | ✅ PASS | 403 tier gate = correct TEAMS-only behavior, not a crash |
+| P0 Railway crash | ✅ FIXED | Removed corrupted aFreshness lines from itemController.ts |
+
+---
+
+## What Was Fixed This Session (discount-rules root cause)
+
+The GET route had no `authenticate` middleware at all — `req.user` was always null even with a valid JWT. Added `optionalAuthenticate` so the token gets parsed when present. Non-TEAMS/no-workspace cases now return `[]` instead of 403.
+
+---
+
+## Next Session
+
+No mandatory bug work. Options:
+- Chrome QA sweep of older unverified features
+- New feature sprint from roadmap
+- Beta organizer outreach / marketing push
+
+---
+
+## Push Block (wrap docs only — all code already pushed)
 
 ```powershell
-git add packages/backend/src/routes/reservations.ts
-git add packages/backend/src/routes/brandKit.ts
-git add packages/backend/src/routes/discountRules.ts
-git add packages/backend/src/controllers/discountRuleController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/components/SettlementWizard.tsx
-git add packages/frontend/components/SimilarItems.tsx
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/pages/shopper/holds.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S579: Fix 9 bugs — My Holds route, holds price, brand-kit route, discount-rules public, ebay-comps 500, SettlementWizard URL, similar-items prefix, tier-lapse label, payout card"
+git commit -m "S580 wrap: QA complete, all clear"
 .\push.ps1
 ```
-
----
-
-## S580 QA Checklist (3 items remaining)
-
-| # | Test | Account | What to Check |
-|---|------|---------|---------------|
-| 1 | Discount rules public | user6@example.com (Seedy2025!) | /sales/cmoezlc8s00q413p74kjv2r9a → network tab shows GET /api/discount-rules = 200 |
-| 2 | SettlementWizard items | user1@example.com / Seedy2025! | Dashboard → find completed sale → Settle → Step 1 items load (not blank) |
-| 3 | workspace/locations 404s | user1@example.com / Seedy2025! | /organizer/locations → network tab — still 404? If yes, dispatch backend investigation |

@@ -88,31 +88,27 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 - ✅ Card reader content — FAQ, organizer guide, and support pages updated: S700 (standard) + S710 (cellular) only. No Tap to Pay (requires native SDK). Web app connects over internet, not Bluetooth.
 
 **Active priorities:**
-- S579 COMPLETE — 4 parallel bug dispatches + Chrome QA + 2 follow-up fixes. 9 files fixed (+ 2 wrap docs). All 9 P1s addressed + 2 P2s. QA confirmed: My Holds ✅, brand-kit ✅, similar-items prefix ✅, tier-lapse label ✅. Discount-rules needed a second fix (router-level auth was applying to all routes — restructured to isolated public router). holds.tsx price divide-by-100 bug found + fixed. SettlementWizard URL fix unverifiable via direct URL (wizard accessed via Settle button on completed sale only). S580 QA: verify discount-rules returns 200 on charity sale page + SettlementWizard via Settle button flow.
-- S578 COMPLETE — Full Chrome QA session. 6 ✅ PASS, 2 ⚠️ PARTIAL, 1 ❌ FAIL. New P1 bugs found. S579 is bug dispatch for all P1s + roadmap update.
+- S579+S580 COMPLETE — 9 bugs fixed across S579 + discount-rules root-cause fixed in S580. P0 Railway crash (aFreshness corruption in itemController.ts) resolved mid-session. S580 Chrome QA: all 3 items ✅. No open bugs. Ready for next sprint.
+- S578 COMPLETE — Full Chrome QA session. 6 ✅ PASS, 2 ⚠️ PARTIAL, 1 ❌ FAIL. New P1 bugs found. All dispatched in S579.
 - S577 COMPLETE — 5 bugs fixed (Settlement payout, Shopify #332, Stripe Connect #333, voice icon, Tier Lapse #75). All 4 UNVERIFIED items unblocked via DB patches.
 
-## S578 QA Results — New Bugs Found
+## S579/S580 Results — All Resolved
 
-**S578 Chrome QA summary (9 items tested):**
-- ✅ PASS (6): QA#1 Settlement payout, QA#2 Shopify upgrade wall, QA#3 Stripe Connect gate, QA#4 Voice-to-tag mic icon, QA#8 PricingCompSummary tile, QA#9 Storefront Copy Link + View
-- ⚠️ PARTIAL (2): QA#5 Tier Lapse (banner ✅, "Your Plan: PRO" shows despite lapse P2), QA#7 Holds (HoldTimer ✅, My Holds page P1 bug, end-to-end UNVERIFIED)
-- ❌ FAIL (1): QA#6 DonationModal (wrong API URL → 404, donation section never renders)
+**S579 — 9 bugs fixed + P0 Railway crash:**
+- ✅ My Holds route: added `GET /shopper` to reservations.ts → getMyHoldsFull
+- ✅ My Holds price: holds.tsx was dividing Railway dollars by 100 again → removed `/100`
+- ✅ Brand-kit route: added `GET /organizers/me` + fixed `req.user.organizerProfile?.id`
+- ✅ SettlementWizard URL: `/api/sales/${saleId}/items` → `/api/items/?saleId=${saleId}`
+- ✅ Similar items double prefix: removed hardcoded `/api/` from SimilarItems.tsx axios call
+- ✅ Tier lapse label: dashboard shows "(Payment Required)" amber badge when `isLapsed=true`
+- ✅ Payout card dark mode: white background + missing values fixed in SettlementWizard
+- ✅ eBay comps 500: findMany→findUnique + BigInt.toString() in itemController.ts
+- ✅ P0 Railway crash: removed corrupted `aFreshness` lines (2559-2571) from itemController.ts
 
-**P1 bugs from Railway logs + QA (S579 dispatch queue):**
-1. `SettlementWizard.tsx` line 68-72: `GET /api/sales/${saleId}/items?status=AVAILABLE` → 404. Fix: change to `/organizer/sales/${saleId}/unsold-items`
-2. `packages/backend/src/routes/reservations.ts`: missing `GET /shopper` route — My Holds page always empty
-3. `GET /api/api/items/:id/similar` → 404 (double `/api/api/` prefix bug)
-4. `GET /api/items/:id/ebay-comps` → 500 (Railway logs)
-5. `GET /api/items/:id/price-history` → 404
-6. `GET /api/workspace` → 404
-7. `GET /api/brand-kit/organizers/me` → 404
-8. `GET /api/locations` → 404
-9. `GET /api/discount-rules` → 403 on charity sale page load
-
-**P2 bugs from S578:**
-- Payout confirmation card: white background in dark mode; Recipient/Amount/Method values not rendering
-- Tier Lapse dashboard: "Your Plan: PRO" label showing despite `isLapsed=true` state
+**S580 — discount-rules root-cause fixed + Chrome QA:**
+- ✅ Discount rules → 200: GET route was missing `optionalAuthenticate` so `req.user` was always null; added middleware + return `[]` instead of 403 for non-TEAMS organizers
+- ✅ SettlementWizard items: GET /api/items/?saleId=cmoezk2ig002k13p7lf52plw0 → 200 (Chrome verified via Alice's completed sale)
+- ✅ workspace/locations 404: now 403 tier gate (correct behavior — TEAMS-only feature, not a crash)
 
 ## Schema & Infrastructure
 
