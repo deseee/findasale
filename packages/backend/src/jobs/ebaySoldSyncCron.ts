@@ -99,12 +99,18 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     });
 
     // Build filter for eBay Fulfillment API
-    // If we've synced before, only fetch orders created since last sync
-    let filter = 'orderpaymentstatus:{PAID}';
+    // Valid filter fields: creationdate, lastmodifieddate (no payment/fulfillment status filter)
+    // Use date range to limit results; fall back to 30-day window on first sync
+    let filter: string;
     if (freshConnection?.lastEbaySoldSyncAt) {
       const startDate = freshConnection.lastEbaySoldSyncAt.toISOString();
       const endDate = new Date().toISOString();
-      filter += `,creationdate:[${startDate}..${endDate}]`;
+      filter = `creationdate:[${startDate}..${endDate}]`;
+    } else {
+      // First sync — look back 30 days
+      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const endDate = new Date().toISOString();
+      filter = `creationdate:[${startDate}..${endDate}]`;
     }
 
     // Call eBay Fulfillment API
