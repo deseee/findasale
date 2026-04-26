@@ -87,6 +87,11 @@ export async function disconnectShopifyAccount(req: AuthRequest, res: Response) 
       return res.status(404).json({ message: 'Organizer not found' });
     }
 
+    // Check TEAMS tier
+    if (organizer.subscriptionTier !== 'TEAMS') {
+      return res.status(403).json({ message: 'Shopify integration requires TEAMS tier' });
+    }
+
     await disconnectShopify(organizer.id);
 
     res.json({ success: true, message: 'Shopify disconnected' });
@@ -113,6 +118,11 @@ export async function getShopifyConnectionStatus(req: AuthRequest, res: Response
 
     if (!organizer) {
       return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // Check TEAMS tier
+    if (organizer.subscriptionTier !== 'TEAMS') {
+      return res.status(403).json({ message: 'Shopify integration requires TEAMS tier' });
     }
 
     const status = await getShopifyStatus(organizer.id);
@@ -147,6 +157,11 @@ export async function pushItemAction(req: AuthRequest, res: Response) {
 
     if (!organizer) {
       return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // Check TEAMS tier
+    if (organizer.subscriptionTier !== 'TEAMS') {
+      return res.status(403).json({ message: 'Shopify integration requires TEAMS tier' });
     }
 
     if (!organizer.shopifyEnabled) {

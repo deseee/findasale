@@ -19,6 +19,7 @@ interface User {
   huntPassExpiry?: string;
   organizerTier?: string;
   subscriptionStatus?: string | null;
+  subscriptionLapsed?: boolean; // Feature #75: Whether subscription is currently lapsed (past_due)
   notificationPrefs?: Record<string, boolean>;
   onboardingComplete?: boolean;
   teamsOnboardingComplete?: boolean;
@@ -73,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           huntPassExpiry: payload.huntPassExpiry,
           organizerTier: payload.subscriptionTier || 'SIMPLE',
           subscriptionStatus: payload.subscriptionStatus ?? null,
+          subscriptionLapsed: payload.subscriptionLapsed ?? false, // Feature #75: Tier lapse state
           onboardingComplete: payload.onboardingComplete ?? false,
           teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
           createdAt: payload.createdAt,
@@ -108,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         huntPassExpiry: payload.huntPassExpiry,
         organizerTier: payload.subscriptionTier || 'SIMPLE',
         subscriptionStatus: payload.subscriptionStatus ?? null,
+        subscriptionLapsed: payload.subscriptionLapsed ?? false, // Feature #75: Tier lapse state
         onboardingComplete: payload.onboardingComplete ?? false,
         teamsOnboardingComplete: payload.teamsOnboardingComplete ?? false,
         createdAt: payload.createdAt,

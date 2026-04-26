@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 
 interface ConsignorStatus {
   consignorId: string;
@@ -17,6 +18,7 @@ interface ConsignorStatus {
 
 const ACHPayoutsPage: React.FC = () => {
   const router = useRouter();
+  const { canAccess, tierLoading } = useOrganizerTier();
   const [consignors, setConsignors] = useState<ConsignorStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,10 +80,54 @@ const ACHPayoutsPage: React.FC = () => {
     }
   };
 
+  // Show loading state while tier is being determined
+  if (tierLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  // Gate: TEAMS tier only
+  if (!canAccess('TEAMS')) {
+    return (
+      <>
+        <Head>
+          <title>Upgrade to TEAMS - FindA.Sale</title>
+        </Head>
+        <div className="min-h-screen bg-gray-50 py-12 px-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="mb-8">
+              <Link href="/organizer/settlement">
+                <a className="text-blue-600 hover:text-blue-700 text-sm mb-4 inline-block">
+                  ← Back to Settlement Hub
+                </a>
+              </Link>
+            </div>
+
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-8 text-center">
+              <h2 className="text-2xl font-bold text-amber-900 mb-3">TEAMS Subscription Required</h2>
+              <p className="text-amber-800 mb-6">
+                ACH consignor payouts are available only for TEAMS tier subscribers.
+                Upgrade to unlock this feature and manage consignor payments at scale.
+              </p>
+              <Link href="/organizer/subscription">
+                <a className="inline-block px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition font-medium">
+                  Upgrade to TEAMS
+                </a>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading ACH payouts...</div>
+        <div className="text-gray-600">Loading consignors...</div>
       </div>
     );
   }
