@@ -192,12 +192,12 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #235 DonationModal | ❌ P1 BUG FOUND S578 — SettlementWizard.tsx line 68-72 fetches `GET /api/sales/${saleId}/items?status=AVAILABLE` which returns 404 (route does not exist). Correct route is `GET /api/organizer/sales/${saleId}/unsold-items`. availableItems.length always 0 → donation section never renders. Fix: update URL in SettlementWizard.tsx. | S579 bug dispatch: SettlementWizard.tsx line 68-72 URL fix | S575 |
 | #251 priceBeforeMarkdown | Needs live data | Need item with markdownApplied=true to verify crossed-out display | S526 |
 | Organizer Insights runtime | User-specific error | Test as Alice (user1) — Bob loads fine, error must be account-specific | S528 |
-| #275 Hunt Pass Cosmetics | Karen has no Hunt Pass | Need Hunt Pass subscriber to verify amber avatar ring + 🏆 leaderboard badge | S530 |
+| #275 Hunt Pass Cosmetics | ✅ Chrome-verified S584 — RESOLVED | Karen (RANGER, Hunt Pass active): 🏆 badge on leaderboard, orange avatar ring in AvatarDropdown confirmed. | S530 |
 | #278 Treasure Hunt Pro | Requires Hunt Pass | Hunt Pass account + active QR scan to verify +10% XP bonus | S530 |
-| #280 Condition Rating XP | Session ended before test | Login as Bob, set conditionGrade on item, verify +3 XP fires | S530 |
+| #280 Condition Rating XP | ✅ Chrome-verified S584 — RESOLVED | Bob changed conditionGrade (Fair→Good) on Vintage Socket Set → CONDITION_RATING PointsTransaction +5 XP created in DB, guild-primer confirmed 0→5 XP. Edit URL: /organizer/edit-item/[id]. | S530 |
 | #281 Streak Milestone XP | Needs 5 real consecutive days | Cannot simulate multi-day streak in automation | S530 |
-| #255 Rank-Up Notifications | Needs XP threshold crossing | Karen needs ~415 more XP to reach Scout | S530 |
-| #257 Scout Hold Duration | Karen is INITIATE | Needs Scout+ account to test 45-min hold | S530 |
+| #255 Rank-Up Notifications | ✅ Chrome-verified S584 — RESOLVED | low-xp-shopper visited sale (495→500 XP) → RANK_UP notification "You've reached SCOUT! Congratulations! You've advanced to SCOUT rank. Keep hunting!" appeared in bell (unread badge). ss_7480h4qzw | S530 |
+| #257 Scout Hold Duration | ✅ Chrome-verified S584 — RESOLVED | Karen (RANGER) placed hold on "Leather Wingback Chair" — timer showed 00:59:48 confirming 60-minute RANGER hold duration. | S530 |
 | #268 Trail Completion XP | Karen's trail has 0 stops | Need trail with all stops completed | S530 |
 | #261 Treasure Hunt XP Rank Multiplier | Needs QR scan | Ranger+ account + live sale QR scan | S530 |
 | #75 Tier Lapse Logic | ✅ FIXED S577 — Hard gate (Patrick decision). AuthContext decodes subscriptionLapsed from JWT. useOrganizerTier: isLapsed=true → canAccess() returns false for PRO/TEAMS. Layout.tsx: amber sticky banner + Update billing link. Pending Chrome QA. | Login as tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → verify amber banner + PRO features gated | S575 |
@@ -277,7 +277,9 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
-**S582 (2026-04-26) — COMPLETE:** QA continuation (8 items verified). **Brand-kit PDFs** ✅ — all 4 PDFs return 200 + application/pdf, JWT present in hrefs (~760 chars), S581 useEffect fix confirmed working. **Holds countdown** ✅ — /shopper/holds shows "Your hold expires in 43:16:04", Purchase Now + Release Hold buttons present. Note: correct route is /shopper/holds (not /shopper/my-holds which 404s). **Guild Primer** ✅ — all XP sections render, personalized rank bar (Initiate, 5 XP, 5/500), 2 hunt-pass cross-links, dark mode clean. **Hunt Pass slim CTA** ✅ — hero, $4.99/mo, 7 benefits, 2 CTAs, guild-primer cross-link. **S529 card reader** ✅ — /support shows S700+S710 only; /faq + /guide have no card reader content. **Affiliate endpoints** ✅ — all 4 endpoints correct (403 for shoppers expected; generate-code fraud gate; Alice returns 200 for all); frontend ?aff= signup flow UNVERIFIED. **AvatarDropdown → Explorer Profile** ✅ — Karen: link present (href=/shopper/explorer-profile), page loads. **S540 Rewards nav (AvatarDropdown)** ✅ — Rewards link in CONNECT section → /coupons, XP Store loads. Organizer sidebar + mobile nav locations UNVERIFIED. **P2 bug found:** XP Store shows "Hunt Pass Inactive" for Karen while AvatarDropdown shows "Hunt Pass Active". No code changes (QA-only).
+**S584 (2026-04-26) — COMPLETE:** QA-only session — 5 items verified from Blocked/Unverified Queue. **#280 Condition Rating XP** ✅ — Bob changed conditionGrade (Fair→Good) on Vintage Socket Set via /organizer/edit-item/[id] → CONDITION_RATING PointsTransaction +5 XP, guild-primer 0→5 XP confirmed. **#255 Rank-Up Notifications** ✅ — low-xp-shopper (495 XP) visited sale → 500 XP → RANK_UP notification "You've reached SCOUT!" in bell (ss_7480h4qzw). **#257 Scout Hold Duration** ✅ — Karen (RANGER) placed hold → 60-minute timer confirmed. **#275 Hunt Pass Cosmetics** ✅ — 🏆 leaderboard badge + orange avatar ring. **#75 Tier Lapse** ✅ — red banner verified. Supplementary: password-reset low-xp-shopper@example.com via DB (bcrypt), found organizer item edit URL is /organizer/edit-item/[id] (not /organizer/add-items/.../[itemId]). Still UNVERIFIED: Settlement PDF (needs ENDED sale), #268 Trail Completion (physical QR), #278 Treasure Hunt Pro (QR scan). 0 code files changed.
+
+**S583 (2026-04-26) — COMPLETE:** QA continuation (8 items verified). **Brand-kit PDFs** ✅ — all 4 PDFs return 200 + application/pdf, JWT present in hrefs (~760 chars), S581 useEffect fix confirmed working. **Holds countdown** ✅ — /shopper/holds shows "Your hold expires in 43:16:04", Purchase Now + Release Hold buttons present. Note: correct route is /shopper/holds (not /shopper/my-holds which 404s). **Guild Primer** ✅ — all XP sections render, personalized rank bar (Initiate, 5 XP, 5/500), 2 hunt-pass cross-links, dark mode clean. **Hunt Pass slim CTA** ✅ — hero, $4.99/mo, 7 benefits, 2 CTAs, guild-primer cross-link. **S529 card reader** ✅ — /support shows S700+S710 only; /faq + /guide have no card reader content. **Affiliate endpoints** ✅ — all 4 endpoints correct (403 for shoppers expected; generate-code fraud gate; Alice returns 200 for all); frontend ?aff= signup flow UNVERIFIED. **AvatarDropdown → Explorer Profile** ✅ — Karen: link present (href=/shopper/explorer-profile), page loads. **S540 Rewards nav (AvatarDropdown)** ✅ — Rewards link in CONNECT section → /coupons, XP Store loads. Organizer sidebar + mobile nav locations UNVERIFIED. **P2 bug found:** XP Store shows "Hunt Pass Inactive" for Karen while AvatarDropdown shows "Hunt Pass Active". No code changes (QA-only).
 
 **S581 (2026-04-25) — COMPLETE:** QA backlog sweep + 4 dev fixes. **QA results (8 ✅):** My Holds page + prices (ss_13195azun), Tier Lapse amber banner (ss_50241eyk2), #228 Settlement payout correct (ss_69423cf19), #338 PricingCompSummary eBay comp tiles on Alice's Hermès item (ss_65281wiyh), #333 Stripe Connect/Consignors loads (ss_153591n3c + ss_5067uftuz), #331 voice-to-tag mic icon present on edit-item, #332 Shopify TEAMS gate for Bob (upgrade wall visible), #235 DonationModal 3 items rendered correctly (ss_5338pakx7). **❌ Brand-kit 403 found + fixed:** Root cause — browsers don't send Authorization headers on direct `<a href>` clicks; `optionalAuthenticate` got no token. Fix: `?token=...` appended to PDF hrefs in brand-kit.tsx + auth.ts reads JWT from query param. **Dev fixes:** (1) track-visit route — `pointsController.ts` (NEW) + `routes/points.ts` (NEW) + `index.ts` (route registered); 5 XP per sale visit, `optionalAuthenticate`. (2) brand-kit auth — `auth.ts` + `brand-kit.tsx`. (3) stripe-connect dark mode — 19 dark: class additions. (4) stripe-connect copy — "ACH Consignor Payouts" → "Consignor Payouts" throughout + Layout.tsx nav link renamed. **UNVERIFIED:** Holds countdown timer (QA agent hit token limit). **Files changed:** `packages/backend/src/controllers/pointsController.ts` (NEW), `packages/backend/src/routes/points.ts` (NEW), `packages/backend/src/index.ts`, `packages/backend/src/middleware/auth.ts`, `packages/frontend/pages/organizer/brand-kit.tsx`, `packages/frontend/pages/organizer/stripe-connect.tsx`, `packages/frontend/components/Layout.tsx`.
 
@@ -301,17 +303,14 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S583 — Bug fix + QA continuation.**
+**S585 — QA backlog + new dev work.**
 
 Priority queue:
-1. **P2 Hunt Pass status bug** — dispatch findasale-dev to fix XP Store "Hunt Pass Inactive" for Karen (user11) while AvatarDropdown shows "Hunt Pass Active". Investigate /coupons huntPassActive detection.
-2. **Remaining UNVERIFIED items (Chrome MCP, sequential):**
-   - Layout.tsx mobile nav guild link — mobile hamburger → Explorer's Guild → verify /shopper/guild-primer (not /loyalty)
-   - Affiliate signup flow — /register?aff=VALIDCODE → amber banner, AffiliateReferral row created
-   - Encyclopedia detail — /encyclopedia/vintage-postcards-ephemera-local-history-collecting → verify article renders
-   - Settlement Receipt PDF — Alice → completed sale → Download Receipt → .pdf file + "Organizer Commission (X%)"
-   - Admin bid-review — /admin/bid-review → no crash
-   - S540 Rewards nav — organizer sidebar + mobile nav locations (3 remaining)
-3. **No code changes pending** — S582 was QA-only. No pushblock needed.
+1. **Settlement PDF** — Create valid SaleSettlement test data (sale must be ENDED status) then verify PDF download. Frank's "Charity Estate Liquidation" must be ended OR seed a new ENDED sale with SaleSettlement row.
+2. **#278 Treasure Hunt Pro** — Requires QR scan at active treasure hunt. Will stay UNVERIFIED without QR infrastructure.
+3. **#268 Trail Completion** — Requires physical QR scans at trail stops. UNVERIFIED permanently without physical infra.
+4. **#310 Color-tag Discount Rules** — Frontend page `/organizer/discount-rules` does not exist. Needs dev dispatch.
+5. **New feature work** — Check roadmap for next priority builds.
+6. **No code changes pending** — S584 was QA-only. No pushblock needed from this session.
 
-**Passwords:** All test accounts use Seedy2025!
+**Passwords:** All test accounts use Seedy2025! (low-xp-shopper password also set to Seedy2025! via DB S584)

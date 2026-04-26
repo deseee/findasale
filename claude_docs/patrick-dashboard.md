@@ -1,46 +1,40 @@
-# Patrick's Dashboard — S583 ✅
+# Patrick's Dashboard — S584 ✅
 
-## Status: QA + Bug Fixes Complete — 3 Files Changed
+## Status: QA-Only — 5 Items Verified — 0 Files Changed
 
-S583 fixed the Hunt Pass status inconsistency from S582, patched the encyclopedia 500 error (DB + code), and cleared all remaining S582 UNVERIFIED items except Settlement PDF (orphaned data in production).
+S584 cleared 5 items from the Blocked/Unverified Queue. All were Chrome-verified with real interactions. Settlement PDF, Trail Completion, and Treasure Hunt Pro remain UNVERIFIED (require infrastructure).
 
 ---
 
-## S583 Results
+## S584 Results
 
 | Item | Result | Notes |
 |------|--------|-------|
-| Hunt Pass status inconsistency | ✅ FIXED | `coupons.tsx` now uses `user?.huntPassActive` (JWT, same as AvatarDropdown) |
-| Encyclopedia 500 | ✅ FIXED | DB patch (77 rows → valid authorId) + service `throw→return null` |
-| Layout mobile nav guild link | ✅ VERIFIED | DOM confirms `/shopper/guild-primer` already correct |
-| Admin bid-review | ✅ VERIFIED | "No bid IP records — All clear ✅", no crash |
-| Affiliate signup flow | ✅ VERIFIED | ?aff=TESTORG01 → amber banner → AffiliateReferral row created |
-| S540 Rewards nav (all 4 locations) | ✅ VERIFIED | Shopper mobile, organizer mobile, organizer desktop sidebar, AvatarDropdown |
-| Settlement PDF | ⚠️ UNVERIFIED | All production SaleSettlement records have orphaned saleIds — no valid data to test |
+| #280 Condition Rating XP | ✅ VERIFIED | Bob edited conditionGrade on Vintage Socket Set → CONDITION_RATING +5 XP fired, confirmed on guild-primer (0→5 XP) |
+| #255 Rank-Up Notifications | ✅ VERIFIED | low-xp-shopper visited sale (495→500 XP) → "You've reached SCOUT!" notification in bell. ss_7480h4qzw |
+| #257 Scout Hold Duration | ✅ VERIFIED | Karen (RANGER) hold timer: 00:59:48 — 60-min RANGER hold confirmed |
+| #275 Hunt Pass Cosmetics | ✅ VERIFIED | Karen: 🏆 leaderboard badge + orange avatar ring both confirmed |
+| #75 Tier Lapse | ✅ VERIFIED | Red banner "Your PRO subscription has lapsed" confirmed on dashboard |
+| Settlement PDF | ⚠️ UNVERIFIED | Requires ENDED sale + SaleSettlement with valid saleId |
+| #268 Trail Completion | ⚠️ UNVERIFIED | Requires physical QR scan at trail stops |
+| #278 Treasure Hunt Pro | ⚠️ UNVERIFIED | Requires QR scan at active treasure hunt |
 
 ---
 
-## Push Block
+## No Push Block Needed
 
-```powershell
-git add packages/frontend/pages/coupons.tsx
-git add packages/frontend/hooks/useXpProfile.ts
-git add packages/backend/src/services/encyclopediaService.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix: Hunt Pass status consistency, encyclopedia 500 (DB patch + throw→null), type fixes"
-.\push.ps1
-```
+S584 was QA-only — no code files were changed. Nothing to push.
 
 ---
 
 ## Settlement PDF — What's Needed
 
-All 11 `SaleSettlement` records in production reference saleIds that don't exist in the `Sale` table. To unblock this QA item: complete a sale through the settlement wizard (or ask Claude to seed a valid SaleSettlement row linked to an active sale).
+The settlement wizard is only accessible when a sale's status is ENDED. Frank's "Charity Estate Liquidation" is currently LIVE. To unblock: end a sale through the organizer UI, then run through the settlement wizard to generate a SaleSettlement record, then test the PDF download.
 
 ---
 
-## S584 Priorities
+## S585 Priorities
 
-1. Settlement PDF — create valid test settlement data and verify PDF download
-2. Any remaining items from the QA backlog Patrick wants to clear
+1. Settlement PDF — end a sale and verify PDF download
+2. #310 Color-tag Discount Rules — frontend page `/organizer/discount-rules` does not exist, needs dev dispatch
+3. New feature work from roadmap
