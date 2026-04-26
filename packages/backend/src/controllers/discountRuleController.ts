@@ -28,8 +28,9 @@ export const listDiscountRules = async (req: AuthRequest, res: Response) => {
         where: { ownerId: sale.organizerId },
       });
 
+      // No workspace = organizer doesn't use color discount rules → return empty array (not an error)
       if (!workspace) {
-        return res.status(403).json({ message: 'Workspace not found' });
+        return res.json([]);
       }
 
       workspaceId = workspace.id;
