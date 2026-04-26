@@ -239,28 +239,6 @@ const SearchPage = () => {
           />
         )}
 
-        {/* Empty / short query state */}
-        {!q && !isShowingVisualResults && (
-          <div className="text-center py-16">
-            <p className="text-warm-500 dark:text-warm-400 text-lg mb-6">What are you looking for?</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTED_CATEGORIES.map((cat) => (
-                <Link
-                  key={cat}
-                  href={`/categories/${cat.toLowerCase()}`}
-                  className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors shadow-sm"
-                >
-                  {cat}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {q && q.length < 2 && (
-          <p className="text-center text-warm-500 dark:text-warm-400 py-8">Please enter at least 2 characters.</p>
-        )}
-
         {/* Visual search results */}
         {isShowingVisualResults && (
           <>
@@ -325,6 +303,28 @@ const SearchPage = () => {
 
           {/* Main content area — results gated by query */}
           <div className="flex-1 min-w-0">
+            {/* Empty / short query state — inside flex so sidebar stays top-aligned */}
+            {!q && !isShowingVisualResults && (
+              <div className="text-center py-16">
+                <p className="text-warm-500 dark:text-warm-400 text-lg mb-6">What are you looking for?</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {SUGGESTED_CATEGORIES.map((cat) => (
+                    <Link
+                      key={cat}
+                      href={`/categories/${cat.toLowerCase()}`}
+                      className="px-4 py-2 bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 hover:border-amber-400 dark:hover:border-amber-500 text-warm-700 dark:text-warm-300 rounded-full text-sm transition-colors shadow-sm"
+                    >
+                      {cat}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {q && q.length < 2 && (
+              <p className="text-center text-warm-500 dark:text-warm-400 py-8">Please enter at least 2 characters.</p>
+            )}
+
             {q && q.length >= 2 && (
               <>
                 {/* Tabs */}
