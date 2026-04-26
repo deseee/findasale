@@ -1087,23 +1087,32 @@ export const getBids = async (req: AuthRequest, res: Response) => {
 /**
  * ADR-069 Phase 2: Get top 3 eBay comparable sales for an item.
  * GET /api/items/:id/ebay-comps
- * Returns the most recent ItemCompLookup rows ordered by fetchedAt DESC.
+ * Returns the ItemCompLookup for this item (single record, @unique constraint on itemId).
  */
 export const getItemEbayComps = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Fetch top 3 eBay comps for this item, ordered by fetchedAt DESC
-    const comps = await prisma.itemCompLookup.findMany({
+    // Fetch the single eBay comp lookup for this item
+    const comp = await prisma.itemCompLookup.findUnique({
       where: { itemId: id },
-      orderBy: { fetchedAt: 'desc' },
-      take: 3,
     });
 
-    res.json({ comps });
+    // If no comp found, return empty array (compatible with frontend expecting array)
+    if (!comp) {
+      return res.json({ comps: [] });
+    }
+
+    // Serialize BigInt estimatedPrice to string for JSON compatibility
+    const serialized = {
+      ...comp,
+      estimatedPrice: comp.estimatedPrice ? comp.estimatedPrice.toString() : null,
+    };
+
+    res.json({ comps: [serialized] });
   } catch (error) {
     console.error('Error fetching eBay comps:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', comps: [] });
   }
 };
 

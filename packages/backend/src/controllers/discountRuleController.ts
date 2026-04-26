@@ -7,30 +7,58 @@ import { prisma } from '../lib/prisma';
  * Endpoints to manage discount rules tied to item tag colors
  */
 
-// GET /api/discount-rules
+// GET /api/discount-rules — optional query param: saleId (for public display on sale pages)
 export const listDiscountRules = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
+    const { saleId } = req.query;
+    let workspaceId: string;
 
-    // Get organizer's workspace
-    const workspace = await prisma.organizerWorkspace.findFirst({
-      where: { ownerId: req.user.id },
-    });
+    // If saleId is provided, fetch organizer's workspace from sale (public read)
+    if (saleId) {
+      const sale = await prisma.sale.findUnique({
+        where: { id: saleId as string },
+        select: { organizerId: true },
+      });
 
-    if (!workspace) {
-      return res.status(403).json({ message: 'Workspace not found' });
-    }
+      if (!sale) {
+        return res.status(404).json({ message: 'Sale not found' });
+      }
 
-    // Tier check: TEAMS only
-    if (workspace.subscriptionTier !== 'TEAMS') {
-      return res.status(403).json({ message: 'TEAMS subscription required' });
+      const workspace = await prisma.organizerWorkspace.findFirst({
+        where: { ownerId: sale.organizerId },
+      });
+
+      if (!workspace) {
+        return res.status(403).json({ message: 'Workspace not found' });
+      }
+
+      workspaceId = workspace.id;
+    } else {
+      // Without saleId, require authentication
+      if (!req.user) {
+        return res.status(401).json({ message: 'Authentication required' });
+      }
+
+      // Get organizer's workspace
+      const workspace = await prisma.organizerWorkspace.findFirst({
+        where: { ownerId: req.user.id },
+      });
+
+      if (!workspace) {
+        return res.status(403).json({ message: 'Workspace not found' });
+      }
+
+      // Tier check: TEAMS only
+      if (workspace.subscriptionTier !== 'TEAMS') {
+        return res.status(403).json({ message: 'TEAMS subscription required' });
+      }
+
+      workspaceId = workspace.id;
     }
 
     // List all rules for this workspace (no date filtering — return all)
     const rules = await prisma.discountRule.findMany({
-      where: { workspaceId: workspace.id },
+      where: { workspaceId },
       orderBy: { createdAt: 'desc' },
     });
 

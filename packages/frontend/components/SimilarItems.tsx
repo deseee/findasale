@@ -45,7 +45,7 @@ const SimilarItems: React.FC<SimilarItemsProps> = ({ itemId, category }) => {
   const { data, isLoading, error } = useQuery<SimilarItemsResponse>({
     queryKey: ['similarItems', itemId],
     queryFn: async () => {
-      const response = await api.get(`/api/items/${itemId}/similar`);
+      const response = await api.get(`items/${itemId}/similar`);
       return response.data;
     },
   });

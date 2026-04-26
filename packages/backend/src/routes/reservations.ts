@@ -30,6 +30,7 @@ router.use(authenticate);
 
 // Shopper holds and invoice routes
 router.get('/my-holds-full', getMyHoldsFull);                  // Shopper: full holds detail for CartDrawer
+router.get('/shopper', getMyHoldsFull);                        // Shopper: full holds detail (My Holds page)
 router.get('/my-invoices', getMyInvoices);                     // Shopper: list their pending invoices
 
 // Invoice detail route (auth required: shopper or organizer)

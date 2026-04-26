@@ -9,11 +9,11 @@ import {
 
 const router = Router();
 
-// All routes require authentication
-router.use(authenticate);
-
-// GET /api/discount-rules
+// GET /api/discount-rules — public read (for displaying discounts on sale pages)
 router.get('/', listDiscountRules);
+
+// All other routes require authentication
+router.use(authenticate);
 
 // POST /api/discount-rules
 router.post('/', createDiscountRule);
