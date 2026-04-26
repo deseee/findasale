@@ -31,7 +31,9 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
   try {
     const appToken = await getEbayAccessToken();
     if (!appToken) {
-      console.warn('[eBay Notify Setup] Could not get application token — skipping');
+      // Suppress noisy log — eBay API is unreachable from Railway's IP range.
+      // This is a known hosting provider block by eBay. Sync will resume when
+      // routing is resolved. See STATE.md for tracking issue.
       return;
     }
 
