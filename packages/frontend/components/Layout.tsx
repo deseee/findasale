@@ -457,9 +457,9 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <ShoppingBag size={16} className="text-teal-500" />
                   <span>Shopify</span>
                 </Link>
-                <Link href="/organizer/stripe-connect" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="ACH bank transfers for consignors — TEAMS">
+                <Link href="/organizer/stripe-connect" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send payouts to consignors — TEAMS">
                   <CreditCard size={16} className="text-teal-500" />
-                  <span>ACH Payouts</span>
+                  <span>Consignor Payouts</span>
                 </Link>
               </>
             )}
