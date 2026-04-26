@@ -1,40 +1,50 @@
-# Patrick's Dashboard — S584 ✅
+# Patrick's Dashboard — S585 ✅
 
-## Status: QA-Only — 5 Items Verified — 0 Files Changed
+## Status: #310 Discount Rules — 3 P0 Bugs Fixed + Full Chrome QA
 
-S584 cleared 5 items from the Blocked/Unverified Queue. All were Chrome-verified with real interactions. Settlement PDF, Trail Completion, and Treasure Hunt Pro remain UNVERIFIED (require infrastructure).
+S585 diagnosed and fixed 3 root-cause bugs in the discount rules backend, then Chrome-verified all 4 CRUD operations end-to-end. Feature is fully functional.
 
 ---
 
-## S584 Results
+## S585 Results
 
 | Item | Result | Notes |
 |------|--------|-------|
-| #280 Condition Rating XP | ✅ VERIFIED | Bob edited conditionGrade on Vintage Socket Set → CONDITION_RATING +5 XP fired, confirmed on guild-primer (0→5 XP) |
-| #255 Rank-Up Notifications | ✅ VERIFIED | low-xp-shopper visited sale (495→500 XP) → "You've reached SCOUT!" notification in bell. ss_7480h4qzw |
-| #257 Scout Hold Duration | ✅ VERIFIED | Karen (RANGER) hold timer: 00:59:48 — 60-min RANGER hold confirmed |
-| #275 Hunt Pass Cosmetics | ✅ VERIFIED | Karen: 🏆 leaderboard badge + orange avatar ring both confirmed |
-| #75 Tier Lapse | ✅ VERIFIED | Red banner "Your PRO subscription has lapsed" confirmed on dashboard |
+| #310 LIST | ✅ VERIFIED | Rule renders with color swatch, label, discount %, edit/delete icons |
+| #310 CREATE | ✅ VERIFIED | Rule created + confirmed in DB |
+| #310 EDIT | ✅ VERIFIED | Modal pre-populates, "30% Off — Red Tag" + 30% saved, green toast, UI updated |
+| #310 DELETE | ✅ VERIFIED | Inline confirm guard, rule removed, empty state + "Create your first rule" CTA |
 | Settlement PDF | ⚠️ UNVERIFIED | Requires ENDED sale + SaleSettlement with valid saleId |
 | #268 Trail Completion | ⚠️ UNVERIFIED | Requires physical QR scan at trail stops |
 | #278 Treasure Hunt Pro | ⚠️ UNVERIFIED | Requires QR scan at active treasure hunt |
 
 ---
 
-## No Push Block Needed
+## Root Causes Fixed (3 P0 bugs in discountRuleController.ts)
 
-S584 was QA-only — no code files were changed. Nothing to push.
+1. **userId vs organizerId** — Write endpoints used `req.user.id` (User table ID) instead of `req.user.organizerProfile?.id` (Organizer table ID). All CRUD silently failed.
+2. **Non-existent column** — Tier check used `workspace.subscriptionTier` (column doesn't exist on OrganizerWorkspace). Correct field: `Organizer.tier`.
+3. **Missing DB join on GET** — GET route uses `optionalAuthenticate` which never joins the organizer table → `organizerProfile` always undefined → list always returned `[]`. Fix: userId fallback lookup added.
 
----
-
-## Settlement PDF — What's Needed
-
-The settlement wizard is only accessible when a sale's status is ENDED. Frank's "Charity Estate Liquidation" is currently LIVE. To unblock: end a sale through the organizer UI, then run through the settlement wizard to generate a SaleSettlement record, then test the PDF download.
+Controller fix was MCP-pushed mid-session (SHA `a8d80db`). **No pushblock needed for code.**
 
 ---
 
-## S585 Priorities
+## Wrap Push Block
+
+STATE.md and patrick-dashboard.md were edited locally. Push these wrap docs:
+
+```powershell
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "wrap: S585 — #310 discount rules QA complete, 3 P0 bugs fixed"
+.\push.ps1
+```
+
+---
+
+## S586 Priorities
 
 1. Settlement PDF — end a sale and verify PDF download
-2. #310 Color-tag Discount Rules — frontend page `/organizer/discount-rules` does not exist, needs dev dispatch
-3. New feature work from roadmap
+2. New feature work from roadmap (#310 COMPLETE)
+3. #278 Treasure Hunt Pro and #268 Trail Completion remain infrastructure-blocked
