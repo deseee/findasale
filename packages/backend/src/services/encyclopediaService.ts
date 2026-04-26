@@ -144,7 +144,7 @@ export async function getEntryBySlug(slug: string, userId?: string): Promise<any
   });
 
   if (!entry) {
-    throw new Error(`Encyclopedia entry not found: ${slug}`);
+    return null; // Controller checks for null and returns 404
   }
 
   return entry;

@@ -1,34 +1,46 @@
-# Patrick's Dashboard — S582 ✅
+# Patrick's Dashboard — S583 ✅
 
-## Status: QA Continuation — 8 Items Verified, 1 P2 Bug Found
+## Status: QA + Bug Fixes Complete — 3 Files Changed
 
-S582 was a QA-only session. No code changes. Cleared the remaining S581 verification queue.
-
----
-
-## S582 QA Results
-
-| Feature | Result | Notes |
-|---------|--------|-------|
-| Brand-kit PDFs (S581 fix) | ✅ PASS | 200 + application/pdf, JWT in hrefs, fix confirmed live |
-| Holds countdown timer | ✅ PASS | /shopper/holds: "Your hold expires in 43:16:04" |
-| Guild Primer | ✅ PASS | All sections, personalized rank bar, dark mode clean |
-| Hunt Pass slim CTA | ✅ PASS | Hero, $4.99/mo, 7 benefits, 2 CTAs |
-| S529 card reader content | ✅ PASS | /support S700+S710 only; /faq /guide no card reader |
-| Affiliate endpoints (4) | ✅ PASS | 403 for shoppers ✓, 200 for organizers, fraud gate ✓ |
-| AvatarDropdown → Explorer Profile | ✅ PASS | Karen: link present → /shopper/explorer-profile |
-| S540 Rewards nav (AvatarDropdown) | ✅ PASS | CONNECT section → /coupons, XP Store loads |
-| Hunt Pass status (XP Store) | ⚠️ P2 BUG | /coupons shows "Inactive" while dropdown shows "Active" for Karen |
+S583 fixed the Hunt Pass status inconsistency from S582, patched the encyclopedia 500 error (DB + code), and cleared all remaining S582 UNVERIFIED items except Settlement PDF (orphaned data in production).
 
 ---
 
-## S583 TODO
+## S583 Results
 
-1. **Fix Hunt Pass status inconsistency** — /coupons shows "Inactive" for Karen despite having an active Hunt Pass
-2. **Continue QA:** Layout mobile nav guild link, affiliate signup flow (?aff=), encyclopedia detail, settlement PDF, admin bid-review, Rewards nav organizer/mobile locations
+| Item | Result | Notes |
+|------|--------|-------|
+| Hunt Pass status inconsistency | ✅ FIXED | `coupons.tsx` now uses `user?.huntPassActive` (JWT, same as AvatarDropdown) |
+| Encyclopedia 500 | ✅ FIXED | DB patch (77 rows → valid authorId) + service `throw→return null` |
+| Layout mobile nav guild link | ✅ VERIFIED | DOM confirms `/shopper/guild-primer` already correct |
+| Admin bid-review | ✅ VERIFIED | "No bid IP records — All clear ✅", no crash |
+| Affiliate signup flow | ✅ VERIFIED | ?aff=TESTORG01 → amber banner → AffiliateReferral row created |
+| S540 Rewards nav (all 4 locations) | ✅ VERIFIED | Shopper mobile, organizer mobile, organizer desktop sidebar, AvatarDropdown |
+| Settlement PDF | ⚠️ UNVERIFIED | All production SaleSettlement records have orphaned saleIds — no valid data to test |
 
 ---
 
-## No Push Block Needed
+## Push Block
 
-S582 was QA-only. No files changed. STATE.md and this dashboard are the only docs updated — push them with S583's code changes.
+```powershell
+git add packages/frontend/pages/coupons.tsx
+git add packages/frontend/hooks/useXpProfile.ts
+git add packages/backend/src/services/encyclopediaService.ts
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: Hunt Pass status consistency, encyclopedia 500 (DB patch + throw→null), type fixes"
+.\push.ps1
+```
+
+---
+
+## Settlement PDF — What's Needed
+
+All 11 `SaleSettlement` records in production reference saleIds that don't exist in the `Sale` table. To unblock this QA item: complete a sale through the settlement wizard (or ask Claude to seed a valid SaleSettlement row linked to an active sale).
+
+---
+
+## S584 Priorities
+
+1. Settlement PDF — create valid test settlement data and verify PDF download
+2. Any remaining items from the QA backlog Patrick wants to clear
