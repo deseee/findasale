@@ -131,22 +131,18 @@ export async function getEbayAccessToken(): Promise<string | null> {
     }
 
     // Route through Vercel proxy — Railway's network blocks api.ebay.com at DNS level.
-    // finda.sale (Vercel) resolves fine from Railway; Vercel's IPs reach eBay normally.
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const postBody = 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope';
+    // Vercel holds its own copy of EBAY_CLIENT_ID/SECRET and fetches the token directly.
+    // Railway just asks "give me a token" — no credential forwarding needed.
     const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
     const proxySecret = process.env.EBAY_PROXY_SECRET;
 
     const proxyRes = await fetch(
-      `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent('/identity/v1/oauth2/token')}`,
+      `${frontendUrl}/api/proxy/ebay?action=token`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Basic ${credentials}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
           ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
         },
-        body: postBody,
       }
     );
 
@@ -156,7 +152,7 @@ export async function getEbayAccessToken(): Promise<string | null> {
     }
 
     const data = await proxyRes.json() as any;
-    if (!data) return null;
+    if (!data?.access_token) return null;
     const expiresIn = data.expires_in || 7200; // Default 2 hours
 
     ebayTokenCache = {
