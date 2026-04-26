@@ -96,6 +96,7 @@ import organizerDigestRoutes from './routes/organizerDigest'; // Organizer weekl
 import buyingPoolRoutes from './routes/buyingPools'; // Group Buying Pools
 import adminRoutes from './routes/admin'; // Admin panel
 import devRoutes from './routes/dev'; // Dev utilities
+import debugEbayRoutes from './routes/debugEbay'; // Temporary: eBay 502 token-refresh diagnostics
 import notificationInboxRoutes from './routes/notificationInbox'; // Notification inbox
 import waitlistRoutes from './routes/waitlist'; // Item Waitlist / "Notify Me"
 import pickupRoutes from './routes/pickup'; // Pickup Appointment Scheduling
@@ -463,6 +464,7 @@ app.use('/api/admin', adminRoutes); // Admin panel
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/dev', devRoutes); // Dev utilities
 }
+app.use('/api/debug', debugEbayRoutes); // Temporary: eBay 502 diagnostics (secret-gated, delete after fix)
 app.use('/api/notifications/inbox', notificationInboxRoutes); // Notification inbox
 app.use('/api/waitlist', waitlistRoutes); // Item Waitlist / "Notify Me"
 app.use('/api/pickup', pickupRoutes); // Pickup Appointment Scheduling
