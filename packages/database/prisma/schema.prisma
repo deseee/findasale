@@ -243,6 +243,9 @@ model User {
   reputationScore       ReferrerReputationScore?
   // QR Scanner Phase 2: scan event tracking
   qrScannerEvents       QRScannerEvent[]         @relation("QRScannerEventShopper")
+  // Feature #XXX: Verified Social Share XP System
+  saleShareLinks        SaleShareLink[]          @relation("SaleShareLinks")
+  saleShareLinkClicks   SaleShareLinkClick[]     @relation("SaleShareLinkClicks")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -705,6 +708,8 @@ model Sale {
   qrScannerEvents             QRScannerEvent[]
   // Feature #XXX: Automatic Markdown Cycles (PRO Tier) — time-based price reductions
   markdownCycles          MarkdownCycle[]
+  // Feature #XXX: Verified Social Share XP System
+  shareLinks              SaleShareLink[]
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -2374,6 +2379,39 @@ model PhotoOpShare {
 
   @@index([stationId])
   @@index([userId])
+}
+
+// Feature #XXX: Verified Social Share XP System — organizer-generated shareable links
+model SaleShareLink {
+  id             String               @id @default(cuid())
+  saleId         String
+  sale           Sale                 @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User                 @relation("SaleShareLinks", fields: [userId], references: [id], onDelete: Cascade)
+  code           String               @unique
+  totalClicks    Int                  @default(0)   // all clicks including anonymous
+  uniqueClicks   Int                  @default(0)   // authenticated non-self unique clickers
+  totalXpAwarded Int                  @default(0)   // running XP total (max 20)
+  clicks         SaleShareLinkClick[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([saleId, userId])
+  @@index([code])
+  @@index([userId])
+}
+
+model SaleShareLinkClick {
+  id          String        @id @default(cuid())
+  shareLinkId String
+  shareLink   SaleShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+  clickerId   String?       // null = anonymous
+  clicker     User?         @relation("SaleShareLinkClicks", fields: [clickerId], references: [id], onDelete: SetNull)
+  xpAwarded   Int           @default(0)
+  createdAt   DateTime      @default(now())
+
+  @@unique([shareLinkId, clickerId])  // one XP record per unique clicker per link
+  @@index([shareLinkId])
 }
 
 // Features #58-59: Achievement Badges & Streak Rewards

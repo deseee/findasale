@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { awardXp } from '../services/xpService';
+import { prisma } from '../lib/prisma';
 
 /**
  * POST /api/points/track-visit
@@ -22,6 +23,24 @@ export const trackSaleVisit = async (req: AuthRequest, res: Response) => {
         message: 'Sale visit tracked',
         xpAwarded: 0,
         authenticated: false,
+      });
+    }
+
+    // Idempotency check — one VISIT XP per user per sale ever
+    const existingVisit = await prisma.pointsTransaction.findFirst({
+      where: {
+        userId: req.user.id,
+        saleId,
+        type: 'VISIT',
+      },
+    });
+
+    if (existingVisit) {
+      return res.status(200).json({
+        message: 'Sale visit tracked',
+        xpAwarded: 0,
+        alreadyVisited: true,
+        authenticated: true,
       });
     }
 
