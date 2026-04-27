@@ -120,13 +120,13 @@ These run with minimal Patrick attention once set up. Check metrics weekly; kill
 **Outscraper → RVM + Email — the primary machine.**
 Scrape Google Maps for estate sale company / estate sale organizer / estate liquidator / auction house / consignment shop / flea market / yard sale organizer / garage sale organizer. Grand Rapids + 5 Michigan cities first. ~$10 per 5k records. Drop RVMs via Drop Cowboy ($0.004 each) and run the 3-email sequence through Instantly.ai ($47/month) against the same list. GroupBoss.io ($20/month) passively captures emails from Facebook-group join questions. Month-one cost to reach 5,000+ organizers: ~$100. Patrick touch: scrape once, upload, walk away. Review weekly metrics.
 
-**Customer-driven sharing — the organic engine.**
+**Customer-driven sharing.**
 Once the dev items below ship, this runs without Patrick: one-tap "share my sale" from the organizer dashboard, post-sale "share your results" prompt, organizer-to-organizer referral (unique link, free month credit per signup sticking 30 days). The social post generator and Haul Posts already exist — the dev work wires up the prompts and incentives so organizers post their own sales as a natural part of the workflow.
 
-**Post-signup automation — the nurture engine.**
+**Post-signup email sequence.**
 12 webhook-triggered emails (see §Post-Signup Automation). Resend-powered. Context-aware (uses inventory count, unsold %, value). Runs for every signup without Patrick's hand.
 
-**Facebook retargeting — the pixel engine.**
+**Facebook retargeting.**
 $20–30/day Facebook ad to `finda.sale/video`, retargeting pixel fires on landing-page visits, keeps FindA.Sale in the feed of anyone who clicked an email or heard an RVM. Kill if CPA > $50 after $60 spend. No creative work beyond the initial ad.
 
 ### Opportunistic (only when it falls in Patrick's lap)
@@ -161,7 +161,7 @@ Everything else from the v1 partner list is deferred.
 
 ## Influencers — Advisory First, Promotional Never
 
-**See `claude_docs/marketing/advisory-outreach-drafts.md` for 36 drafted messages.**
+**See `claude_docs/marketing/advisory-outreach-drafts.md` for 44 drafted messages.**
 
 The framing is: ask organizers, industry voices, and resellers to critique the product — not to promote it. One outreach message per day, Patrick sends from his inbox/LinkedIn. Any promotional mention that follows is organic and earned, not asked for. This replaces v1's "Tier 1 influencer affiliate" section entirely — the moment you attach an affiliate deal to the first message, it's a sales pitch and the honest conversation is gone.
 
@@ -173,7 +173,7 @@ The framing is: ask organizers, industry voices, and resellers to critique the p
 
 ---
 
-## The Flywheel
+## How It Compounds
 
 1. Organizers list sales → sales appear in Google ("estate sales near me," "yard sales near me," "flea markets near me")
 2. Shoppers find sales → attend → spend → earn XP → climb ranks → get hooked on the Explorer's Guild loop
@@ -182,15 +182,15 @@ The framing is: ask organizers, industry voices, and resellers to critique the p
 
 **Tipping point:** 10–15 active organizers in a city. At that density, an organizer NOT on FindA.Sale is leaving buyers on the table.
 
-**"Active organizer" definition (for this playbook):** ≥1 sale published AND ≥20 items listed AND ≥1 sale in the last 90 days. This gets instrumented in the admin dashboard so tipping-point math is measurable, not felt.
+**"Active organizer" definition (for this playbook):** ≥1 sale published AND ≥20 items listed AND ≥1 sale in the last 90 days. This gets instrumented in the admin dashboard so the math is measurable, not felt.
 
-**Shopper retention compounds the flywheel.** Explorer's Guild XP, ranks, Hunt Pass, Treasure Trails — a shopper at Ranger rank has invested real time and isn't switching apps. Every retained shopper is another reason for an organizer to list on FindA.Sale.
+**Shoppers make this stickier over time.** Explorer's Guild XP, ranks, Hunt Pass, Treasure Trails — a shopper at Ranger rank has invested real time and isn't switching apps. Every retained shopper is another reason for an organizer to list on FindA.Sale.
 
 ---
 
-## Expansion Markets — Ordered by Lift
+## Expansion Markets — In Order
 
-Sequenced so Patrick is not running four pitches simultaneously. Do not open market N+1 until market N is throwing signal.
+Sequenced so Patrick is not running four pitches simultaneously. Don't open the next market until the current one has paying customers.
 
 **1. Estate sales (current focus).** Working Outscraper list. SIMPLE covers the base case. PRO eBay push is the hook.
 
@@ -198,9 +198,9 @@ Sequenced so Patrick is not running four pitches simultaneously. Do not open mar
 
 **3. Flea markets.** TEAMS Flea Market Events feature handles vendor check-in, per-vendor POS, end-of-day settlement. No current software does this in one mobile tool. One flea-market chain with 5 locations = $395/month. Scrape: "flea market [city]," "outdoor market [city]." Don't open until ≥5 paying PRO organizers.
 
-**4. Antique malls.** 40–200 dealers per mall. One owner adopts → 40 accounts from one conversation. Requires consignor tracking ship (already schema-pre-wired). Don't open until that ships.
+**4. Antique malls.** 40–200 dealers per mall. One owner adopts → 40 accounts from one conversation. Requires consignor tracking — the schema is already built for it. Don't open until that ships.
 
-**5. Consignment and thrift shops.** $61B US secondhand market. Current tools (ThriftCart, SimpleConsign, ConsignCloud) charge $99–359/month and require hardware. Gap to close first: full consignor tracking feature parity with the incumbents. Don't open until that ships and is verified working.
+**5. Consignment and thrift shops.** $61B US secondhand market. Current tools (ThriftCart, SimpleConsign, ConsignCloud) charge $99–359/month and require hardware. Need to close the gap first: full consignor tracking on par with what those tools offer. Don't open until that ships and is verified working.
 
 **6. Corporate office liquidations.** Same problem, bigger volume, higher pricing tolerance. Defer until inbound volume forces the conversation.
 
