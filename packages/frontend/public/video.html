@@ -581,19 +581,31 @@ body {
   }
 })();
 
-// ── Video height: fit above sticky bar ──
-// Measures the actual sticky bar height and available viewport space,
-// then caps the video wrapper so it never slides under the bar.
+// ── Video: fit height AND rescale to available space above sticky bar ──
+// The iframe is a 390×915 native phone canvas scaled via CSS transform.
+// We recalculate the scale so the video actually shrinks — not just clips.
 (function() {
   function fitVideo() {
     var bar = document.querySelector('.sticky-bar');
     var wrapper = document.querySelector('.video-wrapper');
-    if (!bar || !wrapper) return;
+    var iframe = wrapper && wrapper.querySelector('iframe');
+    if (!bar || !wrapper || !iframe) return;
+
     var isMobile = window.innerWidth <= 600;
-    var naturalMax = isMobile ? 679 : 750;
     var pagePadTop = isMobile ? 8 : 16;
+    var naturalMax = isMobile ? 679 : 750;
+
+    // How tall can the video be?
     var available = window.innerHeight - pagePadTop - bar.offsetHeight - 8;
-    wrapper.style.height = Math.min(naturalMax, Math.max(280, available)) + 'px';
+    var newHeight = Math.min(naturalMax, Math.max(280, available));
+
+    // Derive scale and width from height (iframe native size: 390×915)
+    var newScale = newHeight / 915;
+    var newWidth = Math.round(390 * newScale);
+
+    wrapper.style.height = newHeight + 'px';
+    wrapper.style.width = newWidth + 'px';
+    iframe.style.transform = 'scale(' + newScale + ')';
   }
   fitVideo();
   window.addEventListener('resize', fitVideo);
