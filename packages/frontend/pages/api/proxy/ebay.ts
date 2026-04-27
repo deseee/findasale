@@ -1,12 +1,127 @@
 /**
- * eBay API Proxy — Vercel API Route (DIAGNOSTIC SIMPLIFIED VERSION)
+ * eBay API Proxy — Vercel API Route
  *
- * Stripped back to plain fetch() with no DNS workarounds and maximum
- * error logging to determine whether Vercel→api.ebay.com actually fails.
+ * Two modes:
+ *   1. Token (POST /api/proxy/ebay?action=token) — Vercel uses its own creds
+ *   2. General (any method, /api/proxy/ebay?path=/...) — forwards to api.ebay.com
+ *
+ * Security: requests must include X-Proxy-Secret matching EBAY_PROXY_SECRET.
+ *
+ * Why this is so much code: api.ebay.com → CNAME → e333426.a.akamaiedge.net,
+ * and Akamai's authoritative DNS returns A records ONLY when the resolver
+ * sends EDNS Client Subnet. Vercel's/serverless resolvers don't send ECS, so
+ * fetch('https://api.ebay.com/...') fails with ENOTFOUND. We resolve via
+ * Google's DoH endpoint with explicit ECS, then issue the request via
+ * node:https against the resolved Akamai IP, preserving Host header + TLS SNI
+ * so eBay's cert still validates.
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
+import https from 'node:https';
 
-const EBAY_BASE = 'https://api.ebay.com';
+const EBAY_HOST = 'api.ebay.com';
+
+// Resolve api.ebay.com via DoH with EDNS Client Subnet. Returns ALL A records
+// from the CNAME chain so the caller can fail over.
+async function resolveEbayIps(): Promise<string[]> {
+  const url =
+    `https://dns.google/resolve?name=${EBAY_HOST}&type=A&edns_client_subnet=8.8.8.0/24`;
+  const res = await fetch(url, { headers: { Accept: 'application/dns-json' } });
+  if (!res.ok) {
+    throw new Error(`DoH HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as {
+    Status: number;
+    Answer?: Array<{ type: number; data: string; TTL: number }>;
+  };
+  if (data.Status !== 0) {
+    throw new Error(`DoH status ${data.Status}`);
+  }
+  // Filter type 1 = A records. The chain (api.ebay.com → CNAMEs → Akamai)
+  // produces multiple type-5 entries followed by type-1 entries.
+  const ips = (data.Answer ?? []).filter((a) => a.type === 1).map((a) => a.data);
+  if (!ips.length) {
+    throw new Error(`DoH returned no A records (even with ECS) for ${EBAY_HOST}`);
+  }
+  return ips;
+}
+
+// Cache resolved IPs for 60 seconds (Akamai TTLs are typically 20s; 60s
+// gives a small batching window per warm function instance).
+let cachedIps: { ips: string[]; expires: number } | null = null;
+
+async function getEbayIps(): Promise<string[]> {
+  if (cachedIps && cachedIps.expires > Date.now()) return cachedIps.ips;
+  const ips = await resolveEbayIps();
+  cachedIps = { ips, expires: Date.now() + 60 * 1000 };
+  return ips;
+}
+
+interface HttpsResult {
+  status: number;
+  body: string;
+  contentType: string | null;
+}
+
+function requestEbayOnce(
+  ip: string,
+  ebayPath: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+): Promise<HttpsResult> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        host: ip,
+        port: 443,
+        path: ebayPath,
+        method,
+        headers: { ...headers, host: EBAY_HOST },
+        servername: EBAY_HOST, // TLS SNI — eBay's cert is for api.ebay.com
+        family: 4,
+        timeout: 15000,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString('utf-8'),
+            contentType: (res.headers['content-type'] as string) ?? null,
+          });
+        });
+        res.on('error', reject);
+      },
+    );
+    req.on('timeout', () => {
+      req.destroy(new Error('Request timeout'));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+// Try each resolved IP in turn. If all fail, invalidate cache and rethrow.
+async function fetchEbay(
+  ebayPath: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+): Promise<HttpsResult> {
+  const ips = await getEbayIps();
+  let lastErr: any;
+  for (const ip of ips) {
+    try {
+      return await requestEbayOnce(ip, ebayPath, method, headers, body);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  cachedIps = null; // force re-resolve next time
+  throw lastErr ?? new Error('No IPs to try');
+}
 
 export const config = {
   api: {
@@ -23,7 +138,6 @@ async function readRawBody(req: NextApiRequest): Promise<string | undefined> {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-// Walk err.cause chain and collect every code/message we can find.
 function fullErrorTree(err: any): string {
   const parts: string[] = [];
   let current = err;
@@ -33,12 +147,9 @@ function fullErrorTree(err: any): string {
     const code = current?.code ?? '';
     const msg = (current?.message ?? '').slice(0, 150);
     parts.push(`${name}${code ? `:${code}` : ''}=${msg}`);
-    // AggregateError lists multiple causes
     if (Array.isArray(current?.errors)) {
       for (const sub of current.errors.slice(0, 3)) {
-        const subCode = sub?.code ?? '';
-        const subMsg = (sub?.message ?? '').slice(0, 150);
-        parts.push(`  agg[${subCode}]=${subMsg}`);
+        parts.push(`  agg[${sub?.code ?? ''}]=${(sub?.message ?? '').slice(0, 150)}`);
       }
     }
     current = current?.cause;
@@ -65,24 +176,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
     try {
-      const ebayRes = await fetch(`${EBAY_BASE}/identity/v1/oauth2/token`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${credentials}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
+      const result = await fetchEbay(
+        '/identity/v1/oauth2/token',
+        'POST',
+        {
+          authorization: `Basic ${credentials}`,
+          'content-type': 'application/x-www-form-urlencoded',
         },
-        body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
-      });
-      const text = await ebayRes.text();
-      if (!ebayRes.ok) {
-        console.error('[ebay-proxy/token] eBay returned', ebayRes.status, text.slice(0, 300));
+        'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
+      );
+      if (result.status >= 400) {
+        console.error('[ebay-proxy/token] eBay returned', result.status, result.body.slice(0, 300));
       }
       res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Content-Type', ebayRes.headers.get('content-type') ?? 'application/json');
-      return res.status(ebayRes.status).send(text);
+      res.setHeader('Content-Type', result.contentType ?? 'application/json');
+      return res.status(result.status).send(result.body);
     } catch (err: any) {
       const tree = fullErrorTree(err);
-      console.error('[ebay-proxy/token] FETCH THREW |', tree);
+      console.error('[ebay-proxy/token] threw |', tree);
       return res.status(502).json({ error: tree });
     }
   }
@@ -115,21 +226,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     : undefined;
 
   try {
-    const upstreamRes = await fetch(`${EBAY_BASE}${ebayPath}`, {
-      method: req.method ?? 'GET',
-      headers: forwardHeaders,
-      body,
-    });
-    const text = await upstreamRes.text();
-    if (!upstreamRes.ok) {
-      console.error('[ebay-proxy] Upstream', upstreamRes.status, 'on', ebayPath, '— body:', text.slice(0, 500));
+    const result = await fetchEbay(ebayPath, req.method ?? 'GET', forwardHeaders, body);
+    if (result.status >= 400) {
+      console.error('[ebay-proxy] Upstream', result.status, 'on', ebayPath, '— body:', result.body.slice(0, 500));
     }
-    res.setHeader('Content-Type', upstreamRes.headers.get('content-type') ?? 'application/json');
+    res.setHeader('Content-Type', result.contentType ?? 'application/json');
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(upstreamRes.status).send(text);
+    return res.status(result.status).send(result.body);
   } catch (err: any) {
     const tree = fullErrorTree(err);
-    console.error('[ebay-proxy] FETCH THREW on', ebayPath, '|', tree);
+    console.error('[ebay-proxy] threw on', ebayPath, '|', tree);
     return res.status(502).json({ error: tree });
   }
 }
