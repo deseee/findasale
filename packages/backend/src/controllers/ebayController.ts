@@ -81,6 +81,18 @@ const SECONDARY_CATEGORY_MAP: Record<string, string> = {
   collectible: '1',      // Collectibles root
 };
 
+// ── Vercel Proxy Helpers ────────────────────────────────────────────────────
+// Railway DNS cannot resolve api.ebay.com directly, so all eBay API calls route
+// through the Vercel proxy at /api/proxy/ebay. These helpers ensure consistent
+// URL and header construction across all 35+ call sites.
+const ebayProxyUrl = (path: string): string =>
+  `${process.env.FRONTEND_URL ?? 'https://finda.sale'}/api/proxy/ebay?path=${path}`;
+
+const ebayProxyHeaders = (): Record<string, string> => {
+  const secret = process.env.EBAY_PROXY_SECRET;
+  return secret ? { 'X-Proxy-Secret': secret } : {};
+};
+
 // HTML sanitizer for descriptions
 function sanitizeDescriptionForEbay(raw: string | null | undefined): string {
   if (!raw) return '';
@@ -133,16 +145,11 @@ export async function getEbayAccessToken(): Promise<string | null> {
     // Route through Vercel proxy — Railway's network blocks api.ebay.com at DNS level.
     // Vercel holds its own copy of EBAY_CLIENT_ID/SECRET and fetches the token directly.
     // Railway just asks "give me a token" — no credential forwarding needed.
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
-
     const proxyRes = await fetch(
-      `${frontendUrl}/api/proxy/ebay?action=token`,
+      ebayProxyUrl('?action=token'),
       {
         method: 'POST',
-        headers: {
-          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-        },
+        headers: ebayProxyHeaders(),
       }
     );
 
@@ -713,16 +720,14 @@ export async function refreshEbayAccessToken(organizerId: string): Promise<strin
     });
 
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const response = await fetch(
-      `${frontendUrl}/api/proxy/ebay?path=/identity/v1/oauth2/token`,
+      ebayProxyUrl('/identity/v1/oauth2/token'),
       {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${credentials}`,
           'Content-Type': 'application/x-www-form-urlencoded',
-          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+          ...ebayProxyHeaders(),
         },
         body: params.toString(),
       }
@@ -809,16 +814,14 @@ async function getEbayCategoryCandidates(
     }
     const treeId = '0'; // EBAY_US
     const q = encodeURIComponent(title.slice(0, 100));
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const path = encodeURIComponent(`/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${q}`);
-    const res = await fetch(`${frontendUrl}/api/proxy/ebay?path=${path}`, {
+    const res = await fetch(ebayProxyUrl(path), {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${appToken}`,
         'Content-Type': 'application/json',
         'Accept-Language': 'en-US',
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
     });
     if (!res.ok) {
@@ -867,33 +870,30 @@ async function suggestEbayCategoryForTitle(title: string): Promise<string | null
  */
 export async function fetchAndStoreEbayPolicies(organizerId: string, accessToken: string): Promise<void> {
   try {
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
-
     // Fetch payment policies
-    const paymentRes = await fetch(`${frontendUrl}/api/proxy/ebay?path=/sell/account/v1/payment_policy?marketplace_id=EBAY_US`, {
+    const paymentRes = await fetch(ebayProxyUrl('/sell/account/v1/payment_policy?marketplace_id=EBAY_US'), {
       method: 'GET',
       headers: {
         ...ebayUserHeaders(accessToken),
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
     });
 
     // Fetch fulfillment policies
-    const fulfillmentRes = await fetch(`${frontendUrl}/api/proxy/ebay?path=/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US`, {
+    const fulfillmentRes = await fetch(ebayProxyUrl('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US'), {
       method: 'GET',
       headers: {
         ...ebayUserHeaders(accessToken),
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
     });
 
     // Fetch return policies
-    const returnRes = await fetch(`${frontendUrl}/api/proxy/ebay?path=/sell/account/v1/return_policy?marketplace_id=EBAY_US`, {
+    const returnRes = await fetch(ebayProxyUrl('/sell/account/v1/return_policy?marketplace_id=EBAY_US'), {
       method: 'GET',
       headers: {
         ...ebayUserHeaders(accessToken),
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
     });
 
@@ -982,17 +982,15 @@ export async function fetchAllEbayPolicies(organizerId: string, accessToken: str
   paymentPolicies: Array<{ paymentPolicyId: string; name: string; description?: string }>;
 }> {
   const headers = ebayUserHeaders(accessToken);
-  const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-  const proxySecret = process.env.EBAY_PROXY_SECRET;
 
   async function fetchAll(endpoint: string, resultKey: string): Promise<any[]> {
     try {
       const res = await fetch(
-        `${frontendUrl}/api/proxy/ebay?path=/sell/account/v1/${endpoint}?marketplace_id=EBAY_US&limit=100`,
+        ebayProxyUrl(`/sell/account/v1/${endpoint}?marketplace_id=EBAY_US&limit=100`),
         {
           headers: {
             ...headers,
-            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+            ...ebayProxyHeaders(),
           },
         }
       );
@@ -1029,13 +1027,11 @@ export async function fetchEbayMerchantLocations(organizerId: string, accessToke
   address?: any;
 }>> {
   const headers = ebayUserHeaders(accessToken);
-  const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-  const proxySecret = process.env.EBAY_PROXY_SECRET;
   try {
-    const res = await fetch(`${frontendUrl}/api/proxy/ebay?path=/sell/inventory/v1/location?limit=100`, {
+    const res = await fetch(ebayProxyUrl('/sell/inventory/v1/location?limit=100'), {
       headers: {
         ...headers,
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
     });
     if (!res.ok) {
@@ -1324,14 +1320,12 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
     });
 
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
-    const tokenResponse = await fetch(`${frontendUrl}/api/proxy/ebay?path=/identity/v1/oauth2/token`, {
+    const tokenResponse = await fetch(ebayProxyUrl('/identity/v1/oauth2/token'), {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${credentials}`,
         'Content-Type': 'application/x-www-form-urlencoded',
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
       body: params.toString(),
     });
@@ -1405,7 +1399,7 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
       console.warn('[eBay Notify] Subscription creation failed:', err.message)
     );
 
-    const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
     res.redirect(`${frontendUrl}/organizer/settings?ebay_connected=true`);
   } catch (error) {
     console.error('[eBay] OAuth callback error:', error);
@@ -1491,15 +1485,13 @@ export const disconnectEbay = async (req: AuthRequest, res: Response) => {
 
     // Delete eBay ORDER_CONFIRMATION subscription if exists
     if (organizer.ebaySubscriptionId && organizer.ebayConnection) {
-      const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-      const proxySecret = process.env.EBAY_PROXY_SECRET;
       // Fire-and-forget subscription deletion — non-fatal if this fails
-      fetch(`${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/commerce/notification/v1/subscription/${organizer.ebaySubscriptionId}`)}`, {
+      fetch(ebayProxyUrl(encodeURIComponent(`/commerce/notification/v1/subscription/${organizer.ebaySubscriptionId}`)), {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${organizer.ebayConnection.accessToken}`,
           'Content-Type': 'application/json',
-          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+          ...ebayProxyHeaders(),
         },
       }).catch(err => console.warn('[eBay Notify] Failed to delete subscription:', err.message));
     }
@@ -1889,10 +1881,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         });
 
         // Step 1: Create or replace inventory item
-        const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-        const proxySecret = process.env.EBAY_PROXY_SECRET;
         const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
-        const inventoryUrl = `${frontendUrl}/api/proxy/ebay?path=${inventoryPath}`;
+        const inventoryUrl = ebayProxyUrl(inventoryPath);
         // Build aspects: start with user-provided tags, then auto-fill any
         // REQUIRED aspects the category demands (prevents errorId 25002
         // "The item specific X is missing").
@@ -1946,7 +1936,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           method: 'PUT',
           headers: {
             ...ebayUserHeaders(accessToken),
-            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+            ...ebayProxyHeaders(),
           },
           body: JSON.stringify(inventoryPayload),
         });
@@ -2446,15 +2436,13 @@ async function getOrCreateMerchantLocation(
     'Content-Type': 'application/json',
     'Content-Language': 'en-US',
   };
-  const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-  const proxySecret = process.env.EBAY_PROXY_SECRET;
 
   // Try to find an existing enabled location
   try {
-    const listRes = await fetch(`${frontendUrl}/api/proxy/ebay?path=/sell/inventory/v1/location`, {
+    const listRes = await fetch(ebayProxyUrl('/sell/inventory/v1/location'), {
       headers: {
         ...headers,
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
     });
     if (listRes.ok) {
@@ -2478,12 +2466,12 @@ async function getOrCreateMerchantLocation(
     try {
       const locationKey = `findasale-sale-${Date.now()}`;
       const createRes = await fetch(
-        `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/location/${locationKey}`)}`,
+        ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/location/${locationKey}`)),
         {
           method: 'POST',
           headers: {
             ...headers,
-            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+            ...ebayProxyHeaders(),
           },
           body: JSON.stringify({
             location: {
@@ -2508,12 +2496,12 @@ async function getOrCreateMerchantLocation(
       } else {
         // Enable the newly created location
         const enableRes = await fetch(
-          `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/location/${locationKey}/enable`)}`,
+          ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/location/${locationKey}/enable`)),
           {
             method: 'POST',
             headers: {
               ...headers,
-              ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+              ...ebayProxyHeaders(),
             },
           }
         );
@@ -2774,18 +2762,15 @@ async function getAcceptedConditionsForCategory(categoryId: string): Promise<Set
     const appToken = await getEbayAccessToken();
     if (!appToken) return null;
     // Metadata API: item condition policies per marketplace, filtered by categoryId
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const path = encodeURIComponent(
       `/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies?filter=categoryIds:%7B${categoryId}%7D`
     );
-    const url = `${frontendUrl}/api/proxy/ebay?path=${path}`;
-    const res = await fetch(url, {
+    const res = await fetch(ebayProxyUrl(path), {
       headers: {
         'Authorization': `Bearer ${appToken}`,
         'Accept': 'application/json',
         'Accept-Language': 'en-US',
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
     });
     if (!res.ok) {
@@ -2916,18 +2901,15 @@ async function getRequiredAspectsForCategory(categoryId: string): Promise<Requir
     const appToken = await getEbayAccessToken();
     if (!appToken) return null;
     const treeId = '0'; // EBAY_US
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const path = encodeURIComponent(
       `/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category?category_id=${categoryId}`
     );
-    const url = `${frontendUrl}/api/proxy/ebay?path=${path}`;
-    const res = await fetch(url, {
+    const res = await fetch(ebayProxyUrl(path), {
       headers: {
         'Authorization': `Bearer ${appToken}`,
         'Accept': 'application/json',
         'Accept-Language': 'en-US',
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        ...ebayProxyHeaders(),
       },
     });
     if (!res.ok) {
@@ -3189,17 +3171,17 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
     }
 
     // Call eBay API to withdraw the offer
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
-    const withdrawUrl = `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}/withdraw`)}`;
-    const response = await fetch(withdrawUrl, {
-      method: 'POST',
-      headers: {
-        ...ebayUserHeaders(accessToken),
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-      },
-      body: '{}',
-    });
+    const response = await fetch(
+      ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}/withdraw`)),
+      {
+        method: 'POST',
+        headers: {
+          ...ebayUserHeaders(accessToken),
+          ...ebayProxyHeaders(),
+        },
+        body: '{}',
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.text();
@@ -3275,17 +3257,17 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
     let skipped = 0;
     let hasMore = true;
     let ebayApiError: string | null = null;
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
 
     while (hasMore) {
-      const url = `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/inventory_item?limit=${limit}&offset=${offset}`)}`;
-      const response = await fetch(url, {
-        headers: {
-          ...ebayUserHeaders(accessToken),
-          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-        },
-      });
+      const response = await fetch(
+        ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/inventory_item?limit=${limit}&offset=${offset}`)),
+        {
+          headers: {
+            ...ebayUserHeaders(accessToken),
+            ...ebayProxyHeaders(),
+          },
+        }
+      );
 
       if (!response.ok) {
         const errText = await response.text();
@@ -3383,10 +3365,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         // OutputSelector replaces GranularityLevel (mutually exclusive); use OutputSelector to get specific fields
         const tradingXml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><OutputSelector>ActiveList.ItemArray.Item.ItemID</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.SKU</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.Title</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.SellingStatus</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.BuyItNowPrice</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.PictureDetails</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.ConditionID</OutputSelector><OutputSelector>ActiveList.ItemArray.Item.PrimaryCategory</OutputSelector><OutputSelector>ActiveList.PaginationResult</OutputSelector><ActiveList><Include>true</Include><Pagination><EntriesPerPage>200</EntriesPerPage><PageNumber>${tradingPage}</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
 
-        const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-        const proxySecret = process.env.EBAY_PROXY_SECRET;
-
-        const tradingResp = await fetch(`${frontendUrl}/api/proxy/ebay?path=/ws/api.dll`, {
+        const tradingResp = await fetch(ebayProxyUrl('/ws/api.dll'), {
           method: 'POST',
           headers: {
             'X-EBAY-API-CALL-NAME': 'GetMyeBaySelling',
@@ -3395,7 +3374,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
             'X-EBAY-API-IAF-TOKEN': accessToken,
             'Content-Type': 'text/xml',
-            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+            ...ebayProxyHeaders(),
           },
           body: tradingXml,
         });
@@ -3585,18 +3564,16 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         }
         const getItemXml = `<?xml version="1.0" encoding="utf-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${itemId}</ItemID><OutputSelector>Description</OutputSelector><OutputSelector>ConditionDescription</OutputSelector><OutputSelector>ItemSpecifics</OutputSelector><OutputSelector>PictureDetails</OutputSelector><OutputSelector>ConditionID</OutputSelector><OutputSelector>PrimaryCategory</OutputSelector></GetItemRequest>`;
         try {
-          const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-          const proxySecret = process.env.EBAY_PROXY_SECRET;
           const getItemHeaders: Record<string, string> = {
             'X-EBAY-API-CALL-NAME': 'GetItem',
             'X-EBAY-API-SITEID': '0',
             'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
             'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
             'Content-Type': 'text/xml',
-            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+            ...ebayProxyHeaders(),
           };
           if (accessToken) getItemHeaders['X-EBAY-API-IAF-TOKEN'] = accessToken;
-          const resp = await fetch(`${frontendUrl}/api/proxy/ebay?path=/ws/api.dll`, { method: 'POST', headers: getItemHeaders, body: getItemXml });
+          const resp = await fetch(ebayProxyUrl('/ws/api.dll'), { method: 'POST', headers: getItemHeaders, body: getItemXml });
           const text = await resp.text();
           const ack = xmlVal(text, 'Ack');
           if (ack !== 'Success' && ack !== 'Warning') {
@@ -4062,10 +4039,7 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
 </GetItemRequest>`;
 
           // Route through Vercel proxy to avoid Railway DNS block on api.ebay.com
-          const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-          const proxySecret = process.env.EBAY_PROXY_SECRET;
-
-          const ebayResponse = await fetch(`${frontendUrl}/api/proxy/ebay?path=/ws/api.dll`, {
+          const ebayResponse = await fetch(ebayProxyUrl('/ws/api.dll'), {
             method: 'POST',
             headers: {
               'X-EBAY-API-CALL-NAME': 'GetItem',
@@ -4074,7 +4048,7 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
               'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
               'X-EBAY-API-IAF-TOKEN': accessToken,
               'Content-Type': 'text/xml',
-              ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+              ...ebayProxyHeaders(),
             },
             body: requestXml,
           });
