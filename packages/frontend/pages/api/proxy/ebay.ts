@@ -12,37 +12,87 @@
  *    Railway passes the Bearer token it got from action=token.
  *
  * Security: requests must include X-Proxy-Secret matching EBAY_PROXY_SECRET env var.
- * Set EBAY_PROXY_SECRET in both Vercel and Railway environment variables.
  *
- * Vercel also needs: EBAY_CLIENT_ID, EBAY_CLIENT_SECRET (copy from Railway).
+ * Networking: Vercel's default resolver fails with ENOTFOUND on api.ebay.com
+ * (confirmed via debug logs S590). We bypass it by:
+ *   1. Resolving api.ebay.com via Google DNS (8.8.8.8) directly
+ *   2. Calling node:https.request with the resolved IPv4 address
+ *   3. Preserving Host header + setting servername for TLS SNI
+ * This avoids both undici's DNS handling and the OS getaddrinfo path.
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
-import dns from 'node:dns';
+import https from 'node:https';
+import { Resolver } from 'node:dns/promises';
 
-const EBAY_BASE = 'https://api.ebay.com';
+const EBAY_HOST = 'api.ebay.com';
 
-// Force IPv4-first DNS resolution for outbound fetch() calls in this function.
-// undici (Node 22's built-in fetch) was failing with TypeError/cause=ENOTFOUND
-// when looking up api.ebay.com from Vercel — the IPv6 path was either missing
-// or unreachable. setDefaultResultOrder('ipv4first') makes the resolver return
-// IPv4 addresses first, which undici then prefers.
-// Runs once per cold start (module load).
-dns.setDefaultResultOrder('ipv4first');
+// Cached resolver bound to Google DNS so we don't depend on Vercel's resolver.
+const ebayResolver = new Resolver();
+ebayResolver.setServers(['8.8.8.8', '8.8.4.4']);
+
+// Cache the resolved IP for 5 minutes to avoid a DNS hit per request.
+let cachedIp: { ip: string; expires: number } | null = null;
+
+async function resolveEbayIp(): Promise<string> {
+  if (cachedIp && cachedIp.expires > Date.now()) return cachedIp.ip;
+  const addresses = await ebayResolver.resolve4(EBAY_HOST);
+  if (!addresses.length) throw new Error(`No A records for ${EBAY_HOST}`);
+  cachedIp = { ip: addresses[0], expires: Date.now() + 5 * 60 * 1000 };
+  return addresses[0];
+}
+
+interface HttpsResult {
+  status: number;
+  body: string;
+  contentType: string | null;
+}
+
+async function fetchEbay(
+  ebayPath: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+): Promise<HttpsResult> {
+  const ip = await resolveEbayIp();
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        host: ip,
+        port: 443,
+        path: ebayPath,
+        method,
+        headers: { ...headers, host: EBAY_HOST },
+        servername: EBAY_HOST, // TLS SNI — eBay's cert is for api.ebay.com
+        family: 4,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf-8');
+          resolve({
+            status: res.statusCode ?? 0,
+            body: text,
+            contentType: (res.headers['content-type'] as string) ?? null,
+          });
+        });
+        res.on('error', reject);
+      },
+    );
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
 
 // Disable Next.js body parsing — we forward the raw body for Mode 2 so that
 // application/x-www-form-urlencoded bodies (eBay token refresh) survive intact.
-// Auto-parsing then JSON.stringify-ing them mangled the form body into JSON
-// while leaving the Content-Type form-encoded — eBay rejected → fetch threw → 502.
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-// Returns a UTF-8 string. Every eBay endpoint we proxy uses text bodies
-// (JSON or application/x-www-form-urlencoded), so string is the right shape
-// and is unconditionally a valid fetch BodyInit (avoids the
-// Uint8Array<ArrayBufferLike> vs. Uint8Array<ArrayBuffer> Node 22 type mismatch).
 async function readRawBody(req: NextApiRequest): Promise<string | undefined> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -52,8 +102,6 @@ async function readRawBody(req: NextApiRequest): Promise<string | undefined> {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-// Pack diagnostic fields into a short, single-line prefix so Vercel's runtime
-// log table doesn't truncate the actual root cause (ENOTFOUND, AbortError, etc.).
 function describeError(err: any): string {
   const code = err?.code ?? '';
   const name = err?.name ?? 'Error';
@@ -81,21 +129,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
     try {
-      const ebayRes = await fetch(`${EBAY_BASE}/identity/v1/oauth2/token`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${credentials}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
+      const result = await fetchEbay(
+        '/identity/v1/oauth2/token',
+        'POST',
+        {
+          authorization: `Basic ${credentials}`,
+          'content-type': 'application/x-www-form-urlencoded',
         },
-        body: 'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
-      });
+        'grant_type=client_credentials&scope=https://api.ebay.com/oauth/api_scope',
+      );
 
-      const data = await ebayRes.json();
-      if (!ebayRes.ok) {
-        console.error('[ebay-proxy/token] eBay returned', ebayRes.status, JSON.stringify(data));
+      if (result.status >= 400) {
+        console.error('[ebay-proxy/token] eBay returned', result.status, result.body.slice(0, 300));
       }
       res.setHeader('Cache-Control', 'no-store');
-      return res.status(ebayRes.status).json(data);
+      res.setHeader('Content-Type', result.contentType ?? 'application/json');
+      return res.status(result.status).send(result.body);
     } catch (err: any) {
       console.error('[ebay-proxy/token] threw', describeError(err));
       return res.status(502).json({ error: describeError(err) });
@@ -115,32 +164,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (val) forwardHeaders[key] = Array.isArray(val) ? val[0] : val;
   }
 
-  // Forward the raw body unchanged. Never JSON.stringify a form-encoded body.
   const body = req.method !== 'GET' && req.method !== 'HEAD'
     ? await readRawBody(req)
     : undefined;
 
   try {
-    const upstreamRes = await fetch(`${EBAY_BASE}${ebayPath}`, {
-      method: req.method ?? 'GET',
-      headers: forwardHeaders,
-      body,
-    });
+    const result = await fetchEbay(ebayPath, req.method ?? 'GET', forwardHeaders, body);
 
-    const text = await upstreamRes.text();
-    if (!upstreamRes.ok) {
+    if (result.status >= 400) {
       console.error(
         '[ebay-proxy] Upstream',
-        upstreamRes.status,
+        result.status,
         'on',
         ebayPath,
         '— body:',
-        text.slice(0, 500),
+        result.body.slice(0, 500),
       );
     }
-    res.setHeader('Content-Type', upstreamRes.headers.get('content-type') ?? 'application/json');
+    res.setHeader('Content-Type', result.contentType ?? 'application/json');
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(upstreamRes.status).send(text);
+    return res.status(result.status).send(result.body);
   } catch (err: any) {
     console.error('[ebay-proxy] threw on', ebayPath, describeError(err));
     return res.status(502).json({ error: describeError(err) });
