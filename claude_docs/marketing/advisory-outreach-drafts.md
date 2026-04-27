@@ -501,6 +501,117 @@ Happy to jump on a call whenever works.
 
 ---
 
+---
+
+## Wave 2 Additions
+
+### Bucket 1 — Shopper-Side / Adjacent Creators
+
+### 37. Clutterbug — Cas (large YouTube, HGTV's Hot Mess House)
+YouTube DM or contact via clutterbug.me.
+
+Cas —
+
+Working on something for estate and yard sale organizers. You came up because your audience is full of people at the exact moment where decluttering turns into "okay but now what do we actually do with all this stuff" — and whoever runs that sale is still doing it with handwritten price stickers and a cash box.
+
+90 seconds if you're curious: https://finda.sale/video. No ask beyond the honest read.
+
+— Patrick
+
+---
+
+### 38. Storage Auction Pirate (YouTube — storage unit buying/resale, subs unverified)
+YouTube DM.
+
+Hey —
+
+Working on something for the people who have to turn a pile of found inventory into a sale. You came up because anyone who's bought a unit and then had to sort, price, and move 200 items knows that organizer problem from the inside — which is exactly the lens I want this in front of.
+
+90 seconds: https://finda.sale/video. Fine to say it doesn't hit the right problem.
+
+— Patrick
+
+---
+
+### 39. Treasure Hunting With Jebus (YouTube — storage unit/resale, subs unverified)
+YouTube DM.
+
+Hey —
+
+Building tools for estate and yard sale organizers — and you came up because the "bought the unit, now what" problem is basically the same thing on a smaller scale. Someone who teaches the selling side would catch what I've gotten wrong faster than most.
+
+90 seconds: https://finda.sale/video. Fine to say it doesn't fit.
+
+— Patrick
+
+---
+
+### 40. @estatesalefreaks (TikTok, 79K — VERIFY organizer vs. shopper before sending)
+
+Hey —
+
+Building something for the people who run these sales, not just attend them. You came up because you're one of the few accounts actually documenting the estate sale world on TikTok — which means you probably have a read on what organizers actually deal with that most people on the outside don't.
+
+90 seconds: https://finda.sale/video. Fine to say you're on the shopper side and it's not your thing.
+
+— Patrick
+
+---
+
+### Bucket 3 — Podcast and Adjacent Voices
+
+### 41. Grace Rehman — Organize With Grace Podcast (downsizing/decluttering after 50)
+Contact via organizewithgrace.com.
+
+Grace —
+
+Working on something for estate and yard sale organizers — the people families call after the "what do we do with all this stuff" conversation. Your listeners are at that point all the time.
+
+90 seconds: https://finda.sale/video. Curious whether this fits anywhere in what you cover, or if I've built it for a version of that conversation that looks different from where you sit.
+
+— Patrick
+
+---
+
+### 42. Downsizing Roadmap Podcast
+Contact via show website or Apple Podcasts.
+
+Hi —
+
+Working on software for estate and yard sale organizers. Found the show through research I've been doing on the downsizing space — your listeners are the families who eventually call an estate sale company, which puts you right at the top of that chain.
+
+90 seconds if it's useful: https://finda.sale/video. Happy to be a guest if the tools side of this ever fits what you cover, or just take the read and move on.
+
+— Patrick, finda.sale
+
+---
+
+### 43. Jennifer Pickett — NASMM (National Association of Senior & Specialty Move Managers)
+Contact via nasmm.org.
+
+Jennifer —
+
+Building software for estate and yard sale organizers — the people your members are often coordinating alongside. Senior move managers seem to sit right at the point where the family has decided to downsize but still needs to figure out what happens to everything.
+
+Would you take 90 seconds? https://finda.sale/video. Not pitching NASMM a sponsorship — genuinely curious whether this changes anything for your members' clients, or whether I've missed how that part of the process actually works.
+
+— Patrick, FindA.Sale
+
+---
+
+### 44. Church / Nonprofit Rummage Sale Coordinator (template — send to specific coordinators)
+Find via local Facebook groups, church websites, Nextdoor. Run the search "church rummage sale [city] coordinator" to find named individuals.
+
+Hi —
+
+Working on something for the people who run charity sales — the church rummage, the school fundraiser, the community sale. Found your name through [how you found them]. Not looking for a post or a partnership, just an honest read from someone who actually runs one of these rather than just attends.
+
+90 seconds: https://finda.sale/video. Fine to say it's too estate-sale shaped to fit what you do.
+
+— Patrick
+
+---
+
 ## How to actually run this
 
 One message a day. Two tops. Batching all 36 into one evening makes them sound like you sent them all in one evening — which is the thing that gives AI-written outreach away. Space them out so each one has a little of the day behind it.
@@ -517,7 +628,7 @@ What you don't do: ask for a shoutout, a repost, a mention, an affiliate, or equ
 
 Keep a simple sheet: name, bucket, sent date, replied, called, what they said, next step. Six months from now that list is your advisory bench whether or not any of these turn into anything bigger.
 
-**Known unverified (spot-check before sending):** Amanda's Mercantile, Junking with Lou, The Bonafide Hustler, Swap-O-Rama TV, The Griffin Antique Mall, Jordan Welch, Bolo Brothers.
+**Known unverified (spot-check before sending):** Amanda's Mercantile, Junking with Lou, The Bonafide Hustler, Swap-O-Rama TV, The Griffin Antique Mall, Jordan Welch (⚠️ wrong vertical — dropshipping, not secondhand), Bolo Brothers, Storage Auction Pirate, Treasure Hunting With Jebus, @estatesalefreaks (verify organizer vs. shopper before sending).
 
 **VeeFriends angle:** Reezy Resells is the only confirmed VeeFriend on this list — the NFT line in that draft is genuine and should stay. Flea Market Flipper benefited from Gary Vee's Trash Talk era but has no confirmed direct collaboration or VeeFriends connection — do not use that angle with them. If you're active in VeeFriends Discord or attend VeeCon, that community has significant secondary-market overlap and is worth working organically — member-to-member outreach bypasses cold-contact dynamics entirely.
 
