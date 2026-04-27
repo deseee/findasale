@@ -1,20 +1,18 @@
-# Advisory & Outreach Drafts — FindA.Sale v4
+# Advisory & Outreach Drafts — FindA.Sale v5
 
-**What this is.** 36 first-contact messages to people whose opinion of what I'm building matters. The framing is inquisitive, not promotional — real feedback, not platitudes. Every draft sends them to https://finda.sale/video and asks a question. No free-account offers. No "I built a full platform." Sound like someone a few months into building something and unsure if it holds up.
+**What this is.** 68 first-contact messages to people who'd have a fast read on whether this is useful. The framing is confident and friendly — not promotional, not fan-seeking. Every draft sends them to https://finda.sale/video and leaves the door open for feedback. No free-account offers. No feature lists.
 
 **Rules for the voice.**
 - Sound like Patrick, not a marketing funnel.
-- Open by explaining why THEM specifically — not by labeling the message ("cold note," "cold outreach," "cold reach-out" are buzzwords, don't use them).
-- "I've been working on something" — not a feature list.
-- Appear like LESS is built than actually is. Let the video do the reveal.
-- Use "came up in my head" / "you came up because" framings where it fits. Reads human.
-- Questions > statements. End with what you actually want to know.
-- Short. 4–7 sentences. If you need three paragraphs, cut.
-- Vary openings and sign-offs. Real people don't template.
-- OK to sound unsure. Confident cold outreach reads as salesy.
+- Confident about what's been built. Don't undersell it, don't over-explain it.
+- Short. 3–5 sentences. If you need three paragraphs, cut.
+- The question the recipient should be asking themselves: "would this work for me or my audience?"
+- End every message with openness to feedback — "happy to hear what you think either way."
 - Never say "would you be open to" or "twenty minutes of your time."
+- Never say "you came up because" — it reads like a script.
 - No free-trial or giveaway offers. The ask is for their eyes, not their signup.
-- Avoid assuming facts about their business. Ask, don't declare.
+- Vary openings and sign-offs. Real people don't template.
+- No fan energy. Don't tell them you've watched all their videos or that they're uniquely positioned to help you.
 
 **Where they all land.** https://finda.sale/video — one URL, used for every message. Don't send Looms, branded pages, or attachments on top. Just the video link.
 
@@ -46,16 +44,15 @@ Bucket 3 — Organizer-side voices: podcasts, newsletters, trade editors, associ
 ### 1. Reezy Resells — Michael Rezendes (~430–495k YouTube)
 Contact via reezyresells.com.
 
-Fellow VeeFriend building something for resellers
+Reezy —
 
-Reezy,
-I've been working on something for second hand sales and resellers that I'm hoping appeals to people like you and your audience. You came up in my head as someone who'd see both sides of the idea.
-Not asking for a shoutout, just 90 seconds of your eyes on it and an honest read on whether it holds up. https://finda.sale/video
-Fine to say "not for me."
-Also nice to see another Vee Friend doing well. I still have my NFT somewhere.
+Fellow VeeFriend here. Been building software for secondhand sales and resellers — thought you'd have a fast read on whether it makes sense from your side of it.
 
-Cheers,
-Patrick
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
+
+Also nice to see another VeeFriend doing well. I still have my NFT somewhere.
+
+— Patrick
 
 ---
 
@@ -64,11 +61,9 @@ YouTube DM or IG.
 
 Josh —
 
-Building something for the organizer side of secondary sales — the people running the sales your audience sources at. You came up because the career-pivot story tells me you'd call BS fast if I've got founder-brain tunnel vision.
+Been building tools for the organizer side of secondary sales. Career-pivot into this world means you've seen it from enough angles to know pretty fast if it holds up or just looks like it does on paper.
 
-90 seconds and a working reseller's honest read: https://finda.sale/video. Not asking for a post.
-
-Fine to say it's not for you.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -79,9 +74,9 @@ Email via ralliroots.com; fallback YouTube DM.
 
 Ryan & Alli —
 
-Working on something for the organizer side of reselling, and you two came up because a real warehouse operation plus a mentorship program is exactly the combination that'd catch things I'm too close to see.
+Been building tools for estate and yard sale organizers. Running a real warehouse operation while teaching others how to do it — you'd know fast whether this fits how the business actually runs.
 
-90 seconds if you've got it: https://finda.sale/video. No ask beyond the honest read.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick (Grand Rapids)
 
@@ -92,9 +87,9 @@ Contact via hustleathomemom.com.
 
 Ashley —
 
-Building something for the organizer side of secondary sales. You came up because 390 videos deep and still shipping means you'd know whether an idea actually fits how this space works, or just sounds like it does.
+Been building tools for secondary sale organizers. 390 videos in, you'd know whether an idea actually fits how this space works or just sounds like it does.
 
-90 seconds and a mom-reseller's honest read: https://finda.sale/video. Fine to skip it.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -105,9 +100,9 @@ YouTube community tab or IG.
 
 Hey —
 
-Working on something for the people who run estate sales and consignment — where the good pieces start before they ever reach a thrift store. You came up because you'd know whether this makes sense from the sourcing side, or if I've missed something obvious.
+Building software for estate sales and consignment — where the good pieces start before they reach a thrift store. You'd know whether this makes sense from the sourcing side.
 
-90 seconds: https://finda.sale/video. Fine to say it misses.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -117,9 +112,9 @@ Working on something for the people who run estate sales and consignment — whe
 
 Casey —
 
-Working on something for estate and yard sale organizers — the people running the sales your community sources at. You came up because it's one of the few places where real operators and real flippers talk to each other, which is exactly the kind of feedback I need before I go further.
+Building tools for estate and yard sale organizers — the people running the sales your community sources at. A community where real operators and real flippers actually talk to each other is rare, and that's the read I want on this.
 
-90 seconds and your honest read: https://finda.sale/video. Fine to say it misses.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -127,11 +122,11 @@ Working on something for estate and yard sale organizers — the people running 
 
 ### 7. Commonwealth Picker — Kevin (134k, 3x/week)
 
-Kevin — longtime viewer. Splitting Picker and Flipper was the move that made me realize you think about operations, not just sourcing, which is why I'm writing.
+Kevin — longtime viewer. Splitting Picker and Flipper into separate channels tells me you think about operations, not just sourcing.
 
-Working on something for estate sale organizers. I'd rather hear I've built a founder-brain solution to a problem that doesn't exist than find out after I've gone further.
+Been building something for estate sale organizers and wanted eyes from someone in this world before I go further.
 
-90 seconds: https://finda.sale/video. Not looking for a shoutout.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -141,9 +136,9 @@ Working on something for estate sale organizers. I'd rather hear I've built a fo
 
 Tiffany —
 
-Building something for the organizer side, not the shopper side. You came up because 20+ years in this space means you'd see through a tool designed by someone who's never actually run a sale.
+Been building tools for estate and yard sale organizers. Twenty-plus years in this space means you'd know in 90 seconds whether this is actually useful or just looks like it is.
 
-Would you watch 90 seconds and tell me if it holds up? https://finda.sale/video. Fine to say it doesn't.
+https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -153,9 +148,9 @@ Would you watch 90 seconds and tell me if it holds up? https://finda.sale/video.
 
 Rick —
 
-Working on something for estate sale and auction operators, and you came up because 15 years at #1 eBay pre-loved AND now teaching is the exact lens I want this to go through.
+Building something for estate sale and auction operators. Fifteen years running the #1 eBay pre-loved store and now teaching others — that's a lens not many people have.
 
-90 seconds: https://finda.sale/video. Fine to say it misses what matters. Happy to talk privately if it holds up — first step is the honest read.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, finda.sale
 
@@ -166,9 +161,9 @@ Contact via theantiquenomad.com.
 
 George —
 
-Working on something for estate sale and auction organizers — the other side of the counter from where you do your picking. You came up because the finance-to-antiquing pivot tells me you'd spot the kind of gap someone coming from outside accidentally builds in.
+Working on something for estate sale and auction organizers — the other side of the counter from where you do your picking. The finance-to-antiquing angle means you'd spot gaps that someone who grew up in the industry might not catch.
 
-90 seconds: https://finda.sale/video. No ask beyond "tell me what you think."
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -176,11 +171,11 @@ Working on something for estate sale and auction organizers — the other side o
 
 ### 11. Too Many Records (54.9k)
 
-Hey — vinyl isn't my vertical but the operator skills translate, which is why I'm writing.
+Hey — vinyl isn't my vertical but the operator skills translate.
 
-Working on something for estate sale and yard sale organizers. I want a 90-second read from someone outside the estate-sale bubble who still understands what it actually takes to sort, price, and move inventory.
+Been building something for estate sale and yard sale organizers. Wanted a 90-second read from someone who understands what it actually takes to sort, price, and move inventory.
 
-https://finda.sale/video. Fine to say it doesn't land.
+https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -190,9 +185,9 @@ https://finda.sale/video. Fine to say it doesn't land.
 
 Chris —
 
-Working on something for the organizer layer of reselling — estates, auctions, consignment. You came up because a multi-platform educator would know before I do whether this makes sense to the people I'm building for.
+Been working on something for the organizer side of reselling — estates, auctions, consignment. Multi-platform educator would know before I do whether this makes sense to the people I'm building for.
 
-90 seconds: https://finda.sale/video. Open to a guest spot if it holds up, honest critique if it doesn't.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -202,9 +197,9 @@ Working on something for the organizer layer of reselling — estates, auctions,
 
 Becky —
 
-Building something for the organizer side of secondary sales. You came up because the part-time-reseller-mom perspective would catch what a full-timer building this thing is too close to see.
+Building something for secondary sale organizers. The part-time-reseller-mom perspective is exactly what a full-timer building this thing is probably missing.
 
-90 seconds: https://finda.sale/video. Not an affiliate ask.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -214,9 +209,9 @@ Building something for the organizer side of secondary sales. You came up becaus
 
 Melinda —
 
-I've been working on something for estate and yard sale organizers — the people on the other side of the counter from where your audience shops. You came to mind because someone who knows what makes a good find also knows pretty quick whether the person running the sale has any idea what they're doing.
+Been building something for estate and yard sale organizers — the people on the other side of the counter from where your audience shops. Someone who knows what makes a good find also knows pretty fast whether the person running the sale has any idea what they're doing.
 
-90 seconds, if you're curious: https://finda.sale/video. Fine to say it's not your thing.
+90 seconds if you're curious: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -226,9 +221,9 @@ I've been working on something for estate and yard sale organizers — the peopl
 
 Rebecca —
 
-Working on something for the organizer side of secondary sales. Your Poshmark 30-Day Reboot told me you'd know whether the approach actually helps someone teaching resellers, or misses where it matters.
+Working on tools for the organizer side of secondary sales. Your Poshmark 30-Day Reboot tells me you'd know whether the approach actually helps someone teaching resellers or misses where it matters.
 
-90 seconds: https://finda.sale/video. Not an affiliate pitch.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -238,9 +233,9 @@ Working on something for the organizer side of secondary sales. Your Poshmark 30
 
 Rob & Melissa —
 
-Working on something for the organizer side of what your audience does. Flipper University plus the podcast means you'd know whether this holds up or whether I've built something that sounds good but falls apart in real use.
+Building tools for the organizer side of what your audience does. Between Flipper University and the podcast, you'd know fast whether this holds up or falls apart in real use.
 
-90 seconds: https://finda.sale/video. Fine to poke holes in it.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick (Grand Rapids)
 
@@ -252,9 +247,9 @@ YouTube DM or contact via jordanwelch.com. VERIFY NO COMPETING PLATFORM BEFORE S
 
 Jordan —
 
-Working on something for the organizer side of secondhand sales — the people running the estate sales, yard sales, and auctions your audience sources at. You came up because entrepreneur-reseller overlap is the exact lens that'd tell me if this makes sense outside the estate-sale bubble.
+Working on something for the organizer side of secondhand sales — the people running the estate sales, yard sales, and auctions. Entrepreneur-reseller overlap is the lens that'd tell me if this makes sense outside the estate-sale world.
 
-90 seconds: https://finda.sale/video. Fine to say it's not your thing.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -264,9 +259,9 @@ Working on something for the organizer side of secondhand sales — the people r
 
 Hey —
 
-Working on something for estate sale and auction organizers — the other side of the table from the flipping your channel is built around. You came up because someone deep in the finding side would spot whether I've built a tool that actually fits how these sales run.
+Working on something for estate sale and auction organizers — the other side of the table from the flipping your channel is built around. Someone deep in the finding side would spot fast whether the tools for running these sales actually fit or just look like they do.
 
-90 seconds: https://finda.sale/video. Fine to say it misses.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -280,9 +275,9 @@ The sharpest critics on the list — they run the exact businesses this is built
 
 Alexander —
 
-Working on something for secondary-sale operators, and you came up because you're one of very few people I've found who actually runs this kind of business AND talks about running it on camera.
+Working on something for secondary-sale operators. You're one of very few people I've found who actually runs this kind of business and talks about running it on camera.
 
-Would you watch 90 seconds and tell me if this is built for how these businesses actually run — or if I've built it for a version that doesn't exist? https://finda.sale/video. Fine to say it misses.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, Grand Rapids
 
@@ -292,9 +287,9 @@ Would you watch 90 seconds and tell me if this is built for how these businesses
 
 Brooke —
 
-Working on something for the organizer side of vintage, antique, and estate. You came up because someone selling in a few different ways at once — vintage, antique, estate — is the hardest person to build for. You'd catch what I've missed faster than most.
+Working on something for the organizer side of vintage, antique, and estate. Selling in a few different ways at once — vintage, antique, estate — is about the hardest combination to build for.
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't fit.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -304,9 +299,9 @@ Working on something for the organizer side of vintage, antique, and estate. You
 
 Lou —
 
-Grand Rapids neighbor here working on software for estate and booth operators. 25 years in your position means you'd see problems I haven't lived long enough to see yet.
+Grand Rapids neighbor here working on software for estate and booth operators. Twenty-five years in your position means you've seen problems I haven't lived long enough to know about yet.
 
-90 seconds and whatever critique comes out of it: https://finda.sale/video
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -316,9 +311,9 @@ Grand Rapids neighbor here working on software for estate and booth operators. 2
 
 Chris —
 
-Working on something for operators running what you run. 25+ years in this plus a course teaching other people to do it is the combination that'd tell me whether the approach lands or misses.
+Working on something for operators running what you run. Twenty-five-plus years in this plus a course teaching others — that's the combination that'd tell me fast whether the approach lands or misses.
 
-90 seconds, no strings: https://finda.sale/video. Fine to say it doesn't.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -328,11 +323,11 @@ Working on something for operators running what you run. 25+ years in this plus 
 
 Hi —
 
-Working on software for secondary-sale organizers. Flea market vendors and markets themselves are part of who this is built for. Swap-O-Rama came up because you're one of the few markets that actually documents how a market runs — which means you'd catch what I've built wrong.
+Working on software for secondary-sale organizers — flea market vendors and markets are part of who this is built for. You're one of the few markets that actually documents how the operation runs, which means you'd catch what I've gotten wrong.
 
-Would someone on your team take 90 seconds? https://finda.sale/video. Fine to say it's too estate-sale-shaped.
+Would someone on your team take 90 seconds? https://finda.sale/video — happy to hear what you think either way.
 
-— Patrick, founder, finda.sale
+— Patrick, finda.sale
 
 ---
 
@@ -340,9 +335,9 @@ Would someone on your team take 90 seconds? https://finda.sale/video. Fine to sa
 
 Hi —
 
-Building software for antique mall vendors and mall operations. You came up because you're one of the few malls making behind-the-scenes content about how the operation actually runs — which is the perspective I need before I go further.
+Building software for antique mall vendors and mall operations. You're one of the few malls making behind-the-scenes content about how the operation actually runs — that's the perspective worth having before I go further.
 
-90 seconds: https://finda.sale/video. Fine to say it misses the booth side.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -352,9 +347,9 @@ Building software for antique mall vendors and mall operations. You came up beca
 
 Amanda —
 
-Working on something for booth vendors, and six years at Factory is the kind of steady operator experience I can't replicate from my side of the screen.
+Working on something for booth vendors. Six years at Factory Antique Mall is the kind of steady operator experience I can't replicate from my side of the screen.
 
-90 seconds: would this fit a real booth workflow or miss what matters? https://finda.sale/video
+90 seconds — does this fit a real booth workflow or miss what matters? https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -367,9 +362,9 @@ Contact via estatesalebiz.com.
 
 Ronald —
 
-I'm building something for estate sale business owners, and your show is the only consistent place I've found talking to this audience about the operations side. That's why I'm writing you first.
+Building something for estate sale business owners. Your show is the only consistent place I've found talking to this audience about the operations side — wanted to get this in front of you first.
 
-90 seconds: https://finda.sale/video. Happy to be a guest, a sponsor, or neither — whatever's right for your show.
+90 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to be a guest or a sponsor too — whatever's right for your show.
 
 — Patrick
 
@@ -379,9 +374,9 @@ I'm building something for estate sale business owners, and your show is the onl
 
 Toma —
 
-Working on software for the operators you train. The reason I'm writing you specifically is most of the industry teaches buying — you teach running the business. That's the audience I care about.
+Working on software for the operators you train. Most of the industry teaches buying — you teach running the business. That's the audience this is built for.
 
-90 seconds: https://finda.sale/video. Guest spot, advisor critique, integration conversation — any direction works.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -391,9 +386,9 @@ Working on software for the operators you train. The reason I'm writing you spec
 
 Emily —
 
-Working on something for secondary-sale operators. Pre-Loved came up because it's one of the few places I've found taking the operations side of resale seriously — not haul content, not ecom SEO.
+Working on something for secondary-sale operators. Pre-Loved is one of the few places I've found taking the operations side of resale seriously — not haul content, not ecom SEO.
 
-90-second walkthrough if you're curious: https://finda.sale/video. Not asking for a mention.
+90-second walkthrough if you're curious: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -403,9 +398,9 @@ Working on something for secondary-sale operators. Pre-Loved came up because it'
 
 Tim —
 
-Been reading thriftretailer for a while. Working on software for secondary-sale operators and I'd like to know if the approach makes sense to someone with 20+ years in retail, or if I've built it from too far outside the shop.
+Been reading thriftretailer for a while. Working on software for secondary-sale operators and wanted to know if the approach makes sense to someone with 20+ years in retail.
 
-90 seconds: https://finda.sale/video
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -415,9 +410,9 @@ Been reading thriftretailer for a while. Working on software for secondary-sale 
 
 Libby —
 
-Working on something for consignment shop owners and estate sale companies. Five seasons of operator conversations means you've probably heard every complaint this audience has — which is exactly the filter I want this to go through.
+Working on something for consignment shop owners and estate sale companies. Five seasons of operator conversations — you've probably heard every complaint this audience has.
 
-90 seconds: https://finda.sale/video. Guest spot if it holds up, critique if it doesn't.
+90 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on as a guest if it fits.
 
 — Patrick, finda.sale
 
@@ -429,7 +424,7 @@ Chad / Bill —
 
 Working on software for estate sale companies — the operations layer downstream of the probate and downsizing work your audience does.
 
-Would you watch 90 seconds and tell me if this even fits into the workflow they hand off to? https://finda.sale/video
+90 seconds — does this fit into the workflow they hand off to? https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -441,7 +436,7 @@ Jenna —
 
 Grand Rapids founder here — no DFW overlap, so no competition. Working on software for estate sale companies, and an operator who teaches other operators is the rarest filter to get this in front of.
 
-90 seconds if you have the time: https://finda.sale/video. Fine to say it doesn't fit how you run things.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -451,9 +446,9 @@ Grand Rapids founder here — no DFW overlap, so no competition. Working on soft
 
 Maddy —
 
-Working on software for estate sale organizers. Your DC region newsletter came up as one of the few places I've seen a concentrated regional audience actually work, and you'd know whether a tool like this would change how you cover the sales you spotlight.
+Working on software for estate sale organizers. Your DC region newsletter is one of the few places I've seen a concentrated regional audience actually work — you'd know whether a tool like this would change how you cover the sales you spotlight.
 
-90 seconds: https://finda.sale/video
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -512,9 +507,9 @@ YouTube DM or contact via clutterbug.me.
 
 Cas —
 
-Working on something for estate and yard sale organizers. You came up because your audience is full of people at the exact moment where decluttering turns into "okay but now what do we actually do with all this stuff" — and whoever runs that sale is still doing it with handwritten price stickers and a cash box.
+Building software for estate and yard sale organizers. Your audience is full of people right at the point where decluttering turns into "okay but now what do we actually do with all this stuff" — and whoever runs that sale is still doing it with handwritten price stickers and a cash box.
 
-90 seconds if you're curious: https://finda.sale/video. No ask beyond the honest read.
+90 seconds if you're curious: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -525,9 +520,9 @@ YouTube DM.
 
 Hey —
 
-Working on something for the people who have to turn a pile of found inventory into a sale. You came up because anyone who's bought a unit and then had to sort, price, and move 200 items knows that organizer problem from the inside — which is exactly the lens I want this in front of.
+Working on something for the people who have to turn a pile of found inventory into a sale. Anyone who's bought a unit and then had to sort, price, and move 200 items knows that organizer problem from the inside.
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't hit the right problem.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -538,9 +533,9 @@ YouTube DM.
 
 Hey —
 
-Building tools for estate and yard sale organizers — and you came up because the "bought the unit, now what" problem is basically the same thing on a smaller scale. Someone who teaches the selling side would catch what I've gotten wrong faster than most.
+Building tools for estate and yard sale organizers. The "bought the unit, now what" problem is basically the same thing on a smaller scale — someone who teaches the selling side would catch fast if I've gotten this wrong.
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't fit.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -550,9 +545,9 @@ Building tools for estate and yard sale organizers — and you came up because t
 
 Hey —
 
-Building something for the people who run these sales, not just attend them. You came up because you're one of the few accounts actually documenting the estate sale world on TikTok — which means you probably have a read on what organizers actually deal with that most people on the outside don't.
+Building software for estate and yard sales — tools for the people who run them. You're one of the few accounts actually documenting this world on TikTok, which means you probably see both sides of it.
 
-90 seconds: https://finda.sale/video. Fine to say you're on the shopper side and it's not your thing.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -567,7 +562,7 @@ Grace —
 
 Working on something for estate and yard sale organizers — the people families call after the "what do we do with all this stuff" conversation. Your listeners are at that point all the time.
 
-90 seconds: https://finda.sale/video. Curious whether this fits anywhere in what you cover, or if I've built it for a version of that conversation that looks different from where you sit.
+90 seconds: https://finda.sale/video — happy to hear what you think either way, or happy to come on if it ever fits what you cover.
 
 — Patrick
 
@@ -578,9 +573,9 @@ Contact via show website or Apple Podcasts.
 
 Hi —
 
-Working on software for estate and yard sale organizers. Found the show through research I've been doing on the downsizing space — your listeners are the families who eventually call an estate sale company, which puts you right at the top of that chain.
+Working on software for estate and yard sale organizers. Your listeners are the families who eventually call an estate sale company, which puts your show right at the top of that chain.
 
-90 seconds if it's useful: https://finda.sale/video. Happy to be a guest if the tools side of this ever fits what you cover, or just take the read and move on.
+90 seconds if it's useful: https://finda.sale/video — happy to hear what you think either way. Happy to be a guest if the tools side ever fits what you cover.
 
 — Patrick, finda.sale
 
@@ -591,9 +586,9 @@ Contact via nasmm.org.
 
 Jennifer —
 
-Building software for estate and yard sale organizers — the people your members are often coordinating alongside. Senior move managers seem to sit right at the point where the family has decided to downsize but still needs to figure out what happens to everything.
+Building software for estate and yard sale organizers — the people your members are often coordinating alongside. Senior move managers sit right at the point where the family has decided to downsize but still needs to figure out what happens to everything.
 
-Would you take 90 seconds? https://finda.sale/video. Not pitching NASMM a sponsorship — genuinely curious whether this changes anything for your members' clients, or whether I've missed how that part of the process actually works.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -604,9 +599,9 @@ Find via local Facebook groups, church websites, Nextdoor. Run the search "churc
 
 Hi —
 
-Working on something for the people who run charity sales — the church rummage, the school fundraiser, the community sale. Found your name through [how you found them]. Not looking for a post or a partnership, just an honest read from someone who actually runs one of these rather than just attends.
+Working on something for the people who run charity sales — the church rummage, the school fundraiser, the community sale. Found your name through [how you found them].
 
-90 seconds: https://finda.sale/video. Fine to say it's too estate-sale shaped to fit what you do.
+90 seconds: https://finda.sale/video — happy to hear what you think either way, including if it's too estate-sale shaped to fit what you do.
 
 — Patrick
 
@@ -623,9 +618,9 @@ Contact: WhatTheHales@yahoo.com. Also eBay store (WhatTheHales) and Facebook (fa
 
 Hey —
 
-Working on something for the organizer side of what you do — the people who have to stage, price, and move everything after the find. You came up because you do both sides of it: find it and then sell it, which means you'd know immediately whether the tools for running that sale actually help or just look like they do.
+Working on something for the organizer side of what you do — the staging, pricing, and moving everything after the find. You do both sides of it: find it and then sell it.
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't fit what you run.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -636,9 +631,9 @@ YouTube DM.
 
 Hey —
 
-Working on tools for the people running the sale itself — setup, pricing, checkout, what didn't sell. You came up because someone doing flea markets, Etsy, and eBay at the same time would spot fast whether a tool actually fits how a sale works or just looks like it does from the outside.
+Working on tools for the people running the sale itself — setup, pricing, checkout, what didn't sell. Someone doing flea markets, Etsy, and eBay at the same time would spot fast whether a tool actually fits how a sale works.
 
-90 seconds: https://finda.sale/video. Fine to say it's the wrong problem.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -649,9 +644,9 @@ YouTube DM.
 
 Hey —
 
-Working on something for the people who have to turn found inventory into a sale — the other side of the storage unit or estate you're buying from. You came up because understanding both sides of that transaction is rare, and someone who does would catch what I've built wrong faster than most.
+Working on something for the people who have to turn found inventory into a sale — the other side of the storage unit or estate you're buying from. Understanding both sides of that transaction is rare.
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't hit the right thing.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -664,9 +659,9 @@ Contact via dclutterfly.com. Instagram @tracy_mccubbin.
 
 Tracy —
 
-Working on something for estate and yard sale organizers. You came up because the work you do — helping people actually let go — leads right to the question of what happens to everything after that. Most estate sale companies are still doing it with spreadsheets and a cash box.
+Working on something for estate and yard sale organizers. The work you do — helping people actually let go — leads right to the question of what happens to everything after that. Most estate sale companies are still doing it with spreadsheets and a cash box.
 
-Wondering if that gap is as visible from your side as it looks from mine. 90 seconds: https://finda.sale/video. Not asking for a post, just a read from someone who sees the whole chain.
+Wondering if that gap is as visible from your side as it looks from mine. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -677,9 +672,9 @@ Contact via peterwalshdesign.com.
 
 Peter —
 
-Working on software for the people who run estate and yard sales — the last mile after the decluttering conversation ends. You came up because 20 years of "what's standing between you and the life you want" is exactly the lens that would tell me whether I've built this for the right problem.
+Working on software for people running estate and yard sales — the last mile after the decluttering conversation ends. Twenty years of "what's standing between you and the life you want" is a lens that would tell me pretty fast whether I've built this for the right problem.
 
-90 seconds: https://finda.sale/video. Fine to say it misses.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -692,9 +687,9 @@ Contact via theeperfectsale.com/contact.
 
 Cortney —
 
-Working on software for people running exactly what you run. You came up because you've built the brand and marketing side on top of the actual operations — the Instagram, the curation, the Whatnot presence — and that combination would catch faster than most whether the tools match the reality of running a sale.
+Working on software for people running exactly what you run. You've built the brand and the marketing on top of the actual operations — the Instagram, the curation, the Whatnot presence — that's not something most estate sale companies do.
 
-90 seconds: https://finda.sale/video. Happy to hear where it misses.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale (Grand Rapids)
 
@@ -705,9 +700,9 @@ Contact via Whatnot DM or social @Cassaundra0328.
 
 Cassie —
 
-Working on something for the people running the estate sales and storage unit sales you source from. You came up because someone who does live auctions AND buys from these sales would see both sides of whether this holds up.
+Working on something for the people running the estate sales and storage unit sales you source from. Doing live auctions AND buying from estate sales means you see both sides of whether this holds up.
 
-90 seconds: https://finda.sale/video. Fine to say it's not your thing.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -720,11 +715,9 @@ Contact via Apple Podcasts / podcast website.
 
 Tasha / Nicole —
 
-Working on software for estate and yard sale organizers — the people families call after the downsizing decision is made and everything in the house still needs to be dealt with.
+Working on software for estate and yard sale organizers — the people families call after the downsizing decision is made and everything in the house still needs to be dealt with. Senior move management sits right at the top of that chain.
 
-Your show came up because senior move management sits right at the top of that chain. Curious whether the tools organizers are using is a conversation your listeners would find useful, or if I've built it for a version of that moment that looks different from where you sit.
-
-90 seconds: https://finda.sale/video. Happy to be a guest if the organizer-tools side ever fits.
+Curious whether the tools organizers are using is a conversation your listeners would find useful. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, finda.sale
 
@@ -735,9 +728,9 @@ Contact via senior-settlers.com.
 
 Hi —
 
-Working on software for estate and yard sale organizers — the people families call once the stuff needs to go somewhere. Found Senior Settlers through research on the downsizing space; the gap between "declutter" content and the actual logistics of running a sale seems underserved.
+Working on software for estate and yard sale organizers — the people families call once the stuff needs to go somewhere. The gap between "declutter" content and the actual logistics of running a sale seems underserved.
 
-90 seconds if useful: https://finda.sale/video. Not looking for coverage, just a read from someone writing about this transition seriously.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -750,77 +743,13 @@ YouTube DM.
 
 Hey —
 
-Working on something for the people who run the sales your audience sources at. You came up because yard sale haul content means you've seen the organizer side up close — someone who knows what makes a sale worth showing up to would also know fast if this fits how those sales actually run.
+Working on something for the people who run the sales your audience sources at. Yard sale haul content means you've seen the organizer side up close.
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't land.
-
-— Patrick
-
----
-
----
-
-## Wave 5 — "Start Your Own Business" Creators
-
-### Bucket 3 — Entrepreneurship / Business Builder Voices
-
-### 65. Codie Sanchez — Contrarian Thinking (12M+ combined social, 1M+ newsletter, NYT bestselling "Main Street Millionaire")
-Contact via contrarianthinking.co. Instagram / YouTube / Twitter @CodieSanchez.
-
-Codie —
-
-Working on software for the people running estate and yard sales. Thought of you because the "boring business" frame you've built is exactly the lens this fits: it's a real local service business, most of the people running it have been doing it on paper, and the margins and demand aren't going anywhere.
-
-Not sure if the organizer side of estate liquidation ever comes up in what you cover — but someone who's spent years making the case that main street businesses are underrated would see instantly whether I've gotten the tools right or missed what operators actually need.
-
-90 seconds: https://finda.sale/video.
-
-— Patrick, FindA.Sale
-
----
-
-### 66. Nick Loper — Side Hustle Show (podcast, top-ranked small business show, 12+ years, large engaged audience)
-Contact via sidehustlenation.com/contact. Podcast pitches also via podmatch or podcast contact form.
-
-Nick —
-
-Working on software for people running estate and yard sales as a business — and wanted to reach out because Side Hustle Show is one of the few places that's covered the physical resale and flipping world seriously.
-
-The estate sale company angle is underrepresented in small business coverage: it's local, it's cash-flow positive from the first sale, it doesn't require a storefront. Most people running these are still doing it with spreadsheets and a cash box. The software gap is real.
-
-Would you take 90 seconds? https://finda.sale/video. Happy to come on if it fits — or just take the read.
-
-— Patrick, FindA.Sale (Grand Rapids)
-
----
-
-### 67. Pat Walls — Starter Story (1.6M monthly readers, 130K newsletter, 350K+ social — niche business case study interviews)
-Contact via starterstory.com/pat-walls or Twitter @thepatwalls.
-
-Pat —
-
-Working on software for estate and yard sale organizers — the people who run the liquidation business, not just the people who shop at it.
-
-You came up because Starter Story covers the founder story behind niche businesses that most people overlook. This is one of those: estate sale companies are real, cash-positive local businesses, most of them are running on notepads and cash boxes, and the people who know what tools they're missing haven't built anything for them yet.
-
-Wondering if there's a story in the organizer side of this — either as a business idea case study or as the software founder's side. 90 seconds of context: https://finda.sale/video.
-
-— Patrick, FindA.Sale
-
----
-
-### 68. Junk Removal Authority (YouTube / training — teaches people to start junk removal businesses, estate cleanout overlap)
-Contact via junkremovalauthority.com. YouTube DM. Find host name before sending — Josh Latimer is the founder; verify current host/face.
-
-Hey —
-
-Working on software for the estate sale side of what cleanout crews deal with — the part after someone decides to sell what's in the house rather than haul it all to the dump.
-
-You came up because estate cleanouts and estate sales share a lot of the same starting point: a house full of stuff that someone needs to deal with fast. A lot of junk removal companies end up doing both, or at least referring one to the other. Someone who teaches people to build in that world would know immediately whether the tools exist on the estate sale side or if that's still a gap.
-
-90 seconds: https://finda.sale/video. Happy to hear where it misses.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
+
+---
 
 ---
 
@@ -833,9 +762,9 @@ TikTok DM or YouTube DM. Reach in Finnish and English. Her content is cleaning a
 
 Hey —
 
-Working on something for the people who have to deal with what's left in those homes after the cleaning part is done. You came up because you're documenting a space that most software companies have never looked at — and someone who's been inside hundreds of hoarding situations would know instantly whether this hits the real problem or just looks like it does from the outside.
+Working on something for the people who have to deal with what's left in those homes after the cleaning part is done. You're documenting a space that most software companies have never looked at.
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't land.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -848,9 +777,9 @@ TikTok DM.
 
 Hey —
 
-Working on tools for the people who run the sales you source at. You came up because someone thrifting and flipping at volume has watched the organizer side of it close enough to know what's sloppy and what actually works.
+Working on tools for the people who run the sales you source at. Someone thrifting and flipping at volume has watched the organizer side of it close enough to know what's sloppy and what actually works.
 
-90 seconds: https://finda.sale/video. Happy to hear where it misses.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -861,9 +790,9 @@ TikTok DM or Instagram DM.
 
 Hey —
 
-Working on something for the people running the estate and vintage sales that feed into shops like yours. You came up because someone building a vintage retail operation from scratch would have strong opinions on whether the tools for running those upstream sales are as bad as they look.
+Working on something for the people running the estate and vintage sales that feed into shops like yours. Building a vintage retail operation from scratch means you've seen what the upstream sale looks like when it runs well — and when it doesn't.
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't fit.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -874,9 +803,9 @@ Instagram DM.
 
 Hey —
 
-Working on software for the organizers running the estate and yard sales that supply the stuff you find. You came up because someone with a real eye for curation would catch immediately whether a sale is run well or just lucky — which is exactly the lens I want on this.
+Working on software for the organizers running the estate and yard sales that supply the stuff you find. Someone with a real eye for curation would catch immediately whether a sale is run well or just lucky.
 
-90 seconds: https://finda.sale/video. Genuinely curious what you'd notice.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -889,9 +818,9 @@ YouTube DM or contact via channel.
 
 Laura —
 
-Working on tools for people running estate and yard sales — the sourcing side of what you do. You came up because twelve years of buying from these sales would give you a very clear read on whether the people running them have what they need or are just improvising.
+Working on tools for people running estate and yard sales. Twelve years of buying from these sales would give you a fast read on whether the people running them have what they need or are just figuring it out as they go.
 
-90 seconds: https://finda.sale/video. Fine to say it's the wrong thing.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -902,9 +831,9 @@ YouTube DM.
 
 Hey —
 
-Working on software for the people running the sales you're picking at. You came up because someone who shows up to estate sales and auctions regularly would know immediately whether the organizer side of it looks professional or cobbled together.
+Working on software for the people running the sales you're picking at. Someone who shows up to estate sales and auctions regularly would know pretty fast whether the organizer side of it looks professional or cobbled together.
 
-90 seconds: https://finda.sale/video. Curious what you'd notice.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -917,11 +846,9 @@ Contact via brimfield.com or social @brimfieldantiqueshow. Best angle: vendor re
 
 Hi —
 
-Working on something for people who run the sales — the inventory management, pricing, checkout — not just the buying side. Brimfield came up because the vendors there are running what amounts to a multi-day retail operation twice or three times a year, and most of them are still doing it on paper.
+Working on something for people running the sales — inventory management, pricing, checkout. The vendors at Brimfield are running what amounts to a multi-day retail operation two or three times a year, and most of them are still doing it on paper.
 
-Not looking for an official partnership or placement. Wondering if there's a vendor services person I could run this in front of, or if the show already has something like this in place that I've missed.
-
-90 seconds: https://finda.sale/video.
+Not looking for a partnership placement — wondering if there's a vendor services person I could run this in front of. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -934,9 +861,9 @@ Contact via show website or podcast social.
 
 Matias —
 
-Working on software for estate and yard sale organizers — the people who come in after the probate process identifies what needs to be sold. You came up because someone documenting the probate real estate side of this would see clearly whether the tools the liquidation people are using hold up, or if that part of the chain is as manual as it looks from the outside.
+Working on software for estate and yard sale organizers — the people who come in after the probate process identifies what needs to be sold. That part of the chain is still almost entirely manual.
 
-90 seconds: https://finda.sale/video. Happy to come on if the organizer-tools conversation fits what you cover.
+90 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on if the organizer-tools angle fits what you cover.
 
 — Patrick, finda.sale
 
@@ -947,11 +874,9 @@ Contact via auctioneers.org or NAA podcast social.
 
 Hi —
 
-Working on software for estate and yard sale organizers — a category that overlaps with your member base more than most people realize. You came up because the NAA covers the business side of running a sale, and the gap in software tools for this space seems like it belongs in that conversation somewhere.
+Working on software for estate and yard sale organizers — a category that overlaps with your member base more than most people realize. The gap in software tools for this space feels like it belongs in a trade conversation somewhere.
 
-Not pitching a sponsorship. Wondering whether the tools organizers are actually using is a topic that fits what you cover — or if I've missed the angle.
-
-90 seconds: https://finda.sale/video. Happy to be a guest if it fits.
+Not pitching a sponsorship. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -962,17 +887,73 @@ Find via NAR's SRES directory + cross-reference with Instagram/YouTube/podcast p
 
 Hi —
 
-Working on software for estate and yard sale organizers — the people families often call alongside a senior-focused realtor when it's time to liquidate a home. You came up because an SRES who's built an audience around this transition probably hears the "but what do we do with everything" question constantly.
+Working on software for estate and yard sale organizers — the people families often call alongside a senior-focused realtor when it's time to liquidate a home. The "but what do we do with everything" question probably comes up a lot from where you sit.
 
-90 seconds: https://finda.sale/video. Curious whether the organizer tools gap is visible from where you sit, or if the families you work with are already sorting it out.
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
 ---
 
+## Wave 5 — "Start Your Own Business" Creators
+
+### Bucket 3 — Entrepreneurship / Business Builder Voices
+
+### 65. Codie Sanchez — Contrarian Thinking (12M+ combined social, 1M+ newsletter, NYT bestselling "Main Street Millionaire")
+Contact via contrarianthinking.co. Instagram / YouTube / Twitter @CodieSanchez.
+
+Codie —
+
+Been building software for estate and yard sale organizers. The "boring business" frame you've built is exactly the lens this fits — real local service business, most of the people running it still on paper, margins and demand aren't going anywhere.
+
+Not sure if the organizer side of estate liquidation ever comes up in what you cover. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
+
+— Patrick, FindA.Sale
+
+---
+
+### 66. Nick Loper — Side Hustle Show (podcast, top-ranked small business show, 12+ years, large engaged audience)
+Contact via sidehustlenation.com/contact. Podcast pitches also via podmatch or podcast contact form.
+
+Nick —
+
+Been building software for people running estate and yard sales as a business. The estate sale company angle is underrepresented in small business coverage: local, cash-flow positive from the first sale, no storefront required. Most people running these are still on spreadsheets and a cash box.
+
+90 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on if it fits.
+
+— Patrick, FindA.Sale (Grand Rapids)
+
+---
+
+### 67. Pat Walls — Starter Story (1.6M monthly readers, 130K newsletter, 350K+ social — niche business case study interviews)
+Contact via starterstory.com/pat-walls or Twitter @thepatwalls.
+
+Pat —
+
+Working on software for estate and yard sales — the organizer side of it. Estate sale companies are real, cash-positive local businesses, most of them running on notepads and cash boxes, and nobody's built software for them yet.
+
+Wondering if there's a story in it — as a business idea case study or as a founder's side. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
+
+— Patrick, FindA.Sale
+
+---
+
+### 68. Junk Removal Authority (YouTube / training — teaches people to start junk removal businesses, estate cleanout overlap)
+Contact via junkremovalauthority.com. YouTube DM. Find host name before sending — Josh Latimer is the founder; verify current host/face.
+
+Hey —
+
+Working on software for the estate sale side of what cleanout crews deal with — the part after someone decides to sell what's in the house rather than haul it. A lot of junk removal companies end up doing both, or at least referring one to the other.
+
+90 seconds: https://finda.sale/video — happy to hear what you think either way.
+
+— Patrick
+
+---
+
 ## How to actually run this
 
-One message a day. Two tops. Batching all 36 into one evening makes them sound like you sent them all in one evening — which is the thing that gives AI-written outreach away. Space them out so each one has a little of the day behind it.
+One message a day. Two tops. Batching all of them into one evening makes them sound like you sent them all in one evening — which is the thing that gives AI-written outreach away. Space them out so each one has a little of the day behind it.
 
 Order to send them: Bucket 2 first (operator-creators — the sharpest critics). Then Bucket 3 podcasts and newsletters (Estate Sale Business, Antiques Diva, Pre-Loved, thriftretailer, Consignment Chats) — smaller raw reach but highest conversion per ear. Then trade editors (Swaim, Johnson) — editorial takes time, start the conversation early. Then Bucket 1 — the biggest YouTubers last, because by then you'll have pattern-matched response quality on the other buckets.
 
@@ -982,7 +963,7 @@ When someone says yes to a call, get them on one within the week. If they say no
 
 What you send: https://finda.sale/video. That's it. One URL. Every message in this doc points there. Don't swap in a Loom, a branded landing page, a pricing doc, or an attachment.
 
-What you don't do: ask for a shoutout, a repost, a mention, an affiliate, or equity. Don't offer free accounts. Don't list features. Don't explain what the software does in the email — that's what the video is for. Every word you spend describing the product in the message is a word that makes the video less interesting.
+What you don't do: ask for a shoutout, a repost, a mention, an affiliate, or equity. Don't offer free accounts. Don't list features. Don't explain what the software does in the message — that's what the video is for. Every word you spend describing the product in the message is a word that makes the video less interesting.
 
 Keep a simple sheet: name, bucket, sent date, replied, called, what they said, next step. Six months from now that list is your advisory bench whether or not any of these turn into anything bigger.
 
