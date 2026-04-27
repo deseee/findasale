@@ -285,6 +285,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S590 (2026-04-27) — COMPLETE:** eBay sync end-to-end fix. **REAL root cause finally identified:** eBay's API endpoint `api.ebay.com` resolves via CNAME chain to `e333426.a.akamaiedge.net`, and Akamai's authoritative DNS returns NO A records unless the query includes EDNS Client Subnet (ECS). Most consumer ISP resolvers send ECS; serverless resolvers (Vercel functions, Railway, this VM) do not — so getaddrinfo returns ENOTFOUND. NOT a Vercel/Railway block, NOT eBay outage, NOT a code bug. **Final proxy implementation** (`packages/frontend/pages/api/proxy/ebay.ts` rewritten ~5 times this session): resolve api.ebay.com via Google DoH (`https://dns.google/resolve?name=api.ebay.com&type=A&edns_client_subnet=8.8.8.0/24`) → cache IPs 60s → call `node:https.request` against the resolved Akamai IP with explicit Host header + TLS SNI + family:4 + User-Agent/Accept/Content-Length headers (Akamai returns 504 for header-less requests). **Migrated all 35+ direct `fetch('https://api.ebay.com/...')` call sites in backend to route through proxy** via new module-level helpers `ebayProxyUrl(path)` and `ebayProxyHeaders()` in 5 files (ebayController.ts, ebayTaxonomyController.ts, ebayTaxonomyService.ts, ebaySoldSyncCron.ts, ebayNotificationSetup.ts). Mid-session crash from duplicate `const frontendUrl` declarations in same lexical scope — fixed via the helper refactor. **Sold-sync filter changed from `creationdate` to `lastmodifieddate`** so late-paying orders aren't permanently filtered out. **Mode 1 URL bug fixed**: `ebayProxyUrl('?action=token')` was producing `?path=?action=token` (Mode 2 invalid path → 400). Mode 1 now uses inline URL construction. **Manual fix for one stuck sale**: Nintendo Power book (item cmo3eu2720075jqsued3xp8vn, eBay listing 136308590245) sold Apr 24 but local item had `ebayListingId=NULL` so cron couldn't match. SQL'd `ebayListingId=136308590245` + reset `lastEbaySoldSyncAt='2026-04-20'` → cron caught it, item now SOLD. **96 other AVAILABLE items have NULL ebayListingId** — same bug-victim pattern. Need backfill (queued as task #11→merged into #9). **Files changed:** `packages/frontend/pages/api/proxy/ebay.ts`, `packages/backend/src/controllers/ebayController.ts`, `packages/backend/src/controllers/ebayTaxonomyController.ts`, `packages/backend/src/services/ebayTaxonomyService.ts`, `packages/backend/src/jobs/ebaySoldSyncCron.ts`, `packages/backend/src/jobs/ebayNotificationSetup.ts`. **Outstanding for S591:** (1) Fix push flow to write back ebayListingId/listedOnEbayAt; (2) Fix import-inventory dedup (currently creates duplicates instead of UPDATEing existing); (3) Fix sold-sync watermark advance design flaw (advances past unmatched orders); (4) Vercel env vars EBAY_CLIENT_ID/SECRET still not reaching the function — Mode 1 returns 500 (Mode 2 cron unaffected, low priority).
+
 **S589 (2026-04-26) — COMPLETE:** eBay DNS bypass via Vercel proxy + eBay image incognito fix + roadmap stale corrections. **Root cause confirmed:** Railway's network blocks DNS resolution for api.ebay.com at the infrastructure level — not fixable in code (dns.setServers, dns.setDefaultResultOrder, https.request all tried and confirmed ineffective). **Solution: Vercel proxy.** Created `pages/api/proxy/ebay.ts` with two modes: Mode 1 (`?action=token`) — Vercel fetches OAuth token using its own EBAY_CLIENT_ID/SECRET; Mode 2 (`?path=/...`) — general forward proxy that forwards headers + body to api.ebay.com. `getEbayAccessToken()` now calls `${FRONTEND_URL}/api/proxy/ebay?action=token`. `refreshEbayAccessToken()` now routes token refresh through `?path=/identity/v1/oauth2/token`. **eBay image incognito fix:** Chrome Enhanced Tracking Protection blocks `i.ebayimg.com` in incognito/tracking-protection. Fixed with backend image proxy at `GET /api/image-proxy?url=` (new `imageProxyController.ts` + `imageProxy.ts`). `getItemImageUrl()` added to `imageUtils.ts` — rewrites eBay CDN URLs to go through Railway. Wired into `ItemCard.tsx`. **Roadmap corrections:** #332–335 confirmed built via grep, updated from Queued → "Shipped — Pending Chrome QA (S589)". **Current eBay status (⚠️ UNRESOLVED):** EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_PROXY_SECRET set in Vercel env vars by Patrick. Still getting 500 from Vercel proxy — Vercel needs redeploy to bake in the new env vars (Vercel dashboard → Deployments → latest → Redeploy). Additionally: even once token works, `ebaySoldSyncCron.ts` calls `api.ebay.com` directly for the actual sync API calls — those need the same proxy treatment (currently only token flows are proxied). **Files changed:** `packages/frontend/pages/api/proxy/ebay.ts` (NEW), `packages/backend/src/controllers/ebayController.ts`, `packages/backend/src/controllers/imageProxyController.ts` (NEW), `packages/backend/src/routes/imageProxy.ts` (NEW), `packages/backend/src/index.ts`, `packages/frontend/lib/imageUtils.ts`, `packages/frontend/components/ItemCard.tsx`, `packages/backend/src/jobs/ebayNotificationSetup.ts`, `packages/backend/Dockerfile.production`, `claude_docs/strategy/roadmap.md`.
 
 **S585 (2026-04-26) — COMPLETE:** #310 Color-tag Discount Rules — 3 P0 bugs fixed + full Chrome QA. **Bug 1 (pre-S585):** Write endpoints (`createDiscountRule`, `updateDiscountRule`, `deleteDiscountRule`) used `req.user.id` (User ID) instead of `req.user.organizerProfile?.id` (Organizer ID) — all CRUD operations silently failed for valid TEAMS users. **Bug 2 (pre-S585):** Tier check used `workspace.subscriptionTier` — column does not exist on `OrganizerWorkspace`; correct field is `Organizer.tier`. **Bug 3 (this session):** GET route uses `optionalAuthenticate` which calls `prisma.user.findUnique()` with NO `organizer` include → `req.user.organizerProfile` is always undefined → `organizerProfile?.id` = undefined → fallback `prisma.organizer.findFirst()` threw early return. Fix: added `{ where: { userId: req.user.id } }` fallback lookup in `listDiscountRules`. Confirmed `Organizer.userId @unique` in schema before using it. MCP-pushed SHA `a8d80db`. **Chrome QA — all 4 CRUD ops verified:** LIST ✅ (rule renders with color swatch, label "30% Off — Red Tag", 30%, edit/delete icons), CREATE ✅ (rule created prior session — confirmed in DB via psycopg2), EDIT ✅ (modal pre-populates with existing values, label+discount updated, green toast, UI refreshed immediately), DELETE ✅ (inline confirm guard fires, rule removed, empty state "No discount rules yet" + "Create your first rule" CTA renders). **Files changed:** `packages/backend/src/controllers/discountRuleController.ts` (MCP-pushed mid-session — not in pushblock).
@@ -315,46 +317,53 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S590 — PRIMARY FOCUS: Full eBay syncing audit (Patrick directive 2026-04-26).**
+**S591 — PRIMARY FOCUS: Two parallel dev dispatches to finish the eBay sync work.**
 
-Treat this as a top-to-bottom audit of the eBay integration, not a continuation of S589 patches. Goal: produce a complete picture of every place eBay sync touches the codebase, what's working, what's broken, and the prioritized fix list — before writing more code.
+The eBay proxy is now solid (S590 verified end-to-end with a real sale marked SOLD). What remains is fixing the upstream bugs that caused the bug-victim items in the first place, plus a watermark-design flaw that turned a transient outage into a permanent data loss.
 
-### Audit scope (must cover all of these):
+### First action: dispatch dev batches A + B IN PARALLEL (single message, two Agent calls)
 
-1. **Token flow** — Vercel proxy (`/api/ebay-proxy/token`, `/api/ebay-proxy/refresh`). Confirm redeploy baked env vars. Confirm token refresh works for an active organizer.
-2. **Sync cron job** — `packages/backend/src/jobs/ebaySoldSyncCron.ts`. Grep every `api.ebay.com` direct call. Each one must route through Vercel proxy Mode 2 (`?path=/...`) or it will hit Railway's outbound block.
-3. **Notification setup** — `packages/backend/src/jobs/ebayNotificationSetup.ts`. Same direct-call audit.
-4. **Image proxy** — Confirm incognito Chrome loads eBay item images on a sale detail page (S589 fix).
-5. **Organizer-set values vs eBay overrides** — Verify organizer price/category/condition wins over eBay-imported `aiSuggested*` fields (recurring anti-pattern, see memory).
-6. **Database state** — psycopg2 query for orphaned eBay items, items with stale `lastEbaySyncAt`, orgs with expired tokens.
-7. **Roadmap status** — Cross-check roadmap rows for eBay features against live behavior (S572 found 215-session-old false-pending items).
+The dispatch briefs are stored verbatim in TaskList tasks #9 and #10 (subjects start with `[DEV BATCH A]` and `[DEV BATCH B]`). Each is self-contained — copy the description into an `Agent({subagent_type:'general-purpose', prompt: <prepend "You are findasale-dev. Read .../findasale-dev/SKILL.md first." then paste task body>})` call.
 
-### Deliverable:
+- **Batch A (task #9):** Fix eBay push flow write-back + import-inventory dedup logic. Touches `packages/backend/src/controllers/ebayController.ts` (pushSaleToEbay function + importInventoryFromEbay at line 3211).
+- **Batch B (task #10):** Fix sold-sync watermark advance flaw. Touches `packages/backend/src/jobs/ebaySoldSyncCron.ts` only. Recommended approach in brief: switch to fixed sliding 7-day window.
 
-A single audit report at `claude_docs/audits/ebay-sync-audit-S590.md` listing: every file that touches eBay, current behavior, P0–P3 issues found, and a prioritized fix dispatch list. THEN dispatch fixes — not before.
+Different files → can run in parallel safely. Per CLAUDE.md §7 batch dispatch protocol.
 
-### Pre-audit immediate actions (still required):
+### Second action: spot-check + push
 
-1. **Vercel redeploy** — Go to vercel.com → findasale → Deployments → latest deployment → three-dot menu → **Redeploy**. Bakes in EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_PROXY_SECRET set last session. Without this, eBay proxy still returns 500.
-2. **Watch Railway logs** — After redeploy, wait for next 15-min sync cycle. Should see `[eBay Sync] Starting sync cycle` without 500/ENOTFOUND errors.
+After both subagents return, read the actual diffs (don't blindly trust ✅ marks per CLAUDE.md §10c). Run `pnpm --filter backend tsc --noEmit --skipLibCheck` if VM is available. Single push block for Patrick covering both files.
 
-### Two-session audit scope (S588 + S589):
+### Third action: backfill the 96 stuck items
 
-**S588 delivered:** Photo station geofence, verified share XP system, Treasure Hunt sidebar card, visit idempotency fix. **Chrome QA still pending:** photo station geofence deny → amber block card; scan → share link → click tracking; Treasure Hunt sidebar card on sale detail.
+After Railway rebuilds with the dedup fix shipped, Patrick clicks "Sync eBay Inventory" button on `https://finda.sale/organizer/settings` (eBay tab). The fixed dedup logic should populate `ebayListingId` on most of the 96 AVAILABLE items that currently have NULL. Verify via SQL:
+```sql
+SELECT status, COUNT(*) FILTER (WHERE "ebayListingId" IS NOT NULL) AS has_id, COUNT(*) FILTER (WHERE "ebayListingId" IS NULL) AS no_id FROM "Item" WHERE "saleId" IN (SELECT id FROM "Sale" WHERE "organizerId" = 'cmnxueoas0005tfv8brnc0kky') GROUP BY status;
+```
+Before backfill: AVAILABLE has_id=1, no_id=96. After: has_id should jump to ~97.
 
-**S589 delivered:** Vercel eBay proxy (token + refresh routes), backend image proxy (incognito fix), roadmap stale status corrections (#332–335). **Still outstanding:** Vercel redeploy needed, sync cron direct calls need proxying.
+### Patrick-only action (independent of dev work)
 
-### Other pending items:
-- **#75 Tier Lapse Chrome QA** — Login as tier-lapse-test@example.com (Seedy2025!) → verify amber banner + PRO features gated
-- **Hunt Pass status inconsistency (P2)** — XP Store shows "Hunt Pass Inactive" for Karen but AvatarDropdown shows "Hunt Pass Active"
+**Task #12 — Vercel env vars.** Backend startup still logs `[eBay] Token fetch via proxy failed: 500` because Vercel's proxy can't read EBAY_CLIENT_ID/SECRET. Patrick needs to: open Vercel → Settings → Env Vars → confirm both have values (not empty strings) → trigger a clean Redeploy without build cache. Mode 2 (cron) doesn't depend on this so it's not blocking.
+
+### Reference for next-session orchestrator
+
+Full task list with dispatch-ready briefs lives in TaskList. Tasks 1–8 from S590 are complete. Tasks 9, 10, 12, 13 are pending. Task 13 has the explicit two-Agent-call template.
 
 **Passwords:** All test accounts use Seedy2025!
 
-**S589 push block (wrap docs only — all code was pushed mid-session):**
+### Other carry-over items (not eBay-related)
+- **#75 Tier Lapse Chrome QA** — Login as tier-lapse-test@example.com → verify amber banner + PRO features gated
+- **Hunt Pass status inconsistency (P2)** — XP Store shows "Hunt Pass Inactive" for Karen but AvatarDropdown shows "Hunt Pass Active"
+
+### S590 wrap push block
+
 ```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "wrap: S589 — eBay Vercel proxy + image proxy incognito fix"
+git commit -m "wrap: S590 — eBay sync end-to-end fix (DoH+ECS proxy + 35+ call migration)"
 .\push.ps1
 ```
+
+Note: All code from S590 was pushed mid-session via `.\push.ps1` runs Patrick performed throughout the night. Latest backend commit on main contains all the proxy migration + helper refactor + Mode 1 URL fix + lastmodifieddate filter. Latest frontend commit contains the final DoH+ECS proxy implementation.
