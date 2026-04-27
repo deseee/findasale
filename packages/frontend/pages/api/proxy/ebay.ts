@@ -17,8 +17,17 @@
  * Vercel also needs: EBAY_CLIENT_ID, EBAY_CLIENT_SECRET (copy from Railway).
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { Agent, setGlobalDispatcher } from 'undici';
 
 const EBAY_BASE = 'https://api.ebay.com';
+
+// Force IPv4-only DNS resolution for all outbound fetch() calls in this function.
+// Without this, undici (Node 22's built-in fetch) defaults to IPv6-first lookups,
+// and api.ebay.com fails with TypeError/cause=ENOTFOUND from Vercel's outbound
+// network — either eBay has no AAAA record reachable from Vercel iad1, or the
+// resolver returns unreachable IPv6. Setting connect.family=4 sidesteps the issue.
+// This runs once per cold start (module load), not per request.
+setGlobalDispatcher(new Agent({ connect: { family: 4 } }));
 
 // Disable Next.js body parsing — we forward the raw body for Mode 2 so that
 // application/x-www-form-urlencoded bodies (eBay token refresh) survive intact.
