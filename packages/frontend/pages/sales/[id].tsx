@@ -25,7 +25,6 @@ import AuctionCountdown from '../../components/AuctionCountdown';
 import PhotoLightbox from '../../components/PhotoLightbox';
 import SaleTourGallery from '../../components/SaleTourGallery';
 import { getThumbnailUrl, getOptimizedUrl, getLqipUrl } from '../../lib/imageUtils';
-import ReviewsSection from '../../components/ReviewsSection';
 import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
@@ -1395,15 +1394,6 @@ const SaleDetailPage = () => {
             );
           })()}
         </div>
-
-        {/* Reviews */}
-        <ReviewsSection
-          mode="sale"
-          saleId={sale.id}
-          saleStatus={sale.status}
-          avgRating={sale.organizer.avgRating}
-          totalReviews={sale.organizer.reviewCount}
-        />
 
         {/* Feature #47: UGC Photo Gallery */}
         {ugcPhotos.length > 0 && (
