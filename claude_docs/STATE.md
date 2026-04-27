@@ -315,21 +315,28 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S590 — Two-session audit (S588 + S589) + eBay full resolution.**
+**S590 — PRIMARY FOCUS: Full eBay syncing audit (Patrick directive 2026-04-26).**
 
-### Immediate first actions (before anything else):
+Treat this as a top-to-bottom audit of the eBay integration, not a continuation of S589 patches. Goal: produce a complete picture of every place eBay sync touches the codebase, what's working, what's broken, and the prioritized fix list — before writing more code.
 
-1. **Vercel redeploy** — Go to vercel.com → findasale → Deployments → latest deployment → three-dot menu → **Redeploy**. This bakes in EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_PROXY_SECRET that were set last session. Without this, eBay proxy still returns 500.
+### Audit scope (must cover all of these):
 
-2. **Watch Railway logs** — After Vercel redeploy, wait for next 15-min eBay sync. Should see `[eBay Sync] Starting sync cycle` without 500/ENOTFOUND errors. If 500 persists, check Vercel function logs for `[ebay-proxy/token]` error body.
+1. **Token flow** — Vercel proxy (`/api/ebay-proxy/token`, `/api/ebay-proxy/refresh`). Confirm redeploy baked env vars. Confirm token refresh works for an active organizer.
+2. **Sync cron job** — `packages/backend/src/jobs/ebaySoldSyncCron.ts`. Grep every `api.ebay.com` direct call. Each one must route through Vercel proxy Mode 2 (`?path=/...`) or it will hit Railway's outbound block.
+3. **Notification setup** — `packages/backend/src/jobs/ebayNotificationSetup.ts`. Same direct-call audit.
+4. **Image proxy** — Confirm incognito Chrome loads eBay item images on a sale detail page (S589 fix).
+5. **Organizer-set values vs eBay overrides** — Verify organizer price/category/condition wins over eBay-imported `aiSuggested*` fields (recurring anti-pattern, see memory).
+6. **Database state** — psycopg2 query for orphaned eBay items, items with stale `lastEbaySyncAt`, orgs with expired tokens.
+7. **Roadmap status** — Cross-check roadmap rows for eBay features against live behavior (S572 found 215-session-old false-pending items).
 
-### eBay full audit (primary S590 task):
+### Deliverable:
 
-The token flow is now proxied, but the **actual sync API calls** in `ebaySoldSyncCron.ts` still call `api.ebay.com` directly (not just token — the order fetching, item lookup, etc.). Need to:
-- Read `packages/backend/src/jobs/ebaySoldSyncCron.ts` and find every direct `api.ebay.com` fetch call
-- Route each through Vercel proxy Mode 2 (`?path=/...`)
-- Check `ebayNotificationSetup.ts` same (destination registration calls)
-- Verify eBay image proxy working in Chrome incognito (navigate to a sale with eBay items → incognito → confirm images load)
+A single audit report at `claude_docs/audits/ebay-sync-audit-S590.md` listing: every file that touches eBay, current behavior, P0–P3 issues found, and a prioritized fix dispatch list. THEN dispatch fixes — not before.
+
+### Pre-audit immediate actions (still required):
+
+1. **Vercel redeploy** — Go to vercel.com → findasale → Deployments → latest deployment → three-dot menu → **Redeploy**. Bakes in EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_PROXY_SECRET set last session. Without this, eBay proxy still returns 500.
+2. **Watch Railway logs** — After redeploy, wait for next 15-min sync cycle. Should see `[eBay Sync] Starting sync cycle` without 500/ENOTFOUND errors.
 
 ### Two-session audit scope (S588 + S589):
 
