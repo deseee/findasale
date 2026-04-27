@@ -40,6 +40,7 @@ import { prisma } from '../lib/prisma';
 export const PUBLIC_ITEM_FILTER: Prisma.ItemWhereInput = {
   isActive: true,
   status: { notIn: ['GRACE_LOCKED'] },
+  draftStatus: { in: ['PENDING_REVIEW', 'PUBLISHED'] },
 };
 
 /**
