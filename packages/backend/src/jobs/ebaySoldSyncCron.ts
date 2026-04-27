@@ -114,13 +114,16 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     }
 
     // Call eBay Fulfillment API
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const ebayResponse = await fetch(
-      `https://api.ebay.com/sell/fulfillment/v1/order?filter=${encodeURIComponent(filter)}&limit=50`,
+      `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/fulfillment/v1/order?filter=${encodeURIComponent(filter)}&limit=50`)}`,
       {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Language': 'en-US',
+          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
         },
       }
     );

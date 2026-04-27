@@ -43,11 +43,14 @@ async function getOrganizerEbayToken(organizerId: string): Promise<string | null
 
     try {
       const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-      const response = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
+      const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+      const proxySecret = process.env.EBAY_PROXY_SECRET;
+      const response = await fetch(`${frontendUrl}/api/proxy/ebay?path=/identity/v1/oauth2/token`, {
         method: 'POST',
         headers: {
           Authorization: `Basic ${credentials}`,
           'Content-Type': 'application/x-www-form-urlencoded',
+          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
         },
         body: `grant_type=refresh_token&refresh_token=${connection.refreshToken}&scope=https://api.ebay.com/oauth/api_scope`,
       });
