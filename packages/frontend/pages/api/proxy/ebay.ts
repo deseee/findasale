@@ -5,40 +5,66 @@
  *
  * 1. Token mode (POST /api/proxy/ebay?action=token)
  *    Vercel uses its own EBAY_CLIENT_ID/SECRET to get a token from eBay.
- *    Railway never needs to reach api.ebay.com for auth.
  *
  * 2. General proxy mode (any method /api/proxy/ebay?path=/some/ebay/path)
  *    Forwards headers + raw body bytes from Railway to api.ebay.com unchanged.
- *    Railway passes the Bearer token it got from action=token.
  *
  * Security: requests must include X-Proxy-Secret matching EBAY_PROXY_SECRET env var.
  *
- * Networking: Vercel's default resolver fails with ENOTFOUND on api.ebay.com
- * (confirmed via debug logs S590). We bypass it by:
- *   1. Resolving api.ebay.com via Google DNS (8.8.8.8) directly
- *   2. Calling node:https.request with the resolved IPv4 address
- *   3. Preserving Host header + setting servername for TLS SNI
- * This avoids both undici's DNS handling and the OS getaddrinfo path.
+ * Networking: Vercel's default OS resolver fails with ENOTFOUND on api.ebay.com.
+ * Custom Resolver bound to 8.8.8.8 over UDP returned empty arrays intermittently —
+ * Vercel functions appear to block or unreliably handle outbound UDP port 53.
+ * Solution: resolve via Cloudflare DNS-over-HTTPS (HTTPS, not UDP), then issue
+ * the eBay request via node:https.request with the resolved IPv4 address,
+ * preserving Host header + TLS SNI so eBay's cert validates.
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
 import https from 'node:https';
-import { Resolver } from 'node:dns/promises';
 
 const EBAY_HOST = 'api.ebay.com';
 
-// Cached resolver bound to Google DNS so we don't depend on Vercel's resolver.
-const ebayResolver = new Resolver();
-ebayResolver.setServers(['8.8.8.8', '8.8.4.4']);
+interface DohAnswer {
+  name: string;
+  type: number;
+  TTL: number;
+  data: string;
+}
 
-// Cache the resolved IP for 5 minutes to avoid a DNS hit per request.
-let cachedIp: { ip: string; expires: number } | null = null;
+interface DohResponse {
+  Status: number;
+  Answer?: DohAnswer[];
+}
 
-async function resolveEbayIp(): Promise<string> {
-  if (cachedIp && cachedIp.expires > Date.now()) return cachedIp.ip;
-  const addresses = await ebayResolver.resolve4(EBAY_HOST);
-  if (!addresses.length) throw new Error(`No A records for ${EBAY_HOST}`);
-  cachedIp = { ip: addresses[0], expires: Date.now() + 5 * 60 * 1000 };
-  return addresses[0];
+// Resolve api.ebay.com via Cloudflare DNS-over-HTTPS. Returns ALL A records
+// so the caller can fail over if the first IP is unreachable.
+async function resolveEbayIps(): Promise<string[]> {
+  const url = `https://1.1.1.1/dns-query?name=${EBAY_HOST}&type=A`;
+  const res = await fetch(url, {
+    headers: { Accept: 'application/dns-json' },
+  });
+  if (!res.ok) {
+    throw new Error(`DoH lookup HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as DohResponse;
+  if (data.Status !== 0) {
+    throw new Error(`DoH lookup status ${data.Status}`);
+  }
+  // type 1 = A record. Cloudflare may return CNAMEs (type 5) interleaved.
+  const ips = (data.Answer ?? []).filter((a) => a.type === 1).map((a) => a.data);
+  if (!ips.length) {
+    throw new Error(`DoH returned no A records for ${EBAY_HOST}`);
+  }
+  return ips;
+}
+
+// Cache resolved IPs for 5 minutes per warm function instance.
+let cachedIps: { ips: string[]; expires: number } | null = null;
+
+async function getEbayIps(): Promise<string[]> {
+  if (cachedIps && cachedIps.expires > Date.now()) return cachedIps.ips;
+  const ips = await resolveEbayIps();
+  cachedIps = { ips, expires: Date.now() + 5 * 60 * 1000 };
+  return ips;
 }
 
 interface HttpsResult {
@@ -47,13 +73,13 @@ interface HttpsResult {
   contentType: string | null;
 }
 
-async function fetchEbay(
+function requestEbayOnce(
+  ip: string,
   ebayPath: string,
   method: string,
   headers: Record<string, string>,
   body: string | undefined,
 ): Promise<HttpsResult> {
-  const ip = await resolveEbayIp();
   return new Promise((resolve, reject) => {
     const req = https.request(
       {
@@ -62,27 +88,51 @@ async function fetchEbay(
         path: ebayPath,
         method,
         headers: { ...headers, host: EBAY_HOST },
-        servername: EBAY_HOST, // TLS SNI — eBay's cert is for api.ebay.com
+        servername: EBAY_HOST, // TLS SNI
         family: 4,
+        timeout: 15000,
       },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (c: Buffer) => chunks.push(c));
         res.on('end', () => {
-          const text = Buffer.concat(chunks).toString('utf-8');
           resolve({
             status: res.statusCode ?? 0,
-            body: text,
+            body: Buffer.concat(chunks).toString('utf-8'),
             contentType: (res.headers['content-type'] as string) ?? null,
           });
         });
         res.on('error', reject);
       },
     );
+    req.on('timeout', () => {
+      req.destroy(new Error('Request timeout'));
+    });
     req.on('error', reject);
     if (body) req.write(body);
     req.end();
   });
+}
+
+// Try each resolved IP in turn until one works. If all fail, rethrow the last error.
+async function fetchEbay(
+  ebayPath: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+): Promise<HttpsResult> {
+  const ips = await getEbayIps();
+  let lastErr: any;
+  for (const ip of ips) {
+    try {
+      return await requestEbayOnce(ip, ebayPath, method, headers, body);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  // All IPs failed — invalidate cache so next call re-resolves
+  cachedIps = null;
+  throw lastErr ?? new Error('No IPs to try');
 }
 
 // Disable Next.js body parsing — we forward the raw body for Mode 2 so that
@@ -163,7 +213,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     'content-type',
     'x-ebay-c-marketplace-id',
     'accept',
-    // Trading API headers (GetItem, GetMyeBaySelling, etc. — XML over /ws/api.dll)
     'x-ebay-api-call-name',
     'x-ebay-api-siteid',
     'x-ebay-api-compatibility-level',
