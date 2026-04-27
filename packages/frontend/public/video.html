@@ -580,6 +580,24 @@ body {
     });
   }
 })();
+
+// ── Video height: fit above sticky bar ──
+// Measures the actual sticky bar height and available viewport space,
+// then caps the video wrapper so it never slides under the bar.
+(function() {
+  function fitVideo() {
+    var bar = document.querySelector('.sticky-bar');
+    var wrapper = document.querySelector('.video-wrapper');
+    if (!bar || !wrapper) return;
+    var isMobile = window.innerWidth <= 600;
+    var naturalMax = isMobile ? 679 : 750;
+    var pagePadTop = isMobile ? 8 : 16;
+    var available = window.innerHeight - pagePadTop - bar.offsetHeight - 8;
+    wrapper.style.height = Math.min(naturalMax, Math.max(280, available)) + 'px';
+  }
+  fitVideo();
+  window.addEventListener('resize', fitVideo);
+})();
 </script>
 </body>
 </html>
