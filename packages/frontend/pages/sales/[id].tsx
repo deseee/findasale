@@ -961,35 +961,20 @@ const SaleDetailPage = () => {
 
         {/* Items Section — D-006: First full-width section after About/Photo grid */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-          {/* Title row: heading + per-page + add button */}
-          <div className="flex flex-wrap items-center gap-3 mb-5">
-            <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mr-auto">
+          {/* Title row: heading left, Add More Items right (organizer only) */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50">
               {sale.isAuctionSale ? 'Auction Items' : 'Items for Sale'}
             </h2>
-            {sale.items.length > 12 && (
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-warm-500 dark:text-gray-400">Show:</label>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentItemPage(1); }}
-                  className="text-sm border border-warm-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
-                  <option value={12}>12 per page</option>
-                  <option value={24}>24 per page</option>
-                  <option value={48}>48 per page</option>
-                  <option value={0}>Show all</option>
-                </select>
-              </div>
-            )}
             {isOrganizer && sale.items.length > 0 && (
               <Link
                 href={`/organizer/add-items/${sale.id}`}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-lg inline-flex items-center"
+                className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-1.5 px-3 rounded-lg inline-flex items-center text-sm shrink-0"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-white" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                 </svg>
-                Add More Items
+                Add Items
               </Link>
             )}
           </div>
@@ -1002,7 +987,7 @@ const SaleDetailPage = () => {
             const isLowStock = availableCount > 0 && availableCount <= Math.max(3, Math.floor(sale.items.length * 0.2));
             const isSoldOut = availableCount === 0;
             return (
-              <div className="mb-5 flex flex-wrap items-center gap-3">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
                 {isSoldOut ? (
                   <span className="inline-flex items-center gap-1 bg-warm-100 text-warm-600 text-sm font-semibold px-3 py-1.5 rounded-full">
                     All items sold or reserved
@@ -1030,12 +1015,12 @@ const SaleDetailPage = () => {
             );
           })()}
 
-          {/* Category Filter — collapsed behind dropdown */}
+          {/* Controls row: Filter + Show per page on same line */}
           {sale.items && sale.items.some((item) => item.category) && (
-            <div className="mb-6 relative">
+            <div className="flex items-center gap-3 mb-5 relative">
               <button
                 onClick={() => setCategoryDropdownOpen(o => !o)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-warm-700 dark:text-gray-200 hover:bg-warm-50 dark:hover:bg-gray-600 transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-warm-700 dark:text-gray-200 hover:bg-warm-50 dark:hover:bg-gray-600 transition-colors"
               >
                 <svg className="w-4 h-4 text-warm-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
@@ -1084,6 +1069,23 @@ const SaleDetailPage = () => {
                       );
                     }
                   )}
+                </div>
+              )}
+
+              {/* Show per page — sits beside the filter button */}
+              {sale.items.length > 12 && (
+                <div className="flex items-center gap-2 ml-auto">
+                  <label className="text-sm text-warm-500 dark:text-gray-400 whitespace-nowrap">Show:</label>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentItemPage(1); }}
+                    className="text-sm border border-warm-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value={12}>12</option>
+                    <option value={24}>24</option>
+                    <option value={48}>48</option>
+                    <option value={0}>All</option>
+                  </select>
                 </div>
               )}
             </div>
