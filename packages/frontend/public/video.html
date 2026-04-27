@@ -87,7 +87,7 @@ body {
 .page {
   max-width: 720px;
   margin: 0 auto;
-  padding: 16px 24px 80px;
+  padding: 16px 24px 110px;
 }
 
 /* ── Logo ── */
@@ -415,8 +415,54 @@ body {
 }
 
 /* ── Responsive ── */
+/* ── Sticky CTA Bar ── */
+.sticky-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #111111;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  z-index: 100;
+}
+.sticky-bar .sticky-btn {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto 8px;
+  background: var(--amber);
+  color: #000;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  text-align: center;
+  text-decoration: none;
+  padding: 14px 20px;
+  border-radius: 10px;
+  letter-spacing: -0.2px;
+}
+.sticky-bar .sticky-sub {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+.sticky-bar .sticky-sub span {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.sticky-bar .sticky-sub a {
+  font-size: 12px;
+  color: var(--amber);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(249,115,22,0.4);
+}
+
 @media (max-width: 600px) {
-  .page { padding: 8px 16px 60px; }
+  .page { padding: 8px 16px 100px; }
   .video-wrapper {
     width: 290px;
     height: 679px;
@@ -489,7 +535,7 @@ body {
   </div>
 
   <!-- Two quick answers -->
-  <div class="faq">
+  <div class="faq" id="faq">
     <div class="faq-row">
       <div class="faq-q">Who is this for?</div>
       <div class="faq-a">Antique dealers, estate sale organizers, yard sale hosts, auctioneers, thrift stores, flea market operators, and consignment shops. Anyone running a secondary sale.</div>
@@ -509,6 +555,14 @@ body {
   <!-- Footer -->
   <div class="footer">
     <p>Built by <a href="https://finda.sale">FindA.Sale</a> — the app for estate sales, yard sales, auctions, flea markets, and consignment.</p>
+  </div>
+</div>
+
+<div class="sticky-bar">
+  <a href="https://finda.sale/register" class="sticky-btn" id="sticky-cta">Start Your First Sale</a>
+  <div class="sticky-sub">
+    <span>Free forever · No card needed</span>
+    <a href="#faq">Have questions?</a>
   </div>
 </div>
 
