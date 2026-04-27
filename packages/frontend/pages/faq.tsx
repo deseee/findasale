@@ -167,7 +167,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is a Treasure Hunt scan and how do QR codes work?',
     answer: (
       <>
-        Each item at a participating sale has a QR sticker printed by the organizer. When you scan an item's QR code at the sale, you earn 3 XP (Hunt Pass: 4.5 XP). Scanning also pulls up the item's full listing so you can check price, condition, and description right from your phone. It's like a built-in shopping assistant at every sale you attend.
+        Each item at a participating sale has a QR sticker printed by the organizer. Scan an item's QR code at the sale to pull up its full listing — price, condition, description, and photos — right on your phone. Scanning is a quick way to verify details before you buy, and organizers use it to streamline checkout at the event.
       </>
     ),
   },
@@ -268,7 +268,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'How do I earn XP?',
     answer: (
       <>
-        You earn XP from a wide range of activities. Main sources include: purchasing items ($1 spent = 10 XP), walking into a sale (2 XP per check-in, max 2 per day), posting haul reviews (30 XP), submitting appraisals (5 XP), and referring friends (500 XP per friend purchase). You also earn XP from Treasure Trails, QR code scans (3 XP), community activities, and streak bonuses. Visit your <strong>Account → Loyalty</strong> page to see all available actions and track your progress.
+        You earn XP from a wide range of activities. Main sources include: purchasing items ($1 spent = 1 XP), visiting a sale (5 XP, max 2 per day), publishing haul posts (10 XP), reviewing organizers (8 XP), completing Treasure Trails (40–80 XP bonus), submitting appraisals (10 XP), and referring friends. You also earn XP from seasonal challenges, community activities, and daily streaks. Visit your <strong>Account → Loyalty</strong> page to see all available actions and track your progress.
       </>
     ),
   },
@@ -331,7 +331,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Treasure Trails?',
     answer: (
       <>
-        Treasure Trails are curated routes that combine estate sale shopping, thrift store visits, and local points of interest into one adventure. A Trail might take you from a Saturday morning estate sale to a vintage shop downtown to a scenic overlook on the way home. Each stop is mapped. You check in at locations along the way, rate the trail when you're done, and earn XP for completing it. Hunt Pass subscribers can create their own trails and share them with the community — and earn XP every time someone new completes a trail they built.
+        Treasure Trails are curated multi-stop local experiences anchored to estate sales. A Trail might combine a Saturday morning estate sale with a vintage shop downtown and a scenic café on the way home. You check in at each stop, earn XP (5 XP for sales, 3 for shops, 2 for points of interest), and earn a completion bonus (40–80 XP depending on trail length) when you finish all stops. Hunt Pass subscribers can create their own trails and share them with the community — and earn XP every time a shopper completes a trail they built.
       </>
     ),
   },
@@ -340,7 +340,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Crowd Appraisals?',
     answer: (
       <>
-        Crowd Appraisals let the FindA.Sale community weigh in on an item's estimated value. When a buyer or organizer marks an item for appraisal, community members with SCOUT rank or above can submit their valuation. The community votes on submissions, and the requester picks the appraisal they find most useful. Submitting earns XP — and if yours is selected, you earn a significant XP bonus. It's a way for experienced collectors to share their knowledge and get recognized for it.
+        Crowd Appraisals let the FindA.Sale community weigh in on an item's estimated value. When a buyer or organizer marks an item for appraisal, community members with Scout rank or above can submit their valuation. The community votes on submissions, and the requester picks the appraisal they find most useful. Submitting earns XP — and if yours is selected, you earn a significant XP bonus. It's a way for experienced collectors to share their knowledge and get recognized for it.
       </>
     ),
   },
@@ -503,45 +503,6 @@ const organizerFAQs: FAQItem[] = [
     answer: (
       <>
         Brand Kit lets you customize your organizer profile with your logo, colors, custom fonts, banners, and a custom URL. Brand Kit is available on PRO and TEAMS plans.
-      </>
-    ),
-  },
-  {
-    question: 'How do I test my payment setup before my sale starts?',
-    answer: (
-      <>
-        You have two ways to test payment flows:
-        <br /><br />
-        <strong>For POS (in-person card payments):</strong> Open the{' '}
-        <Link href="/organizer/pos" className="text-amber-600 hover:underline">POS page</Link>,
-        select your sale, and tap <strong>"Run $1.00 Test Transaction"</strong> in the Pre-Sale Test card.
-        It sends a $1 charge through Stripe's test environment — no real money moves — and automatically
-        checks off the POS task on your sale's progress checklist when it succeeds.
-        <br /><br />
-        <strong>For online checkout:</strong> Open your sale's Promote page and tap <strong>"Test Online Checkout"</strong> or <strong>"Test Auction Checkout"</strong> to get a test link and QR code. No real money moves and your inventory stays safe.
-        <br /><br />
-        For a full pre-sale walkthrough including all checkout methods and a day-before checklist, see the{' '}
-        <Link href="/guide#before-you-go-live" className="text-amber-600 hover:underline">Before You Go Live</Link>{' '}
-        section of the Organizer Guide.
-        <br /><br />
-        <strong>Common reasons tests fail:</strong> Stripe account not fully onboarded (look for a
-        setup banner on your Earnings page), sale not yet published, or no items added. Still stuck?
-        Contact support with your sale name and we'll help you get sorted before opening day.
-      </>
-    ),
-  },
-  {
-    question: 'What Stripe test card numbers should I use?',
-    answer: (
-      <>
-        Use these when clicking through the test checkout links on the Promote page. Any future expiry date (e.g. 12/30) and any 3-digit CVC work with all test cards.
-        <br /><br />
-        <strong>4242 4242 4242 4242</strong> — Payment succeeds<br />
-        <strong>4000 0000 0000 0002</strong> — Payment is declined<br />
-        <strong>4000 0025 0000 3155</strong> — Triggers an authentication step (3D Secure)
-        <br /><br />
-        Test cards only work in test checkout flows. Real checkouts will never ask for these numbers.
-        If you see a test card request when you&apos;re not testing, contact support.
       </>
     ),
   },
