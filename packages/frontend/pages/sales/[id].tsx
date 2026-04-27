@@ -927,8 +927,8 @@ const SaleDetailPage = () => {
               </div>
             )}
 
-            {/* Photo Station card — shopper only, not organizer */}
-            {user && !isOrganizer && (
+            {/* Photo Station card — visible to all except organizer */}
+            {!isOrganizer && (
               <Link href={`/sales/${sale.id}/photo-station`} className="block bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 mb-8 hover:shadow-md transition">
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">📸</span>
@@ -941,8 +941,8 @@ const SaleDetailPage = () => {
               </Link>
             )}
 
-            {/* Treasure Hunt card — shopper only, not organizer */}
-            {user && !isOrganizer && sale.treasureHuntEnabled && (
+            {/* Treasure Hunt card — visible to all except organizer */}
+            {!isOrganizer && sale.treasureHuntEnabled && (
               <Link href={`/sales/${sale.id}/treasure-hunt-qr/progress`} className="block bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-8 hover:shadow-md transition">
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">🎯</span>
@@ -1395,6 +1395,15 @@ const SaleDetailPage = () => {
             );
           })()}
         </div>
+
+        {/* Reviews */}
+        <ReviewsSection
+          mode="sale"
+          saleId={sale.id}
+          saleStatus={sale.status}
+          avgRating={sale.organizer.avgRating}
+          totalReviews={sale.organizer.reviewCount}
+        />
 
         {/* Feature #47: UGC Photo Gallery */}
         {ugcPhotos.length > 0 && (

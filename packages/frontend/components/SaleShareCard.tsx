@@ -105,41 +105,47 @@ const SaleShareCard: React.FC<SaleShareCardProps> = ({
         Copy Link
       </button>
 
-      {/* Social buttons — ghost/outlined treatment */}
+      {/* Social buttons — centered with platform brand colors */}
       <div className="space-y-1">
         <button
           onClick={handleFacebookShare}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 font-medium transition-colors border border-gray-200 dark:border-gray-700 mb-1"
+          className="w-full text-center px-3 py-2 rounded text-sm font-medium transition-colors border-l-4 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 mb-1"
+          style={{ borderLeftColor: '#1877F2' }}
         >
           Facebook
         </button>
         <button
           onClick={handleTwitterShare}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 font-medium transition-colors border border-gray-200 dark:border-gray-700 mb-1"
+          className="w-full text-center px-3 py-2 rounded text-sm font-medium transition-colors border-l-4 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 mb-1"
+          style={{ borderLeftColor: '#000000' }}
         >
           X/Twitter
         </button>
         <button
           onClick={handleThreadsShare}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 font-medium transition-colors border border-gray-200 dark:border-gray-700 mb-1"
+          className="w-full text-center px-3 py-2 rounded text-sm font-medium transition-colors border-l-4 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 mb-1"
+          style={{ borderLeftColor: '#000000' }}
         >
           Threads
         </button>
         <button
           onClick={handlePinterestShare}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 font-medium transition-colors border border-gray-200 dark:border-gray-700 mb-1"
+          className="w-full text-center px-3 py-2 rounded text-sm font-medium transition-colors border-l-4 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 mb-1"
+          style={{ borderLeftColor: '#E60023' }}
         >
           Pinterest
         </button>
         <button
           onClick={handleNextdoorShare}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 font-medium transition-colors border border-gray-200 dark:border-gray-700 mb-1"
+          className="w-full text-center px-3 py-2 rounded text-sm font-medium transition-colors border-l-4 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 mb-1"
+          style={{ borderLeftColor: '#8FBC48' }}
         >
           Nextdoor
         </button>
         <button
           onClick={handleTikTokShare}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-sm text-gray-700 dark:text-gray-300 font-medium transition-colors border border-gray-200 dark:border-gray-700"
+          className="w-full text-center px-3 py-2 rounded text-sm font-medium transition-colors border-l-4 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
+          style={{ borderLeftColor: '#010101' }}
         >
           TikTok
         </button>

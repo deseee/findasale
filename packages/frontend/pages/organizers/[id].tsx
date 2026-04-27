@@ -10,6 +10,7 @@ import FollowButton from '../../components/FollowButton';
 import ReputationTier from '../../components/ReputationTier';
 import ReputationBadge from '../../components/ReputationBadge'; // Feature #71
 import Skeleton from '../../components/Skeleton';
+import ReviewsSection from '../../components/ReviewsSection';
 
 interface Sale {
   id: string;
@@ -183,6 +184,16 @@ const OrganizerProfilePage = () => {
             <p className="text-sm text-warm-400 dark:text-warm-500 mt-2">Check back soon for upcoming sales.</p>
           </div>
         )}
+
+        {/* Reviews */}
+        <div className="mt-8">
+          <ReviewsSection
+            mode="organizer"
+            organizerId={organizer.id}
+            avgRating={organizer.avgRating}
+            totalReviews={organizer.reviewCount}
+          />
+        </div>
       </main>
     </div>
   );
