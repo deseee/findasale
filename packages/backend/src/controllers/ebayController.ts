@@ -3287,11 +3287,84 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         const sku = ebayItem.sku as string;
         if (!sku) { skipped++; continue; }
 
-        // Dedup: skip if already imported
-        const existing = await prisma.item.findFirst({
-          where: { organizerId: organizer.id, ebayListingId: sku }
-        });
-        if (existing) { skipped++; continue; }
+        // Dedup: handle FAS-* (FindA.Sale-pushed) items specially
+        let existing: any = null;
+        let shouldBackfillEbayListingId = false;
+
+        if (sku.startsWith('FAS-')) {
+          // Extract FindA.Sale itemId from SKU
+          const itemId = sku.slice(4); // Remove 'FAS-' prefix
+          existing = await prisma.item.findUnique({
+            where: { id: itemId }
+          });
+
+          if (existing) {
+            // Item exists — check if it needs backfill
+            if (!existing.organizerId || existing.organizerId !== organizer.id) {
+              // Wrong organizer — treat as orphaned, skip
+              skipped++;
+              continue;
+            }
+
+            if (existing.ebayListingId === null) {
+              // Item needs backfill — try to fetch the numeric listing ID from eBay offer
+              shouldBackfillEbayListingId = true;
+            } else {
+              // ebayListingId already set — just skip
+              skipped++;
+              continue;
+            }
+          } else {
+            // Item not found by itemId — orphaned SKU, skip
+            skipped++;
+            continue;
+          }
+        } else {
+          // Non-FAS SKU: use original logic (check by SKU as ebayListingId)
+          existing = await prisma.item.findFirst({
+            where: { organizerId: organizer.id, ebayListingId: sku }
+          });
+          if (existing) { skipped++; continue; }
+        }
+
+        // If backfill needed, fetch the numeric listing ID from eBay offer
+        if (shouldBackfillEbayListingId) {
+          try {
+            const offerRes = await fetch(
+              ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`)),
+              {
+                headers: {
+                  ...ebayUserHeaders(accessToken),
+                  ...ebayProxyHeaders(),
+                },
+              }
+            );
+
+            if (offerRes.ok) {
+              const offerData = (await offerRes.json()) as any;
+              const listingId = offerData?.offers?.[0]?.listing?.listingId;
+
+              if (listingId && existing) {
+                // Update item with the numeric listing ID and mark as listed
+                await prisma.item.update({
+                  where: { id: existing.id },
+                  data: {
+                    ebayListingId: listingId,
+                    listedOnEbayAt: new Date(),
+                  },
+                });
+                skipped++;
+                continue;
+              }
+            }
+          } catch (err: any) {
+            console.warn(`[eBay Import] Failed to fetch offer for SKU ${sku}:`, err.message);
+          }
+
+          // If backfill failed, just skip without creating a duplicate
+          skipped++;
+          continue;
+        }
 
         // Map eBay fields → Item
         const product = ebayItem.product || {};
