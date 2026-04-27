@@ -145,8 +145,11 @@ export async function getEbayAccessToken(): Promise<string | null> {
     // Route through Vercel proxy — Railway's network blocks api.ebay.com at DNS level.
     // Vercel holds its own copy of EBAY_CLIENT_ID/SECRET and fetches the token directly.
     // Railway just asks "give me a token" — no credential forwarding needed.
+    // NOTE: Mode 1 uses ?action=token directly; do NOT route through ebayProxyUrl()
+    // which prepends ?path= and would corrupt the URL into ?path=?action=token.
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
     const proxyRes = await fetch(
-      ebayProxyUrl('?action=token'),
+      `${frontendUrl}/api/proxy/ebay?action=token`,
       {
         method: 'POST',
         headers: ebayProxyHeaders(),

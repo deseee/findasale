@@ -273,12 +273,12 @@ async function syncEbaySoldItems(): Promise<void> {
   }
 }
 
-// TEMP S590: every 6 minutes for proxy debugging — restore to */15 once stable
-// Cron expression: */6 * * * *
+// Register the cron job to run every 15 minutes
+// Cron expression: */15 * * * *
 export function startEbaySoldSyncCron(): void {
-  cron.schedule('*/6 * * * *', async () => {
-    console.log('[eBay Sync] Starting 6-minute sync cycle...');
+  cron.schedule('*/15 * * * *', async () => {
+    console.log('[eBay Sync] Starting 15-minute sync cycle...');
     await syncEbaySoldItems();
   });
-  console.log('[eBay Sync] Cron registered — runs every 6 minutes (S590 debug)');
+  console.log('[eBay Sync] Cron registered — runs every 15 minutes');
 }
