@@ -3290,6 +3290,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         // Dedup: handle FAS-* (FindA.Sale-pushed) items specially
         let existing: any = null;
         let shouldBackfillEbayListingId = false;
+        // For non-FAS items, will be overwritten with the numeric eBay listingId
+        // fetched from the offer API. Defaults to SKU as fallback.
+        let ebayListingIdToStore: string = sku;
 
         if (sku.startsWith('FAS-')) {
           // Extract FindA.Sale itemId from SKU
@@ -3320,11 +3323,46 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             continue;
           }
         } else {
-          // Non-FAS SKU: use original logic (check by SKU as ebayListingId)
+          // Non-FAS SKU: fetch the numeric listingId from the offer API.
+          // The Inventory API only exposes the SKU; the Fulfillment API (used by the sold-sync
+          // cron) identifies line items by legacyItemId (numeric), NOT by inventory SKU.
+          // Storing the SKU as ebayListingId breaks sold-sync matching — always use numeric ID.
+          try {
+            const offerRes = await fetch(
+              ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`)),
+              { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
+            );
+            if (offerRes.ok) {
+              const offerData = (await offerRes.json()) as any;
+              const listingId = offerData?.offers?.[0]?.listing?.listingId;
+              if (listingId) ebayListingIdToStore = listingId;
+            }
+          } catch (err: any) {
+            console.warn(`[eBay Import] Could not fetch offer for SKU ${sku}, using SKU as fallback:`, err.message);
+          }
+
+          // Dedup: check by both numeric listingId AND sku to catch items stored either way
           existing = await prisma.item.findFirst({
-            where: { organizerId: organizer.id, ebayListingId: sku }
+            where: {
+              organizerId: organizer.id,
+              OR: [
+                { ebayListingId: ebayListingIdToStore },
+                { ebayListingId: sku },
+              ],
+            }
           });
-          if (existing) { skipped++; continue; }
+          if (existing) {
+            // Backfill: migrate SKU-stored ebayListingId to numeric ID so sold-sync can match
+            if (ebayListingIdToStore !== sku && existing.ebayListingId !== ebayListingIdToStore) {
+              await prisma.item.update({
+                where: { id: existing.id },
+                data: { ebayListingId: ebayListingIdToStore },
+              });
+              console.log(`[eBay Import] Backfilled numeric listingId ${ebayListingIdToStore} on item ${existing.id} (was SKU: ${sku})`);
+            }
+            skipped++;
+            continue;
+          }
         }
 
         // If backfill needed, fetch the numeric listing ID from eBay offer
@@ -3402,7 +3440,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             inInventory: true,
             organizerId: organizer.id,
             saleId: null,          // Feature #300: inventory items need no sale container
-            ebayListingId: sku,
+            ebayListingId: ebayListingIdToStore, // numeric listingId if offer fetch succeeded; sku as fallback
             conditionGrade,
             condition,
             embedding: [],  // populated later when item is indexed for search
