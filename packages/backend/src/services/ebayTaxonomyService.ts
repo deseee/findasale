@@ -13,6 +13,18 @@ import { prisma } from '../lib/prisma';
 import { isAnthropicAvailable } from './cloudAIService';
 import axios from 'axios';
 
+// ── Vercel Proxy Helpers ────────────────────────────────────────────────────
+// Railway DNS cannot resolve api.ebay.com directly, so all eBay API calls route
+// through the Vercel proxy at /api/proxy/ebay. These helpers ensure consistent
+// URL and header construction.
+const ebayProxyUrl = (path: string): string =>
+  `${process.env.FRONTEND_URL ?? 'https://finda.sale'}/api/proxy/ebay?path=${path}`;
+
+const ebayProxyHeaders = (): Record<string, string> => {
+  const secret = process.env.EBAY_PROXY_SECRET;
+  return secret ? { 'X-Proxy-Secret': secret } : {};
+};
+
 // ── Simple in-memory aspect cache (24h TTL) ──────────────────────────────────
 
 interface CachedAspect {
@@ -61,10 +73,8 @@ export async function getAspectsForCategory(
     }
 
     // Fetch from eBay Taxonomy API
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const response = await axios.get(
-      `${frontendUrl}/api/proxy/ebay`,
+      `${process.env.FRONTEND_URL ?? 'https://finda.sale'}/api/proxy/ebay`,
       {
         params: {
           path: '/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category',
@@ -73,7 +83,7 @@ export async function getAspectsForCategory(
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+          ...ebayProxyHeaders(),
         },
         timeout: 10000,
       }
@@ -142,10 +152,8 @@ export async function searchCatalogProduct(
       queryParam.mpn = params.mpn;
     }
 
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const response = await axios.get(
-      `${frontendUrl}/api/proxy/ebay`,
+      `${process.env.FRONTEND_URL ?? 'https://finda.sale'}/api/proxy/ebay`,
       {
         params: {
           path: '/commerce/catalog/v1_beta/product_summary/search',
@@ -155,7 +163,7 @@ export async function searchCatalogProduct(
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+          ...ebayProxyHeaders(),
         },
         timeout: 10000,
       }
@@ -361,10 +369,8 @@ export async function suggestCategories(
     // Fetch from eBay Taxonomy API
     const treeId = '0'; // EBAY_US
     const q = query.slice(0, 100);
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const response = await axios.get(
-      `${frontendUrl}/api/proxy/ebay`,
+      `${process.env.FRONTEND_URL ?? 'https://finda.sale'}/api/proxy/ebay`,
       {
         params: {
           path: `/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
@@ -373,7 +379,7 @@ export async function suggestCategories(
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
-          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+          ...ebayProxyHeaders(),
         },
         timeout: 10000,
       }
