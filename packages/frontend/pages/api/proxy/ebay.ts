@@ -158,7 +158,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const forwardHeaders: Record<string, string> = {};
-  const allowedHeaders = ['authorization', 'content-type', 'x-ebay-c-marketplace-id', 'accept'];
+  const allowedHeaders = [
+    'authorization',
+    'content-type',
+    'x-ebay-c-marketplace-id',
+    'accept',
+    // Trading API headers (GetItem, GetMyeBaySelling, etc. — XML over /ws/api.dll)
+    'x-ebay-api-call-name',
+    'x-ebay-api-siteid',
+    'x-ebay-api-compatibility-level',
+    'x-ebay-api-app-name',
+    'x-ebay-api-iaf-token',
+  ];
   for (const key of allowedHeaders) {
     const val = req.headers[key];
     if (val) forwardHeaders[key] = Array.isArray(val) ? val[0] : val;
