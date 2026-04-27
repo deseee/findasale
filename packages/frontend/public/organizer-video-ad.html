@@ -591,7 +591,7 @@ body.embed #timer { display: none; }
 /* Listing card */
 .listing-card {
   background: #1C1C2A; border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 16px; overflow: hidden; width: 100%; max-width: 310px;
+  border-radius: 16px; overflow: hidden; width: 100%; max-width: 340px;
   display: flex; flex-direction: row; align-items: center;
   margin-bottom: 16px; opacity: 0; transform: translateY(8px) scale(0.97);
   transition: opacity 0.4s ease, transform 0.4s ease;
@@ -599,11 +599,11 @@ body.embed #timer { display: none; }
 }
 .listing-card.in { opacity: 1; transform: translateY(0) scale(1); }
 .listing-card-img {
-  width: 80px; height: 80px; flex-shrink: 0;
+  width: 96px; height: 96px; flex-shrink: 0;
   background: linear-gradient(135deg, #8B7355, #6B5B3E);
   display: flex; align-items: center; justify-content: center; position: relative;
 }
-.lamp-svg-card { width: 48px; height: 60px; }
+.lamp-svg-card { width: 58px; height: 72px; }
 .listing-live-dot {
   position: absolute; top: 5px; left: 5px;
   background: #10B981; color: white; font-family: 'Inter', sans-serif;
@@ -611,13 +611,13 @@ body.embed #timer { display: none; }
   padding: 2px 5px; border-radius: 4px;
 }
 .listing-card-body { flex: 1; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
-.listing-card-title { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); }
+.listing-card-title { font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9); }
 .listing-card-row { display: flex; align-items: center; justify-content: space-between; }
-.listing-card-price { font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+.listing-card-price { font-family: 'Montserrat', sans-serif; font-size: 21px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
 .listing-card-buy {
   background: #F97316; color: #000;
-  font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 800;
-  padding: 6px 12px; border-radius: 8px; letter-spacing: -0.2px;
+  font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 800;
+  padding: 7px 14px; border-radius: 8px; letter-spacing: -0.2px;
 }
 .share-headline {
   font-family: 'Montserrat', sans-serif; font-size: 28px; font-weight: 800;
@@ -634,7 +634,7 @@ body.embed #timer { display: none; }
 .share-sub.in { opacity: 1; }
 .platform-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-  width: 100%; max-width: 310px;
+  width: 100%; max-width: 340px;
 }
 .plat-tile {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -643,7 +643,7 @@ body.embed #timer { display: none; }
 }
 .plat-tile.in { opacity: 1; transform: translateY(0) scale(1); }
 .plat-logo {
-  width: 62px; height: 62px; border-radius: 14px;
+  width: 72px; height: 72px; border-radius: 16px;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 14px rgba(0,0,0,0.4); overflow: hidden; flex-shrink: 0;
 }
@@ -652,7 +652,7 @@ body.embed #timer { display: none; }
   color: rgba(255,255,255,0.45); text-align: center; letter-spacing: 0.2px;
 }
 .share-btn-wrap {
-  margin-top: 16px; width: 100%; max-width: 310px; opacity: 0;
+  margin-top: 16px; width: 100%; max-width: 340px; opacity: 0;
   transform: translateY(6px); transition: opacity 0.4s ease, transform 0.4s ease;
 }
 .share-btn-wrap.in { opacity: 1; transform: translateY(0); }
@@ -1472,7 +1472,7 @@ body.embed #timer { display: none; }
     <div class="platform-grid">
       <div class="plat-tile" id="pt1">
         <div class="plat-logo" style="background:#fff;">
-          <svg viewBox="0 0 68 40" width="60" height="35" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 68 40" width="68" height="40" xmlns="http://www.w3.org/2000/svg">
             <text x="1" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#E53238">e</text>
             <text x="21" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#0064D2">B</text>
             <text x="39" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#F5AF02">a</text>
@@ -1483,7 +1483,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt2">
         <div class="plat-logo" style="background:#1877F2;">
-          <svg viewBox="0 0 32 32" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="38" height="38" xmlns="http://www.w3.org/2000/svg">
             <text x="16" y="26" font-family="Georgia,serif" font-size="26" font-weight="900" fill="white" text-anchor="middle">f</text>
           </svg>
         </div>
@@ -1491,7 +1491,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt3">
         <div class="plat-logo" style="background:#00B246;">
-          <svg viewBox="0 0 32 32" width="30" height="30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="36" height="36" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M16 4L29 15H25V28H7V15H3Z" fill="white" opacity="0.95"/>
             <rect x="13" y="19" width="6" height="9" rx="1" fill="#00B246"/>
           </svg>
@@ -1500,7 +1500,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt4">
         <div class="plat-logo" style="background:#008060;">
-          <svg viewBox="0 0 32 32" width="30" height="30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="36" height="36" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="5" y="13" width="22" height="15" rx="3" stroke="white" stroke-width="2" fill="rgba(255,255,255,0.1)"/>
             <path d="M12 13C12 9.5 20 9.5 20 13" stroke="white" stroke-width="2" fill="none"/>
             <text x="16" y="25" font-family="Arial Black,sans-serif" font-size="9" font-weight="900" fill="white" text-anchor="middle">S</text>
@@ -1511,15 +1511,15 @@ body.embed #timer { display: none; }
       <div class="plat-tile" id="pt5">
         <div class="plat-logo" style="background:#C0392B;">
           <div style="display:flex;flex-direction:column;align-items:center;line-height:1.1;">
-            <span style="font-family:'Montserrat',sans-serif;font-size:17px;font-weight:900;color:white;letter-spacing:-0.5px;">ES</span>
-            <span style="font-family:'Inter',sans-serif;font-size:8px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:0.5px;">.NET</span>
+            <span style="font-family:'Montserrat',sans-serif;font-size:20px;font-weight:900;color:white;letter-spacing:-0.5px;">ES</span>
+            <span style="font-family:'Inter',sans-serif;font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:0.5px;">.NET</span>
           </div>
         </div>
         <div class="plat-name">EstateSales.net</div>
       </div>
       <div class="plat-tile" id="pt6">
         <div class="plat-logo" style="background:linear-gradient(135deg,#FFDC80 0%,#FCAF45 15%,#F77737 30%,#E1306C 55%,#C13584 75%,#833AB4 100%);">
-          <svg viewBox="0 0 32 32" width="28" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="5" width="24" height="22" rx="6" stroke="white" stroke-width="2"/>
             <circle cx="16" cy="16" r="5.5" stroke="white" stroke-width="2"/>
             <circle cx="23.5" cy="8.5" r="1.5" fill="white"/>
@@ -1529,7 +1529,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt7">
         <div class="plat-logo" style="background:#E60023;">
-          <svg viewBox="0 0 32 32" width="28" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
             <text x="16" y="25" font-family="Georgia,serif" font-size="28" font-weight="900" fill="white" text-anchor="middle">P</text>
           </svg>
         </div>
@@ -1537,15 +1537,42 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt8">
         <div class="plat-logo" style="background:#000;">
-          <svg viewBox="0 0 32 32" width="26" height="26" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <text x="5" y="25" font-family="Arial Black,sans-serif" font-size="22" font-weight="900" fill="white">𝕏</text>
+          <svg viewBox="0 0 32 32" width="32" height="32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <text x="5" y="26" font-family="Arial Black,sans-serif" font-size="26" font-weight="900" fill="white">𝕏</text>
           </svg>
         </div>
         <div class="plat-name">X</div>
       </div>
       <div class="plat-tile" id="pt9">
+        <div class="plat-logo" style="background:#7B3FB3;">
+          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="11" stroke="white" stroke-width="2.5"/>
+            <line x1="16" y1="5" x2="16" y2="27" stroke="white" stroke-width="2.5"/>
+            <line x1="6.5" y1="21.5" x2="16" y2="16" stroke="white" stroke-width="2.5"/>
+            <line x1="25.5" y1="21.5" x2="16" y2="16" stroke="white" stroke-width="2.5"/>
+          </svg>
+        </div>
+        <div class="plat-name">Craigslist</div>
+      </div>
+      <div class="plat-tile" id="pt10">
+        <div class="plat-logo" style="background:#FF0211;">
+          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <text x="16" y="25" font-family="Arial Black,sans-serif" font-size="24" font-weight="900" fill="white" text-anchor="middle">M</text>
+          </svg>
+        </div>
+        <div class="plat-name">Mercari</div>
+      </div>
+      <div class="plat-tile" id="pt11">
+        <div class="plat-logo" style="background:#2BB673;">
+          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 6L23 14H19.5V26H12.5V14H9Z" fill="white"/>
+          </svg>
+        </div>
+        <div class="plat-name">OfferUp</div>
+      </div>
+      <div class="plat-tile" id="pt12">
         <div class="plat-logo" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);">
-          <span style="font-family:'Montserrat',sans-serif;font-size:15px;font-weight:800;color:rgba(255,255,255,0.7);">+more</span>
+          <span style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:rgba(255,255,255,0.7);">+more</span>
         </div>
         <div class="plat-name">&amp; more</div>
       </div>
@@ -1834,7 +1861,7 @@ function resetAll() {
   ['listing-card','share-hl','share-sub','share-btn-wrap'].forEach(id => {
     const el = document.getElementById(id); if (el) el.classList.remove('in');
   });
-  ['pt1','pt2','pt3','pt4','pt5','pt6','pt7','pt8','pt9'].forEach(id => {
+  ['pt1','pt2','pt3','pt4','pt5','pt6','pt7','pt8','pt9','pt10','pt11','pt12'].forEach(id => {
     const el = document.getElementById(id); if (el) el.classList.remove('in');
   });
   // Scene 3
@@ -1965,7 +1992,10 @@ const events = [
   { at: 21700, fn: () => { addAt(document.getElementById('pt7'),'in',0); } },
   { at: 21850, fn: () => { addAt(document.getElementById('pt8'),'in',0); } },
   { at: 22000, fn: () => { addAt(document.getElementById('pt9'),'in',0); } },
-  { at: 22100, fn: () => { addAt(document.getElementById('share-btn-wrap'),'in',0); } },
+  { at: 22150, fn: () => { addAt(document.getElementById('pt10'),'in',0); } },
+  { at: 22300, fn: () => { addAt(document.getElementById('pt11'),'in',0); } },
+  { at: 22450, fn: () => { addAt(document.getElementById('pt12'),'in',0); } },
+  { at: 22650, fn: () => { addAt(document.getElementById('share-btn-wrap'),'in',0); } },
   // cut to s3 at 26500ms
 
   // SCENE 3 — POS / Payments (26500ms–36000ms)
