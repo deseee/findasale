@@ -61,13 +61,19 @@ export async function getAspectsForCategory(
     }
 
     // Fetch from eBay Taxonomy API
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const response = await axios.get(
-      `https://api.ebay.com/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category`,
+      `${frontendUrl}/api/proxy/ebay`,
       {
-        params: { category_id: categoryId },
+        params: {
+          path: '/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category',
+          category_id: categoryId,
+        },
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
+          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
         },
         timeout: 10000,
       }
@@ -136,14 +142,24 @@ export async function searchCatalogProduct(
       queryParam.mpn = params.mpn;
     }
 
-    const response = await axios.get(searchUrl, {
-      params: { ...queryParam, limit: 3 },
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 10000,
-    });
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+    const proxySecret = process.env.EBAY_PROXY_SECRET;
+    const response = await axios.get(
+      `${frontendUrl}/api/proxy/ebay`,
+      {
+        params: {
+          path: '/commerce/catalog/v1_beta/product_summary/search',
+          ...queryParam,
+          limit: 3,
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        },
+        timeout: 10000,
+      }
+    );
 
     const products = response.data.productSummaries ?? [];
 
@@ -344,14 +360,20 @@ export async function suggestCategories(
 
     // Fetch from eBay Taxonomy API
     const treeId = '0'; // EBAY_US
-    const q = encodeURIComponent(query.slice(0, 100));
+    const q = query.slice(0, 100);
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+    const proxySecret = process.env.EBAY_PROXY_SECRET;
     const response = await axios.get(
-      `https://api.ebay.com/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
+      `${frontendUrl}/api/proxy/ebay`,
       {
-        params: { q },
+        params: {
+          path: `/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions`,
+          q,
+        },
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
+          ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
         },
         timeout: 10000,
       }

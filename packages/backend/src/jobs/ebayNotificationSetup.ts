@@ -37,15 +37,19 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
       return;
     }
 
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+    const proxySecret = process.env.EBAY_PROXY_SECRET;
+
     const headers = {
       Authorization: `Bearer ${appToken}`,
       'Content-Type': 'application/json',
+      ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
     };
 
     // ── Find or create destination ───────────────────────────────────────────
     let destinationId: string | null = null;
 
-    const destListResp = await fetch(`${EBAY_NOTIFY_BASE}/destination`, {
+    const destListResp = await fetch(`${frontendUrl}/api/proxy/ebay?path=/commerce/notification/v1/destination`, {
       method: 'GET',
       headers,
     });
@@ -67,7 +71,7 @@ export async function registerEbayNotificationSubscription(): Promise<void> {
     }
 
     if (!destinationId) {
-      const destCreateResp = await fetch(`${EBAY_NOTIFY_BASE}/destination`, {
+      const destCreateResp = await fetch(`${frontendUrl}/api/proxy/ebay?path=/commerce/notification/v1/destination`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
