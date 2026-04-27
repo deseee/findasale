@@ -667,7 +667,7 @@ body.embed #timer { display: none; }
 /* ────────────────────────────────
    SCENE 3 — POS / PAYMENTS
 ──────────────────────────────── */
-#s3 { background: #0D0D15; gap: 0; padding: 28px 4px; justify-content: center; }
+#s3 { background: #0D0D15; gap: 0; padding: 44px 4px; justify-content: center; }
 
 .s3-headline {
   font-family: 'Montserrat', sans-serif;
@@ -893,30 +893,26 @@ body.embed #timer { display: none; }
 .s3-sub {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 28px;
+  gap: 9px;
+  margin-top: 14px;
   opacity: 0;
   transition: opacity 0.5s ease;
   width: 100%;
   padding: 0 10px;
 }
 .s3-sub.in { opacity: 1; }
-.s3-bullet {
-  font-family: 'Inter', sans-serif;
-  font-size: 20px;
-  font-weight: 500;
-  color: rgba(255,255,255,0.85);
-  text-align: left;
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  line-height: 1.45;
+/* Three stat pills */
+.s3-pills { display: flex; flex-direction: column; gap: 8px; }
+.s3-pill {
+  width: 100%; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10); border-radius: 16px;
+  padding: 18px 18px; display: flex; flex-direction: row;
+  align-items: center; gap: 14px; text-align: left;
 }
-.s3-bullet-dot {
-  color: #F97316;
-  font-size: 20px;
-  line-height: 1.3;
-  flex-shrink: 0;
+.s3-pill-icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.s3-pill-label {
+  font-family: 'Inter', sans-serif; font-size: 15.5px; font-weight: 600;
+  color: rgba(255,255,255,0.85); line-height: 1.3; white-space: nowrap;
 }
 
 /* Card auth on shopper phone */
@@ -1055,7 +1051,7 @@ body.embed #timer { display: none; }
   color: #FFFFFF;
   text-align: center;
   letter-spacing: -0.5px;
-  margin-bottom: 40px;
+  margin-bottom: 18px;
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.4s ease, transform 0.4s ease;
@@ -1064,98 +1060,128 @@ body.embed #timer { display: none; }
 .s4-headline.in { opacity: 1; transform: translateY(0); }
 .s4-headline em { font-style: normal; color: #F97316; }
 
-/* Unsold badge */
-.unsold-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 18px 28px;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.32);
-  border-radius: 18px;
+/* ────────────────────────────────
+   UNIFIED EBAY CARD — one card, two overlay states
+   Card never moves or resizes. Interior cross-fades on tap.
+──────────────────────────────── */
+.ebay-card {
+  display: grid;
   width: 100%;
-  opacity: 0;
-  transform: translateY(12px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.unsold-badge.in { opacity: 1; transform: translateY(0); }
-.unsold-count {
-  font-family: 'Montserrat', sans-serif;
-  font-size: 42px;
-  font-weight: 900;
-  color: rgba(255,255,255,0.95);
-  letter-spacing: -2px;
-  line-height: 1;
-}
-.unsold-label {
-  font-family: 'Inter', sans-serif;
-  font-size: 16px;
-  color: rgba(255,255,255,0.85);
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-/* Push button */
-.ebay-push-btn {
-  margin-top: 20px;
-  width: 100%;
-  background: #F97316;
-  color: #fff;
-  border-radius: 16px;
-  padding: 20px;
-  text-align: center;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 20px;
-  box-shadow: 0 0 28px rgba(217,119,6,0.35);
-  font-weight: 800;
-  letter-spacing: -0.2px;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-  cursor: pointer;
-}
-.ebay-push-btn.in { opacity: 1; transform: translateY(0); }
-.ebay-push-btn.tapped { animation: ebayTap 0.3s ease forwards; }
-@keyframes ebayTap {
-  0% { transform: scale(1); }
-  50% { transform: scale(0.95); background: #B45309; }
-  100% { transform: scale(1); }
-}
-
-/* eBay confirm */
-.ebay-confirm {
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.16);
+  border-radius: 20px;
+  margin-top: 22px;
+  overflow: hidden;
   opacity: 0;
   transform: translateY(10px);
-  transition: opacity 0.45s ease, transform 0.45s ease;
+  transition: opacity 0.35s ease, transform 0.35s ease,
+              border-color 0.55s ease, background 0.55s ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
 }
-.ebay-confirm.in { opacity: 1; transform: translateY(0); }
-.ebay-confirm-ring {
-  width: 76px; height: 76px;
-  border-radius: 50%;
-  background: rgba(16,185,129,0.12);
-  border: 2px solid #10B981;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 32px;
-  color: #fff;
+.ebay-card.in { opacity: 1; transform: translateY(0); }
+.ebay-card.confirmed {
+  border-color: rgba(16,185,129,0.55);
+  background: rgba(16,185,129,0.07);
 }
-.ebay-confirm-text {
+.ebay-card-inner {
+  grid-area: 1 / 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 26px 24px; gap: 12px;
+  transition: opacity 0.4s ease;
+}
+#ebay-post { opacity: 0; pointer-events: none; }
+#ebay-post.in { opacity: 1; pointer-events: auto; }
+/* Pre-tap: count + label + push row */
+.ebay-count-big {
   font-family: 'Montserrat', sans-serif;
-  font-size: 20px;
-  font-weight: 800;
-  color: #10B981;
+  font-size: 58px; font-weight: 900;
+  color: #fff; letter-spacing: -2px; line-height: 1;
+}
+.ebay-count-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px; color: rgba(255,255,255,0.62);
+  text-align: center; line-height: 1.4; margin-bottom: 6px;
+}
+.ebay-push-row {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: #0E0E0E;
+  border: 1.5px solid rgba(255,255,255,0.11);
+  border-radius: 14px; padding: 15px 20px;
+}
+.ebay-push-row.tapped { animation: ebayTap 0.3s ease forwards; }
+@keyframes ebayTap {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.96); background: #1a1a1a; }
+  100% { transform: scale(1); }
+}
+.ebay-push-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px; font-weight: 800;
+  color: #F97316; letter-spacing: -0.2px;
+}
+/* Post-tap: confirm ring + message */
+.ebay-confirm-ring-big {
+  width: 82px; height: 82px; border-radius: 50%;
+  background: rgba(16,185,129,0.14);
+  border: 2.5px solid #10B981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px; color: #fff;
+}
+.ebay-confirm-title-big {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 21px; font-weight: 800;
+  color: #10B981; text-align: center;
+}
+.ebay-confirm-sub-big {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; color: rgba(255,255,255,0.44);
   text-align: center;
 }
-.ebay-confirm-sub {
-  font-family: 'Inter', sans-serif;
-  font-size: 15px;
-  color: rgba(255,255,255,0.65);
-  text-align: center;
+
+/* Sale summary + reports */
+.s4-summary {
+  margin-top: 20px; width: 100%;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 14px; padding: 22px 20px;
+  display: flex; align-items: center; justify-content: space-around;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s4-summary.in { opacity: 1; transform: translateY(0); }
+.s4-stat { text-align: center; }
+.s4-stat-num {
+  font-family: 'Montserrat', sans-serif; font-size: 34px; font-weight: 900;
+  color: #fff; letter-spacing: -0.5px; line-height: 1;
+}
+.s4-stat-label {
+  font-family: 'Inter', sans-serif; font-size: 11px;
+  color: rgba(255,255,255,0.42); margin-top: 4px;
+}
+.s4-stat-div { width: 1px; height: 44px; background: rgba(255,255,255,0.11); }
+.s4-reports {
+  margin-top: 10px; width: 100%;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px; padding: 18px 18px;
+  display: flex; align-items: center; gap: 14px;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s4-reports.in { opacity: 1; transform: translateY(0); }
+.s4-report-icons {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex-shrink: 0;
+}
+.s4-report-icon {
+  width: 52px; height: 52px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.s4-report-copy {
+  font-family: 'Inter', sans-serif; font-size: 12px;
+  color: rgba(255,255,255,0.62); line-height: 1.55;
+}
+.s4-report-copy strong {
+  font-family: 'Montserrat', sans-serif; font-weight: 800;
+  color: rgba(255,255,255,0.92); display: block; font-size: 17px; margin-bottom: 4px;
 }
 
 /* ────────────────────────────────
@@ -1472,7 +1498,7 @@ body.embed #timer { display: none; }
     <div class="platform-grid">
       <div class="plat-tile" id="pt1">
         <div class="plat-logo" style="background:#fff;">
-          <svg viewBox="0 0 68 40" width="68" height="40" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="-2 -2 78 46" width="66" height="39" xmlns="http://www.w3.org/2000/svg">
             <text x="1" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#E53238">e</text>
             <text x="21" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#0064D2">B</text>
             <text x="39" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#F5AF02">a</text>
@@ -1483,7 +1509,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt2">
         <div class="plat-logo" style="background:#1877F2;">
-          <svg viewBox="0 0 32 32" width="38" height="38" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="52" height="52" xmlns="http://www.w3.org/2000/svg">
             <text x="16" y="26" font-family="Georgia,serif" font-size="26" font-weight="900" fill="white" text-anchor="middle">f</text>
           </svg>
         </div>
@@ -1491,7 +1517,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt3">
         <div class="plat-logo" style="background:#00B246;">
-          <svg viewBox="0 0 32 32" width="36" height="36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M16 4L29 15H25V28H7V15H3Z" fill="white" opacity="0.95"/>
             <rect x="13" y="19" width="6" height="9" rx="1" fill="#00B246"/>
           </svg>
@@ -1500,7 +1526,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt4">
         <div class="plat-logo" style="background:#008060;">
-          <svg viewBox="0 0 32 32" width="36" height="36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="5" y="13" width="22" height="15" rx="3" stroke="white" stroke-width="2" fill="rgba(255,255,255,0.1)"/>
             <path d="M12 13C12 9.5 20 9.5 20 13" stroke="white" stroke-width="2" fill="none"/>
             <text x="16" y="25" font-family="Arial Black,sans-serif" font-size="9" font-weight="900" fill="white" text-anchor="middle">S</text>
@@ -1511,15 +1537,15 @@ body.embed #timer { display: none; }
       <div class="plat-tile" id="pt5">
         <div class="plat-logo" style="background:#C0392B;">
           <div style="display:flex;flex-direction:column;align-items:center;line-height:1.1;">
-            <span style="font-family:'Montserrat',sans-serif;font-size:20px;font-weight:900;color:white;letter-spacing:-0.5px;">ES</span>
-            <span style="font-family:'Inter',sans-serif;font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:0.5px;">.NET</span>
+            <span style="font-family:'Montserrat',sans-serif;font-size:24px;font-weight:900;color:white;letter-spacing:-0.5px;">ES</span>
+            <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:0.5px;">.NET</span>
           </div>
         </div>
         <div class="plat-name">EstateSales.net</div>
       </div>
       <div class="plat-tile" id="pt6">
         <div class="plat-logo" style="background:linear-gradient(135deg,#FFDC80 0%,#FCAF45 15%,#F77737 30%,#E1306C 55%,#C13584 75%,#833AB4 100%);">
-          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="5" width="24" height="22" rx="6" stroke="white" stroke-width="2"/>
             <circle cx="16" cy="16" r="5.5" stroke="white" stroke-width="2"/>
             <circle cx="23.5" cy="8.5" r="1.5" fill="white"/>
@@ -1529,7 +1555,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt7">
         <div class="plat-logo" style="background:#E60023;">
-          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
             <text x="16" y="25" font-family="Georgia,serif" font-size="28" font-weight="900" fill="white" text-anchor="middle">P</text>
           </svg>
         </div>
@@ -1537,7 +1563,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt8">
         <div class="plat-logo" style="background:#000;">
-          <svg viewBox="0 0 32 32" width="32" height="32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
             <text x="5" y="26" font-family="Arial Black,sans-serif" font-size="26" font-weight="900" fill="white">𝕏</text>
           </svg>
         </div>
@@ -1545,7 +1571,7 @@ body.embed #timer { display: none; }
       </div>
       <div class="plat-tile" id="pt9">
         <div class="plat-logo" style="background:#7B3FB3;">
-          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="16" cy="16" r="11" stroke="white" stroke-width="2.5"/>
             <line x1="16" y1="5" x2="16" y2="27" stroke="white" stroke-width="2.5"/>
             <line x1="6.5" y1="21.5" x2="16" y2="16" stroke="white" stroke-width="2.5"/>
@@ -1555,20 +1581,20 @@ body.embed #timer { display: none; }
         <div class="plat-name">Craigslist</div>
       </div>
       <div class="plat-tile" id="pt10">
-        <div class="plat-logo" style="background:#FF0211;">
-          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <text x="16" y="25" font-family="Arial Black,sans-serif" font-size="24" font-weight="900" fill="white" text-anchor="middle">M</text>
+        <div class="plat-logo" style="background:#010101;">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M19.5 6h-3v13.5c0 1.4-1.1 2.5-2.5 2.5s-2.5-1.1-2.5-2.5S12.6 17 14 17c.3 0 .5 0 .8.1V14c-.3 0-.5-.1-.8-.1C10.4 13.9 8 16.3 8 19.5S10.4 25 13.5 25 19 22.6 19 19.5V12c1 .7 2.2 1.1 3.5 1.2V10c-1.6-.1-3-1.1-3-4z" fill="white"/>
           </svg>
         </div>
-        <div class="plat-name">Mercari</div>
+        <div class="plat-name">TikTok</div>
       </div>
       <div class="plat-tile" id="pt11">
-        <div class="plat-logo" style="background:#2BB673;">
-          <svg viewBox="0 0 32 32" width="34" height="34" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M16 6L23 14H19.5V26H12.5V14H9Z" fill="white"/>
+        <div class="plat-logo" style="background:#25D366;">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 4C9.4 4 4 9.4 4 16c0 2.1.5 4.1 1.5 5.9L4 28l6.3-1.5C12 27.5 14 28 16 28c6.6 0 12-5.4 12-12S22.6 4 16 4zm0 2c5.5 0 10 4.5 10 10s-4.5 10-10 10c-1.8 0-3.5-.5-5-1.3l-.4-.2-3.7.9.9-3.6-.2-.4C6.5 19.5 6 17.8 6 16 6 10.5 10.5 6 16 6zm-3.5 6.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1.1 2.8 1.2 3c.1.2 2.1 3.3 5.2 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2.1-1.4.3-.7.3-1.2.2-1.4-.1-.2-.3-.2-.6-.4s-1.8-.9-2.1-1-.4-.2-.6.2c-.2.3-.7.9-.9 1.1-.1.2-.3.2-.6.1-.3-.1-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.6-2-.2-.3 0-.4.1-.6.2-.2.3-.3.5-.5.1-.2.2-.3.3-.5.1-.2 0-.4-.1-.6-.1-.2-.6-1.5-.8-2.1-.2-.5-.5-.5-.7-.5h-.6z" fill="white"/>
           </svg>
         </div>
-        <div class="plat-name">OfferUp</div>
+        <div class="plat-name">WhatsApp</div>
       </div>
       <div class="plat-tile" id="pt12">
         <div class="plat-logo" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);">
@@ -1654,23 +1680,99 @@ body.embed #timer { display: none; }
     </div>
 
     <div class="s3-sub" id="s3-sub">
-      <div class="s3-bullet"><span class="s3-bullet-dot">·</span>No card reader necessary. Shoppers scan a QR, you get paid instantly.</div>
-      <div class="s3-bullet"><span class="s3-bullet-dot">·</span>Built-in point-of-sale handles cash, receipts and returns.</div>
-      <div class="s3-bullet"><span class="s3-bullet-dot">·</span>Every sale tracked automatically — sales reports ready when you need them.</div>
+      <div class="s3-pills">
+        <div class="s3-pill">
+          <div class="s3-pill-icon">📱</div>
+          <div class="s3-pill-label">No card reader necessary.</div>
+        </div>
+        <div class="s3-pill">
+          <div class="s3-pill-icon">💵</div>
+          <div class="s3-pill-label">Cash, receipts &amp; returns handled.</div>
+        </div>
+        <div class="s3-pill">
+          <div class="s3-pill-icon">⚡</div>
+          <div class="s3-pill-label">Instant payouts.</div>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- ── Scene 4: eBay Push ── -->
   <div class="scene" id="s4">
     <div class="s4-headline" id="s4-headline">Sale ends.<br><em>One tap to eBay.</em></div>
-    <div class="unsold-badge" id="unsold-badge">
-      <div class="unsold-count" id="unsold-count">38</div>
-      <div class="unsold-label">unsold items<br>still have value</div>
+
+    <div class="ebay-card" id="ebay-card">
+      <!-- State 1: pre-tap -->
+      <div class="ebay-card-inner" id="ebay-pre">
+        <div class="ebay-count-big">38</div>
+        <div class="ebay-count-label">unsold items still have value</div>
+        <div class="ebay-push-row" id="ebay-push-row">
+          <svg viewBox="-2 -2 78 46" width="60" height="35" xmlns="http://www.w3.org/2000/svg">
+            <text x="1" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#E53238">e</text>
+            <text x="21" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#0064D2">B</text>
+            <text x="39" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#F5AF02">a</text>
+            <text x="54" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#86B817">y</text>
+          </svg>
+          <div class="ebay-push-text">Push →</div>
+        </div>
+      </div>
+      <!-- State 2: post-tap (same grid cell — cross-fades in) -->
+      <div class="ebay-card-inner" id="ebay-post">
+        <div class="ebay-confirm-ring-big">✓</div>
+        <div class="ebay-confirm-title-big">38 items live on eBay</div>
+        <div class="ebay-confirm-sub-big">Listed in under a second</div>
+      </div>
     </div>
-    <div class="ebay-push-btn" id="ebay-btn">Push to eBay →</div>
-    <div class="ebay-confirm" id="ebay-confirm">
-      <div class="ebay-confirm-ring">✓</div>
-      <div class="ebay-confirm-text">38 items live on eBay</div>
+    <div class="s4-summary" id="s4-summary">
+      <div class="s4-stat">
+        <div class="s4-stat-num">62</div>
+        <div class="s4-stat-label">items sold</div>
+      </div>
+      <div class="s4-stat-div"></div>
+      <div class="s4-stat">
+        <div class="s4-stat-num">$2,340</div>
+        <div class="s4-stat-label">revenue</div>
+      </div>
+      <div class="s4-stat-div"></div>
+      <div class="s4-stat">
+        <div class="s4-stat-num" id="s4-stat-ebay">0</div>
+        <div class="s4-stat-label">to eBay</div>
+      </div>
+    </div>
+    <div class="s4-reports" id="s4-reports">
+      <div class="s4-report-icons">
+        <!-- Excel spreadsheet grid -->
+        <div class="s4-report-icon" style="background:#1D6F42;">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="1.5" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.08)"/>
+            <line x1="3" y1="8.5" x2="21" y2="8.5" stroke="white" stroke-width="1"/>
+            <line x1="3" y1="14" x2="21" y2="14" stroke="white" stroke-width="1"/>
+            <line x1="9.5" y1="3" x2="9.5" y2="21" stroke="white" stroke-width="1"/>
+            <line x1="15.5" y1="3" x2="15.5" y2="21" stroke="white" stroke-width="1"/>
+          </svg>
+        </div>
+        <!-- PDF -->
+        <div class="s4-report-icon" style="background:#F40F02;">
+          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">PDF</text>
+          </svg>
+        </div>
+        <!-- QuickBooks -->
+        <div class="s4-report-icon" style="background:#2CA01C;">
+          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">QB</text>
+          </svg>
+        </div>
+        <!-- CSV -->
+        <div class="s4-report-icon" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);">
+          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="rgba(255,255,255,0.82)" text-anchor="middle">CSV</text>
+          </svg>
+        </div>
+      </div>
+      <div class="s4-report-copy">
+        <strong>Reports &amp; Exports</strong>Excel · PDF · QuickBooks · CSV · Webhooks
+      </div>
     </div>
   </div>
 
@@ -1743,7 +1845,7 @@ let paused = false;
 let pauseStart = null;
 const DURATION = 45000;
 const sceneIds = ['s1', 's2', 's_share', 's3', 's4', 's5'];
-const sceneStarts = [0, 4000, 19500, 26500, 36000, 42500];
+const sceneStarts = [0, 4000, 19500, 26500, 36000, 42500]; // Scene 4: 36–42.5s, Scene 5: 42.5–45s
 let currentScene = 0;
 
 // ── DOM refs ──
@@ -1885,10 +1987,13 @@ function resetAll() {
   document.getElementById('s3-sub').classList.remove('in');
   // Scene 4 — eBay push
   document.getElementById('s4-headline').classList.remove('in');
-  document.getElementById('unsold-badge').classList.remove('in');
-  document.getElementById('ebay-btn').classList.remove('in','tapped');
-  document.getElementById('ebay-btn').style.opacity = '';
-  document.getElementById('ebay-confirm').classList.remove('in');
+  document.getElementById('ebay-card').classList.remove('in', 'confirmed');
+  document.getElementById('ebay-push-row').classList.remove('tapped');
+  document.getElementById('ebay-pre').style.opacity = '';
+  document.getElementById('ebay-post').classList.remove('in');
+  document.getElementById('s4-summary').classList.remove('in');
+  document.getElementById('s4-reports').classList.remove('in');
+  document.getElementById('s4-stat-ebay').textContent = '0';
   // Scene 5
   document.getElementById('cta-logo').classList.remove('in');
   document.getElementById('cta-main').classList.remove('in');
@@ -2041,39 +2146,43 @@ const events = [
   }},
   // cut to s4 at 36000ms
 
-  // SCENE 4 — eBay Push (36000ms–42500ms)
-  // Headline reads 0.8s. Badge drops. Button sits 1.6s before tap.
-  // eBay confirm ("38 items live") holds ~2.2s before cut — room to breathe.
+  // SCENE 4 — eBay Push (36000ms–42500ms = 6.5s)
+  // Card slides in. Button on screen 1.5s before tap.
+  // Cross-fade: pre → post inside same card. No layout shift.
+  // Reports breathe 3s before cut.
   { at: 36000, fn: () => {
     showScene('s4');
     addAt(document.getElementById('s4-headline'),'in',0);
-    addAt(document.getElementById('unsold-badge'),'in',800);
-    addAt(document.getElementById('ebay-btn'),'in',1700);
+    addAt(document.getElementById('ebay-card'),'in',600);
+    addAt(document.getElementById('s4-summary'),'in',1000);
+    addAt(document.getElementById('s4-reports'),'in',1400);
   }},
 
-  // Tap at 40200ms (btn on screen since 37700ms = 2.5s)
-  { at: 40200, fn: () => {
-    document.getElementById('ebay-btn').classList.add('tapped');
+  // Tap at 38100ms (card on screen 1.5s)
+  { at: 38100, fn: () => {
+    document.getElementById('ebay-push-row').classList.add('tapped');
     setTimeout(() => {
-      document.getElementById('ebay-btn').style.opacity = '0.3';
-      addAt(document.getElementById('ebay-confirm'),'in',200);
-    }, 350);
+      document.getElementById('ebay-card').classList.add('confirmed');
+      document.getElementById('ebay-pre').style.opacity = '0';
+      addAt(document.getElementById('ebay-post'),'in',100);
+      animateCounter(0, 38, 800, (v) => {
+        document.getElementById('s4-stat-ebay').textContent = v;
+      });
+    }, 300);
   }},
-  // cut to s5 at 42500ms (confirm on screen ~2.1s ✓)
+  // cut to s5 at 42500ms
 
-  // SCENE 5 — CTA (42500ms–45000ms)
-  // Logo + tagline first. "Try it free." punches in fast.
-  // URL holds 1.6s — time to pull out your phone.
+  // SCENE 5 — CTA (~1s total, tight stagger)
   { at: 42500, fn: () => {
     showScene('s5');
     addAt(document.getElementById('cta-logo'),'in',0);
-    addAt(document.getElementById('cta-main'),'in',400);
-    addAt(document.getElementById('cta-sub'),'in',800);
-    addAt(document.getElementById('cta-url'),'in',1100);
+    addAt(document.getElementById('cta-main'),'in',120);
+    addAt(document.getElementById('cta-sub'),'in',240);
+    addAt(document.getElementById('cta-url'),'in',360);
   }},
 
-  // End at 45000ms
-  { at: 45000, fn: () => {
+  // End at 43700ms
+  { at: 43700, fn: () => {
     running = false;
     cancelAnimationFrame(rafId);
     replayBtn.style.display = 'block';
