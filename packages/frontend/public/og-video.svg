@@ -1,0 +1,15 @@
+<svg viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+<rect width="1200" height="630" fill="#0F172A"/>
+<rect x="0" y="0" width="5" height="630" fill="#F97316"/>
+<text x="60" y="110" font-family="-apple-system, sans-serif" font-size="22" font-weight="400" fill="#F97316" letter-spacing="4">W A T C H</text>
+<text x="60" y="200" font-family="-apple-system, sans-serif" font-size="78" font-weight="700" fill="white">See how it works</text>
+<text x="60" y="295" font-family="-apple-system, sans-serif" font-size="78" font-weight="700" fill="white">in under 2 minutes.</text>
+<text x="60" y="375" font-family="-apple-system, sans-serif" font-size="32" font-weight="300" fill="#64748B">One photo. The app does the rest.</text>
+<line x1="60" y1="430" x2="460" y2="430" stroke="#1E293B" stroke-width="1"/>
+<text x="60" y="478" font-family="Georgia, serif" font-size="52" font-weight="700" fill="white">Find<tspan fill="#F97316">A</tspan>.Sale</text>
+<text x="236" y="518" font-family="-apple-system, sans-serif" font-size="20" fill="#475569">finda.sale/video</text>
+<circle cx="980" cy="315" r="115" fill="#1E293B"/>
+<circle cx="980" cy="315" r="88" fill="#F97316" opacity="0.2"/>
+<circle cx="980" cy="315" r="66" fill="#F97316"/>
+<polygon points="966,282 966,348 1016,315" fill="white"/>
+</svg>
