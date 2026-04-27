@@ -64,10 +64,11 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
       return result;
     }
 
-    // Get all AVAILABLE items pushed to eBay for this organizer (via Sale relation)
-    const availableEbayItems: EbayItem[] = await prisma.item.findMany({
+    // Get ALL AVAILABLE items for this organizer (via Sale relation).
+    // Includes items with null ebayListingId — title-based fallback handles those
+    // when eBay orders come in for items listed directly on eBay (not via FindA.Sale push).
+    const availableItems: EbayItem[] = await prisma.item.findMany({
       where: {
-        ebayListingId: { not: null },
         status: 'AVAILABLE',
         sale: { organizerId },
       },
@@ -80,8 +81,8 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
       },
     });
 
-    if (!availableEbayItems.length) {
-      console.log(`[eBay Sync] Organizer ${organizerId}: no AVAILABLE items with ebayListingId`);
+    if (!availableItems.length) {
+      console.log(`[eBay Sync] Organizer ${organizerId}: no AVAILABLE items`);
       return result;
     }
 
@@ -94,7 +95,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
 
     // Build filter for eBay Fulfillment API
     // Fixed 7-day sliding window — always look back 7 days regardless of lastEbaySoldSyncAt.
-    // This is idempotent (items already SOLD are skipped by the availableEbayItems query)
+    // This is idempotent (items already SOLD are skipped by the availableItems query)
     // and robust against transient outages or items that were added to eBay outside our normal push flow.
     // Use lastmodifieddate (NOT creationdate) so we catch late payments — an order
     // created before the window but paid AFTER it would be permanently skipped if we
@@ -136,7 +137,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     const orders = ebayData.orders || [];
 
     console.log(
-      `[eBay Sync] Organizer ${organizerId}: ${orders.length} fulfilled orders from eBay, ${availableEbayItems.length} local items to check`
+      `[eBay Sync] Organizer ${organizerId}: ${orders.length} fulfilled orders from eBay, ${availableItems.length} local items to check`
     );
 
     // Process each order's line items
@@ -152,12 +153,40 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
 
         if (sku.startsWith('FAS-')) {
           const itemId = sku.substring(4);
-          matchedItem = availableEbayItems.find((item) => item.id === itemId);
+          matchedItem = availableItems.find((item) => item.id === itemId);
         }
 
         // Fall back to matching by legacyItemId (eBay listing ID)
         if (!matchedItem && legacyItemId) {
-          matchedItem = availableEbayItems.find((item) => item.ebayListingId === legacyItemId);
+          matchedItem = availableItems.find((item) => item.ebayListingId === legacyItemId);
+        }
+
+        // Final fallback: title-based match for items without an ebayListingId.
+        // Handles items the organizer listed directly on eBay (not via FindA.Sale push flow).
+        // Only matches if exactly one local item shares the same title — ambiguous matches are skipped.
+        if (!matchedItem && lineItem.title) {
+          const normalizedTitle = lineItem.title.toLowerCase().trim();
+          const titleMatches = availableItems.filter(
+            (item) => item.ebayListingId === null && item.title.toLowerCase().trim() === normalizedTitle
+          );
+          if (titleMatches.length === 1) {
+            matchedItem = titleMatches[0];
+            // Backfill ebayListingId so future cron runs use the faster ID-based match
+            if (legacyItemId) {
+              await prisma.item.update({
+                where: { id: matchedItem.id },
+                data: { ebayListingId: legacyItemId },
+              });
+              console.log(
+                `[eBay Sync] Title-matched item ${matchedItem.id} ("${matchedItem.title}") to eBay listing ${legacyItemId} — ebayListingId backfilled`
+              );
+              matchedItem = { ...matchedItem, ebayListingId: legacyItemId };
+            }
+          } else if (titleMatches.length > 1) {
+            console.warn(
+              `[eBay Sync] Ambiguous title match for "${lineItem.title}" — ${titleMatches.length} candidates, skipping`
+            );
+          }
         }
 
         if (!matchedItem) {
@@ -221,8 +250,10 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
  */
 async function syncEbaySoldItems(): Promise<void> {
   try {
-    // Find all organizers that have both an eBay connection AND AVAILABLE items pushed to eBay.
+    // Find all organizers that have both an eBay connection AND AVAILABLE items.
     // Items live under Sale, so the path is: EbayConnection -> Organizer -> Sales -> Items
+    // Note: we no longer require ebayListingId IS NOT NULL here — title-based matching
+    // inside syncSoldItemsForOrganizer handles items that were listed directly on eBay.
     const connections = await prisma.ebayConnection.findMany({
       where: {
         organizer: {
@@ -230,7 +261,6 @@ async function syncEbaySoldItems(): Promise<void> {
             some: {
               items: {
                 some: {
-                  ebayListingId: { not: null },
                   status: 'AVAILABLE',
                 },
               },
