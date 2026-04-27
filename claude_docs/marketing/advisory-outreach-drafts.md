@@ -105,7 +105,7 @@ YouTube community tab or IG.
 
 Hey —
 
-Working on something for the people who run estate sales and consignment — the layer where the best fashion finds start before they ever hit a thrift store. You came up because you'd know whether this makes sense from the sourcing side, or if I've missed something obvious.
+Working on something for the people who run estate sales and consignment — where the good pieces start before they ever reach a thrift store. You came up because you'd know whether this makes sense from the sourcing side, or if I've missed something obvious.
 
 90 seconds: https://finda.sale/video. Fine to say it misses.
 
@@ -212,9 +212,11 @@ Building something for the organizer side of secondary sales. You came up becaus
 
 ### 14. Melinda Murphy (36.1k)
 
-Melinda — adjacent-vertical ask. Working on something for estate and yard sale organizers and a fresh pair of eyes from outside the niche is exactly what I need right now.
+Melinda —
 
-90 seconds: https://finda.sale/video. Fine to say it doesn't translate.
+I've been working on something for estate and yard sale organizers — the people on the other side of the counter from where your audience shops. You came to mind because someone who knows what makes a good find also knows pretty quick whether the person running the sale has any idea what they're doing.
+
+90 seconds, if you're curious: https://finda.sale/video. Fine to say it's not your thing.
 
 — Patrick
 
@@ -246,6 +248,7 @@ Working on something for the organizer side of what your audience does. Flipper 
 
 ### 17. Jordan Welch (~300–400k YouTube, entrepreneur/reselling/ecom)
 YouTube DM or contact via jordanwelch.com. VERIFY NO COMPETING PLATFORM BEFORE SENDING.
+⚠️ LOW PRIORITY — Jordan's world is new-product dropshipping (Viral Vault, AI Com Academy, eCom Accelerators). His audience sources from Alibaba, not estate sales. Poor fit for this list — consider removing.
 
 Jordan —
 
@@ -279,7 +282,7 @@ Alexander —
 
 Working on something for secondary-sale operators, and you came up because you're one of very few people I've found who actually runs this kind of business AND talks about running it on camera.
 
-Would you watch 90 seconds and tell me if I've designed it for a persona that doesn't really exist? https://finda.sale/video. Fine to say it misses.
+Would you watch 90 seconds and tell me if this is built for how these businesses actually run — or if I've built it for a version that doesn't exist? https://finda.sale/video. Fine to say it misses.
 
 — Patrick, Grand Rapids
 
@@ -289,7 +292,7 @@ Would you watch 90 seconds and tell me if I've designed it for a persona that do
 
 Brooke —
 
-Working on something for the organizer side of vintage, antique, and estate. You came up because multi-channel sellers are one of the hardest personas to build for — you'd spot faster than most whether I've overfit or underbuilt.
+Working on something for the organizer side of vintage, antique, and estate. You came up because someone selling in a few different ways at once — vintage, antique, estate — is the hardest person to build for. You'd catch what I've missed faster than most.
 
 90 seconds: https://finda.sale/video. Fine to say it doesn't fit.
 
@@ -475,9 +478,9 @@ The category — purpose-built software for independent secondary-sale operators
 
 Kele —
 
-Editorial note. Building software for secondary-sale operators, and Antique Trader's audience overlaps almost exactly with that user base.
+Editorial note. Building software for estate sale, yard sale, and auction organizers — Antique Trader's audience overlaps almost exactly with who I'm building for.
 
-Happy to be a source for any piece on the emerging operator-software layer — no promotion required. Product context here if useful: https://finda.sale/video
+Happy to be a source for any piece on the tools this world is starting to see — no promotion required. Product context here if useful: https://finda.sale/video
 
 — Patrick
 
