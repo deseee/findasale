@@ -117,14 +117,14 @@ const SaleShareCard: React.FC<SaleShareCardProps> = ({
         <button
           onClick={handleTwitterShare}
           className="w-full text-center px-3 py-2 rounded text-sm font-semibold text-white transition-opacity hover:opacity-90"
-          style={{ backgroundColor: '#14171A' }}
+          style={{ backgroundColor: '#1DA1F2' }}
         >
           X / Twitter
         </button>
         <button
           onClick={handleThreadsShare}
-          className="w-full text-center px-3 py-2 rounded text-sm font-semibold text-white transition-opacity hover:opacity-90"
-          style={{ backgroundColor: '#101010' }}
+          className="w-full text-center px-3 py-2 rounded text-sm font-semibold text-gray-700 dark:text-gray-200 transition-opacity hover:opacity-90"
+          style={{ backgroundColor: 'transparent', border: '2px solid #C0C0C0' }}
         >
           Threads
         </button>
