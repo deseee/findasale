@@ -92,28 +92,17 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
       return result;
     }
 
-    // Re-fetch connection for the latest lastEbaySoldSyncAt after token refresh
-    const freshConnection = await prisma.ebayConnection.findUnique({
-      where: { organizerId },
-      select: { lastEbaySoldSyncAt: true },
-    });
-
     // Build filter for eBay Fulfillment API
+    // Fixed 7-day sliding window — always look back 7 days regardless of lastEbaySoldSyncAt.
+    // This is idempotent (items already SOLD are skipped by the availableEbayItems query)
+    // and robust against transient outages or items that were added to eBay outside our normal push flow.
     // Use lastmodifieddate (NOT creationdate) so we catch late payments — an order
-    // created before lastEbaySoldSyncAt but paid AFTER it would be permanently
-    // skipped if we filtered on creationdate. lastmodifieddate updates on payment,
-    // so the order enters our window when it becomes fulfilled.
-    let filter: string;
-    if (freshConnection?.lastEbaySoldSyncAt) {
-      const startDate = freshConnection.lastEbaySoldSyncAt.toISOString();
-      const endDate = new Date().toISOString();
-      filter = `lastmodifieddate:[${startDate}..${endDate}]`;
-    } else {
-      // First sync — look back 30 days
-      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const endDate = new Date().toISOString();
-      filter = `lastmodifieddate:[${startDate}..${endDate}]`;
-    }
+    // created before the window but paid AFTER it would be permanently skipped if we
+    // filtered on creationdate. lastmodifieddate updates on payment, so the order enters
+    // our window when it becomes fulfilled.
+    const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const endDate = new Date().toISOString();
+    const filter = `lastmodifieddate:[${startDate}..${endDate}]`;
 
     // Call eBay Fulfillment API
     const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
