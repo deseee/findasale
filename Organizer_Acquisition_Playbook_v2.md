@@ -161,7 +161,7 @@ Everything else from the v1 partner list is deferred.
 
 ## Influencers — Advisory First, Promotional Never
 
-**See `claude_docs/marketing/advisory-outreach-drafts.md` for 44 drafted messages.**
+**See `claude_docs/marketing/advisory-outreach-drafts.md` for 54 drafted messages.**
 
 The framing is: ask organizers, industry voices, and resellers to critique the product — not to promote it. One outreach message per day, Patrick sends from his inbox/LinkedIn. Any promotional mention that follows is organic and earned, not asked for. This replaces v1's "Tier 1 influencer affiliate" section entirely — the moment you attach an affiliate deal to the first message, it's a sales pitch and the honest conversation is gone.
 

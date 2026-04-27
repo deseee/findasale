@@ -612,6 +612,364 @@ Working on something for the people who run charity sales — the church rummage
 
 ---
 
+---
+
+## Wave 3 Additions
+
+### Bucket 1 — Storage Unit / Resale Creators
+
+### 45. What The Hales (large YouTube — Wooster, OH, storage unit auction + resale)
+Contact: WhatTheHales@yahoo.com. Also eBay store (WhatTheHales) and Facebook (facebook.com/whatthehales).
+
+Hey —
+
+Working on something for the organizer side of what you do — the people who have to stage, price, and move everything after the find. You came up because you do both sides of it: find it and then sell it, which means you'd know immediately whether the tools for running that sale actually help or just look like they do.
+
+90 seconds: https://finda.sale/video. Fine to say it doesn't fit what you run.
+
+— Patrick
+
+---
+
+### 46. Taco Stacks (~312K YouTube — storage unit resale, flea markets, Etsy, eBay)
+YouTube DM.
+
+Hey —
+
+Working on tools for the people running the sale itself — setup, pricing, checkout, what didn't sell. You came up because someone doing flea markets, Etsy, and eBay at the same time would spot fast whether a tool actually fits how a sale works or just looks like it does from the outside.
+
+90 seconds: https://finda.sale/video. Fine to say it's the wrong problem.
+
+— Patrick
+
+---
+
+### 47. Paper and Moose (~82K YouTube — storage unit resale, frequent Taco Stacks collaborator)
+YouTube DM.
+
+Hey —
+
+Working on something for the people who have to turn found inventory into a sale — the other side of the storage unit or estate you're buying from. You came up because understanding both sides of that transaction is rare, and someone who does would catch what I've built wrong faster than most.
+
+90 seconds: https://finda.sale/video. Fine to say it doesn't hit the right thing.
+
+— Patrick
+
+---
+
+### Bucket 1 — Professional Organizer / Declutter Creators
+
+### 48. Tracy McCubbin — dClutterfly (173K Instagram, 2 bestselling books, NYT / Forbes / goop contributor)
+Contact via dclutterfly.com. Instagram @tracy_mccubbin.
+
+Tracy —
+
+Working on something for estate and yard sale organizers. You came up because the work you do — helping people actually let go — leads right to the question of what happens to everything after that. Most estate sale companies are still doing it with spreadsheets and a cash box.
+
+Wondering if that gap is as visible from your side as it looks from mine. 90 seconds: https://finda.sale/video. Not asking for a post, just a read from someone who sees the whole chain.
+
+— Patrick
+
+---
+
+### 49. Peter Walsh (Oprah regular, TLC Clean Sweep, 7 books including 2 NYT bestsellers, ~45K YouTube)
+Contact via peterwalshdesign.com.
+
+Peter —
+
+Working on software for the people who run estate and yard sales — the last mile after the decluttering conversation ends. You came up because 20 years of "what's standing between you and the life you want" is exactly the lens that would tell me whether I've built this for the right problem.
+
+90 seconds: https://finda.sale/video. Fine to say it misses.
+
+— Patrick
+
+---
+
+### Bucket 2 — Operator-Creators
+
+### 50. Thee Perfect Sale LLC — Cortney (NJ estate sale + liquidation company, Instagram / TikTok / Whatnot @theeperfectsale)
+Contact via theeperfectsale.com/contact.
+
+Cortney —
+
+Working on software for people running exactly what you run. You came up because you've built the brand and marketing side on top of the actual operations — the Instagram, the curation, the Whatnot presence — and that combination would catch faster than most whether the tools match the reality of running a sale.
+
+90 seconds: https://finda.sale/video. Happy to hear where it misses.
+
+— Patrick, FindA.Sale (Grand Rapids)
+
+---
+
+### 51. Cassaundra0328 — Cassie (Whatnot top seller, sources from estate sales + storage units, Wake Forest NC, Facebook / TikTok / Instagram)
+Contact via Whatnot DM or social @Cassaundra0328.
+
+Cassie —
+
+Working on something for the people running the estate sales and storage unit sales you source from. You came up because someone who does live auctions AND buys from these sales would see both sides of whether this holds up.
+
+90 seconds: https://finda.sale/video. Fine to say it's not your thing.
+
+— Patrick
+
+---
+
+### Bucket 3 — Senior Transitions and Adjacent Voices
+
+### 52. Empowered Elder Podcast — Tasha Beckman & Nicole Robilotto (senior move management, downsizing, relocation)
+Contact via Apple Podcasts / podcast website.
+
+Tasha / Nicole —
+
+Working on software for estate and yard sale organizers — the people families call after the downsizing decision is made and everything in the house still needs to be dealt with.
+
+Your show came up because senior move management sits right at the top of that chain. Curious whether the tools organizers are using is a conversation your listeners would find useful, or if I've built it for a version of that moment that looks different from where you sit.
+
+90 seconds: https://finda.sale/video. Happy to be a guest if the organizer-tools side ever fits.
+
+— Patrick, finda.sale
+
+---
+
+### 53. Senior Settlers (blog / newsletter, downsizing and simplifying life)
+Contact via senior-settlers.com.
+
+Hi —
+
+Working on software for estate and yard sale organizers — the people families call once the stuff needs to go somewhere. Found Senior Settlers through research on the downsizing space; the gap between "declutter" content and the actual logistics of running a sale seems underserved.
+
+90 seconds if useful: https://finda.sale/video. Not looking for coverage, just a read from someone writing about this transition seriously.
+
+— Patrick
+
+---
+
+### Bucket 1 — Yard Sale Creators
+
+### 54. MsStoneHome (YouTube — yard sale hauls, home, gardening)
+YouTube DM.
+
+Hey —
+
+Working on something for the people who run the sales your audience sources at. You came up because yard sale haul content means you've seen the organizer side up close — someone who knows what makes a sale worth showing up to would also know fast if this fits how those sales actually run.
+
+90 seconds: https://finda.sale/video. Fine to say it doesn't land.
+
+— Patrick
+
+---
+
+---
+
+## Wave 5 — "Start Your Own Business" Creators
+
+### Bucket 3 — Entrepreneurship / Business Builder Voices
+
+### 65. Codie Sanchez — Contrarian Thinking (12M+ combined social, 1M+ newsletter, NYT bestselling "Main Street Millionaire")
+Contact via contrarianthinking.co. Instagram / YouTube / Twitter @CodieSanchez.
+
+Codie —
+
+Working on software for the people running estate and yard sales. Thought of you because the "boring business" frame you've built is exactly the lens this fits: it's a real local service business, most of the people running it have been doing it on paper, and the margins and demand aren't going anywhere.
+
+Not sure if the organizer side of estate liquidation ever comes up in what you cover — but someone who's spent years making the case that main street businesses are underrated would see instantly whether I've gotten the tools right or missed what operators actually need.
+
+90 seconds: https://finda.sale/video.
+
+— Patrick, FindA.Sale
+
+---
+
+### 66. Nick Loper — Side Hustle Show (podcast, top-ranked small business show, 12+ years, large engaged audience)
+Contact via sidehustlenation.com/contact. Podcast pitches also via podmatch or podcast contact form.
+
+Nick —
+
+Working on software for people running estate and yard sales as a business — and wanted to reach out because Side Hustle Show is one of the few places that's covered the physical resale and flipping world seriously.
+
+The estate sale company angle is underrepresented in small business coverage: it's local, it's cash-flow positive from the first sale, it doesn't require a storefront. Most people running these are still doing it with spreadsheets and a cash box. The software gap is real.
+
+Would you take 90 seconds? https://finda.sale/video. Happy to come on if it fits — or just take the read.
+
+— Patrick, FindA.Sale (Grand Rapids)
+
+---
+
+### 67. Pat Walls — Starter Story (1.6M monthly readers, 130K newsletter, 350K+ social — niche business case study interviews)
+Contact via starterstory.com/pat-walls or Twitter @thepatwalls.
+
+Pat —
+
+Working on software for estate and yard sale organizers — the people who run the liquidation business, not just the people who shop at it.
+
+You came up because Starter Story covers the founder story behind niche businesses that most people overlook. This is one of those: estate sale companies are real, cash-positive local businesses, most of them are running on notepads and cash boxes, and the people who know what tools they're missing haven't built anything for them yet.
+
+Wondering if there's a story in the organizer side of this — either as a business idea case study or as the software founder's side. 90 seconds of context: https://finda.sale/video.
+
+— Patrick, FindA.Sale
+
+---
+
+### 68. Junk Removal Authority (YouTube / training — teaches people to start junk removal businesses, estate cleanout overlap)
+Contact via junkremovalauthority.com. YouTube DM. Find host name before sending — Josh Latimer is the founder; verify current host/face.
+
+Hey —
+
+Working on software for the estate sale side of what cleanout crews deal with — the part after someone decides to sell what's in the house rather than haul it all to the dump.
+
+You came up because estate cleanouts and estate sales share a lot of the same starting point: a house full of stuff that someone needs to deal with fast. A lot of junk removal companies end up doing both, or at least referring one to the other. Someone who teaches people to build in that world would know immediately whether the tools exist on the estate sale side or if that's still a gap.
+
+90 seconds: https://finda.sale/video. Happy to hear where it misses.
+
+— Patrick
+
+---
+
+## Wave 4 Additions
+
+### Bucket 1 — International and Viral Cleaning / Hoarding Creators
+
+### 55. Aurikatariina (11.4M TikTok, 4M YouTube, ~20M combined social — Finnish hoarding/extreme cleaning creator)
+TikTok DM or YouTube DM. Reach in Finnish and English. Her content is cleaning and organizing hoarding homes — which means she is standing inside the estate sale problem on every video.
+
+Hey —
+
+Working on something for the people who have to deal with what's left in those homes after the cleaning part is done. You came up because you're documenting a space that most software companies have never looked at — and someone who's been inside hundreds of hoarding situations would know instantly whether this hits the real problem or just looks like it does from the outside.
+
+90 seconds: https://finda.sale/video. Fine to say it doesn't land.
+
+— Patrick
+
+---
+
+### Bucket 1 — Vintage and Thrift Flip Creators (Growing Accounts)
+
+### 56. Sym Clarke — The Thrift Guru (~200K TikTok — vintage finds, thrift flips)
+TikTok DM.
+
+Hey —
+
+Working on tools for the people who run the sales you source at. You came up because someone thrifting and flipping at volume has watched the organizer side of it close enough to know what's sloppy and what actually works.
+
+90 seconds: https://finda.sale/video. Happy to hear where it misses.
+
+— Patrick
+
+---
+
+### 57. Emma Rogue (vintage resale, NYC store owner, fast-growing TikTok — went 0 to 100K quickly)
+TikTok DM or Instagram DM.
+
+Hey —
+
+Working on something for the people running the estate and vintage sales that feed into shops like yours. You came up because someone building a vintage retail operation from scratch would have strong opinions on whether the tools for running those upstream sales are as bad as they look.
+
+90 seconds: https://finda.sale/video. Fine to say it doesn't fit.
+
+— Patrick
+
+---
+
+### 58. Siena Filippi (138K Instagram — thrift and vintage, curated aesthetic)
+Instagram DM.
+
+Hey —
+
+Working on software for the organizers running the estate and yard sales that supply the stuff you find. You came up because someone with a real eye for curation would catch immediately whether a sale is run well or just lucky — which is exactly the lens I want on this.
+
+90 seconds: https://finda.sale/video. Genuinely curious what you'd notice.
+
+— Patrick
+
+---
+
+### Bucket 1 — Antique Picker YouTube
+
+### 59. Laura Caldwell (YouTube — full-time vintage shop owner, 12+ years, antique picking and resale)
+YouTube DM or contact via channel.
+
+Laura —
+
+Working on tools for people running estate and yard sales — the sourcing side of what you do. You came up because twelve years of buying from these sales would give you a very clear read on whether the people running them have what they need or are just improvising.
+
+90 seconds: https://finda.sale/video. Fine to say it's the wrong thing.
+
+— Patrick
+
+---
+
+### 60. The Antique Agenda (YouTube — antique picking, finds, market coverage)
+YouTube DM.
+
+Hey —
+
+Working on software for the people running the sales you're picking at. You came up because someone who shows up to estate sales and auctions regularly would know immediately whether the organizer side of it looks professional or cobbled together.
+
+90 seconds: https://finda.sale/video. Curious what you'd notice.
+
+— Patrick
+
+---
+
+### Bucket 2 — Institutional / Operator Reach
+
+### 61. Brimfield Antique Flea Market (largest antique show in US — Brimfield, MA, three times per year)
+Contact via brimfield.com or social @brimfieldantiqueshow. Best angle: vendor relations or social/event manager, not ownership.
+
+Hi —
+
+Working on something for people who run the sales — the inventory management, pricing, checkout — not just the buying side. Brimfield came up because the vendors there are running what amounts to a multi-day retail operation twice or three times a year, and most of them are still doing it on paper.
+
+Not looking for an official partnership or placement. Wondering if there's a vendor services person I could run this in front of, or if the show already has something like this in place that I've missed.
+
+90 seconds: https://finda.sale/video.
+
+— Patrick, FindA.Sale
+
+---
+
+### Bucket 3 — Probate, Estate, and Legal-Adjacent Podcast Voices
+
+### 62. The Probate Realtor Show — Matias Baker Masucci (podcast, ranked top 10 realtor podcasts 2024)
+Contact via show website or podcast social.
+
+Matias —
+
+Working on software for estate and yard sale organizers — the people who come in after the probate process identifies what needs to be sold. You came up because someone documenting the probate real estate side of this would see clearly whether the tools the liquidation people are using hold up, or if that part of the chain is as manual as it looks from the outside.
+
+90 seconds: https://finda.sale/video. Happy to come on if the organizer-tools conversation fits what you cover.
+
+— Patrick, finda.sale
+
+---
+
+### 63. The Auction Advocate — National Auction Association Podcast (trade podcast, auctioneer membership org)
+Contact via auctioneers.org or NAA podcast social.
+
+Hi —
+
+Working on software for estate and yard sale organizers — a category that overlaps with your member base more than most people realize. You came up because the NAA covers the business side of running a sale, and the gap in software tools for this space seems like it belongs in that conversation somewhere.
+
+Not pitching a sponsorship. Wondering whether the tools organizers are actually using is a topic that fits what you cover — or if I've missed the angle.
+
+90 seconds: https://finda.sale/video. Happy to be a guest if it fits.
+
+— Patrick, FindA.Sale
+
+---
+
+### 64. SRES Realtor with Social Presence (template — Senior Real Estate Specialist with active following or podcast)
+Find via NAR's SRES directory + cross-reference with Instagram/YouTube/podcast presence. Search "SRES realtor podcast" and "senior real estate specialist YouTube" for named individuals.
+
+Hi —
+
+Working on software for estate and yard sale organizers — the people families often call alongside a senior-focused realtor when it's time to liquidate a home. You came up because an SRES who's built an audience around this transition probably hears the "but what do we do with everything" question constantly.
+
+90 seconds: https://finda.sale/video. Curious whether the organizer tools gap is visible from where you sit, or if the families you work with are already sorting it out.
+
+— Patrick, FindA.Sale
+
+---
+
 ## How to actually run this
 
 One message a day. Two tops. Batching all 36 into one evening makes them sound like you sent them all in one evening — which is the thing that gives AI-written outreach away. Space them out so each one has a little of the day behind it.
@@ -628,7 +986,7 @@ What you don't do: ask for a shoutout, a repost, a mention, an affiliate, or equ
 
 Keep a simple sheet: name, bucket, sent date, replied, called, what they said, next step. Six months from now that list is your advisory bench whether or not any of these turn into anything bigger.
 
-**Known unverified (spot-check before sending):** Amanda's Mercantile, Junking with Lou, The Bonafide Hustler, Swap-O-Rama TV, The Griffin Antique Mall, Jordan Welch (⚠️ wrong vertical — dropshipping, not secondhand), Bolo Brothers, Storage Auction Pirate, Treasure Hunting With Jebus, @estatesalefreaks (verify organizer vs. shopper before sending).
+**Known unverified (spot-check before sending):** Amanda's Mercantile, Junking with Lou, The Bonafide Hustler, Swap-O-Rama TV, The Griffin Antique Mall, Jordan Welch (⚠️ wrong vertical — dropshipping, not secondhand), Bolo Brothers, Storage Auction Pirate, Treasure Hunting With Jebus, @estatesalefreaks (verify organizer vs. shopper before sending), What The Hales (names on channel — verify before personalizing), Taco Stacks (real name unverified), Paper and Moose (real names unverified), MsStoneHome (real name unverified), Cassaundra0328 (Cassie — confirmed), Senior Settlers (find specific editor name before sending), Aurikatariina (Finnish creator — verify DM/email contact), Laura Caldwell (YouTube — verify current contact method), Sym Clarke / The Thrift Guru (verify real name), Emma Rogue (verify real name and preferred DM), Siena Filippi (verify Instagram DM open), The Antique Agenda (find host name), Brimfield Antique Flea Market (find vendor relations or social manager), The Probate Realtor Show / Matias Baker Masucci (verify podcast contact), The Auction Advocate / NAA (verify current host), Junk Removal Authority (verify Josh Latimer is still the face / find current contact).
 
 **VeeFriends angle:** Reezy Resells is the only confirmed VeeFriend on this list — the NFT line in that draft is genuine and should stay. Flea Market Flipper benefited from Gary Vee's Trash Talk era but has no confirmed direct collaboration or VeeFriends connection — do not use that angle with them. If you're active in VeeFriends Discord or attend VeeCon, that community has significant secondary-market overlap and is worth working organically — member-to-member outreach bypasses cold-contact dynamics entirely.
 
