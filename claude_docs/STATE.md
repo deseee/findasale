@@ -291,6 +291,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S596 (2026-04-28) — COMPLETE:** Ops + outreach session. No code changes. **Gmail advisory outreach drafts:** Created 28 Gmail drafts via Gmail MCP for all contacts in `advisory-outreach-drafts.md` with confirmed email addresses who hadn't been emailed yet. Subject line "finda.sale" consistent with prior sent emails. Drafts send from deseee@gmail.com (patrick@finda.sale is a Send As alias — Patrick selects it in From field before sending). **Docker MCP removed:** Was showing ENOENT error; Patrick removed via Claude Code Settings UI (it was auto-registered by Docker Desktop, not in any JSON config file). **Railway MCP fixed:** Was disconnected (OAuth expired). Multiple failed attempts (OAuth cache clear, token header auth, url-type config) — ultimately resolved by full system reboot which re-triggered the OAuth popup. Railway MCP tools now active in session. **Config location memorized:** True Claude Desktop config path is `C:\Users\desee\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json` (Windows packaged app sandbox, NOT AppData\Roaming\Claude). Saved to memory file `reference_claude_config_location.md`. `.claude/settings.json` (Claude Code CLI user config) had a duplicate Railway entry as `type: http` — Patrick deleted the file entirely.
+
 **S595 (2026-04-27) — COMPLETE:** QA backlog sweep — 9 items tested from Blocked/Unverified Queue. **Results:** 8 ✅ verified, 1 ⚠️ PARTIAL, 1 UNVERIFIED. **✅ Verified:** AvatarDropdown CONNECT → Explorer's Guild link (ss_6465qdcim), /admin/items pagination page 2 at 780px (ss_3396hados), /admin/bid-review clean empty state S566 fix (ss_0420q1hkk), Organizer Insights for Alice $3,856.31 gross S545 fix (ss_2893wh51g), Print Kit 13 items + Sign Templates S543 fix (ss_4080t1wlc), /organizer/earnings real data S550 hooks fix (ss_6291mzhzi), /organizer/calendar April 2026 grid S550 fix (ss_3710aljj0), Settlement Receipt PDF "Organizer Commission (35%): -$437.50" endpoint 200 OK (ss_45016j87d). **⚠️ PARTIAL:** #75 Tier Lapse Logic — lapse detection works but P2 banner issues: banner is red + dismissible (not sticky amber), "Your Plan: PRO" card contradicts lapse message. Needs dev fix. **UNVERIFIED:** ConfirmDialog smoke test — no deletable data in user2 account. **Code shipped this session (S595, pending push):** progress.tsx (new — treasure hunt progress page), [clueId].tsx (?via=qr auto-claim guard), QRScannerModal.tsx (appends ?via=qr on treasure hunt URLs). **No new bugs requiring immediate dispatch.** P2 dispatch needed: Tier Lapse banner → make sticky amber + remove "Your Plan: PRO" contradiction.
 
 **S594 (2026-04-27) — COMPLETE:** Advisory outreach audit — real email research + file repair. All 68 contacts in `advisory-outreach-drafts.md` audited against actual web research (4 parallel agents dispatched with WebSearch/WebFetch). **Wrong emails corrected:** Threads Obsessed (#5) — madison89millerbusiness@gmail.com belongs to a different creator (beauty/lifestyle); correct contact is YouTube/Instagram DM only. Too Many Records (#11) — toomanyrecordsmusic@gmail.com is a Portland vinyl record shop, not the YouTube creator; removed from list. Daily Refinement (#12) — nychrislin@gmail.com wrong; correct is contact@dailyrefinement.com. **New email found:** TechNSports (#9) — resellerpodcast@gmail.com (Reseller Greatness Podcast). **Wrong entity removed:** @estatesalefreaks (#40) confirmed SHOPPER not organizer. **Confirmation notes added** for all 30+ verified contacts. **UNVERIFIED flags added** for Pre-Loved podcast, Jennarocity, Thrifting Vegas, Brimfield (jmjy2@aol.com unconfirmed — only phone public). **Nick Loper corrected:** was "form only" — actual direct email nick@sidehustlenation.com exists on Press & Media Kit page. **File changed:** `claude_docs/marketing/advisory-outreach-drafts.md`.
@@ -327,33 +329,36 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S596 — Next priorities.**
+**S597 — Next priorities.**
 
-**Push block needed first:** S595 code is sitting uncommitted (treasure hunt progress page + via=qr guard). Push before any new QA of those features.
+**Push block needed first (S595 still pending):** Treasure hunt progress page + via=qr guard code is sitting uncommitted. Push before any QA of those features:
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/sales/[id]/treasure-hunt-qr/progress.tsx
+git add "packages/frontend/pages/sales/[id]/treasure-hunt-qr/[clueId].tsx"
+git add packages/frontend/components/qr-scanner/QRScannerModal.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat: treasure hunt progress page + via=qr auto-claim guard + S596 wrap [wrap S595/S596]"
+.\push.ps1
+```
 
-**After push — Chrome QA:**
+**After push — Chrome QA (S595):**
 - Navigate to `/sales/[saleId]/treasure-hunt-qr/progress` as shopper — verify progress page loads (NOT "Clue not found")
 - Navigate to `/sales/[saleId]/treasure-hunt-qr/[clueId]` directly (no ?via=qr) — should see preview mode banner, NOT auto-claim
 - QRScannerModal: scan a treasure hunt QR — URL should auto-claim with ?via=qr appended
 
 **P2 dev dispatch:** Tier Lapse banner — make non-dismissible + amber; resolve "Your Plan: PRO" card contradiction when lapsed.
 
-**ConfirmDialog smoke test (UNVERIFIED):** Need an account with a deletable consignor or location. Seed one or use psycopg2 to create a test consignor for user2's sale.
+**ConfirmDialog smoke test (UNVERIFIED):** Need account with a deletable consignor or location.
 
-**Ongoing:** Resume eBay sync dev work per task #9/#10 if eBay tasks not yet complete. Advisory outreach: send 1–2/day from verified list.
+**Advisory outreach:** 28 drafts ready in Gmail. Send 1–2/day using patrick@finda.sale Send As alias. Remember to click the To field to reveal From dropdown before sending.
 
-**S591 — PRIMARY FOCUS: Two parallel dev dispatches to finish the eBay sync work.**
+**eBay sync tasks #9/#10:** Still pending if not dispatched from S591.
 
-The eBay proxy is now solid (S590 verified end-to-end with a real sale marked SOLD). What remains is fixing the upstream bugs that caused the bug-victim items in the first place, plus a watermark-design flaw that turned a transient outage into a permanent data loss.
+**Vercel redeploy without build cache:** Mode 1 eBay token returns 500 (env vars not reaching function). Not blocking cron.
 
-### First action: dispatch dev batches A + B IN PARALLEL (single message, two Agent calls)
-
-The dispatch briefs are stored verbatim in TaskList tasks #9 and #10 (subjects start with `[DEV BATCH A]` and `[DEV BATCH B]`). Each is self-contained — copy the description into an `Agent({subagent_type:'general-purpose', prompt: <prepend "You are findasale-dev. Read .../findasale-dev/SKILL.md first." then paste task body>})` call.
-
-- **Batch A (task #9):** Fix eBay push flow write-back + import-inventory dedup logic. Touches `packages/backend/src/controllers/ebayController.ts` (pushSaleToEbay function + importInventoryFromEbay at line 3211).
-- **Batch B (task #10):** Fix sold-sync watermark advance flaw. Touches `packages/backend/src/jobs/ebaySoldSyncCron.ts` only. Recommended approach in brief: switch to fixed sliding 7-day window.
-
-Different files → can run in parallel safely. Per CLAUDE.md §7 batch dispatch protocol.
+**Consider retiring Railway CLI hack:** Railway MCP now works via OAuth. CLAUDE.md still documents the binary/token approach — Records agent could update if Railway MCP proves stable over multiple sessions.
 
 ### Second action: spot-check + push
 

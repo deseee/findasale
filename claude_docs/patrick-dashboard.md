@@ -1,6 +1,6 @@
-# Patrick's Dashboard — S595 ✅ COMPLETE
+# Patrick's Dashboard — S596 ✅ COMPLETE
 
-## Status: QA backlog sweep done. S595 code pending push.
+## Status: Ops + outreach session. S595 code still pending push (now includes S596 wrap docs).
 
 ---
 
@@ -23,7 +23,7 @@
 
 ## ⚡ Do This Now
 
-**Step 1 — Push S595 treasure hunt code:**
+**Step 1 — Push S595 + S596 wrap (combined block):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/frontend/pages/sales/[id]/treasure-hunt-qr/progress.tsx
@@ -31,7 +31,7 @@ git add "packages/frontend/pages/sales/[id]/treasure-hunt-qr/[clueId].tsx"
 git add packages/frontend/components/qr-scanner/QRScannerModal.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: treasure hunt progress page + via=qr auto-claim guard [wrap S595]"
+git commit -m "feat: treasure hunt progress page + via=qr auto-claim guard + S596 wrap [wrap S595/S596]"
 .\push.ps1
 ```
 
@@ -41,8 +41,9 @@ git commit -m "feat: treasure hunt progress page + via=qr auto-claim guard [wrap
 
 | Action | Why | Blocking? |
 |--------|-----|-----------|
-| Push block above | S595 code + wrap docs | Yes |
+| Push block above | S595 code + S596 wrap docs | Yes |
 | After push: Chrome QA treasure hunt progress page | Verify `/treasure-hunt-qr/progress` loads (not "Clue not found") | No |
+| Advisory outreach drafts | 28 Gmail drafts ready — send 1–2/day from patrick@finda.sale (click To field to reveal From dropdown) | No |
 | S591 eBay sync: click "Sync eBay Inventory" | Still pending from S591 if not done | No |
 | Vercel redeploy without build cache | Mode 1 eBay token returns 500 — NOT blocking cron | No |
 
@@ -74,5 +75,6 @@ git commit -m "feat: treasure hunt progress page + via=qr auto-claim guard [wrap
 
 ## Carry-over
 
-- **Advisory outreach:** Continue 1–2/day from verified list using patrick@finda.sale
+- **Advisory outreach:** 28 Gmail drafts queued. Send 1–2/day using patrick@finda.sale Send As alias.
 - **eBay sync:** Tasks #9/#10 pending if not already dispatched
+- **Railway MCP:** Now working via OAuth (resolved by system reboot). Consider retiring the Railway CLI binary hack in CLAUDE.md after a few stable sessions.
