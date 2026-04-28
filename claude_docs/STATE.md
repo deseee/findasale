@@ -291,6 +291,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S597 (2026-04-28) — COMPLETE:** Condition rating system sync across UI. Patrick reported FAQ (Excellent/Good/Fair/Poor/As-Is) didn't match form S/A/B/C/D selector. Survey found 5 disagreeing sources: `itemConstants.ts` said "Mint" for grade S, form helper text said "Like new", FAQ Q1 said "S=Like New" but Q2 defined "Excellent" as "like new" (collision), `ConditionBadge` had both `mint` and `excellent` keys as separate top tiers, `review.tsx` used both "Like New" and "Like new" within the same file. **Locked decisions:** (1) "Like New" canonical for S grade — drop Mint everywhere; (2) As-Is treated as a flag orthogonal to grade, not a 6th tier. **Files changed:** `packages/frontend/lib/itemConstants.ts`, `pages/organizer/edit-item/[id].tsx`, `pages/organizer/add-items/[saleId]/review.tsx`, `components/ConditionBadge.tsx`, `pages/faq.tsx`. FAQ collapsed from 9 condition entries to 3: the intro Q + 5 grade Qs + As-Is Q merged into a single comprehensive "What is a Condition Rating?" with bulleted grade list (S/A/B/C/D each with pricing % + examples) and As-Is paragraph at the bottom. "Who decides the condition rating?" and "Can I dispute a condition rating?" kept as separate Qs. Pricing % redistributed S 80–100, A 60–80, B 40–60, C 25–40, D 10–25. Q1 "Poor," typo eliminated. **Sandbox blocker:** Linux VM workspace was unavailable for entire session (every bash call returned "Workspace unavailable") — couldn't run `tsc --noEmit` for §13 pre-flight gate; included as first step of pushblock for Patrick. File tools, GitHub MCP, and Railway MCP all worked normally. **Railway MCP recurrence at session start**, resolved by Patrick rebooting Claude Desktop (consistent with S596 reboot fix). **Combined push:** S595 treasure hunt code (pending from S596) + S597 changes + S597 wrap docs.
+
 **S596 (2026-04-28) — COMPLETE:** Ops + outreach session. No code changes. **Gmail advisory outreach drafts:** Created 28 Gmail drafts via Gmail MCP for all contacts in `advisory-outreach-drafts.md` with confirmed email addresses who hadn't been emailed yet. Subject line "finda.sale" consistent with prior sent emails. Drafts send from deseee@gmail.com (patrick@finda.sale is a Send As alias — Patrick selects it in From field before sending). **Docker MCP removed:** Was showing ENOENT error; Patrick removed via Claude Code Settings UI (it was auto-registered by Docker Desktop, not in any JSON config file). **Railway MCP fixed:** Was disconnected (OAuth expired). Multiple failed attempts (OAuth cache clear, token header auth, url-type config) — ultimately resolved by full system reboot which re-triggered the OAuth popup. Railway MCP tools now active in session. **Config location memorized:** True Claude Desktop config path is `C:\Users\desee\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json` (Windows packaged app sandbox, NOT AppData\Roaming\Claude). Saved to memory file `reference_claude_config_location.md`. `.claude/settings.json` (Claude Code CLI user config) had a duplicate Railway entry as `type: http` — Patrick deleted the file entirely.
 
 **S595 (2026-04-27) — COMPLETE:** QA backlog sweep — 9 items tested from Blocked/Unverified Queue. **Results:** 8 ✅ verified, 1 ⚠️ PARTIAL, 1 UNVERIFIED. **✅ Verified:** AvatarDropdown CONNECT → Explorer's Guild link (ss_6465qdcim), /admin/items pagination page 2 at 780px (ss_3396hados), /admin/bid-review clean empty state S566 fix (ss_0420q1hkk), Organizer Insights for Alice $3,856.31 gross S545 fix (ss_2893wh51g), Print Kit 13 items + Sign Templates S543 fix (ss_4080t1wlc), /organizer/earnings real data S550 hooks fix (ss_6291mzhzi), /organizer/calendar April 2026 grid S550 fix (ss_3710aljj0), Settlement Receipt PDF "Organizer Commission (35%): -$437.50" endpoint 200 OK (ss_45016j87d). **⚠️ PARTIAL:** #75 Tier Lapse Logic — lapse detection works but P2 banner issues: banner is red + dismissible (not sticky amber), "Your Plan: PRO" card contradicts lapse message. Needs dev fix. **UNVERIFIED:** ConfirmDialog smoke test — no deletable data in user2 account. **Code shipped this session (S595, pending push):** progress.tsx (new — treasure hunt progress page), [clueId].tsx (?via=qr auto-claim guard), QRScannerModal.tsx (appends ?via=qr on treasure hunt URLs). **No new bugs requiring immediate dispatch.** P2 dispatch needed: Tier Lapse banner → make sticky amber + remove "Your Plan: PRO" contradiction.
@@ -329,36 +331,32 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S597 — Next priorities.**
+**S598 — Next priorities.**
 
-**Push block needed first (S595 still pending):** Treasure hunt progress page + via=qr guard code is sitting uncommitted. Push before any QA of those features:
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/sales/[id]/treasure-hunt-qr/progress.tsx
-git add "packages/frontend/pages/sales/[id]/treasure-hunt-qr/[clueId].tsx"
-git add packages/frontend/components/qr-scanner/QRScannerModal.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat: treasure hunt progress page + via=qr auto-claim guard + S596 wrap [wrap S595/S596]"
-.\push.ps1
-```
+**FIRST ACTION — Live-site smoke test (mandatory per CLAUDE.md §10):** S597 changed condition rating copy across 5 files. Open Chrome → `https://finda.sale/faq` — verify the 5-tier S/A/B/C/D structure renders with grade letters in question titles (Like New (S), Excellent (A), Good (B), Fair (C), Poor (D)) plus reworded As-Is entry. Pricing percentages should match S 80–100, A 60–80, B 40–60, C 25–40, D 10–25. Then check `/organizer/edit-item/[any-item]` — helper text under the S/A/B/C/D buttons should read "S=Like New · A=Excellent · …" (capital N). Same on the organizer review-and-publish page (`/organizer/add-items/[saleId]/review`). Item detail page condition badge: hover for tooltip showing grade letter (e.g. "Like New (S). No signs of wear…").
 
-**After push — Chrome QA (S595):**
-- Navigate to `/sales/[saleId]/treasure-hunt-qr/progress` as shopper — verify progress page loads (NOT "Clue not found")
-- Navigate to `/sales/[saleId]/treasure-hunt-qr/[clueId]` directly (no ?via=qr) — should see preview mode banner, NOT auto-claim
-- QRScannerModal: scan a treasure hunt QR — URL should auto-claim with ?via=qr appended
+**Chrome QA carryover (S595):**
+- `/sales/[saleId]/treasure-hunt-qr/progress` as shopper — progress page loads (NOT "Clue not found")
+- `/sales/[saleId]/treasure-hunt-qr/[clueId]` without `?via=qr` — should see preview mode banner, NOT auto-claim
+- QRScannerModal: scan treasure hunt QR — URL should auto-claim with `?via=qr` appended
 
-**P2 dev dispatch:** Tier Lapse banner — make non-dismissible + amber; resolve "Your Plan: PRO" card contradiction when lapsed.
+**P2 dev dispatch (carryover):** Tier Lapse banner — make non-dismissible + amber; resolve "Your Plan: PRO" card contradiction when lapsed.
 
-**ConfirmDialog smoke test (UNVERIFIED):** Need account with a deletable consignor or location.
+**ConfirmDialog smoke test (UNVERIFIED):** Need account with deletable consignor or location.
 
-**Advisory outreach:** 28 drafts ready in Gmail. Send 1–2/day using patrick@finda.sale Send As alias. Remember to click the To field to reveal From dropdown before sending.
+**Advisory outreach:** 28 Gmail drafts ready. Send 1–2/day using patrick@finda.sale Send As alias (click To field to reveal From dropdown before sending).
 
-**eBay sync tasks #9/#10:** Still pending if not dispatched from S591.
+**eBay tasks #9/#10:** Still pending if not dispatched from S591.
 
 **Vercel redeploy without build cache:** Mode 1 eBay token returns 500 (env vars not reaching function). Not blocking cron.
 
-**Consider retiring Railway CLI hack:** Railway MCP now works via OAuth. CLAUDE.md still documents the binary/token approach — Records agent could update if Railway MCP proves stable over multiple sessions.
+**FAQ pricing percentages (spot-check before beta):** S 80–100, A 60–80, B 40–60, C 25–40, D 10–25 are best-guess redistribution from old 4-tier ranges. Quick read-through for tone/anchor accuracy is worthwhile — easy follow-up edit if any feel off.
+
+**Sandbox stability concern:** S597 ran with completely unavailable Linux VM workspace (every bash call returned "Workspace unavailable") for entire session. File tools + GitHub MCP + Railway MCP worked normally. If pattern recurs in S598, may warrant root-cause investigation — could indicate a Cowork-side issue with sandbox provisioning.
+
+**Railway CLI hack retirement:** MCP now works via OAuth and survived a second reboot recovery cycle (S596 + S597). Two more stable sessions = safe to remove the CLI binary/token block from global CLAUDE.md.
+
+**Passwords:** All test accounts use Seedy2025!
 
 ### Second action: spot-check + push
 
