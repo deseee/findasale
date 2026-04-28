@@ -24,7 +24,8 @@ interface FoundResponse {
 
 const CluePage = () => {
   const router = useRouter();
-  const { id, clueId } = router.query;
+  const { id, clueId, via } = router.query;
+  const viaQr = via === 'qr';
   const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const hasAutoClaimedRef = useRef(false);
@@ -129,13 +130,13 @@ const CluePage = () => {
     },
   });
 
-  // Auto-claim on page load (after clue loads)
+  // Auto-claim on page load (after clue loads) — only if arriving via QR scan
   useEffect(() => {
-    if (!clueLoading && clue && !hasAutoClaimedRef.current && !foundMutation.isPending) {
+    if (viaQr && !clueLoading && clue && !hasAutoClaimedRef.current && !foundMutation.isPending) {
       hasAutoClaimedRef.current = true;
       foundMutation.mutate();
     }
-  }, [clueLoading, clue]);
+  }, [viaQr, clueLoading, clue, foundMutation.isPending]);
 
   const isLoading = authLoading || clueLoading;
 
@@ -206,6 +207,18 @@ const CluePage = () => {
                       <span className="inline-block bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-medium">
                         Category: {clue.category}
                       </span>
+                    </div>
+                  )}
+
+                  {/* Preview mode banner — shown when visiting from sale page, not via QR scan */}
+                  {!viaQr && (
+                    <div className="w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-800 rounded-lg p-4">
+                      <p className="text-sm text-blue-900 dark:text-blue-100 font-semibold">
+                        👀 Preview Mode
+                      </p>
+                      <p className="text-sm text-blue-800 dark:text-blue-200 mt-2">
+                        Scan the QR code at the sale venue to claim this clue and earn XP.
+                      </p>
                     </div>
                   )}
 
