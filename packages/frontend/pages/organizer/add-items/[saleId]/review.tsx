@@ -1444,7 +1444,7 @@ const ReviewPage = () => {
                                   </div>
                                   <div className="text-xs text-gray-400 mt-0.5">
                                     {(['S','A','B','C','D'] as const).map(g => {
-                                      const labels: Record<string, string> = { S:'Like new', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
+                                      const labels: Record<string, string> = { S:'Like New', A:'Excellent', B:'Good', C:'Fair', D:'Poor' };
                                       return `${g}=${labels[g]}`;
                                     }).join(' · ')}
                                   </div>

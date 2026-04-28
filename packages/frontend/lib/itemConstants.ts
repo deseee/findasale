@@ -36,7 +36,7 @@ export const CONDITION_MAP: Record<string, string> = {
   'REFURBISHED': 'Refurbished',
   'PARTS_OR_REPAIR': 'Parts or Repair',
   // Grade letters (from conditionGrade field: S | A | B | C | D)
-  'S': 'Mint',
+  'S': 'Like New',
   'A': 'Excellent',
   'B': 'Good',
   'C': 'Fair',
