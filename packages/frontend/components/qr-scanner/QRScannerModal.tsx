@@ -33,7 +33,12 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
           setShowCheckmark(true);
           setTimeout(() => {
             markCompleted();
-            const pathname = url.pathname + url.search;
+            let pathname = url.pathname + url.search;
+            // Append ?via=qr to treasure hunt clue URLs to signal this came from a QR scan
+            if (pathname.includes('/treasure-hunt-qr/') && !pathname.includes('via=qr')) {
+              const separator = pathname.includes('?') ? '&' : '?';
+              pathname += separator + 'via=qr';
+            }
             router.push(pathname);
             onClose();
           }, 600);
