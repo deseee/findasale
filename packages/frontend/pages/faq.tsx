@@ -223,11 +223,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is the Explorer\'s Guild?',
     answer: (
       <>
-        The Explorer's Guild is our loyalty rewards program. You earn Guild XP by visiting sales, making
-        purchases, and completing seasonal challenges. As you earn XP, you progress through ranks —
-        Initiate, Scout, Ranger, Sage, and Grandmaster — each new rank unlocks perks like coupons, longer
-        hold times, Hunt Pass discounts and more! Accumulate XP to unlock discounts on future purchases.
-        View your balance and redemption options at <strong>Account → Loyalty</strong>.
+        The Explorer's Guild is our loyalty rewards program. You earn Guild XP by visiting sales, making purchases, posting hauls, completing seasonal challenges, and more — and you progress through five ranks: Initiate, Scout, Ranger, Sage, and Grandmaster. Each rank unlocks perks like longer hold times, earlier access to listings, and exclusive cosmetics. See the full XP table and rank perks in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Explorer's Guild walkthrough</Link>.
       </>
     ),
   },
@@ -235,7 +231,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'How do I earn XP?',
     answer: (
       <>
-        You earn XP from a wide range of activities. Main sources include: purchasing items ($1 spent = 1 XP), visiting a sale (5 XP, max 2 per day), publishing haul posts (10 XP), reviewing organizers (8 XP), completing Treasure Trails (40–80 XP bonus), submitting appraisals (10 XP), and referring friends. You also earn XP from seasonal challenges, community activities, and daily streaks. Visit your <strong>Account → Loyalty</strong> page to see all available actions and track your progress.
+        XP comes from a wide range of activities — visiting sales, making purchases, winning auctions, posting hauls, leaving item reviews, fulfilling bounties, completing Treasure Trails, referring friends, daily streaks, seasonal challenges, and more. Hunt Pass subscribers earn 1.5× XP on every action. The complete table of XP values per action lives in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "How to Earn XP".
       </>
     ),
   },
@@ -243,14 +239,15 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Explorer\'s Guild ranks and what do I unlock at each level?',
     answer: (
       <>
-        There are five ranks in the Explorer's Guild, each unlocking new perks:
+        There are five ranks. Each unlocks longer hold times, earlier access to high-value items, and additional perks:
         <ul className="mt-2 ml-4 space-y-1">
-          <li><strong>Initiate (0 XP)</strong> — Full access to the platform, join the community</li>
-          <li><strong>Scout (500 XP)</strong> — 5% Hunt Pass discount, early access to 1 sale per week</li>
-          <li><strong>Ranger (2,000 XP)</strong> — 10% Hunt Pass discount, early access to 3 sales per week</li>
-          <li><strong>Sage (5,000 XP)</strong> — 15% Hunt Pass discount, unlimited early access, 48-hour advance sale alerts, ability to publish Sourcebook hunting guides</li>
-          <li><strong>Grandmaster (12,000 XP)</strong> — Permanent free Hunt Pass, all Sage perks, priority support</li>
+          <li><strong>Initiate</strong> — 0 XP (everyone starts here)</li>
+          <li><strong>Scout</strong> — 500 XP</li>
+          <li><strong>Ranger</strong> — 2,000 XP</li>
+          <li><strong>Sage</strong> — 5,000 XP</li>
+          <li><strong>Grandmaster</strong> — 12,000 XP</li>
         </ul>
+        Full perk lists per rank live in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "The Rank Journey".
       </>
     ),
   },
@@ -258,7 +255,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What happens to my rank each year?',
     answer: (
       <>
-        The Explorer's Guild resets ranks on January 1st each year. If you're at Grandmaster, you drop one tier to Sage. Scout and Initiate ranks don't drop — they stay the same. Crucially, <strong>Grandmaster receives free Hunt Pass forever</strong>, even after dropping to Sage, so reaching the top tier is a permanent achievement with lasting value.
+        On January 1st, everyone drops one tier — Grandmaster becomes Sage, Sage becomes Ranger, Ranger becomes Scout, Scout becomes Initiate. Your XP resets to the floor of your new rank. Reaching <strong>Grandmaster</strong> unlocks free Hunt Pass while you hold that rank — if you drop below Grandmaster the pass lapses, and it restores automatically the next time you re-qualify.
       </>
     ),
   },
@@ -266,22 +263,15 @@ const shopperFAQs: FAQItem[] = [
     question: 'What can I spend my XP on?',
     answer: (
       <>
-        XP isn't just for rank progression — you can redeem it for real rewards in the Explorer's Guild. Current redemption options:
-        <ul className="mt-2 ml-4 space-y-1">
-          <li><strong>75 XP → $5 off</strong> at any participating sale (min $20 purchase)</li>
-          <li><strong>15 XP → Rarity Boost</strong> — +2% Legendary item odds for your next sale visit</li>
-          <li><strong>25 XP → Trail Boost</strong> — Feature your Treasure Trail at the top of the discovery feed for 48 hours</li>
-          <li><strong>50 XP → Hunt Pass Discount</strong> — $1 off your next Hunt Pass billing cycle (stackable up to 3 times)</li>
-        </ul>
-        Redeem XP from <strong>Account → Loyalty</strong>.
+        XP is spendable currency. You can redeem it for cosmetics (custom username colors, frame badges, profile showcase slots), gameplay boosts (Rarity Boost, Haul Visibility Boost, Wishlist Notification Boost), shopper coupons, a Hunt Pass discount, and organizer features (Sale Bump, Event Sponsorship, Treasure Trail Sponsor). Live prices and availability are at the <Link href="/coupons" className="text-amber-600 hover:underline">XP Store</Link>; the full catalog with rank requirements is in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "Spend Your XP".
       </>
     ),
   },
   {
-    question: 'What is Hunt Pass and how do I earn points?',
+    question: 'What is Hunt Pass?',
     answer: (
       <>
-        Hunt Pass is the fun and competitive side of the Explorers Guild. For $4.99/month, you get 1.5x XP multiplier on all actions, 6-hour early access to Rare items and 12-hour early access to Legendary items before the general public, seasonal challenges with exclusive cosmetics, and priority trail recommendations. Hunt Pass also unlocks Treasure Trails and early flash deal notifications.
+        Hunt Pass is the competitive layer on top of the Explorer's Guild. For $4.99/month you get a 1.5× XP multiplier on all actions, 6-hour early access to Rare items and 12-hour early access to Legendary items, seasonal challenge access with exclusive cosmetics, and the ability to create your own Treasure Trails. Learn more on the <Link href="/shopper/hunt-pass" className="text-amber-600 hover:underline">Hunt Pass page</Link>.
       </>
     ),
   },
@@ -289,8 +279,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are seasonal challenges?',
     answer: (
       <>
-        Each season (Spring, Summer, Fall, Winter) brings themed challenges — like visiting a certain number of sales or collecting items in specific categories.
-        Complete challenges to earn bonus XP and exclusive seasonal badges.
+        Each quarter brings a themed adventure — Spring Awakening, Summer Exploration, Fall Collection, Winter Treasures — with challenges, exclusive cosmetics, and a fresh leaderboard. Hunt Pass subscribers get challenge access included; everyone else can buy a season pass for 250 XP (or $2.50). Details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "Seasonal Adventures".
       </>
     ),
   },
@@ -298,7 +287,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Treasure Trails?',
     answer: (
       <>
-        Treasure Trails are curated multi-stop local experiences anchored to estate sales. A Trail might combine a Saturday morning estate sale with a vintage shop downtown and a scenic café on the way home. You check in at each stop, earn XP (5 XP for sales, 3 for shops, 2 for points of interest), and earn a completion bonus (40–80 XP depending on trail length) when you finish all stops. Hunt Pass subscribers can create their own trails and share them with the community — and earn XP every time a shopper completes a trail they built.
+        Treasure Trails are curated multi-stop local experiences — for example, a Saturday estate sale plus a vintage shop downtown plus a scenic café on the way home. You check in at each stop and earn a tiered completion bonus (40 XP for 3 stops, scaling up to 80 XP for 7+ stops) when you finish. Trail access scales with rank: Ranger gets 3 per week, Sage gets unlimited. Hunt Pass subscribers can create and share their own trails. Full XP details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link>.
       </>
     ),
   },

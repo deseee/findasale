@@ -14,7 +14,9 @@ Condition rating system was inconsistent across 5 surfaces. Fixed both the label
 
 **5 files synced:** `lib/itemConstants.ts`, `pages/organizer/edit-item/[id].tsx`, `pages/organizer/add-items/[saleId]/review.tsx`, `components/ConditionBadge.tsx`, `pages/faq.tsx`.
 
-**FAQ collapsed 9→3 entries** (per your callout): the intro + 5 grade questions + As-Is merged into a single "What is a Condition Rating?" with bulleted grade list (S/A/B/C/D each with pricing % + examples) and As-Is paragraph at the bottom. "Who decides" and "Can I dispute" kept separate.
+**FAQ condition section collapsed 9→3 entries** (per your callout): intro + 5 grade Qs + As-Is merged into a single "What is a Condition Rating?" with bulleted grade list (S/A/B/C/D + pricing % + examples) and As-Is paragraph. "Who decides" and "Can I dispute" kept separate.
+
+**FAQ Explorer's Guild section audited + rewritten** (your second callout — fabricated XP amounts/discounts). Confirmed 6 of 8 Qs had values that didn't match `guild-primer.tsx`: "$1 = 1 XP" (real: flat 10 XP/purchase), "5/10/15% Hunt Pass rank discounts" (don't exist), "75 XP → $5 off" (real: 500 XP), "GM keeps Hunt Pass forever after dropping" (real: lapses on drop, restores on re-qualify), "Scout/Initiate don't drop at reset" (real: everyone drops one tier), per-stop trail XP "5/3/2" (don't exist), "Account → Loyalty" route (stale). **Fix:** all 8 guild Qs rewritten to link to `/shopper/guild-primer` (canonical) and `/coupons` (XP Store live prices) instead of duplicating numeric values inline. Annual reset and Treasure Trail rank gates rewritten to match primer exactly.
 
 ---
 
@@ -45,7 +47,8 @@ git commit -m "feat: treasure hunt progress + via=qr guard (S595) + condition ra
 ```
 
 **Step 3 — After push, Chrome QA:**
-- `/faq` — FAQ has ONE merged condition Q (not 9). Bulleted S/A/B/C/D list with pricing %. As-Is paragraph at bottom.
+- `/faq` condition section — ONE merged Q (not 9). Bulleted S/A/B/C/D list with pricing %. As-Is paragraph at bottom.
+- `/faq` Explorer's Guild section — 8 Qs now link to `/shopper/guild-primer` and `/coupons` (no inline XP/% values). Verify links work.
 - `/organizer/edit-item/[any-item]` helper text shows "S=Like New" (capital N).
 - Organizer review-and-publish helper text matches.
 - Item detail page: condition badge tooltip shows grade letter (e.g. "Like New (S). No signs of wear…").
