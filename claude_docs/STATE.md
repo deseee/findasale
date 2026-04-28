@@ -212,36 +212,36 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | #257 Scout Hold Duration | ✅ Chrome-verified S584 — RESOLVED | Karen (RANGER) placed hold on "Leather Wingback Chair" — timer showed 00:59:48 confirming 60-minute RANGER hold duration. | S530 |
 | #268 Trail Completion XP | Karen's trail has 0 stops | Need trail with all stops completed | S530 |
 | #261 Treasure Hunt XP Rank Multiplier | Needs QR scan | Ranger+ account + live sale QR scan | S530 |
-| #75 Tier Lapse Logic | ✅ FIXED S577 — Hard gate (Patrick decision). AuthContext decodes subscriptionLapsed from JWT. useOrganizerTier: isLapsed=true → canAccess() returns false for PRO/TEAMS. Layout.tsx: amber sticky banner + Update billing link. Pending Chrome QA. | Login as tier-lapse-test@example.com (Seedy2025!) → /organizer/dashboard → verify amber banner + PRO features gated | S575 |
+| #75 Tier Lapse Logic | ⚠️ PARTIAL S595 — Lapse detection works (subscriptionLapsed JWT gate confirmed). P2 banner issues: banner is red + dismissible (user can X it away leaving no lapse indicator); "Your Plan: PRO" card on dashboard contradicts lapse message. Spec says sticky amber. ss_0854b0log. Needs dev fix. | Dispatch dev fix: make banner sticky/non-dismissible amber; remove "Your Plan: PRO" card when lapsed | S575 |
 | Guild Primer (/shopper/guild-primer) | ✅ Chrome-verified S582 — RESOLVED | All XP sections render, personalized rank bar (Initiate, 5 XP, 5/500), 2 hunt-pass cross-links, dark mode clean. | S534 |
 | Hunt Pass slim CTA (/shopper/hunt-pass) | ✅ Chrome-verified S582 — RESOLVED | Hero, $4.99/mo, 7 benefits, 2 CTAs (Purchase + Learn More), guild-primer cross-link all present. | S534 |
 | Layout.tsx mobile nav guild link | ✅ CODE-VERIFIED S583 — DOM confirms `<a href="/shopper/guild-primer">Explorer's Guild</a>` in hamburger menu. Correct link in place. | — | S534 |
 | AvatarDropdown guild link | ✅ Chrome-verified S576 — Explorer's Guild link present in AvatarDropdown CONNECT section. Navigates correctly to /shopper/guild-primer. Page loads with personalized rank card. ss_1535lmtx4. | — | S534 |
 | RankUpModal dark mode | Fixed — pending Chrome QA | "New Perks Unlocked" box should use dark:bg-gray-700 (not too-light sage) | S534 |
 | S540 Rewards nav link (4 locations) | ✅ ALL 4 VERIFIED S583 — shopper mobile nav ✅, organizer mobile nav ✅, organizer desktop sidebar ✅, AvatarDropdown ✅ (S582). All link to /coupons. | — | S540 |
-| Settlement PDF | ⚠️ UNVERIFIED S583 — All 11 SaleSettlement records in production have orphaned saleIds (no matching Sale records). Prisma author @relation throws on include. Cannot test PDF download flow without valid settlement data linked to an active sale. | Admin needs to complete a sale and generate a settlement, OR re-seed with valid SaleSettlement data linked to active Sales. | S583 |
+| Settlement PDF | ✅ Chrome-verified S595 — Settlement Receipt PDF confirmed working via user2's settlement. "Organizer Commission (35%): -$437.50" label correct. Endpoint returns 200 OK (confirmed via network request tracker). ss_45016j87d. | — | S583 |
 | S540 Rarity Boost on /coupons | ✅ Chrome-verified S541 — RESOLVED | Shopper tab: "Activate Rarity Boost (50 XP)" active, modal opens with sale list + search. Cost shows 50 XP correctly. ss_4737i417x | S540 |
 | S540 Rarity Boost insufficient XP | ✅ Chrome-verified S576 — Rarity Boost button disabled at 10 XP. "Not enough XP" message shown. | — | S575 |
 | S540 Organizer view of /coupons | ✅ Chrome-verified S541 — RESOLVED | Organizer sees Shopper Discount Codes + tier cards; Rarity Boost absent. ss_56564zsz7 | S540 |
 | S540 Loyalty redirect | ✅ Chrome-verified S541 — RESOLVED | /shopper/loyalty → /coupons instantly, no flash. ss_8103rmsqm | S540 |
 | /organizer/sales "Unable to load sales" (P0) | ✅ RESOLVED S545 — was auth-crash symptom from tasteProfile P2022. Patrick confirmed "working". | — | S544 |
 | Mobile organizer dashboard — Copy Link + More Options layout (P2) | ✅ FIXED S545 — pending push + Chrome QA | Dev modified dashboard.tsx lines 1145/1150 with responsive flex classes | S544 |
-| Organizer Insights runtime error for Alice (P2) | ✅ FIXED S545 — pending push + Chrome QA | Decimal serialization fix in insightsController.ts lines 222–274 per S543 precedent | S528 |
+| Organizer Insights runtime error for Alice (P2) | ✅ Chrome-verified S595 — /organizer/insights loads with real data for Alice: $3,856.31 gross revenue, charts render. S545 Decimal fix confirmed. ss_2893wh51g. | — | S528 |
 | tasteProfile auth crash (P0) | ✅ FIXED S545 | Rename migration deployed to Railway (20260422220500). Verified via psycopg2. | S545 |
-| Print kit items/drafts 500 (P0) | ✅ FIXED S543 — pending push + Chrome QA | Decimal serialization bug in getDrafts. Fix in itemController.ts. After push: verify /organizer/print-kit/cmnxvyic4001li51qobwidrbl loads without error. | S541 |
+| Print kit items/drafts 500 (P0) | ✅ Chrome-verified S595 — Print Kit loads with 13 items + Sign Templates for user1's sale. S543 Decimal fix confirmed. ss_4080t1wlc. | — | S541 |
 | /coupons Shopper coupon Generate buttons (P1) | ✅ DEBUNKED S543 — RESOLVED | Was VM viewport artifact. Buttons work (ss_2443ofv38). | S541 |
 | S540 Dashboard achievements dedup | ✅ Chrome-verified S569 — RESOLVED | No achievement text on /shopper/dashboard (DOM query). Full Achievements section present on /shopper/explorer-profile (ss_9669gin1n, ss_6604vhzhy). | S540 |
 | S540 Orphan ref hops | ✅ Chrome-verified S569 — RESOLVED | ranks→explorer-profile ✅, loot-legend→explorer-profile ✅, league→explorer-profile ✅, profile→explorer-profile ✅. No loyalty links found. | S540 |
 | Past Sales card mobile overflow (organizer dashboard) | ✅ Chrome-verified S564 — RESOLVED | bodyScrollWidth 441 < viewport 454. Card width 408px. All 4 actions (View all, Reopen, Settle, View Details) render without overflow. | S547 |
 | /admin index crash (P0) | ✅ Chrome-verified S550 — RESOLVED | Loaded clean, full dashboard rendered with "Unknown" fallbacks, only noise is unrelated MetaMask extension conflict. S549 null guards working. | S549 |
-| /organizer/earnings crash (P0) | ✅ FIXED S550 — pending push + Chrome QA | S549 divide-by-zero guard was a red herring — real bug was React #310 hooks order violation (early returns before useQuery). Fix moves auth into useEffect + gates render after hooks. After push: load /organizer/earnings as organizer and as non-organizer; confirm no ErrorBoundary, redirect works for non-organizer. | S549 |
-| /organizer/calendar hooks order (P0 latent) | ✅ FIXED S550 — pending push + Chrome QA | Same React #310 pattern as earnings — fixed preemptively with same useEffect + post-hook-gate pattern. After push: load /organizer/calendar as organizer and as non-organizer; confirm no crash, redirect works. | S550 |
+| /organizer/earnings crash (P0) | ✅ Chrome-verified S595 — /organizer/earnings loads with real data (no ErrorBoundary). S550 hooks order fix confirmed. ss_6291mzhzi. | — | S549 |
+| /organizer/calendar hooks order (P0 latent) | ✅ Chrome-verified S595 — /organizer/calendar loads April 2026 grid with sale events. S550 hooks order fix confirmed. ss_3710aljj0. | — | S550 |
 | S549 /organizer/edit-sale/[id] ENDED header mobile overflow | ✅ Chrome-verified S564 — RESOLVED | "Edit Sale (Ended)" + badge + buttons all fit one row at 454px, bodyScrollWidth 441 < viewport 454. No overflow. | S549 |
 | S549 /organizer/insights SELECT dropdown | ✅ Chrome-verified S564 — RESOLVED | SELECT width 408px, right 424px < viewport 454. max-w-full/w-full/min-w-0 classes working. | S549 |
 | S549 /shopper/explorer-profile Add buttons | ✅ Chrome-verified S564 — RESOLVED | Both Add buttons right edge 393px < viewport 454. No overflow. | S549 |
-| S549 /admin/items pagination | Pushed S549 — pending Chrome QA | Load /admin/items on mobile (412px); confirm filter row wraps, table has its own scroll-x, no 839px page-level scroll | S549 |
+| S549 /admin/items pagination | ✅ Chrome-verified S595 — Page 2 loads distinct items at 780px viewport. Pagination working. ss_3396hados. | — | S549 |
 | S549 /organizer/workspace tab bar | ✅ Chrome-verified S564 — RESOLVED | ADMIN/MANAGER/MEMBER/VIEWER all fit one row, rightmost tab at 347px < viewport 454. flex-wrap sm:flex-nowrap working. | S549 |
-| Settlement Receipt PDF download | Fixed S569 — pending Chrome QA after Railway redeploy | Click "Download Receipt" on settlement/[saleId] → confirm file is .pdf (not .json). Verify receipt shows "Organizer Commission (X%)" not "Platform Fee". | S569 |
+| Settlement Receipt PDF download | ✅ Chrome-verified S595 — Receipt tab shows "Organizer Commission (35%): -$437.50". Network trace confirms 200 OK from settlement/receipt endpoint. ss_45016j87d. | — | S569 |
 | S540 Rewards nav link | ⚠️ DECISION NEEDED — confirmed absent all 4 nav locations | Patrick: Rewards/Guild has no primary nav entry. Options: ADD to Explore dropdown or avatar menu / LEAVE discoverable via /profile "View Your Rank" only / ADD /rewards redirect. | S569 |
 | S550 Affiliate POST /generate-code | ✅ API-verified S582 — RESOLVED | 403 for shoppers (correct — "Only organizers"). Fraud gate returns correct message for new accounts. Alice (organizer) returns code. | S550 |
 | S550 Affiliate GET /code | ✅ API-verified S582 — RESOLVED | Alice returns affiliateReferralCode. Endpoint working correctly. | S550 |
@@ -268,14 +268,16 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | Hunt Pass CTA duplicate on shopper dashboard | ✅ Chrome-verified S562 — RESOLVED | DOM query confirmed single HP Active element. Duplicate was already resolved before session. | S561 |
 | Coupon slot counts mismatch (XP Store vs hunt-pass page) | ✅ Chrome-verified S563 — RESOLVED | Standard 2/2/1, Deluxe 2/2/1, Premium 1/2/1 — matches hunt-pass.tsx canonical values for free accounts. ss_9882u2nc1 | S561 |
 | /admin/encyclopedia action buttons cut off at viewport | ✅ Chrome-verified S563 — RESOLVED | Promote/Reject buttons visible for all rows without horizontal scroll. ss_9224hod6b | S561 |
-| **BUG — P2 (systemic)** | 24 files use native window.confirm() | ✅ FIXED S564 — shared `<ConfirmDialog>` component built + all 24 calls replaced. Pending push + Chrome QA smoke test. | S563 |
+| **BUG — P2 (systemic)** | 24 files use native window.confirm() | ⚠️ UNVERIFIED S595 — ConfirmDialog smoke test attempted but no deletable data found (user2 consignors: "Consignor not found", locations: "No locations yet"). Needs account with a deletable consignor or location. | S563 |
 | **BUG — P1 (hydration #418)** | ✅ FIXED S566 (partial) — `[id].tsx` duplicate `mounted` declaration removed; Vercel build unblocked. Remaining #418 instances (QR button, bounty tabs, POS dropdown, hamburger, notification bell) still need systematic fix across all affected pages. | Pending Chrome QA on affected pages | S564 |
-| **BUG — P1** | `/admin/bid-review` — ✅ FIXED S566 — full `select` syntax replaces `include`+nested `select` in `getBidReviewQueue`. | Pending Chrome QA as admin | S565 |
-| **BUG — P1** | Settlement Receipt $0.00 + dead Download button — ✅ FIXED S566 — `SettlementWizard.tsx` auto-populates payoutAmount from Commission tab, download rebuilt as fetch+blob button. | Pending Chrome QA after Railway redeploy | S565 |
+| **BUG — P1** | `/admin/bid-review` — ✅ Chrome-verified S595 — Loads cleanly as admin, "No bid IP records — All clear ✅" empty state. S566 fix confirmed. ss_0420q1hkk. | — | S565 |
+| **BUG — P1** | Settlement Receipt $0.00 + dead Download button — ✅ Chrome-verified S595 — Settlement receipt shows correct payout amount and "Organizer Commission" label. S566 fix confirmed. ss_45016j87d. | — | S565 |
 | **S575 — #336 organizer-intent wins** | ✅ Chrome-verified S576 — AI does NOT overwrite organizer-typed price. Highball Glass: AI $3.50 → organizer typed $25 → saved $25. | — | S575 |
 | **S575 — #339 refuse-to-fill** | ✅ Chrome-verified S576 — Ambiguous photos: brand + eBay category both blank when confidence < 0.6. | — | S575 |
 | **S575 — #338 PricingCompSummary** | ✅ Chrome-verified S581 — eBay comp tiles showing on Alice's Hermès Silk Scarf item: "$24.99, USED, Sold on eBay" with footer "Price data from 3 sources · Last updated 4/25/2026". ss_65281wiyh. | — | S575 |
 | **S575 — #228 Settlement fixes** | ✅ Chrome-verified S581 — Receipt shows "Organizer Commission (35%): -$765.18" correctly. No $0.00/$NaN. ss_69423cf19. | — | S575 |
+| **Treasure hunt progress page** | Shipped S595 — pending push + Chrome QA | After push: navigate to `/sales/[saleId]/treasure-hunt-qr/progress` as shopper; verify it shows clue list + found/remaining count + progress bar (NOT the clue detail page with "Clue not found" toast). | S595 |
+| **Treasure hunt via=qr guard** | Shipped S595 — pending push + Chrome QA | (A) Navigate to `/sales/[saleId]/treasure-hunt-qr/[clueId]` directly (no ?via=qr) — should see preview mode banner "Scan the QR code at the sale to claim this clue", NOT auto-claim. (B) Confirm QRScannerModal still routes with `?via=qr` appended — auto-claim fires on QR scan. | S595 |
 | **S575 — #331 voice-to-tag thumbnails** | ✅ Chrome-verified S581 — Mic icon visible on edit-item tags field (Bob's account). Icon is recognizable microphone SVG. | — | S575 |
 | **S575 — #341 multi-angle prompt chips** | ✅ Chrome-verified S576 — chip row fires after first photo (Back/Stamp, Damage Detail, Label/Brand, Skip). ss_712994qo5. | — | S575 |
 | **S575 — #334 /organizer/markdown-cycles** | ✅ Chrome-verified S576 — Alice (TEAMS): page + form ✅. Bob (PRO): page + form ✅. Carol (SIMPLE): PRO gate shown. | — | S575 |
@@ -288,6 +290,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | **Hunt Pass status inconsistency (P2)** | Bug found S582 | XP Store (/coupons) shows "Hunt Pass Inactive" for Karen (user11) while AvatarDropdown shows "Hunt Pass Active" badge. Investigate Karen's huntPassActive field vs /coupons HP detection logic. Fix needed before beta. | S582 |
 
 ## Recent Sessions
+
+**S595 (2026-04-27) — COMPLETE:** QA backlog sweep — 9 items tested from Blocked/Unverified Queue. **Results:** 8 ✅ verified, 1 ⚠️ PARTIAL, 1 UNVERIFIED. **✅ Verified:** AvatarDropdown CONNECT → Explorer's Guild link (ss_6465qdcim), /admin/items pagination page 2 at 780px (ss_3396hados), /admin/bid-review clean empty state S566 fix (ss_0420q1hkk), Organizer Insights for Alice $3,856.31 gross S545 fix (ss_2893wh51g), Print Kit 13 items + Sign Templates S543 fix (ss_4080t1wlc), /organizer/earnings real data S550 hooks fix (ss_6291mzhzi), /organizer/calendar April 2026 grid S550 fix (ss_3710aljj0), Settlement Receipt PDF "Organizer Commission (35%): -$437.50" endpoint 200 OK (ss_45016j87d). **⚠️ PARTIAL:** #75 Tier Lapse Logic — lapse detection works but P2 banner issues: banner is red + dismissible (not sticky amber), "Your Plan: PRO" card contradicts lapse message. Needs dev fix. **UNVERIFIED:** ConfirmDialog smoke test — no deletable data in user2 account. **Code shipped this session (S595, pending push):** progress.tsx (new — treasure hunt progress page), [clueId].tsx (?via=qr auto-claim guard), QRScannerModal.tsx (appends ?via=qr on treasure hunt URLs). **No new bugs requiring immediate dispatch.** P2 dispatch needed: Tier Lapse banner → make sticky amber + remove "Your Plan: PRO" contradiction.
 
 **S594 (2026-04-27) — COMPLETE:** Advisory outreach audit — real email research + file repair. All 68 contacts in `advisory-outreach-drafts.md` audited against actual web research (4 parallel agents dispatched with WebSearch/WebFetch). **Wrong emails corrected:** Threads Obsessed (#5) — madison89millerbusiness@gmail.com belongs to a different creator (beauty/lifestyle); correct contact is YouTube/Instagram DM only. Too Many Records (#11) — toomanyrecordsmusic@gmail.com is a Portland vinyl record shop, not the YouTube creator; removed from list. Daily Refinement (#12) — nychrislin@gmail.com wrong; correct is contact@dailyrefinement.com. **New email found:** TechNSports (#9) — resellerpodcast@gmail.com (Reseller Greatness Podcast). **Wrong entity removed:** @estatesalefreaks (#40) confirmed SHOPPER not organizer. **Confirmation notes added** for all 30+ verified contacts. **UNVERIFIED flags added** for Pre-Loved podcast, Jennarocity, Thrifting Vegas, Brimfield (jmjy2@aol.com unconfirmed — only phone public). **Nick Loper corrected:** was "form only" — actual direct email nick@sidehustlenation.com exists on Press & Media Kit page. **File changed:** `claude_docs/marketing/advisory-outreach-drafts.md`.
 
@@ -323,11 +327,20 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S595 — Next priorities (advisory outreach + dev backlog).**
+**S596 — Next priorities.**
 
-**Advisory outreach status:** `advisory-outreach-drafts.md` is now audited and cleaned. Confirmed, UNVERIFIED, FORM-ONLY, and ❌ WRONG entries are all marked. Patrick can begin sending from the verified list. Remaining sends should go out 1–2/day using patrick@finda.sale. Contacts without direct emails (Hairy Tornado, Commonwealth Picker, Becky Park, Melinda Murphy, Brimfield) should use social DM or contact forms.
+**Push block needed first:** S595 code is sitting uncommitted (treasure hunt progress page + via=qr guard). Push before any new QA of those features.
 
-**Dev work:** Resume normal dev/QA cycle. See Blocked/Unverified Queue for outstanding QA items.
+**After push — Chrome QA:**
+- Navigate to `/sales/[saleId]/treasure-hunt-qr/progress` as shopper — verify progress page loads (NOT "Clue not found")
+- Navigate to `/sales/[saleId]/treasure-hunt-qr/[clueId]` directly (no ?via=qr) — should see preview mode banner, NOT auto-claim
+- QRScannerModal: scan a treasure hunt QR — URL should auto-claim with ?via=qr appended
+
+**P2 dev dispatch:** Tier Lapse banner — make non-dismissible + amber; resolve "Your Plan: PRO" card contradiction when lapsed.
+
+**ConfirmDialog smoke test (UNVERIFIED):** Need an account with a deletable consignor or location. Seed one or use psycopg2 to create a test consignor for user2's sale.
+
+**Ongoing:** Resume eBay sync dev work per task #9/#10 if eBay tasks not yet complete. Advisory outreach: send 1–2/day from verified list.
 
 **S591 — PRIMARY FOCUS: Two parallel dev dispatches to finish the eBay sync work.**
 
