@@ -58,7 +58,7 @@ DONE
 ---
 
 ### 2. Hairy Tornado — Josh Varnell (379k)
-YouTube DM or IG.
+[YouTube DM](https://www.youtube.com/@HairyTornado) or [Instagram @hairytornado](https://www.instagram.com/hairytornado/).
 
 Josh —
 
@@ -74,7 +74,7 @@ Been building tools for the organizer side of secondary sales. Career-pivot into
 ---
 
 ### 3. Ralli Roots — Ryan & Alli (258k)
-Contact: ryan@ryanroots.com. Fallback: ralliroots.com / YouTube DM.
+Contact: ryan@ryanroots.com. Fallback: [ralliroots.com](https://ralliroots.com) / [YouTube DM](https://www.youtube.com/@RalliRoots).
 
 Ryan & Alli —
 
@@ -87,7 +87,7 @@ Been building tools for estate and yard sale organizers. Running a real warehous
 ---
 
 ### 4. Hustle at Home Mom — Ashley (226k)
-Contact via hustleathomemom.com.
+Contact via [hustleathomemom.com](https://hustleathomemom.com).
 
 Ashley —
 
@@ -100,7 +100,7 @@ Been building tools for secondary sale organizers. 390 videos in, you'd know whe
 ---
 
 ### 5. Threads Obsessed (175k)
-Contact: ❌ WRONG EMAIL — madison89millerbusiness@gmail.com belongs to a different creator (Madison Miller, beauty/lifestyle). Threads Obsessed is run by Melissa Tatti. No public business email found. Fallback: YouTube DM or Instagram @threadsobsessed.
+Contact: ❌ WRONG EMAIL — madison89millerbusiness@gmail.com belongs to a different creator (Madison Miller, beauty/lifestyle). Threads Obsessed is run by Melissa Tatti. No public business email found. Fallback: [YouTube DM](https://www.youtube.com/@ThreadsObsessed) or [Instagram @threadsobsessed](https://www.instagram.com/threadsobsessed/).
 
 Hey —
 
@@ -127,6 +127,7 @@ DONE
 ---
 
 ### 7. Commonwealth Picker — Kevin (134k, 3x/week)
+[YouTube DM](https://www.youtube.com/@CommonwealthPicker).
 
 Kevin — longtime viewer. Splitting Picker and Flipper into separate channels tells me you think about operations, not just sourcing.
 
@@ -139,7 +140,7 @@ Been building something for estate sale organizers and wanted eyes from someone 
 ---
 
 ### 8. Thrifting Vegas — Tiffany (113k)
-Contact: ⚠️ UNVERIFIED — ThriftingVegas.Tiffany@gmail.com not confirmed anywhere. Site (thriftingvegas.com) is form-only. Fallback: contact form at thriftingvegas.com/pages/contact or Instagram @thrifting_vegas.
+Contact: ⚠️ UNVERIFIED — ThriftingVegas.Tiffany@gmail.com not confirmed anywhere. Site (thriftingvegas.com) is form-only. Fallback: [contact form](https://thriftingvegas.com/pages/contact) or [Instagram @thrifting_vegas](https://www.instagram.com/thrifting_vegas/).
 
 Tiffany —
 
@@ -165,7 +166,7 @@ Building something for estate sale and auction operators. Fifteen years running 
 ---
 
 ### 10. The Antique Nomad — George Higby (59k)
-Contact via theantiquenomad.com.
+Contact via [theantiquenomad.com](https://theantiquenomad.com).
 
 George —
 
@@ -191,7 +192,7 @@ https://finda.sale/video — happy to hear what you think either way.
 ---
 
 ### 12. Daily Refinement — Chris Lin (IG 52k)
-Contact: ❌ WRONG EMAIL — nychrislin@gmail.com not verified as his business contact. Correct email: contact@dailyrefinement.com (from dailyrefinement.com). Fallback: Instagram @dailyrefinement.
+Contact: ❌ WRONG EMAIL — nychrislin@gmail.com not verified as his business contact. Correct email: contact@dailyrefinement.com (from [dailyrefinement.com](https://dailyrefinement.com)). Fallback: [Instagram @dailyrefinement](https://www.instagram.com/dailyrefinement/).
 
 Chris —
 
@@ -254,7 +255,7 @@ Building tools for the organizer side of what your audience does. Between Flippe
 ---
 
 ### 17. Jordan Welch (~300–400k YouTube, entrepreneur/reselling/ecom)
-YouTube DM or contact via jordanwelch.com. VERIFY NO COMPETING PLATFORM BEFORE SENDING.
+[YouTube DM](https://www.youtube.com/@JordanWelch) or contact via [jordanwelch.com](https://jordanwelch.com). VERIFY NO COMPETING PLATFORM BEFORE SENDING.
 ⚠️ LOW PRIORITY — Jordan's world is new-product dropshipping (Viral Vault, AI Com Academy, eCom Accelerators). His audience sources from Alibaba, not estate sales. Poor fit for this list — consider removing.
 
 Jordan —
@@ -268,7 +269,7 @@ Working on something for the organizer side of secondhand sales — the people r
 ---
 
 ### 18. Bolo Brothers (subs unverified — eBay/thrift flipping duo, Trash Talk era cohort — VERIFY STILL ACTIVE + NO DISTRICT.NET MARKETPLACE BEFORE SENDING)
-⚠️ NO VERIFIED EMAIL — HOWDY@BOLOBROTHERSCREATIVE.com is a Nashville video production company, NOT this creator. YouTube DM only until confirmed.
+⚠️ NO VERIFIED EMAIL — HOWDY@BOLOBROTHERSCREATIVE.com is a Nashville video production company, NOT this creator. [YouTube DM](https://www.youtube.com/@BoloBrothers) only until confirmed.
 
 Hey —
 
@@ -377,7 +378,7 @@ Working on something for booth vendors. Six years at Factory Antique Mall is the
 ## Bucket 3 — Organizer-Side Voices & Trade Reach
 
 ### 26. Estate Sale Business Podcast — Ronald Andrew Murphy
-Contact via estatesalebiz.com — no direct email found, contact form only.
+Contact via [estatesalebiz.com](https://estatesalebiz.com) — no direct email found, contact form only.
 
 Ronald —
 
@@ -402,7 +403,7 @@ DONE
 ---
 
 ### 28. Pre-Loved — Emily Stochl
-Contact: ⚠️ UNVERIFIED — prelovedpodpr@gmail.com not found on podcast site or emilymstochl.com. Contact form at emilymstochl.com or Substack DM (prelovedpod.substack.com).
+Contact: ⚠️ UNVERIFIED — prelovedpodpr@gmail.com not found on podcast site or emilymstochl.com. [Contact form](https://emilymstochl.com) or [Substack DM](https://prelovedpod.substack.com).
 
 Emily —
 
@@ -415,7 +416,7 @@ Working on something for secondary-sale operators. Pre-Loved is one of the few p
 ---
 
 ### 29. thriftretailer — Tim Gebauer
-Contact via Substack message (thriftretailer.substack.com) — no direct email. LinkedIn: Tim Gebauer.
+Contact via [Substack message](https://thriftretailer.substack.com) — no direct email. [LinkedIn: Tim Gebauer](https://www.linkedin.com/in/timgebauer).
 
 Tim —
 
@@ -428,7 +429,7 @@ Been reading thriftretailer for a while. Working on software for secondary-sale 
 ---
 
 ### 30. Consignment Chats — Libby Kuniegel Broggi
-Contact form: conshyconsignment.com/pages/contact-us — no direct email.
+Contact form: [conshyconsignment.com/pages/contact-us](https://conshyconsignment.com/pages/contact-us) — no direct email.
 
 Libby —
 
@@ -441,6 +442,7 @@ Working on something for consignment shop owners and estate sale companies. Five
 ---
 
 ### 31. Estate Professionals Mastermind — Chad Corbett & Bill Gross
+Contact via [estateprofessionalsmastermind.com](https://estateprofessionalsmastermind.com) or [podcast page](https://estateprofessionalsmastermind.com/podcast).
 
 Chad / Bill —
 
@@ -453,7 +455,7 @@ Working on software for estate sale companies — the operations layer downstrea
 ---
 
 ### 32. Jennarocity Estate Sales — Jenna (DFW)
-Contact: ⚠️ UNVERIFIED — myjennarocityestatesales@gmail.com not listed on site (myjennarocityestatesales.com uses a contact form). Grand Prairie, TX 75051. Use contact form or social DM.
+Contact: ⚠️ UNVERIFIED — myjennarocityestatesales@gmail.com not listed on site. Grand Prairie, TX 75051. Use [contact form](https://myjennarocityestatesales.com) or social DM.
 
 Jenna —
 
@@ -466,7 +468,7 @@ Grand Rapids founder here — no DFW overlap, so no competition. Working on soft
 ---
 
 ### 33. Maddy Brannon (DC region, 64k IG + weekly newsletter)
-Contact via Substack (maddybrannon.substack.com) or IG @maddytheb — no direct email.
+Contact via [Substack](https://maddybrannon.substack.com) or [Instagram @maddytheb](https://www.instagram.com/maddytheb/) — no direct email.
 
 Maddy —
 
@@ -529,7 +531,7 @@ Happy to jump on a call whenever works.
 ### Bucket 1 — Shopper-Side / Adjacent Creators
 
 ### 37. Clutterbug — Cas (large YouTube, HGTV's Hot Mess House)
-Contact: cas@clutterbug.me ✓ CONFIRMED (clutterbug.me contact page)
+Contact: cas@clutterbug.me ✓ CONFIRMED ([clutterbug.me contact page](https://clutterbug.me/contact))
 
 Cas —
 
@@ -542,7 +544,7 @@ Building software for estate and yard sale organizers. Your audience is full of 
 ---
 
 ### 38. Storage Auction Pirate (YouTube — storage unit buying/resale, subs unverified)
-YouTube DM.
+[YouTube DM](https://www.youtube.com/@StorageAuctionPirate).
 
 Hey —
 
@@ -555,7 +557,7 @@ Working on something for the people who have to turn a pile of found inventory i
 ---
 
 ### 39. Treasure Hunting With Jebus (YouTube — storage unit/resale, subs unverified)
-YouTube DM.
+[YouTube DM](https://www.youtube.com/@TreasureHuntingWithJebus).
 
 Hey —
 
@@ -567,7 +569,7 @@ Building tools for estate and yard sale organizers. The "bought the unit, now wh
 
 ---
 
-### 40. @estatesalefreaks (TikTok, 79K — ❌ REMOVE — confirmed SHOPPER, not organizer. Buys at estate sales/auctions in LA area. Wrong audience for this list.)
+### 40. [@estatesalefreaks](https://www.tiktok.com/@estatesalefreaks) (TikTok, 79K — ❌ REMOVE — confirmed SHOPPER, not organizer. Buys at estate sales/auctions in LA area. Wrong audience for this list.)
 
 Hey —
 
@@ -582,7 +584,7 @@ Building software for estate and yard sales — tools for the people who run the
 ### Bucket 3 — Podcast and Adjacent Voices
 
 ### 41. Grace Rehman — Organize With Grace Podcast (downsizing/decluttering after 50)
-Contact: grace@organizewithgrace.com ✓ CONFIRMED (organizewithgrace.com contact page — also hello@organizewithgrace.com for general inquiries)
+Contact: grace@organizewithgrace.com ✓ CONFIRMED ([organizewithgrace.com contact page](https://organizewithgrace.com/contact) — also hello@organizewithgrace.com for general inquiries)
 
 Grace —
 
@@ -595,7 +597,7 @@ Working on something for estate and yard sale organizers — the people families
 ---
 
 ### 42. Downsizing Roadmap Podcast
-Contact: info@downsizingroadmap.com ✓ CONFIRMED (downsizingroadmap.com). Hosts: Jodi Rosko & Heather Fisher (Realtors / Downsizing Specialists, The Rosko Group / Keller Williams).
+Contact: info@downsizingroadmap.com ✓ CONFIRMED ([downsizingroadmap.com](https://downsizingroadmap.com)). Hosts: Jodi Rosko & Heather Fisher (Realtors / Downsizing Specialists, The Rosko Group / Keller Williams).
 
 Hi —
 
@@ -608,7 +610,7 @@ Working on software for estate and yard sale organizers. Your listeners are the 
 ---
 
 ### 43. Jennifer Pickett — NASMM (National Association of Senior & Specialty Move Managers)
-Contact: jennifer@nasmm.org ✓ CONFIRMED (Co-Executive Director, nasmm.org)
+Contact: jennifer@nasmm.org ✓ CONFIRMED (Co-Executive Director, [nasmm.org](https://nasmm.org))
 
 Jennifer —
 
@@ -654,7 +656,7 @@ DONE
 ---
 
 ### 46. Taco Stacks (~312K YouTube — storage unit resale, flea markets, Etsy, eBay)
-YouTube DM.
+[YouTube DM](https://www.youtube.com/@TacoStacks).
 
 Hey —
 
@@ -667,7 +669,7 @@ Working on tools for the people running the sale itself — setup, pricing, chec
 ---
 
 ### 47. Paper and Moose (~82K YouTube — storage unit resale, frequent Taco Stacks collaborator)
-YouTube DM.
+[YouTube DM](https://www.youtube.com/@PaperandMoose).
 
 Hey —
 
@@ -724,7 +726,7 @@ DONE
 ---
 
 ### 51. Cassaundra0328 — Cassie (Whatnot top seller, sources from estate sales + storage units, Wake Forest NC, Facebook / TikTok / Instagram)
-Contact via Whatnot DM or social @Cassaundra0328.
+Contact via [Whatnot DM](https://www.whatnot.com/user/cassaundra0328) or social @Cassaundra0328.
 
 Cassie —
 
@@ -739,7 +741,7 @@ Working on something for the people running the estate sales and storage unit sa
 ### Bucket 3 — Senior Transitions and Adjacent Voices
 
 ### 52. Empowered Elder Podcast — Tasha Beckman & Nicole Robilotto (senior move management, downsizing, relocation)
-Contact via podcast website — no direct email found.
+Contact via [podcast website](https://www.empoweredelder.com) — no direct email found.
 
 Tasha / Nicole —
 
@@ -752,7 +754,7 @@ Curious whether the tools organizers are using is a conversation your listeners 
 ---
 
 ### 53. Senior Settlers (blog / newsletter, downsizing and simplifying life)
-Contact: libby@senior-settlers.com ✓ CONFIRMED (Libby Wood, senior-settlers.com — note: STATE.md had a typo "senior-sellers.com"; correct domain is senior-settlers.com). San Rafael, CA.
+Contact: libby@senior-settlers.com ✓ CONFIRMED (Libby Wood, [senior-settlers.com](https://senior-settlers.com) — note: STATE.md had a typo "senior-sellers.com"; correct domain is senior-settlers.com). San Rafael, CA.
 
 Hi —
 
@@ -767,7 +769,7 @@ Working on software for estate and yard sale organizers — the people families 
 ### Bucket 1 — Yard Sale Creators
 
 ### 54. MsStoneHome (YouTube — yard sale hauls, home, gardening)
-YouTube DM.
+[YouTube DM](https://www.youtube.com/@MsStoneHome).
 
 Hey —
 
@@ -786,7 +788,7 @@ Working on something for the people who run the sales your audience sources at. 
 ### Bucket 1 — International and Viral Cleaning / Hoarding Creators
 
 ### 55. Aurikatariina (11.4M TikTok, 4M YouTube, ~20M combined social — Finnish hoarding/extreme cleaning creator)
-Contact: aurikacleaning@gmail.com ✓ CONFIRMED (aurikacleaning.com). Fallback: TikTok DM or YouTube DM. Reach in Finnish and English. Her content is cleaning and organizing hoarding homes — which means she is standing inside the estate sale problem on every video.
+Contact: aurikacleaning@gmail.com ✓ CONFIRMED ([aurikacleaning.com](https://aurikacleaning.com)). Fallback: [TikTok DM](https://www.tiktok.com/@aurikatariina) or [YouTube DM](https://www.youtube.com/@aurikatariina). Reach in Finnish and English. Her content is cleaning and organizing hoarding homes — which means she is standing inside the estate sale problem on every video.
 
 Hey —
 
@@ -801,7 +803,7 @@ Working on something for the people who have to deal with what's left in those h
 ### Bucket 1 — Vintage and Thrift Flip Creators (Growing Accounts)
 
 ### 56. Sym Clarke — The Thrift Guru (~200K TikTok — vintage finds, thrift flips)
-TikTok DM.
+[TikTok DM](https://www.tiktok.com/@thethriftguru).
 
 Hey —
 
@@ -814,7 +816,7 @@ Working on tools for the people who run the sales you source at. Someone thrifti
 ---
 
 ### 57. Emma Rogue (vintage resale, NYC store owner, fast-growing TikTok — went 0 to 100K quickly)
-Contact: hello@emmarogue.com ✓ CONFIRMED (email valid; note emmarogue.com domain expired Dec 2023 — send email directly, don't click the website). Physical shop: 154 Allen St, NYC. Active on Instagram @roguegarms. Fallback: Instagram DM.
+Contact: hello@emmarogue.com ✓ CONFIRMED (email valid; note emmarogue.com domain expired Dec 2023 — send email directly, don't click the website). Physical shop: 154 Allen St, NYC. Active on [Instagram @roguegarms](https://www.instagram.com/roguegarms/). Fallback: Instagram DM.
 
 Hey —
 
@@ -827,7 +829,7 @@ Working on something for the people running the estate and vintage sales that fe
 ---
 
 ### 58. Siena Filippi (138K Instagram — thrift and vintage, curated aesthetic)
-Contact: filippisiena@gmail.com ✓ CONFIRMED (sienafilippi.com). Instagram @simply.siena. NYC vintage studio at 53 Bridge St, DUMBO #204. Fallback: Instagram DM.
+Contact: filippisiena@gmail.com ✓ CONFIRMED ([sienafilippi.com](https://sienafilippi.com)). [Instagram @simply.siena](https://www.instagram.com/simply.siena/). NYC vintage studio at 53 Bridge St, DUMBO #204. Fallback: Instagram DM.
 
 Hey —
 
@@ -842,7 +844,7 @@ Working on software for the organizers running the estate and yard sales that su
 ### Bucket 1 — Antique Picker YouTube
 
 ### 59. Laura Caldwell (YouTube — full-time vintage shop owner, 12+ years, antique picking and resale)
-Contact: hello@leftcoastrevivals.com ✓ CONFIRMED (leftcoastrevivals.com). Instagram @leftcoastrevivals. Fallback: YouTube DM.
+Contact: hello@leftcoastrevivals.com ✓ CONFIRMED ([leftcoastrevivals.com](https://leftcoastrevivals.com)). [Instagram @leftcoastrevivals](https://www.instagram.com/leftcoastrevivals/). Fallback: [YouTube DM](https://www.youtube.com/@LeftCoastRevivals).
 
 Laura —
 
@@ -855,7 +857,7 @@ Working on tools for people running estate and yard sales. Twelve years of buyin
 ---
 
 ### 60. The Antique Agenda (YouTube — antique picking, finds, market coverage)
-YouTube DM.
+[YouTube DM](https://www.youtube.com/@TheAntiqueAgenda).
 
 Hey —
 
@@ -870,7 +872,7 @@ Working on software for the people running the sales you're picking at. Someone 
 ### Bucket 2 — Institutional / Operator Reach
 
 ### 61. Brimfield Antique Flea Market (largest antique show in US — Brimfield, MA, three times per year)
-Contact: ⚠️ UNVERIFIED — jmjy2@aol.com (Jody Young) not confirmed via web research. Jody Young is confirmed as owner/event coordinator but only phone contact is public: (508) 422-6470. Consider calling to get the right email. Fallback: brimfield.com or @brimfieldantiqueshow.
+Contact: ⚠️ UNVERIFIED — jmjy2@aol.com (Jody Young) not confirmed via web research. Jody Young is confirmed as owner/event coordinator but only phone contact is public: (508) 422-6470. Consider calling to get the right email. Fallback: [brimfield.com](https://brimfield.com) or [Instagram @brimfieldantiqueshow](https://www.instagram.com/brimfieldantiqueshow/).
 
 Hi —
 
@@ -885,7 +887,7 @@ Not looking for a partnership placement — wondering if there's a vendor servic
 ### Bucket 3 — Probate, Estate, and Legal-Adjacent Podcast Voices
 
 ### 62. The Probate Realtor Show — Matias Baker Masucci (podcast, ranked top 10 realtor podcasts 2024)
-Contact: info@probaterealtor.la ✓ CONFIRMED (probaterealtor.la contact page)
+Contact: info@probaterealtor.la ✓ CONFIRMED ([probaterealtor.la contact page](https://probaterealtor.la/contact))
 
 Matias —
 
@@ -928,7 +930,7 @@ Working on software for estate and yard sale organizers — the people families 
 ### Bucket 3 — Entrepreneurship / Business Builder Voices
 
 ### 65. Codie Sanchez — Contrarian Thinking (12M+ combined social, 1M+ newsletter, NYT bestselling "Main Street Millionaire")
-Contact: c@codiesanchez.com ✓ CONFIRMED (codiesanchez.com / contrarianthinking.co — note: may route to team. Fallback: contrarianthinking.co/contact form. Instagram / YouTube / Twitter @CodieSanchez.)
+Contact: c@codiesanchez.com ✓ CONFIRMED ([codiesanchez.com](https://codiesanchez.com) / [contrarianthinking.co](https://contrarianthinking.co/contact) — note: may route to team. Fallback: [Instagram @CodieSanchez](https://www.instagram.com/codiesanchez/) / [YouTube](https://www.youtube.com/@CodieSanchez) / [Twitter/X @CodieSanchez](https://x.com/CodieSanchez).)
 
 Codie —
 
@@ -941,7 +943,7 @@ Not sure if the organizer side of estate liquidation ever comes up in what you c
 ---
 
 ### 66. Nick Loper — Side Hustle Show (podcast, top-ranked small business show, 12+ years, large engaged audience)
-Contact: nick@sidehustlenation.com ✓ CONFIRMED (direct email — confirmed via sidehustlenation.com Press & Media Kit page. Not form-only.) Podcast pitches also via podmatch.
+Contact: nick@sidehustlenation.com ✓ CONFIRMED (direct email — confirmed via [sidehustlenation.com Press & Media Kit](https://www.sidehustlenation.com/press/). Not form-only.) Podcast pitches also via [Podmatch](https://www.podmatch.com).
 
 Nick —
 
@@ -954,7 +956,7 @@ Been building software for people running estate and yard sales as a business. T
 ---
 
 ### 67. Pat Walls — Starter Story (1.6M monthly readers, 130K newsletter, 350K+ social — niche business case study interviews)
-Contact via starterstory.com/pat-walls or Twitter @thepatwalls — contact form only, no direct email found.
+Contact via [starterstory.com/pat-walls](https://www.starterstory.com/pat-walls) or [Twitter/X @thepatwalls](https://x.com/thepatwalls) — contact form only, no direct email found.
 
 Pat —
 
@@ -967,7 +969,7 @@ Wondering if there's a story in it — as a business idea case study or as a fou
 ---
 
 ### 68. Junk Removal Authority (YouTube / training — teaches people to start junk removal businesses, estate cleanout overlap)
-Contact via junkremovalauthority.com — form only, no direct email found. YouTube DM. Find host name before sending — Josh Latimer is the founder; verify current host/face.
+Contact via [junkremovalauthority.com](https://junkremovalauthority.com) — form only, no direct email found. [YouTube DM](https://www.youtube.com/@JunkRemovalAuthority). Find host name before sending — Josh Latimer is the founder; verify current host/face.
 
 Hey —
 
