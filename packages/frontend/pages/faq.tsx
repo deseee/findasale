@@ -60,37 +60,44 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is a Condition Rating?',
     answer: (
       <>
-        Every item on FindA.Sale has a condition rating: S = Like New, A = Excellent, B = Good, C = Fair, D = Poor,. These help you know what to expect before you visit.
-        See our full Condition Guide for details.
+        Every item on FindA.Sale has a condition grade from S to D: <strong>S = Like New</strong>, <strong>A = Excellent</strong>, <strong>B = Good</strong>, <strong>C = Fair</strong>, <strong>D = Poor</strong>. These help you know what to expect before you visit. Items can also be sold <strong>As-Is</strong> regardless of grade — see below for what that means.
       </>
     ),
   },
   {
-    question: 'What does "Excellent" condition mean?',
+    question: 'What does "Like New" (S) condition mean?',
     answer: (
       <>
-        Excellent condition means the item is like new — no signs of wear or use, and may still have original packaging. These items are priced near retail (80–100% of retail value). Examples include new in box items, rarely used vintage collectibles, and display pieces in perfect condition.
+        Like New items show no signs of wear or use and may still have original packaging or tags. Examples include new-in-box items, rarely used vintage collectibles, and display pieces in perfect condition. Like New items are typically priced at 80–100% of retail value.
       </>
     ),
   },
   {
-    question: 'What does "Good" condition mean?',
+    question: 'What does "Excellent" (A) condition mean?',
     answer: (
       <>
-        Good condition items have minor signs of use but are fully functional with only small cosmetic imperfections that don't affect use. Examples include gently used furniture, dishes without chips, and electronics in working order. Good items typically cost 50–75% of retail.
+        Excellent items have only light cosmetic wear — fully functional, look great, but not new. Examples include lightly used kitchenware, gently worn clothing in pristine shape, and well-maintained electronics. Excellent items typically cost 60–80% of retail.
       </>
     ),
   },
   {
-    question: 'What does "Fair" condition mean?',
+    question: 'What does "Good" (B) condition mean?',
     answer: (
       <>
-        Fair condition items show visible wear or age but are fully functional. They may have noticeable cosmetic issues like scratches, fading, or patina. Fair items include well-loved vintage pieces, furniture with minor scuffs, and books with reading wear. Expect to pay 25–50% of retail value — fair condition items are excellent finds for budget shoppers, collectors, and people restoring or upcycling items.
+        Good condition items have visible signs of use but are fully functional, with minor cosmetic imperfections that don't affect use. Examples include gently used furniture, dishes without chips, and electronics in working order. Good items typically cost 40–60% of retail.
       </>
     ),
   },
   {
-    question: 'What does "Poor" condition mean?',
+    question: 'What does "Fair" (C) condition mean?',
+    answer: (
+      <>
+        Fair condition items show noticeable wear or age but are fully functional. They may have visible cosmetic issues like scratches, fading, or patina. Fair items include well-loved vintage pieces, furniture with minor scuffs, and books with reading wear. Expect to pay 25–40% of retail value — fair condition items are excellent finds for budget shoppers, collectors, and people restoring or upcycling items.
+      </>
+    ),
+  },
+  {
+    question: 'What does "Poor" (D) condition mean?',
     answer: (
       <>
         Poor condition items show heavy wear, damage, or missing parts and may need repair. They're best suited for people working on restoration or upcycling projects. Examples include chipped or cracked ceramics, furniture needing reupholstering, and electronics with cosmetic damage. Poor items cost 10–25% of retail value.
@@ -98,10 +105,10 @@ const shopperFAQs: FAQItem[] = [
     ),
   },
   {
-    question: 'What does "As-Is" condition mean?',
+    question: 'What does "As-Is" mean?',
     answer: (
       <>
-        As-Is items are sold in their current condition without warranty or implied fitness for use. They may not function and should be inspected before purchasing. Examples include unknown condition electronics, untested vintage items, and items sold as found. Pricing is typically negotiable and often the lowest available.
+        As-Is is a flag the organizer can apply to any item, regardless of its S–D grade. It means the item is sold in its current condition without warranty or implied fitness for use — the buyer accepts it as-is. As-Is items should be inspected before purchasing. Pricing is typically negotiable and often the lowest available.
       </>
     ),
   },

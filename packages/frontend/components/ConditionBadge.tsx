@@ -1,41 +1,41 @@
 import React from 'react';
 
 export const CONDITION_COLORS: Record<string, { bg: string; text: string; border: string; description: string }> = {
-  mint: {
+  'like new': {
     bg: 'bg-emerald-100',
     text: 'text-emerald-800',
     border: 'border-emerald-300',
-    description: 'Mint condition. Essentially new, no signs of use. May still have original packaging or tags.',
+    description: 'Like New (S). No signs of wear or use. May still have original packaging or tags.',
   },
   excellent: {
     bg: 'bg-green-100',
     text: 'text-green-800',
     border: 'border-green-300',
-    description: 'Like new. No signs of wear or use. May still have original packaging.',
+    description: 'Excellent (A). Light cosmetic wear only. Fully functional and looks great.',
   },
   good: {
     bg: 'bg-blue-100',
     text: 'text-blue-800',
     border: 'border-blue-300',
-    description: 'Minor signs of use. Fully functional. Small cosmetic imperfections that don\'t affect use.',
+    description: 'Good (B). Visible signs of use but fully functional. Minor cosmetic imperfections that don\'t affect use.',
   },
   fair: {
     bg: 'bg-amber-100',
     text: 'text-amber-800',
     border: 'border-amber-300',
-    description: 'Visible wear or age. Fully functional. Noticeable cosmetic issues.',
+    description: 'Fair (C). Noticeable wear, scratches, or patina. Fully functional.',
   },
   poor: {
     bg: 'bg-orange-100',
     text: 'text-orange-800',
     border: 'border-orange-300',
-    description: 'Heavy wear, damage, or missing parts. May need repair.',
+    description: 'Poor (D). Heavy wear, damage, or missing parts. May need repair.',
   },
   'as-is': {
     bg: 'bg-gray-100',
     text: 'text-gray-800',
     border: 'border-gray-300',
-    description: 'Sold in current condition without warranty. May not function.',
+    description: 'As-Is. Sold without warranty regardless of grade. Inspect before purchase.',
   },
 };
 
