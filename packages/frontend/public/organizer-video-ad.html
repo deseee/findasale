@@ -2296,9 +2296,8 @@ document.querySelectorAll('.scene-dot').forEach(function(dot) {
 </script>
 
 <script>
-// ── Voiceover + Background Music — skip when embedded in video.html ──
+// ── Voiceover + Background Music ──
 (function() {
-  if (new URLSearchParams(window.location.search).has('embed')) return;
 
   // ── Background music config ──
   var BG_SRC    = 'bg-music.mp3';
@@ -2406,14 +2405,9 @@ document.querySelectorAll('.scene-dot').forEach(function(dot) {
     pausedAt = null;
   }
 
-  // Unlock all Audio elements synchronously inside the user gesture, then schedule playback
+  // Start audio on play/replay click — allow="autoplay" on the iframe unlocks the frame's audio context
   document.addEventListener('click', function(e) {
     if (e.target.closest('#play-overlay') || e.target.closest('#replay-btn')) {
-      audios.forEach(function(a) {
-        var p = a.play();
-        if (p) p.then(function() { a.pause(); a.currentTime = 0; }).catch(function() {});
-        else { a.pause(); a.currentTime = 0; }
-      });
       startAudio();
     }
   }, true);
