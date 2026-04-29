@@ -1,5 +1,7 @@
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -285,6 +287,9 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <PosPaymentRequestAlert />
               {/* Explorer's Guild: Rank-up celebration modal */}
               <RankUpManager />
+              {/* Vercel Analytics + Speed Insights */}
+              <Analytics />
+              <SpeedInsights />
               </QueryClientProvider>
             </LowBandwidthProvider>
           </DegradationProvider>
