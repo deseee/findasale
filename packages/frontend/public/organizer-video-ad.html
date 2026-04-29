@@ -1773,16 +1773,16 @@ body.embed #timer { display: none; }
             <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">PDF</text>
           </svg>
         </div>
-        <!-- QuickBooks -->
-        <div class="s4-report-icon" id="s4-icon-qb" style="background:#2CA01C;">
-          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
-            <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">QB</text>
-          </svg>
-        </div>
         <!-- CSV -->
         <div class="s4-report-icon" id="s4-icon-csv" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);">
           <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
             <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="rgba(255,255,255,0.82)" text-anchor="middle">CSV</text>
+          </svg>
+        </div>
+        <!-- QuickBooks -->
+        <div class="s4-report-icon" id="s4-icon-qb" style="background:#2CA01C;">
+          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">QB</text>
           </svg>
         </div>
       </div>
@@ -2194,8 +2194,8 @@ const events = [
   { at: 39950, fn: () => {
     addAt(document.getElementById('s4-icon-excel'), 'in', 0);
     addAt(document.getElementById('s4-icon-pdf'),   'in', 160);
-    addAt(document.getElementById('s4-icon-qb'),    'in', 320);
-    addAt(document.getElementById('s4-icon-csv'),   'in', 480);
+    addAt(document.getElementById('s4-icon-csv'),   'in', 320);
+    addAt(document.getElementById('s4-icon-qb'),    'in', 480);
   }},
   // cut to s5 at 42500ms
 
