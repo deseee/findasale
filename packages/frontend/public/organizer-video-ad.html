@@ -1175,6 +1175,12 @@ body.embed #timer { display: none; }
   width: 52px; height: 52px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
 }
+@keyframes iconPulse {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.s4-report-icon.in { animation: iconPulse 0.4s ease; }
 .s4-report-copy {
   font-family: 'Inter', sans-serif; font-size: 12px;
   color: rgba(255,255,255,0.62); line-height: 1.55;
@@ -1752,7 +1758,7 @@ body.embed #timer { display: none; }
     <div class="s4-reports" id="s4-reports">
       <div class="s4-report-icons">
         <!-- Excel spreadsheet grid -->
-        <div class="s4-report-icon" style="background:#1D6F42;">
+        <div class="s4-report-icon" id="s4-icon-excel" style="background:#1D6F42;">
           <svg viewBox="0 0 24 24" width="32" height="32" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="3" y="3" width="18" height="18" rx="1.5" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.08)"/>
             <line x1="3" y1="8.5" x2="21" y2="8.5" stroke="white" stroke-width="1"/>
@@ -1762,25 +1768,25 @@ body.embed #timer { display: none; }
           </svg>
         </div>
         <!-- PDF -->
-        <div class="s4-report-icon" style="background:#F40F02;">
+        <div class="s4-report-icon" id="s4-icon-pdf" style="background:#F40F02;">
           <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
             <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">PDF</text>
           </svg>
         </div>
         <!-- QuickBooks -->
-        <div class="s4-report-icon" style="background:#2CA01C;">
+        <div class="s4-report-icon" id="s4-icon-qb" style="background:#2CA01C;">
           <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
             <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">QB</text>
           </svg>
         </div>
         <!-- CSV -->
-        <div class="s4-report-icon" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);">
+        <div class="s4-report-icon" id="s4-icon-csv" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);">
           <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
             <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="rgba(255,255,255,0.82)" text-anchor="middle">CSV</text>
           </svg>
         </div>
       </div>
-      <div class="s4-report-copy">
+      <div class="s4-report-copy" id="s4-report-copy">
         <strong>Reports &amp; Exports</strong>Excel · PDF · QuickBooks · CSV · Webhooks
       </div>
     </div>
@@ -1997,6 +2003,9 @@ function resetAll() {
   document.getElementById('s3-sub').classList.remove('in');
   // Scene 4 — eBay push
   document.getElementById('s4-headline').classList.remove('in');
+  ['s4-icon-excel','s4-icon-pdf','s4-icon-qb','s4-icon-csv'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.remove('in');
+  });
   document.getElementById('ebay-card').classList.remove('in', 'confirmed');
   document.getElementById('ebay-push-row').classList.remove('tapped');
   document.getElementById('ebay-pre').style.opacity = '';
@@ -2166,6 +2175,14 @@ const events = [
     addAt(document.getElementById('ebay-card'),'in',600);
     addAt(document.getElementById('s4-summary'),'in',1000);
     addAt(document.getElementById('s4-reports'),'in',1400);
+  }},
+
+  // Report icons pulse one-by-one when vo-11 starts (39950ms)
+  { at: 39950, fn: () => {
+    addAt(document.getElementById('s4-icon-excel'), 'in', 0);
+    addAt(document.getElementById('s4-icon-pdf'),   'in', 160);
+    addAt(document.getElementById('s4-icon-qb'),    'in', 320);
+    addAt(document.getElementById('s4-icon-csv'),   'in', 480);
   }},
 
   // Tap at 38100ms (card on screen 1.5s)
