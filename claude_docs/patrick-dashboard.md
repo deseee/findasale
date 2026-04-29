@@ -1,6 +1,6 @@
-# Patrick's Dashboard — S597 ✅ COMPLETE
+# Patrick's Dashboard — S593 ✅ COMPLETE
 
-## Status: Condition rating UI sync (5 files) + FAQ section collapsed 9→3 entries. Combined push pending: S595 treasure hunt + S597 + wrap docs.
+## Status: Voiced video ad (12-line ElevenLabs VO + background music) + Vercel Analytics added to PWA. Push block below.
 
 ---
 

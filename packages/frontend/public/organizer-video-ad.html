@@ -2296,9 +2296,20 @@ document.querySelectorAll('.scene-dot').forEach(function(dot) {
 </script>
 
 <script>
-// ── Voiceover — skip when embedded in video.html ──
+// ── Voiceover + Background Music — skip when embedded in video.html ──
 (function() {
   if (new URLSearchParams(window.location.search).has('embed')) return;
+
+  // ── Background music config ──
+  var BG_SRC    = 'bg-music.mp3';
+  var BG_OFFSET = 12;     // seconds into the track to start from
+  var BG_END    = 57.85;  // seconds into the track to stop (0 = no limit)
+  var BG_VOL    = 0.05;  // 0.0–1.0 — raise/lower to taste
+
+  var bgMusic = new Audio(BG_SRC);
+  bgMusic.preload = 'auto';
+  bgMusic.volume = BG_VOL;
+  bgMusic.loop = false;
 
   var CLIPS = [
     { at: 400,   src: 'vo-01.mp3' },  // You've got three days...
@@ -2311,7 +2322,7 @@ document.querySelectorAll('.scene-dot').forEach(function(dot) {
     { at: 33000, src: 'vo-08.mp3' },  // No card reader necessary.
     { at: 35000, src: 'vo-09.mp3' },  // Everything happens right on your phone.
     { at: 37250, src: 'vo-10.mp3' },  // Leftovers? One tap to eBay.
-    { at: 39500, src: 'vo-11.mp3' },  // After sale reports...
+    { at: 39600, src: 'vo-11.mp3' },  // After sale reports...
     { at: 42000, src: 'vo-12.mp3' },  // FindA.Sale. Run your sale. Every Sale.
   ];
 
@@ -2323,14 +2334,29 @@ document.querySelectorAll('.scene-dot').forEach(function(dot) {
   });
 
   var timers = [];
+  var bgStopTimer = null;
   var startedAt = null;
   var pausedAt = null;
   var isPaused = false;
 
+  function clearBgStop() {
+    if (bgStopTimer) { clearTimeout(bgStopTimer); bgStopTimer = null; }
+  }
+
+  function scheduleBgStop(delayMs) {
+    clearBgStop();
+    if (BG_END > 0 && delayMs > 0) {
+      bgStopTimer = setTimeout(function() { bgMusic.pause(); bgStopTimer = null; }, delayMs);
+    }
+  }
+
   function stopAll() {
     timers.forEach(function(t) { clearTimeout(t); });
     timers = [];
+    clearBgStop();
     audios.forEach(function(a) { a.pause(); a.currentTime = 0; });
+    bgMusic.pause();
+    bgMusic.currentTime = 0;
   }
 
   function scheduleFrom(offsetMs) {
@@ -2352,20 +2378,29 @@ document.querySelectorAll('.scene-dot').forEach(function(dot) {
     startedAt = performance.now();
     pausedAt = null;
     isPaused = false;
+    bgMusic.currentTime = BG_OFFSET;
+    bgMusic.play().catch(function() {});
+    scheduleBgStop((BG_END - BG_OFFSET) * 1000);
     scheduleFrom(0);
   }
 
   function pauseAudio() {
     timers.forEach(function(t) { clearTimeout(t); });
     timers = [];
+    clearBgStop();
     pausedAt = performance.now();
     audios.forEach(function(a) { if (!a.paused) a.pause(); });
+    bgMusic.pause();
   }
 
   function resumeAudio() {
     if (pausedAt === null) return;
     var elapsed = pausedAt - startedAt;
+    var bgRemaining = (BG_END - BG_OFFSET) * 1000 - elapsed;
     audios.forEach(function(a) { if (a.paused && a.currentTime > 0) a.play().catch(function() {}); });
+    bgMusic.play().catch(function() {});
+    scheduleBgStop(bgRemaining);
+    bgMusic.play().catch(function() {});
     scheduleFrom(elapsed);
     startedAt = performance.now() - elapsed;
     pausedAt = null;
