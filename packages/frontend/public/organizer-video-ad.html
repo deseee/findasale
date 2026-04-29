@@ -1180,7 +1180,7 @@ body.embed #timer { display: none; }
   45%  { transform: scale(1.22); }
   100% { transform: scale(1); }
 }
-.s4-report-icon.in { animation: iconPulse 0.4s ease; }
+.s4-report-icon.in { animation: iconPulse 0.9s ease; }
 .s4-report-copy {
   font-family: 'Inter', sans-serif; font-size: 12px;
   color: rgba(255,255,255,0.62); line-height: 1.55;
@@ -2177,14 +2177,6 @@ const events = [
     addAt(document.getElementById('s4-reports'),'in',1400);
   }},
 
-  // Report icons pulse one-by-one when vo-11 starts (39950ms)
-  { at: 39950, fn: () => {
-    addAt(document.getElementById('s4-icon-excel'), 'in', 0);
-    addAt(document.getElementById('s4-icon-pdf'),   'in', 160);
-    addAt(document.getElementById('s4-icon-qb'),    'in', 320);
-    addAt(document.getElementById('s4-icon-csv'),   'in', 480);
-  }},
-
   // Tap at 38100ms (card on screen 1.5s)
   { at: 38100, fn: () => {
     document.getElementById('ebay-push-row').classList.add('tapped');
@@ -2196,6 +2188,14 @@ const events = [
         document.getElementById('s4-stat-ebay').textContent = v;
       });
     }, 300);
+  }},
+
+  // Report icons pulse one-by-one when vo-11 starts (39950ms)
+  { at: 39950, fn: () => {
+    addAt(document.getElementById('s4-icon-excel'), 'in', 0);
+    addAt(document.getElementById('s4-icon-pdf'),   'in', 160);
+    addAt(document.getElementById('s4-icon-qb'),    'in', 320);
+    addAt(document.getElementById('s4-icon-csv'),   'in', 480);
   }},
   // cut to s5 at 42500ms
 
@@ -2332,14 +2332,15 @@ document.querySelectorAll('.scene-dot').forEach(function(dot) {
     { at: 6500,  src: 'vo-02.mp3' },  // That used to mean sticky tags...
     { at: 11000, src: 'vo-03.mp3' },  // Now you just take a photo.
     { at: 13000, src: 'vo-04.mp3' },  // FindA.Sale scans the item...
-    { at: 19100, src: 'vo-05.mp3' },  // A hundred items, done before lunch.
+    { at: 19200, src: 'vo-05.mp3' },  // A hundred items, done before lunch.
     { at: 22500, src: 'vo-06.mp3' },  // Your sale goes live...
     { at: 29000, src: 'vo-07.mp3' },  // At the sale — they scan, they pay...
     { at: 33000, src: 'vo-08.mp3' },  // No card reader necessary.
-    { at: 35000, src: 'vo-09.mp3' },  // Everything happens right on your phone.
-    { at: 37350, src: 'vo-10.mp3' },  // Leftovers? One tap to eBay.
+    { at: 34950, src: 'vo-09.mp3' },  // Everything happens right on your phone.
+    { at: 37400, src: 'vo-10.mp3' },  // Leftovers? One tap to eBay.
     { at: 39950, src: 'vo-11.mp3' },  // After sale reports...
-    { at: 42350, src: 'vo-12.mp3' },  // FindA.Sale. Run your sale. Every Sale.
+    { at: 42450, src: 'vo-12.mp3' },  // FindA.Sale. Run your sale. Every Sale.
+    { at: 44500, src: 'vo-13.mp3' },  // [new line — tune timing]
   ];
 
   // Preload voiceover clips
