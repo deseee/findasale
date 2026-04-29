@@ -2294,5 +2294,108 @@ document.querySelectorAll('.scene-dot').forEach(function(dot) {
   });
 });
 </script>
+
+<script>
+// ── Voiceover — skip when embedded in video.html ──
+(function() {
+  if (new URLSearchParams(window.location.search).has('embed')) return;
+
+  var CLIPS = [
+    { at: 400,   src: 'vo-01.mp3' },  // You've got three days...
+    { at: 6500,  src: 'vo-02.mp3' },  // That used to mean sticky tags...
+    { at: 11000, src: 'vo-03.mp3' },  // Now you just take a photo.
+    { at: 13000, src: 'vo-04.mp3' },  // FindA.Sale scans the item...
+    { at: 19000, src: 'vo-05.mp3' },  // A hundred items, done before lunch.
+    { at: 22500, src: 'vo-06.mp3' },  // Your sale goes live...
+    { at: 29000, src: 'vo-07.mp3' },  // At the sale — they scan, they pay...
+    { at: 33000, src: 'vo-08.mp3' },  // No card reader necessary.
+    { at: 35000, src: 'vo-09.mp3' },  // Everything happens right on your phone.
+    { at: 37250, src: 'vo-10.mp3' },  // Leftovers? One tap to eBay.
+    { at: 39500, src: 'vo-11.mp3' },  // After sale reports...
+    { at: 42000, src: 'vo-12.mp3' },  // FindA.Sale. Run your sale. Every Sale.
+  ];
+
+  // Preload voiceover clips
+  var audios = CLIPS.map(function(c) {
+    var a = new Audio(c.src);
+    a.preload = 'auto';
+    return a;
+  });
+
+  var timers = [];
+  var startedAt = null;
+  var pausedAt = null;
+  var isPaused = false;
+
+  function stopAll() {
+    timers.forEach(function(t) { clearTimeout(t); });
+    timers = [];
+    audios.forEach(function(a) { a.pause(); a.currentTime = 0; });
+  }
+
+  function scheduleFrom(offsetMs) {
+    timers.forEach(function(t) { clearTimeout(t); });
+    timers = [];
+    CLIPS.forEach(function(clip, i) {
+      var delay = clip.at - offsetMs;
+      if (delay < 0) return;
+      var t = setTimeout(function() {
+        audios[i].currentTime = 0;
+        audios[i].play().catch(function() {});
+      }, delay);
+      timers.push(t);
+    });
+  }
+
+  function startAudio() {
+    stopAll();
+    startedAt = performance.now();
+    pausedAt = null;
+    isPaused = false;
+    scheduleFrom(0);
+  }
+
+  function pauseAudio() {
+    timers.forEach(function(t) { clearTimeout(t); });
+    timers = [];
+    pausedAt = performance.now();
+    audios.forEach(function(a) { if (!a.paused) a.pause(); });
+  }
+
+  function resumeAudio() {
+    if (pausedAt === null) return;
+    var elapsed = pausedAt - startedAt;
+    audios.forEach(function(a) { if (a.paused && a.currentTime > 0) a.play().catch(function() {}); });
+    scheduleFrom(elapsed);
+    startedAt = performance.now() - elapsed;
+    pausedAt = null;
+  }
+
+  // Unlock all Audio elements synchronously inside the user gesture, then schedule playback
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('#play-overlay') || e.target.closest('#replay-btn')) {
+      audios.forEach(function(a) {
+        var p = a.play();
+        if (p) p.then(function() { a.pause(); a.currentTime = 0; }).catch(function() {});
+        else { a.pause(); a.currentTime = 0; }
+      });
+      startAudio();
+    }
+  }, true);
+
+  // Pause / resume audio alongside visual pause
+  document.getElementById('player').addEventListener('click', function(e) {
+    if (e.target.closest('#play-overlay') || e.target.closest('#replay-btn')) return;
+    if (!startedAt) return;
+    if (isPaused) {
+      isPaused = false;
+      resumeAudio();
+    } else {
+      isPaused = true;
+      pauseAudio();
+    }
+  });
+})();
+</script>
 </body>
 </html>
