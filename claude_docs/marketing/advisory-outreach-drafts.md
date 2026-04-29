@@ -48,7 +48,7 @@ Reezy —
 
 Fellow VeeFriend here. Been building software for secondhand sales and resellers — thought you'd have a fast read on whether it makes sense from your side of it.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 Also nice to see another VeeFriend doing well. I still have my NFT somewhere.
 
@@ -58,55 +58,53 @@ DONE
 ---
 
 ### 2. Hairy Tornado — Josh Varnell (379k)
-[YouTube DM](https://www.youtube.com/@HairyTornado) or [Instagram @hairytornado](https://www.instagram.com/hairytornado/).
-
+[YouTube DM](https://www.youtube.com/@HairyTornado) hairytornado@gmail.com or [Instagram @hairytornado](https://www.instagram.com/hairytornado/).
+DONE
 Josh —
 
 Been building tools for the organizer side of secondary sales. Career-pivot into this world means you've seen it from enough angles to know pretty fast if it holds up or just looks like it does on paper.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
-
-
-
+DONE
 ---
 
 ### 3. Ralli Roots — Ryan & Alli (258k)
 Contact: ryan@ryanroots.com. Fallback: [ralliroots.com](https://ralliroots.com) / [YouTube DM](https://www.youtube.com/@RalliRoots).
-
+DONE
 Ryan & Alli —
 
 Been building tools for estate and yard sale organizers. Running a real warehouse operation while teaching others how to do it — you'd know fast whether this fits how the business actually runs.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick (Grand Rapids)
-
+DONE
 ---
 
 ### 4. Hustle at Home Mom — Ashley (226k)
 Contact via [hustleathomemom.com](https://hustleathomemom.com).
+DONE
+Ashley,
+Congrats on paying off the house!  That's amazing to hear!
+I've been building tools for secondary sale organizers. You'll know better than most whether an idea actually fits how this space works or just sounds like it does.
 
-Ashley —
-
-Been building tools for secondary sale organizers. 390 videos in, you'd know whether an idea actually fits how this space works or just sounds like it does.
-
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
-
-— Patrick
-
+60 seconds: https://finda.sale/video — happy to hear what you think either way.
+Cheers,
+Patrick
+DONE
 ---
 
 ### 5. Threads Obsessed (175k)
 Contact: ❌ WRONG EMAIL — madison89millerbusiness@gmail.com belongs to a different creator (Madison Miller, beauty/lifestyle). Threads Obsessed is run by Melissa Tatti. No public business email found. Fallback: [YouTube DM](https://www.youtube.com/@ThreadsObsessed) or [Instagram @threadsobsessed](https://www.instagram.com/threadsobsessed/).
 
-Hey —
+Melissa,
 
-Building software for estate sales and consignment — where the good pieces start before they reach a thrift store. You'd know whether this makes sense from the sourcing side.
+Building tools for estate and yard sale organizers, specifically the people running the sales your audience sources from. Someone who covers where the good pieces start would know fast whether those organizers have what they need.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -120,7 +118,7 @@ Casey —
 
 Building tools for estate and yard sale organizers — the people running the sales your community sources at. A community where real operators and real flippers actually talk to each other is rare, and that's the read I want on this.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 DONE
@@ -128,20 +126,20 @@ DONE
 
 ### 7. Commonwealth Picker — Kevin (134k, 3x/week)
 [YouTube DM](https://www.youtube.com/@CommonwealthPicker).
-
+DONE
 Kevin — longtime viewer. Splitting Picker and Flipper into separate channels tells me you think about operations, not just sourcing.
 
 Been building something for estate sale organizers and wanted eyes from someone in this world before I go further.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
-
+DONE
 ---
 
 ### 8. Thrifting Vegas — Tiffany (113k)
 Contact: ⚠️ UNVERIFIED — ThriftingVegas.Tiffany@gmail.com not confirmed anywhere. Site (thriftingvegas.com) is form-only. Fallback: [contact form](https://thriftingvegas.com/pages/contact) or [Instagram @thrifting_vegas](https://www.instagram.com/thrifting_vegas/).
-
+DONE
 Tiffany —
 
 Been building tools for estate and yard sale organizers. Twenty-plus years in this space means you'd know in 90 seconds whether this is actually useful or just looks like it is.
@@ -149,30 +147,30 @@ Been building tools for estate and yard sale organizers. Twenty-plus years in th
 https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
-
+DONE
 ---
 
 ### 9. TechNSports — Rick Senko (70k + Reseller Greatness Podcast)
 Contact: resellerpodcast@gmail.com (Reseller Greatness Podcast). TechNSports LLC, P.O. Box 9844, Coral Springs, FL 33075.
 
-Rick —
+Rick,
 
-Building something for estate sale and auction operators. Fifteen years running the #1 eBay pre-loved store and now teaching others — that's a lens not many people have.
+Building tools for estate sale and auction operators. Fifteen years running the #1 pre-loved eBay store and now teaching resellers gives you a rare read on whether this actually fits how the business works.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
-— Patrick, finda.sale
+— Patrick
 
 ---
 
 ### 10. The Antique Nomad — George Higby (59k)
 Contact via [theantiquenomad.com](https://theantiquenomad.com).
 
-George —
+George,
 
-Working on something for estate sale and auction organizers — the other side of the counter from where you do your picking. The finance-to-antiquing angle means you'd spot gaps that someone who grew up in the industry might not catch.
+Working on tools for estate sale and auction organizers, the people on your side of the counter. Coming to this from finance means you'd spot gaps that someone who grew up in the industry might miss.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -181,11 +179,11 @@ Working on something for estate sale and auction organizers — the other side o
 ### 11. Too Many Records (54.9k)
 Contact: ❌ WRONG ENTITY — toomanyrecordsmusic@gmail.com is a Portland, OR local vinyl record shop (1854 N Lombard St), not this YouTube creator. Confirmed via Yelp + website toomanyrecords.net. Remove from list or find the correct channel contact separately.
 
-Hey — vinyl isn't my vertical but the operator skills translate.
+Hey,
 
-Been building something for estate sale and yard sale organizers. Wanted a 90-second read from someone who understands what it actually takes to sort, price, and move inventory.
+Building tools for estate sale and yard sale organizers. Someone who actually knows what it takes to sort, price, and move inventory would catch fast whether this makes sense.
 
-https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -194,11 +192,11 @@ https://finda.sale/video — happy to hear what you think either way.
 ### 12. Daily Refinement — Chris Lin (IG 52k)
 Contact: ❌ WRONG EMAIL — nychrislin@gmail.com not verified as his business contact. Correct email: contact@dailyrefinement.com (from [dailyrefinement.com](https://dailyrefinement.com)). Fallback: [Instagram @dailyrefinement](https://www.instagram.com/dailyrefinement/).
 
-Chris —
+Chris,
 
-Been working on something for the organizer side of reselling — estates, auctions, consignment. Multi-platform educator would know before I do whether this makes sense to the people I'm building for.
+Working on tools for the organizer side of reselling: estates, auctions, consignment. Teaching resellers across multiple platforms gives you a clearer read on whether a tool like this actually fits how the business works or just looks like it does.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -206,11 +204,11 @@ Been working on something for the organizer side of reselling — estates, aucti
 
 ### 13. Becky Park (49.2k + Teachable)
 
-Becky —
+Becky,
 
-Building something for secondary sale organizers. The part-time-reseller-mom perspective is exactly what a full-timer building this thing is probably missing.
+Building tools for secondary sale organizers. The part-time-reseller perspective is the one a full-time founder is most likely to get wrong, and you'd know fast.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -218,11 +216,11 @@ Building something for secondary sale organizers. The part-time-reseller-mom per
 
 ### 14. Melinda Murphy (36.1k)
 
-Melinda —
+Melinda,
 
-Been building something for estate and yard sale organizers — the people on the other side of the counter from where your audience shops. Someone who knows what makes a good find also knows pretty fast whether the person running the sale has any idea what they're doing.
+Working on tools for estate and yard sale organizers, the people on the other side of the counter from your audience. Someone who knows what makes a good find knows just as fast whether the person running the sale has it together.
 
-90 seconds if you're curious: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -231,11 +229,11 @@ Been building something for estate and yard sale organizers — the people on th
 ### 15. Rebecca The Reseller (18k + Teachable)
 Contact: hello.rebeccathereseller@gmail.com ✓ CONFIRMED (YouTube About tab)
 
-Rebecca —
+Rebecca,
 
-Working on tools for the organizer side of secondary sales. Your Poshmark 30-Day Reboot tells me you'd know whether the approach actually helps someone teaching resellers or misses where it matters.
+Working on tools for the organizer side of secondary sales. The Poshmark 30-Day Reboot tells me you think about the practical mechanics, so you'd know whether this actually helps or misses where it matters.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -244,11 +242,11 @@ Working on tools for the organizer side of secondary sales. Your Poshmark 30-Day
 ### 16. Pro Flipper Show / Flea Market Flipper — Rob & Melissa Stephenson (IG 100k, TikTok 77k, podcast 3x/week)
 Contact: rob@fleamarketflipper.com
 
-Rob & Melissa —
+Rob & Melissa,
 
-Building tools for the organizer side of what your audience does. Between Flipper University and the podcast, you'd know fast whether this holds up or falls apart in real use.
+Working on tools for estate and yard sale organizers, the people behind the sales Flipper University teaches you to find. Between the university and the podcast, you'd know fast whether this holds up for real operators or just looks like it does on paper.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick (Grand Rapids)
 
@@ -258,11 +256,11 @@ Building tools for the organizer side of what your audience does. Between Flippe
 [YouTube DM](https://www.youtube.com/@JordanWelch) or contact via [jordanwelch.com](https://jordanwelch.com). VERIFY NO COMPETING PLATFORM BEFORE SENDING.
 ⚠️ LOW PRIORITY — Jordan's world is new-product dropshipping (Viral Vault, AI Com Academy, eCom Accelerators). His audience sources from Alibaba, not estate sales. Poor fit for this list — consider removing.
 
-Jordan —
+Jordan,
 
-Working on something for the organizer side of secondhand sales — the people running the estate sales, yard sales, and auctions. Entrepreneur-reseller overlap is the lens that'd tell me if this makes sense outside the estate-sale world.
+Working on software for estate and yard sale organizers. Wondering whether the local service business angle ever makes sense to an audience built around ecom, and you'd know faster than I would.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -271,11 +269,11 @@ Working on something for the organizer side of secondhand sales — the people r
 ### 18. Bolo Brothers (subs unverified — eBay/thrift flipping duo, Trash Talk era cohort — VERIFY STILL ACTIVE + NO DISTRICT.NET MARKETPLACE BEFORE SENDING)
 ⚠️ NO VERIFIED EMAIL — HOWDY@BOLOBROTHERSCREATIVE.com is a Nashville video production company, NOT this creator. [YouTube DM](https://www.youtube.com/@BoloBrothers) only until confirmed.
 
-Hey —
+Hey,
 
-Working on something for estate sale and auction organizers — the other side of the table from the flipping your channel is built around. Someone deep in the finding side would spot fast whether the tools for running these sales actually fit or just look like they do.
+Working on tools for estate sale and auction organizers, the other side of the table from the flipping your channel is built around. Someone this deep in the finding side would know fast whether the tools for running these sales actually work.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -292,7 +290,7 @@ Alexander —
 
 Working on something for secondary-sale operators. You're one of very few people I've found who actually runs this kind of business and talks about running it on camera.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, Grand Rapids
 DONE
@@ -300,76 +298,76 @@ DONE
 
 ### 20. The Junk Parlor — Brooke Johnson (10k+ July 2025, has podcast)
 Contact: thejunkparlor@gmail.com
-
+DONE
 Brooke —
 
-Working on something for the organizer side of vintage, antique, and estate. Selling in a few different ways at once — vintage, antique, estate — is about the hardest combination to build for.
+Working on tools for vintage, antique, and estate sale organizers. Running all three at once is about the hardest combination to build for — which means you'd spot the gaps fastest.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
-
+DONE
 ---
 
 ### 21. Junking with Lou (subs unverified — OH & MI booths, 25+ years — VERIFY NO DISTRICT.NET MARKETPLACE BEFORE SENDING)
-
+DONE
 Lou —
 
-Grand Rapids neighbor here working on software for estate and booth operators. Twenty-five years in your position means you've seen problems I haven't lived long enough to know about yet.
+Grand Rapids neighbor here. Working on software for estate and booth operators, and twenty-five years in this position means you've seen problems I haven't lived long enough to know about.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
-
+DONE
 ---
 
 ### 22. The Bonafide Hustler — Chris Dupuis (subs unverified, Gumroad course)
 Contact: bonafidehustlingtheworld@gmail.com ✓ CONFIRMED (YouTube About tab)
-
+DONE
 Chris —
 
-Working on something for operators running what you run. Twenty-five-plus years in this plus a course teaching others — that's the combination that'd tell me fast whether the approach lands or misses.
+Working on tools for operators running exactly what you run. Twenty-five years in it plus a course teaching others is the combination that tells me fast whether an approach lands or misses.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
-
+DONE
 ---
 
 ### 23. Swap-O-Rama TV (subs unverified — Alsip, IL flea market)
 Contact: info@swap-o-rama.com
-
+DONE
 Hi —
 
-Working on software for secondary-sale organizers — flea market vendors and markets are part of who this is built for. You're one of the few markets that actually documents how the operation runs, which means you'd catch what I've gotten wrong.
+Working on software for flea market vendors and market operators. You're one of the few markets that actually documents how the operation runs, which means you'd catch what I've gotten wrong faster than most.
 
-Would someone on your team take 90 seconds? https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, finda.sale
-
+DONE
 ---
 
 ### 24. The Griffin Antique Mall (subs unverified)
 Contact: info@thegriffinmall.com
-
+DONE
 Hi —
 
-Building software for antique mall vendors and mall operations. You're one of the few malls making behind-the-scenes content about how the operation actually runs — that's the perspective worth having before I go further.
+Building tools for antique mall vendors and the people operating the mall. You're one of the few malls making behind-the-scenes content about how the operation actually runs — that's the perspective worth having before I go further.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
-
+DONE
 ---
 
 ### 25. Amanda's Mercantile — Amanda Gorby (subs unverified, Factory Antique Mall VA)
 Contact: amandasmercantile@gmail.com
 
-Amanda —
+Amanda,
 
-Working on something for booth vendors. Six years at Factory Antique Mall is the kind of steady operator experience I can't replicate from my side of the screen.
+Working on tools for booth vendors. Six years at Factory Antique Mall is the kind of steady operator experience I can't replicate from my side of the screen.
 
-90 seconds — does this fit a real booth workflow or miss what matters? https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -380,11 +378,11 @@ Working on something for booth vendors. Six years at Factory Antique Mall is the
 ### 26. Estate Sale Business Podcast — Ronald Andrew Murphy
 Contact via [estatesalebiz.com](https://estatesalebiz.com) — no direct email found, contact form only.
 
-Ronald —
+Ronald,
 
-Building something for estate sale business owners. Your show is the only consistent place I've found talking to this audience about the operations side — wanted to get this in front of you first.
+Building software for estate sale business owners. Your show is the only consistent place I've found talking to this audience about the operations side.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to be a guest or a sponsor too — whatever's right for your show.
+45 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to be a guest or a sponsor if that's ever right for the show.
 
 — Patrick
 
@@ -396,7 +394,7 @@ Toma —
 
 Working on software for the operators you train. Most of the industry teaches buying — you teach running the business. That's the audience this is built for.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 DONE
@@ -405,11 +403,11 @@ DONE
 ### 28. Pre-Loved — Emily Stochl
 Contact: ⚠️ UNVERIFIED — prelovedpodpr@gmail.com not found on podcast site or emilymstochl.com. [Contact form](https://emilymstochl.com) or [Substack DM](https://prelovedpod.substack.com).
 
-Emily —
+Emily,
 
-Working on something for secondary-sale operators. Pre-Loved is one of the few places I've found taking the operations side of resale seriously — not haul content, not ecom SEO.
+Working on tools for secondary-sale operators. Pre-Loved is one of the few places I've found that takes the operations side of resale seriously — not haul content, not ecom SEO.
 
-90-second walkthrough if you're curious: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -418,11 +416,11 @@ Working on something for secondary-sale operators. Pre-Loved is one of the few p
 ### 29. thriftretailer — Tim Gebauer
 Contact via [Substack message](https://thriftretailer.substack.com) — no direct email. [LinkedIn: Tim Gebauer](https://www.linkedin.com/in/timgebauer).
 
-Tim —
+Tim,
 
-Been reading thriftretailer for a while. Working on software for secondary-sale operators and wanted to know if the approach makes sense to someone with 20+ years in retail.
+Been reading thriftretailer for a while. Working on software for secondary-sale operators and wanted a read from someone with 20+ years on the retail side.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -431,11 +429,11 @@ Been reading thriftretailer for a while. Working on software for secondary-sale 
 ### 30. Consignment Chats — Libby Kuniegel Broggi
 Contact form: [conshyconsignment.com/pages/contact-us](https://conshyconsignment.com/pages/contact-us) — no direct email.
 
-Libby —
+Libby,
 
-Working on something for consignment shop owners and estate sale companies. Five seasons of operator conversations — you've probably heard every complaint this audience has.
+Working on tools for consignment shop owners and estate sale companies. Five seasons of operator conversations — you've probably heard every complaint this audience has.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on as a guest if it fits.
+45 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on as a guest if it ever fits.
 
 — Patrick, finda.sale
 
@@ -444,11 +442,11 @@ Working on something for consignment shop owners and estate sale companies. Five
 ### 31. Estate Professionals Mastermind — Chad Corbett & Bill Gross
 Contact via [estateprofessionalsmastermind.com](https://estateprofessionalsmastermind.com) or [podcast page](https://estateprofessionalsmastermind.com/podcast).
 
-Chad / Bill —
+Chad / Bill,
 
-Working on software for estate sale companies — the operations layer downstream of the probate and downsizing work your audience does.
+Working on software for estate sale companies, the operations layer downstream of the probate and downsizing work your audience does.
 
-90 seconds — does this fit into the workflow they hand off to? https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -457,11 +455,11 @@ Working on software for estate sale companies — the operations layer downstrea
 ### 32. Jennarocity Estate Sales — Jenna (DFW)
 Contact: ⚠️ UNVERIFIED — myjennarocityestatesales@gmail.com not listed on site. Grand Prairie, TX 75051. Use [contact form](https://myjennarocityestatesales.com) or social DM.
 
-Jenna —
+Jenna,
 
-Grand Rapids founder here — no DFW overlap, so no competition. Working on software for estate sale companies, and an operator who teaches other operators is the rarest filter to get this in front of.
+Grand Rapids founder here — no DFW overlap, no competition. Working on software for estate sale companies, and an operator who teaches other operators is the rarest filter to get this in front of.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -470,11 +468,11 @@ Grand Rapids founder here — no DFW overlap, so no competition. Working on soft
 ### 33. Maddy Brannon (DC region, 64k IG + weekly newsletter)
 Contact via [Substack](https://maddybrannon.substack.com) or [Instagram @maddytheb](https://www.instagram.com/maddytheb/) — no direct email.
 
-Maddy —
+Maddy,
 
-Working on software for estate sale organizers. Your DC region newsletter is one of the few places I've seen a concentrated regional audience actually work — you'd know whether a tool like this would change how you cover the sales you spotlight.
+Working on software for estate sale organizers. Your DC region newsletter is one of the few places I've seen a concentrated regional audience actually work, so you'd know fast whether a tool like this changes how the sales you spotlight actually run.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -483,13 +481,13 @@ Working on software for estate sale organizers. Your DC region newsletter is one
 ### 34. Connie Swaim — Managing Editor, AntiqueWeek
 Editorial inquiry. Contact: cswaim@antiqueweek.com ✓ CONFIRMED (listed on antiqueweek.com contact page, ext. 131)
 
-Connie —
+Connie,
 
 Editorial note, not a product pitch. I'm the founder of FindA.Sale — software built for estate sale, yard sale, auction, and consignment organizers.
 
-The category — purpose-built software for independent secondary-sale operators — is new enough that your readers likely haven't seen anything framed this way. If that emerging layer would be useful to cover, I'd make myself available for background, data, or quotes.
+The category — purpose-built software for independent secondary-sale operators — is new enough that your readers probably haven't seen it framed this way. If that's worth covering, I'm available for background, data, or quotes.
 
-90-second product context if useful: https://finda.sale/video
+Product context if useful: https://finda.sale/video
 
 — Patrick Deseranno, FindA.Sale
 
@@ -498,11 +496,11 @@ The category — purpose-built software for independent secondary-sale operators
 ### 35. Kele Johnson — Editor, Antique Trader
 Contact: KeleJohnson@aimmedia.com ✓ CONFIRMED (Active Interest Media / Kovels Antique Trader, verified via LinkedIn + antiquetrader.com)
 
-Kele —
+Kele,
 
-Editorial note. Building software for estate sale, yard sale, and auction organizers — Antique Trader's audience overlaps almost exactly with who I'm building for.
+Editorial note. I'm building software for estate sale, yard sale, and auction organizers — an audience that overlaps almost exactly with Antique Trader's readers.
 
-Happy to be a source for any piece on the tools this world is starting to see — no promotion required. Product context here if useful: https://finda.sale/video
+Happy to be a source for any piece on the tools this space is starting to see — no promotion required. Product context: https://finda.sale/video
 
 — Patrick
 
@@ -512,13 +510,13 @@ Happy to be a source for any piece on the tools this world is starting to see �
 One template; send tailored versions to each.
 Contacts: NAA — memberservices@auctioneers.org ✓ CONFIRMED | ISA — info@isa-appraisers.org ✓ CONFIRMED | NESA — treasurer@nesa-usa.com ✓ CONFIRMED (nesa-usa.com contact page) | NAOEL — no email found, contact form or Facebook only (naoel.com)
 
-Hi —
+Hi,
 
-I'm Patrick Deseranno. I've been building something for [estate sale / auction / appraisal] operators, and I'd like to understand what sponsorship, exhibitor, or member-education partnerships look like for [NESA / NAOEL / NAA / ISA].
+I'm Patrick Deseranno, founder of FindA.Sale — software built for [estate sale / auction / appraisal] organizers. I'd like to understand what sponsorship, exhibitor, or member-education partnerships look like for [NESA / NAOEL / NAA / ISA].
 
-I'd rather build a real long-term relationship with your members than run a one-off ad, but I don't know your side of the table well enough to propose without hearing your framework first. Product context in 90 seconds if useful: https://finda.sale/video
+I'd rather build a real relationship with your members than run a one-off ad, but I don't know your side well enough to propose without hearing your framework first.
 
-Happy to jump on a call whenever works.
+90 seconds of product context if useful: https://finda.sale/video — happy to jump on a call.
 
 — Patrick
 
@@ -533,11 +531,11 @@ Happy to jump on a call whenever works.
 ### 37. Clutterbug — Cas (large YouTube, HGTV's Hot Mess House)
 Contact: cas@clutterbug.me ✓ CONFIRMED ([clutterbug.me contact page](https://clutterbug.me/contact))
 
-Cas —
+Cas,
 
-Building software for estate and yard sale organizers. Your audience is full of people right at the point where decluttering turns into "okay but now what do we actually do with all this stuff" — and whoever runs that sale is still doing it with handwritten price stickers and a cash box.
+Building tools for estate and yard sale organizers. Your audience is right at the point where decluttering becomes "okay, but what do we actually do with all this stuff" — and whoever runs that sale is still doing it with handwritten price stickers and a cash box.
 
-90 seconds if you're curious: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -546,11 +544,11 @@ Building software for estate and yard sale organizers. Your audience is full of 
 ### 38. Storage Auction Pirate (YouTube — storage unit buying/resale, subs unverified)
 [YouTube DM](https://www.youtube.com/@StorageAuctionPirate).
 
-Hey —
+Hey,
 
-Working on something for the people who have to turn a pile of found inventory into a sale. Anyone who's bought a unit and then had to sort, price, and move 200 items knows that organizer problem from the inside.
+Working on tools for the people who have to turn found inventory into a sale. Anyone who's bought a storage unit and had to sort, price, and move 200 items knows the organizer problem from the inside.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -559,11 +557,11 @@ Working on something for the people who have to turn a pile of found inventory i
 ### 39. Treasure Hunting With Jebus (YouTube — storage unit/resale, subs unverified)
 [YouTube DM](https://www.youtube.com/@TreasureHuntingWithJebus).
 
-Hey —
+Hey,
 
-Building tools for estate and yard sale organizers. The "bought the unit, now what" problem is basically the same thing on a smaller scale — someone who teaches the selling side would catch fast if I've gotten this wrong.
+Building tools for estate and yard sale organizers. The "bought the unit, now what" problem is basically the same thing on a smaller scale — someone who teaches the selling side would know fast whether I've gotten this wrong.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -571,11 +569,11 @@ Building tools for estate and yard sale organizers. The "bought the unit, now wh
 
 ### 40. [@estatesalefreaks](https://www.tiktok.com/@estatesalefreaks) (TikTok, 79K — ❌ REMOVE — confirmed SHOPPER, not organizer. Buys at estate sales/auctions in LA area. Wrong audience for this list.)
 
-Hey —
+Hey,
 
 Building software for estate and yard sales — tools for the people who run them. You're one of the few accounts actually documenting this world on TikTok, which means you probably see both sides of it.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -586,11 +584,11 @@ Building software for estate and yard sales — tools for the people who run the
 ### 41. Grace Rehman — Organize With Grace Podcast (downsizing/decluttering after 50)
 Contact: grace@organizewithgrace.com ✓ CONFIRMED ([organizewithgrace.com contact page](https://organizewithgrace.com/contact) — also hello@organizewithgrace.com for general inquiries)
 
-Grace —
+Grace,
 
-Working on something for estate and yard sale organizers — the people families call after the "what do we do with all this stuff" conversation. Your listeners are at that point all the time.
+Working on tools for estate and yard sale organizers, the people families call after the "what do we do with all this stuff" conversation. Your listeners are at that moment all the time.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way, or happy to come on if it ever fits what you cover.
+45 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on if the topic ever fits.
 
 — Patrick
 
@@ -599,11 +597,11 @@ Working on something for estate and yard sale organizers — the people families
 ### 42. Downsizing Roadmap Podcast
 Contact: info@downsizingroadmap.com ✓ CONFIRMED ([downsizingroadmap.com](https://downsizingroadmap.com)). Hosts: Jodi Rosko & Heather Fisher (Realtors / Downsizing Specialists, The Rosko Group / Keller Williams).
 
-Hi —
+Hi,
 
-Working on software for estate and yard sale organizers. Your listeners are the families who eventually call an estate sale company, which puts your show right at the top of that chain.
+Working on tools for estate and yard sale organizers. Your listeners are the families who eventually call an estate sale company — your show is right at the top of that chain.
 
-90 seconds if it's useful: https://finda.sale/video — happy to hear what you think either way. Happy to be a guest if the tools side ever fits what you cover.
+45 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on if the tools side ever fits.
 
 — Patrick, finda.sale
 
@@ -612,11 +610,11 @@ Working on software for estate and yard sale organizers. Your listeners are the 
 ### 43. Jennifer Pickett — NASMM (National Association of Senior & Specialty Move Managers)
 Contact: jennifer@nasmm.org ✓ CONFIRMED (Co-Executive Director, [nasmm.org](https://nasmm.org))
 
-Jennifer —
+Jennifer,
 
-Building software for estate and yard sale organizers — the people your members are often coordinating alongside. Senior move managers sit right at the point where the family has decided to downsize but still needs to figure out what happens to everything.
+Building tools for estate and yard sale organizers, the people your members coordinate alongside. Senior move managers are right at the point where the family has decided to downsize but still needs to figure out what happens to everything.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -625,11 +623,11 @@ Building software for estate and yard sale organizers — the people your member
 ### 44. Church / Nonprofit Rummage Sale Coordinator (template — send to specific coordinators)
 Find via local Facebook groups, church websites, Nextdoor. Run the search "church rummage sale [city] coordinator" to find named individuals.
 
-Hi —
+Hi,
 
-Working on something for the people who run charity sales — the church rummage, the school fundraiser, the community sale. Found your name through [how you found them].
+Working on tools for the people who run charity sales: the church rummage, the school fundraiser, the community sale. Found you through [how you found them].
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way, including if it's too estate-sale shaped to fit what you do.
+45 seconds: https://finda.sale/video — happy to hear what you think either way, including if this is too estate-sale-shaped for what you do.
 
 — Patrick
 
@@ -649,7 +647,7 @@ Hey —
 
 Working on something for the organizer side of what you do — the staging, pricing, and moving everything after the find. You do both sides of it: find it and then sell it.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 DONE
@@ -658,11 +656,11 @@ DONE
 ### 46. Taco Stacks (~312K YouTube — storage unit resale, flea markets, Etsy, eBay)
 [YouTube DM](https://www.youtube.com/@TacoStacks).
 
-Hey —
+Hey,
 
-Working on tools for the people running the sale itself — setup, pricing, checkout, what didn't sell. Someone doing flea markets, Etsy, and eBay at the same time would spot fast whether a tool actually fits how a sale works.
+Working on tools for the people running the sale itself — setup, pricing, checkout, what didn't sell. Someone doing flea markets, Etsy, and eBay at the same time would spot fast whether a tool actually fits how a real sale works.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -671,11 +669,11 @@ Working on tools for the people running the sale itself — setup, pricing, chec
 ### 47. Paper and Moose (~82K YouTube — storage unit resale, frequent Taco Stacks collaborator)
 [YouTube DM](https://www.youtube.com/@PaperandMoose).
 
-Hey —
+Hey,
 
-Working on something for the people who have to turn found inventory into a sale — the other side of the storage unit or estate you're buying from. Understanding both sides of that transaction is rare.
+Working on tools for the people who have to turn found inventory into a sale, the other side of the storage unit or estate you're buying from. Understanding both sides of that transaction is rare, and it's the kind of read I want.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -691,7 +689,7 @@ Tracy —
 
 Working on something for estate and yard sale organizers. The work you do — helping people actually let go — leads right to the question of what happens to everything after that. Most estate sale companies are still doing it with spreadsheets and a cash box.
 
-Wondering if that gap is as visible from your side as it looks from mine. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
+Wondering if that gap is as visible from your side as it looks from mine. 45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 DONE
@@ -704,7 +702,7 @@ Peter —
 
 Working on software for people running estate and yard sales — the last mile after the decluttering conversation ends. Twenty years of "what's standing between you and the life you want" is a lens that would tell me pretty fast whether I've built this for the right problem.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 DONE
@@ -719,7 +717,7 @@ Cortney —
 
 Working on software for people running exactly what you run. You've built the brand and the marketing on top of the actual operations — the Instagram, the curation, the Whatnot presence — that's not something most estate sale companies do.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale (Grand Rapids)
 DONE
@@ -728,11 +726,11 @@ DONE
 ### 51. Cassaundra0328 — Cassie (Whatnot top seller, sources from estate sales + storage units, Wake Forest NC, Facebook / TikTok / Instagram)
 Contact via [Whatnot DM](https://www.whatnot.com/user/cassaundra0328) or social @Cassaundra0328.
 
-Cassie —
+Cassie,
 
-Working on something for the people running the estate sales and storage unit sales you source from. Doing live auctions AND buying from estate sales means you see both sides of whether this holds up.
+Working on tools for the people running the estate sales and storage unit sales you source from. Doing live auctions and buying from estate sales means you see both sides of whether this holds up.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -743,11 +741,11 @@ Working on something for the people running the estate sales and storage unit sa
 ### 52. Empowered Elder Podcast — Tasha Beckman & Nicole Robilotto (senior move management, downsizing, relocation)
 Contact via [podcast website](https://www.empoweredelder.com) — no direct email found.
 
-Tasha / Nicole —
+Tasha / Nicole,
 
-Working on software for estate and yard sale organizers — the people families call after the downsizing decision is made and everything in the house still needs to be dealt with. Senior move management sits right at the top of that chain.
+Working on tools for estate and yard sale organizers, the people families call after the downsizing decision is made and everything still needs to be dealt with.
 
-Curious whether the tools organizers are using is a conversation your listeners would find useful. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
+Curious whether the tools organizers are using is something your listeners would want to hear about. 45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, finda.sale
 
@@ -756,11 +754,11 @@ Curious whether the tools organizers are using is a conversation your listeners 
 ### 53. Senior Settlers (blog / newsletter, downsizing and simplifying life)
 Contact: libby@senior-settlers.com ✓ CONFIRMED (Libby Wood, [senior-settlers.com](https://senior-settlers.com) — note: STATE.md had a typo "senior-sellers.com"; correct domain is senior-settlers.com). San Rafael, CA.
 
-Hi —
+Hi,
 
-Working on software for estate and yard sale organizers — the people families call once the stuff needs to go somewhere. The gap between "declutter" content and the actual logistics of running a sale seems underserved.
+Working on tools for estate and yard sale organizers, the people families call once the stuff needs to go somewhere. There's a real gap between "declutter" content and the actual logistics of running a sale.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -771,11 +769,11 @@ Working on software for estate and yard sale organizers — the people families 
 ### 54. MsStoneHome (YouTube — yard sale hauls, home, gardening)
 [YouTube DM](https://www.youtube.com/@MsStoneHome).
 
-Hey —
+Hey,
 
-Working on something for the people who run the sales your audience sources at. Yard sale haul content means you've seen the organizer side up close.
+Working on tools for the people running the yard sales your audience sources at. Covering hauls regularly means you've watched the organizer side enough to know when it's working and when it's not.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -790,11 +788,11 @@ Working on something for the people who run the sales your audience sources at. 
 ### 55. Aurikatariina (11.4M TikTok, 4M YouTube, ~20M combined social — Finnish hoarding/extreme cleaning creator)
 Contact: aurikacleaning@gmail.com ✓ CONFIRMED ([aurikacleaning.com](https://aurikacleaning.com)). Fallback: [TikTok DM](https://www.tiktok.com/@aurikatariina) or [YouTube DM](https://www.youtube.com/@aurikatariina). Reach in Finnish and English. Her content is cleaning and organizing hoarding homes — which means she is standing inside the estate sale problem on every video.
 
-Hey —
+Hey,
 
-Working on something for the people who have to deal with what's left in those homes after the cleaning part is done. You're documenting a space that most software companies have never looked at.
+Working on tools for the people who deal with what's in those homes once the cleaning part is done: the estate sale, the yard sale, the auction. You're inside that problem on every video.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -805,11 +803,11 @@ Working on something for the people who have to deal with what's left in those h
 ### 56. Sym Clarke — The Thrift Guru (~200K TikTok — vintage finds, thrift flips)
 [TikTok DM](https://www.tiktok.com/@thethriftguru).
 
-Hey —
+Hey,
 
-Working on tools for the people who run the sales you source at. Someone thrifting and flipping at volume has watched the organizer side of it close enough to know what's sloppy and what actually works.
+Working on tools for the people running the sales you source at. Thrifting and flipping at volume means you've watched the organizer side close enough to know what's sloppy and what actually works.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -818,11 +816,11 @@ Working on tools for the people who run the sales you source at. Someone thrifti
 ### 57. Emma Rogue (vintage resale, NYC store owner, fast-growing TikTok — went 0 to 100K quickly)
 Contact: hello@emmarogue.com ✓ CONFIRMED (email valid; note emmarogue.com domain expired Dec 2023 — send email directly, don't click the website). Physical shop: 154 Allen St, NYC. Active on [Instagram @roguegarms](https://www.instagram.com/roguegarms/). Fallback: Instagram DM.
 
-Hey —
+Hey,
 
-Working on something for the people running the estate and vintage sales that feed into shops like yours. Building a vintage retail operation from scratch means you've seen what the upstream sale looks like when it runs well — and when it doesn't.
+Working on tools for the people running the estate and vintage sales that feed into shops like yours. Building a vintage retail operation from scratch means you've seen what the upstream sale looks like when it runs well — and when it doesn't.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -831,11 +829,11 @@ Working on something for the people running the estate and vintage sales that fe
 ### 58. Siena Filippi (138K Instagram — thrift and vintage, curated aesthetic)
 Contact: filippisiena@gmail.com ✓ CONFIRMED ([sienafilippi.com](https://sienafilippi.com)). [Instagram @simply.siena](https://www.instagram.com/simply.siena/). NYC vintage studio at 53 Bridge St, DUMBO #204. Fallback: Instagram DM.
 
-Hey —
+Hey,
 
-Working on software for the organizers running the estate and yard sales that supply the stuff you find. Someone with a real eye for curation would catch immediately whether a sale is run well or just lucky.
+Working on tools for the organizers running the estate and yard sales that supply what you find. Someone with a real eye for curation can tell immediately whether a sale is run well or just lucky.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -846,11 +844,11 @@ Working on software for the organizers running the estate and yard sales that su
 ### 59. Laura Caldwell (YouTube — full-time vintage shop owner, 12+ years, antique picking and resale)
 Contact: hello@leftcoastrevivals.com ✓ CONFIRMED ([leftcoastrevivals.com](https://leftcoastrevivals.com)). [Instagram @leftcoastrevivals](https://www.instagram.com/leftcoastrevivals/). Fallback: [YouTube DM](https://www.youtube.com/@LeftCoastRevivals).
 
-Laura —
+Laura,
 
-Working on tools for people running estate and yard sales. Twelve years of buying from these sales would give you a fast read on whether the people running them have what they need or are just figuring it out as they go.
+Working on tools for people running estate and yard sales. Twelve years of buying from these sales gives you a faster read than most on whether the organizer has it together or is figuring it out as they go.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -859,11 +857,11 @@ Working on tools for people running estate and yard sales. Twelve years of buyin
 ### 60. The Antique Agenda (YouTube — antique picking, finds, market coverage)
 [YouTube DM](https://www.youtube.com/@TheAntiqueAgenda).
 
-Hey —
+Hey,
 
-Working on software for the people running the sales you're picking at. Someone who shows up to estate sales and auctions regularly would know pretty fast whether the organizer side of it looks professional or cobbled together.
+Working on tools for the people running the sales you pick at. Showing up to estate sales and auctions regularly means you know pretty fast whether the organizer side looks professional or cobbled together.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
@@ -874,11 +872,11 @@ Working on software for the people running the sales you're picking at. Someone 
 ### 61. Brimfield Antique Flea Market (largest antique show in US — Brimfield, MA, three times per year)
 Contact: ⚠️ UNVERIFIED — jmjy2@aol.com (Jody Young) not confirmed via web research. Jody Young is confirmed as owner/event coordinator but only phone contact is public: (508) 422-6470. Consider calling to get the right email. Fallback: [brimfield.com](https://brimfield.com) or [Instagram @brimfieldantiqueshow](https://www.instagram.com/brimfieldantiqueshow/).
 
-Hi —
+Hi,
 
-Working on something for people running the sales — inventory management, pricing, checkout. The vendors at Brimfield are running what amounts to a multi-day retail operation two or three times a year, and most of them are still doing it on paper.
+Working on tools for flea market vendors — inventory management, pricing, checkout. The vendors at Brimfield are running what amounts to a multi-day retail operation two or three times a year, and most of them are still doing it on paper.
 
-Not looking for a partnership placement — wondering if there's a vendor services person I could run this in front of. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
+Not looking for a placement — just wondering if there's a vendor services contact I could run this by. 45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -889,11 +887,11 @@ Not looking for a partnership placement — wondering if there's a vendor servic
 ### 62. The Probate Realtor Show — Matias Baker Masucci (podcast, ranked top 10 realtor podcasts 2024)
 Contact: info@probaterealtor.la ✓ CONFIRMED ([probaterealtor.la contact page](https://probaterealtor.la/contact))
 
-Matias —
+Matias,
 
-Working on software for estate and yard sale organizers — the people who come in after the probate process identifies what needs to be sold. That part of the chain is still almost entirely manual.
+Working on software for estate and yard sale organizers, the people who come in once the probate process has identified what needs to be sold. That part of the chain is still almost entirely manual.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on if the organizer-tools angle fits what you cover.
+45 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on if the organizer-tools angle ever fits.
 
 — Patrick, finda.sale
 
@@ -902,11 +900,11 @@ Working on software for estate and yard sale organizers — the people who come 
 ### 63. The Auction Advocate — National Auction Association Podcast (trade podcast, auctioneer membership org)
 Contact: communications@auctioneers.org (or memberservices@auctioneers.org)
 
-Hi —
+Hi,
 
-Working on software for estate and yard sale organizers — a category that overlaps with your member base more than most people realize. The gap in software tools for this space feels like it belongs in a trade conversation somewhere.
+Working on software for estate and yard sale organizers — a category that overlaps with your member base more than most people realize. The gap in purpose-built tools for this space feels like it belongs in a trade conversation somewhere.
 
-Not pitching a sponsorship. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
+Not pitching a sponsorship. 45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -915,11 +913,11 @@ Not pitching a sponsorship. 90 seconds: https://finda.sale/video — happy to he
 ### 64. SRES Realtor with Social Presence (template — Senior Real Estate Specialist with active following or podcast)
 Find via NAR's SRES directory + cross-reference with Instagram/YouTube/podcast presence. Search "SRES realtor podcast" and "senior real estate specialist YouTube" for named individuals.
 
-Hi —
+Hi,
 
-Working on software for estate and yard sale organizers — the people families often call alongside a senior-focused realtor when it's time to liquidate a home. The "but what do we do with everything" question probably comes up a lot from where you sit.
+Working on tools for estate and yard sale organizers, the people families often call alongside a senior-focused realtor when it's time to liquidate a home. The "what do we do with everything" question probably comes up a lot from where you sit.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -932,11 +930,11 @@ Working on software for estate and yard sale organizers — the people families 
 ### 65. Codie Sanchez — Contrarian Thinking (12M+ combined social, 1M+ newsletter, NYT bestselling "Main Street Millionaire")
 Contact: c@codiesanchez.com ✓ CONFIRMED ([codiesanchez.com](https://codiesanchez.com) / [contrarianthinking.co](https://contrarianthinking.co/contact) — note: may route to team. Fallback: [Instagram @CodieSanchez](https://www.instagram.com/codiesanchez/) / [YouTube](https://www.youtube.com/@CodieSanchez) / [Twitter/X @CodieSanchez](https://x.com/CodieSanchez).)
 
-Codie —
+Codie,
 
-Been building software for estate and yard sale organizers. The "boring business" frame you've built is exactly the lens this fits — real local service business, most of the people running it still on paper, margins and demand aren't going anywhere.
+Been building software for estate and yard sale organizers. The "boring business" frame you've built is exactly where this fits — real local service business, most operators still on paper, margins and demand aren't going anywhere.
 
-Not sure if the organizer side of estate liquidation ever comes up in what you cover. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
+Not sure if the organizer side of estate liquidation comes up in what you cover. 45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -945,11 +943,11 @@ Not sure if the organizer side of estate liquidation ever comes up in what you c
 ### 66. Nick Loper — Side Hustle Show (podcast, top-ranked small business show, 12+ years, large engaged audience)
 Contact: nick@sidehustlenation.com ✓ CONFIRMED (direct email — confirmed via [sidehustlenation.com Press & Media Kit](https://www.sidehustlenation.com/press/). Not form-only.) Podcast pitches also via [Podmatch](https://www.podmatch.com).
 
-Nick —
+Nick,
 
 Been building software for people running estate and yard sales as a business. The estate sale company angle is underrepresented in small business coverage: local, cash-flow positive from the first sale, no storefront required. Most people running these are still on spreadsheets and a cash box.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on if it fits.
+45 seconds: https://finda.sale/video — happy to hear what you think either way. Happy to come on if it fits.
 
 — Patrick, FindA.Sale (Grand Rapids)
 
@@ -958,11 +956,11 @@ Been building software for people running estate and yard sales as a business. T
 ### 67. Pat Walls — Starter Story (1.6M monthly readers, 130K newsletter, 350K+ social — niche business case study interviews)
 Contact via [starterstory.com/pat-walls](https://www.starterstory.com/pat-walls) or [Twitter/X @thepatwalls](https://x.com/thepatwalls) — contact form only, no direct email found.
 
-Pat —
+Pat,
 
-Working on software for estate and yard sales — the organizer side of it. Estate sale companies are real, cash-positive local businesses, most of them running on notepads and cash boxes, and nobody's built software for them yet.
+Working on software for estate and yard sale organizers. Estate sale companies are real, cash-positive local businesses, most of them running on notepads and cash boxes, and nobody's built software for them yet.
 
-Wondering if there's a story in it — as a business idea case study or as a founder's side. 90 seconds: https://finda.sale/video — happy to hear what you think either way.
+Wondering if there's a story in it — as a business idea case study or as a founder's side. 45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick, FindA.Sale
 
@@ -971,11 +969,11 @@ Wondering if there's a story in it — as a business idea case study or as a fou
 ### 68. Junk Removal Authority (YouTube / training — teaches people to start junk removal businesses, estate cleanout overlap)
 Contact via [junkremovalauthority.com](https://junkremovalauthority.com) — form only, no direct email found. [YouTube DM](https://www.youtube.com/@JunkRemovalAuthority). Find host name before sending — Josh Latimer is the founder; verify current host/face.
 
-Hey —
+Hey,
 
-Working on software for the estate sale side of what cleanout crews deal with — the part after someone decides to sell what's in the house rather than haul it. A lot of junk removal companies end up doing both, or at least referring one to the other.
+Working on tools for the estate sale side of what cleanout crews deal with, the part after someone decides to sell what's in the house rather than haul it. A lot of junk removal companies end up doing both, or at least referring one to the other.
 
-90 seconds: https://finda.sale/video — happy to hear what you think either way.
+45 seconds: https://finda.sale/video — happy to hear what you think either way.
 
 — Patrick
 
