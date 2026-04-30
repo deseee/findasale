@@ -759,39 +759,30 @@ const OrganizerDashboard = () => {
             </Link>
           </div>
 
-          {/* Tier Lapse Banner */}
+          {/* Tier Lapse Banner — sticky, non-dismissible until payment is updated */}
           {orgProfile?.subscriptionLapsed && (
-            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 p-4 mb-4 rounded">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-400 dark:border-amber-600 p-4 mb-4 rounded">
               <div className="flex items-start justify-between">
                 <div className="flex items-start flex-1">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="h-5 w-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                      Your PRO subscription has lapsed
+                    <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                      Payment required to restore PRO access
                     </h3>
-                    <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                      <p>You've been downgraded to SIMPLE tier (200 items/sale, 5 photos/item, 100 Auto Tags/month).</p>
+                    <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                      <p>Your subscription has lapsed. You're temporarily on SIMPLE tier (200 items/sale, 5 photos/item, 100 Auto Tags/month). Update your billing info to restore full PRO features.</p>
                     </div>
                     <div className="mt-4">
-                      <Link href="/organizer/billing" className="text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 underline">
-                        Reactivate subscription →
+                      <Link href="/organizer/billing" className="text-sm font-medium text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 underline">
+                        Update Billing →
                       </Link>
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => { localStorage.setItem('tier_lapse_banner_dismissed', 'true'); window.location.reload(); }}
-                  className="text-red-400 hover:text-red-600 dark:hover:text-red-300"
-                  aria-label="Dismiss banner"
-                >
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
               </div>
             </div>
           )}

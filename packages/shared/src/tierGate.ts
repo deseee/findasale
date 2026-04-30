@@ -41,4 +41,5 @@ export const FEATURE_TIERS: Record<string, SubscriptionTier> = {
   multiUser: 'TEAMS',
   bulkImport: 'TEAMS',
   commandCenter: 'TEAMS',
+  removeWatermark: 'TEAMS',
 };

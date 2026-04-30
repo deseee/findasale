@@ -56,8 +56,6 @@ const QuickReplyPicker: React.FC<Props> = ({ onSelect }) => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['message-templates'] }),
   });
 
-  if (!user || !user.roles?.includes('ORGANIZER')) return null;
-
   const templates: Template[] = data?.templates || [];
   const categories = ['all', ...Array.from(new Set(templates.map(t => t.category)))];
   const filtered = activeCategory === 'all' ? templates : templates.filter(t => t.category === activeCategory);
@@ -68,7 +66,7 @@ const QuickReplyPicker: React.FC<Props> = ({ onSelect }) => {
     setIsOpen(false);
   };
 
-  return (
+  return !user || !user.roles?.includes('ORGANIZER') ? null : (
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}

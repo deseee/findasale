@@ -117,11 +117,7 @@ const NotificationBell = () => {
   };
 
   // Only show for logged-in users
-  if (!user) {
-    return null;
-  }
-
-  return (
+  return !user ? null : (
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}

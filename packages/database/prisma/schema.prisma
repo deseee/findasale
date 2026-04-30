@@ -365,6 +365,8 @@ model Organizer {
   shopifyShopDomain       String? // e.g. "myshop.myshopify.com"
   shopifyEnabled          Boolean                @default(false)
   shopifyListings         ShopifyListing[]
+  // Feature: Remove Watermark — TEAMS tier only
+  removeWatermarkEnabled  Boolean                @default(false)
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 }

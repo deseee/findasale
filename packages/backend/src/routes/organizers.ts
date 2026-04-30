@@ -11,6 +11,7 @@ import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, ge
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
 import { getCheatsheet, getItemsForLabels, createLabelBatch, printLabelBatch } from '../controllers/labelComposerController';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 
 const router = Router();
 
@@ -1047,6 +1048,14 @@ router.get('/pos-tiers', authenticate, getPosTierStatus);
 // GET /organizers/export/csv?saleId=X&format=ebay|amazon|facebook — CSV Export (Roadmap #125)
 // Export inventory items for a sale in platform-specific CSV formats (PRO tier required)
 router.get('/export/csv', authenticate, getCsvExportHandler);
+
+// ---- Feature: Remove Watermark (TEAMS tier) ----
+
+// GET /api/organizer/settings/watermark — read watermark removal setting
+router.get('/settings/watermark', authenticate, getWatermarkSetting);
+
+// PATCH /api/organizer/settings/watermark — update watermark removal setting (TEAMS only)
+router.patch('/settings/watermark', authenticate, updateWatermarkSetting);
 
 // ---- Feature #228: Dashboard Widget Endpoints ----
 

@@ -39,9 +39,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   };
 
   // Don't show if user is not logged in
-  if (!user) return null;
-
-  return (
+  return !user ? null : (
     <div className="flex items-center gap-3">
       <button
         onClick={handleToggle}

@@ -128,8 +128,6 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
     }
   }, []);
 
-  if (!user) return null;
-
   const handleInstallApp = () => {
     localStorage.removeItem('findasale_install_dismissed_until');
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -149,9 +147,9 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
   };
 
 
-  const isOrganizer = user.roles?.includes('ORGANIZER');
-  const isUser = user.roles?.includes('USER');
-  const isAdmin = user.roles?.includes('ADMIN');
+  const isOrganizer = user?.roles?.includes('ORGANIZER');
+  const isUser = user?.roles?.includes('USER');
+  const isAdmin = user?.roles?.includes('ADMIN');
   const isTeams = canAccess('TEAMS');
   const { items: cartItems } = useShopperCart(user?.id);
 
@@ -159,7 +157,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
   const { data: xpProfile } = useXpProfile(!!user);
   const freshExplorerRank = xpProfile?.explorerRank || 'INITIATE';
 
-  return (
+  return !user ? null : (
     <div className="relative">
       {/* Avatar Button Trigger */}
       <button
