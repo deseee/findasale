@@ -89,27 +89,17 @@ export function generateSaleOGImage(params: {
     watermarkOverlay = `l_text:Arial_32_bold:finda.sale,co_rgb:D97706,x_0,y_270`;
   }
 
-  // If a photo is provided, use it as the base; otherwise use a solid color background
-  let baseImage: string;
-  if (cloudinaryPublicId) {
-    // Assume cloudinaryPublicId is just the public_id without .jpg extension
-    baseImage = `${cloudinaryPublicId}.jpg`;
-  } else {
-    // Solid color background: warm amber
-    baseImage = `data:image/svg+xml,%3Csvg%20width%3D%271200%27%20height%3D%27630%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Crect%20fill%3D%27%23fef3c7%27%20width%3D%271200%27%20height%3D%27630%27%2F%3E%3C%2Fsvg%3E`;
-  }
-
   // Build the full Cloudinary URL
   const overlays = [titleOverlay, dateLocationText, watermarkOverlay]
     .filter(Boolean)
     .join('/');
 
-  // Construct URL with fetch endpoint for external images or direct public_id for Cloudinary assets
+  // Construct URL with direct public_id for Cloudinary assets
   if (cloudinaryPublicId) {
     return `https://res.cloudinary.com/${cloudName}/image/upload/${baseTransform}/${overlays}/${cloudinaryPublicId}.jpg`;
   } else {
-    // Fallback to simple URL without photo
-    return `https://res.cloudinary.com/${cloudName}/image/upload/${baseTransform}/${overlays}/b_rgb:fef3c7,w_1200,h_630`;
+    // Fallback to solid color background without photo (no data: URIs — they break in Vercel runtime)
+    return `https://res.cloudinary.com/${cloudName}/image/upload/${baseTransform},b_rgb:fef3c7/${overlays}`;
   }
 }
 

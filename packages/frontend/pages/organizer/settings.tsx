@@ -38,10 +38,16 @@ const OrganizerSettingsPage = () => {
   const [businessName, setBusinessName] = useState(user?.businessName || '');
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
+  const [tagline, setTagline] = useState('');
+  const [yearFounded, setYearFounded] = useState('');
   const [website, setWebsite] = useState('');
   const [facebook, setFacebook] = useState('');
   const [instagram, setInstagram] = useState('');
   const [etsy, setEtsy] = useState('');
+  const [twitterUrl, setTwitterUrl] = useState('');
+  const [tiktokUrl, setTiktokUrl] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [pinterestUrl, setPinterestUrl] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
@@ -121,10 +127,16 @@ const OrganizerSettingsPage = () => {
           setBusinessName(response.data.businessName || '');
           setPhone(response.data.phone || '');
           setBio(response.data.bio || '');
+          setTagline(response.data.tagline || '');
+          setYearFounded(response.data.yearFounded ? String(response.data.yearFounded) : '');
           setWebsite(response.data.website || '');
           setFacebook(response.data.facebook || '');
           setInstagram(response.data.instagram || '');
           setEtsy(response.data.etsy || '');
+          setTwitterUrl(response.data.twitterUrl || '');
+          setTiktokUrl(response.data.tiktokUrl || '');
+          setYoutubeUrl(response.data.youtubeUrl || '');
+          setPinterestUrl(response.data.pinterestUrl || '');
           setPickupWindows(response.data.pickupWindows || '');
           setStripeConnected(response.data.stripeConnected || false);
           setOrganizerTier(response.data.subscriptionTier || null);
@@ -271,10 +283,16 @@ const OrganizerSettingsPage = () => {
         businessName,
         phone,
         bio,
+        tagline,
+        yearFounded: yearFounded ? parseInt(yearFounded, 10) : undefined,
         website,
         facebook,
         instagram,
         etsy,
+        twitterUrl,
+        tiktokUrl,
+        youtubeUrl,
+        pinterestUrl,
         pickupWindows,
       });
       // Refetch organizer data to sync local state with backend
@@ -282,10 +300,16 @@ const OrganizerSettingsPage = () => {
       if (response.data) {
         setPhone(response.data.phone || '');
         setBio(response.data.bio || '');
+        setTagline(response.data.tagline || '');
+        setYearFounded(response.data.yearFounded ? String(response.data.yearFounded) : '');
         setWebsite(response.data.website || '');
         setFacebook(response.data.facebook || '');
         setInstagram(response.data.instagram || '');
         setEtsy(response.data.etsy || '');
+        setTwitterUrl(response.data.twitterUrl || '');
+        setTiktokUrl(response.data.tiktokUrl || '');
+        setYoutubeUrl(response.data.youtubeUrl || '');
+        setPinterestUrl(response.data.pinterestUrl || '');
         setPickupWindows(response.data.pickupWindows || '');
       }
       showToast('Profile updated', 'success');
@@ -653,6 +677,32 @@ const OrganizerSettingsPage = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Tagline</label>
+                  <input
+                    type="text"
+                    value={tagline}
+                    onChange={(e) => setTagline(e.target.value.slice(0, 120))}
+                    maxLength={120}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="e.g., Estate Sales Since 2010 — Quality & Authenticity"
+                  />
+                  <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">{tagline.length}/120 characters</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Year Founded</label>
+                  <input
+                    type="number"
+                    value={yearFounded}
+                    onChange={(e) => setYearFounded(e.target.value)}
+                    min="1900"
+                    max={new Date().getFullYear()}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="e.g., 2018"
+                  />
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Website URL</label>
                   <input
                     type="url"
@@ -693,6 +743,50 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setEtsy(e.target.value)}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
                     placeholder="https://etsy.com/shop/yourshop"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Twitter Profile URL</label>
+                  <input
+                    type="url"
+                    value={twitterUrl}
+                    onChange={(e) => setTwitterUrl(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://twitter.com/yourprofile"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">TikTok Profile URL</label>
+                  <input
+                    type="url"
+                    value={tiktokUrl}
+                    onChange={(e) => setTiktokUrl(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://tiktok.com/@yourprofile"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">YouTube Channel URL</label>
+                  <input
+                    type="url"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://youtube.com/@yourchannel"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Pinterest Profile URL</label>
+                  <input
+                    type="url"
+                    value={pinterestUrl}
+                    onChange={(e) => setPinterestUrl(e.target.value)}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    placeholder="https://pinterest.com/yourprofile"
                   />
                 </div>
 
