@@ -44,6 +44,8 @@ const CreateSalePage = () => {
     // B1: Sale type selector
     saleType: 'ESTATE',
     retailAutoRenewDays: 30,
+    // Feature #363: Auction Buyer's Premium
+    buyersPremiumPct: null as number | null,
     // Feature #311: Multi-Location Inventory View
     locationId: null as string | null,
   });
@@ -132,7 +134,7 @@ const CreateSalePage = () => {
     try {
       // Combine date + time and convert to UTC ISO string using browser's local timezone
       // P1 fix: omit lat/lng when null — sending null fails Zod validation before tier check runs
-      const { lat, lng, retailAutoRenewDays, ...restFormData } = formData;
+      const { lat, lng, retailAutoRenewDays, buyersPremiumPct, ...restFormData } = formData;
       const isRetail = formData.saleType === 'RETAIL';
       const payload = {
         ...restFormData,
@@ -145,6 +147,7 @@ const CreateSalePage = () => {
           : formData.endDate ? new Date(`${formData.endDate}T${endTime}`).toISOString() : formData.endDate,
         ...(lat !== null ? { lat } : {}),
         ...(lng !== null ? { lng } : {}),
+        ...(buyersPremiumPct !== null ? { buyersPremiumPct } : {}),
       };
       const response = await api.post('/sales', {
         ...payload,
@@ -255,6 +258,31 @@ const CreateSalePage = () => {
                 </p>
               )}
             </div>
+
+            {/* Feature #363: Auction Buyer's Premium */}
+            {formData.saleType === 'AUCTION' && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label htmlFor="buyersPremiumPct" className="block text-sm font-medium text-warm-700 dark:text-warm-300">Buyer's Premium %</label>
+                  <Tooltip content="Percentage added to the hammer price at checkout. Required disclosure for auction buyers." />
+                </div>
+                <input
+                  id="buyersPremiumPct"
+                  type="number"
+                  name="buyersPremiumPct"
+                  min="0"
+                  max="50"
+                  step="0.5"
+                  value={formData.buyersPremiumPct ?? ''}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    buyersPremiumPct: e.target.value ? parseFloat(e.target.value) : null
+                  })}
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:bg-gray-700 dark:text-warm-100"
+                  placeholder="0"
+                />
+              </div>
+            )}
 
             {/* Basic Info */}
             <div>

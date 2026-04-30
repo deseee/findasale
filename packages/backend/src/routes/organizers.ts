@@ -50,6 +50,12 @@ const awardBadgesSchema = z.object({
   earnedAt: z.string().datetime().optional(),
 });
 
+const claimRequestSchema = z.object({
+  claimantEmail: z.string().email('Invalid email address'),
+  claimantName: z.string().min(1, 'Name is required'),
+  message: z.string().optional(),
+}).strict();
+
 // Authenticated: get revenue analytics for the current organizer
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -833,6 +839,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       avgRating: Math.round(avgRating * 10) / 10,
       followerCount: (organizer as any)._count?.followers ?? 0,
       isFollowing,
+      isClaimed: (organizer as any).isClaimed,
     });
   } catch (error) {
     console.error('Error fetching organizer profile:', error);
@@ -1380,6 +1387,269 @@ router.patch('/me/sales/:saleId/unpin', authenticate, async (req: AuthRequest, r
     res.json(updated);
   } catch (error) {
     console.error('Error unpinning sale:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #362: Sale Attendance Count — PATCH /organizers/me/sales/:saleId/attendance
+router.patch('/me/sales/:saleId/attendance', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+    const { attendanceCount } = req.body;
+
+    // Validate
+    if (typeof attendanceCount !== 'number' || attendanceCount < 0 || !Number.isInteger(attendanceCount)) {
+      return res.status(400).json({ message: 'attendanceCount must be a non-negative integer' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+    });
+
+    if (!sale || sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Sale not found or access denied' });
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: { attendanceCount },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating attendance count:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #356: Organizer Broadcast — send message to followers
+const broadcastSchema = z.object({
+  subject: z.string().min(1).max(100, 'Subject must be 100 characters or less'),
+  message: z.string().min(1).max(1000, 'Message must be 1000 characters or less'),
+}).strict();
+
+router.post('/me/broadcast', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    // Parse and validate request body
+    const validationResult = broadcastSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ message: 'Invalid input', errors: validationResult.error.errors });
+    }
+    const { subject, message } = validationResult.data;
+
+    // Fetch organizer and check tier
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true, subscriptionTier: true },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // Tier gate — PRO or TEAMS only
+    if (organizer.subscriptionTier !== 'PRO' && organizer.subscriptionTier !== 'TEAMS') {
+      return res.status(403).json({ message: 'Broadcast requires PRO or TEAMS tier' });
+    }
+
+    // Find all followers with email or push notifications enabled
+    const followers = await prisma.follow.findMany({
+      where: {
+        organizerId: organizer.id,
+        OR: [
+          { notifyEmail: true },
+          { notifyPush: true },
+        ],
+      },
+      select: { userId: true, notifyEmail: true, notifyPush: true },
+    });
+
+    // Create broadcast record
+    const broadcast = await prisma.organizerBroadcast.create({
+      data: {
+        organizerId: organizer.id,
+        subject,
+        message,
+        recipientCount: followers.length,
+      },
+    });
+
+    // Create notifications for each follower
+    if (followers.length > 0) {
+      await prisma.notification.createMany({
+        data: followers.map((follower) => ({
+          userId: follower.userId,
+          type: 'organizer_broadcast',
+          message: `${subject}`,
+          relatedId: broadcast.id,
+        })),
+      });
+    }
+
+    res.json({
+      success: true,
+      broadcastId: broadcast.id,
+      recipientCount: followers.length,
+    });
+  } catch (error) {
+    console.error('Error sending broadcast:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get recent broadcasts for the current organizer
+router.get('/me/broadcasts', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const broadcasts = await prisma.organizerBroadcast.findMany({
+      where: { organizerId: organizer.id },
+      select: {
+        id: true,
+        subject: true,
+        sentAt: true,
+        recipientCount: true,
+      },
+      orderBy: { sentAt: 'desc' },
+      take: 10,
+    });
+
+    res.json(broadcasts);
+  } catch (error) {
+    console.error('Error fetching broadcasts:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #361: POST /organizers/:id/claim — submit claim request for unclaimed listing
+router.post('/:id/claim', async (req: Request, res: Response) => {
+  try {
+    // Validate request body
+    const validation = claimRequestSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ message: 'Invalid request body', errors: validation.error.errors });
+    }
+
+    const { claimantEmail, claimantName, message } = validation.data;
+    const organizerId = req.params.id;
+
+    // Verify organizer exists
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { id: true, isClaimed: true },
+    });
+
+    if (!organizer) {
+      // Also try by slug
+      const organizerBySlug = await prisma.organizer.findUnique({
+        where: { customStorefrontSlug: organizerId },
+        select: { id: true, isClaimed: true },
+      });
+
+      if (!organizerBySlug) {
+        return res.status(404).json({ message: 'Organizer not found' });
+      }
+
+      // Use the found organizer
+      if (organizerBySlug.isClaimed) {
+        return res.status(409).json({ message: 'This listing is already claimed' });
+      }
+
+      // Check if PENDING claim already exists from this email
+      const existingClaim = await prisma.claimRequest.findFirst({
+        where: {
+          organizerId: organizerBySlug.id,
+          claimantEmail: claimantEmail,
+          status: 'PENDING',
+        },
+      });
+
+      if (existingClaim) {
+        return res.status(409).json({ message: 'A claim request is already pending for this email' });
+      }
+
+      // Create claim request
+      await prisma.claimRequest.create({
+        data: {
+          organizerId: organizerBySlug.id,
+          claimantEmail,
+          claimantName,
+          message: message || null,
+          status: 'PENDING',
+        },
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Your claim request has been submitted. We\'ll review it within 2-3 business days.',
+      });
+    }
+
+    // Check if already claimed
+    if (organizer.isClaimed) {
+      return res.status(409).json({ message: 'This listing is already claimed' });
+    }
+
+    // Check if PENDING claim already exists from this email
+    const existingClaim = await prisma.claimRequest.findFirst({
+      where: {
+        organizerId: organizer.id,
+        claimantEmail: claimantEmail,
+        status: 'PENDING',
+      },
+    });
+
+    if (existingClaim) {
+      return res.status(409).json({ message: 'A claim request is already pending for this email' });
+    }
+
+    // Create claim request
+    await prisma.claimRequest.create({
+      data: {
+        organizerId: organizer.id,
+        claimantEmail,
+        claimantName,
+        message: message || null,
+        status: 'PENDING',
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Your claim request has been submitted. We\'ll review it within 2-3 business days.',
+    });
+  } catch (error) {
+    console.error('Error submitting claim request:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -19,6 +19,7 @@ interface Sale {
   zip?: string;
   photoUrls?: string[];
   isPinned?: boolean;
+  attendanceCount?: number | null;
   organizer?: {
     id: string;
     businessName: string;
@@ -35,6 +36,9 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
   const [imgError, setImgError] = useState(false);
   const [rsvpCount, setRsvpCount] = useState(0);
   const [isAttendeesModalOpen, setIsAttendeesModalOpen] = useState(false);
+  const [attendanceCount, setAttendanceCount] = useState<number | null>(sale.attendanceCount ?? null);
+  const [isEditingAttendance, setIsEditingAttendance] = useState(false);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
 
   // Fetch RSVP count
   useEffect(() => {
@@ -77,6 +81,23 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
   };
 
   const lqipUrl = lqipUrl_calc;
+
+  const handleSaveAttendance = async () => {
+    if (attendanceCount === null || attendanceCount < 0) return;
+    setIsSavingAttendance(true);
+    try {
+      await api.patch(`/organizers/me/sales/${sale.id}/attendance`, {
+        attendanceCount: Math.floor(attendanceCount),
+      });
+      setIsEditingAttendance(false);
+    } catch (error) {
+      console.error('Failed to save attendance count:', error);
+    } finally {
+      setIsSavingAttendance(false);
+    }
+  };
+
+  const isSaleEnded = sale.status === 'ENDED' || sale.status === 'CLOSED' || sale.status === 'COMPLETED';
 
   return (
     <>
@@ -153,6 +174,60 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
               {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}&nbsp;·&nbsp;{sale.city}, {sale.state}
             </p>
           </Link>
+
+          {/* Feature #362: Attendance Count for Ended Sales */}
+          {isSaleEnded && (
+            <div className="mt-2 pt-2 border-t border-warm-200 dark:border-gray-700">
+              {isEditingAttendance ? (
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    min="0"
+                    value={attendanceCount ?? ''}
+                    onChange={(e) => setAttendanceCount(e.target.value ? Math.max(0, parseInt(e.target.value, 10)) : null)}
+                    className="w-16 px-2 py-1 text-xs border border-warm-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="0"
+                    disabled={isSavingAttendance}
+                  />
+                  <button
+                    onClick={handleSaveAttendance}
+                    disabled={isSavingAttendance || attendanceCount === null || attendanceCount < 0}
+                    className="text-xs px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50"
+                  >
+                    {isSavingAttendance ? '...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsEditingAttendance(false);
+                      setAttendanceCount(sale.attendanceCount ?? null);
+                    }}
+                    className="text-xs px-2 py-1 bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 rounded"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : attendanceCount ? (
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-warm-600 dark:text-gray-400">
+                    👥 {attendanceCount} attended
+                  </p>
+                  <button
+                    onClick={() => setIsEditingAttendance(true)}
+                    className="text-xs px-2 py-1 text-warm-600 dark:text-gray-400 hover:text-warm-700 dark:hover:text-gray-300"
+                  >
+                    Edit
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsEditingAttendance(true)}
+                  className="text-xs text-warm-600 dark:text-gray-400 hover:text-warm-700 dark:hover:text-gray-300"
+                >
+                  + Add attendance
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

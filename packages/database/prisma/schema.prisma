@@ -379,6 +379,12 @@ model Organizer {
   hours                   OrganizerHours[]
   // Feature #355: Organizer Types Multi-Select
   organizerTypes          String[]               @default([])
+  // Feature #356: Organizer Broadcast to Followers
+  broadcasts              OrganizerBroadcast[]
+  // Feature #361: Claim-This-Listing — allow unclaimed profiles to be claimed
+  isClaimed               Boolean                @default(true) // Whether organizer profile has been claimed by owner
+  isUnmanagedListing      Boolean                @default(false) // Whether this is an unmanaged/imported listing
+  claimRequests           ClaimRequest[]
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 }
@@ -393,6 +399,19 @@ model OrganizerHours {
   organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
 
   @@unique([organizerId, dayOfWeek])
+}
+
+// Feature #356: Organizer Broadcast to Followers — message delivery system
+model OrganizerBroadcast {
+  id             String    @id @default(cuid())
+  organizerId    String
+  subject        String
+  message        String
+  sentAt         DateTime  @default(now())
+  recipientCount Int       @default(0)
+  organizer      Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId])
 }
 
 // Pre-wire: API Keys for third-party integrations (Zapier, IFTTT, webhooks)
@@ -738,6 +757,10 @@ model Sale {
   shareLinks              SaleShareLink[]
   // Feature #359: Sale Pinned/Featured Flag
   isPinned                Boolean                  @default(false)
+  // Feature #362: Sale Attendance Count — track shoppers who attended
+  attendanceCount         Int?
+  // Feature #363: Auction Buyer's Premium — percentage added to hammer price
+  buyersPremiumPct        Decimal?                 @db.Decimal(5, 2)
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -945,6 +968,8 @@ model Item {
   clusterConfidence          Float? // 0.0–1.0 from Haiku clustering pass
   // ADR-069 Phase 2: eBay comp lookup cache
   compLookup                 ItemCompLookup?
+  // Feature #363: Auction Lot Number — identifier for auction items
+  lotNumber                  String?
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -4184,4 +4209,20 @@ model QRScannerEvent {
   @@index([saleId, createdAt])
   @@index([saleId, eventType])
   @@index([shopperId, createdAt])
+}
+
+// Feature #361: Claim-This-Listing — claim requests for unclaimed organizer profiles
+model ClaimRequest {
+  id            String    @id @default(cuid())
+  organizerId   String
+  claimantEmail String
+  claimantName  String
+  message       String?
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt     DateTime  @default(now())
+  reviewedAt    DateTime?
+  organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId])
+  @@index([status])
 }

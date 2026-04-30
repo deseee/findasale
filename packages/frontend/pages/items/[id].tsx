@@ -48,6 +48,7 @@ interface Item {
   auctionStatus?: 'INACTIVE' | 'ACTIVE' | 'ENDING_SOON' | 'ENDED'; // ADR-013 Phase 2
   status: string;
   photoUrls: string[];
+  lotNumber?: string | null;
   isLiveDrop: boolean; // CD2
   liveDropAt: string | null; // CD2
   reverseAuction: boolean; // CD2 Phase 4 (deprecated — use listingType)
@@ -566,7 +567,15 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
                 <div className="flex items-center gap-3 mb-2">
                   {/* P2 #6: Check listingType instead of deprecated reverseAuction */}
                   {item.listingType === 'REVERSE_AUCTION' && <ReverseAuctionBadge item={item} />}
-                  <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{item.title}</h1>
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{item.title}</h1>
+                    {/* Feature #363: Auction Lot Number */}
+                    {item.lotNumber && (
+                      <span className="text-lg font-semibold text-amber-600 dark:text-amber-400">
+                        Lot #{item.lotNumber}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
                   <span>{item.cartCount} in cart</span> • <span>{item.views} views</span> •
