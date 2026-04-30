@@ -30,6 +30,7 @@ interface Sale {
   zip?: string;
   photoUrls?: string[];
   isPinned?: boolean;
+  attendanceCount?: number | null;
   organizer?: {
     id: string;
     businessName: string;

@@ -57,6 +57,9 @@ export interface UnifiedItemCardItem {
     expiresAt: string;
     status: string;
   };
+
+  // Feature #363: Auction Lot Number
+  lotNumber?: string | null;
 }
 
 // Legacy Item interface (deprecated, kept for backward compatibility)
@@ -89,6 +92,8 @@ interface Item {
     expiresAt: string;
     status: string;
   };
+  // Feature #363: Auction Lot Number
+  lotNumber?: string | null;
 }
 
 export interface ItemCardProps {
@@ -323,11 +328,19 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
       {/* ── Content area ── */}
       <div className={`flex flex-col flex-1 ${contentPaddingClass}`}>
-        {showTitle && (
-          <h3 className={`font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug ${titleClampClass}`}>
-            {item.title}
-          </h3>
-        )}
+        <div className="flex items-start justify-between gap-2">
+          {showTitle && (
+            <h3 className={`font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug ${titleClampClass} flex-1`}>
+              {item.title}
+            </h3>
+          )}
+          {/* Feature #363: Auction Lot Number Badge */}
+          {(item as any).lotNumber && (
+            <span className="inline-block bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs px-2 py-1 rounded-full flex-shrink-0 whitespace-nowrap font-medium">
+              Lot #{(item as any).lotNumber}
+            </span>
+          )}
+        </div>
 
         {/* Category badge (if enabled) */}
         {showCategory && item.category && (

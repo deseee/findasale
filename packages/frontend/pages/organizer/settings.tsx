@@ -22,6 +22,7 @@ import ThemeToggle from '../../components/ThemeToggle';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import PasskeyManager from '../../components/PasskeyManager';
 import FeedbackMenu from '../../components/FeedbackMenu';
+import BroadcastSection from '../../components/BroadcastSection';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -68,6 +69,10 @@ const OrganizerSettingsPage = () => {
   const [removeWatermarkEnabled, setRemoveWatermarkEnabled] = useState(false);
   const [watermarkUpdating, setWatermarkUpdating] = useState(false);
   const [organizerTier, setOrganizerTier] = useState<string | null>(null);
+  const [broadcastSubject, setBroadcastSubject] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+  const [recentBroadcasts, setRecentBroadcasts] = useState<Array<{ id: string; subject: string; sentAt: string; recipientCount: number }>>([]);
 
   // Verification status query
   const { data: verStatus, isLoading: verStatusLoading } = useQuery({
@@ -831,6 +836,30 @@ const OrganizerSettingsPage = () => {
                   ))}
                 </div>
               </div>
+
+              {/* Broadcast to Followers Section — Feature #356 */}
+              {(tier === 'PRO' || tier === 'TEAMS') ? (
+                <div className="card p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Message Your Followers</h2>
+                    <Tooltip content="Send a message to all followers who opted in to email or push notifications." position="right" />
+                  </div>
+
+                  <BroadcastSection tier={tier} />
+                </div>
+              ) : (
+                <div className="card p-6 border-2 border-amber-200 bg-amber-50 dark:bg-gray-900 dark:border-amber-900">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-2">Message Your Followers</h2>
+                  <p className="text-sm text-warm-700 dark:text-gray-400 mb-3">
+                    Broadcast messaging is available on PRO and TEAMS tiers.
+                  </p>
+                  <Link href="/organizer/subscription">
+                    <button className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg">
+                      Upgrade to PRO
+                    </button>
+                  </Link>
+                </div>
+              )}
 
               {/* Business Info Section */}
               <div className="card p-6">

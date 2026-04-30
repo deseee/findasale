@@ -1,67 +1,82 @@
-# Patrick's Dashboard — S600 ✅ COMPLETE
+# Patrick's Dashboard — S601 ✅ COMPLETE
 
-## Status: Storefront v2 gap audit + 3 parallel fixes shipped. Tier Lapse card ✅ fixed. /items/{id} 500 ✅ fixed. Schema fields #352/#353/#360 ✅ built.
+## Status: Storefront v2 full build-out complete. All 9 remaining gap features shipped (#354–#356, #359, #361–#363). 4 new migrations. 2 new components. Designer can now finish.
 
 ---
 
-## S600 Summary
+## S601 Summary — Storefront v2 Full Build-Out
 
-**Decisions locked:**
-- **#354 OrganizerHours table** — build it. Standard model per Google/Yelp/Apple Maps: day-of-week rows, HH:MM open/close times, timezone on Organizer, byAppointment Boolean.
-- **#357 RETAIL saleType** — already done. Migration `20260420200000_retail_saletype` committed RETAIL to saleType months ago. Boolean fields (`isRetailMode`/`hasRetailMode`) no longer exist — dropped in that migration. Feature is "Retail Mode" (not "Shop Mode"). Storefront v2 retail layout keys off `saleType === 'RETAIL'` and `retailAutoRenewDays`.
+**Features shipped (all Pending Chrome QA):**
+- **#354 Business Hours** — OrganizerHours table (day-of-week rows, HH:MM, timezone, by-appointment). Settings UI 7-day grid. Storefront Hours card.
+- **#355 Organizer Type Multi-Select** — 8-type checkbox grid in settings (Estate Sales, Yard Sales, Auctions, etc.). Pill badges on storefront below bio.
+- **#356 Broadcast to Followers** — BroadcastSection.tsx in settings (PRO/TEAMS only). POST /organizers/me/broadcast creates Notification rows for all followers. Recent broadcasts list.
+- **#359 Sale Pinned / Featured Flag** — Pin toggle on sales mgmt page. Amber "Pinned" badge. Pinned sales sort first. "Featured" amber badge on storefront.
+- **#361 Claim-This-Listing Flow** — ClaimListingModal.tsx (NEW). Amber claim banner on sales/[id]. POST /organizers/:id/claim (unauthenticated). isClaimed + isUnmanagedListing + ClaimRequest schema.
+- **#362 Sale Attendance Count** — attendanceCount field + PATCH endpoint. Number input on ended sales in sales.tsx.
+- **#363 Auction Buyer's Premium + Lot Numbers** — buyersPremiumPct on Sale (AUCTION-gated in create-sale), lotNumber on Item. Disclosure box on items/[id]. Lot badge on ItemCard.
+- **Sales SSR OG meta** — getServerSideProps on sales/[id].tsx so FB/iMessage scrapers get per-sale og:image/title/description.
 
-**Bugs fixed:**
-- **Tier Lapse plan card gradient** — `dashboard.tsx` — card was teal/cyan even when `isLapsed=true`. Fixed: separated gradient + border into independent ternaries so both switch to amber on lapse.
-- **`/items/{id}` 500 in production** — root cause: `lib/ogImage.ts` was embedding a `data:image/svg+xml` URI as a Cloudinary base path. Special characters in the URI broke Vercel's Node runtime URL parser → SyntaxError on every items page. Fixed: use Cloudinary native `b_rgb:fef3c7` background parameter instead. No data URIs.
+**4 new migrations (all must be deployed — see Step 2 below):**
+1. `20260430000000_storefront_v2_hours_types_pinned` — OrganizerHours table + organizerTypes + byAppointment + timezone + isPinned
+2. `20260430200000_organizer_broadcast` — OrganizerBroadcast table
+3. `20260430210000_attendance_buyers_premium_lot_number` — attendanceCount + buyersPremiumPct + lotNumber
+4. `20260430220000_storefront_v2_claim_listing` — isClaimed + isUnmanagedListing on Organizer + ClaimRequest table
 
-**New schema fields shipped (#352 tagline / #353 year founded / #360 social links):**
-- `Organizer.tagline String?` — one-liner below business name
-- `Organizer.yearFounded Int?` — year business founded
-- `Organizer.twitterUrl/tiktokUrl/youtubeUrl/pinterestUrl String?` — 4 new social link fields
-- Migration: `20260430100000_storefront_v2_organizer_fields`
-- Backend validation + response updated in `routes/organizers.ts`
-- Settings UI: tagline (120-char counter), year founded, 4 social link inputs added to Profile + Social sections
-
-**Roadmap:** Entries #352–#363 added (storefront v2 gap audit). #357 marked resolved.
+**Note:** Migration `20260430000000_storefront_v2_hours_types_pinned` is alphabetically before `20260430100000_storefront_v2_organizer_fields` (already deployed S600). They touch different columns — Prisma will apply the unapplied one and skip the already-applied one. A drift warning may appear — ignore it.
 
 ---
 
 ## ⚡ Do This Now
 
-**Step 1 — Push all S600 changes:**
+**Step 1 — Push all S601 changes:**
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/frontend/lib/ogImage.ts
 git add packages/database/prisma/schema.prisma
-git add "packages/database/prisma/migrations/20260430100000_storefront_v2_organizer_fields/migration.sql"
+git add "packages/database/prisma/migrations/20260430000000_storefront_v2_hours_types_pinned/migration.sql"
+git add "packages/database/prisma/migrations/20260430200000_organizer_broadcast/migration.sql"
+git add "packages/database/prisma/migrations/20260430210000_attendance_buyers_premium_lot_number/migration.sql"
+git add "packages/database/prisma/migrations/20260430220000_storefront_v2_claim_listing/migration.sql"
 git add packages/backend/src/routes/organizers.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/controllers/itemController.ts
 git add packages/frontend/pages/organizer/settings.tsx
+git add packages/frontend/pages/organizer/sales.tsx
+git add "packages/frontend/pages/organizer/storefront/[slug].tsx"
+git add packages/frontend/components/OrganizerSaleCard.tsx
+git add packages/frontend/components/BroadcastSection.tsx
+git add packages/frontend/components/ClaimListingModal.tsx
+git add "packages/frontend/pages/sales/[id].tsx"
+git add "packages/frontend/pages/organizer/create-sale.tsx"
+git add "packages/frontend/pages/items/[id].tsx"
+git add packages/frontend/components/ItemCard.tsx
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: Tier Lapse card gradient + /items/{id} 500 (data URI ogImage); feat #352/#353/#360 tagline/yearFounded/social links schema + settings UI"
+git commit -m "feat: Storefront v2 full build-out — #354 Hours, #355 OrganizerTypes, #356 Broadcast, #359 PinnedSale, #361 ClaimListing, #362 Attendance, #363 BuyersPremium/LotNumber + sales SSR OG"
 .\push.ps1
 ```
 
-**Step 2 — Run migration (new schema fields):**
+**Step 2 — Deploy all 4 new migrations (Railway DB):**
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="[Railway DATABASE_URL — copy from Railway dashboard → findasale-db → Variables]"
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```
 
+A drift advisory warning may appear about migration ordering — that's expected and safe to ignore.
+
 ---
 
-## Outstanding — Queued for S601
+## Outstanding — Queued for S602
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| **Sales pages SSR OG meta** | P2 | `/sales/[id]` has no per-sale og:image/title/description server-side. SaleOGMeta renders post-mount only — FB/iMessage scrapers don't see it. Pattern: add getServerSideProps like `items/[id].tsx`. |
-| **#354 OrganizerHours table** | Roadmap | Build the table when ready for storefront v2. |
+| **Chrome QA: all storefront v2 features** | P1 | #352/#353/#354/#355/#356/#359/#360/#361/#362/#363 all Pending Chrome QA. One feature per QA dispatch. |
+| **dev-environment skill Neon URL** | P2 | Flagged 5x — use skill-creator to update old Neon URL. |
+| **Draft contact audit** | P2 | Memory note from Apr 27: run draft contact audit next session. |
 
 ---
 

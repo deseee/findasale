@@ -57,6 +57,7 @@ import SocialProofBadge from '../../components/SocialProofBadge';
 import { useSaleSocialProof } from '../../hooks/useSocialProof';
 import ColorKeyLegend from '../../components/ColorKeyLegend'; // Feature #310: Color-tagged discount rules
 import useXpProfile from '../../hooks/useXpProfile'; // Rank-Based Early Access: fresh rank (explorerRank no longer on AuthContext User)
+import ClaimListingModal from '../../components/ClaimListingModal'; // Feature #361: Claim-This-Listing
 
 
 interface Sale {
@@ -74,6 +75,7 @@ interface Sale {
   status: string;
   photoUrls: string[];
   saleType?: string;
+  buyersPremiumPct?: number | null;
   organizer: {
     id: string;
     userId: string;
@@ -84,6 +86,7 @@ interface Sale {
     verificationStatus?: string; // Feature #16
     subscriptionTier?: string; // Feature #65: Subscription Tiers (SIMPLE, PRO, TEAMS, ENTERPRISE)
     removeWatermarkEnabled?: boolean; // Feature: OG watermark removal toggle (TEAMS only)
+    isClaimed?: boolean; // Feature #361: Claim-This-Listing
     badges?: Array<{
       id: string;
       name: string;
@@ -197,6 +200,7 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
     onConfirm: () => void;
   }>({ open: false, title: '', message: '', onConfirm: () => {} });
   const [mounted, setMounted] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false); // Feature #361: Claim-This-Listing
 
   // Set mounted flag to enable client-side-only date comparisons
   useEffect(() => {
@@ -755,6 +759,19 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
 
         {/* Organizer Info Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+          {/* Feature #361: Claim-This-Listing Banner */}
+          {!sale.organizer.isClaimed && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
+              <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">Is this your business?</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">Claim this listing to manage your profile, add photos, and connect with shoppers.</p>
+              <button
+                onClick={() => setShowClaimModal(true)}
+                className="mt-2 text-xs bg-amber-600 dark:bg-amber-700 text-white px-3 py-1 rounded font-medium hover:bg-amber-700 dark:hover:bg-amber-600 transition-colors"
+              >
+                Claim This Listing
+              </button>
+            </div>
+          )}
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <h2 className="text-xl font-bold text-warm-900 dark:text-gray-50 mb-2">Organized by</h2>
@@ -942,6 +959,15 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
               <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-50 mb-4">About</h2>
               <p className="text-warm-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{sale.description}</p>
             </div>
+
+            {/* Feature #363: Auction Buyer's Premium Disclosure */}
+            {sale.buyersPremiumPct && sale.buyersPremiumPct > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-8">
+                <p className="text-amber-900 dark:text-amber-200 font-medium">
+                  Buyer's Premium: {sale.buyersPremiumPct}% added to final bid price at checkout.
+                </p>
+              </div>
+            )}
 
             {/* SocialProofBadge removed — redundant with LiveFeedTicker */}
 
@@ -1580,6 +1606,14 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
         saleId={sale.id}
         onSuccess={handleMessageSuccess}
       />
+
+      {/* Feature #361: Claim-This-Listing Modal */}
+      {showClaimModal && (
+        <ClaimListingModal
+          organizerId={sale.organizer.id}
+          onClose={() => setShowClaimModal(false)}
+        />
+      )}
 
       {/* Phase 1: Smart Cart — floating action button */}
       <ShopperCartFAB onClick={openCart} />

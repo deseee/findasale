@@ -703,7 +703,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -733,6 +733,14 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         message: `Invalid listing type "${listingType}". Must be one of: ${VALID_LISTING_TYPES.join(', ')}`
       });
+    }
+
+    // Feature #363: Validate lot number if provided
+    if (lotNumber !== undefined && lotNumber !== null) {
+      const lotStr = String(lotNumber).trim();
+      if (lotStr.length > 20) {
+        return res.status(400).json({ message: 'Lot number must be 20 characters or less' });
+      }
     }
 
     // Fetch item to verify ownership
@@ -855,6 +863,8 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (bestOfferMinimumAmt !== undefined) updateData.bestOfferMinimumAmt = bestOfferMinimumAmt === null ? null : Number(bestOfferMinimumAmt);
     if (ebaySecondaryCategoryId !== undefined) updateData.ebaySecondaryCategoryId = ebaySecondaryCategoryId || null;
     if (ebaySubtitle !== undefined) updateData.ebaySubtitle = ebaySubtitle ? String(ebaySubtitle).substring(0, 55) : null;
+    // Feature #363: Auction Lot Number
+    if (lotNumber !== undefined) updateData.lotNumber = lotNumber ? String(lotNumber).trim() : null;
 
     // D-006: Update userEditedFields array to track which fields organizer has explicitly set
     // This prevents AI results from overwriting organizer-set values during rapid processing

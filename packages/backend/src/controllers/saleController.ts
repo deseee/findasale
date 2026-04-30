@@ -108,6 +108,8 @@ const saleCreateSchema = z.object({
   holdsEnabled: z.boolean().optional(),  // Feature #121: allow organizer to disable holds per-sale
   // Feature #XXX: Retail Mode — auto-renewal for retail stores (saleType='RETAIL')
   retailAutoRenewDays: z.number().int().min(1).max(365).optional().default(30),
+  // Feature #363: Auction Buyer's Premium
+  buyersPremiumPct: z.number().min(0).max(50).optional(),
 });
 
 const saleUpdateSchema = saleCreateSchema.partial();
