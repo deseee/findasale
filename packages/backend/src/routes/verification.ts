@@ -9,7 +9,11 @@ import {
   getPendingOrganizers,
   searchGooglePlaces,
   previewGooglePlace,
-  confirmGoogleVerification
+  confirmGoogleVerification,
+  searchGooglePlacesNext,
+  searchYelpBusinesses,
+  previewYelpBusiness,
+  confirmYelpVerification
 } from '../controllers/verificationController';
 
 const router = Router();
@@ -26,6 +30,10 @@ router.get('/status', authenticate, getVerificationStatus);
 // Requires: auth
 router.get('/google/search', authenticate, searchGooglePlaces);
 
+// GET /api/verification/google/search/next — get next page of Google Places results
+// Requires: auth
+router.get('/google/search/next', authenticate, searchGooglePlacesNext);
+
 // GET /api/verification/google/preview — preview Google Place details
 // Requires: auth
 router.get('/google/preview', authenticate, previewGooglePlace);
@@ -33,6 +41,18 @@ router.get('/google/preview', authenticate, previewGooglePlace);
 // POST /api/verification/google/confirm — confirm Google verification and auto-fill
 // Requires: auth
 router.post('/google/confirm', authenticate, confirmGoogleVerification);
+
+// GET /api/verification/yelp/search — search Yelp businesses
+// Requires: auth
+router.get('/yelp/search', authenticate, searchYelpBusinesses);
+
+// GET /api/verification/yelp/preview — preview Yelp business details
+// Requires: auth
+router.get('/yelp/preview', authenticate, previewYelpBusiness);
+
+// POST /api/verification/yelp/confirm — confirm Yelp verification and auto-fill
+// Requires: auth
+router.post('/yelp/confirm', authenticate, confirmYelpVerification);
 
 // GET /api/verification/admin/pending — admin gets pending verification requests
 // Requires: auth + admin

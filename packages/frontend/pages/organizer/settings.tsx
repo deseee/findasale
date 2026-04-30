@@ -74,7 +74,7 @@ const OrganizerSettingsPage = () => {
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   const [recentBroadcasts, setRecentBroadcasts] = useState<Array<{ id: string; subject: string; sentAt: string; recipientCount: number }>>([]);
 
-  // Google Places verification types
+  // Verification types
   interface GooglePlaceResult {
     placeId: string;
     name: string;
@@ -83,14 +83,25 @@ const OrganizerSettingsPage = () => {
     userRatingsTotal?: number;
   }
 
+  interface YelpBusinessResult {
+    businessId: string;
+    name: string;
+    address: string;
+    rating: number | null;
+    reviewCount: number;
+    phone: string | null;
+    url: string | null;
+  }
+
   interface VerificationPreview {
     incoming: {
       businessName: string;
       address: string;
       phone?: string;
       website?: string;
-      hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>;
-      googlePlaceId: string;
+      hours?: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>;
+      googlePlaceId?: string;
+      yelpBusinessId?: string;
       rating?: number;
       reviewCount?: number;
     };
@@ -99,14 +110,17 @@ const OrganizerSettingsPage = () => {
       address: string;
       phone?: string;
       website?: string;
-      hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>;
+      hours?: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>;
     };
   }
 
-  // Google Places verification state
+  // Verification state
+  const [verSource, setVerSource] = useState<'google' | 'yelp'>('google');
   const [verSearchQuery, setVerSearchQuery] = useState('');
-  const [verSearchResults, setVerSearchResults] = useState<GooglePlaceResult[]>([]);
+  const [verCity, setVerCity] = useState('');
+  const [verSearchResults, setVerSearchResults] = useState<(GooglePlaceResult | YelpBusinessResult)[]>([]);
   const [verSearchLoading, setVerSearchLoading] = useState(false);
+  const [verNextPageToken, setVerNextPageToken] = useState<string | null>(null);
   const [verPreview, setVerPreview] = useState<VerificationPreview | null>(null);
   const [verPreviewLoading, setVerPreviewLoading] = useState(false);
   const [verConfirmLoading, setVerConfirmLoading] = useState(false);
@@ -173,12 +187,11 @@ const OrganizerSettingsPage = () => {
     }
   });
 
-  // Google Places verification handlers
+  // Verification handlers
   const handleGoogleSearch = async () => {
     if (!verSearchQuery.trim()) return;
     setVerSearchLoading(true);
     try {
-      // Try to get browser geolocation for accurate local bias
       let geoParams = '';
       try {
         const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
@@ -186,16 +199,67 @@ const OrganizerSettingsPage = () => {
         );
         geoParams = `&lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`;
       } catch {
-        // Permission denied or unavailable — search without bias
+        if (verCity.trim()) {
+          geoParams = `&city=${encodeURIComponent(verCity.trim())}`;
+        }
       }
 
       const res = await api.get(`/verification/google/search?q=${encodeURIComponent(verSearchQuery)}${geoParams}`);
       const results = res.data.results || [];
       setVerSearchResults(results);
+      setVerNextPageToken(res.data.nextPageToken || null);
       if (!results.length) {
         showToast('No results found — try a different business name', 'error');
         return;
       }
+      setVerStep('results');
+    } catch {
+      showToast('Search failed — try a different name', 'error');
+    } finally {
+      setVerSearchLoading(false);
+    }
+  };
+
+  const handleLoadMoreResults = async () => {
+    if (!verNextPageToken) return;
+    setVerSearchLoading(true);
+    try {
+      const res = await api.get(
+        `/verification/google/search/next?pageToken=${encodeURIComponent(verNextPageToken)}&q=${encodeURIComponent(verSearchQuery)}`
+      );
+      const more = res.data.results || [];
+      setVerSearchResults((prev) => [...prev, ...more]);
+      setVerNextPageToken(res.data.nextPageToken || null);
+    } catch {
+      showToast('Could not load more results', 'error');
+    } finally {
+      setVerSearchLoading(false);
+    }
+  };
+
+  const handleYelpSearch = async () => {
+    if (!verSearchQuery.trim()) return;
+    setVerSearchLoading(true);
+    try {
+      let geoParams = '';
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 })
+        );
+        geoParams = `&lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`;
+      } catch {
+        if (verCity.trim()) {
+          geoParams = `&city=${encodeURIComponent(verCity.trim())}`;
+        }
+      }
+      const res = await api.get(`/verification/yelp/search?q=${encodeURIComponent(verSearchQuery)}${geoParams}`);
+      const results = res.data.results || [];
+      if (!results.length) {
+        showToast('No results found — try a different business name', 'error');
+        return;
+      }
+      setVerSearchResults(results);
+      setVerNextPageToken(null);
       setVerStep('results');
     } catch {
       showToast('Search failed — try a different name', 'error');
@@ -217,11 +281,28 @@ const OrganizerSettingsPage = () => {
     }
   };
 
+  const handleSelectYelpBusiness = async (businessId: string) => {
+    setVerPreviewLoading(true);
+    try {
+      const res = await api.get(`/verification/yelp/preview?businessId=${encodeURIComponent(businessId)}`);
+      setVerPreview(res.data);
+      setVerStep('preview');
+    } catch {
+      showToast('Could not load business details', 'error');
+    } finally {
+      setVerPreviewLoading(false);
+    }
+  };
+
   const handleConfirmVerification = async () => {
     if (!verPreview) return;
     setVerConfirmLoading(true);
     try {
-      await api.post('/verification/google/confirm', { placeId: verPreview.incoming.googlePlaceId });
+      if (verSource === 'google') {
+        await api.post('/verification/google/confirm', { placeId: verPreview.incoming.googlePlaceId });
+      } else {
+        await api.post('/verification/yelp/confirm', { businessId: verPreview.incoming.yelpBusinessId });
+      }
       queryClient.invalidateQueries({ queryKey: ['verification-status'] });
       setVerStep('done');
       showToast('Your business is now verified!', 'success');
@@ -604,11 +685,19 @@ const OrganizerSettingsPage = () => {
                     <VerifiedBadge status={verStatus?.status} verificationSource={verStatus?.verificationSource} size="md" />
                   </div>
                   <p className="text-green-700 dark:text-green-300 mb-2">
-                    Your business is verified{verStatus?.verificationSource === 'GOOGLE' ? ' via Google Business' : ''}.
+                    Your business is verified{
+                      verStatus?.verificationSource === 'GOOGLE' ? ' via Google Business' :
+                      verStatus?.verificationSource === 'YELP' ? ' via Yelp' : ''
+                    }.
                   </p>
                   {verStatus?.verificationSource === 'GOOGLE' && (
                     <p className="text-sm text-green-600 dark:text-green-400 mb-4">
                       Your profile was auto-filled from your Google Business listing on {verStatus?.verifiedAt ? new Date(verStatus.verifiedAt).toLocaleDateString() : 'today'}.
+                    </p>
+                  )}
+                  {verStatus?.verificationSource === 'YELP' && (
+                    <p className="text-sm text-green-600 dark:text-green-400 mb-4">
+                      Your profile was auto-filled from Yelp on {verStatus?.verifiedAt ? new Date(verStatus.verifiedAt).toLocaleDateString() : 'today'}.
                     </p>
                   )}
                   {verStatus?.verifiedAt && (
@@ -633,19 +722,54 @@ const OrganizerSettingsPage = () => {
                     <>
                       <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-2">Verify your business</h2>
                       <p className="text-warm-600 dark:text-gray-400 mb-6">
-                        Connect your Google Business listing — no waiting, no paperwork. We'll fill in your profile automatically.
+                        Choose a verification source. We'll auto-fill your profile information.
                       </p>
+
+                      {/* Source selector */}
+                      <div className="grid grid-cols-2 gap-3 mb-6">
+                        <button
+                          onClick={() => setVerSource('google')}
+                          className={`p-4 rounded-lg border-2 text-left transition ${
+                            verSource === 'google'
+                              ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                              : 'border-warm-200 dark:border-gray-600 hover:border-amber-300'
+                          }`}
+                        >
+                          <div className="font-semibold text-warm-900 dark:text-gray-100 mb-1">Google Business</div>
+                          <div className="text-xs text-warm-500 dark:text-gray-400">Auto-fills name, address, phone, hours</div>
+                        </button>
+                        <button
+                          onClick={() => setVerSource('yelp')}
+                          className={`p-4 rounded-lg border-2 text-left transition ${
+                            verSource === 'yelp'
+                              ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                              : 'border-warm-200 dark:border-gray-600 hover:border-amber-300'
+                          }`}
+                        >
+                          <div className="font-semibold text-warm-900 dark:text-gray-100 mb-1">Yelp</div>
+                          <div className="text-xs text-warm-500 dark:text-gray-400">Auto-fills name, address, phone</div>
+                        </button>
+                      </div>
+
+                      {/* Search form */}
                       <div className="space-y-4">
                         <input
                           type="text"
                           value={verSearchQuery}
                           onChange={(e) => setVerSearchQuery(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && handleGoogleSearch()}
+                          onKeyPress={(e) => e.key === 'Enter' && (verSource === 'google' ? handleGoogleSearch() : handleYelpSearch())}
                           placeholder="Search for your business..."
-                          className="w-full px-4 py-2 border border-warm-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500"
+                          className="w-full px-4 py-2 border border-warm-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 text-sm"
+                        />
+                        <input
+                          type="text"
+                          value={verCity}
+                          onChange={(e) => setVerCity(e.target.value)}
+                          placeholder="City, State (optional — helps narrow results)"
+                          className="w-full px-4 py-2 border border-warm-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 text-sm"
                         />
                         <button
-                          onClick={handleGoogleSearch}
+                          onClick={verSource === 'google' ? handleGoogleSearch : handleYelpSearch}
                           disabled={verSearchLoading || !verSearchQuery.trim()}
                           className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
                         >
@@ -654,7 +778,7 @@ const OrganizerSettingsPage = () => {
                       </div>
                       <div className="mt-6 pt-6 border-t border-warm-200 dark:border-gray-700">
                         <p className="text-sm text-warm-600 dark:text-gray-400 mb-3">
-                          Don't have a Google listing?
+                          Can't find your business?
                         </p>
                         <button
                           onClick={() => requestMutation.mutate()}
@@ -674,8 +798,8 @@ const OrganizerSettingsPage = () => {
                       <div className="space-y-3">
                         {verSearchResults.map((result) => (
                           <button
-                            key={result.placeId}
-                            onClick={() => handleSelectPlace(result.placeId)}
+                            key={'placeId' in result ? result.placeId : result.businessId}
+                            onClick={() => ('placeId' in result ? handleSelectPlace(result.placeId) : handleSelectYelpBusiness(result.businessId))}
                             disabled={verPreviewLoading}
                             className="w-full text-left p-4 border border-warm-200 dark:border-gray-600 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-800 transition disabled:opacity-50"
                           >
@@ -683,16 +807,26 @@ const OrganizerSettingsPage = () => {
                             <div className="text-sm text-warm-600 dark:text-gray-400 mb-2">{result.address}</div>
                             {result.rating && (
                               <div className="text-sm text-amber-600 dark:text-amber-400">
-                                ★ {result.rating} ({result.userRatingsTotal} reviews)
+                                ★ {result.rating} ({('userRatingsTotal' in result ? result.userRatingsTotal : result.reviewCount)} reviews)
                               </div>
                             )}
                           </button>
                         ))}
                       </div>
+                      {verNextPageToken && (
+                        <button
+                          onClick={handleLoadMoreResults}
+                          disabled={verSearchLoading}
+                          className="w-full mt-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 border border-amber-200 dark:border-amber-800 rounded-lg disabled:opacity-50"
+                        >
+                          {verSearchLoading ? 'Loading...' : 'Show more results'}
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setVerStep('search');
                           setVerSearchResults([]);
+                          setVerNextPageToken(null);
                         }}
                         className="mt-4 text-sm text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200"
                       >
