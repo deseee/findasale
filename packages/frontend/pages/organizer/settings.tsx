@@ -179,7 +179,12 @@ const OrganizerSettingsPage = () => {
     setVerSearchLoading(true);
     try {
       const res = await api.get(`/verification/google/search?q=${encodeURIComponent(verSearchQuery)}`);
-      setVerSearchResults(res.data.results);
+      const results = res.data.results || [];
+      setVerSearchResults(results);
+      if (!results.length) {
+        showToast('No results found — try a different business name', 'error');
+        return;
+      }
       setVerStep('results');
     } catch {
       showToast('Search failed — try a different name', 'error');
@@ -812,8 +817,8 @@ const OrganizerSettingsPage = () => {
                     </div>
                   )}
 
-                  {/* PENDING status */}
-                  {verStatus?.status === 'PENDING' && (
+                  {/* PENDING status — only show on search step so it doesn't overlap Google flow */}
+                  {verStatus?.status === 'PENDING' && verStep === 'search' && (
                     <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="w-3 h-3 bg-amber-400 rounded-full animate-pulse" />
