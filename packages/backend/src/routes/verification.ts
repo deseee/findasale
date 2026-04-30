@@ -6,18 +6,33 @@ import {
   getVerificationStatus,
   adminApproveVerification,
   adminRejectVerification,
-  getPendingOrganizers
+  getPendingOrganizers,
+  searchGooglePlaces,
+  previewGooglePlace,
+  confirmGoogleVerification
 } from '../controllers/verificationController';
 
 const router = Router();
 
 // POST /api/verification/request — organizer requests verification
-// Requires: auth + PRO tier
-router.post('/request', authenticate, requireTier('PRO'), requestVerification);
+// Requires: auth
+router.post('/request', authenticate, requestVerification);
 
 // GET /api/verification/status — organizer checks their status
 // Requires: auth
 router.get('/status', authenticate, getVerificationStatus);
+
+// GET /api/verification/google/search — search Google Places by business name
+// Requires: auth
+router.get('/google/search', authenticate, searchGooglePlaces);
+
+// GET /api/verification/google/preview — preview Google Place details
+// Requires: auth
+router.get('/google/preview', authenticate, previewGooglePlace);
+
+// POST /api/verification/google/confirm — confirm Google verification and auto-fill
+// Requires: auth
+router.post('/google/confirm', authenticate, confirmGoogleVerification);
 
 // GET /api/verification/admin/pending — admin gets pending verification requests
 // Requires: auth + admin

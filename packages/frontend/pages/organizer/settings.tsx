@@ -74,6 +74,44 @@ const OrganizerSettingsPage = () => {
   const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
   const [recentBroadcasts, setRecentBroadcasts] = useState<Array<{ id: string; subject: string; sentAt: string; recipientCount: number }>>([]);
 
+  // Google Places verification types
+  interface GooglePlaceResult {
+    placeId: string;
+    name: string;
+    address: string;
+    rating?: number;
+    userRatingsTotal?: number;
+  }
+
+  interface VerificationPreview {
+    incoming: {
+      businessName: string;
+      address: string;
+      phone?: string;
+      website?: string;
+      hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>;
+      googlePlaceId: string;
+      rating?: number;
+      reviewCount?: number;
+    };
+    current: {
+      businessName: string;
+      address: string;
+      phone?: string;
+      website?: string;
+      hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>;
+    };
+  }
+
+  // Google Places verification state
+  const [verSearchQuery, setVerSearchQuery] = useState('');
+  const [verSearchResults, setVerSearchResults] = useState<GooglePlaceResult[]>([]);
+  const [verSearchLoading, setVerSearchLoading] = useState(false);
+  const [verPreview, setVerPreview] = useState<VerificationPreview | null>(null);
+  const [verPreviewLoading, setVerPreviewLoading] = useState(false);
+  const [verConfirmLoading, setVerConfirmLoading] = useState(false);
+  const [verStep, setVerStep] = useState<'search' | 'results' | 'preview' | 'done'>('search');
+
   // Verification status query
   const { data: verStatus, isLoading: verStatusLoading } = useQuery({
     queryKey: ['verification-status'],
@@ -126,6 +164,51 @@ const OrganizerSettingsPage = () => {
       showToast(msg, 'error');
     }
   });
+
+  // Google Places verification handlers
+  const handleGoogleSearch = async () => {
+    if (!verSearchQuery.trim()) return;
+    setVerSearchLoading(true);
+    try {
+      const res = await api.get(`/verification/google/search?q=${encodeURIComponent(verSearchQuery)}`);
+      setVerSearchResults(res.data.results);
+      setVerStep('results');
+    } catch {
+      showToast('Search failed — try a different name', 'error');
+    } finally {
+      setVerSearchLoading(false);
+    }
+  };
+
+  const handleSelectPlace = async (placeId: string) => {
+    setVerPreviewLoading(true);
+    try {
+      const res = await api.get(`/verification/google/preview?placeId=${encodeURIComponent(placeId)}`);
+      setVerPreview(res.data);
+      setVerStep('preview');
+    } catch {
+      showToast('Could not load business details', 'error');
+    } finally {
+      setVerPreviewLoading(false);
+    }
+  };
+
+  const handleConfirmVerification = async () => {
+    if (!verPreview) return;
+    setVerConfirmLoading(true);
+    try {
+      await api.post('/verification/google/confirm', { placeId: verPreview.incoming.googlePlaceId });
+      queryClient.invalidateQueries({ queryKey: ['verification-status'] });
+      setVerStep('done');
+      showToast('Your business is now verified!', 'success');
+    } catch (e: any) {
+      showToast(e.response?.data?.message || 'Verification failed', 'error');
+    } finally {
+      setVerConfirmLoading(false);
+    }
+  };
+
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   // Fetch full organizer profile data (phone, bio, website, facebook, instagram, etsy, businessName)
   useEffect(() => {
@@ -385,23 +468,26 @@ const OrganizerSettingsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto">
-            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', 'help'].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab(tab as any);
-                }}
-                className={`pb-2 font-medium capitalize whitespace-nowrap ${
-                  activeTab === tab
-                    ? 'border-b-2 border-amber-600 text-amber-600'
-                    : 'text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
+            {['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', 'help'].map((tab) => {
+              const tabLabel = tab === 'verification' ? 'Get Verified' : tab.charAt(0).toUpperCase() + tab.slice(1);
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveTab(tab as any);
+                  }}
+                  className={`pb-2 font-medium whitespace-nowrap ${
+                    activeTab === tab
+                      ? 'border-b-2 border-amber-600 text-amber-600'
+                      : 'text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {tabLabel}
+                </button>
+              );
+            })}
           </div>
 
           {/* Payments Tab */}
@@ -483,97 +569,276 @@ const OrganizerSettingsPage = () => {
           {/* Verification Tab */}
           {activeTab === 'verification' && (
             <div className="space-y-6">
-              <div className="card p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Verified Organizer Badge</h2>
-                  <VerifiedBadge status={verStatus?.status} size="md" />
+              {/* If already verified via Google, show success card */}
+              {verStatus?.status === 'VERIFIED' && (
+                <div className="card p-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <div className="flex items-center gap-3 mb-4">
+                    <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <h2 className="text-xl font-semibold text-green-800 dark:text-green-200">You're Verified!</h2>
+                    <VerifiedBadge status={verStatus?.status} verificationSource={verStatus?.verificationSource} size="md" />
+                  </div>
+                  <p className="text-green-700 dark:text-green-300 mb-2">
+                    Your business is verified{verStatus?.verificationSource === 'GOOGLE' ? ' via Google Business' : ''}.
+                  </p>
+                  {verStatus?.verificationSource === 'GOOGLE' && (
+                    <p className="text-sm text-green-600 dark:text-green-400 mb-4">
+                      Your profile was auto-filled from your Google Business listing on {verStatus?.verifiedAt ? new Date(verStatus.verifiedAt).toLocaleDateString() : 'today'}.
+                    </p>
+                  )}
+                  {verStatus?.verifiedAt && (
+                    <p className="text-sm text-green-600 dark:text-green-400 mb-6">
+                      Verified badge is now live on your storefront and all your sales.
+                    </p>
+                  )}
+                  <Link
+                    href={user?.customStorefrontSlug ? `/organizer/storefront/${user.customStorefrontSlug}` : '/organizer/settings'}
+                    className="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
+                  >
+                    View Storefront
+                  </Link>
                 </div>
-                <p className="text-warm-600 dark:text-gray-400 mb-2">
-                  A verified badge builds trust with shoppers and appears on your profile and all your sales. It signals that you're a professional, reliable organizer.
-                </p>
-                <p className="text-sm text-warm-500 dark:text-gray-400 mb-6">
-                  Only PRO and TEAMS organizers can request verification. Our team reviews your profile and approves badges for active, legitimate organizers.
-                </p>
+              )}
 
-                {verStatus?.status === 'NONE' && (
-                  <>
-                    {tier === 'SIMPLE' ? (
-                      <div className="p-4 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
-                        <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
-                          Upgrade to PRO to request verification.
-                        </p>
-                        <Link
-                          href="/pricing"
-                          className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
+              {/* Google Places verification flow */}
+              {verStatus?.status !== 'VERIFIED' && (
+                <div className="card p-6">
+                  {/* Search step */}
+                  {verStep === 'search' && (
+                    <>
+                      <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-2">Verify your business</h2>
+                      <p className="text-warm-600 dark:text-gray-400 mb-6">
+                        Connect your Google Business listing — no waiting, no paperwork. We'll fill in your profile automatically.
+                      </p>
+                      <div className="space-y-4">
+                        <input
+                          type="text"
+                          value={verSearchQuery}
+                          onChange={(e) => setVerSearchQuery(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleGoogleSearch()}
+                          placeholder="Search for your business..."
+                          className="w-full px-4 py-2 border border-warm-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500"
+                        />
+                        <button
+                          onClick={handleGoogleSearch}
+                          disabled={verSearchLoading || !verSearchQuery.trim()}
+                          className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
                         >
-                          Upgrade to PRO
-                        </Link>
+                          {verSearchLoading ? 'Searching...' : 'Find My Business'}
+                        </button>
                       </div>
-                    ) : (
-                      <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                        <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                          Request verification to add a badge to your profile. Our team will review your information.
+                      <div className="mt-6 pt-6 border-t border-warm-200 dark:border-gray-700">
+                        <p className="text-sm text-warm-600 dark:text-gray-400 mb-3">
+                          Don't have a Google listing?
                         </p>
                         <button
                           onClick={() => requestMutation.mutate()}
                           disabled={requestMutation.isPending}
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
+                          className="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium"
                         >
-                          {requestMutation.isPending ? 'Submitting...' : 'Request Verification'}
+                          {requestMutation.isPending ? 'Submitting...' : 'Request manual review instead'}
                         </button>
                       </div>
-                    )}
-                  </>
-                )}
+                    </>
+                  )}
 
-                {verStatus?.status === 'PENDING' && (
-                  <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-3 h-3 bg-amber-400 rounded-full animate-pulse" />
-                      <p className="font-semibold text-amber-800 dark:text-amber-200">Verification Pending</p>
-                    </div>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      Our team is reviewing your request. We'll notify you when a decision is made.
-                    </p>
-                  </div>
-                )}
+                  {/* Results step */}
+                  {verStep === 'results' && (
+                    <>
+                      <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-6">Is your business listed here?</h2>
+                      <div className="space-y-3">
+                        {verSearchResults.map((result) => (
+                          <button
+                            key={result.placeId}
+                            onClick={() => handleSelectPlace(result.placeId)}
+                            disabled={verPreviewLoading}
+                            className="w-full text-left p-4 border border-warm-200 dark:border-gray-600 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-800 transition disabled:opacity-50"
+                          >
+                            <div className="font-semibold text-warm-900 dark:text-gray-100 mb-1">{result.name}</div>
+                            <div className="text-sm text-warm-600 dark:text-gray-400 mb-2">{result.address}</div>
+                            {result.rating && (
+                              <div className="text-sm text-amber-600 dark:text-amber-400">
+                                ★ {result.rating} ({result.userRatingsTotal} reviews)
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setVerStep('search');
+                          setVerSearchResults([]);
+                        }}
+                        className="mt-4 text-sm text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200"
+                      >
+                        ← Back
+                      </button>
+                    </>
+                  )}
 
-                {verStatus?.status === 'VERIFIED' && (
-                  <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                    <div className="flex items-center gap-2 mb-2">
-                      <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                  {/* Preview step */}
+                  {verStep === 'preview' && verPreview && (
+                    <>
+                      <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-6">Does this look right?</h2>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        {/* Current profile */}
+                        <div>
+                          <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-4">Your current profile</h3>
+                          <div className="space-y-3">
+                            <div>
+                              <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Business Name</div>
+                              <div className="text-warm-900 dark:text-gray-100">{verPreview.current.businessName}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Address</div>
+                              <div className="text-warm-900 dark:text-gray-100">{verPreview.current.address}</div>
+                            </div>
+                            {verPreview.current.phone && (
+                              <div>
+                                <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Phone</div>
+                                <div className="text-warm-900 dark:text-gray-100">{verPreview.current.phone}</div>
+                              </div>
+                            )}
+                            {verPreview.current.website && (
+                              <div>
+                                <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Website</div>
+                                <div className="text-warm-900 dark:text-gray-100 truncate">{verPreview.current.website}</div>
+                              </div>
+                            )}
+                            {verPreview.current.hours.length > 0 && (
+                              <div>
+                                <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-2">Hours</div>
+                                <div className="text-sm space-y-1">
+                                  {verPreview.current.hours.map((h) => (
+                                    <div key={h.dayOfWeek} className="text-warm-900 dark:text-gray-100">
+                                      {DAY_NAMES[h.dayOfWeek]}: {h.openTime} - {h.closeTime}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* What we found on Google */}
+                        <div className="border-l border-warm-200 dark:border-gray-600 pl-6">
+                          <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-4">What we found on Google</h3>
+                          <div className="space-y-3">
+                            <div>
+                              <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Business Name</div>
+                              <div className="text-warm-900 dark:text-gray-100">{verPreview.incoming.businessName}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Address</div>
+                              <div className="text-warm-900 dark:text-gray-100">{verPreview.incoming.address}</div>
+                            </div>
+                            {verPreview.incoming.phone && (
+                              <div>
+                                <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Phone</div>
+                                <div className="text-warm-900 dark:text-gray-100">{verPreview.incoming.phone}</div>
+                              </div>
+                            )}
+                            {verPreview.incoming.website && (
+                              <div>
+                                <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Website</div>
+                                <div className="text-warm-900 dark:text-gray-100 truncate">{verPreview.incoming.website}</div>
+                              </div>
+                            )}
+                            {verPreview.incoming.rating && (
+                              <div>
+                                <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Rating</div>
+                                <div className="text-warm-900 dark:text-gray-100">★ {verPreview.incoming.rating} ({verPreview.incoming.reviewCount} reviews)</div>
+                              </div>
+                            )}
+                            {verPreview.incoming.hours.length > 0 && (
+                              <div>
+                                <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-2">Hours</div>
+                                <div className="text-sm space-y-1">
+                                  {verPreview.incoming.hours.map((h) => (
+                                    <div key={h.dayOfWeek} className="text-warm-900 dark:text-gray-100">
+                                      {DAY_NAMES[h.dayOfWeek]}: {h.openTime} - {h.closeTime}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleConfirmVerification}
+                          disabled={verConfirmLoading}
+                          className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
+                        >
+                          {verConfirmLoading ? 'Confirming...' : 'Confirm & Get Verified'}
+                        </button>
+                        <button
+                          onClick={() => setVerStep('results')}
+                          className="text-sm text-warm-600 dark:text-gray-400 hover:text-warm-900 dark:hover:text-gray-200"
+                        >
+                          Back
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Done step */}
+                  {verStep === 'done' && (
+                    <div className="text-center">
+                      <svg className="w-12 h-12 text-green-600 dark:text-green-400 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      <p className="font-semibold text-green-800 dark:text-green-200">Verified</p>
-                    </div>
-                    {verStatus?.verifiedAt && (
-                      <p className="text-sm text-green-700 dark:text-green-300">
-                        Verified on {new Date(verStatus.verifiedAt).toLocaleDateString()}
+                      <h2 className="text-2xl font-bold text-warm-900 dark:text-gray-100 mb-2">You're verified!</h2>
+                      <p className="text-warm-600 dark:text-gray-400 mb-6">
+                        Your badge is now live on your storefront and all your sales.
                       </p>
-                    )}
-                  </div>
-                )}
-
-                {verStatus?.status === 'REJECTED' && (
-                  <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                    <p className="font-semibold text-red-800 dark:text-red-200 mb-2">Not Verified</p>
-                    {verStatus?.verificationNotes && (
-                      <p className="text-sm text-red-700 dark:text-red-300 mb-3">
-                        <strong>Reason:</strong> {verStatus.verificationNotes}
-                      </p>
-                    )}
-                    {tier === 'PRO' && (
-                      <button
-                        onClick={() => requestMutation.mutate()}
-                        disabled={requestMutation.isPending}
-                        className="text-sm bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-4 rounded-lg disabled:opacity-50 transition"
+                      <Link
+                        href={user?.customStorefrontSlug ? `/organizer/storefront/${user.customStorefrontSlug}` : '/organizer/settings'}
+                        className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
                       >
-                        {requestMutation.isPending ? 'Submitting...' : 'Try Again'}
+                        View Storefront
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* PENDING status */}
+                  {verStatus?.status === 'PENDING' && (
+                    <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-3 h-3 bg-amber-400 rounded-full animate-pulse" />
+                        <p className="font-semibold text-amber-800 dark:text-amber-200">Verification Pending</p>
+                      </div>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">
+                        Our team is reviewing your request. We'll notify you when a decision is made.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* REJECTED status */}
+                  {verStatus?.status === 'REJECTED' && (
+                    <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                      <p className="font-semibold text-red-800 dark:text-red-200 mb-2">Not Verified</p>
+                      {verStatus?.verificationNotes && (
+                        <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+                          <strong>Reason:</strong> {verStatus.verificationNotes}
+                        </p>
+                      )}
+                      <button
+                        onClick={() => {
+                          setVerStep('search');
+                          setVerSearchQuery('');
+                        }}
+                        className="text-sm bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-4 rounded-lg transition"
+                      >
+                        Try Again
                       </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
