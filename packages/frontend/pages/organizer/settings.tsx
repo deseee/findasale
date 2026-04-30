@@ -54,6 +54,8 @@ const OrganizerSettingsPage = () => {
   const [isFeedbackMenuOpen, setIsFeedbackMenuOpen] = useState(false);
   const { highContrast, setHighContrast } = useTheme();
   const queryClient = useQueryClient();
+  const [removeWatermarkEnabled, setRemoveWatermarkEnabled] = useState(false);
+  const [watermarkUpdating, setWatermarkUpdating] = useState(false);
 
   // Verification status query
   const { data: verStatus, isLoading: verStatusLoading } = useQuery({
@@ -124,6 +126,11 @@ const OrganizerSettingsPage = () => {
           setEtsy(response.data.etsy || '');
           setPickupWindows(response.data.pickupWindows || '');
           setStripeConnected(response.data.stripeConnected || false);
+        }
+        // Fetch watermark setting
+        const watermarkRes = await api.get('/organizer/settings/watermark');
+        if (watermarkRes.data) {
+          setRemoveWatermarkEnabled(watermarkRes.data.removeWatermarkEnabled || false);
         }
       } catch (error) {
         console.error('Failed to fetch organizer data:', error);
@@ -229,6 +236,24 @@ const OrganizerSettingsPage = () => {
       showToast(error.response?.data?.error || error.response?.data?.message || 'Network error. Try again.', 'error');
     } finally {
       setSyncingEbayPolicies(false);
+    }
+  };
+
+  const handleWatermarkToggle = async (enabled: boolean) => {
+    setWatermarkUpdating(true);
+    try {
+      const res = await api.patch('/organizer/settings/watermark', {
+        removeWatermarkEnabled: enabled,
+      });
+      setRemoveWatermarkEnabled(res.data.removeWatermarkEnabled);
+      showToast(enabled ? 'Watermark removal enabled' : 'Watermark removal disabled', 'success');
+    } catch (error: any) {
+      const msg = error.response?.data?.message || 'Failed to update watermark setting';
+      showToast(msg, 'error');
+      // Revert toggle on error
+      setRemoveWatermarkEnabled(!enabled);
+    } finally {
+      setWatermarkUpdating(false);
     }
   };
 
@@ -807,6 +832,44 @@ const OrganizerSettingsPage = () => {
                     <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">Enable Low-Bandwidth Mode</span>
                   </label>
                   <p className="text-sm text-warm-600 dark:text-gray-400">Manually override automatic detection. Use this if you're on a slow connection or want to save mobile data.</p>
+                </div>
+              </div>
+
+              {/* Watermark Settings Section */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Watermark Settings</h2>
+                  <Tooltip content="Remove FindA.Sale watermark from exports and shareable images." position="right" />
+                </div>
+                <div className="space-y-4">
+                  {user?.subscriptionTier !== 'TEAMS' ? (
+                    <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                      <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                        <strong>Teams plan required</strong> — Watermark removal is only available with the Teams plan.
+                      </p>
+                      <Link href="/pricing">
+                        <button className="text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                          Upgrade to Teams
+                        </button>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={removeWatermarkEnabled}
+                          onChange={(e) => handleWatermarkToggle(e.target.checked)}
+                          disabled={watermarkUpdating}
+                          className="w-4 h-4 rounded disabled:opacity-50"
+                        />
+                        <span className="ml-2 text-warm-700 dark:text-gray-300 font-medium">
+                          {watermarkUpdating ? 'Updating...' : 'Remove FindA.Sale watermark from exports and shareable images'}
+                        </span>
+                      </label>
+                      <p className="text-sm text-warm-600 dark:text-gray-400">When enabled, your exported PDFs, shareable cards, and images will not display the FindA.Sale branding.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

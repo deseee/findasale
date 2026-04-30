@@ -29,7 +29,7 @@ const PickupBookingCard: React.FC<Props> = ({ saleId }) => {
     queryKey: ['shopper-holds-for-sale', saleId],
     queryFn: async () => {
       const res = await api.get('/reservations/shopper');
-      const holds: any[] = res.data.holds || [];
+      const holds: any[] = res.data || [];
       return holds.some((h: any) => h.item?.sale?.id === saleId || h.item?.saleId === saleId);
     },
     staleTime: 30_000,

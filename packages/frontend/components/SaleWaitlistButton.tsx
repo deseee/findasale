@@ -45,13 +45,12 @@ export default function SaleWaitlistButton({ saleId }: Props) {
     },
   });
 
-  if (!user) return null;
-  if (isLoading) return <div className="h-9 w-36 animate-pulse bg-gray-100 dark:bg-gray-700 rounded-lg" />;
+  if (isLoading && user) return <div className="h-9 w-36 animate-pulse bg-gray-100 dark:bg-gray-700 rounded-lg" />;
 
   const onWaitlist = status?.onWaitlist ?? false;
   const count = status?.count ?? 0;
 
-  return (
+  return !user ? null : (
     <div>
       <button
         onClick={() => onWaitlist ? leaveMutation.mutate() : joinMutation.mutate()}

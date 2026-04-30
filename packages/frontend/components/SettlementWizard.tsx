@@ -68,8 +68,8 @@ export default function SettlementWizard({ saleId, saleType }: SettlementWizardP
   const { data: availableItems = [] } = useQuery({
     queryKey: ['sale-available-items', saleId],
     queryFn: () =>
-      api.get(`/ebay/organizer/sales/${saleId}/unsold-items`).then((r) =>
-        ((r.data || []) as any[]).map((item: any) => ({
+      api.get(`/api/ebay/organizer/sales/${saleId}/unsold-items`).then((r) =>
+        ((r.data?.items || []) as any[]).map((item: any) => ({
           id: item.id,
           title: item.title,
           price: item.price,

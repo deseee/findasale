@@ -205,7 +205,7 @@ const SaleDetailPage = () => {
   // Phase 27: Show amber toast when points are awarded
   useEffect(() => {
     if (!id || !user) return;
-    api.post('/points/track-visit', { saleId: id })
+    api.post('/api/points/track-visit', { saleId: id })
       .then((res) => { if (res.data?.awarded === true) showToast('\ud83c\udfc6 +1 pt earned!', 'points'); })
       .catch(() => { /* non-fatal */ });
   }, [id, user]);
@@ -233,7 +233,7 @@ const SaleDetailPage = () => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       // Check if user has active holds at this sale — if so, warn before leaving
       api.get('/reservations/shopper').then((res) => {
-        const userHoldsAtSale = res.data.holds?.filter((h: any) => h.item.sale.id === id);
+        const userHoldsAtSale = (res.data || []).filter((h: any) => h.item?.sale?.id === id);
         if (userHoldsAtSale && userHoldsAtSale.length > 0) {
           e.preventDefault();
           e.returnValue = '';
@@ -246,7 +246,7 @@ const SaleDetailPage = () => {
       // Only warn if navigating to a different page
       if (!url.includes(`/sales/${id}`)) {
         api.get('/reservations/shopper').then((res) => {
-          const userHoldsAtSale = res.data.holds?.filter((h: any) => h.item.sale.id === id);
+          const userHoldsAtSale = (res.data || []).filter((h: any) => h.item?.sale?.id === id);
           if (userHoldsAtSale && userHoldsAtSale.length > 0) {
             setShowLeaveWarning(true);
             setPendingNavigation(url);

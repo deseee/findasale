@@ -44,12 +44,10 @@ const FollowOrganizerButton: React.FC<Props> = ({ organizerId, organizerName, si
     },
   });
 
-  if (!user) return null;
-
   const btnSm = size === 'sm';
   const isLoading = statusLoading || mutation.isPending;
 
-  return (
+  return !user ? null : (
     <button
       onClick={(e) => {
         e.preventDefault();
