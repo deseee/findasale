@@ -119,6 +119,14 @@ const OrganizerSettingsPage = () => {
     enabled: !!user
   });
 
+  // Storefront slug — used in verification done step
+  const { data: storefrontSlug } = useQuery({
+    queryKey: ['organizer-storefront-slug'],
+    queryFn: () => api.get('/brand-kit/organizers/me').then(r => r.data?.customStorefrontSlug || null),
+    enabled: !!user,
+    staleTime: 5 * 60_000,
+  });
+
   // eBay connection status query
   const { data: ebayStatus, isLoading: ebayStatusLoading, refetch: refetchEbayStatus } = useQuery({
     queryKey: ['ebay-connection-status'],
@@ -593,7 +601,7 @@ const OrganizerSettingsPage = () => {
                     </p>
                   )}
                   <Link
-                    href={user?.customStorefrontSlug ? `/organizer/storefront/${user.customStorefrontSlug}` : '/organizer/settings'}
+                    href={storefrontSlug ? `/organizer/storefront/${storefrontSlug}` : '/organizer/settings'}
                     className="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition"
                   >
                     View Storefront
@@ -796,7 +804,7 @@ const OrganizerSettingsPage = () => {
                         Your badge is now live on your storefront and all your sales.
                       </p>
                       <Link
-                        href={user?.customStorefrontSlug ? `/organizer/storefront/${user.customStorefrontSlug}` : '/organizer/settings'}
+                        href={storefrontSlug ? `/organizer/storefront/${storefrontSlug}` : '/organizer/settings'}
                         className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition"
                       >
                         View Storefront
