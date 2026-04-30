@@ -24,6 +24,10 @@ interface BrandKitData {
   instagram: string | null;
   etsy: string | null;
   pickupWindows: string | null;
+  timezone: string | null;
+  byAppointment: boolean;
+  organizerTypes: string[];
+  hours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }>;
   brandLogoUrl: string | null;
   brandPrimaryColor: string | null;
   brandSecondaryColor: string | null;
@@ -47,7 +51,19 @@ interface Sale {
   status: string;
   saleType?: string;
   photoUrls: string[];
+  isPinned?: boolean;
 }
+
+const ORGANIZER_TYPE_LABELS: Record<string, string> = {
+  estate_sale: 'Estate Sales',
+  yard_sale: 'Yard Sales',
+  auction: 'Auctions',
+  flea_market: 'Flea Markets',
+  consignment: 'Consignment',
+  antique_shop: 'Antique Shops',
+  thrift_store: 'Thrift Stores',
+  liquidation: 'Liquidation',
+};
 
 const OrganizerStorefront = () => {
   const router = useRouter();
@@ -81,6 +97,10 @@ const OrganizerStorefront = () => {
           instagram: orgData.instagram,
           etsy: orgData.etsy,
           pickupWindows: orgData.pickupWindows,
+          timezone: orgData.timezone,
+          byAppointment: orgData.byAppointment || false,
+          organizerTypes: orgData.organizerTypes || [],
+          hours: orgData.hours || [],
           brandLogoUrl: orgData.brandLogoUrl,
           brandPrimaryColor: orgData.brandPrimaryColor,
           brandSecondaryColor: orgData.brandSecondaryColor,
@@ -191,15 +211,54 @@ const OrganizerStorefront = () => {
                   {brandKit.bio || 'A professional sale organizer serving the Grand Rapids area.'}
                 </p>
 
-                {/* Shop Hours */}
-                {brandKit.pickupWindows && (
+                {/* Organizer Types */}
+                {brandKit.organizerTypes && brandKit.organizerTypes.length > 0 && (
+                  <div className="mb-6 flex flex-wrap gap-2">
+                    {brandKit.organizerTypes.map((type) => (
+                      <span
+                        key={type}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                      >
+                        {ORGANIZER_TYPE_LABELS[type] || type}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Business Hours */}
+                {brandKit.byAppointment ? (
+                  <div className="mb-6 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
+                    <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-2">Hours</h3>
+                    <p className="text-sm text-warm-700 dark:text-gray-300">By Appointment</p>
+                  </div>
+                ) : brandKit.hours && brandKit.hours.length > 0 ? (
+                  <div className="mb-6 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
+                    <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-3">Hours</h3>
+                    <div className="space-y-1">
+                      {brandKit.hours.map((hour) => {
+                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        const isClosed = !hour.openTime || !hour.closeTime;
+                        return (
+                          <p key={hour.dayOfWeek} className="text-sm text-warm-700 dark:text-gray-300">
+                            {dayNames[hour.dayOfWeek]}{' '}
+                            {isClosed ? (
+                              <span className="text-warm-500 dark:text-gray-400">Closed</span>
+                            ) : (
+                              <span>{hour.openTime} – {hour.closeTime}</span>
+                            )}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : brandKit.pickupWindows ? (
                   <div className="mb-6 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
                     <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-2">Hours</h3>
                     <p className="text-sm text-warm-700 dark:text-gray-300 whitespace-pre-line">
                       {brandKit.pickupWindows}
                     </p>
                   </div>
-                )}
+                ) : null}
 
                 {/* Social Links */}
                 <div className="space-y-3">
@@ -320,8 +379,15 @@ const OrganizerStorefront = () => {
                     <Link
                       key={sale.id}
                       href={`/sales/${sale.id}`}
-                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow relative"
                     >
+                      {/* Featured Badge */}
+                      {sale.isPinned && (
+                        <div className="absolute top-2 right-2 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 rounded text-xs font-semibold border border-amber-200 dark:border-amber-700 z-10">
+                          Featured
+                        </div>
+                      )}
+
                       {/* Sale Image */}
                       {featuredImage && (
                         <div className="h-40 overflow-hidden bg-warm-100 dark:bg-gray-700">

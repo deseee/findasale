@@ -39,6 +39,9 @@ const organizerProfileSchema = z.object({
   brandFontFamily: z.string().optional(),
   brandBannerImageUrl: z.string().url().optional().or(z.literal('')),
   brandAccentColor: z.string().optional(),
+  timezone: z.string().optional(),
+  byAppointment: z.boolean().optional(),
+  organizerTypes: z.array(z.string()).optional(),
 }).strict();
 
 const awardBadgesSchema = z.object({
@@ -291,7 +294,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -326,6 +329,9 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
         ...(brandFontFamily !== undefined && { brandFontFamily }),
         ...(brandBannerImageUrl !== undefined && { brandBannerImageUrl }),
         ...(brandAccentColor !== undefined && { brandAccentColor }),
+        ...(timezone !== undefined && { timezone }),
+        ...(byAppointment !== undefined && { byAppointment }),
+        ...(organizerTypes !== undefined && { organizerTypes }),
       },
     });
 
@@ -1220,5 +1226,162 @@ router.get('/sales/:saleId/donations', authenticate, getDonations);
 
 // GET /api/organizer/donations/:donationId/receipt — generate tax receipt PDF
 router.get('/donations/:donationId/receipt', authenticate, generateReceipt);
+
+// Feature #354: OrganizerHours — GET /organizers/:id/hours
+router.get('/:id/hours', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const hours = await prisma.organizerHours.findMany({
+      where: { organizerId: id },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+    res.json(hours);
+  } catch (error) {
+    console.error('Error fetching organizer hours:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #354: OrganizerHours — PUT /organizers/me/hours (upsert all 7 days)
+router.put('/me/hours', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const hoursArray = req.body; // Array of { dayOfWeek, openTime, closeTime }
+
+    if (!Array.isArray(hoursArray)) {
+      return res.status(400).json({ message: 'Hours must be an array' });
+    }
+
+    // Validate each entry
+    for (const entry of hoursArray) {
+      if (typeof entry.dayOfWeek !== 'number' || entry.dayOfWeek < 0 || entry.dayOfWeek > 6) {
+        return res.status(400).json({ message: 'dayOfWeek must be 0-6' });
+      }
+      if (typeof entry.openTime !== 'string' || !/^\d{2}:\d{2}$/.test(entry.openTime)) {
+        return res.status(400).json({ message: 'openTime must be HH:MM format' });
+      }
+      if (typeof entry.closeTime !== 'string' || !/^\d{2}:\d{2}$/.test(entry.closeTime)) {
+        return res.status(400).json({ message: 'closeTime must be HH:MM format' });
+      }
+    }
+
+    // Upsert all entries
+    const results = await Promise.all(
+      hoursArray.map((entry) =>
+        prisma.organizerHours.upsert({
+          where: {
+            organizerId_dayOfWeek: {
+              organizerId: organizer.id,
+              dayOfWeek: entry.dayOfWeek,
+            },
+          },
+          update: {
+            openTime: entry.openTime,
+            closeTime: entry.closeTime,
+          },
+          create: {
+            organizerId: organizer.id,
+            dayOfWeek: entry.dayOfWeek,
+            openTime: entry.openTime,
+            closeTime: entry.closeTime,
+          },
+        })
+      )
+    );
+
+    res.json(results);
+  } catch (error) {
+    console.error('Error updating organizer hours:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #359: Sale Pinned/Featured Flag — PATCH /organizers/me/sales/:saleId/pin
+router.patch('/me/sales/:saleId/pin', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+    });
+
+    if (!sale || sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Sale not found or access denied' });
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: { isPinned: true },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error pinning sale:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #359: Sale Pinned/Featured Flag — PATCH /organizers/me/sales/:saleId/unpin
+router.patch('/me/sales/:saleId/unpin', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required.' });
+    }
+
+    const { saleId } = req.params;
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+    });
+
+    if (!sale || sale.organizerId !== organizer.id) {
+      return res.status(403).json({ message: 'Sale not found or access denied' });
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: { isPinned: false },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error unpinning sale:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 export default router;

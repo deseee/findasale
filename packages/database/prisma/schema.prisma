@@ -373,8 +373,26 @@ model Organizer {
   shopifyListings         ShopifyListing[]
   // Feature: Remove Watermark — TEAMS tier only
   removeWatermarkEnabled  Boolean                @default(false)
+  // Feature #354: OrganizerHours — business hours and appointment settings
+  timezone                String? // e.g. "America/Detroit"
+  byAppointment           Boolean                @default(false)
+  hours                   OrganizerHours[]
+  // Feature #355: Organizer Types Multi-Select
+  organizerTypes          String[]               @default([])
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
+}
+
+// Feature #354: Business hours — per-day operating hours for organizers
+model OrganizerHours {
+  id            String    @id @default(cuid())
+  organizerId   String
+  dayOfWeek     Int // 0=Sunday, 1=Monday, ..., 6=Saturday
+  openTime      String // HH:MM format, 24hr
+  closeTime     String // HH:MM format, 24hr
+  organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@unique([organizerId, dayOfWeek])
 }
 
 // Pre-wire: API Keys for third-party integrations (Zapier, IFTTT, webhooks)
@@ -718,6 +736,8 @@ model Sale {
   markdownCycles          MarkdownCycle[]
   // Feature #XXX: Verified Social Share XP System
   shareLinks              SaleShareLink[]
+  // Feature #359: Sale Pinned/Featured Flag
+  isPinned                Boolean                  @default(false)
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 

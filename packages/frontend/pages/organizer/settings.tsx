@@ -50,6 +50,11 @@ const OrganizerSettingsPage = () => {
   const [pinterestUrl, setPinterestUrl] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [timezone, setTimezone] = useState('');
+  const [byAppointment, setByAppointment] = useState(false);
+  const [hours, setHours] = useState<Array<{ dayOfWeek: number; openTime: string; closeTime: string }>>([]);
+  const [organizerTypes, setOrganizerTypes] = useState<string[]>([]);
+  const [isSavingHours, setIsSavingHours] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
   const [isConnectingEbay, setIsConnectingEbay] = useState(false);
@@ -140,6 +145,24 @@ const OrganizerSettingsPage = () => {
           setPickupWindows(response.data.pickupWindows || '');
           setStripeConnected(response.data.stripeConnected || false);
           setOrganizerTier(response.data.subscriptionTier || null);
+          setTimezone(response.data.timezone || '');
+          setByAppointment(response.data.byAppointment || false);
+          setOrganizerTypes(response.data.organizerTypes || []);
+        }
+        // Fetch hours
+        try {
+          const hoursRes = await api.get('/organizers/me/hours');
+          if (hoursRes.data && Array.isArray(hoursRes.data)) {
+            setHours(hoursRes.data);
+          }
+        } catch (error) {
+          // Hours not found is OK, initialize with defaults
+          const defaultHours = Array.from({ length: 7 }, (_, i) => ({
+            dayOfWeek: i,
+            openTime: '09:00',
+            closeTime: '17:00',
+          }));
+          setHours(defaultHours);
         }
         // Fetch watermark setting
         const watermarkRes = await api.get('/organizers/settings/watermark');
@@ -294,6 +317,9 @@ const OrganizerSettingsPage = () => {
         youtubeUrl,
         pinterestUrl,
         pickupWindows,
+        timezone,
+        byAppointment,
+        organizerTypes,
       });
       // Refetch organizer data to sync local state with backend
       const response = await api.get('/organizers/me');
@@ -311,6 +337,9 @@ const OrganizerSettingsPage = () => {
         setYoutubeUrl(response.data.youtubeUrl || '');
         setPinterestUrl(response.data.pinterestUrl || '');
         setPickupWindows(response.data.pickupWindows || '');
+        setTimezone(response.data.timezone || '');
+        setByAppointment(response.data.byAppointment || false);
+        setOrganizerTypes(response.data.organizerTypes || []);
       }
       showToast('Profile updated', 'success');
       showSurvey('OG-5');
@@ -318,6 +347,19 @@ const OrganizerSettingsPage = () => {
       showToast(error.response?.data?.message || 'Failed to update profile', 'error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveHours = async () => {
+    setIsSavingHours(true);
+    try {
+      const hoursToSave = byAppointment ? [] : hours;
+      await api.put('/organizers/me/hours', hoursToSave);
+      showToast('Business hours updated', 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to update business hours', 'error');
+    } finally {
+      setIsSavingHours(false);
     }
   };
 
@@ -633,9 +675,167 @@ const OrganizerSettingsPage = () => {
 
           {/* Profile Tab */}
           {activeTab === 'profile' && (
-            <div className="card p-6">
-              <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Business Profile</h2>
-              <div className="space-y-4">
+            <div className="space-y-6">
+              {/* Business Hours Section */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Business Hours</h2>
+                  <Tooltip content="Set your regular business hours or mark yourself as by-appointment only." position="right" />
+                </div>
+
+                <div className="space-y-4">
+                  {/* Timezone Selector */}
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">Timezone</label>
+                    <select
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    >
+                      <option value="">Select timezone...</option>
+                      <option value="America/New_York">Eastern (ET)</option>
+                      <option value="America/Chicago">Central (CT)</option>
+                      <option value="America/Denver">Mountain (MT)</option>
+                      <option value="America/Los_Angeles">Pacific (PT)</option>
+                      <option value="America/Detroit">Michigan (ET)</option>
+                      <option value="America/Phoenix">Arizona (MST)</option>
+                      <option value="America/Anchorage">Alaska (AKT)</option>
+                      <option value="Pacific/Honolulu">Hawaii (HST)</option>
+                    </select>
+                  </div>
+
+                  {/* By Appointment Checkbox */}
+                  <div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={byAppointment}
+                        onChange={(e) => setByAppointment(e.target.checked)}
+                        className="w-4 h-4 rounded"
+                      />
+                      <span className="text-warm-700 dark:text-gray-300 font-medium">By appointment only</span>
+                    </label>
+                    <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                      {byAppointment ? "Customers will see 'By Appointment' on your storefront." : 'Show your regular business hours below.'}
+                    </p>
+                  </div>
+
+                  {/* Weekly Hours Grid (hidden when byAppointment is true) */}
+                  {!byAppointment && (
+                    <div className="mt-4 space-y-3">
+                      <p className="text-sm text-warm-600 dark:text-gray-400">Regular Hours</p>
+                      {hours.map((hour, index) => {
+                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        const isClosed = hours[index]?.openTime === '' && hours[index]?.closeTime === '';
+
+                        return (
+                          <div key={index} className="flex items-center gap-3">
+                            <label className="w-24 text-sm font-medium text-warm-700 dark:text-gray-300">
+                              {dayNames[hour.dayOfWeek]}
+                            </label>
+                            {!isClosed ? (
+                              <>
+                                <input
+                                  type="time"
+                                  value={hour.openTime || '09:00'}
+                                  onChange={(e) => {
+                                    const newHours = [...hours];
+                                    newHours[index].openTime = e.target.value;
+                                    setHours(newHours);
+                                  }}
+                                  className="px-3 py-1 border border-warm-300 dark:border-gray-700 rounded text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                                />
+                                <span className="text-warm-600 dark:text-gray-400">–</span>
+                                <input
+                                  type="time"
+                                  value={hour.closeTime || '17:00'}
+                                  onChange={(e) => {
+                                    const newHours = [...hours];
+                                    newHours[index].closeTime = e.target.value;
+                                    setHours(newHours);
+                                  }}
+                                  className="px-3 py-1 border border-warm-300 dark:border-gray-700 rounded text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                                />
+                              </>
+                            ) : (
+                              <span className="text-sm text-warm-500 dark:text-gray-400">Closed</span>
+                            )}
+                            <label className="flex items-center gap-2 ml-auto">
+                              <input
+                                type="checkbox"
+                                checked={isClosed}
+                                onChange={(e) => {
+                                  const newHours = [...hours];
+                                  if (e.target.checked) {
+                                    newHours[index].openTime = '';
+                                    newHours[index].closeTime = '';
+                                  } else {
+                                    newHours[index].openTime = '09:00';
+                                    newHours[index].closeTime = '17:00';
+                                  }
+                                  setHours(newHours);
+                                }}
+                                className="w-4 h-4 rounded"
+                              />
+                              <span className="text-xs text-warm-600 dark:text-gray-400">Closed</span>
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSaveHours}
+                    disabled={isSavingHours}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 mt-4"
+                  >
+                    {isSavingHours ? 'Saving...' : 'Save Business Hours'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Organizer Types Section */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Organizer Types</h2>
+                  <Tooltip content="Select the types of sales you organize. These appear as badges on your storefront." position="right" />
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                  {[
+                    { value: 'estate_sale', label: 'Estate Sales' },
+                    { value: 'yard_sale', label: 'Yard Sales' },
+                    { value: 'auction', label: 'Auctions' },
+                    { value: 'flea_market', label: 'Flea Markets' },
+                    { value: 'consignment', label: 'Consignment' },
+                    { value: 'antique_shop', label: 'Antique Shops' },
+                    { value: 'thrift_store', label: 'Thrift Stores' },
+                    { value: 'liquidation', label: 'Liquidation' },
+                  ].map((type) => (
+                    <label key={type.value} className="flex items-center gap-2 p-2 border border-warm-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={organizerTypes.includes(type.value)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setOrganizerTypes([...organizerTypes, type.value]);
+                          } else {
+                            setOrganizerTypes(organizerTypes.filter(t => t !== type.value));
+                          }
+                        }}
+                        className="w-4 h-4 rounded"
+                      />
+                      <span className="text-sm text-warm-700 dark:text-gray-300">{type.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Business Info Section */}
+              <div className="card p-6">
+                <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Business Profile</h2>
+                <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Name or Business Name <span className="text-red-500">*</span></label>

@@ -18,6 +18,7 @@ interface Sale {
   state?: string;
   zip?: string;
   photoUrls?: string[];
+  isPinned?: boolean;
   organizer?: {
     id: string;
     businessName: string;

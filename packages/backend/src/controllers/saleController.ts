@@ -175,7 +175,7 @@ export const listSales = async (req: Request, res: Response) => {
         where,
         skip,
         take: limit,
-        orderBy: { startDate: 'asc' },
+        orderBy: [{ isPinned: 'desc' }, { startDate: 'asc' }],
         include: {
           organizer: {
             select: { id: true, businessName: true, phone: true, reputationTier: true, user: { select: { customMapPin: true } } }
@@ -264,7 +264,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
 
     const sales = await prisma.sale.findMany({
       where: { organizerId: organizer.id, isInventoryContainer: false },
-      orderBy: { startDate: 'asc' },
+      orderBy: [{ isPinned: 'desc' }, { startDate: 'asc' }],
       select: {
         id: true,
         title: true,
@@ -294,6 +294,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
         treasureHuntCompletionBadge: true,
         holdsEnabled: true,
         isAuctionSale: true,
+        isPinned: true,
         organizer: { select: { userId: true, businessName: true, phone: true, address: true } },
         items: { select: { id: true, title: true, price: true, status: true, organizerDiscountAmount: true } },
         _count: { select: { items: true } }

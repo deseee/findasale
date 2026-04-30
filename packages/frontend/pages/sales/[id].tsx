@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { GetServerSidePropsContext } from 'next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
@@ -141,7 +143,24 @@ interface Bid {
   createdAt: string;
 }
 
-const SaleDetailPage = () => {
+// SSR-fetched data for OG tags — avoids CSR hydration race with Facebook bot
+interface OGSaleData {
+  id: string;
+  title: string;
+  description: string | null;
+  city: string;
+  state: string;
+  startDate: string;
+  photoUrl: string | null;
+  itemCount: number;
+  organizer?: {
+    subscriptionTier?: string;
+    removeWatermarkEnabled?: boolean;
+    businessName?: string;
+  };
+}
+
+const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
@@ -554,9 +573,71 @@ const SaleDetailPage = () => {
   const isSaleLocked = sale.locked === true;
   const showRankUpCta = xpProfile?.explorerRank === 'INITIATE' && isSaleLocked;
 
+  // Build SSR OG head once — rendered in all return paths so FB bot sees it immediately
+  const ogHead = ogData ? (
+    <SaleOGMeta
+      sale={{
+        id: ogData.id,
+        title: ogData.title,
+        description: ogData.description || undefined,
+        city: ogData.city,
+        state: ogData.state,
+        startDate: ogData.startDate,
+        photos: ogData.photoUrl ? [{ url: ogData.photoUrl }] : [],
+      }}
+      canonicalUrl={`https://finda.sale/sales/${ogData.id}`}
+      organizer={ogData.organizer}
+    />
+  ) : null;
+
+  // Server-side and pre-mount: render only OG meta + skeleton so FB/Twitter bots
+  // get the correct OG tags without any browser-specific code running server-side.
+  if (!mounted || isLoading) {
+    return (
+      <>
+        {ogHead}
+        <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+          <main className="container mx-auto px-4 py-8">
+            <Skeleton className="h-5 w-28 mb-6" />
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8"></div>
+            <Skeleton className="h-64 mb-8" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="md:col-span-2">
+                <Skeleton className="h-96" />
+              </div>
+              <div>
+                <Skeleton className="h-40" />
+              </div>
+            </div>
+          </main>
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
-      <SaleOGMeta sale={saleForOGMeta} organizer={sale.organizer} />
+      {ogHead ? (
+        // SSR version — full OG image with watermark policy applied
+        <SaleOGMeta sale={saleForOGMeta} organizer={sale.organizer} />
+      ) : (
+        // CSR fallback — used only when getServerSideProps didn't return ogData
+        <Head>
+          <title>{sale.title} – FindA.Sale</title>
+          <meta name="description" content={sale.description} />
+          <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
+          <meta property="og:description" content={sale.description} />
+          <meta property="og:image" content={sale.photoUrls[0] || ''} />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} />
+          <meta property="og:type" content="website" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
+          <meta name="twitter:description" content={sale.description} />
+          <meta name="twitter:image" content={sale.photoUrls[0] || ''} />
+        </Head>
+      )}
 
       {/* Feature #121: Leave Sale Warning Modal */}
       <LeaveSaleWarning
@@ -1543,3 +1624,59 @@ const SaleDetailPage = () => {
 };
 
 export default SaleDetailPage;
+
+/**
+ * Feature #33 — Share Card Factory
+ * Fetch sale data server-side so OG meta tags are present in the initial HTML
+ * before client-side React hydration. This is required for Facebook/Twitter bots
+ * which do not execute JavaScript when scraping pages.
+ */
+export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const { id } = context.params as { id: string };
+  // Use INTERNAL_API_URL (server-only) if set; fall back to NEXT_PUBLIC_API_URL.
+  // Never falls back to localhost — that hangs and kills the Vercel function timeout.
+  const apiUrl =
+    process.env.INTERNAL_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    null;
+
+  if (!apiUrl) {
+    return { props: { ogData: null } };
+  }
+
+  try {
+    // 3s timeout — fail fast so Vercel function never hangs waiting for localhost
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${apiUrl}/sales/${id}`, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return { props: { ogData: null } };
+    }
+    const sale = await res.json();
+
+    const ogData: OGSaleData = {
+      id: sale.id,
+      title: sale.title || '',
+      description: sale.description || null,
+      city: sale.city || '',
+      state: sale.state || '',
+      startDate: sale.startDate || '',
+      photoUrl: Array.isArray(sale.photoUrls) && sale.photoUrls.length > 0
+        ? sale.photoUrls[0]
+        : null,
+      itemCount: Array.isArray(sale.items) ? sale.items.length : 0,
+      organizer: sale.organizer ? {
+        subscriptionTier: sale.organizer.subscriptionTier,
+        removeWatermarkEnabled: sale.organizer.removeWatermarkEnabled,
+        businessName: sale.organizer.businessName,
+      } : undefined,
+    };
+
+    return { props: { ogData } };
+  } catch {
+    // Fail open — page still works, OG tags fall back to CSR version
+    return { props: { ogData: null } };
+  }
+}
