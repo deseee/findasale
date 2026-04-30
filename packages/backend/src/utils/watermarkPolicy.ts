@@ -5,7 +5,11 @@
  * Default-deny semantics: failure modes always result in watermarked output.
  */
 
-import { hasAccess } from '@findasale/shared';
+/**
+ * NOTE: We intentionally do NOT import from '@findasale/shared'.
+ * The workspace alias does not resolve in the Railway Docker build (S574 documented).
+ * TEAMS check is inlined below — trivial comparison, no need for the shared helper.
+ */
 
 export interface WatermarkPolicyOrganizer {
   subscriptionTier: string | null | undefined;
@@ -26,5 +30,5 @@ export interface WatermarkPolicyOrganizer {
 export function canRemoveWatermark(organizer: WatermarkPolicyOrganizer | null | undefined): boolean {
   if (!organizer) return false;
   if (!organizer.removeWatermarkEnabled) return false;
-  return hasAccess((organizer.subscriptionTier as any) || 'SIMPLE', 'TEAMS');
+  return organizer.subscriptionTier === 'TEAMS';
 }

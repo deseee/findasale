@@ -9,8 +9,10 @@
 import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
-import { hasAccess } from '@findasale/shared';
 import { z } from 'zod';
+
+// Inlined TEAMS check — '@findasale/shared' alias does not resolve in Railway Docker build (S574 documented).
+const isTeams = (tier: string | null | undefined): boolean => tier === 'TEAMS';
 
 // Schema for watermark update request
 const watermarkUpdateSchema = z.object({
@@ -43,7 +45,7 @@ export const getWatermarkSetting = async (req: AuthRequest, res: Response) => {
 
     res.json({
       removeWatermarkEnabled: organizer.removeWatermarkEnabled,
-      canAccess: hasAccess((organizer.subscriptionTier as any) || 'SIMPLE', 'TEAMS'),
+      canAccess: isTeams(organizer.subscriptionTier),
       subscriptionTier: organizer.subscriptionTier,
     });
   } catch (error: any) {
@@ -85,7 +87,7 @@ export const updateWatermarkSetting = async (req: AuthRequest, res: Response) =>
     }
 
     // Tier check: TEAMS tier required to enable watermark removal
-    if (removeWatermarkEnabled && !hasAccess((organizer.subscriptionTier as any) || 'SIMPLE', 'TEAMS')) {
+    if (removeWatermarkEnabled && !isTeams(organizer.subscriptionTier)) {
       return res.status(403).json({
         message: 'Watermark removal requires the Teams plan.',
       });

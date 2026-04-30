@@ -56,6 +56,7 @@ const OrganizerSettingsPage = () => {
   const queryClient = useQueryClient();
   const [removeWatermarkEnabled, setRemoveWatermarkEnabled] = useState(false);
   const [watermarkUpdating, setWatermarkUpdating] = useState(false);
+  const [organizerTier, setOrganizerTier] = useState<string | null>(null);
 
   // Verification status query
   const { data: verStatus, isLoading: verStatusLoading } = useQuery({
@@ -126,6 +127,7 @@ const OrganizerSettingsPage = () => {
           setEtsy(response.data.etsy || '');
           setPickupWindows(response.data.pickupWindows || '');
           setStripeConnected(response.data.stripeConnected || false);
+          setOrganizerTier(response.data.subscriptionTier || null);
         }
         // Fetch watermark setting
         const watermarkRes = await api.get('/organizer/settings/watermark');
@@ -842,7 +844,7 @@ const OrganizerSettingsPage = () => {
                   <Tooltip content="Remove FindA.Sale watermark from exports and shareable images." position="right" />
                 </div>
                 <div className="space-y-4">
-                  {user?.subscriptionTier !== 'TEAMS' ? (
+                  {organizerTier !== 'TEAMS' ? (
                     <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                       <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
                         <strong>Teams plan required</strong> — Watermark removal is only available with the Teams plan.
