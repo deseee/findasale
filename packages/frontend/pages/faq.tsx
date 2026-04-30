@@ -347,8 +347,9 @@ const organizerFAQs: FAQItem[] = [
     question: 'What is the platform fee?',
     answer: (
       <>
-        FindA.Sale charges a <strong>10% flat platform fee</strong> on each completed purchase, regardless of sale
-        type (fixed-price or auction). 
+        FindA.Sale charges a platform fee on each completed purchase, regardless of sale type (fixed-price or auction).
+        The fee depends on your plan: <strong>SIMPLE organizers pay 10%</strong>; <strong>PRO and TEAMS organizers pay 8%</strong>.
+        Upgrading to PRO or TEAMS saves 2 percentage points on every transaction.
       </>
     ),
   },
@@ -392,7 +393,7 @@ const organizerFAQs: FAQItem[] = [
     ),
   },
   {
-    question: 'How does Auto Tags work?',
+    question: 'How do Auto Tags work?',
     answer: (
       <>
         After you upload a photo, our system analyzes the image and suggests
@@ -487,7 +488,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'How does in-person / Point of Sale checkout work?',
     answer: (
       <>
-        The FindA.Sale POS lets you process sales at the event using your phone or tablet. From your sale dashboard, tap <strong>POS</strong> to open the point-of-sale view. You can search your inventory, add items to a cart, accept payment (card via Stripe or cash recorded manually), and mark items sold — all from the same screen. POS transactions sync with your online inventory in real time, so an item sold in person won't show as available online.
+        The FindA.Sale POS lets you process sales at the event using your phone or tablet. From your sale dashboard, tap <strong>POS</strong> to open the point-of-sale view. You can search your inventory, add items to a cart, accept payment (card via Stripe or cash), and mark items sold — all from the same screen. POS transactions sync with your online inventory in real time, so an item sold in person won't show as available online.
       </>
     ),
   },
