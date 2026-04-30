@@ -68,7 +68,7 @@ const BulkConfirmModal: React.FC<BulkConfirmModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
       <div
-        className={`bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl border-l-4 ${
+        className={`bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl border-l-4 ${
           isDestructive ? 'border-l-red-600' : 'border-l-amber-600'
         }`}
       >

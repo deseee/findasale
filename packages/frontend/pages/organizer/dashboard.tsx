@@ -151,7 +151,7 @@ const OrganizerDashboard = () => {
   }, [user?.organizerTier, user?.teamsOnboardingComplete, existingWorkspace, workspaceLoading]);
 
   // Fetch organizer's sales
-  const { data: salesData = [], isLoading: salesLoading } = useQuery<Sale[]>({
+  const { data: salesData = [], isLoading: salesLoading, isError: salesError } = useQuery<Sale[]>({
     queryKey: ['organizer-sales', user?.id],
     queryFn: async () => {
       const response = await api.get('/sales/mine');
@@ -576,6 +576,13 @@ const OrganizerDashboard = () => {
       {/* Main Dashboard */}
       {!isSimpleMode && (
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
+        {salesError && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-6 m-4 max-w-2xl mx-auto mt-8">
+            <h2 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2">Something went wrong</h2>
+            <p className="text-red-700 dark:text-red-300">We couldn't load your dashboard. Please refresh the page to try again.</p>
+          </div>
+        )}
+        {!salesError && (
         <div className="max-w-6xl mx-auto px-4 py-4">
           {/* Header */}
           <div className="mb-2">
@@ -1725,6 +1732,7 @@ const OrganizerDashboard = () => {
           )}
 
         </div>
+        )}
       </div>
       )}
 

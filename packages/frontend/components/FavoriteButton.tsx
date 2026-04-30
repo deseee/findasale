@@ -125,7 +125,7 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
         onClick={handleToggle}
         disabled={isLoading}
         className="flex items-center justify-center rounded-full hover:bg-white/20 dark:hover:bg-gray-700/50 transition-colors disabled:opacity-50"
-        aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+        aria-label={isFavorited ? 'Remove from wishlist' : 'Add to wishlist'}
         title={user ? (isFavorited ? 'Remove from saves' : 'Add to saves') : 'Sign in to save'}
       >
         <Heart

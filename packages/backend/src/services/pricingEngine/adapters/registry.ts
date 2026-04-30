@@ -74,6 +74,7 @@ class AdapterRegistry {
         tier,
         enabled: true,
       },
+      take: 100, // Reasonable upper bound for pricing source configs
     });
 
     return configs

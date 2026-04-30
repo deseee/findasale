@@ -120,7 +120,7 @@ const ShopperProfilePage = () => {
           {/* Stats grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard label="Purchases Made" value={profile.totalPurchases} />
-            <StatCard label="Favorites" value={profile.totalFavorites} />
+            <StatCard label="Wishlist Saves" value={profile.totalFavorites} />
             <StatCard label="Wishlists Created" value={profile.totalWishlists} />
             <StatCard label="Visit Streak" value={`${profile.streakDays} days`} />
           </div>

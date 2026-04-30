@@ -148,7 +148,7 @@ export const returnItemsToInventory = async (
       ? { id: { in: itemIds }, saleId }
       : { saleId, status: { notIn: ['SOLD', 'DONATED'] as string[] } };
 
-  const items = await prisma.item.findMany({ where: query });
+  const items = await prisma.item.findMany({ where: query, take: 10000 });
 
   let returned = 0;
   const skipped: Array<{ id: string; title: string; reason: string }> = [];

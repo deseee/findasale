@@ -160,7 +160,7 @@ const PurchaseHistoryPage = () => {
       <Head>
         <title>My Purchase History - FindA.Sale</title>
       </Head>
-      <div className="min-h-screen bg-white dark:bg-gray-800">
+      <div className="min-h-screen bg-white dark:bg-gray-800 overflow-x-hidden">
         <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Post-payment success flash */}
           {showPaidFlash && (

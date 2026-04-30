@@ -215,7 +215,7 @@ const ShopperReputationPage = () => {
               {/* Favorites */}
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Favorite Sales</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Wishlist Saves</h3>
                   <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
                     {reputation?.favoriteCount || 0}
                   </div>
@@ -274,7 +274,7 @@ const ShopperReputationPage = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                      Save Your Favorites
+                      Save Your Wishlist
                     </h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Heart sales you're interested in. Active browsing and participation signal genuine interest to organizers.

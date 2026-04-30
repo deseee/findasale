@@ -104,7 +104,7 @@ const EditSalePage = () => {
     return null;
   }
 
-  const { data: sale, isLoading, refetch } = useQuery({
+  const { data: sale, isLoading, isError: saleError, refetch } = useQuery({
     queryKey: ['sale', id],
     queryFn: async () => {
       const response = await api.get(`/sales/${id}`);
@@ -428,6 +428,22 @@ const EditSalePage = () => {
             <Skeleton className="h-12" />
             <Skeleton className="h-12" />
             <Skeleton className="h-12" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (saleError || !sale) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-6">
+            <h1 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2">Something went wrong</h1>
+            <p className="text-red-700 dark:text-red-300 mb-4">We couldn't load this sale. Please refresh the page or go back to your sales list.</p>
+            <Link href="/organizer/sales" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+              Back to Sales
+            </Link>
           </div>
         </div>
       </div>

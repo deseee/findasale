@@ -162,7 +162,7 @@ const WishlistPage = () => {
   return (
     <>
       <Head>
-        <title>My Collections – FindA.Sale</title>
+        <title>My Wishlist – FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -173,7 +173,7 @@ const WishlistPage = () => {
             <Link href="/shopper/dashboard" className="text-warm-500 hover:text-warm-700 dark:text-warm-400 dark:hover:text-warm-300">
               ←
             </Link>
-            <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">My Collections</h1>
+            <h1 className="text-2xl font-bold text-warm-900 dark:text-warm-100">My Wishlist</h1>
           </div>
 
           {/* Tab Navigation */}

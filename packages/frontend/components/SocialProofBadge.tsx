@@ -70,7 +70,7 @@ const SocialProofBadge: React.FC<SocialProofBadgeProps> = ({
             <div className="flex items-center gap-1">
               <span className="text-lg">❤️</span>
               <span className="text-[#5a7a60]">
-                {itemProof.favoriteCount} fav{itemProof.favoriteCount !== 1 ? 's' : ''}
+                {itemProof.favoriteCount} save{itemProof.favoriteCount !== 1 ? 's' : ''}
               </span>
             </div>
           )}
@@ -105,7 +105,7 @@ const SocialProofBadge: React.FC<SocialProofBadgeProps> = ({
             <div className="flex items-center gap-1">
               <span className="text-lg">❤️</span>
               <span className="text-[#5a7a60]">
-                {saleProof.totalFavorites} fav{saleProof.totalFavorites !== 1 ? 's' : ''}
+                {saleProof.totalFavorites} save{saleProof.totalFavorites !== 1 ? 's' : ''}
               </span>
             </div>
           )}

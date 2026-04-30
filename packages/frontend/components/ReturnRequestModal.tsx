@@ -55,7 +55,7 @@ export default function ReturnRequestModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-2">Request Return</h2>
         <p className="text-sm text-gray-600 mb-6">
           {itemTitle}

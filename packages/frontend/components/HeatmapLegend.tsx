@@ -29,22 +29,22 @@ const HeatmapLegend = ({
   };
 
   return (
-    <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-4 z-[999] pointer-events-auto max-w-xs">
-      <h3 className="text-sm font-bold text-gray-800 mb-3">Sale Density</h3>
+    <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 z-[999] pointer-events-auto max-w-xs">
+      <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-3">Sale Density</h3>
 
       <div className="space-y-2">
         {Object.entries(displayLegend).map(([key, { color, label }]) => (
           <div key={key} className="flex items-center gap-2">
             <div
-              className="w-4 h-4 rounded-full border border-gray-300"
+              className="w-4 h-4 rounded-full border border-gray-300 dark:border-gray-600"
               style={{ backgroundColor: color }}
             />
-            <span className="text-xs text-gray-700">{label}</span>
+            <span className="text-xs text-gray-700 dark:text-gray-300">{label}</span>
           </div>
         ))}
       </div>
 
-      <div className="text-xs text-gray-500 mt-3 border-t border-gray-200 pt-2">
+      <div className="text-xs text-gray-500 dark:text-gray-400 mt-3 border-t border-gray-200 dark:border-gray-700 pt-2">
         Data {formatCacheAge(cacheAge)}
       </div>
     </div>

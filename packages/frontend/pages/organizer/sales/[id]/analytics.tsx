@@ -4,7 +4,7 @@
  * Detailed analytics for a single estate sale:
  * - Items sold vs available vs on hold (donut chart)
  * - Revenue timeline (line chart)
- * - Top items by favorites
+ * - Top items by wishlist saves
  * - Shopper engagement metrics
  * - Pickup appointment schedule
  */
@@ -298,7 +298,7 @@ const PerSaleAnalyticsPage = () => {
           {/* Top Items by Favorites */}
           {analytics.topItems.length > 0 && (
             <div className="card p-6">
-              <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Top Items (by favorites)</h3>
+              <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Top Items (by wishlist saves)</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -306,7 +306,7 @@ const PerSaleAnalyticsPage = () => {
                       <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Title</th>
                       <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Price</th>
                       <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Status</th>
-                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Favorites</th>
+                      <th className="text-left py-3 px-4 font-semibold text-warm-700 dark:text-warm-300">Wishlist Saves</th>
                     </tr>
                   </thead>
                   <tbody>

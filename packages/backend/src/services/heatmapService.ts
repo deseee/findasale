@@ -55,6 +55,7 @@ export const computeHeatmapTiles = async (
       },
     },
     select: { id: true, lat: true, lng: true },
+    take: 10000, // Reasonable upper bound for heatmap tile computation
   });
 
   // Group sales into grid cells (lat/lng rounded to 2 decimals ≈ 1.1km)

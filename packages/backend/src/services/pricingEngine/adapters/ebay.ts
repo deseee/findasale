@@ -14,11 +14,12 @@ export class EbayAdapter implements PricingAdapter {
   async fetch(request: PricingRequest): Promise<SourceResult[]> {
     // Phase 1: Stub implementation
     // TODO: Integrate with existing fetchEbayPriceComps, add filterBySold parameter
-    return [];
+    throw new Error('eBay adapter not yet implemented — enable in registry when ready');
   }
 
   isConfigured(): boolean {
     // TODO: Check if eBay API is configured
+    // Returns false to prevent fetch() from being called
     return false;
   }
 

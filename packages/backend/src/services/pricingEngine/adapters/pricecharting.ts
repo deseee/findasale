@@ -14,11 +14,12 @@ export class PriceChartingAdapter implements PricingAdapter {
   async fetch(request: PricingRequest): Promise<SourceResult[]> {
     // Phase 1: Stub implementation
     // TODO: Integrate with existing priceChartingService
-    return [];
+    throw new Error('PriceCharting adapter not yet implemented — enable in registry when ready');
   }
 
   isConfigured(): boolean {
     // TODO: Check if priceChartingService is available
+    // Returns false to prevent fetch() from being called
     return false;
   }
 
