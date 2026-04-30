@@ -1011,6 +1011,7 @@ const OrganizerSettingsPage = () => {
                 >
                   {isSaving ? 'Saving...' : 'Save Changes'}
                 </button>
+                </div>
               </div>
             </div>
           )}
