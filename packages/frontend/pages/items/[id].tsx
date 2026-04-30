@@ -447,6 +447,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
       saleName={ogData.saleName}
       saleId={ogData.saleId}
       canonicalUrl={`https://finda.sale/items/${ogData.id}`}
+      organizer={ogData.organizer}
     />
   ) : null;
 
@@ -491,7 +492,7 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
           item={{ ...item, photos: item.photoUrls.map(url => ({ url })) }}
           saleName={item.sale?.title || 'FindA.Sale'}
           saleId={item.sale?.id || ''}
-          organizer={ogHead.organizer}
+          organizer={ogData?.organizer}
         />
       ) : (
         // CSR fallback — used only when getServerSideProps didn't return ogData
