@@ -1,53 +1,41 @@
-# Patrick's Dashboard — S594 ✅ COMPLETE
+# Patrick's Dashboard — S598 ✅ COMPLETE
 
-## Status: Video audio fixed + login password toggle + voiceover fine-tuned + icon pulse animation + new VO files. Push block below.
+## Status: Scheduled task audit + FAQ fixes + 5 parallel dispatches. All pushed.
 
 ---
 
-## S594 Summary
+## S598 Summary
 
-Three things shipped:
+**Scheduled task audit** — read all 14 task session transcripts from the past 2 weeks. Findings dispatched.
 
-**1. finda.sale/video audio fixed.** All 13 voiceover lines now play. Root cause: the embed guard in `organizer-video-ad.html` was doing an early return when `?embed=1` was in the URL — which is exactly how `video.html` loads the ad in its iframe. Removed the guard. Kept `?embed=1` for layout. Added `allow="autoplay"` to the iframe so the Web Audio API works post-gesture.
+**FAQ fixes (live after push):**
+- Platform fee now says "SIMPLE=10%, PRO/TEAMS=8%" instead of flat 10%
+- "How do Auto Tags work?" — grammar fixed
+- POS cash description no longer says "recorded manually"
 
-**2. Missing vo-01 through vo-06 pushed.** These files were never on GitHub. Found and pushed mid-session.
+**Decision locked:** "Wishlist" is the canonical name everywhere user-facing. Code internals (isFavorite, /api/favorites, DB fields) unchanged.
 
-**3. Login show/hide password toggle.** Eye icon on the password field — click to reveal/hide.
-
-Plus a full round of voiceover timing work: 13-line final CLIPS array, staggered icon pulse animation on the 4 export buttons (Excel→PDF→CSV→QB), new vo-11/12/13 recordings, and a QB/CSV position swap.
+**5 parallel dispatches — all shipped:**
+1. Dark mode modals: 8 components now have `dark:bg-gray-800`
+2. Mobile overflow: admin/items + shopper/history page wrappers
+3. Backend: findMany limits on 3 services; eBay/PriceCharting adapters now throw instead of silently failing
+4. Error states: organizer dashboard + edit-sale show error UI on fetch failure
+5. Wishlist rename: 16 occurrences across 10 files updated
 
 ---
 
 ## ⚡ Do This Now
 
-**Step 1 — Copy new MP3 files from Downloads:**
+Nothing blocking — Patrick already pushed the S598 batch.
 
-You need to move the new recordings into the project before pushing:
-```powershell
-Copy-Item "$env:USERPROFILE\Downloads\[your-vo-11-filename].mp3" "C:\Users\desee\ClaudeProjects\FindaSale\packages\frontend\public\vo-11.mp3" -Force
-Copy-Item "$env:USERPROFILE\Downloads\[your-vo-12-filename].mp3" "C:\Users\desee\ClaudeProjects\FindaSale\packages\frontend\public\vo-12.mp3" -Force
-Copy-Item "$env:USERPROFILE\Downloads\[your-vo-13-filename].mp3" "C:\Users\desee\ClaudeProjects\FindaSale\packages\frontend\public\vo-13.mp3" -Force
-```
-(Replace filenames with whatever you saved them as. vo-12 and vo-13 came from mp3cut.net; vo-11 came from ElevenLabs.)
-
-**Step 2 — Push (S594 wrap):**
+Push the wrap docs:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/public/organizer-video-ad.html
-git add packages/frontend/public/video.html
-git add packages/frontend/pages/login.tsx
-git add packages/frontend/public/vo-11.mp3
-git add packages/frontend/public/vo-12.mp3
-git add packages/frontend/public/vo-13.mp3
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: video audio + login password toggle + voiceover polish + icon pulse animation [wrap S594]"
+git commit -m "wrap: S598 — scheduled task audit, FAQ fixes, dark mode modals, overflow, wishlist rename, error states"
 .\push.ps1
 ```
-
-**Step 3 — Smoke test after deploy:**
-- `finda.sale/video` — click Play, all 13 lines audible, icons pulse in scene 4 after eBay counter hits 38
-- `finda.sale/login` — type a password, click the eye icon, verify it shows/hides
 
 ---
 
@@ -55,38 +43,37 @@ git commit -m "fix: video audio + login password toggle + voiceover polish + ico
 
 | Action | Why | Blocking? |
 |--------|-----|-----------|
-| Copy new MP3 files (Steps 1–2 above) | vo-11/12/13 not on GitHub yet | Yes |
-| Push block above | S594 code + wrap docs | Yes |
-| S597 push (from previous session) | Condition rating sync + FAQ merge — may still be pending | Check git status |
-| Vercel redeploy without build cache | Mode 1 eBay token returns 500 (not blocking cron) | No |
-| Spot-check FAQ pricing % | S 80–100 / A 60–80 / B 40–60 / C 25–40 / D 10–25 — verify before beta | No |
-| Advisory outreach drafts | 28 Gmail drafts ready — send 1–2/day | No |
+| dev-environment skill Neon URL fix | Flagged 4x by power user sweep — Neon is decommissioned S264, skill still has old URL | No — but next session |
+| Competitor monitor Apr 23 content | Blog brief + social post + 3 subject lines generated, never used | No |
+| Label composer QR-free layout | Small Avery labels (60-70/sheet ≈ 1"×1-5/8") can't reliably scan QR — add text-only layout option | No |
 
 ---
 
-## P2 Bug to Dispatch
+## P1/P2 Bugs Still Pending Dev Dispatch
 
-**Tier Lapse Banner (P2):** Banner shows red + has X dismiss button. Spec says sticky amber. Also shows "Your Plan: PRO" card alongside the lapse warning (contradictory). Needs dev fix before beta.
+| Bug | Notes |
+|-----|-------|
+| #75 Tier Lapse banner | Red + dismissible (spec: sticky amber). "Your Plan: PRO" card contradicts lapse message. Needs dev fix before beta. |
+| #235 DonationModal URL | SettlementWizard.tsx line 68-72 fetches wrong route (`GET /api/sales/${id}/items?status=AVAILABLE` → 404). Correct: `/api/organizer/sales/${id}/unsold-items` |
 
 ---
 
-## QA Queue Remaining
+## QA Queue
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| finda.sale/video audio | Pending push + smoke test | S594 fix |
-| Login password toggle | Pending push + smoke test | S594 |
-| S597 condition rating sync + FAQ merge | Pending push + Chrome QA | From S597 |
-| Treasure hunt progress page | Pending push + Chrome QA | S595 carryover |
-| Treasure hunt via=qr guard | Pending push + Chrome QA | S595 carryover |
+| S598 dark mode modals | Pending Chrome QA | 8 components |
+| S598 mobile overflow | Pending Chrome QA | admin/items + shopper/history |
+| S598 error states | Pending Chrome QA | dashboard + edit-sale |
+| S598 Wishlist rename | Pending Chrome QA | visual scan across pages |
+| S597 condition rating sync + FAQ merge | Pending Chrome QA | From S597 |
+| Treasure hunt progress page | Pending Chrome QA | S595 carryover |
 | ConfirmDialog smoke test | UNVERIFIED | Need deletable consignor/location |
 | #278 Treasure Hunt Pro | Blocked | Needs Hunt Pass + live QR scan |
 | #268 Trail Completion XP | Blocked | Karen's trail has 0 stops |
 | #281 Streak Milestone XP | Blocked | Needs 5 real consecutive days |
-| #251 priceBeforeMarkdown | Blocked | Needs item with markdownApplied=true |
 | RankUpModal dark mode | Blocked | Can't trigger rank artificially |
 | S529 mobile nav rank | Pending | Mobile viewport test |
-| S550 Affiliate signup (?aff=) | Pending | Chrome signup flow test |
 | #52 Encyclopedia detail page | Pending | Railway redeploy d77cff42 |
 
 ---
@@ -94,4 +81,4 @@ git commit -m "fix: video audio + login password toggle + voiceover polish + ico
 ## Carry-over
 
 - **Advisory outreach:** 28 Gmail drafts queued. Send 1–2/day using patrick@finda.sale Send As alias.
-- **eBay sync:** Tasks #9/#10 pending if not dispatched.
+- **eBay sync:** Click "Sync eBay Inventory" after S591 deploy to re-import 96 items with null ebayListingId.
