@@ -226,11 +226,22 @@ export const searchGooglePlaces = async (req: AuthRequest, res: Response) => {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
+    // Use browser-supplied lat/lng for location bias if provided
+    const { lat, lng } = req.query;
+    let locationParams: Record<string, string> = {};
+    if (lat && lng && typeof lat === 'string' && typeof lng === 'string') {
+      locationParams = {
+        location: `${lat},${lng}`,
+        radius: '80000' // 80km radius
+      };
+    }
+
     try {
       const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
         params: {
           query: q,
-          key: apiKey
+          key: apiKey,
+          ...locationParams
         },
         timeout: 10000
       });

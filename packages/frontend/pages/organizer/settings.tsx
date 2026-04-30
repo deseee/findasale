@@ -178,7 +178,18 @@ const OrganizerSettingsPage = () => {
     if (!verSearchQuery.trim()) return;
     setVerSearchLoading(true);
     try {
-      const res = await api.get(`/verification/google/search?q=${encodeURIComponent(verSearchQuery)}`);
+      // Try to get browser geolocation for accurate local bias
+      let geoParams = '';
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 })
+        );
+        geoParams = `&lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`;
+      } catch {
+        // Permission denied or unavailable — search without bias
+      }
+
+      const res = await api.get(`/verification/google/search?q=${encodeURIComponent(verSearchQuery)}${geoParams}`);
       const results = res.data.results || [];
       setVerSearchResults(results);
       if (!results.length) {
