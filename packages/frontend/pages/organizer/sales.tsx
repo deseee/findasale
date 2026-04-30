@@ -29,6 +29,7 @@ interface Sale {
   state?: string;
   zip?: string;
   photoUrls?: string[];
+  isPinned?: boolean;
   organizer?: {
     id: string;
     businessName: string;
@@ -38,7 +39,9 @@ interface Sale {
 const OrganizerSalesPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
+  const [pinningStates, setPinningStates] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setIsClient(true);
@@ -98,6 +101,23 @@ const OrganizerSalesPage = () => {
     }
   };
 
+  const handleTogglePin = async (saleId: string, currentlyPinned: boolean) => {
+    setPinningStates(prev => ({ ...prev, [saleId]: true }));
+    try {
+      const endpoint = currentlyPinned
+        ? `/organizers/me/sales/${saleId}/unpin`
+        : `/organizers/me/sales/${saleId}/pin`;
+      await api.patch(endpoint);
+
+      showToast(currentlyPinned ? 'Sale unpinned' : 'Sale pinned to top', 'success');
+      refetchSales();
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to update sale pin status', 'error');
+    } finally {
+      setPinningStates(prev => ({ ...prev, [saleId]: false }));
+    }
+  };
+
   return (
     <>
       <Head>
@@ -147,9 +167,29 @@ const OrganizerSalesPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sales.map((sale: Sale) => (
                 <div key={sale.id} className="flex flex-col">
-                  <OrganizerSaleCard sale={sale} />
+                  {/* Pin Badge and Card Container */}
+                  <div className="relative">
+                    <OrganizerSaleCard sale={sale} />
+                    {sale.isPinned && (
+                      <div className="absolute top-2 right-2 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 px-2 py-1 rounded text-xs font-semibold">
+                        Featured
+                      </div>
+                    )}
+                  </div>
                   {/* Action buttons below card */}
-                  <div className="flex gap-3 mt-3">
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    <button
+                      onClick={() => handleTogglePin(sale.id, sale.isPinned || false)}
+                      disabled={pinningStates[sale.id]}
+                      className={`flex-1 text-center font-semibold py-2 px-4 rounded-lg transition-colors text-sm ${
+                        sale.isPinned
+                          ? 'bg-amber-100 dark:bg-amber-900 hover:bg-amber-200 dark:hover:bg-amber-800 text-amber-900 dark:text-amber-100'
+                          : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
+                      } disabled:opacity-50`}
+                      title={sale.isPinned ? 'Unpin sale from top' : 'Pin sale to top'}
+                    >
+                      {pinningStates[sale.id] ? '...' : (sale.isPinned ? '📌 Pinned' : '📍 Pin')}
+                    </button>
                     <Link
                       href={`/organizer/edit-sale/${sale.id}`}
                       className="flex-1 text-center bg-warm-200 dark:bg-gray-700 hover:bg-warm-300 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
