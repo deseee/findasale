@@ -1,71 +1,67 @@
-# Patrick's Dashboard — S599 ✅ COMPLETE
+# Patrick's Dashboard — S600 ✅ COMPLETE
 
-## Status: Watermark feature shipped end-to-end + 5 P1/P2 fixes + 4 mid-session hotfixes + Chrome QA verified.
+## Status: Storefront v2 gap audit + 3 parallel fixes shipped. Tier Lapse card ✅ fixed. /items/{id} 500 ✅ fixed. Schema fields #352/#353/#360 ✅ built.
 
 ---
 
-## S599 Summary
+## S600 Summary
 
-**Watermark feature (TEAMS-only) — fully wired:**
-- Schema: `Organizer.removeWatermarkEnabled` + migration deployed
-- Helper: `canRemoveWatermark(organizer)` default-deny utility
-- API: GET + PATCH `/api/organizers/settings/watermark` with TEAMS gate (403 for non-TEAMS)
-- UI: toggle on `/organizer/settings` Appearance tab (TEAMS sees toggle, others see upgrade gate)
-- 5 existing watermark surfaces gated (eBay/Facebook/Craigslist/EstateSales/Amazon CSV exports, social posts, share cards)
-- Gaps filled: Amazon CSV, bulk Organizer ZIP photos, iCal description footer
-- PDF watermarks per locked policy: Print Kit + Marketing Kit (full footer); Earnings + Settlement Receipt (light footer); Brand Kit Print intentionally unwatermarked
-- OG image gating wired in `lib/ogImage.ts` + Sale/Item OG components
+**Decisions locked:**
+- **#354 OrganizerHours table** — build it. Standard model per Google/Yelp/Apple Maps: day-of-week rows, HH:MM open/close times, timezone on Organizer, byAppointment Boolean.
+- **#357 RETAIL saleType** — already done. Migration `20260420200000_retail_saletype` committed RETAIL to saleType months ago. Boolean fields (`isRetailMode`/`hasRetailMode`) no longer exist — dropped in that migration. Feature is "Retail Mode" (not "Shop Mode"). Storefront v2 retail layout keys off `saleType === 'RETAIL'` and `retailAutoRenewDays`.
 
-**Round 1 P1/P2 fixes (all pushed):**
-- SettlementWizard URL + response shape (DonationModal can now fetch unsold items)
-- Reservations `/shopper` URL + array response handling (My Holds page works)
-- track-visit URL prefix (`POST /api/points/track-visit` returns 200 — XP awarded on sale visits)
-- Tier Lapse banner amber + sticky (no dismiss button)
-- Hydration #418 systematic fix across 6 components (NotificationBell, AvatarDropdown, FollowButton, FollowOrganizerButton, SaleWaitlistButton, QuickReplyPicker)
-- Hunt Pass status canonical source (reads `xpProfile.huntPassActive` not stale JWT)
+**Bugs fixed:**
+- **Tier Lapse plan card gradient** — `dashboard.tsx` — card was teal/cyan even when `isLapsed=true`. Fixed: separated gradient + border into independent ternaries so both switch to amber on lapse.
+- **`/items/{id}` 500 in production** — root cause: `lib/ogImage.ts` was embedding a `data:image/svg+xml` URI as a Cloudinary base path. Special characters in the URI broke Vercel's Node runtime URL parser → SyntaxError on every items page. Fixed: use Cloudinary native `b_rgb:fef3c7` background parameter instead. No data URIs.
 
-**Mid-session hotfixes (all pushed):**
-1. `@findasale/shared` import broke Railway Docker (workspace alias doesn't resolve in production runtime — same trap as S574). Fixed by inlining `tier === 'TEAMS'` check in `watermarkPolicy.ts` + `watermarkController.ts`.
-2. Vercel build failed reading `user?.subscriptionTier` (field on Organizer not User). Fixed by populating `organizerTier` state from existing `/organizers/me` fetch.
-3. Vercel build failed reading `ogHead.organizer` (JSX element not data). Fixed to `ogData?.organizer` + added organizer to SSR ogHead.
-4. Watermark URL singular vs plural mismatch (`/organizer/...` vs `/organizers/...`). Fixed both call sites.
+**New schema fields shipped (#352 tagline / #353 year founded / #360 social links):**
+- `Organizer.tagline String?` — one-liner below business name
+- `Organizer.yearFounded Int?` — year business founded
+- `Organizer.twitterUrl/tiktokUrl/youtubeUrl/pinterestUrl String?` — 4 new social link fields
+- Migration: `20260430100000_storefront_v2_organizer_fields`
+- Backend validation + response updated in `routes/organizers.ts`
+- Settings UI: tagline (120-char counter), year founded, 4 social link inputs added to Profile + Social sections
 
-**Chrome QA verified:**
-- Alice (TEAMS) sees toggle, can flip on, persists to DB across reload (ss_4138714pq)
-- Bob (PRO) PATCH attempt → 403 "Watermark removal requires the Teams plan."
-- Tier Lapse banner amber + no dismiss button + zero red classes anywhere
-- track-visit POST returns 200 with proper response body
+**Roadmap:** Entries #352–#363 added (storefront v2 gap audit). #357 marked resolved.
 
 ---
 
 ## ⚡ Do This Now
 
-Push wrap docs:
+**Step 1 — Push all S600 changes:**
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/frontend/lib/ogImage.ts
+git add packages/database/prisma/schema.prisma
+git add "packages/database/prisma/migrations/20260430100000_storefront_v2_organizer_fields/migration.sql"
+git add packages/backend/src/routes/organizers.ts
+git add packages/frontend/pages/organizer/settings.tsx
+git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "wrap: S599 — watermark feature TEAMS gating end-to-end + 5 P1/P2 fixes + 4 hotfixes + Chrome QA"
+git commit -m "fix: Tier Lapse card gradient + /items/{id} 500 (data URI ogImage); feat #352/#353/#360 tagline/yearFounded/social links schema + settings UI"
 .\push.ps1
+```
+
+**Step 2 — Run migration (new schema fields):**
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="[Railway DATABASE_URL — copy from Railway dashboard → findasale-db → Variables]"
+npx prisma migrate deploy
+npx prisma generate
 ```
 
 ---
 
-## Issues Found in S599 — Queued for S600 Dispatch
+## Outstanding — Queued for S601
 
-### P1 (pre-existing, NOT introduced by S599)
-
-| Bug | Notes |
-|-----|-------|
-| **Items page 500** | All `/items/{id}` URLs return 500. Verified pre-S599 deployment same 500 — not a regression. Vercel logs truncate `⨯ file:///var/task/node_mod...SyntaxError...data:image`. Worked at S572 per STATE.md. **Dispatch 1 in next session.** Open Vercel dashboard for full stack trace OR reproduce locally with `pnpm dev`. |
-
-### P2 (introduced and partially fixed in S599)
-
-| Bug | Notes |
-|-----|-------|
-| **Tier Lapse plan card NOT amber** | Banner is correct (amber sticky no-dismiss). Plan card next to it still teal/cyan when lapsed, copy reads "Scale with your team — TEAMS is $79/mo" — directly contradicts banner. Dev agent claimed fix; production shows otherwise. **Dispatch 2 in next session.** Small fix — apply amber gradient + change copy when `isLapsed=true`. |
-| **Sales pages SSR OG meta missing** | `/sales/[id]` HTML has no per-sale `og:image`/`og:title`/`og:description`. SaleOGMeta renders post-mount only — FB/iMessage scrapers don't see it. Watermark gating wired into SaleOGMeta is moot until SSR renders. **Dispatch 3 in next session.** Pattern after `items/[id].tsx`: add getServerSideProps + render SaleOGMeta in pre-mount return path. |
+| Item | Priority | Notes |
+|------|----------|-------|
+| **Sales pages SSR OG meta** | P2 | `/sales/[id]` has no per-sale og:image/title/description server-side. SaleOGMeta renders post-mount only — FB/iMessage scrapers don't see it. Pattern: add getServerSideProps like `items/[id].tsx`. |
+| **#354 OrganizerHours table** | Roadmap | Build the table when ready for storefront v2. |
 
 ---
 

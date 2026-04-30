@@ -841,7 +841,7 @@ const OrganizerDashboard = () => {
           )}
 
           {isClient && user?.organizerTier === 'PRO' && (
-            <div className={`bg-gradient-to-r ${isLapsed ? 'from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800' : 'from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border border-teal-200 dark:border-teal-800'} rounded-lg p-6 mb-8`}>
+            <div className={`bg-gradient-to-r ${isLapsed ? 'from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20' : 'from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20'} ${isLapsed ? 'border-amber-200 dark:border-amber-800' : 'border-teal-200 dark:border-teal-800'} border rounded-lg p-6 mb-8`}>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex-1">
                   <h3 className={`text-lg font-bold mb-1 ${isLapsed ? 'text-amber-900 dark:text-amber-100' : 'text-warm-900 dark:text-warm-100'}`}>Your Plan: PRO {isLapsed && '(Payment Required)'}</h3>

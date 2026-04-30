@@ -263,11 +263,17 @@ model Organizer {
   phone                   String
   address                 String
   bio                     String? // Organizer bio/description (optional)
+  tagline                 String? // Short tagline for storefront (120 char limit)
+  yearFounded             Int? // Year business was founded
   website                 String? // Business website URL
   profilePhoto            String? // Profile photo URL (Cloudinary)
   facebook                String? // Facebook page URL
   instagram               String? // Instagram profile URL
   etsy                    String? // Etsy shop URL
+  twitterUrl              String? // Twitter profile URL
+  tiktokUrl               String? // TikTok profile URL
+  youtubeUrl              String? // YouTube channel URL
+  pinterestUrl            String? // Pinterest profile URL
   serviceAreas            String? // CSV or JSON of cities/zip codes served
   pickupWindows           String? // Default pickup availability (JSON or text)
   userId                  String                 @unique
