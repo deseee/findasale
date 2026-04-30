@@ -1,5 +1,6 @@
 import { Item } from '@prisma/client';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
+import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermarkPolicy';
 
 type ExportFormat = 'ebay' | 'amazon' | 'facebook' | 'quickbooks';
 
@@ -53,7 +54,7 @@ function mapConditionToEbayString(condition: string | null | undefined): string 
  * Matches eBay's official Seller Hub bulk upload template
  * https://www.ebay.com/help/selling/listings/creating-managing-listings/upload-listings
  */
-function formatEbayCsv(items: Item[], includeWatermark: boolean = false): string {
+function formatEbayCsv(items: Item[], organizer: WatermarkPolicyOrganizer | null = null, includeWatermark: boolean = false): string {
   // eBay template header rows (required for Seller Hub bulk upload)
   const infoRows: string[] = [
     '#INFO,Version=0.0.2,Template= eBay-draft-listings-template_US,,,,,,,,',
@@ -72,9 +73,11 @@ function formatEbayCsv(items: Item[], includeWatermark: boolean = false): string
     let photoUrl = '';
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
-      // Apply QR+name watermark by default for eBay exports
+      // Apply QR+name watermark if requested and tier allows it
       if (includeWatermark && photoUrl) {
-        photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
+        if (!canRemoveWatermark(organizer)) {
+          photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
+        }
       }
     }
 
@@ -143,14 +146,23 @@ function mapConditionLabel(condition: string | null | undefined): string {
 /**
  * Amazon Format: product-id, product-id-type, item-condition, price, item-note, will-ship-internationally
  */
-function formatAmazonCsv(items: Item[]): string {
-  const headers = ['product-id', 'product-id-type', 'item-condition', 'price', 'item-note', 'will-ship-internationally'];
+function formatAmazonCsv(items: Item[], organizer: WatermarkPolicyOrganizer | null = null): string {
+  const headers = ['product-id', 'product-id-type', 'item-condition', 'price', 'item-note', 'will-ship-internationally', 'image-url'];
   const rows: string[] = [headers.map(escapeCsvField).join(',')];
 
   items.forEach((item) => {
     const productId = item.sku || item.id;
     const description = item.description ? item.description.substring(0, 500) : '';
     const shippingValue = item.shippingAvailable ? 'Yes' : 'No';
+
+    // Get photo URL with optional watermark
+    let photoUrl = '';
+    if (item.photoUrls && item.photoUrls.length > 0) {
+      photoUrl = item.photoUrls[0];
+      if (!canRemoveWatermark(organizer)) {
+        photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
+      }
+    }
 
     const row = [
       escapeCsvField(productId),
@@ -159,6 +171,7 @@ function formatAmazonCsv(items: Item[]): string {
       escapeCsvField(item.price ?? ''),
       escapeCsvField(description),
       escapeCsvField(shippingValue),
+      escapeCsvField(photoUrl),
     ];
     rows.push(row.join(','));
   });
@@ -169,18 +182,20 @@ function formatAmazonCsv(items: Item[]): string {
 /**
  * Facebook Marketplace Format: title, price, category, condition, description, availability, image_url
  */
-function formatFacebookCsv(items: Item[]): string {
+function formatFacebookCsv(items: Item[], organizer: WatermarkPolicyOrganizer | null = null): string {
   const headers = ['title', 'price', 'category', 'condition', 'description', 'availability', 'image_url'];
   const rows: string[] = [headers.map(escapeCsvField).join(',')];
 
   items.forEach((item) => {
     const availability = item.status === 'AVAILABLE' ? 'In Stock' : 'Out of Stock';
 
-    // Get photo URL with QR+name watermark by default
+    // Get photo URL with QR+name watermark by default, gated by tier
     let photoUrl = '';
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
-      photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
+      if (!canRemoveWatermark(organizer)) {
+        photoUrl = getWatermarkedUrlWithQR(photoUrl, item.id);
+      }
     }
 
     const row = [
@@ -235,14 +250,14 @@ function formatQuickBooksCsv(items: Item[]): string {
 /**
  * Main export function — routes to format-specific generators
  */
-export function generateCsvExport(items: Item[], format: ExportFormat, includeWatermark: boolean = false): string {
+export function generateCsvExport(items: Item[], format: ExportFormat, organizer: WatermarkPolicyOrganizer | null = null, includeWatermark: boolean = false): string {
   switch (format) {
     case 'ebay':
-      return formatEbayCsv(items, includeWatermark);
+      return formatEbayCsv(items, organizer, includeWatermark);
     case 'amazon':
-      return formatAmazonCsv(items);
+      return formatAmazonCsv(items, organizer);
     case 'facebook':
-      return formatFacebookCsv(items);
+      return formatFacebookCsv(items, organizer);
     case 'quickbooks':
       return formatQuickBooksCsv(items);
     default:

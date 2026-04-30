@@ -69,6 +69,8 @@ interface Item {
       businessName?: string;
       rating?: number;
       userId?: string;
+      subscriptionTier?: string; // Feature #65: Subscription Tiers for watermark policy
+      removeWatermarkEnabled?: boolean; // Feature: OG watermark removal toggle
     } | null;
     location?: string;
   };
@@ -129,6 +131,10 @@ interface OGItemData {
   photoUrl: string | null;
   saleId: string;
   saleName: string;
+  organizer?: {
+    subscriptionTier?: string;
+    removeWatermarkEnabled?: boolean;
+  };
 }
 
 const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
@@ -479,7 +485,15 @@ const ItemDetail: React.FC<{ ogData?: OGItemData | null }> = ({ ogData }) => {
 
   return (
     <>
-      {ogHead ?? (
+      {ogHead ? (
+        // SSR version — full OG image with watermark policy applied
+        <ItemOGMeta
+          item={{ ...item, photos: item.photoUrls.map(url => ({ url })) }}
+          saleName={item.sale?.title || 'FindA.Sale'}
+          saleId={item.sale?.id || ''}
+          organizer={ogHead.organizer}
+        />
+      ) : (
         // CSR fallback — used only when getServerSideProps didn't return ogData
         <Head>
           <title>{item.title} - FindA.Sale</title>
@@ -1155,6 +1169,10 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
         : null,
       saleId: item.sale?.id || '',
       saleName: item.sale?.title || 'FindA.Sale',
+      organizer: item.sale?.organizer ? {
+        subscriptionTier: item.sale.organizer.subscriptionTier,
+        removeWatermarkEnabled: item.sale.organizer.removeWatermarkEnabled,
+      } : undefined,
     };
 
     return { props: { ogData } };

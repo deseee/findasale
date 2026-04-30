@@ -21,6 +21,8 @@ interface Sale {
   address?: string;
   organizer?: {
     businessName?: string;
+    subscriptionTier?: string;
+    removeWatermarkEnabled?: boolean;
   };
   items?: Array<{ id: string }>;
 }
@@ -37,15 +39,32 @@ interface SaleOGMetaProps {
    * Defaults to sale.description or auto-generated summary.
    */
   description?: string;
+  /**
+   * Optional organizer object for watermark policy.
+   * If not provided, defaults to sale.organizer.
+   */
+  organizer?: {
+    subscriptionTier?: string;
+    removeWatermarkEnabled?: boolean;
+  };
 }
 
 export default function SaleOGMeta({
   sale,
   canonicalUrl,
   description,
+  organizer,
 }: SaleOGMetaProps) {
   // Get Cloudinary cloud name from environment
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'db8yhzjdq';
+
+  // Determine which organizer object to use (passed prop or sale.organizer)
+  const effectiveOrganizer = organizer || sale.organizer;
+
+  // Calculate watermark policy: apply watermark UNLESS organizer is TEAMS tier AND toggle is on
+  const shouldApplyWatermark = !(
+    effectiveOrganizer?.subscriptionTier === 'TEAMS' && effectiveOrganizer?.removeWatermarkEnabled
+  );
 
   // Extract first photo's Cloudinary public ID if available
   let cloudinaryPublicId: string | undefined;
@@ -97,6 +116,7 @@ export default function SaleOGMeta({
     cloudinaryPublicId,
     itemCount: sale.items?.length,
     organizerName: sale.organizer?.businessName,
+    shouldApplyWatermark,
   });
 
   // Sale type label mapping

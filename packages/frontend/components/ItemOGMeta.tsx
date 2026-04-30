@@ -38,6 +38,13 @@ interface ItemOGMetaProps {
    * Defaults to item.description or auto-generated summary.
    */
   description?: string;
+  /**
+   * Optional organizer object for watermark policy.
+   */
+  organizer?: {
+    subscriptionTier?: string;
+    removeWatermarkEnabled?: boolean;
+  };
 }
 
 export default function ItemOGMeta({
@@ -46,9 +53,15 @@ export default function ItemOGMeta({
   saleId,
   canonicalUrl,
   description,
+  organizer,
 }: ItemOGMetaProps) {
   // Get Cloudinary cloud name from environment
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'db8yhzjdq';
+
+  // Calculate watermark policy: apply watermark UNLESS organizer is TEAMS tier AND toggle is on
+  const shouldApplyWatermark = !(
+    organizer?.subscriptionTier === 'TEAMS' && organizer?.removeWatermarkEnabled
+  );
 
   // Extract first photo's Cloudinary public ID if available
   let cloudinaryPublicId: string | undefined;
@@ -95,6 +108,7 @@ export default function ItemOGMeta({
       price: displayPrice,
       condition: item.condition,
       cloudinaryPublicId,
+      shouldApplyWatermark,
     });
   } else if (item.photos && item.photos.length > 0 && item.photos[0].url) {
     // Non-Cloudinary photo — use raw URL; no branded overlay but no broken image either

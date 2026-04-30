@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
 import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+import { canRemoveWatermark } from '../utils/watermarkPolicy';
 
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
@@ -154,9 +155,10 @@ Write only the post text, no explanations.`;
       photoUrl = firstItemWithPhoto.photoUrls[0];
       // Apply platform-specific crop
       photoUrl = getPlatformSpecificPhotoUrl(photoUrl, platform);
-      // Apply watermark based on tier (all tiers get watermark except TEAMS with no watermark option)
-      // For now: FREE/SIMPLE/PRO get watermark, TEAMS can choose but we default to watermark
-      photoUrl = getWatermarkedUrl(photoUrl);
+      // Apply watermark based on tier
+      if (!canRemoveWatermark(organizer)) {
+        photoUrl = getWatermarkedUrl(photoUrl);
+      }
     }
 
     res.json({ post: postText, platform, photoUrl });
