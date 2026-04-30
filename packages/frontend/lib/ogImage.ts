@@ -45,6 +45,7 @@ export function generateSaleOGImage(params: {
   cloudinaryPublicId?: string;
   itemCount?: number;
   organizerName?: string;
+  shouldApplyWatermark?: boolean;
 }): string {
   const {
     cloudName,
@@ -54,6 +55,7 @@ export function generateSaleOGImage(params: {
     cloudinaryPublicId,
     itemCount,
     organizerName,
+    shouldApplyWatermark = true,
   } = params;
 
   // Base transformations: size, quality, format
@@ -81,8 +83,11 @@ export function generateSaleOGImage(params: {
     dateLocationText = `l_text:Arial_36:${encodeCloudinaryText(location)},co_rgb:6B5A42,x_0,y_50`;
   }
 
-  // Text overlay: watermark (bottom)
-  const watermarkOverlay = `l_text:Arial_32_bold:finda.sale,co_rgb:D97706,x_0,y_270`;
+  // Text overlay: watermark (bottom) — conditionally applied based on watermark policy
+  let watermarkOverlay = '';
+  if (shouldApplyWatermark) {
+    watermarkOverlay = `l_text:Arial_32_bold:finda.sale,co_rgb:D97706,x_0,y_270`;
+  }
 
   // If a photo is provided, use it as the base; otherwise use a solid color background
   let baseImage: string;
@@ -131,6 +136,7 @@ export function generateItemOGImage(params: {
   price?: number;
   condition?: string;
   cloudinaryPublicId?: string;
+  shouldApplyWatermark?: boolean;
 }): string {
   const {
     cloudName,
@@ -139,6 +145,7 @@ export function generateItemOGImage(params: {
     price,
     condition,
     cloudinaryPublicId,
+    shouldApplyWatermark = true,
   } = params;
 
   // Base transformations: size, quality, format
@@ -172,8 +179,11 @@ export function generateItemOGImage(params: {
     conditionOverlay = `l_text:Arial_28:${encodeCloudinaryText(condition)},co_rgb:6B5A42,x_0,y_180`;
   }
 
-  // Watermark
-  const watermarkOverlay = `l_text:Arial_28_bold:finda.sale,co_rgb:D97706,x_0,y_280`;
+  // Watermark — conditionally applied based on watermark policy
+  let watermarkOverlay = '';
+  if (shouldApplyWatermark) {
+    watermarkOverlay = `l_text:Arial_28_bold:finda.sale,co_rgb:D97706,x_0,y_280`;
+  }
 
   // Build overlay string
   const overlays = [

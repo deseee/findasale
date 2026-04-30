@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
+import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import archiver from 'archiver';
 import { checkExportRateLimit, formatNextExportDate } from '../services/exportRateLimitService';
 
@@ -155,18 +156,25 @@ export const exportEstatesalesCSV = async (
     ];
 
     // Build CSV rows
-    const rows = sale.items.map((item) => [
-      escapeCSV(item.title),
-      mapCategory(item.category),
-      item.price ? item.price.toFixed(2) : '',
-      escapeCSV(truncate(item.description, 500)),
-      item.condition || '',
-      item.photoUrls && item.photoUrls.length > 0
-        ? getWatermarkedUrlWithQR(item.photoUrls[0], item.id, item.qrEmbedEnabled)
-        : '',
-      item.shippingAvailable ? 'Yes' : 'No',
-      item.shippingPrice ? item.shippingPrice.toFixed(2) : '',
-    ]);
+    const rows = sale.items.map((item) => {
+      let photoUrl = '';
+      if (item.photoUrls && item.photoUrls.length > 0) {
+        const rawUrl = item.photoUrls[0];
+        photoUrl = canRemoveWatermark(sale.organizer)
+          ? rawUrl
+          : getWatermarkedUrlWithQR(rawUrl, item.id, item.qrEmbedEnabled);
+      }
+      return [
+        escapeCSV(item.title),
+        mapCategory(item.category),
+        item.price ? item.price.toFixed(2) : '',
+        escapeCSV(truncate(item.description, 500)),
+        item.condition || '',
+        photoUrl,
+        item.shippingAvailable ? 'Yes' : 'No',
+        item.shippingPrice ? item.shippingPrice.toFixed(2) : '',
+      ];
+    });
 
     // Combine headers and rows into CSV string
     const csvContent = [
@@ -281,10 +289,15 @@ export const exportFacebookJSON = async (
         description: item.description || '',
         category: item.category || '',
         condition: item.condition || '',
-        images: (item.photoUrls || []).map((url, imgIndex) => ({
-          url: getWatermarkedUrlWithQR(url, item.id, item.qrEmbedEnabled),
-          isPrimary: imgIndex === 0,
-        })),
+        images: (item.photoUrls || []).map((url, imgIndex) => {
+          const photoUrl = canRemoveWatermark(sale.organizer)
+            ? url
+            : getWatermarkedUrlWithQR(url, item.id, item.qrEmbedEnabled);
+          return {
+            url: photoUrl,
+            isPrimary: imgIndex === 0,
+          };
+        }),
         shipping: {
           available: item.shippingAvailable,
           ...(item.shippingPrice && { price: item.shippingPrice }),
@@ -404,7 +417,11 @@ export const exportCraigslistText = async (
         lines.push(item.description);
       }
       if (item.photoUrls && item.photoUrls.length > 0) {
-        lines.push(getWatermarkedUrlWithQR(item.photoUrls[0], item.id, item.qrEmbedEnabled));
+        const rawUrl = item.photoUrls[0];
+        const photoUrl = canRemoveWatermark(sale.organizer)
+          ? rawUrl
+          : getWatermarkedUrlWithQR(rawUrl, item.id, item.qrEmbedEnabled);
+        lines.push(photoUrl);
       }
       lines.push('');
     });
@@ -584,21 +601,27 @@ export const exportOrganizer = async (
       'photoUrls',
       'createdAt',
     ];
-    const itemsRows = items.map((item: any) => [
-      escapeCSV(item.id),
-      escapeCSV(item.saleId ?? ''),
-      escapeCSV(item.title),
-      escapeCSV(item.description),
-      item.price ? item.price.toFixed(2) : '',
-      escapeCSV(item.status),
-      escapeCSV(item.category),
-      escapeCSV(item.condition),
-      item.tags && item.tags.length > 0 ? escapeCSV(item.tags.join(';')) : '',
-      item.photoUrls && item.photoUrls.length > 0
-        ? escapeCSV(item.photoUrls.join(';'))
-        : '',
-      item.createdAt ? formatDateISO(item.createdAt) : '',
-    ]);
+    const itemsRows = items.map((item: any) => {
+      // Gate watermarks on item photos
+      const photoUrls = item.photoUrls && item.photoUrls.length > 0
+        ? item.photoUrls.map((url: string) =>
+            canRemoveWatermark(organizer) ? url : getWatermarkedUrlWithQR(url, item.id)
+          )
+        : [];
+      return [
+        escapeCSV(item.id),
+        escapeCSV(item.saleId ?? ''),
+        escapeCSV(item.title),
+        escapeCSV(item.description),
+        item.price ? item.price.toFixed(2) : '',
+        escapeCSV(item.status),
+        escapeCSV(item.category),
+        escapeCSV(item.condition),
+        item.tags && item.tags.length > 0 ? escapeCSV(item.tags.join(';')) : '',
+        photoUrls.length > 0 ? escapeCSV(photoUrls.join(';')) : '',
+        item.createdAt ? formatDateISO(item.createdAt) : '',
+      ];
+    });
     const itemsCSV = [
       itemsHeaders.join(','),
       ...itemsRows.map((row) => row.join(',')),

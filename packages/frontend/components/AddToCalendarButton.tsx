@@ -42,7 +42,13 @@ const AddToCalendarButton: React.FC<AddToCalendarButtonProps> = ({
 
     const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale';
     const location = `${address}, ${city}, ${state}`;
-    const eventDescription = description ? `${description}\n\nView at ${siteUrl}/sales/${saleId}` : `View at ${siteUrl}/sales/${saleId}`;
+    const descriptionLines = [
+      description,
+      `View at ${siteUrl}/sales/${saleId}`,
+      '',
+      'Find more sales at https://finda.sale'
+    ].filter(Boolean);
+    const eventDescription = descriptionLines.join('\n');
 
     const ics = `BEGIN:VCALENDAR
 VERSION:2.0

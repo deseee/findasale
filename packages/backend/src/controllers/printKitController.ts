@@ -7,6 +7,7 @@ import QRCode from 'qrcode';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { CHEATSHEET_PRICES } from '../constants/cheatsheet';
+import { canRemoveWatermark } from '../utils/watermarkPolicy';
 
 // Avery 5160 label dimensions: 1" × 2.625"
 const STICKER_W = 189; // 2.625 inches @ 72 dpi
@@ -47,7 +48,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
       include: {
-        organizer: { select: { userId: true } },
+        organizer: { select: { userId: true, subscriptionTier: true, removeWatermarkEnabled: true } },
         items: {
           select: { id: true, title: true, price: true },
           orderBy: { title: 'asc' },
@@ -99,7 +100,9 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
       column-gap: 0.125in;
       row-gap: 0;
       page-break-after: always;
+      position: relative;
     }
+    ${!canRemoveWatermark(sale.organizer) ? `.sheet::after { content: 'Find more sales at FindA.Sale'; position: absolute; bottom: 0.1in; right: 0.1in; font-size: 6pt; color: #999; }` : ''}
     .label {
       width: 2.625in;
       height: 1in;
@@ -229,7 +232,7 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
 
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      include: { organizer: { select: { userId: true } } },
+      include: { organizer: { select: { userId: true, subscriptionTier: true, removeWatermarkEnabled: true } } },
     });
 
     if (!sale) return res.status(404).json({ message: 'Sale not found.' });
@@ -318,6 +321,17 @@ export const getYardSignKit = async (req: AuthRequest, res: Response) => {
         width: PAGE_W - PAGE_MARGIN * 2,
         align: 'center',
       });
+
+    // Add watermark footer if organizer cannot remove it
+    if (!canRemoveWatermark(sale.organizer)) {
+      doc
+        .fontSize(8)
+        .fillColor('#cccccc')
+        .text('Find more sales at FindA.Sale', PAGE_MARGIN, PAGE_H - 20, {
+          width: PAGE_W - PAGE_MARGIN * 2,
+          align: 'center',
+        });
+    }
 
     doc.end();
   } catch (error) {

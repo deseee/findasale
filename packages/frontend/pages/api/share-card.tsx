@@ -609,6 +609,14 @@ export default async function handler(req: Request) {
 
     const sale = await saleRes.json();
 
+    // Fetch organizer subscription tier for watermark gating
+    const orgRes = await fetch(`${apiUrl}/organizer/profile`, {
+      headers: {
+        Authorization: authHeader,
+      },
+    });
+    const organizer = orgRes.ok ? await orgRes.json() : null;
+
     // XP gate deferred — guildXp not available via Authorization header auth
     // TODO: fetch user XP from backend when endpoint is available
 
@@ -629,11 +637,13 @@ export default async function handler(req: Request) {
     // Fetch and convert photo to data URI if available
     let photoDataUri = null;
     if (sale.photos && sale.photos.length > 0) {
-      const photoUrl = sale.photos[0];
-      const watermarkedUrl = photoUrl.includes('cloudinary')
-        ? `${photoUrl}/l_text:Arial_20:FindA.Sale,co_white,o_50,g_south_east,x_10,y_10`
-        : photoUrl;
-      photoDataUri = await fetchImageAsDataUri(watermarkedUrl);
+      let photoUrl = sale.photos[0];
+      // Apply watermark unless organizer is TEAMS with toggle enabled
+      const canRemoveWatermark = organizer?.subscriptionTier === 'TEAMS' && organizer?.removeWatermarkEnabled === true;
+      if (!canRemoveWatermark && photoUrl.includes('cloudinary')) {
+        photoUrl = `${photoUrl}/l_text:Arial_20:FindA.Sale,co_white,o_50,g_south_east,x_10,y_10`;
+      }
+      photoDataUri = await fetchImageAsDataUri(photoUrl);
     }
 
     // Get dimensions for selected format

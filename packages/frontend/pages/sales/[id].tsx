@@ -80,6 +80,8 @@ interface Sale {
     address: string;
     tier?: 'BRONZE' | 'SILVER' | 'GOLD'; // Phase 31: Tier Rewards
     verificationStatus?: string; // Feature #16
+    subscriptionTier?: string; // Feature #65: Subscription Tiers (SIMPLE, PRO, TEAMS, ENTERPRISE)
+    removeWatermarkEnabled?: boolean; // Feature: OG watermark removal toggle (TEAMS only)
     badges?: Array<{
       id: string;
       name: string;
@@ -554,7 +556,7 @@ const SaleDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
-      <SaleOGMeta sale={saleForOGMeta} />
+      <SaleOGMeta sale={saleForOGMeta} organizer={sale.organizer} />
 
       {/* Feature #121: Leave Sale Warning Modal */}
       <LeaveSaleWarning

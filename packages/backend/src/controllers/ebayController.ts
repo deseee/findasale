@@ -5,6 +5,7 @@ import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
+import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { getIO } from '../lib/socket';
 import { isEbayRateLimited, trackEbayCall, getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
@@ -503,7 +504,8 @@ function generateEbayCsv(
     aiSuggestedPrice: any;
   }>,
   saleTitle: string,
-  includeWatermark: boolean = false
+  includeWatermark: boolean = false,
+  organizer: { subscriptionTier?: string | null } | null = null
 ): string {
   // Escape CSV values (quote if contains comma, quote, or newline)
   const escapeCsvValue = (value: string | number): string => {
@@ -533,7 +535,9 @@ function generateEbayCsv(
     if (item.photoUrls && item.photoUrls.length > 0) {
       photoUrl = item.photoUrls[0];
       if (includeWatermark && photoUrl) {
-        photoUrl = getWatermarkedUrl(photoUrl);
+        if (!canRemoveWatermark(organizer)) {
+          photoUrl = getWatermarkedUrl(photoUrl);
+        }
       }
     }
 
@@ -664,7 +668,7 @@ export const exportSaleToEbay = async (req: AuthRequest, res: Response) => {
 
     // Generate CSV (includeWatermark = true when photoMode is not 'clean')
     const includeWatermark = photoMode !== 'clean';
-    const csv = generateEbayCsv(sale.items, sale.title, includeWatermark);
+    const csv = generateEbayCsv(sale.items, sale.title, includeWatermark, organizer);
 
     // Set response headers for file download
     const timestamp = new Date().toISOString().split('T')[0];
@@ -1604,6 +1608,9 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
       if (photoMode === 'clean') {
         return url; // Return clean URL
       }
+      if (canRemoveWatermark(organizer)) {
+        return url; // TEAMS with toggle: return clean URL
+      }
       return getWatermarkedUrl(url); // Return watermarked URL
     });
 
@@ -1879,6 +1886,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         const photos = item.photoUrls.map((url: string) => {
           if (photoMode === 'clean') {
             return url;
+          }
+          if (canRemoveWatermark(organizer)) {
+            return url; // TEAMS with toggle: return clean URL
           }
           return getWatermarkedUrlWithQR(url, item.id); // QR+name watermark default
         });
