@@ -7,10 +7,11 @@
 
 interface VerifiedBadgeProps {
   status?: string | null;
+  verificationSource?: string | null;
   size?: 'sm' | 'md' | 'lg';
 }
 
-const VerifiedBadge = ({ status, size = 'md' }: VerifiedBadgeProps) => {
+const VerifiedBadge = ({ status, verificationSource, size = 'md' }: VerifiedBadgeProps) => {
   if (status !== 'VERIFIED') {
     return null;
   }
@@ -21,10 +22,25 @@ const VerifiedBadge = ({ status, size = 'md' }: VerifiedBadgeProps) => {
     lg: 'w-6 h-6'
   };
 
+  const getTitleBySource = (): string => {
+    switch (verificationSource) {
+      case 'GOOGLE':
+        return 'Verified via Google Business';
+      case 'FACEBOOK':
+        return 'Verified via Facebook Page';
+      case 'YELP':
+        return 'Verified via Yelp';
+      case 'STRIPE_IDENTITY':
+        return 'Identity Verified';
+      default:
+        return 'Verified Organizer';
+    }
+  };
+
   return (
     <div
       className={`${sizeClasses[size]} bg-blue-500 text-white rounded-full flex items-center justify-center flex-shrink-0`}
-      title="Verified Organizer"
+      title={getTitleBySource()}
     >
       <svg
         className="w-full h-full"

@@ -299,6 +299,12 @@ model Organizer {
   verificationStatus      String                 @default("NONE") // NONE | PENDING | VERIFIED | REJECTED
   verificationNotes       String?
   verifiedAt              DateTime?
+  // Feature: Verified Organizer — automated verification sources (ADR-073)
+  verificationSource      String?  // GOOGLE | FACEBOOK | YELP | STRIPE_IDENTITY | MANUAL
+  googlePlaceId           String?  // Google Places Place ID e.g. "ChIJrTLr-GyuEmsRBfy61i59si4"
+  facebookPageId          String?  // Facebook Page ID (Phase 2)
+  yelpBusinessId          String?  // Yelp Business ID (Phase 2)
+  stripeIdentitySessionId String?  // Stripe Identity verification session ID (Phase 2)
   // Feature #83: Estate Planning — executor account stub
   executorUserId          String?
   estateId                String? // Pre-wire: Estate Planning Toolkit — references future Estate model
