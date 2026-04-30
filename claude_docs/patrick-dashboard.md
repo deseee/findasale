@@ -1,82 +1,53 @@
-# Patrick's Dashboard — S601 ✅ COMPLETE
+# Patrick's Dashboard — S602 Wrap (Strategy Session)
 
-## Status: Storefront v2 full build-out complete. All 9 remaining gap features shipped (#354–#356, #359, #361–#363). 4 new migrations. 2 new components. Designer can now finish.
+## Status: Acquisition strategy locked. Real-operator + viral-content sprint queued for S603.
 
----
-
-## S601 Summary — Storefront v2 Full Build-Out
-
-**Features shipped (all Pending Chrome QA):**
-- **#354 Business Hours** — OrganizerHours table (day-of-week rows, HH:MM, timezone, by-appointment). Settings UI 7-day grid. Storefront Hours card.
-- **#355 Organizer Type Multi-Select** — 8-type checkbox grid in settings (Estate Sales, Yard Sales, Auctions, etc.). Pill badges on storefront below bio.
-- **#356 Broadcast to Followers** — BroadcastSection.tsx in settings (PRO/TEAMS only). POST /organizers/me/broadcast creates Notification rows for all followers. Recent broadcasts list.
-- **#359 Sale Pinned / Featured Flag** — Pin toggle on sales mgmt page. Amber "Pinned" badge. Pinned sales sort first. "Featured" amber badge on storefront.
-- **#361 Claim-This-Listing Flow** — ClaimListingModal.tsx (NEW). Amber claim banner on sales/[id]. POST /organizers/:id/claim (unauthenticated). isClaimed + isUnmanagedListing + ClaimRequest schema.
-- **#362 Sale Attendance Count** — attendanceCount field + PATCH endpoint. Number input on ended sales in sales.tsx.
-- **#363 Auction Buyer's Premium + Lot Numbers** — buyersPremiumPct on Sale (AUCTION-gated in create-sale), lotNumber on Item. Disclosure box on items/[id]. Lot badge on ItemCard.
-- **Sales SSR OG meta** — getServerSideProps on sales/[id].tsx so FB/iMessage scrapers get per-sale og:image/title/description.
-
-**4 new migrations (all must be deployed — see Step 2 below):**
-1. `20260430000000_storefront_v2_hours_types_pinned` — OrganizerHours table + organizerTypes + byAppointment + timezone + isPinned
-2. `20260430200000_organizer_broadcast` — OrganizerBroadcast table
-3. `20260430210000_attendance_buyers_premium_lot_number` — attendanceCount + buyersPremiumPct + lotNumber
-4. `20260430220000_storefront_v2_claim_listing` — isClaimed + isUnmanagedListing on Organizer + ClaimRequest table
-
-**Note:** Migration `20260430000000_storefront_v2_hours_types_pinned` is alphabetically before `20260430100000_storefront_v2_organizer_fields` (already deployed S600). They touch different columns — Prisma will apply the unapplied one and skip the already-applied one. A drift warning may appear — ignore it.
+S602 was a strategy/research session — no code shipped. Two strategic decisions locked: (1) "get too big to ignore before partners can react" stance, (2) RVM campaign deferred to Q3 in favor of faster, more visceral acquisition channels. Eight strategy artifacts curated and filed in `claude_docs/strategy/`.
 
 ---
 
-## ⚡ Do This Now
+## Strategic Stance (Locked S602 — D-007 amendment)
 
-**Step 1 — Push all S601 changes:**
+**"Get too big to ignore before partners can react."**
 
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add "packages/database/prisma/migrations/20260430000000_storefront_v2_hours_types_pinned/migration.sql"
-git add "packages/database/prisma/migrations/20260430200000_organizer_broadcast/migration.sql"
-git add "packages/database/prisma/migrations/20260430210000_attendance_buyers_premium_lot_number/migration.sql"
-git add "packages/database/prisma/migrations/20260430220000_storefront_v2_claim_listing/migration.sql"
-git add packages/backend/src/routes/organizers.ts
-git add packages/backend/src/controllers/saleController.ts
-git add packages/backend/src/controllers/itemController.ts
-git add packages/frontend/pages/organizer/settings.tsx
-git add packages/frontend/pages/organizer/sales.tsx
-git add "packages/frontend/pages/organizer/storefront/[slug].tsx"
-git add packages/frontend/components/OrganizerSaleCard.tsx
-git add packages/frontend/components/BroadcastSection.tsx
-git add packages/frontend/components/ClaimListingModal.tsx
-git add "packages/frontend/pages/sales/[id].tsx"
-git add "packages/frontend/pages/organizer/create-sale.tsx"
-git add "packages/frontend/pages/items/[id].tsx"
-git add packages/frontend/components/ItemCard.tsx
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "feat: Storefront v2 full build-out — #354 Hours, #355 OrganizerTypes, #356 Broadcast, #359 PinnedSale, #361 ClaimListing, #362 Attendance, #363 BuyersPremium/LotNumber + sales SSR OG"
-.\push.ps1
-```
-
-**Step 2 — Deploy all 4 new migrations (Railway DB):**
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
-```
-
-A drift advisory warning may appear about migration ordering — that's expected and safe to ignore.
+- Speed-to-distribution over partner agreements.
+- Design for partner reneges (eBay/Mercari/etc. WILL renege, raise API prices, or build a competing layer — assume it).
+- Real operators + real data = the only durable defensibility.
+- Don't waste cycles on "venture vs acquisition" framing debates — frame-debates slow shipping.
 
 ---
 
-## Outstanding — Queued for S602
+## Q2 Primary Path — Organizer Acquisition Sprint (S603+)
 
-| Item | Priority | Notes |
-|------|----------|-------|
-| **Chrome QA: all storefront v2 features** | P1 | #352/#353/#354/#355/#356/#359/#360/#361/#362/#363 all Pending Chrome QA. One feature per QA dispatch. |
-| **dev-environment skill Neon URL** | P2 | Flagged 5x — use skill-creator to update old Neon URL. |
-| **Draft contact audit** | P2 | Memory note from Apr 27: run draft contact audit next session. |
+| Spike | Initiative | Owner | Timeline | Status |
+|-------|-----------|-------|----------|--------|
+| **1 (GATING)** | Real-operator seeding (concierge onboard 10, Founding Operator program, GR Saturday hand-recruit, real-data acceleration) | findasale-sales-ops | 2-4 weeks | NEXT |
+| **2 (PARALLEL)** | Visceral content (40→15 time-lapse, "what we found" series, "pile that doesn't sell," founder vlog, first-100 waitlist) | findasale-marketing | 1-2 weeks for first 3-4 pieces | NEXT |
+| **3 (RESEARCH)** | Channel exploration (TikTok, YouTube, local TV, Reddit, FB groups, in-person GR circuit, trade pubs, influencers, local partnerships) | findasale-innovation | 2-3 weeks per channel | NEXT |
+
+---
+
+## Q3+ Deferred Initiatives
+
+| Initiative | Status | Why Deferred |
+|-----------|--------|--------------|
+| RVM campaign (V2 scripts, A2P 10DLC, voice talent) | Design phase | 4-5 week ramp too slow vs spike approach. V2 scripts attorney-ready; A2P checklist pre-filled. |
+| eBay + Mercari channel bridge | Architecturally approved, awaiting Hacker review | Need real-operator baseline before measuring channel-bridge ROI. 8-week build post-approval. |
+
+---
+
+## S602 Artifacts Produced (filed in `claude_docs/strategy/`)
+
+- `ebay-channel-strategy-memo.md` — Phase 1 8wk + Phase 2 3mo channel routing playbook (in /outputs/, may need relocation)
+- `ebay-strategy-board-stress-test.md` — GTM + Future Vision committee review (in /outputs/, may need relocation)
+- `rvm-scripts-v1.md` — 5 original variants, Version C selected by board+gurus, then flagged for compliance issues
+- `rvm-scripts-v2.md` — 5 revised variants with first-person Patrick substantiation; V2-D + V2-E recommended
+- `rvm-scripts-board-guru-review.md` — full board + 6 business guru critique (Hormozi, Cialdini, Sugarman, Brunson, Suby, Halbert) (in /outputs/, may need relocation)
+- `rvm-tcpa-compliance-review.md` — full 42-item attorney handoff checklist
+- `rvm-a2p-10dlc-package.md` — pre-filled TCR brand + campaign registration package
+- `phase1-channel-bridge-adr.md` — 296 eng hours, eBay first then Mercari, 4 new Prisma models, $40/mo recurring (in /outputs/, may need relocation)
+
+**File hygiene note:** Four of the eight artifacts above only persist in `/outputs/` (the VM temp folder). Records flagged this — Patrick should decide whether to relocate to `claude_docs/strategy/` next session or leave as scratch.
 
 ---
 
@@ -84,27 +55,32 @@ A drift advisory warning may appear about migration ordering — that's expected
 
 | Action | Why | Blocking? |
 |--------|-----|-----------|
-| dev-environment skill Neon URL fix | Flagged 5x now — Neon decommissioned S264, skill still has old URL. skill-creator + present_files install button. | No |
-| eBay backfill 96 stuck items | Click "Sync eBay Inventory" on /organizer/settings (eBay tab). Verify via SQL in STATE.md. | No |
-| Vercel env vars (eBay token Mode 1) | EBAY_CLIENT_ID/SECRET not reaching function. Confirm values, redeploy without build cache. Mode 2 cron unaffected. | No |
-| Advisory outreach | 28 Gmail drafts queued. Send 1–2/day using patrick@finda.sale Send As alias. | No |
+| **`claude_docs/legal/` directory ratification or removal** | Created without approval by S602 legal subagent. Locked Folder Map decision needed. | No |
+| **MI LLC details for A2P 10DLC** | Application package pre-filled; Patrick provides legal name, EIN, formation date, registered street address, authorized rep, business phone, contact email (recommend `contact@finda.sale` over yahoo for TCR vetting), estimated monthly volume | No (queued) |
+| **V2 RVM script attorney sign-off** | V2-D + V2-E recommended; non-MI targeting scope needs final review | No (queued) |
+| **Voice talent decision + booking** | 2-3 hour session for selected V2 scripts | No (queued) |
+| **dev-environment skill stale Neon URL** | Flagged 5x — Neon decommissioned S264, skill still has old URL. skill-creator + present_files install button | No |
+| **eBay backfill 96 items** | Click "Sync eBay Inventory" on `/organizer/settings`. Verify via SQL in STATE.md | No |
+| **Vercel env vars (eBay Mode 1)** | EBAY_CLIENT_ID/SECRET not reaching function. Confirm values, redeploy without build cache. Mode 2 cron unaffected. | No |
+| **Advisory outreach** | 28 Gmail drafts queued. Send 1-2/day using `patrick@finda.sale` Send As alias | No |
 
 ---
 
-## QA Queue
+## Carryover QA Queue (Pending Chrome QA)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| S601 Storefront v2 (#354–#363) | Pending Chrome QA | 9 features, 4 migrations. One feature per QA dispatch. |
 | S599 Hydration #418 click test | Pending Chrome QA | Code-verified, visual click test deferred |
-| S599 Hunt Pass status (Karen) | Pending QA | Needs stale-JWT scenario unlikely on prod seed |
-| S599 PDF watermark visual | Pending Chrome QA | Generate one of each (Print Kit, Marketing, Earnings, Settlement) as TEAMS toggled-on vs SIMPLE |
+| S599 Hunt Pass status (Karen) | Pending QA | Stale-JWT scenario unlikely on prod seed |
+| S599 PDF watermark visual | Pending Chrome QA | Print Kit / Marketing / Earnings / Settlement, TEAMS-on vs SIMPLE |
 | S599 iCal footer | Pending Chrome QA | Trigger AddToCalendar, open .ics, confirm footer in DESCRIPTION |
 | S599 DonationModal end-to-end | Pending Chrome QA | Needs sale with unsold items + active settlement |
 | S599 Holds /shopper end-to-end | Pending Chrome QA | Needs active hold setup |
 | S598 dark mode modals | Pending Chrome QA | 8 components |
 | S598 mobile overflow | Pending Chrome QA | admin/items + shopper/history |
 | S598 error states | Pending Chrome QA | dashboard + edit-sale |
-| S598 Wishlist rename | Pending Chrome QA | visual scan across pages |
+| S598 Wishlist rename | Pending Chrome QA | visual scan |
 | S597 condition rating sync + FAQ merge | Pending Chrome QA | From S597 |
 | Treasure hunt progress page | Pending Chrome QA | S595 carryover |
 | ConfirmDialog smoke test | UNVERIFIED | Need deletable consignor/location |
@@ -112,13 +88,51 @@ A drift advisory warning may appear about migration ordering — that's expected
 | #268 Trail Completion XP | Blocked | Karen's trail has 0 stops |
 | #281 Streak Milestone XP | Blocked | Needs 5 real consecutive days |
 | RankUpModal dark mode | Blocked | Can't trigger rank artificially |
-| S529 mobile nav rank | Pending | Mobile viewport test |
-| #52 Encyclopedia detail page | Pending | Railway redeploy d77cff42 |
 
 ---
 
-## Carry-over
+## Deployment Status
 
-- **Advisory outreach:** 28 Gmail drafts queued. Send 1–2/day using patrick@finda.sale Send As alias.
-- **eBay sync:** Click "Sync eBay Inventory" after deploy to re-import 96 items with null ebayListingId.
-- **Sandbox stability:** S597 + parts of S599 had VM workspace unavailable. File tools + GitHub MCP + Vercel MCP + Railway MCP all worked normally. Pattern continues — flag for investigation if it persists across more sessions.
+**Frontend (Vercel):** Latest = S601 Storefront v2 full build-out. Auto-deploys on push.
+**Backend (Railway):** Latest = S601 (4 migrations deployed). Auto-deploys on push.
+**Database:** PostgreSQL on Railway. Migrations current as of S601.
+**S602 changes:** Documentation + file relocation only. No deploy required for product.
+
+---
+
+## ⚡ Push Block (S602 Wrap)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs\STATE.md
+git add claude_docs\patrick-dashboard.md
+git add claude_docs\strategy\rvm-scripts-v1.md
+git add claude_docs\strategy\rvm-scripts-v2.md
+git add claude_docs\strategy\rvm-a2p-10dlc-package.md
+git add claude_docs\strategy\rvm-tcpa-compliance-review.md
+git commit -m "S602 wrap: strategy artifacts filed, S603 acquisition sprint directive locked, get-too-big-to-ignore stance D-007 amendment"
+.\push.ps1
+```
+
+**If `claude_docs/legal/rvm-tcpa-compliance-review.md` still exists** (records said it was moved but verify):
+```powershell
+Remove-Item -LiteralPath "claude_docs\legal\rvm-tcpa-compliance-review.md"
+Remove-Item -LiteralPath "claude_docs\legal" -Recurse  # only if empty and you want directory removed
+```
+
+**If RVM files still exist at project root** (records said moved but verify):
+```powershell
+Remove-Item -LiteralPath "rvm-scripts-v1.md","rvm-scripts-v2.md","rvm-a2p-10dlc-package.md"
+```
+
+---
+
+## Key Dates
+
+| Date | Milestone | Status |
+|------|-----------|--------|
+| Now (S603) | Real-operator seeding sprint kickoff | Next session |
+| S603 + 1-2 weeks | First 3-4 visceral content pieces shipped | Next |
+| S603 + 2-4 weeks | First 5-10 hand-recruited real organizers running real sales | Next |
+| Q3 (post-baseline) | RVM campaign Phase 1 launch (if Spike 1 stalls, accelerate) | Deferred |
+| Q3 (post-baseline) | eBay + Mercari channel bridge dev dispatch (post-Hacker review) | Deferred |

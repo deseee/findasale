@@ -308,6 +308,12 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S602 (2026-04-30) — COMPLETE (Strategy/research session, no code):** Cowork session covering recent AI/camera-workflow developments (Q1 2026 vision-model landscape, eBay Magical Listing v2 AI-native architecture, Nifty/Underpriced AI/WorthPoint as competitor signals), eBay-as-channel strategy memo via findasale-innovation (Phase 1 8-week ship: eBay Magical Listing API bridge + Mercari API auto-crosspost; Phase 2 3-month: Intent-Based Routing Engine; Year-1 incremental projection ~$120K; 9 documented kill scenarios), advisory board stress test of "layer above marketplaces" framing (GTM + Future Vision committees flagged eBay's likely 12-month Seller Hub release as the kill threat; recommended locked 2-year referral rates — Patrick rejected this advice, locked counter-stance instead), RVM campaign for established operators (5 V1 scripts via findasale-marketing → board+6 business gurus picked Version C unanimously → flagged FTC Operation AI Comply persona-misrepresentation risk + MI SB 351 caller-ID-in-opening violation → 5 V2 scripts produced with first-person Patrick substantiation, female voice as truthful third-person narrator, non-MI targeting), TCPA/A2P 10DLC compliance research via findasale-legal (HOLD on all 3 phases initially → Patrick provided WY LLC alternative + first-person substantiation → unblocked; Rabbit v. Rohrman March 30 2026 N.D. Illinois ruling makes SMS DNC-scrubbing mandatory not optional), Drop Cowboy capability audit (handles auto-suppression, quiet hours, caller ID, audit logs, opt-out automation; does NOT handle A2P 10DLC carrier registration — that's Patrick's job, ~5 business days), Phase 1 channel-bridge ADR via findasale-architect (296 eng hours / 8-week ship, eBay first then Mercari sequential, 4 new Prisma models, $40/mo recurring infra, 6 red-flag security items routed to Hacker review). **Strategic stance locked (decision D-007 amendment):** "Get too big to ignore before partners can react" — speed-to-distribution over partner agreements; design for partner reneges, not contract negotiation. Saved to memory + CLAUDE.md awareness. **File hygiene:** 4 orphan files (3 RVM strategy docs from project root + 1 TCPA review from unauthorized `claude_docs/legal/`) relocated to `claude_docs/strategy/`. The `claude_docs/legal/` directory was created without approval and needs Patrick's call: ratify into Locked Folder Map, or remove. `claude_docs/strategy/` already existed in the schema. **No code changes. No roadmap entries (no features shipped). Eight artifacts curated and filed in `claude_docs/strategy/`:** ebay-channel-strategy-memo.md, ebay-strategy-board-stress-test.md, rvm-scripts-v1.md, rvm-scripts-v2.md, rvm-scripts-board-guru-review.md, rvm-tcpa-compliance-review.md, rvm-a2p-10dlc-package.md, phase1-channel-bridge-adr.md.
+
+**S601 (2026-04-30) — COMPLETE:** Storefront v2 full build-out — #354–#363 all shipped. 9 features (Business Hours, Organizer Type multi-select, Broadcast to Followers, Sale Pinned/Featured, Claim-This-Listing, Sale Attendance Count, Auction Buyer's Premium + Lot Numbers), 4 migrations, Sales SSR OG meta. All Pending Chrome QA. See patrick-dashboard.md (pre-S602) for migration deployment.
+
+**S600 (2026-04-30) — COMPLETE:** Storefront v2 QA + 3 parallel dev dispatches. Smoke test of S599 fixes (watermark toggle, Tier Lapse banner, Hydration #418). Dispatched: (1) Items page 500 root-cause investigation, (2) Tier Lapse plan card amber styling, (3) Sales SSR OG meta implementation. All roadmap rows updated BROKEN → FIXED S[N]; Chrome QA pending session completion. (Note: this entry was added retroactively in S602 wrap — original entry not made when session ran.)
+
 **S599 (2026-04-30) — COMPLETE:** Watermark feature TEAMS-gating end-to-end + 5 P1/P2 fixes + 4 hotfixes + Chrome QA. Watermark feature shipped with Round 1 (foundation: schema field, migration, helper, controller, settings UI, P1/P2 fixes — Tier Lapse banner, Hydration #418, Hunt Pass status, holds/track-visit/donation URL prefixes) and Round 2 (gate 5 existing surfaces, fill Amazon/bulk-ZIP/iCal gaps, PDF watermarks selective per locked policy, OG image tier-aware). 4 hotfixes mid-session: `@findasale/shared` import broke Railway Docker (inlined TEAMS check); settings.tsx read `user?.subscriptionTier` (User type lacks field, fetched from `/organizers/me` instead); items/[id].tsx read `ogHead.organizer` (JSX element not data); watermark URL singular vs plural mismatch. Chrome QA verified: TEAMS toggle works end-to-end, persists, non-TEAMS gets 403, Tier Lapse banner amber/sticky, track-visit returns 200. Bug NOT FIXED: Tier Lapse "Your Plan: PRO" card still teal/cyan when lapsed. Pre-existing P1 found: items/{id} 500 across all items (not regression — confirmed on pre-S599 deployment). Sales OG SSR gap discovered. 33 files changed.
 
 **S598 (2026-04-29) — COMPLETE:** Scheduled task audit + FAQ fixes (tiered fee copy, grammar, POS cash) + 5 parallel dispatches (dark mode 8 modals, mobile overflow 2 pages, backend findMany limits + adapter explicit throws, error states 2 pages, Wishlist rename 16 occurrences). Decision locked: "Wishlist" canonical name. Deferred: dev-environment skill stale Neon URL (flagged 4x), competitor monitor Apr 23 content unused, label composer QR-free layout for small Avery labels.
@@ -352,7 +358,73 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S600 — Three dispatches + remaining QA.**
+**S603 — Viral / visceral organizer acquisition exploration (Patrick's locked directive).**
+
+Patrick's verbatim directive (S602 wrap): *"prepare the next session to explore other avenues to reaching large swaths of potential customers quickly. we need faster and more viral and visceral. I know we have a great product but we have to get the ball rolling as only one real operator and a bunch of fake data isn't going to cut it even if we tell people it's in beta."*
+
+Three explicit constraints decoded:
+1. **Speed.** RVM at realistic 4-5 weeks to launch is too slow. Need real prospects in days, not weeks.
+2. **Viral / visceral.** Not informational marketing. Gut-level, shareable, emotionally charged. Estate sales + flea markets + auctions are already a viral content vertical on TikTok/IG/YouTube — that signal is exploitable.
+3. **Real operator + real data problem.** Currently 1 real operator (Patrick's family) + seed/fake data. "Beta" framing has a half-life. Need 5-10 real organizers running real sales with real data BEFORE any broader campaign or it falls apart on contact with reality.
+
+### Order of operations for S601 (locked recommendation, Patrick can override):
+
+**SPIKE 1 — Real-operator seeding (FIRST — gates everything else)** → dispatch `findasale-sales-ops`
+- Concierge onboarding offer: Patrick personally sets up first 10 organizers and runs their first sale alongside them.
+- Founding-Operator program: pay or comp first 10 ($500-1000 cash OR free PRO/TEAMS for life) in exchange for testimonial + case study + photo + name-and-likeness consent.
+- Hyper-local hand-recruit: Patrick walks the Saturday GR estate sale circuit for 4 weekends, signs 10 in person.
+- Real-data acceleration: how to get clean real-sale data into the platform fast (so screenshots, demos, case studies use real not seed data).
+- **Estimated:** 2-4 weeks to hand-recruit 10 real organizers + first 2-3 live sales.
+
+**SPIKE 2 — Visceral content (parallel to Spike 1)** → dispatch `findasale-marketing`
+- "40 hours to 15 hours" time-lapse video — visual, factual, founder-faced, share-bait.
+- "What we found at this estate sale" content series — unboxing-meets-archaeology pattern that wins on social.
+- "The pile that doesn't sell" content — the unsold-inventory shame nobody talks about, voiced empathetically.
+- Patrick's founder vlog (TikTok / YouTube Shorts) — build-in-public, audience-as-distribution.
+- "First 100 organizers" pre-launch waitlist hook — scarcity + status + viral mechanic.
+- **Estimated:** 1-2 weeks for first 3-4 pieces.
+
+**SPIKE 3 — Channel exploration (parallel, lower priority)** → dispatch `findasale-innovation`
+- TikTok / IG Reels (founder content + product demo + influencer partnership angles).
+- YouTube Shorts (estate sale walkthroughs, time-lapse tagging, 40→15 visual).
+- Local TV news pitch (slow-news-day human-interest stories — Patrick + GR + family-ops angle).
+- Reddit r/estatesales / r/flipping / r/declutter (engaged communities, founder-AMA-able).
+- FB groups for shoppers AND organizers (different plays for each).
+- In-person Saturday GR estate sale circuit (Patrick walks sales, talks to organizers, 5-min demos).
+- Trade publication outreach (EstateSales.org, Antique Trader, AuctionTime) — earned media.
+- Influencer partnerships (Mike Wolfe-tier or smaller estate-sale/antiques creators).
+- Local partnerships (Goodwill, Habitat ReStore, antique malls, GR Antique District).
+- **Estimated:** 2-3 weeks per channel spike, distributed across parallel dispatches.
+
+### Carryover from S600 (queued, not primary focus):
+
+- **V2 RVM script final legal review** (V2-D + V2-E recommended; attorney sign-off before launch).
+- **Voice talent decision + booking** (2-3 hour recording session for selected V2 scripts).
+- **A2P 10DLC application** — pending Patrick's MI LLC details: legal name, EIN, formation date, registered street address, authorized rep name+title, business phone, contact email (recommend `contact@finda.sale` over yahoo for TCR vetting), estimated monthly volume. Pre-filled package at `claude_docs/strategy/rvm-a2p-10dlc-package.md`.
+- **eBay/Mercari channel bridge** — architecturally approved, blocked on Hacker review of 6 red-flag security items (token encryption, webhook signature validation, OAuth CSRF handling, token refresh locking, sold-state race conditions, organizer data isolation). Defer dev dispatch until acquisition baseline exists.
+
+### Carryover bugs from S599 (deferred — not primary focus but Chrome QA still owed):
+
+- **P1 — Items page SSR 500** across all `/items/{id}` URLs. Pre-existing (S572→S598). See S599 dispatch notes for investigation steps. Likely culprits: `lib/ogImage.ts` data:image template literal, `pages/items/[id].tsx` getServerSideProps catch path, or socket.io-client SSR import.
+- **P2 — Tier Lapse plan card** stays teal/cyan when lapsed; should be amber. ~30 lines in `pages/organizer/dashboard.tsx`.
+- **P2 — Sales SSR OG meta** missing per-sale og:image/title/description. Watermark gating wired but SSR rendering missing. Pattern after items/[id].tsx getServerSideProps.
+
+### Roadmap impact:
+
+- **RVM campaign:** still approved in principle but **deferred to Q3** unless Spike 1 stalls. Q2 = real-operator seeding + visceral content + channel exploration.
+- **eBay/Mercari channel bridge:** still architecturally approved but **deferred** pending real-operator baseline (can't measure channel-bridge ROI without real organizers using the platform).
+- **Strategic stance D-007 amendment:** "Get too big to ignore before partners can react" — locked. All future strategy work runs through this filter.
+
+### Carryover Patrick actions:
+
+- **Advisory outreach:** 28 Gmail drafts queued. Send 1-2/day using `patrick@finda.sale` Send As alias.
+- **eBay backfill task:** Click "Sync eBay Inventory" on `/organizer/settings` to backfill 96 AVAILABLE items with NULL `ebayListingId`.
+- **Vercel env vars (eBay Mode 1):** Confirm `EBAY_CLIENT_ID`/`SECRET` set, trigger Redeploy without build cache. Mode 2 cron unaffected.
+- **dev-environment skill stale Neon URL** (flagged 4x): Update via skill-creator + present_files install button.
+- **`claude_docs/legal/` directory ratification or removal** (created without approval S600 by legal subagent — needs Patrick's call).
+- **`claude_docs/strategy/` confirmed in Locked Folder Map** (used by S600 records triage — verify in `operations/file-creation-schema.md`).
+
+**Passwords:** All test accounts use `Seedy2025!`. Test users: user1=Alice (TEAMS), user2=Bob (PRO), user6=charity sale owner, tier-lapse-test (PRO past_due), low-xp-shopper (10 XP).
 
 ### FIRST ACTION — Live-site smoke test (mandatory per CLAUDE.md §10)
 
