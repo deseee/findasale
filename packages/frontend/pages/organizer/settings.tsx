@@ -130,7 +130,7 @@ const OrganizerSettingsPage = () => {
           setOrganizerTier(response.data.subscriptionTier || null);
         }
         // Fetch watermark setting
-        const watermarkRes = await api.get('/organizer/settings/watermark');
+        const watermarkRes = await api.get('/organizers/settings/watermark');
         if (watermarkRes.data) {
           setRemoveWatermarkEnabled(watermarkRes.data.removeWatermarkEnabled || false);
         }
@@ -244,7 +244,7 @@ const OrganizerSettingsPage = () => {
   const handleWatermarkToggle = async (enabled: boolean) => {
     setWatermarkUpdating(true);
     try {
-      const res = await api.patch('/organizer/settings/watermark', {
+      const res = await api.patch('/organizers/settings/watermark', {
         removeWatermarkEnabled: enabled,
       });
       setRemoveWatermarkEnabled(res.data.removeWatermarkEnabled);
