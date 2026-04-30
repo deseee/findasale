@@ -206,9 +206,9 @@ export const getPendingOrganizers = async (req: Request, res: Response) => {
 
 /**
  * Search Google Places by business name/query
- * GET /api/verification/google/search?q=...
+ * GET /api/verification/google/search?q=...&lat=...&lng=...&city=...
  * Requires: auth
- * Returns: top 5 results with placeId, name, address, rating, userRatingsTotal
+ * Returns: top 5 results with placeId, name, address, rating, userRatingsTotal, and nextPageToken for pagination
  */
 export const searchGooglePlaces = async (req: AuthRequest, res: Response) => {
   try {
@@ -216,7 +216,7 @@ export const searchGooglePlaces = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Organizer profile not found' });
     }
 
-    const { q } = req.query;
+    const { q, city } = req.query;
     if (!q || typeof q !== 'string') {
       return res.status(400).json({ message: 'Search query required' });
     }
@@ -234,12 +234,30 @@ export const searchGooglePlaces = async (req: AuthRequest, res: Response) => {
         location: `${lat},${lng}`,
         radius: '80000' // 80km radius
       };
+    } else if (city && typeof city === 'string') {
+      // Attempt to geocode city to lat/lng for location bias
+      try {
+        const geocodeResponse = await axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
+          params: { address: city, key: apiKey },
+          timeout: 5000
+        });
+        if (geocodeResponse.data.status === 'OK' && geocodeResponse.data.results?.[0]) {
+          const loc = geocodeResponse.data.results[0].geometry.location;
+          locationParams = {
+            location: `${loc.lat},${loc.lng}`,
+            radius: '80000'
+          };
+        }
+      } catch {
+        // Fall through to global search without location bias
+      }
     }
 
     try {
       const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
         params: {
           query: q,
+          type: 'establishment',
           key: apiKey,
           ...locationParams
         },
@@ -259,7 +277,10 @@ export const searchGooglePlaces = async (req: AuthRequest, res: Response) => {
         userRatingsTotal: place.user_ratings_total || 0
       }));
 
-      res.json({ results });
+      res.json({
+        results,
+        nextPageToken: response.data.next_page_token || null
+      });
     } catch (axiosError) {
       console.error('Google Places API request failed:', axiosError);
       res.status(500).json({ message: 'Search failed' });
@@ -527,6 +548,305 @@ export const confirmGoogleVerification = async (req: AuthRequest, res: Response)
     }
   } catch (error) {
     console.error('Confirm Google verification error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Get next page of Google Places search results
+ * GET /api/verification/google/search/next?pageToken=...&q=...
+ * Requires: auth
+ * Returns: { results, nextPageToken }
+ */
+export const searchGooglePlacesNext = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.organizerProfile?.id) {
+      return res.status(401).json({ message: 'Organizer profile not found' });
+    }
+
+    const { pageToken, q } = req.query;
+    if (!pageToken || typeof pageToken !== 'string') {
+      return res.status(400).json({ message: 'pageToken required' });
+    }
+    if (!q || typeof q !== 'string') {
+      return res.status(400).json({ message: 'Search query required' });
+    }
+
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ message: 'Google Places not configured' });
+    }
+
+    try {
+      // Google requires a 2-second delay before using pagetoken
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+        params: {
+          pagetoken: pageToken,
+          key: apiKey
+        },
+        timeout: 10000
+      });
+
+      if (response.data.status !== 'OK' && response.data.status !== 'ZERO_RESULTS') {
+        console.error('Google Places API error:', response.data.status);
+        return res.status(400).json({ message: 'Search failed' });
+      }
+
+      const results = (response.data.results || []).map((place: any) => ({
+        placeId: place.place_id,
+        name: place.name,
+        address: place.formatted_address,
+        rating: place.rating || null,
+        userRatingsTotal: place.user_ratings_total || 0
+      }));
+
+      res.json({
+        results,
+        nextPageToken: response.data.next_page_token || null
+      });
+    } catch (axiosError) {
+      console.error('Google Places API request failed:', axiosError);
+      res.status(500).json({ message: 'Search failed' });
+    }
+  } catch (error) {
+    console.error('Search Google Places next error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Search Yelp businesses by query and location
+ * GET /api/verification/yelp/search?q=...&city=...&lat=...&lng=...
+ * Requires: auth
+ * Returns: { results: [{ businessId, name, address, rating, reviewCount, phone, url }] }
+ */
+export const searchYelpBusinesses = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.organizerProfile?.id) {
+      return res.status(401).json({ message: 'Organizer profile not found' });
+    }
+
+    const { q, city, lat, lng } = req.query;
+    if (!q || typeof q !== 'string') {
+      return res.status(400).json({ message: 'Search query required' });
+    }
+
+    const apiKey = process.env.YELP_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ message: 'Yelp not configured' });
+    }
+
+    // Build location params: prefer lat/lng, fall back to city
+    let locationParams: Record<string, any> = {};
+    if (lat && lng && typeof lat === 'string' && typeof lng === 'string') {
+      locationParams = {
+        latitude: parseFloat(lat),
+        longitude: parseFloat(lng)
+      };
+    } else if (city && typeof city === 'string') {
+      locationParams = { location: city };
+    } else {
+      return res.status(400).json({ message: 'City or location (lat/lng) required' });
+    }
+
+    try {
+      const response = await axios.get('https://api.yelp.com/v3/businesses/search', {
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        params: {
+          term: q,
+          ...locationParams,
+          limit: 5
+        },
+        timeout: 10000
+      });
+
+      const results = (response.data.businesses || []).map((b: any) => ({
+        businessId: b.id,
+        name: b.name,
+        address: [b.location?.address1, b.location?.city, b.location?.state, b.location?.zip_code]
+          .filter(Boolean)
+          .join(', '),
+        rating: b.rating || null,
+        reviewCount: b.review_count || 0,
+        phone: b.phone || null,
+        url: b.url || null
+      }));
+
+      res.json({ results });
+    } catch (axiosError) {
+      console.error('Yelp search API request failed:', axiosError);
+      res.status(500).json({ message: 'Search failed' });
+    }
+  } catch (error) {
+    console.error('Search Yelp businesses error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Get preview of Yelp business details for verification
+ * GET /api/verification/yelp/preview?businessId=...
+ * Requires: auth
+ * Returns: { incoming: {...}, current: {...} }
+ */
+export const previewYelpBusiness = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.organizerProfile?.id) {
+      return res.status(401).json({ message: 'Organizer profile not found' });
+    }
+
+    const { businessId } = req.query;
+    if (!businessId || typeof businessId !== 'string') {
+      return res.status(400).json({ message: 'businessId required' });
+    }
+
+    const apiKey = process.env.YELP_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ message: 'Yelp not configured' });
+    }
+
+    const organizerId = req.user.organizerProfile.id;
+
+    // Get current organizer data
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: {
+        businessName: true,
+        address: true,
+        phone: true,
+        website: true
+      }
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    try {
+      // Fetch Yelp business details
+      const response = await axios.get(`https://api.yelp.com/v3/businesses/${businessId}`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        timeout: 10000
+      });
+
+      const business = response.data;
+
+      res.json({
+        incoming: {
+          businessName: business.name,
+          address: [business.location?.address1, business.location?.city, business.location?.state, business.location?.zip_code]
+            .filter(Boolean)
+            .join(', '),
+          phone: business.phone || null,
+          website: business.url || null,
+          rating: business.rating || null,
+          reviewCount: business.review_count || 0,
+          yelpBusinessId: businessId
+        },
+        current: {
+          businessName: organizer.businessName,
+          address: organizer.address,
+          phone: organizer.phone || null,
+          website: organizer.website || null
+        }
+      });
+    } catch (axiosError) {
+      console.error('Yelp details API request failed:', axiosError);
+      res.status(500).json({ message: 'Could not load business details' });
+    }
+  } catch (error) {
+    console.error('Preview Yelp business error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Confirm Yelp verification and auto-fill profile
+ * POST /api/verification/yelp/confirm body: { businessId: string }
+ * Requires: auth
+ * Updates: businessName, address, phone, website, yelpBusinessId, verificationSource, verificationStatus, verifiedAt
+ */
+export const confirmYelpVerification = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.organizerProfile?.id) {
+      return res.status(401).json({ message: 'Organizer profile not found' });
+    }
+
+    const { businessId } = req.body;
+    if (!businessId) {
+      return res.status(400).json({ message: 'businessId required' });
+    }
+
+    const apiKey = process.env.YELP_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ message: 'Yelp not configured' });
+    }
+
+    const organizerId = req.user.organizerProfile.id;
+
+    // Check if already verified via different source
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+      select: { verificationStatus: true, verificationSource: true }
+    });
+
+    if (
+      organizer?.verificationStatus === 'VERIFIED' &&
+      organizer.verificationSource &&
+      organizer.verificationSource !== 'YELP'
+    ) {
+      return res.status(409).json({
+        message: `Already verified via ${organizer.verificationSource}`,
+        currentSource: organizer.verificationSource
+      });
+    }
+
+    try {
+      // Fetch Yelp business details
+      const response = await axios.get(`https://api.yelp.com/v3/businesses/${businessId}`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        timeout: 10000
+      });
+
+      const business = response.data;
+      const address = [business.location?.address1, business.location?.city, business.location?.state, business.location?.zip_code]
+        .filter(Boolean)
+        .join(', ');
+
+      // Update organizer
+      const updatedOrganizer = await prisma.organizer.update({
+        where: { id: organizerId },
+        data: {
+          businessName: business.name,
+          address,
+          phone: business.phone || undefined,
+          website: business.url || undefined,
+          yelpBusinessId: businessId,
+          verificationSource: 'YELP',
+          verificationStatus: 'VERIFIED',
+          verifiedAt: new Date()
+        }
+      });
+
+      res.json({
+        message: 'Business verified',
+        verificationStatus: 'VERIFIED',
+        verifiedAt: updatedOrganizer.verifiedAt
+      });
+    } catch (axiosError) {
+      console.error('Yelp details API request failed:', axiosError);
+      res.status(500).json({ message: 'Could not verify business' });
+    }
+  } catch (error) {
+    console.error('Confirm Yelp verification error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
