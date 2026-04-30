@@ -128,12 +128,12 @@ const WishlistsPage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>My Collections - FindA.Sale</title>
+        <title>My Wishlist - FindA.Sale</title>
       </Head>
 
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">My Collections</h1>
+          <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">My Wishlist</h1>
           <p className="text-warm-600 dark:text-warm-400">Organize your saved items into named collections for moving, decorating, gifting, and more.</p>
         </div>
 

@@ -131,7 +131,7 @@ const AdminItems = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 overflow-x-hidden">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-2">Manage Items</h1>
         <p className="text-warm-600 dark:text-warm-400">Search and filter items across all organizers</p>

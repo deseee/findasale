@@ -182,7 +182,7 @@ const BulkPhotoModal: React.FC<BulkPhotoModalProps> = ({
               {photoUrls.map((url, idx) => (
                 <li
                   key={idx}
-                  className="flex items-center justify-between text-sm text-warm-700 p-2 bg-white rounded border border-warm-100"
+                  className="flex items-center justify-between text-sm text-warm-700 p-2 bg-white dark:bg-gray-700 rounded border border-warm-100 dark:border-gray-600"
                 >
                   <span className="truncate flex-1 text-xs">{url}</span>
                   <button

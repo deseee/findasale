@@ -43,7 +43,7 @@ const SaleHealthMiniCard: React.FC<SaleHealthMiniCardProps> = ({ sale }) => {
             <p className="text-xs text-green-600 dark:text-green-400">{sale.conversionRate.toFixed(1)}% conv</p>
           </div>
           <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded">
-            <p className="text-red-700 dark:text-red-300 font-semibold mb-1">Favorites</p>
+            <p className="text-red-700 dark:text-red-300 font-semibold mb-1">Wishlist</p>
             <p className="text-lg font-bold text-red-700 dark:text-red-400">{sale.favoritesCount}</p>
           </div>
           <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded">

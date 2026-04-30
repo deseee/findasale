@@ -108,8 +108,8 @@ const BuyingPoolCard: React.FC<BuyingPoolCardProps> = ({
   const perPersonPrices = potentialSplits.map(n => (itemPrice / n).toFixed(2));
 
   return (
-    <div className="mt-6 pt-6 border-t border-warm-200">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <div className="mt-6 pt-6 border-t border-warm-200 dark:border-gray-700">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 rounded-lg p-4">
         {/* Header */}
         <div className="flex items-start gap-2 mb-3">
           <span className="text-2xl">🤝</span>
@@ -220,9 +220,9 @@ const BuyingPoolCard: React.FC<BuyingPoolCardProps> = ({
             {/* Price breakdown teaser */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               {potentialSplits.map((n, i) => (
-                <div key={n} className="bg-white/60 rounded p-2">
-                  <p className="text-blue-700">Split {n} ways:</p>
-                  <p className="font-bold text-blue-900">${perPersonPrices[i]} each</p>
+                <div key={n} className="bg-white/60 dark:bg-gray-800/60 rounded p-2">
+                  <p className="text-blue-700 dark:text-blue-300">Split {n} ways:</p>
+                  <p className="font-bold text-blue-900 dark:text-blue-100">${perPersonPrices[i]} each</p>
                 </div>
               ))}
             </div>

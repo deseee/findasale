@@ -192,7 +192,7 @@ export default function EmailDigestPreview() {
                       </div>
                       <div>
                         <span className="mr-2">❤️</span>
-                        {mockDigest.totalItemFavorites} new favorites
+                        {mockDigest.totalItemFavorites} new wishlist saves
                       </div>
                     </div>
                   </div>
