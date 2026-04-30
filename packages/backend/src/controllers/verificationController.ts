@@ -226,22 +226,10 @@ export const searchGooglePlaces = async (req: AuthRequest, res: Response) => {
       return res.status(503).json({ message: 'Google Places not configured' });
     }
 
-    // Get organizer's address for location context
-    const organizer = await prisma.organizer.findUnique({
-      where: { id: req.user.organizerProfile.id },
-      select: { address: true }
-    });
-
-    if (!organizer) {
-      return res.status(404).json({ message: 'Organizer not found' });
-    }
-
-    const locationBias = organizer.address ? ` ${organizer.address}` : '';
-
     try {
       const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
         params: {
-          query: `${q}${locationBias}`,
+          query: q,
           key: apiKey
         },
         timeout: 10000
