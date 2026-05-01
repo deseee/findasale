@@ -1,8 +1,100 @@
-# Patrick's Dashboard — S602 Wrap (Strategy Session)
+# Patrick's Dashboard — S603 Wrap → S604 National Cold-Start Blitz
 
-## Status: Acquisition strategy locked. Real-operator + viral-content sprint queued for S603.
+## Status: 8 parallel work streams queued for S604. National scope from day one. Defaults overridden per Patrick directive: "go big fast before they can react, doing only one city at a time is how you get caught before you can scale."
 
-S602 was a strategy/research session — no code shipped. Two strategic decisions locked: (1) "get too big to ignore before partners can react" stance, (2) RVM campaign deferred to Q3 in favor of faster, more visceral acquisition channels. Eight strategy artifacts curated and filed in `claude_docs/strategy/`.
+**S604 directive:** Mechanics 1-4 in parallel + additional cold-start work streams. **National scope, NOT GR-only.** Saved as feedback memory `feedback_go_big_fast_not_local.md`. Overrides ADR-073 Phase 1 default (was: GR only) and ADR-074 default scope (was: 50 metros) — both flip to **national from day one**.
+
+S603 was a strategy session — no code shipped. First pass produced founder-hustle spikes (cold-call sales, daily founder vlogs, Reddit AMA) → Patrick rejected verbatim as *"pathetic way of being viral."* Re-dispatched innovation with corrected viral-mechanics framing. Innovation generated 15 mechanics; advisory board GTM committee (5-voice stress test) verdicted top 5. Final plan: Waitlist Position-Jumping ships Week 1 (clean approve), Loot Drop Cascade ships infra Week 1 / activates Week 3-4 gated on 3+ real organizers × 5+ sales each, TikTok Creator Sponsorship capped at 5 creators ($15K/4mo, FTC contracts required), Auto-Reels REJECTED, Bounty Board reframed as retention not growth (Month 2). Patrick hours target ≤10h/wk. Supply seeded by Patrick's family + 2 friends (≤6h one-time) + organizer-referral bounty.
+
+## ⚠️ Push block — 11 strategy/architecture files + 2 wrap docs (PowerShell, copy-paste)
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add claude_docs/strategy/spike1-real-operator-seeding.md
+git add claude_docs/strategy/spike2-visceral-content-plan.md
+git add claude_docs/strategy/spike3-channel-exploration.md
+git add claude_docs/strategy/s603-acquisition-action-plan.md
+git add claude_docs/strategy/s603-viral-mechanics.md
+git add claude_docs/strategy/s603-viral-mechanics-gtm-stress-test.md
+git add claude_docs/strategy/s603-final-plan.md
+git add claude_docs/strategy/s603-pr-wire-blast-package.md
+git add claude_docs/strategy/s603-newsjacking-engine.md
+git add claude_docs/architecture/ADR-073-DIRECTORY-SCRAPER.md
+git add claude_docs/architecture/ADR-074-METRO-AUTO-CONTENT.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S603 wrap: viral mechanics + cold-start dispatches (scraper, PR wire, newsjacking, metro auto-content), founder-hustle spikes superseded"
+.\push.ps1
+```
+
+## 🚀 S604 Work Streams — 8 in flight (national scope)
+
+**Batch 1 — Engineering parallel (4 dispatches week 1):**
+1. **Directory scraper national** (ADR-073, override Phase 1 to national) — 80h dev, EstateSales.NET + Craigslist + GarageSaleFinder × all US metros via Vercel proxy. DMCA + 24h takedown baked in.
+2. **Metro auto-content 3K cities** (ADR-074, override scope to 3K not 50) — 50h dev, per-city pages from eBay sold-comps via Census ZCTA mapping + Next.js ISR. Schema-light.
+3. **SEO long-tail content moat** (NEW — architect spec then dev) — ~60h Phase 1, auto-generated category guides + city × category pages. Composes with #1 + #2 as SEO front-line.
+4. **Public-browse mode** (NEW — architect spec) — ~24h, every page indexed without auth. Signup becomes upgrade event not access event. Like Zillow/Indeed.
+
+**Batch 2 — Patrick + manual parallel to Batch 1 (~10h Patrick time week 1):**
+5. **PR Wire Blast fire** — Patrick provides name+phone, picks version (A tech vs B business vs both), picks vendor (PRNewswire vs Cision), $600-800 cash, files release week 1.
+6. **Newsjacking engine launch** — Patrick subscribes to alert stack (30 min), publishes first post week 1 from one of the 10 worked examples or current news.
+7. **Creator UGC swap outreach** — REPLACES paid creator sponsorship D-S603-B. Patrick repurposes 60-contact advisory list, sends 15 DMs week 1, target 5 swaps signed by week 3. Zero cash.
+
+**Batch 3 — Triggered after Batch 1 ships (week 2-3):**
+8. **HN + Reddit + ProductHunt founder launch** — once Batch 1 deliverables are live and there's something to point to. Solo founder authenticity story. ~6h Patrick time.
+
+**Optional / queued for week 4+:**
+- Wikipedia backlink seeding ($1-2K freelance writer or 40h Patrick) — 20 antique/vintage/estate Wikipedia entries with citations. Compounds Google domain authority over 6-12mo.
+
+## 📐 Original cold-start mechanics added in S603 (after viral-plan pushback)
+
+Patrick rejected the viral plan's user/cash dependencies. Re-evaluated with zero-users + zero-cash filter. Four mechanics dispatched in parallel:
+
+| Mechanic | Deliverable | Eng cost | Cash cost | First impact |
+|---|---|---|---|---|
+| **Public scrape-and-republish directory (#1)** | ADR-073 | 40h Phase 1, 160h full | $5/mo proxy | Becomes THE estate sale directory in 60-90 days |
+| **PR Wire Blast (#2 promoted)** | Press release v1 + v2 + vendor comparison + 25 media targets + 4-wk plan | 4h Patrick | $300-800 (Cision/PRNewswire) | Fire next week, 50-500 clickthroughs |
+| **Newsjacking engine (#5 reframed)** | 10 trigger categories + monitoring stack + 10 worked example posts | 0h eng (manual) | $0 | 1 post/week, compounds 12-24mo |
+| **eBay metro auto-content (#8 promoted)** | ADR-074 | 32h Phase 1 (50 metros), 72h full (3K) | $0-99/mo | Per-city pages look lived-in immediately |
+
+The thread that connects them: **build the most comprehensive sale-and-pricing index in the country before any organizer signs up.** Scraper indexes everything → metro pages display it per-city → newsjacking + PR Wire drive traffic to it → unmanaged listings convert organizers via Claim flow (S601 already shipped).
+
+## 🎯 Decisions to lock by Sunday May 3 (defaults shown)
+
+**Original 6 from viral plan:**
+1. **D-S603-A** — Waitlist incentive (Founding 100 + 6mo PRO). Default = adopt.
+2. **D-S603-B** — Creator cap (5 creators × $750/mo × 4mo = $15K). Default = 5 creators. **NOTE: Patrick rejected this as "no money to pay influencers" — recommend kill or replace with creator UGC swaps (#11) at $0 cash.**
+3. **D-S603-C** — Organizer referral bounty ($200 + 6mo PRO per referral). Default = adopt.
+4. **D-S603-D** — Loot Drop activation gate (3+ orgs × 5+ sales). Default = adopt. **NOTE: Patrick called this "no users to send to" — gate may be more aggressive (10 orgs × 10 sales) or Loot Drop may be replaced entirely by metro auto-content + scraper traffic.**
+5. **D-S603-E** — Sales SSR OG meta P0. Default = P0.
+6. **D-S603-F** — Supply seeding (3 friends, ≤6h). Default = adopt.
+
+**New from cold-start dispatches:**
+7. **D-S603-G** — Scraper legal comfort (cease-and-desist will come from EstateSales.NET). Default = proceed with DMCA registration + 24h takedown protocol.
+8. **D-S603-H** — Scraper outreach (proactive email "we have you listed, claim free" → 3-4x conversion vs silent). Default = silent index Phase 1, evaluate Phase 2.
+9. **D-S603-I** — PR Wire press release version (A: AI-powered tech angle vs B: inventory-mgmt business angle vs both). Default = both, A to tech tier 4, B to tiers 1-3. **D-006 nuance:** AI-powered fine in media-facing release.
+10. **D-S603-J** — PR Wire vendor (PRNewswire $595-795 vs Cision $299). Default = PRNewswire if budget allows, Cision if testing first.
+11. **D-S603-K** — PR Wire contact details needed (full name, phone for press release boilerplate).
+12. **D-S603-L** — Metro auto-content title phrasing ("Top Estate Sale Finds in [City]" SEO-optimized vs "Top Sale Finds" inclusive). Default = estate-focused title + inclusive page copy.
+13. **D-S603-M** — Metro auto-content scope. **OVERRIDDEN by Patrick's go-national directive — Phase 1 = 3K cities, not 50.** No further decision needed.
+14. **D-S603-N** — Metro tips content owner. **OVERRIDDEN — at 3K cities scope, Patrick can't write all tips. Default = freelance writer pool ($30-50/article × ~200 high-value cities = $6-10K outsourced) or auto-generated tips from template + city stats for the long tail.**
+
+**Override applied automatically (per S604 national directive):**
+- D-S603-M flipped from 50 metros → 3K cities Phase 1
+- D-S603-G scraper scope flipped from "1 source × 1 metro Phase 1" → "all major sources × national Phase 1"
+
+Reply with letter + override only if you want to change a default. Silence = adopt all defaults including overrides above.
+
+## 🎯 Six decisions to lock by Sunday May 3 (defaults shown — accept or override)
+
+1. **D-S603-A — Waitlist incentive:** Founding 100 badge + 6mo free PRO + public name page. No referral-position-bumps in MVP. **Default = adopt.**
+2. **D-S603-B — Creator cap:** 5 creators at $750/mo for 4 months ($15K total). **Default = 5 creators at $750/mo.**
+3. **D-S603-C — Organizer referral bounty:** $200 cash + 6mo PRO per referred organizer who ships first sale. Cap 25/mo. **Default = adopt.**
+4. **D-S603-D — Loot Drop activation gate:** 3+ real organizers × 5+ real sales each before Loot Drop activates. **Default = adopt.**
+5. **D-S603-E — Sales SSR OG meta:** promote S599 carryover bug to P0 Week 3 (Loot Drop social-share previews depend on it). **Default = P0.**
+6. **D-S603-F — Supply seeding:** Patrick onboards family + 2 friends only (≤6h, one-time). After that, referral bounty + eBay sync carry supply. **Default = adopt.**
+
+Reply with letter + override only if you want to change a default. Silence = adopt all defaults.
 
 ---
 

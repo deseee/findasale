@@ -4,6 +4,10 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
+**Latest work (S603 — COMPLETE, strategy session, no code):** Viral mechanics planning + cold-start mechanics dispatch. After GTM stress test, Patrick rejected the viral plan's user-and-cash dependencies ("no users to send to. no money to pay influencers. why deprioritize PR Wire? Bounty Board already shipped") and asked "what else you got?" — 8 cold-start mechanics presented (no users / no cash filter): public scrape-and-republish directory, PR Wire Blast (promoted from #6), SEO long-tail content moat, HN/Reddit founder launch, newsjacking content engine, Wikipedia backlink seeding, creator UGC swaps (#11 promoted from bottom), reverse-waitlist public Zillow-style index, Estate Sale Almanac PDF. Patrick selected 4 to dispatch in parallel: directory scraper architect spec (ADR-073), PR Wire Blast deliverable (press release v1 + v2, vendor comparison Cision vs PRNewswire vs 3 others, 25 hand-curated media targets, 4-week distribution plan), newsjacking content engine (10 trigger categories, 15 Google Alerts + 20 Twitter accounts + 5 Reddit subs + 5 RSS + 5 newsletters monitoring stack, reusable response template, 10 worked example posts based on real 2025-2026 news, distribution playbook, 1-post-every-1-2-weeks cadence), eBay metro auto-content architect spec (ADR-074, per-city dynamic pages from eBay sold-comps, top 50 metros Phase 1 / 3K cities Phase 3, 32h MVP, $0 marginal cost). Bounty Board confirmed already shipped via grep (controller, routes, BountyMatchModal, both shopper and organizer pages). Bounty Board reframed: not "ship Month 2," but "drive traffic via SEO + social + Reddit." **Files written this session (10 total):** `claude_docs/strategy/spike1-real-operator-seeding.md` (NEW, SUPERSEDED header), `claude_docs/strategy/spike2-visceral-content-plan.md` (NEW, SUPERSEDED header), `claude_docs/strategy/spike3-channel-exploration.md` (NEW, SUPERSEDED header), `claude_docs/strategy/s603-acquisition-action-plan.md` (NEW, SUPERSEDED header), `claude_docs/strategy/s603-viral-mechanics.md` (NEW), `claude_docs/strategy/s603-viral-mechanics-gtm-stress-test.md` (NEW), `claude_docs/strategy/s603-final-plan.md` (NEW), `claude_docs/architecture/ADR-073-DIRECTORY-SCRAPER.md` (NEW), `claude_docs/architecture/ADR-074-METRO-AUTO-CONTENT.md` (NEW), `claude_docs/strategy/s603-pr-wire-blast-package.md` (NEW), `claude_docs/strategy/s603-newsjacking-engine.md` (NEW). **No code changes. No migrations.** **Pending Patrick actions:** lock decisions (D-S603-A through D-S603-F from final-plan + ADR-073 legal-comfort + email-vs-self-discovery + ADR-074 title-phrasing + scope + content-owner + PR Wire version + vendor + contact details + launch date) by Sunday May 3. S604 dispatches Waitlist + Loot Drop infra + scraper Phase 1 + metro auto-content Phase 1 + PR Wire submission to architect/dev/marketing pipelines.
+
+**Latest work (S603 — earlier, superseded by entry above):** Viral mechanics planning for organizer + shopper acquisition. Initial pass dispatched 3 spike personas (sales-ops, marketing, innovation) which produced founder-hustle plans (cold-call sales, in-person QR cards, daily founder vlogs, Reddit AMAs) — Patrick rejected verbatim: *"those spikes suck. it's just Patrick doing cold call sales and begging for users. fucking pathetic way of being viral. totally not what I asked for."* Re-dispatched findasale-innovation with corrected framing: viral = 1 user → 5+ users with **zero added founder hours**; visceral = recipients screenshot unprompted. Innovation produced 15 mechanics. Advisory Board GTM committee (5-voice stress test: Growth-PM Veteran, Creator Economy Operator, Distribution Lead, Marketplace Economist, Adversarial Skeptic) reviewed top 5 and verdicted: ✅ Waitlist Position-Jumping (K=3.0–4.0, 8 eng hrs, $0, ship W1); ⚠️ Loot Drop Cascade (committee-revised K=1.5–1.8 vs author's 2.5–4.0, infra W1 / activate W3-4 gated on 3+ real organizers × 5+ sales each); ⚠️ TikTok Creator Sponsorship (cap 5 creators not 10, $750/mo × 4mo = $15K total, FTC 16 CFR §255 compliance required); ❌ Auto-Generated Wildest Finds Reels (REJECTED — production quality bar too high, brand damage risk); ⚠️ Bounty Board (reframe as retention not growth, defer to Month 2). Final plan: `s603-final-plan.md` — Patrick hours target ≤10h/wk, supply-side problem solved by 3-friend seed (~6h one-time) + organizer-to-organizer referral bounty ($200 cash + 6mo PRO per referred organizer who ships). 4 prior-pass docs annotated SUPERSEDED but kept as record. **Files written (5 total):** `claude_docs/strategy/spike1-real-operator-seeding.md` (NEW, superseded), `claude_docs/strategy/spike2-visceral-content-plan.md` (NEW, superseded), `claude_docs/strategy/spike3-channel-exploration.md` (NEW, superseded), `claude_docs/strategy/s603-acquisition-action-plan.md` (NEW, superseded), `claude_docs/strategy/s603-viral-mechanics.md` (NEW), `claude_docs/strategy/s603-viral-mechanics-gtm-stress-test.md` (NEW), `claude_docs/strategy/s603-final-plan.md` (NEW). **No code changes. No migrations.** **Pending Patrick actions:** lock 6 decisions D-S603-A through D-S603-F by Sunday May 3, then S604 dispatches Waitlist + Loot Drop infra to architect + dev.
+
 **Latest work (S601 — COMPLETE):** Storefront v2 full build-out — all 9 remaining gap features shipped. **#354 Business Hours:** OrganizerHours table (dayOfWeek 0–6, openTime/closeTime HH:MM, unique per organizerId+dayOfWeek, CASCADE), Organizer.timezone/byAppointment/organizerTypes, GET /organizers/:id/hours + PUT /organizers/me/hours, settings.tsx 7-day time grid + timezone selector + byAppointment toggle, storefront Hours card. Migration `20260430000000_storefront_v2_hours_types_pinned`. **#355 Organizer Type Multi-Select:** Organizer.organizerTypes String[] @default([]), 8-type checkbox grid in settings, pill badges on storefront below bio. Same migration. **#359 Sale Featured/Pinned:** Sale.isPinned Boolean @default(false), PATCH /pin + /unpin routes, getMySales/listSales sort isPinned desc first, sales.tsx pin toggle + amber badge, storefront "Featured" amber badge on pinned sales. Same migration. **Sales SSR OG meta** (sales/[id].tsx): getServerSideProps fetches sale + organizer with 3s timeout, builds ogData prop, renders SaleOGMeta server-side so FB/iMessage scrapers see per-sale og:image/title/description. **#356 Broadcast to Followers:** OrganizerBroadcast model (migration 20260430200000), POST /organizers/me/broadcast (PRO/TEAMS gate, creates Notification rows for all Follow records), GET /organizers/me/broadcasts (last 10), BroadcastSection.tsx (NEW) wired into settings.tsx Profile tab. **#361 Claim-This-Listing:** Organizer.isClaimed Boolean @default(true) + isUnmanagedListing Boolean, ClaimRequest model (migration 20260430220000), POST /organizers/:id/claim (unauthenticated, 409 if already claimed or duplicate pending), ClaimListingModal.tsx (NEW), amber claim banner on sales/[id].tsx. **#362 Sale Attendance Count:** Sale.attendanceCount Int? (migration 20260430210000), PATCH /organizers/me/sales/:id/attendance, number input for ended sales in sales.tsx + OrganizerSaleCard.tsx. **#363 Auction Buyer's Premium + Lot Numbers:** Sale.buyersPremiumPct Decimal? @db.Decimal(5,2) + Item.lotNumber String? (same migration), buyersPremiumPct validated in saleController create/update, lotNumber max 20 chars in itemController, create-sale.tsx AUCTION-gated premium field, items/[id].tsx lot number + amber premium disclosure, ItemCard.tsx amber lot badge. **JSX fix:** settings.tsx had unclosed `<div className="space-y-4">` from batch edit — inserted missing `</div>` at line 838 to fix Vercel "JSX fragment has no corresponding closing tag" build error. **Roadmap:** #354/#355/#356/#359/#361/#362/#363 → Shipped S601 Pending Chrome QA. #357 → Closed (RETAIL already committed S586). **Files changed (21 total):** `packages/database/prisma/schema.prisma`, 4 migration SQL files (20260430000000/200000/210000/220000), `packages/backend/src/routes/organizers.ts`, `packages/backend/src/controllers/saleController.ts`, `packages/backend/src/controllers/itemController.ts`, `packages/frontend/pages/organizer/settings.tsx`, `packages/frontend/pages/organizer/sales.tsx`, `packages/frontend/pages/organizer/storefront/[slug].tsx`, `packages/frontend/components/OrganizerSaleCard.tsx`, `packages/frontend/components/BroadcastSection.tsx` (NEW), `packages/frontend/components/ClaimListingModal.tsx` (NEW), `packages/frontend/pages/sales/[id].tsx`, `packages/frontend/pages/organizer/create-sale.tsx`, `packages/frontend/pages/items/[id].tsx`, `packages/frontend/components/ItemCard.tsx`, `claude_docs/strategy/roadmap.md`. **Pending Patrick actions:** (1) push block in dashboard; (2) run 4 new migrations on Railway (see dashboard Step 2); (3) Chrome QA all storefront v2 features next session.
 
 **Latest work (S600 — COMPLETE):** Storefront v2 gap audit + #357/#354 industry standard decisions + 3 parallel fixes. **Feature naming correction:** "Shop Mode" was renamed to "Retail Mode" then consolidated — `isRetailMode`/`hasRetailMode` booleans were dropped entirely via migration `20260420200000_retail_saletype`; RETAIL is now a saleType value and `retailAutoRenewDays Int` handles auto-renewal. Neither boolean field exists on schema anymore. **#354 decision LOCKED:** Build `OrganizerHours` table — standard model (Google Business Profile, Yelp, Apple Maps all use it): day-of-week rows (0–6), `openTime`/`closeTime` HH:MM strings, `timezone` on Organizer, `byAppointment Boolean`. Separate from sale dates. Roadmap #354 stays as-is. **#357 decision LOCKED:** RETAIL already committed to saleType — resolved by existing migration, not pending. Roadmap #357 closed (already done). Storefront v2 retail layout keys off `saleType === 'RETAIL'`, not any boolean. **Tier Lapse card gradient FIXED:** `packages/frontend/pages/organizer/dashboard.tsx` — card border conditional was incorrectly bundled inside the gradient ternary; separated into two distinct ternaries so amber gradient + amber border both apply when `isLapsed=true`. **`/items/{id}` 500 FIXED:** Root cause — `packages/frontend/lib/ogImage.ts` `generateSaleOGImage` was building a fallback OG image using a data URI (`data:image/svg+xml,...`) as a Cloudinary base image path. Special characters in the data URI broke URL parsing in Vercel's Node runtime causing SyntaxError. Fix: replaced data URI approach with Cloudinary native solid-color background parameter (`b_rgb:fef3c7`). **Storefront v2 schema fields shipped (#352/#353/#360):** Added `tagline String?`, `yearFounded Int?`, `twitterUrl String?`, `tiktokUrl String?`, `youtubeUrl String?`, `pinterestUrl String?` to Organizer model. Migration `20260430100000_storefront_v2_organizer_fields`. Routes validation + response updated in `packages/backend/src/routes/organizers.ts`. Settings UI added to `packages/frontend/pages/organizer/settings.tsx` (tagline with 120-char counter, year founded numeric input, 4 new social link fields below existing etsy). **Roadmap entries #352–#363 added** (storefront v2 gap audit). **Files changed:** `packages/frontend/pages/organizer/dashboard.tsx`, `packages/frontend/lib/ogImage.ts`, `packages/database/prisma/schema.prisma`, `packages/database/prisma/migrations/20260430100000_storefront_v2_organizer_fields/migration.sql` (NEW), `packages/backend/src/routes/organizers.ts`, `packages/frontend/pages/organizer/settings.tsx`, `claude_docs/strategy/roadmap.md`. **Pending Patrick actions:** push block below + run migrate deploy + prisma generate for new migration.
@@ -308,6 +312,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S603 (2026-04-30) — COMPLETE (Strategy session, no code):** Viral mechanics plan for acquisition. First pass produced 3 founder-hustle spikes (cold-call sales, daily founder vlogs, Reddit AMA) → Patrick rejected as "pathetic way of being viral." Re-dispatched innovation with corrected viral-mechanics framing → 15 candidates. GTM advisory committee (5-voice stress test) verdicted top 5: ✅ Waitlist Position-Jumping (W1, $0, K=3-4), ⚠️ Loot Drop Cascade (committee-revised K=1.5-1.8, infra W1 / activate W3-4 gated on supply), ⚠️ TikTok Creator Sponsorship (cap 5 creators, $15K/4mo, FTC contracts required), ❌ Auto-Reels REJECTED, ⚠️ Bounty Board → retention M2. Final plan: `s603-final-plan.md`. Patrick hours target ≤10h/wk. Supply solved by 3-friend seed (one-time 6h) + organizer-referral bounty ($200 + 6mo PRO). 4 prior-pass docs annotated SUPERSEDED. 6 decisions D-S603-A→F queued for Patrick to lock by May 3.
+
 **S602 (2026-04-30) — COMPLETE (Strategy/research session, no code):** Cowork session covering recent AI/camera-workflow developments (Q1 2026 vision-model landscape, eBay Magical Listing v2 AI-native architecture, Nifty/Underpriced AI/WorthPoint as competitor signals), eBay-as-channel strategy memo via findasale-innovation (Phase 1 8-week ship: eBay Magical Listing API bridge + Mercari API auto-crosspost; Phase 2 3-month: Intent-Based Routing Engine; Year-1 incremental projection ~$120K; 9 documented kill scenarios), advisory board stress test of "layer above marketplaces" framing (GTM + Future Vision committees flagged eBay's likely 12-month Seller Hub release as the kill threat; recommended locked 2-year referral rates — Patrick rejected this advice, locked counter-stance instead), RVM campaign for established operators (5 V1 scripts via findasale-marketing → board+6 business gurus picked Version C unanimously → flagged FTC Operation AI Comply persona-misrepresentation risk + MI SB 351 caller-ID-in-opening violation → 5 V2 scripts produced with first-person Patrick substantiation, female voice as truthful third-person narrator, non-MI targeting), TCPA/A2P 10DLC compliance research via findasale-legal (HOLD on all 3 phases initially → Patrick provided WY LLC alternative + first-person substantiation → unblocked; Rabbit v. Rohrman March 30 2026 N.D. Illinois ruling makes SMS DNC-scrubbing mandatory not optional), Drop Cowboy capability audit (handles auto-suppression, quiet hours, caller ID, audit logs, opt-out automation; does NOT handle A2P 10DLC carrier registration — that's Patrick's job, ~5 business days), Phase 1 channel-bridge ADR via findasale-architect (296 eng hours / 8-week ship, eBay first then Mercari sequential, 4 new Prisma models, $40/mo recurring infra, 6 red-flag security items routed to Hacker review). **Strategic stance locked (decision D-007 amendment):** "Get too big to ignore before partners can react" — speed-to-distribution over partner agreements; design for partner reneges, not contract negotiation. Saved to memory + CLAUDE.md awareness. **File hygiene:** 4 orphan files (3 RVM strategy docs from project root + 1 TCPA review from unauthorized `claude_docs/legal/`) relocated to `claude_docs/strategy/`. The `claude_docs/legal/` directory was created without approval and needs Patrick's call: ratify into Locked Folder Map, or remove. `claude_docs/strategy/` already existed in the schema. **No code changes. No roadmap entries (no features shipped). Eight artifacts curated and filed in `claude_docs/strategy/`:** ebay-channel-strategy-memo.md, ebay-strategy-board-stress-test.md, rvm-scripts-v1.md, rvm-scripts-v2.md, rvm-scripts-board-guru-review.md, rvm-tcpa-compliance-review.md, rvm-a2p-10dlc-package.md, phase1-channel-bridge-adr.md.
 
 **S601 (2026-04-30) — COMPLETE:** Storefront v2 full build-out — #354–#363 all shipped. 9 features (Business Hours, Organizer Type multi-select, Broadcast to Followers, Sale Pinned/Featured, Claim-This-Listing, Sale Attendance Count, Auction Buyer's Premium + Lot Numbers), 4 migrations, Sales SSR OG meta. All Pending Chrome QA. See patrick-dashboard.md (pre-S602) for migration deployment.
@@ -357,6 +363,215 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 **S572 (2026-04-25) — COMPLETE:** Audit + 3 parallel fixes + P0 Railway hotfix + comprehensive Chrome QA + QR auto-claim + in-app scanner Phase 1 + scanner relocation. Hydration #418 root-cause fixed (Layout.tsx SSR conditional). D-001 manifest inclusive copy. Right-panel 1104px overflow fixed. Encyclopedia.ts routes hotfix via MCP. 9 Chrome-verified features. QR auto-claim shipped (auto-fires foundMutation on mount). ADR-072 scanner spec locked. Scanner Phase 1: useQRScanner + QRScannerModal + QRScannerButton. html5-qrcode added. Scanner relocated to mobile top-header utility row.
 
 ## Next Session
+
+**S604 — National-scope cold-start blitz. Ship 8 parallel work streams. Beat competitors to scale.**
+
+Patrick's S603 wrap directive (verbatim): *"work on 1-4 in parallel where applicable but don't just focus on GR, it's too little. we have to go big fast before they can react and doing only one city at a time is how you get caught before you can scale. surface any other ideas that you plan to implement and run those in parallel as well."*
+
+This overrides ADR-073 Phase 1 default (was: EstateSales.NET + GR only) and ADR-074 default scope (was: 50 metros Phase 1). New defaults: **national from day one.** Saved as feedback memory `feedback_go_big_fast_not_local.md`.
+
+### FIRST ACTION — verify S603 push and live deployment
+
+1. Run `mcp__github__list_commits` to confirm S603 wrap commit (13 files) is on main.
+2. Open finda.sale in Chrome — verify production is up, no regressions from S603 prep.
+3. Check Vercel + Railway dashboards for failed deploys.
+4. If push didn't go through, surface to Patrick before any S604 work starts.
+
+### Decision lock-in (~15 min Patrick time)
+
+14 decisions queued in `claude_docs/patrick-dashboard.md` (D-S603-A through D-S603-N). Defaults documented. Patrick reply with letter + override only if changing default. Silence = adopt.
+
+**National-scope override applied automatically:**
+- D-S603-M (metro scope): override to **3K cities Phase 1**, not 50 (per S603 directive)
+- D-S603-G (scraper national): scrape EstateSales.NET + EstateSales.org + Craigslist + FB Marketplace + GarageSaleFinder all metros simultaneously, not 1 source × 1 metro
+
+### Batch 1 — Engineering parallel (4 simultaneous Agent dispatches, ~1.5M tokens)
+
+**Dispatch 1.1 — Directory scraper national Phase 1** → general-purpose agent w/ findasale-dev context
+- Implement ADR-073 with national-scope override
+- Phase 1: EstateSales.NET + Craigslist + GarageSaleFinder × all US metros via Vercel proxy pattern (mirrors `pages/api/proxy/ebay.ts`)
+- Reuse Sale model + isUnmanagedListing (S601 shipped)
+- Add Sale.sourceUrl/sourceName/lastScrapedAt/scrapeVersion fields
+- DMCA agent registration + 24h takedown protocol baked in
+- Schema migration + cron + admin dashboard for scrape health
+- ~80h dev work (2x prior estimate due to national scope)
+
+**Dispatch 1.2 — Metro auto-content 3K cities Phase 1** → general-purpose agent w/ findasale-dev context
+- Implement ADR-074 with 3K-cities national scope override
+- Per-city dynamic pages at `finda.sale/city/[slug]` populated from eBay sold-comp data
+- Census ZCTA zip→city mapping + Next.js ISR (revalidate=86400)
+- Schema-light: compute on demand from existing Item/Sale tables, no new MetroPage model
+- Auto-generated tips for 3K cities + hand-written for top 20 (Patrick + 19 from advisory list freelance writer queue)
+- ~50h dev (vs 32h prior 50-metro estimate)
+
+**Dispatch 1.3 — SEO long-tail content moat (architect spec then dev)** → general-purpose agent w/ findasale-architect context
+- New mechanic — auto-generated category guides + item pricing guides + per-city × per-category pages
+- Composes with Scraper (#1) and Metro (#8) as the SEO front-line
+- Templates: "Vintage Rolex Pricing Guide 2026" / "Mid-Century Furniture for [City]" / "Hummel Figurine Identification Guide" using eBay sync price data
+- ~60h Phase 1 (template + content pipeline + 500 high-value pages)
+- Returns full ADR + dev plan; dispatch dev in subsequent batch
+
+**Dispatch 1.4 — Public-browse mode (no signup required)** → general-purpose agent w/ findasale-architect context
+- Critical SEO infrastructure — every sale, item, organizer, city page must be fully indexed without auth
+- Audit existing routes for auth-walls; remove unnecessary login gates
+- Signup becomes upgrade event (alerts, claim, save) not access event
+- Like Zillow/Indeed/Glassdoor pattern
+- ~24h Phase 1 architect spec + dev work
+
+### Batch 2 — Patrick-time + manual work parallel to Batch 1 (~10h Patrick time)
+
+**Dispatch 2.1 — PR Wire Blast fire** (Patrick: 4h, $600-800 cash)
+- Patrick provides full name + phone for press release contact block
+- Picks Version A (AI-powered tech angle) or B (inventory-mgmt business angle) or both
+- Picks PRNewswire ($595-795) or Cision ($299)
+- Files release week 1 of S604
+- Sends hand-curated emails to 25 media targets per `s603-pr-wire-blast-package.md`
+
+**Dispatch 2.2 — Newsjacking engine launch** (Patrick: 30 min setup + 3h first post)
+- Patrick subscribes to 15 Google Alerts + 20 Twitter accounts + 5 subreddits + 5 RSS + 5 newsletters per `s603-newsjacking-engine.md`
+- Picks first opportunity from monitoring; uses one of the 10 worked example posts as template OR drafts new from current news
+- Publishes week 1, distributes Twitter/LinkedIn/Reddit
+- Ongoing cadence: 1 post every 1-2 weeks
+
+**Dispatch 2.3 — Creator UGC swap outreach** (Patrick: 3h, $0 cash) — REPLACES paid creator sponsorship D-S603-B
+- Patrick repurposes `claude_docs/marketing/advisory-outreach-drafts.md` list (~60 contacts)
+- Pivot offer from "be our advisor" to "creator content swap": free PRO + featured placement on FindA.Sale social accounts in exchange for app-on-camera content (FTC #ad disclosure required)
+- Send 15 outreach DMs week 1, target 5 swaps signed by week 3
+- Zero cash exchanged
+
+### Batch 3 — Triggered after Batch 1 ships (week 2-3)
+
+**Dispatch 3.1 — Hacker News + Reddit + ProductHunt founder launch**
+- Once Scraper Phase 1 + Metro 3K + Public-browse + SEO content are live
+- Solo founder authenticity story: "Show HN: I built FindA.Sale to fix the broken estate sale market — solo founder, GR Michigan, would love feedback"
+- Cross-post to /r/SideProject, /r/InternetIsBeautiful, /r/Entrepreneur, /r/AntiqueDealers
+- ProductHunt launch with founder Q&A
+- ~6h Patrick time, repeatable every 3-4 months with new milestones
+
+**Dispatch 3.2 — Wikipedia backlink seeding**
+- Outsource to freelance writer ($50-100/article × 20 articles = ~$1-2K) OR queue Patrick for week 4
+- 20 contributions to antique/vintage/estate-sale Wikipedia entries with accurate data + citations
+- Backlinks compound Google domain authority over 6-12 months
+
+### Sequencing logic
+
+Batch 1 (eng-heavy, parallel) + Batch 2 (Patrick + manual, parallel to Batch 1) run concurrently in week 1. Batch 3 fires week 2-3 once Batch 1 deliverables are live and there's something for the launch + backlinks to point to.
+
+This is 8 work streams in flight by end of S604 week 1. Token budget per batch: ~1.5M agent tokens. Patrick hours week 1: ~10-12h. Hours week 2-3: ~6-8h.
+
+### Carryover from S603 (decisions and reframes)
+
+- **D-S603-B (paid creators) replaced by Creator UGC Swaps (#11).** No cash exchanged. Mechanism: free PRO + featured placement on platform social.
+- **D-S603-D (Loot Drop activation) deprioritized.** Patrick's "no users to send to" critique stands. Replaced by SEO + scraper + metro auto-content as the primary discovery layer. Loot Drop revisited Month 2+ once organic shopper traffic from SEO is live.
+- **D-S603-A (Waitlist position-jumping) keeps shipping** — position-jumping works for any traffic source, not just paid acquisition. Composes with HN launch + PR Wire + organic SEO.
+
+### Carryover from S599 (deferred bugs — verify in production before scheduling)
+
+- **P1 — Items page SSR 500.** S600 entry claims fixed via Cloudinary `b_rgb:fef3c7` background. Verify in production first action of S604.
+- **P2 — Tier Lapse plan card teal/cyan when lapsed.** S600 entry claims fixed. Verify.
+- **Sales SSR OG meta** (D-S603-E P0) shipped S601 per Latest Work entry. Verify in production by checking `view-source:` on a sale page for og:image/title/description tags.
+
+### Carryover Patrick actions (still open)
+
+- 28 Gmail advisory drafts queued (now repurposed for Creator UGC swap outreach — Batch 2.3)
+- eBay backfill: Click "Sync eBay Inventory" on `/organizer/settings`
+- Vercel env vars (eBay Mode 1) — confirm + redeploy without build cache
+- dev-environment skill stale Neon URL (flagged 4x): skill-creator + present_files
+- `claude_docs/legal/` directory ratification or removal (S600 unauthorized creation)
+- A2P 10DLC application — pending MI LLC details
+
+### S603 superseded docs (kept as record, NOT to be executed)
+
+- `claude_docs/strategy/spike1-real-operator-seeding.md` — concierge + cold-call sales, REJECTED
+- `claude_docs/strategy/spike2-visceral-content-plan.md` — daily founder vlog grind, REJECTED
+- `claude_docs/strategy/spike3-channel-exploration.md` — Reddit/FB/local TV cold outreach, REJECTED
+- `claude_docs/strategy/s603-acquisition-action-plan.md` — synthesis of rejected spikes, SUPERSEDED
+
+### QA carryover (verification tasks)
+
+- S601 storefront v2 features (#354–#363, 9 features, 4 migrations) — Pending Chrome QA from S601 wrap
+- Hydration #418 click verification on NotificationBell, AvatarDropdown, hamburger
+- DonationModal SettlementWizard end-to-end
+- Holds `/shopper` page end-to-end
+- PDF watermark visual confirmation (Print Kit, Marketing Kit, Earnings, Settlement Receipt)
+- iCal footer in `.ics` description
+- Treasure hunt progress page
+- ConfirmDialog smoke test
+
+**Passwords:** Test accounts `Seedy2025!`. user1=Alice (TEAMS), user2=Bob (PRO), user6=charity sale owner, tier-lapse-test (PRO past_due), low-xp-shopper (10 XP).
+
+---
+
+### LEGACY S603 plan content below (preserved for context — Patrick rejected this approach, then the corrected viral plan, in favor of national cold-start)
+
+**S603 — Viral / visceral organizer acquisition exploration (Patrick's locked directive).**
+
+S603 produced the viral-mechanics plan (`claude_docs/strategy/s603-final-plan.md`). The first pass (cold-call founder-hustle spikes) was rejected by Patrick. The second pass produced 15 mechanics; the GTM advisory committee verdicted the top 5. Plan is locked pending 6 Patrick decisions.
+
+### FIRST ACTION — confirm Patrick's 6 decisions (D-S603-A through D-S603-F)
+
+The synthesis doc at `claude_docs/strategy/s603-final-plan.md` lists these explicitly. Defaults are documented; if Patrick gives no answer, adopt defaults and proceed.
+
+1. **D-S603-A — Waitlist incentive structure** — Founding 100 badge + 6mo free PRO + public name on Founding 100 page. No referral-position-bumps in MVP. Default = adopt.
+2. **D-S603-B — Creator sponsorship cap** — 5 creators at $750/mo for 4 months ($15K total). Default = 5 creators.
+3. **D-S603-C — Organizer referral bounty** — $200 cash + 6mo free PRO per referred organizer who ships first sale. Cap 25/mo. Default = adopt.
+4. **D-S603-D — Loot Drop activation gate** — hard requirement: 3+ real organizers × 5+ real sales each. Default = adopt the gate.
+5. **D-S603-E — Sales SSR OG meta priority** — promote to P0 Week 3. Required for Loot Drop social-share preview cards. Default = P0.
+6. **D-S603-F — Supply seeding scope** — Patrick onboards family + 2 friends as initial 3 organizers (≤6h, one-time). After that, organizer-referral bounty + eBay sync carry supply. Default = adopt.
+
+### Week 1 dispatches (after decisions locked)
+
+**Dispatch 1 — Waitlist Position-Jumping page** → `findasale-architect` for spec, then `findasale-dev` for build (~8 eng hours). New `pages/waitlist.tsx` + WaitlistEntry Prisma model + position cron + email sequence. Public ranked position with refer-to-jump-100-spots. NO "AI" copy per D-006.
+
+**Dispatch 2 — Loot Drop Cascade infrastructure** → `findasale-architect` then `findasale-dev` (~40 eng hours). Cron job: weekly Friday 10AM ET selecting top 10 finds by (actualPrice / aiEstimatedValue) per zip. Push template, frequency cap (max 1/shopper/week), per-zip targeting. Activation flag default OFF until D-S603-D gate clears.
+
+**Dispatch 3 — Organizer referral bounty** → `findasale-architect` then `findasale-dev` (~12 eng hours). Each existing organizer gets unique referral link. Successful referral (referred org ships first sale) = $200 cash + 6mo PRO. Stripe payout cron monthly. Hard cap 25/mo.
+
+**Dispatch 4 — Sales SSR OG meta fix** (S599 carryover, NOW P0) → `findasale-dev` (~16 eng hours). `pages/sales/[id].tsx` getServerSideProps fetches sale + items + organizer, renders SaleOGMeta server-side. Without this, Loot Drop links shared on FB/iMessage have no preview cards.
+
+### Week 2 (after Week 1 ships)
+
+**Dispatch 5 — TikTok creator outreach** — Patrick batch-sends 15 DMs (≤2.5h his time). Standardized template, FTC-compliant per 16 CFR §255. Target: 5 signed creators by end of Week 3 at $750/mo for 4 months.
+
+### Carryover from S599 (deferred bugs — not primary focus but Chrome QA still owed)
+
+- **P1 — Items page SSR 500** across all `/items/{id}` URLs. Pre-existing (S572→S598). Likely culprits: `lib/ogImage.ts` data:image template literal, `pages/items/[id].tsx` getServerSideProps catch path, or socket.io-client SSR import. (S600 entry in STATE.md claims this was fixed via Cloudinary `b_rgb:fef3c7` background — verify in production before scheduling new dispatch.)
+- **P2 — Tier Lapse plan card** stays teal/cyan when lapsed; should be amber. ~30 lines in `pages/organizer/dashboard.tsx`. (S600 entry claims this was fixed — verify in production.)
+
+### Carryover Patrick actions (still open)
+
+- **Advisory outreach:** 28 Gmail drafts queued. Send 1–2/day using `patrick@finda.sale` Send As alias.
+- **eBay backfill:** Click "Sync eBay Inventory" on `/organizer/settings`. Backfills 96 AVAILABLE items with NULL `ebayListingId`.
+- **Vercel env vars (eBay Mode 1):** Confirm `EBAY_CLIENT_ID`/`SECRET` set, redeploy without build cache. Mode 2 cron unaffected.
+- **dev-environment skill stale Neon URL** (flagged 4x): Update via skill-creator + present_files.
+- **`claude_docs/legal/` directory ratification or removal** (created without approval S600).
+- **A2P 10DLC application** — pending MI LLC details: legal name, EIN, formation date, registered street address, authorized rep name+title, business phone, contact email, estimated monthly volume.
+
+### S603 superseded docs (kept as record, NOT to be executed)
+
+- `claude_docs/strategy/spike1-real-operator-seeding.md` — concierge + cold-call sales, REJECTED
+- `claude_docs/strategy/spike2-visceral-content-plan.md` — daily founder vlog grind, REJECTED
+- `claude_docs/strategy/spike3-channel-exploration.md` — Reddit/FB/local TV cold outreach, REJECTED
+- `claude_docs/strategy/s603-acquisition-action-plan.md` — synthesis of the rejected spikes, SUPERSEDED
+
+Each has SUPERSEDED header at top explaining why.
+
+### QA carryover (not for dispatch as bugs — these are pure verification tasks)
+
+- S601 storefront v2 features (#354–#363, 9 features, 4 migrations) — Pending Chrome QA from S601 wrap, never executed
+- Hydration #418 click verification on NotificationBell, AvatarDropdown, hamburger
+- DonationModal SettlementWizard end-to-end
+- Holds `/shopper` page end-to-end
+- PDF watermark visual confirmation (Print Kit, Marketing Kit, Earnings, Settlement Receipt) TEAMS-on vs SIMPLE
+- iCal footer in `.ics` description
+- Treasure hunt progress page
+- ConfirmDialog smoke test
+
+**Passwords:** All test accounts use `Seedy2025!`. Test users: user1=Alice (TEAMS), user2=Bob (PRO), user6=charity sale owner, tier-lapse-test (PRO past_due), low-xp-shopper (10 XP).
+
+---
+
+### LEGACY S603 plan content below (preserved for context — Patrick rejected this approach)
 
 **S603 — Viral / visceral organizer acquisition exploration (Patrick's locked directive).**
 
