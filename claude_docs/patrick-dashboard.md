@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S612 (Chrome QA in progress)
+# Patrick's Dashboard — S612 COMPLETE
 
-## Status: S611 LIVE on Vercel. SCRAPER_ENABLED=true confirmed. Running Chrome QA.
+## Status: S612 DONE. City dataset regenerated (2,723 cities). Scraper live. Press release URGENT (May 5 deadline).
 
-**Headline:** All S611 features live on Vercel (ca12138 READY). All 5 Patrick manual actions now complete — migrations, INTERNAL_API_URL, SCRAPER_ENABLED all done. Scraper is now live and will run at next cron window (00:00 + 06:00 UTC). Chrome QA of broadcast card, buyer's premium badge, and tier lapse amber in progress this session.
+**Headline:** `pnpm data:cities` fixed and run — 2,723 population-sorted US cities now in `data/us-cities-3000.json` (was 35KB stub with ~137 cities). SCRAPER_ENABLED=true confirmed live, running daily at 00:00 + 06:00 UTC. Press release filing deadline is TOMORROW (May 5, 9:00 AM EST).
 
 ---
 
@@ -15,7 +15,7 @@
 | ✅ | Run `prisma migrate deploy` | Done | Both migrations deployed |
 | ✅ | Set `INTERNAL_API_URL` in Vercel | Done | OG meta should now work |
 | ✅ | Set `SCRAPER_ENABLED=true` in Railway env | Done | Scraper now live — runs at 00:00 + 06:00 UTC daily |
-| **P2** | Run `pnpm data:cities` from `packages/frontend` | When ready | Regenerates `data/us-cities-3000.json` with full ~3,000 cities |
+| ✅ | Run `pnpm data:cities` from `packages/frontend` | Done S612 | 2,723 population-sorted cities — New York → Ocean City |
 | **P2** | Fill in `[Last Name]` (×3) + real cell in press release | **May 5** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
 | **P2** | File PR Wire release on PRNewswire | Tue May 5, 9:00 AM EST | Schedule for 9:00 AM EST |
 | **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA, NASMM, ISA, etc. from S596 |
@@ -71,13 +71,12 @@ Pending migrations:
 
 ---
 
-## 🚀 S612 Plan (Next Session)
+## 🚀 S613 Plan (Next Session)
 
-1. Push S611 block (above) — first action
-2. Run pending migrations
-3. Chrome QA: storefront broadcast card, buyer's premium badge, tier lapse amber
-4. Check Vercel for `INTERNAL_API_URL` — fix OG meta
-5. Verify #361 claim banner positive path (user11 storefront after re-seed)
+1. Chrome QA of S611 features: broadcast card, buyer's premium badge, tier lapse amber
+2. Verify #361 claim banner positive path (user11 = Sunrise Consignment, `isUnmanagedListing=true`)
+3. Check Vercel for `INTERNAL_API_URL` — fix OG meta if still broken
+4. Review + send 19 outreach drafts in Gmail
 
 ---
 
