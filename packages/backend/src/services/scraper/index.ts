@@ -7,8 +7,8 @@ import { prisma } from '../../lib/prisma';
 import { ParsedListing } from './htmlParser';
 import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
-import { scrapeEstateSalesNet } from './sources/estateSalesNet';
-import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
+import { scrapeEstateSalesNet } from './sources/estatesalesnet';
+import { scrapeGarageSaleFinder } from './sources/garagesalefinder';
 import { scrapeCraigslist } from './sources/craigslist';
 import { enrichOrganizer } from './enrichment';
 
@@ -44,7 +44,7 @@ export async function getOrCreateSystemOrganizer(): Promise<string> {
 
   if (existing?.organizer?.id) {
     _systemOrganizerId = existing.organizer.id;
-    return _systemOrganizerId;
+    return existing.organizer.id;
   }
 
   // Create system user + organizer
@@ -78,7 +78,7 @@ export async function getOrCreateSystemOrganizer(): Promise<string> {
     'US'
   ).catch((err) => console.error('[scraper] Enrichment failed silently:', err));
 
-  return _systemOrganizerId;
+  return _systemOrganizerId!;
 }
 
 /**
