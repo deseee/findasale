@@ -30,16 +30,16 @@ function metroToUrl(metro: string): string {
 }
 
 /**
- * Scrape EstateSales.NET for a specific metro area.
+ * Scrape EstateSales.NET for a specific metro area and return items.
  * Uses Puppeteer because the site requires JS to render sale cards.
+ * Returns items without ingesting — used by GitHub Actions workflow.
  */
-export async function scrapeEstateSalesNet(
+export async function scrapeEstateSalesNetItems(
   metro: string,
-  organizerId: string,
   rateLimiter: RateLimiter
-): Promise<{ created: number; updated: number; skipped: number; failed: number }> {
+): Promise<ScrapedItem[]> {
   let browser: Browser | null = null;
-  const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
+  const items: ScrapedItem[] = [];
 
   try {
     await rateLimiter.loadRobotsTxt(ESTATESALES_BASE_URL);
@@ -67,7 +67,7 @@ export async function scrapeEstateSalesNet(
     const response = await page.goto(metroUrl, { waitUntil: 'networkidle2', timeout: 30000 });
     if (!response || response.status() === 404) {
       console.warn(`[EstateSalesNet] Metro page not found: ${metroUrl}`);
-      return stats;
+      return items;
     }
 
     // Wait for sale cards to render
@@ -100,15 +100,43 @@ export async function scrapeEstateSalesNet(
 
     await page.close();
 
-    // Process each sale link
+    // Process each sale link and collect items
     for (const saleUrl of saleLinks) {
       await jitterDelay(800, 2500);
       const item = await parseEstateSalesNetSale(saleUrl, rateLimiter);
-      if (!item) {
-        stats.failed++;
-        continue;
+      if (item) {
+        items.push(item);
       }
+    }
 
+    return items;
+  } catch (error) {
+    console.error(`[EstateSalesNet] Scrape failed for ${metro}:`, error);
+    throw error;
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+/**
+ * Scrape EstateSales.NET for a specific metro area.
+ * Uses Puppeteer because the site requires JS to render sale cards.
+ * Calls scrapeEstateSalesNetItems and ingests results.
+ */
+export async function scrapeEstateSalesNet(
+  metro: string,
+  organizerId: string,
+  rateLimiter: RateLimiter
+): Promise<{ created: number; updated: number; skipped: number; failed: number }> {
+  const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
+
+  try {
+    const items = await scrapeEstateSalesNetItems(metro, rateLimiter);
+
+    // Ingest collected items
+    for (const item of items) {
       const result = await ingestScrapedListing(item, organizerId);
       if (result.status === 'created') stats.created++;
       else if (result.status === 'updated') stats.updated++;
@@ -120,10 +148,6 @@ export async function scrapeEstateSalesNet(
   } catch (error) {
     console.error(`[EstateSalesNet] Scrape failed for ${metro}:`, error);
     throw error;
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
   }
 }
 
