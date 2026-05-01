@@ -4,6 +4,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
+**Latest work (S613 — COMPLETE, admin scraper page fully fixed + Railway cache-busted):** `/admin/scraper` page was 404 → redirecting → data load failure → white in dark mode → empty trigger dropdown — five successive bugs fixed. Root causes: (1) `@/hooks/useAuth` and `@/hooks/useToast` don't exist → Next.js route 404; fixed to `../../components/AuthContext` + `../../components/ToastContext`. (2) Auth check fired before auth resolved + used wrong field `roles` (array) vs `role` (string) → premature redirect; fixed with `isLoading: authLoading` gate. (3) `ScrapedSalesJob` table didn't exist → API 500 → Patrick ran `npx prisma migrate deploy + generate` (migration `20260501020000_scraper_phase1` confirmed deployed). (4) API response extraction wrong — `sourcesData` instead of `sourcesData.sources`, `runsData.runs` instead of `runsData.jobs`; fixed. (5) Trigger scrape dropdown was filtering to `enabled` sources only — with SCRAPER_ENABLED not yet baked into the running container all sources showed `enabled:false` → empty dropdown; fixed by removing filter + adding fallback. `Dockerfile.production` cache-bust comment updated to `2026-05-01` to force full Railway rebuild and pick up `SCRAPER_ENABLED=true`. Dark mode classes added throughout the page. Scraper scope clarified: EstateSalesNet (Puppeteer) + GarageSaleFinder (Cheerio) are live; Craigslist is Phase 2 stub. eBay is for price suggestions/city pages only (ADR-074), NOT a scrape source. Google/Yelp/Facebook enrichment is specced (ADR-073 Phase 2), not yet built. **Files changed:** `packages/frontend/pages/admin/scraper.tsx` (5 bug fixes + dark mode), `packages/backend/Dockerfile.production` (cache-bust). **S614 plan: metro sync cron (ADR-074), scraper enrichment, Craigslist impl, claim email pipeline, ADR-075 SEO pages — all parallel.**
+
 **Latest work (S612 — COMPLETE, city dataset regeneration + SCRAPER_ENABLED confirmed):** `pnpm data:cities` fixed and run. Two-pass fix: (1) kelvins CSV header mismatch — columns are uppercase (`CITY`, `STATE_CODE`, `COUNTY`) but script expected lowercase, and kelvins has no population column at all; (2) complete rewrite to two-source strategy — plotly/datasets (primary: 3,231 cities with population) + kelvins (enrichment: state/county via name+coordinate proximity matching). 2,723 population-sorted cities output, New York (8,287,238) → Ocean City (7,094). SCRAPER_ENABLED=true confirmed live by Patrick; scraper runs at 00:00 + 06:00 UTC daily. **Files changed:** `packages/frontend/scripts/generate-us-cities.ts` (rewritten), `packages/frontend/data/us-cities-3000.json` (regenerated — 2,723 cities), `claude_docs/patrick-dashboard.md`. **Pending Patrick actions:** (1) press release — fill `[Last Name]` ×3 + real cell in `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B, file PRNewswire May 5 9:00 AM EST (DEADLINE TOMORROW); (2) review + send 19 outreach drafts in Gmail (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 10 others from S596); (3) Chrome QA of S611 features (broadcast card, buyer's premium badge, tier lapse amber).
 
 **Latest work (S610 — COMPLETE, S601 Storefront v2 Chrome QA + hours sort fix):** Verified all S601 features live on production at `finda.sale/organizer/storefront/kellys-estate-sales`. Root cause found and fixed in prior session (S609): `GET /organizers/:id` route returned only 12 hardcoded fields — expanded to 34 fields including all S601/S609 additions. Chrome QA results: #354 Hours ✅, #355 Org Type Badges ✅ (uppercase normalization working), #359 Pinned "Featured" badge ✅, #361 Claim banner ✅ (hidden for claimed; untestable positive path — no unclaimed organizer), #362 Attendance "👥 247 attended" ✅, Tagline S609 ✅, yearFounded S609 ✅, twitterUrl/tiktokUrl S609 ✅. P3 bug found + fixed inline: hours displayed in insertion order — fixed with `.sort((a,b)=>a.dayOfWeek-b.dayOfWeek)`. Two features deferred: #356 Broadcast (no frontend storefront code exists) + #363 Buyer's Premium (buyerPremiumRate on nested AuctionDetails, needs Architect scope). **Files changed:** `packages/frontend/pages/organizer/storefront/[slug].tsx` (hours sort fix, 1 line). **Pending Patrick actions:** (1) push block below; (2) run `prisma migrate deploy` + `prisma generate` for `20260501020000_scraper_phase1` and `20260430220000_storefront_v2_claim_listing` (not yet deployed); (3) set `SCRAPER_ENABLED=true` when ready; (4) run `pnpm data:cities`; (5) fill `[Last Name]` in press release.
@@ -337,6 +339,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S613 (2026-05-01) — COMPLETE (admin scraper page — 5 bugs fixed + Railway cache-bust):** `/admin/scraper` page fixed: wrong import paths (404) → premature auth redirect (wrong field + no isLoading gate) → data load failure (ScrapedSalesJob table missing — Patrick deployed migration) → API response extraction (`sources`/`jobs` not `sourcesData`/`runsData.runs`) → dark mode → empty trigger dropdown (enabled filter + container rebuild). `Dockerfile.production` cache-bust forces Railway full rebuild. Scraper scope confirmed: EstateSalesNet + GarageSaleFinder live; Craigslist Phase 2 stub; eBay for city pages (ADR-074) not scraping; Google/Yelp/Facebook enrichment specced not built. Files: `admin/scraper.tsx`, `Dockerfile.production`.
+
 **S612 (2026-05-01) — COMPLETE (city dataset regeneration + SCRAPER_ENABLED confirmed):** `pnpm data:cities` fixed (two-pass: header mismatch fix → then full two-source rewrite). Script now merges plotly/datasets (population) + kelvins (state/county) via name+coordinate proximity. Output: 2,723 population-sorted US cities. SCRAPER_ENABLED=true confirmed live by Patrick (scraper runs 00:00 + 06:00 UTC daily). Files: `generate-us-cities.ts` (rewritten), `us-cities-3000.json` (regenerated), `patrick-dashboard.md`.
 
 **S611 (2026-05-01) — COMPLETE (Storefront v2 deferred features + seed + OG meta diagnosis):** 3 parallel dispatches. **#356 Broadcast storefront UI:** `GET /organizers/:id` now includes latest broadcast (sentAt desc, take:1); `[slug].tsx` renders "Latest Update" card with message + relative time when broadcast exists. **#363 Buyer's Premium display:** `auctionDetails: { select: { buyerPremiumRate: true } }` added to organizer sales include; amber "Buyer's Premium: n%" badge renders on AUCTION cards where `buyersPremiumPct` non-null. **Tier Lapse plan card (P2):** `dashboard.tsx` line 844 — amber gradient/border/text/button when `isLapsed=true`, teal otherwise. **Claim-This-Listing seed:** `seed.ts` adds unclaimed organizer "Sunrise Consignment & Collectibles" (user11, `isClaimed=false`, `isUnmanagedListing=true`, Muskegon MI). Primary shopper now user12. **OG meta diagnosis:** `ogData` returning null confirmed via `__NEXT_DATA__` smoke test. Root cause: `INTERNAL_API_URL` env var likely missing in Vercel — 3s timeout fires silently. No code change needed. **Draft contact audit:** 19 outreach drafts from S596 remain unsent in Gmail (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 10 others). Files: `organizers.ts`, `[slug].tsx`, `dashboard.tsx`, `seed.ts`. All pending Chrome QA.
@@ -403,205 +407,101 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S612 — Chrome QA for S611 features + pending migrations + scraper activation.**
+**S614 — Parallel build: metro sync cron (ADR-074) + scraper enrichment + Craigslist + claim email pipeline + ADR-075 SEO pages.**
 
-### FIRST ACTION — push S611 wrap block (this block)
+### FIRST ACTION — push S613 wrap block
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/routes/organizers.ts
-git add "packages/frontend/pages/organizer/storefront/[slug].tsx"
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/database/prisma/seed.ts
+git add packages/frontend/pages/admin/scraper.tsx
+git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: #356 broadcast storefront, #363 buyer's premium, tier lapse amber, unclaimed seed + S611 wrap docs"
+git commit -m "fix: admin scraper page 5 bugs fixed, dark mode, Railway cache-bust + S613 wrap docs"
 .\push.ps1
 ```
 
-### Pending Patrick manual actions (carry-over)
+### Pending Patrick actions (carry-over)
 
-1. **Run pending migrations on Railway** (public proxy URL):
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-   npx prisma migrate deploy
-   npx prisma generate
-   ```
-   Pending: `20260501020000_scraper_phase1`, `20260430220000_storefront_v2_claim_listing`
+1. **URGENT — File PRNewswire press release: May 5, 9:00 AM EST.** Fill `[Last Name]` ×3 + real cell in `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B before filing.
+2. **Review + send 19 outreach drafts in Gmail** — Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others (S596 batch remainder).
+3. **Chrome QA still pending** — #356 broadcast card, #363 buyer's premium badge, tier lapse amber plan card, #361 Claim-This-Listing positive path (user11 = Sunrise Consignment, `isClaimed=false`).
+4. **Migrations already deployed** (`20260501020000_scraper_phase1` confirmed by Patrick S613). `20260430220000_storefront_v2_claim_listing` — verify deployed or run if not.
+5. **SCRAPER_ENABLED=true** already set in Railway. Scraper running at 00:00 + 06:00 UTC.
 
-2. **Check Vercel env vars** — add `INTERNAL_API_URL` pointing to Railway backend URL if missing. This fixes ogData returning null on sales pages.
-3. **Set `SCRAPER_ENABLED=true`** in Railway env vars (when ready to go live with scraper)
-4. **Run `pnpm data:cities`** from `packages/frontend` to regenerate 3,000-city JSON
-5. **Fill `[Last Name]` (×3)** + real cell in press release (`claude_docs/strategy/s603-pr-wire-blast-package.md`)
-6. **File PRNewswire** on May 5 9:00 AM EST
-7. **19 outreach drafts still unsent in Gmail** — S596 batch remainder. Review and send when ready.
+### S614 Parallel Dispatch Plan
 
-### S612 Dispatch Queue
+All 5 groups are independent file domains — dispatch in parallel. Patrick confirmed: "be comprehensive, I'm sick of Claude doing half ass work and only shipping partial features."
 
-**Priority 1 — Chrome QA S611 features:** Navigate to `finda.sale/organizer/storefront/kellys-estate-sales` and verify: (a) Latest Update card shows (or is absent when no broadcast), (b) Buyer's Premium badge on auction sale cards, (c) dashboard.tsx plan card amber when lapsed (needs tier-lapse test account). Also verify Claim banner on a storefront with `isClaimed=false` (use seed user11 after re-seed).
+---
 
-**Priority 2 — #361 Claim-This-Listing positive path QA:** Re-seed local DB → verify `user11@example.com` (Sunrise Consignment) storefront shows amber claim banner.
+**Group 1 — Metro Sync Cron (ADR-074): eBay sold-comps for city pages**
 
-**Priority 3 — OG meta fix:** Check Vercel dashboard → Environment Variables → confirm `INTERNAL_API_URL` exists. If missing, add it (Railway backend public URL). Then verify sales page returns per-sale OG tags in `__NEXT_DATA__`.
+Files to create/modify:
+- `packages/database/prisma/schema.prisma` — add `MetroTopFinds` model: `id`, `citySlug String`, `metro String`, `itemTitle String`, `itemCategory String?`, `soldPrice Decimal`, `imageUrl String?`, `ebayListingId String`, `soldAt DateTime`, `updatedAt DateTime`. Composite unique `@@unique([citySlug, ebayListingId])`.
+- New migration: `20260501030000_metro_top_finds`
+- `packages/backend/src/jobs/metroSyncCron.ts` — NEW. Nightly at 4:00 UTC. For each city in `us-cities-3000.json`, call eBay Browse API sold-items search filtered by city/state. Upsert top 12 into `MetroTopFinds`. Use eBay proxy pattern. Gated by `METRO_SYNC_ENABLED=true`.
+- `packages/backend/src/index.ts` — wire `initMetroSyncCron()` at startup
+- `packages/frontend/lib/citiesController.ts` — add `getMetroTopFinds(citySlug)` querying `MetroTopFinds`
+- `packages/frontend/pages/city/[slug].tsx` — update `CityTopFinds` to consume real `MetroTopFinds` data; remove static placeholder
 
-**Smoke test at S611 start:** Navigate to `finda.sale/organizer/storefront/kellys-estate-sales` and verify the hours sort fix deployed (Mon, Tue, Wed, Thu, Fri, Sat order — not insertion order).
+---
 
-S605 surfaced a systemic subagent failure mode: **general-purpose Agent dispatches that produce net-new files report success but write to their own VM scratch instead of the mounted Windows workspace, so files vanish.** Confirmed across 4+ dispatches (S604 scraper + S604 metro + S605 scraper + S605 metro + S605 PR checklist all fabricated). Real fixes that landed this session went through the **main session Edit tool directly** (proven by the `_app.tsx` deploy verified-200 outcome). S606 must use one of three protocols below per workstream.
+**Group 2 — Scraper Enrichment (Google Places + Facebook Graph)**
 
-### FIRST ACTION — verify the P0 SSR fix is still holding (5 min)
+Files to create/modify:
+- `packages/backend/src/services/scraper/enrichment.ts` — NEW. Google Places API lookup by organizer name+city → store `placeId`. Facebook Graph API page search → store `facebookPageId`. Export `enrichOrganizer()`. Fire-and-forget after scraper creates unmanaged organizer.
+- `packages/backend/src/services/scraper/index.ts` — call `enrichOrganizer()` after creating an unmanaged Sale + Organizer record.
+- Env vars needed: `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN` (document — Patrick to add in Railway).
 
-1. `mcp__workspace__web_fetch` `https://finda.sale/sales/cmes2woj30001qj04zxc8klpj` — must return 200 (or HTML body containing `__NEXT_DATA__.page="/sales/[id]" gssp:true`). If 500, the dynamic-import regression has reappeared (likely a `pnpm-lock.yaml` change that flipped @vercel/analytics back to a static import).
-2. `https://finda.sale/sitemap.xml` — must return 200 with the 10-URL static XML.
-3. `https://finda.sale/robots.txt` — must return 200 with Googlebot/Bingbot directives.
-4. If all three pass, proceed. If any fail, fix-first before any new work.
+---
 
-### Three workstreams to deliver (priority order)
+**Group 3 — Craigslist Scraper (ADR-073 Phase 2)**
 
-**1. PR Wire launch checklist** — single doc, deadline May 5 (4 days out). Approach: **main session writes the file directly via Write tool.** Reads `claude_docs/strategy/s603-pr-wire-blast-package.md` (~30k tokens — read in chunks via offset/limit), composes a 6-section checklist into `claude_docs/strategy/s606-pr-wire-launch-checklist.md`. ~30-45 minutes of session time, zero subagent risk. Decisions already locked: D-PR-A=B, D-PR-B=PRNewswire eSpeed, D-PR-C=Tue May 5 9am EST.
+Files to create/modify:
+- `packages/backend/src/services/scraper/sources/craigslist.ts` — replace current stub. Cheerio + plain fetch. URL: `https://{metro-subdomain}.craigslist.org/search/sss?query=estate+sale`. Metro subdomain mapping included. D-073-A: "beg forgiveness" stance locked.
+- `packages/backend/src/jobs/scraperCron.ts` — add Craigslist at 12:00 UTC (`cron('0 12 * * *')`). No new metro list needed — use existing `NATIONAL_METROS`.
 
-**2. Metro auto-content build script (3000 cities)** — single build script + JSON regen. Approach: **main session writes the script via Write tool, Patrick runs `pnpm data:cities` locally to populate the JSON.** Script: `packages/frontend/scripts/generate-us-cities.ts` fetches from `https://raw.githubusercontent.com/kelvins/US-Cities-Database/main/csv/us_cities.csv` (public domain, ~30K rows), filters population ≥ 2,500, slugifies as `{kebab-name}-{state}` with county tie-break for collisions, writes to `packages/frontend/data/us-cities-3000.json`. Also: write the slug page `packages/frontend/pages/city/[slug].tsx` if not present; ADR-074 has the layout spec. Add `tsx` to devDependencies in `packages/frontend/package.json`. Skip eBay quota stagger for Phase 1 (citiesController is placeholder per ADR-074). Decisions locked: D-074-B=3000 cities (no fallback to 137).
+---
 
-**3. Scraper Phase 1** — ~12 files. Largest workstream. Two protocol options:
-   - **3a. Multi-step verified subagent (recommended).** Dispatch ONE file at a time. After each subagent returns, main session `Glob`s the claimed path. If file exists, dispatch the next. If file doesn't exist, the previous dispatch failed — main session writes the file directly via Write tool using the spec from ADR-073. Round trips: ~12 dispatches × ~3 min each = 30-45 min total. Verifiable at every step.
-   - **3b. Patrick uses Cursor / Claude Code locally.** Faster (Cursor writes to disk natively, no VM mount issue), Patrick reviews diffs in IDE. Recommended if Patrick has 90 min uninterrupted.
-   
-   Whichever path: scope is per ADR-073 with national override. Decisions locked: D-073-A "beg forgiveness" + 24h takedown; D-073-B 3-touch email Day 1/3/7; D-073-C placeholder photos; D-073-D scraped visible to all tiers; D-073-E first claim free.
+**Group 4 — Claim Email Pipeline (ADR-073 Phase 2)**
 
-### Hard rules for S606 dispatches
+Files to create/modify:
+- `packages/backend/src/services/scraper/claimEmailService.ts` — NEW. Queries unmanaged organizers with no `ClaimEmail` or last sent >3 days ago and <3 total. Sends via Resend. Upserts `ClaimEmail`. D-073-B: 3-touch Day 1/3/7.
+- `packages/backend/src/jobs/claimEmailCron.ts` — NEW. Daily at 08:00 UTC. Gated by `CLAIM_EMAIL_ENABLED=true`.
+- `packages/backend/src/index.ts` — wire `initClaimEmailCron()`.
 
-- **Subagent file-creation work is BANNED unless followed by main-session Glob verification.** No exceptions. The fabrication pattern is real and fully documented S605.
-- **Subagent doc-only and research work remains OK** (decision compilation, code review, file reading) — those return text, not files. Only file-CREATION dispatches need the verification gate.
-- **Main-session inline file writes are the recommended path** for any 1-3 file change. Skip the dispatch overhead. The CLAUDE.md §7 inline-edit gate carries an "Patrick explicitly authorizes" out — Patrick locked this in S605 by saying "wrap and prep the next session for #3."
-- **STATE.md and patrick-dashboard.md** are wrap-only. Never push mid-session.
-- **Verify-before-trust on all subagent claims about files.** Don't write claimed files into STATE.md until Glob confirms they exist. S604's "metro auto-content — PARTIAL" fabricated entry shows the cost of skipping this.
+---
 
-### Cleanup carryover
+**Group 5 — ADR-075 SEO Content Moat Phase 1**
 
-1. The S604 wrap mentioned `packages/frontend/claude_docs/audits/public-browse-audit-S604.md` at wrong path — that file also doesn't exist (also fabricated). No cleanup needed; nothing to move.
-2. S604 STATE.md "Doc gap discovered" called out S602 verified-organizer feature missing from session log. Still true. Add a retroactive S602 entry when there's spare time.
+Files to create/modify:
+- Read `claude_docs/architecture/ADR-075-SEO-CONTENT-MOAT.md` and `claude_docs/strategy/seo-content-moat-phase1-targets.md` for full spec.
+- Generate 500 content entries (category/city pricing guides, "how to run a sale in [City]" pages) into `packages/frontend/data/seo-pages/` as JSON.
+- `packages/frontend/pages/guide/[slug].tsx` — NEW. ISR page rendering SEO content from JSON index. `getStaticPaths` from the data directory.
+- Update sitemap to include `/guide/` pages.
 
-### Carryover from S604 (still open)
+---
 
-- 14 decisions D-S603-A through D-S603-N still queued in `patrick-dashboard.md` for lock-in (Patrick to reply with letter + override only when changing default; silence = adopt)
-- ADR-075 SEO content moat ready for dev dispatch once 1.1 and 1.4 land
-- Batch 2 (PR Wire / Newsjacking / Creator UGC swap outreach) was deferred — Patrick directive depends on the engineering side landing first
-- Verified-organizer feature shipped during S602 (commit b617d20c) — log retroactively as S602 entry in STATE.md when next session has time
+**Schema change Patrick actions (if Groups 1 or 4 land):**
 
-### Decision lock-in (~15 min Patrick time)
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-14 decisions queued in `claude_docs/patrick-dashboard.md` (D-S603-A through D-S603-N). Defaults documented. Patrick reply with letter + override only if changing default. Silence = adopt.
+New env vars for Railway after Group 2 lands: `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN`, `METRO_SYNC_ENABLED=true`, `CLAIM_EMAIL_ENABLED=true`.
 
-**National-scope override applied automatically:**
-- D-S603-M (metro scope): override to **3K cities Phase 1**, not 50 (per S603 directive)
-- D-S603-G (scraper national): scrape EstateSales.NET + EstateSales.org + Craigslist + FB Marketplace + GarageSaleFinder all metros simultaneously, not 1 source × 1 metro
+### SMOKE TEST — first action of S614
 
-### Batch 1 — Engineering parallel (4 simultaneous Agent dispatches, ~1.5M tokens)
+Verify `https://finda.sale/sales/cmes2woj30001qj04zxc8klpj` returns 200 (P0 SSR must still hold). If 500, fix before any new work. Then verify admin scraper page loads at `finda.sale/admin/scraper` without 404 (S613 fix deployed).
 
-**Dispatch 1.1 — Directory scraper national Phase 1** → general-purpose agent w/ findasale-dev context
-- Implement ADR-073 with national-scope override
-- Phase 1: EstateSales.NET + Craigslist + GarageSaleFinder × all US metros via Vercel proxy pattern (mirrors `pages/api/proxy/ebay.ts`)
-- Reuse Sale model + isUnmanagedListing (S601 shipped)
-- Add Sale.sourceUrl/sourceName/lastScrapedAt/scrapeVersion fields
-- DMCA agent registration + 24h takedown protocol baked in
-- Schema migration + cron + admin dashboard for scrape health
-- ~80h dev work (2x prior estimate due to national scope)
 
-**Dispatch 1.2 — Metro auto-content 3K cities Phase 1** → general-purpose agent w/ findasale-dev context
-- Implement ADR-074 with 3K-cities national scope override
-- Per-city dynamic pages at `finda.sale/city/[slug]` populated from eBay sold-comp data
-- Census ZCTA zip→city mapping + Next.js ISR (revalidate=86400)
-- Schema-light: compute on demand from existing Item/Sale tables, no new MetroPage model
-- Auto-generated tips for 3K cities + hand-written for top 20 (Patrick + 19 from advisory list freelance writer queue)
-- ~50h dev (vs 32h prior 50-metro estimate)
+### QA carryover (separate from S614 build work)
 
-**Dispatch 1.3 — SEO long-tail content moat (architect spec then dev)** → general-purpose agent w/ findasale-architect context
-- New mechanic — auto-generated category guides + item pricing guides + per-city × per-category pages
-- Composes with Scraper (#1) and Metro (#8) as the SEO front-line
-- Templates: "Vintage Rolex Pricing Guide 2026" / "Mid-Century Furniture for [City]" / "Hummel Figurine Identification Guide" using eBay sync price data
-- ~60h Phase 1 (template + content pipeline + 500 high-value pages)
-- Returns full ADR + dev plan; dispatch dev in subsequent batch
-
-**Dispatch 1.4 — Public-browse mode (no signup required)** → general-purpose agent w/ findasale-architect context
-- Critical SEO infrastructure — every sale, item, organizer, city page must be fully indexed without auth
-- Audit existing routes for auth-walls; remove unnecessary login gates
-- Signup becomes upgrade event (alerts, claim, save) not access event
-- Like Zillow/Indeed/Glassdoor pattern
-- ~24h Phase 1 architect spec + dev work
-
-### Batch 2 — Patrick-time + manual work parallel to Batch 1 (~10h Patrick time)
-
-**Dispatch 2.1 — PR Wire Blast fire** (Patrick: 4h, $600-800 cash)
-- Patrick provides full name + phone for press release contact block
-- Picks Version A (AI-powered tech angle) or B (inventory-mgmt business angle) or both
-- Picks PRNewswire ($595-795) or Cision ($299)
-- Files release week 1 of S604
-- Sends hand-curated emails to 25 media targets per `s603-pr-wire-blast-package.md`
-
-**Dispatch 2.2 — Newsjacking engine launch** (Patrick: 30 min setup + 3h first post)
-- Patrick subscribes to 15 Google Alerts + 20 Twitter accounts + 5 subreddits + 5 RSS + 5 newsletters per `s603-newsjacking-engine.md`
-- Picks first opportunity from monitoring; uses one of the 10 worked example posts as template OR drafts new from current news
-- Publishes week 1, distributes Twitter/LinkedIn/Reddit
-- Ongoing cadence: 1 post every 1-2 weeks
-
-**Dispatch 2.3 — Creator UGC swap outreach** (Patrick: 3h, $0 cash) — REPLACES paid creator sponsorship D-S603-B
-- Patrick repurposes `claude_docs/marketing/advisory-outreach-drafts.md` list (~60 contacts)
-- Pivot offer from "be our advisor" to "creator content swap": free PRO + featured placement on FindA.Sale social accounts in exchange for app-on-camera content (FTC #ad disclosure required)
-- Send 15 outreach DMs week 1, target 5 swaps signed by week 3
-- Zero cash exchanged
-
-### Batch 3 — Triggered after Batch 1 ships (week 2-3)
-
-**Dispatch 3.1 — Hacker News + Reddit + ProductHunt founder launch**
-- Once Scraper Phase 1 + Metro 3K + Public-browse + SEO content are live
-- Solo founder authenticity story: "Show HN: I built FindA.Sale to fix the broken estate sale market — solo founder, GR Michigan, would love feedback"
-- Cross-post to /r/SideProject, /r/InternetIsBeautiful, /r/Entrepreneur, /r/AntiqueDealers
-- ProductHunt launch with founder Q&A
-- ~6h Patrick time, repeatable every 3-4 months with new milestones
-
-**Dispatch 3.2 — Wikipedia backlink seeding**
-- Outsource to freelance writer ($50-100/article × 20 articles = ~$1-2K) OR queue Patrick for week 4
-- 20 contributions to antique/vintage/estate-sale Wikipedia entries with accurate data + citations
-- Backlinks compound Google domain authority over 6-12 months
-
-### Sequencing logic
-
-Batch 1 (eng-heavy, parallel) + Batch 2 (Patrick + manual, parallel to Batch 1) run concurrently in week 1. Batch 3 fires week 2-3 once Batch 1 deliverables are live and there's something for the launch + backlinks to point to.
-
-This is 8 work streams in flight by end of S604 week 1. Token budget per batch: ~1.5M agent tokens. Patrick hours week 1: ~10-12h. Hours week 2-3: ~6-8h.
-
-### Carryover from S603 (decisions and reframes)
-
-- **D-S603-B (paid creators) replaced by Creator UGC Swaps (#11).** No cash exchanged. Mechanism: free PRO + featured placement on platform social.
-- **D-S603-D (Loot Drop activation) deprioritized.** Patrick's "no users to send to" critique stands. Replaced by SEO + scraper + metro auto-content as the primary discovery layer. Loot Drop revisited Month 2+ once organic shopper traffic from SEO is live.
-- **D-S603-A (Waitlist position-jumping) keeps shipping** — position-jumping works for any traffic source, not just paid acquisition. Composes with HN launch + PR Wire + organic SEO.
-
-### Carryover from S599 (deferred bugs — verify in production before scheduling)
-
-- **P1 — Items page SSR 500.** S600 entry claims fixed via Cloudinary `b_rgb:fef3c7` background. Verify in production first action of S604.
-- **P2 — Tier Lapse plan card teal/cyan when lapsed.** S600 entry claims fixed. Verify.
-- **Sales SSR OG meta** (D-S603-E P0) shipped S601 per Latest Work entry. Verify in production by checking `view-source:` on a sale page for og:image/title/description tags.
-
-### Carryover Patrick actions (still open)
-
-- 28 Gmail advisory drafts queued (now repurposed for Creator UGC swap outreach — Batch 2.3)
-- eBay backfill: Click "Sync eBay Inventory" on `/organizer/settings`
-- Vercel env vars (eBay Mode 1) — confirm + redeploy without build cache
-- dev-environment skill stale Neon URL (flagged 4x): skill-creator + present_files
-- `claude_docs/legal/` directory ratification or removal (S600 unauthorized creation)
-- A2P 10DLC application — pending MI LLC details
-
-### S603 superseded docs (kept as record, NOT to be executed)
-
-- `claude_docs/strategy/spike1-real-operator-seeding.md` — concierge + cold-call sales, REJECTED
-- `claude_docs/strategy/spike2-visceral-content-plan.md` — daily founder vlog grind, REJECTED
-- `claude_docs/strategy/spike3-channel-exploration.md` — Reddit/FB/local TV cold outreach, REJECTED
-- `claude_docs/strategy/s603-acquisition-action-plan.md` — synthesis of rejected spikes, SUPERSEDED
-
-### QA carryover (verification tasks)
-
-- S601 storefront v2 features (#354–#363, 9 features, 4 migrations) — Pending Chrome QA from S601 wrap
-- Hydration #418 click verification on NotificationBell, AvatarDropdown, hamburger
+- #356 broadcast card, #363 buyer's premium badge, tier lapse amber plan card, #361 Claim banner (user11 = Sunrise Consignment) — all pending Chrome QA from S611/S612. Queue for a dedicated QA session after S614 builds land.
 - DonationModal SettlementWizard end-to-end
 - Holds `/shopper` page end-to-end
 - PDF watermark visual confirmation (Print Kit, Marketing Kit, Earnings, Settlement Receipt)

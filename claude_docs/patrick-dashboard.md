@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S612 COMPLETE
+# Patrick's Dashboard — S613 COMPLETE
 
-## Status: S612 DONE. City dataset regenerated (2,723 cities). Scraper live. Press release URGENT (May 5 deadline).
+## Status: S613 DONE. Admin scraper page fully fixed (5 bugs). Railway cache-busted. S614 plan: metro sync cron + scraper enrichment + Craigslist + claim email pipeline + SEO pages — all parallel.
 
-**Headline:** `pnpm data:cities` fixed and run — 2,723 population-sorted US cities now in `data/us-cities-3000.json` (was 35KB stub with ~137 cities). SCRAPER_ENABLED=true confirmed live, running daily at 00:00 + 06:00 UTC. Press release filing deadline is TOMORROW (May 5, 9:00 AM EST).
+**Headline:** `/admin/scraper` now works end-to-end: page loads, data loads, dark mode correct, trigger scrape dropdown populated. Railway rebuilding with `SCRAPER_ENABLED=true` baked in. Migration `20260501020000_scraper_phase1` confirmed deployed.
 
 ---
 
@@ -10,36 +10,61 @@
 
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
-| ✅ | Push S611 wrap block | Done | Committed ca12138, Vercel building |
-| ✅ | Push S610 wrap block | Done | Committed 2397307 |
-| ✅ | Run `prisma migrate deploy` | Done | Both migrations deployed |
-| ✅ | Set `INTERNAL_API_URL` in Vercel | Done | OG meta should now work |
-| ✅ | Set `SCRAPER_ENABLED=true` in Railway env | Done | Scraper now live — runs at 00:00 + 06:00 UTC daily |
-| ✅ | Run `pnpm data:cities` from `packages/frontend` | Done S612 | 2,723 population-sorted cities — New York → Ocean City |
-| **P2** | Fill in `[Last Name]` (×3) + real cell in press release | **May 5** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
-| **P2** | File PR Wire release on PRNewswire | Tue May 5, 9:00 AM EST | Schedule for 9:00 AM EST |
-| **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA, NASMM, ISA, etc. from S596 |
+| **P1 URGENT** | Fill `[Last Name]` ×3 + real cell in press release | **File Mon May 5, 9:00 AM EST** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
+| **P2** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others (S596 batch) |
+| **P3** | Add Railway env vars after S614 builds land | After S614 | `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN`, `METRO_SYNC_ENABLED=true`, `CLAIM_EMAIL_ENABLED=true` |
 
 ---
 
-## 📦 Push Block — S611 Wrap
+## 📦 Push Block — S613 Wrap
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/routes/organizers.ts
-git add "packages/frontend/pages/organizer/storefront/[slug].tsx"
-git add packages/frontend/pages/organizer/dashboard.tsx
-git add packages/database/prisma/seed.ts
+git add packages/frontend/pages/admin/scraper.tsx
+git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: #356 broadcast storefront, #363 buyer's premium, tier lapse amber, unclaimed seed + S611 wrap docs"
+git commit -m "fix: admin scraper page 5 bugs fixed, dark mode, Railway cache-bust + S613 wrap docs"
 .\push.ps1
 ```
 
 ---
 
-## 🗄️ Migration Deploy Block
+## ✅ S613 What Was Done
 
+**Admin scraper page — 5 successive bugs fixed:**
+
+1. **404 on page load** — wrong import paths (`@/hooks/useAuth` and `@/hooks/useToast` don't exist). Fixed to `../../components/AuthContext` + `../../components/ToastContext`.
+
+2. **Redirect to homepage** — auth check fired before auth resolved + used `roles` (array) instead of `role` (string). Fixed with `isLoading: authLoading` gate.
+
+3. **"Failed to load data" toast** — `ScrapedSalesJob` table didn't exist in Railway DB. Patrick ran `npx prisma migrate deploy` + `prisma generate` (migration `20260501020000_scraper_phase1` confirmed deployed). Also fixed API response extraction: `sourcesData.sources` not `sourcesData`, `runsData.jobs` not `runsData.runs`.
+
+4. **White background in dark mode** — no dark mode Tailwind classes. Fixed throughout.
+
+5. **Empty trigger scrape dropdown** — filtered to `enabled` sources but Railway hadn't rebuilt with `SCRAPER_ENABLED=true` yet → all sources showed `enabled:false`. Removed filter + added fallback. Cache-busted `Dockerfile.production` comment (`# cache-bust: 2026-05-01`) to force full Railway rebuild.
+
+**Scraper scope clarified:**
+- EstateSalesNet (Puppeteer) + GarageSaleFinder (Cheerio) = LIVE, running 00:00 + 06:00 UTC daily
+- Craigslist = Phase 2 stub (S614 will implement)
+- eBay = price suggestions + city pages (ADR-074), NOT a scrape source
+- Google/Yelp/Facebook = enrichment (S614 will build), not yet wired
+
+---
+
+## 🚀 S614 Plan — Full Parallel Build
+
+All 5 groups are independent — dispatch all in parallel. Patrick's directive: "be comprehensive, I'm sick of Claude doing half ass work."
+
+| Group | What | Key Files |
+|-------|------|-----------|
+| **1** | Metro Sync Cron (ADR-074) — eBay sold-comps for city pages | `MetroTopFinds` Prisma model + migration + `metroSyncCron.ts` + `citiesController.ts` + `city/[slug].tsx` update |
+| **2** | Scraper Enrichment — Google Places + Facebook Graph | `enrichment.ts` (NEW) wired into `scraper/index.ts` post-create |
+| **3** | Craigslist Scraper — replace stub | `craigslist.ts` (replace stub) + `scraperCron.ts` add 12:00 UTC slot |
+| **4** | Claim Email Pipeline — Day 1/3/7 cadence | `claimEmailService.ts` + `claimEmailCron.ts` + wire into `index.ts` |
+| **5** | ADR-075 SEO Content Moat Phase 1 | 500 content entries + `pages/guide/[slug].tsx` + sitemap update |
+
+**Schema migrations Patrick will need to run after Group 1 + 4 land:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
@@ -47,39 +72,8 @@ npx prisma migrate deploy
 npx prisma generate
 ```
 
-Pending migrations:
-- `20260501020000_scraper_phase1` — Sale scrape fields, ScrapedSalesJob, ClaimEmail
-- `20260430220000_storefront_v2_claim_listing` — Organizer.isClaimed/isUnmanagedListing, ClaimRequest
-
----
-
-## ✅ S611 What Was Done
-
-**Agent A — #356 Broadcast + #363 Buyer's Premium:**
-- `packages/backend/src/routes/organizers.ts` — `GET /organizers/:id` now includes `broadcasts: { orderBy: sentAt desc, take: 1 }` + `auctionDetails: { select: { buyerPremiumRate: true } }` on sales
-- `packages/frontend/pages/organizer/storefront/[slug].tsx` — "Latest Update" card (broadcast message + relative time); amber "Buyer's Premium: n%" pill on AUCTION sale cards
-
-**Agent B — Tier Lapse plan card:**
-- `packages/frontend/pages/organizer/dashboard.tsx` — line 844: amber gradient/border/text/button when `isLapsed=true`; teal when not
-
-**Agent C — Seed + OG meta diagnosis:**
-- `packages/database/prisma/seed.ts` — user11 = "Sunrise Consignment & Collectibles" (Muskegon MI, `isClaimed=false`, `isUnmanagedListing=true`); user12 = primary shopper
-- OG meta: no code fix needed — `INTERNAL_API_URL` env var missing in Vercel is the likely culprit
-
-**Draft contact audit:**
-- 19 drafts from S596 batch still unsent (Nick Loper, Codie Sanchez, NAA ×2, NASMM, senior-settlers, ISA, NESA, Antique Trader, AntiqueWeek, Amanda's Mercantile, 8 others)
-
----
-
-## 🚀 S613 Plan (Next Session)
-
-1. Chrome QA of S611 features: broadcast card, buyer's premium badge, tier lapse amber
-2. Verify #361 claim banner positive path (user11 = Sunrise Consignment, `isUnmanagedListing=true`)
-3. Check Vercel for `INTERNAL_API_URL` — fix OG meta if still broken
-4. Review + send 19 outreach drafts in Gmail
-
 ---
 
 ## Strategic Context
 
-**"Get too big to ignore before partners can react."** Storefront v2 makes every organizer page a real landing page. Scraper → unmanaged listings → Claim flow → organizer conversion. All pieces are shipped or in-progress.
+**"Get too big to ignore before partners can react."** Scraper is live. S614 completes the content flywheel: city pages get real eBay sold-comp data (Group 1), scraped organizer profiles get enriched (Group 2), Craigslist adds a third source (Group 3), unmanaged organizers get claim emails (Group 4), 500+ SEO pages go live (Group 5). Every piece compounds the distribution moat.
