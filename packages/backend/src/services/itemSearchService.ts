@@ -146,6 +146,7 @@ async function ftsSearch(params: {
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
       AND i."saleId" IS NOT NULL
+      AND (o."isUnmanagedListing" = false OR o."isClaimed" = true)
       AND (
         i."searchVector" @@ plainto_tsquery('english', $${idx + 1})
         OR o."businessName" ILIKE '%' || $${idx} || '%'
@@ -219,6 +220,7 @@ async function ilikeSearch(params: {
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
       AND i."saleId" IS NOT NULL
+      AND (o."isUnmanagedListing" = false OR o."isClaimed" = true)
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -274,6 +276,7 @@ async function filteredSearch(params: Omit<SearchQuery, 'q'> & Required<Pick<Sea
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
       AND i."saleId" IS NOT NULL
+      AND (o."isUnmanagedListing" = false OR o."isClaimed" = true)
   `);
 
   idx = appendFilters(sqlParts, sqlParams, idx, { category, condition, saleId, priceMin, priceMax });
@@ -310,6 +313,7 @@ async function countFts(
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
       AND i."saleId" IS NOT NULL
+      AND (o."isUnmanagedListing" = false OR o."isClaimed" = true)
       AND (
         i."searchVector" @@ plainto_tsquery('english', $${idx})
         OR o."businessName" ILIKE '%' || $${idx} || '%'
@@ -344,6 +348,7 @@ async function countIlike(
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
       AND i."saleId" IS NOT NULL
+      AND (o."isUnmanagedListing" = false OR o."isClaimed" = true)
       AND (
         i.title ILIKE '%' || $${idx} || '%'
         OR i.description ILIKE '%' || $${idx} || '%'
@@ -372,12 +377,14 @@ async function countFiltered(
     SELECT COUNT(*)::int AS count
     FROM "Item" i
     JOIN "Sale" s ON i."saleId" = s.id
+    JOIN "Organizer" o ON s."organizerId" = o.id
     WHERE i.status = 'AVAILABLE'
       AND s.status = 'PUBLISHED'
       AND i."isActive" = true
       AND i."draftStatus" = 'PUBLISHED'
       AND i."inInventory" = false
       AND i."saleId" IS NOT NULL
+      AND (o."isUnmanagedListing" = false OR o."isClaimed" = true)
   `);
   appendFilters(sqlParts, sqlParams, idx, filters);
 
@@ -475,18 +482,18 @@ export async function getItemFacets(
   const [categoryRows, conditionRows, priceRows] = await Promise.all([
     prisma.item.groupBy({
       by: ['category'],
-      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, category: { not: null }, draftStatus: 'PUBLISHED' },
+      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED', organizer: { OR: [{ isUnmanagedListing: false }, { isClaimed: true }] } }, category: { not: null }, draftStatus: 'PUBLISHED' },
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
     }),
     prisma.item.groupBy({
       by: ['condition'],
-      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, condition: { not: null }, draftStatus: 'PUBLISHED' },
+      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED', organizer: { OR: [{ isUnmanagedListing: false }, { isClaimed: true }] } }, condition: { not: null }, draftStatus: 'PUBLISHED' },
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
     }),
     prisma.item.aggregate({
-      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED' }, price: { not: null } },
+      where: { status: 'AVAILABLE', sale: { status: 'PUBLISHED', organizer: { OR: [{ isUnmanagedListing: false }, { isClaimed: true }] } }, price: { not: null } },
       _min: { price: true },
       _max: { price: true },
     }),
@@ -508,7 +515,7 @@ export async function getItemFacets(
 export async function getItemCategories(): Promise<Record<string, number>> {
   const rows = await prisma.item.groupBy({
     by: ['category'],
-    where: { status: 'AVAILABLE', isActive: true, sale: { status: 'PUBLISHED' }, category: { not: null }, draftStatus: 'PUBLISHED' },
+    where: { status: 'AVAILABLE', isActive: true, sale: { status: 'PUBLISHED', organizer: { OR: [{ isUnmanagedListing: false }, { isClaimed: true }] } }, category: { not: null }, draftStatus: 'PUBLISHED' },
     _count: { id: true },
     orderBy: { _count: { id: 'desc' } },
   });
