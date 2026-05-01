@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S611 Wrap (Storefront deferred features shipped)
+# Patrick's Dashboard — S612 (Chrome QA in progress)
 
-## Status: #356 Broadcast + #363 Buyer's Premium + Tier Lapse card fix all shipped. 4 files ready to push. Pending Chrome QA.
+## Status: S611 LIVE on Vercel. SCRAPER_ENABLED=true confirmed. Running Chrome QA.
 
-**Headline:** S611 dispatched 3 parallel agents. #356 (Broadcast storefront display) and #363 (Buyer's Premium badge) are now in the codebase. Tier Lapse plan card now shows amber when lapsed. Unclaimed organizer seed added for #361 positive-path QA. OG meta issue diagnosed: likely missing `INTERNAL_API_URL` in Vercel env vars. 19 outreach drafts from S596 still unsent in Gmail.
+**Headline:** All S611 features live on Vercel (ca12138 READY). All 5 Patrick manual actions now complete — migrations, INTERNAL_API_URL, SCRAPER_ENABLED all done. Scraper is now live and will run at next cron window (00:00 + 06:00 UTC). Chrome QA of broadcast card, buyer's premium badge, and tier lapse amber in progress this session.
 
 ---
 
@@ -10,10 +10,11 @@
 
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
-| **P0** | Push S611 wrap block (below) | Now | 4 code files + wrap docs |
-| **P1** | Run `prisma migrate deploy` (pending migrations) | Before scraper/claim features activate | See migration block below |
-| **P1** | Check Vercel env vars for `INTERNAL_API_URL` | Soon | Missing = ogData null on sales pages = no social OG previews |
-| **P1** | Set `SCRAPER_ENABLED=true` in Railway env | When ready to go live | Scraper fully gated — won't run until you flip this |
+| ✅ | Push S611 wrap block | Done | Committed ca12138, Vercel building |
+| ✅ | Push S610 wrap block | Done | Committed 2397307 |
+| ✅ | Run `prisma migrate deploy` | Done | Both migrations deployed |
+| ✅ | Set `INTERNAL_API_URL` in Vercel | Done | OG meta should now work |
+| ✅ | Set `SCRAPER_ENABLED=true` in Railway env | Done | Scraper now live — runs at 00:00 + 06:00 UTC daily |
 | **P2** | Run `pnpm data:cities` from `packages/frontend` | When ready | Regenerates `data/us-cities-3000.json` with full ~3,000 cities |
 | **P2** | Fill in `[Last Name]` (×3) + real cell in press release | **May 5** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
 | **P2** | File PR Wire release on PRNewswire | Tue May 5, 9:00 AM EST | Schedule for 9:00 AM EST |
