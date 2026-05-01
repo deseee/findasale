@@ -31,7 +31,7 @@ export function markdownToHtml(markdown: string): string {
 
   // Unordered lists
   html = html.replace(/^\* (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>)/s, (match) => {
+  html = html.replace(/(<li>[\s\S]*<\/li>)/, (match) => {
     return '<ul class="list-disc list-inside space-y-2 mb-4">' + match + '</ul>';
   });
 
