@@ -568,13 +568,13 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
   const saleHasEnded = now >= saleEndDate;
 
   // Feature #43: OG Image Generator — transform photoUrls to photos format for SaleOGMeta
-  const saleForOGMeta = {
+  const saleForOGMeta = sale ? {
     ...sale,
     photos: sale.photoUrls.map(url => ({ url })),
-  };
+  } : null;
 
   // Rank-Based Early Access: Check if sale is locked for this user
-  const isSaleLocked = sale.locked === true;
+  const isSaleLocked = sale?.locked === true;
   const showRankUpCta = xpProfile?.explorerRank === 'INITIATE' && isSaleLocked;
 
   // Build SSR OG head once — rendered in all return paths so FB bot sees it immediately
@@ -623,24 +623,26 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       {ogHead ? (
         // SSR version — full OG image with watermark policy applied
-        <SaleOGMeta sale={saleForOGMeta} organizer={sale.organizer} />
+        saleForOGMeta && <SaleOGMeta sale={saleForOGMeta} organizer={sale?.organizer} />
       ) : (
         // CSR fallback — used only when getServerSideProps didn't return ogData
-        <Head>
-          <title>{sale.title} – FindA.Sale</title>
-          <meta name="description" content={sale.description} />
-          <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
-          <meta property="og:description" content={sale.description} />
-          <meta property="og:image" content={sale.photoUrls[0] || ''} />
-          <meta property="og:image:width" content="1200" />
-          <meta property="og:image:height" content="630" />
-          <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} />
-          <meta property="og:type" content="website" />
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
-          <meta name="twitter:description" content={sale.description} />
+        sale ? (
+          <Head>
+            <title>{sale.title} – FindA.Sale</title>
+            <meta name="description" content={sale.description} />
+            <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
+            <meta property="og:description" content={sale.description} />
+            <meta property="og:image" content={sale.photoUrls[0] || ''} />
+            <meta property="og:image:width" content="1200" />
+            <meta property="og:image:height" content="630" />
+            <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} />
+            <meta property="og:type" content="website" />
+            <meta name="twitter:card" content="summary_large_image" />
+            <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
+            <meta name="twitter:description" content={sale.description} />
           <meta name="twitter:image" content={sale.photoUrls[0] || ''} />
-        </Head>
+          </Head>
+        ) : null
       )}
 
       {/* Feature #121: Leave Sale Warning Modal */}
@@ -668,7 +670,7 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
         </div>
       )}
 
-      {!isSaleLocked && (
+      {!isSaleLocked && sale && (
       <main className="container mx-auto px-4 py-8 max-w-7xl">
         <Link href="/" className="text-amber-600 hover:text-amber-700 font-medium mb-6 inline-block">
           ← Back to home
