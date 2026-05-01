@@ -1,0 +1,42 @@
+name: Craigslist Scraper
+
+on:
+  schedule:
+    - cron: '30 0 * * *'  # 00:30 UTC — 30 min after EstateSalesNet to avoid concurrent ingest contention
+  workflow_dispatch:       # Manual trigger for testing
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # Longer timeout to account for per-site rate limiting (~80 sites)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --filter backend --filter database
+
+      - name: Generate Prisma client
+        run: cd packages/database && npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+
+      - name: Run Craigslist scraper
+        env:
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
+          INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
+          CRAIGSLIST_ORGANIZER_ID: ${{ secrets.CRAIGSLIST_ORGANIZER_ID }}
+        run: |
+          cd packages/backend
+          ./node_modules/.bin/ts-node src/scripts/run-craigslist.ts
