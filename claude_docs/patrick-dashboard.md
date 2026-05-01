@@ -1,54 +1,63 @@
-# Patrick's Dashboard — S604 Wrap (Mixed Dispatch Results)
+# Patrick's Dashboard — S605 Wrap (P0 SSR Closed + Subagent Fabrication Discovery)
 
-## Status: Build green. P0 SSR 500 still broken on /sales/[id] + /items/[id] unauth. 1 of 4 dispatches clean (1.3 SEO ADR), 1 partial (1.4 sitemap+robots), 1 incomplete (1.2 metro), 1 fabricated (1.1 scraper).
+## Status: P0 SSR ✅ FIXED. /sales/[id] returns 200 unauth (build `ouEe_ZxrqSurr9RHc_b5F`). Sitemap + robots ✅ live via static `public/` bypass. Three S605 re-dispatches all fabricated their files — deferred to S606 with verified protocol.
 
-**Build fix shipped mid-session:** Two TypeScript narrowing bugs in `pages/organizer/settings.tsx` (line 810 union narrowing, lines 867/912 optional `hours.length` guards) had broken three consecutive Vercel builds (S603 wrap, S602 wrap, Yelp commit). Two inline fixes pushed and deployed green. Verified-organizer feature now live in production.
+**Headline win:** the 30+ session-long P0 unauth SSR 500 across `/sales/[id]`, `/items/[id]`, `/sitemap.xml` is closed. Root cause was `@vercel/analytics@1.6.1` shipping an ESM file that does `import { useEffect } from "react"` — but react@18 ships as CJS, so Node's strict ESM loader 500'd every SSR page that loaded `_app.tsx` at module-load time. Same for `@vercel/speed-insights`. Both were imported and rendered statically in `_app.tsx`, so EVERY dynamic page failed unauth. Authed users saw cached client chunks; unauth visitors and crawlers got `/500`. Fix: replaced both static imports with `next/dynamic(..., { ssr: false })`. The bug was live since at least S572 — masked because all QA was done logged-in.
 
-**P0 SSR remains broken:** `/sales/[id]` and `/items/[id]` return HTTP 500 to all unauthenticated visitors (FB scrapers, Twitter, iMessage, Google bot). Logged-in users see them fine. The local `getServerSideProps` IS try/catch'd — the throw is somewhere else (component render or wrapper). Cold-start strategy is blocked until S605 fixes this.
+**S604/S603/S600/S599 all chased the wrong fix** (null guards, OG image fallbacks, defensive try/catches in our own code). The throw was upstream in a node_modules path, not in any code we'd written. The Vercel runtime log via `mcp__27b581af__get_runtime_logs` was the unlock — error message `⨯ file:///var/task/node_modules/.pnpm/@vercel+analytics@1.6.1.../dist/react/index.mjs:4 SyntaxError: Named export 'useEffect' not found`.
 
-**Batch 1 dispatch results (verified, not rubber-stamped):**
-- **1.1 Scraper Phase 1 — TOTAL FABRICATION.** Agent reported 12 files / 1,455 lines. Zero files on disk. Re-dispatch S605.
-- **1.2 Metro auto-content — PARTIAL.** Components written, but `data/us-cities-3000.json` has only 13 cities (mislabeled), AND duplicate routes `pages/city/[city].tsx` + `[slug].tsx` will conflict. Re-dispatch S605 to fix dataset + remove duplicate.
-- **1.3 SEO Content Moat ADR-075 — CLEAN.** Pure docs, ready to push.
-- **1.4 Public-browse + SSR — MIXED.** sitemap.xml.ts + robots.txt.ts written and defensively coded. SSR fix WAS NOT done — agent misdiagnosed. Audit doc written to wrong path (`packages/frontend/claude_docs/audits/...`). Re-dispatch S605.
+**Subagent fabrication pattern surfaced:** 4+ dispatches across S604+S605 (scraper Phase 1 ×2, metro auto-content ×2, PR Wire checklist ×1) all reported success and produced detailed file lists. Verified by `Glob`: zero files exist on disk for any of them. Hypothesis — general-purpose Agent dispatches write to their own VM scratch space (`/sessions/[isolated-id]/...`) instead of the mounted Windows workspace. Tool calls succeed inside their VM; files vanish on teardown; agents Read their own scratch and confirm "their" files exist. **Real fixes that landed this session went through main-session Edit tool directly** (proven by the verified-200 deploy outcome). S606 is set up to use main-session inline writes for the three queued workstreams instead of subagent dispatches.
 
-## ⚠️ Push block — 5 files (validated only — fabricated/broken work excluded)
+**Decisions you locked this session (4 of 17):**
+- D-073-A scraper legal: "beg forgiveness, not permission" + 24h takedown protocol
+- D-074-B metro scale: 3000 cities (the agents' 137 cap was fabricated)
+- D-S603-F supply seeding: you + 2 organizers = 3 (clears Loot Drop gate D-S603-D)
+- D-PR-C launch date: Tuesday May 5 9am EST (4 days from now)
+
+**Decision defaults applied** (industry-standard, flip if desired): D-073-B email outreach 3-touch Day 1/3/7 ✓ • D-073-C placeholder photos ✓ • D-073-D scraped visible to all tiers ✓ • D-073-E first claim free ✓ • D-PR-A press release version B (no "AI") ✓ • D-PR-B vendor PRNewswire eSpeed $595–795 ✓.
+
+## ⚠️ Push block — wrap docs only (S605 code already pushed mid-session)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/architecture/ADR-075-SEO-CONTENT-MOAT.md
-git add claude_docs/strategy/seo-content-moat-phase1-targets.md
-git add packages/frontend/pages/sitemap.xml.ts
-git add packages/frontend/pages/robots.txt.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S604 wrap: ADR-075 SEO content moat + sitemap.xml + robots.txt; STATE+dashboard updates (P0 SSR + 1.1 scraper re-dispatch queued for S605)"
+git commit -m "S605 wrap: P0 SSR fix landed (vercel analytics dynamic-import) + fabrication pattern documented + S606 prep"
 .\push.ps1
 ```
 
-**NOT pushed (intentional):**
-- 1.1 scraper files — agent fabricated, zero on disk
-- 1.2 metro files (CityHero/CityTopFinds/CityRecentSales/CityNearbyLinks/CityTipsBlock components, citiesController, cities route, city-slugs.ts, city-tips-generator.ts, us-cities-3000.json, pages/city/[slug].tsx, pages/city/[city].tsx) — duplicate route conflict + mislabeled city dataset; re-dispatch S605 will clean up
-- `packages/frontend/claude_docs/audits/public-browse-audit-S604.md` — wrong path (should be `claude_docs/audits/...`); contains fabricated "fix applied" claims; cleanup S605
+**Already pushed mid-session (no action needed):**
+- `packages/frontend/pages/_app.tsx` (the SSR fix — verified 200 production)
+- `packages/frontend/public/sitemap.xml` (static, replaces broken dynamic)
+- `packages/frontend/pages/sitemap.xml.ts` (top-level try/catch, superseded but harmless)
+- `packages/frontend/pages/sales/[id].tsx` + `pages/items/[id].tsx` (defensive guards, harmless)
+- `packages/frontend/pages/robots.txt.ts` (DELETED — conflicted with `public/robots.txt`)
 
-## 🚀 S604 Work Streams — 8 in flight (national scope)
+**Nothing else to push.** The three S605 re-dispatches (scraper, metro, PR checklist) all fabricated — no real files to add.
 
-**Batch 1 — Engineering parallel (4 dispatches week 1):**
-1. **Directory scraper national** (ADR-073, override Phase 1 to national) — 80h dev, EstateSales.NET + Craigslist + GarageSaleFinder × all US metros via Vercel proxy. DMCA + 24h takedown baked in.
-2. **Metro auto-content 3K cities** (ADR-074, override scope to 3K not 50) — 50h dev, per-city pages from eBay sold-comps via Census ZCTA mapping + Next.js ISR. Schema-light.
-3. **SEO long-tail content moat** (NEW — architect spec then dev) — ~60h Phase 1, auto-generated category guides + city × category pages. Composes with #1 + #2 as SEO front-line.
-4. **Public-browse mode** (NEW — architect spec) — ~24h, every page indexed without auth. Signup becomes upgrade event not access event. Like Zillow/Indeed.
+## 🚀 S606 Work Plan (Multi-step verified — main-session inline writes)
 
-**Batch 2 — Patrick + manual parallel to Batch 1 (~10h Patrick time week 1):**
-5. **PR Wire Blast fire** — Patrick provides name+phone, picks version (A tech vs B business vs both), picks vendor (PRNewswire vs Cision), $600-800 cash, files release week 1.
-6. **Newsjacking engine launch** — Patrick subscribes to alert stack (30 min), publishes first post week 1 from one of the 10 worked examples or current news.
-7. **Creator UGC swap outreach** — REPLACES paid creator sponsorship D-S603-B. Patrick repurposes 60-contact advisory list, sends 15 DMs week 1, target 5 swaps signed by week 3. Zero cash.
+**Why the protocol changed:** S604 + S605 produced 4+ subagent dispatches that all fabricated their files. The pattern is consistent — general-purpose Agent dispatches for net-new file creation report success but write to their own VM scratch instead of the Windows workspace. S606 uses main-session inline Write tool for the small workstreams and a verified-multi-step subagent loop for the big one.
 
-**Batch 3 — Triggered after Batch 1 ships (week 2-3):**
-8. **HN + Reddit + ProductHunt founder launch** — once Batch 1 deliverables are live and there's something to point to. Solo founder authenticity story. ~6h Patrick time.
+**Priority order for S606 (~3-4 hours total):**
 
-**Optional / queued for week 4+:**
-- Wikipedia backlink seeding ($1-2K freelance writer or 40h Patrick) — 20 antique/vintage/estate Wikipedia entries with citations. Compounds Google domain authority over 6-12mo.
+1. **PR Wire launch checklist** (May 5 deadline — 4 days out). Main session writes `claude_docs/strategy/s606-pr-wire-launch-checklist.md` directly. Reads `s603-pr-wire-blast-package.md` in chunks (file is large), composes the 6-section checklist (Tomorrow Morning Action Plan, v2 review prompts, distribution targets, day-of playbook, risk flags, post-launch tracking). ~30-45 min. Decisions all locked: Version B, PRNewswire eSpeed, May 5 9am EST.
+
+2. **Metro auto-content build script** (3000 cities). Main session writes `packages/frontend/scripts/generate-us-cities.ts` directly. Script fetches from `https://raw.githubusercontent.com/kelvins/US-Cities-Database/main/csv/us_cities.csv` (public domain, ~30K rows), filters population ≥ 2,500, slugifies as `{kebab-name}-{state}` with county tie-break, writes to `packages/frontend/data/us-cities-3000.json`. Also writes `pages/city/[slug].tsx` per ADR-074. Patrick runs `pnpm data:cities` locally after push to populate the JSON. ~45-60 min.
+
+3. **Scraper Phase 1** (~12 files — biggest). Two paths:
+   - **3a. Multi-step verified subagent loop:** main session dispatches ONE file at a time, `Glob`s after each return, dispatches the next only if file exists. ~12 round trips × 3 min = 30-45 min. Bulletproof against fabrication.
+   - **3b. Patrick uses Cursor / Claude Code locally** with the ADR-073 spec. Cursor writes to disk natively. Faster if Patrick has 90 min. Recommended path.
+
+   Decisions all locked: D-073-A "beg forgiveness" + 24h takedown, D-073-B email outreach 3-touch, D-073-C placeholder photos, D-073-D scraped visible to all tiers, D-073-E first claim free.
+
+**Already in flight from S603/S604 plan but DEFERRED to S607+:**
+- SEO long-tail content moat (ADR-075 written, dev not started)
+- Public-browse mode audit (architect spec needed)
+- Newsjacking engine launch (Patrick manual, ~30 min setup + 3h first post)
+- Creator UGC swap outreach (Patrick manual, ~3h)
+- HN/Reddit/ProductHunt launch (after Batch 1 deliverables are live)
+- Wikipedia backlink seeding ($1-2K freelance, optional)
 
 ## 📐 Original cold-start mechanics added in S603 (after viral-plan pushback)
 
@@ -63,42 +72,31 @@ Patrick rejected the viral plan's user/cash dependencies. Re-evaluated with zero
 
 The thread that connects them: **build the most comprehensive sale-and-pricing index in the country before any organizer signs up.** Scraper indexes everything → metro pages display it per-city → newsjacking + PR Wire drive traffic to it → unmanaged listings convert organizers via Claim flow (S601 already shipped).
 
-## 🎯 Decisions to lock by Sunday May 3 (defaults shown)
+## 🎯 Decision status (as of S605 wrap)
 
-**Original 6 from viral plan:**
-1. **D-S603-A** — Waitlist incentive (Founding 100 + 6mo PRO). Default = adopt.
-2. **D-S603-B** — Creator cap (5 creators × $750/mo × 4mo = $15K). Default = 5 creators. **NOTE: Patrick rejected this as "no money to pay influencers" — recommend kill or replace with creator UGC swaps (#11) at $0 cash.**
-3. **D-S603-C** — Organizer referral bounty ($200 + 6mo PRO per referral). Default = adopt.
-4. **D-S603-D** — Loot Drop activation gate (3+ orgs × 5+ sales). Default = adopt. **NOTE: Patrick called this "no users to send to" — gate may be more aggressive (10 orgs × 10 sales) or Loot Drop may be replaced entirely by metro auto-content + scraper traffic.**
-5. **D-S603-E** — Sales SSR OG meta P0. Default = P0.
-6. **D-S603-F** — Supply seeding (3 friends, ≤6h). Default = adopt.
+**Locked by Patrick this session:**
+- **D-073-A** Scraper legal — beg forgiveness, 24h takedown ✓
+- **D-074-B** Metro scale — 3000 cities ✓
+- **D-S603-F** Supply seeding — Patrick + 2 organizers ✓ (clears D-S603-D Loot Drop gate)
+- **D-PR-C** Launch date — Tuesday May 5 9am EST ✓
 
-**New from cold-start dispatches:**
-7. **D-S603-G** — Scraper legal comfort (cease-and-desist will come from EstateSales.NET). Default = proceed with DMCA registration + 24h takedown protocol.
-8. **D-S603-H** — Scraper outreach (proactive email "we have you listed, claim free" → 3-4x conversion vs silent). Default = silent index Phase 1, evaluate Phase 2.
-9. **D-S603-I** — PR Wire press release version (A: AI-powered tech angle vs B: inventory-mgmt business angle vs both). Default = both, A to tech tier 4, B to tiers 1-3. **D-006 nuance:** AI-powered fine in media-facing release.
-10. **D-S603-J** — PR Wire vendor (PRNewswire $595-795 vs Cision $299). Default = PRNewswire if budget allows, Cision if testing first.
-11. **D-S603-K** — PR Wire contact details needed (full name, phone for press release boilerplate).
-12. **D-S603-L** — Metro auto-content title phrasing ("Top Estate Sale Finds in [City]" SEO-optimized vs "Top Sale Finds" inclusive). Default = estate-focused title + inclusive page copy.
-13. **D-S603-M** — Metro auto-content scope. **OVERRIDDEN by Patrick's go-national directive — Phase 1 = 3K cities, not 50.** No further decision needed.
-14. **D-S603-N** — Metro tips content owner. **OVERRIDDEN — at 3K cities scope, Patrick can't write all tips. Default = freelance writer pool ($30-50/article × ~200 high-value cities = $6-10K outsourced) or auto-generated tips from template + city stats for the long tail.**
+**Defaults applied (industry-standard — flip if you want to change):**
+- D-073-B email outreach — yes, 3-touch Day 1/3/7 (CAN-SPAM compliant)
+- D-073-C photos — placeholder only on unmanaged listings
+- D-073-D tier-gating — scraped listings visible to all tiers
+- D-073-E claim flow — first claim free, full edit unlocked
+- D-PR-A press release version — Version B (no "AI" per D-006)
+- D-PR-B vendor — PRNewswire eSpeed $595–795
+- D-S603-A waitlist incentive — Founding 100 + 6mo PRO + public page
+- D-S603-C organizer referral bounty — $200 + 6mo PRO per referral
+- D-S603-E Sales SSR OG meta — P0 in Week 3 (still pending — separate from the SSR fix shipped this session)
 
-**Override applied automatically (per S604 national directive):**
-- D-S603-M flipped from 50 metros → 3K cities Phase 1
-- D-S603-G scraper scope flipped from "1 source × 1 metro Phase 1" → "all major sources × national Phase 1"
+**Still open / replaced:**
+- **D-S603-B** Creator paid sponsorship — Patrick rejected as "no money for influencers." Replaced by Creator UGC Swap (zero cash, free PRO + featured placement). 60-contact advisory list available; outreach is Batch 2 manual work, not blocking.
+- **D-074-A** Metro page title — recommended "Top Estate Sale Finds in [City]" + intro covers all sale types. Not yet locked but defaulting at S606 dispatch unless you flip.
+- **D-074-C** City tips ownership — at 3000 cities scope, you can't write all of them. Auto-gen for long tail, you write top 10 metros (~10 hours one-time). Default applies.
 
-Reply with letter + override only if you want to change a default. Silence = adopt all defaults including overrides above.
-
-## 🎯 Six decisions to lock by Sunday May 3 (defaults shown — accept or override)
-
-1. **D-S603-A — Waitlist incentive:** Founding 100 badge + 6mo free PRO + public name page. No referral-position-bumps in MVP. **Default = adopt.**
-2. **D-S603-B — Creator cap:** 5 creators at $750/mo for 4 months ($15K total). **Default = 5 creators at $750/mo.**
-3. **D-S603-C — Organizer referral bounty:** $200 cash + 6mo PRO per referred organizer who ships first sale. Cap 25/mo. **Default = adopt.**
-4. **D-S603-D — Loot Drop activation gate:** 3+ real organizers × 5+ real sales each before Loot Drop activates. **Default = adopt.**
-5. **D-S603-E — Sales SSR OG meta:** promote S599 carryover bug to P0 Week 3 (Loot Drop social-share previews depend on it). **Default = P0.**
-6. **D-S603-F — Supply seeding:** Patrick onboards family + 2 friends only (≤6h, one-time). After that, referral bounty + eBay sync carry supply. **Default = adopt.**
-
-Reply with letter + override only if you want to change a default. Silence = adopt all defaults.
+Industry-standard recommendations were compiled in S605 (Robinhood waitlist mechanics, Zillow/Redfin city-page patterns, hiQ Labs CFAA precedent for public-facts scraping, SaaS marketplace claim/conversion conventions). 14 of 17 decisions had a clear standard answer; 3 were genuine judgment calls (your time allocation + risk tolerance).
 
 ---
 
