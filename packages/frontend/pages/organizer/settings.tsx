@@ -864,7 +864,7 @@ const OrganizerSettingsPage = () => {
                                 <div className="text-warm-900 dark:text-gray-100 truncate">{verPreview.current.website}</div>
                               </div>
                             )}
-                            {verPreview.current.hours.length > 0 && (
+                            {verPreview.current.hours && verPreview.current.hours.length > 0 && (
                               <div>
                                 <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-2">Hours</div>
                                 <div className="text-sm space-y-1">
@@ -909,7 +909,7 @@ const OrganizerSettingsPage = () => {
                                 <div className="text-warm-900 dark:text-gray-100">★ {verPreview.incoming.rating} ({verPreview.incoming.reviewCount} reviews)</div>
                               </div>
                             )}
-                            {verPreview.incoming.hours.length > 0 && (
+                            {verPreview.incoming.hours && verPreview.incoming.hours.length > 0 && (
                               <div>
                                 <div className="text-xs font-medium text-warm-600 dark:text-gray-400 mb-2">Hours</div>
                                 <div className="text-sm space-y-1">
