@@ -8,128 +8,118 @@ interface SitemapEntry {
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ res }) => {
-  // Static pages
-  const staticPages: SitemapEntry[] = [
-    { url: '/', changefreq: 'yearly', priority: 1.0 },
-    { url: '/map', changefreq: 'daily', priority: 0.8 },
-    { url: '/trending', changefreq: 'daily', priority: 0.8 },
-    { url: '/search', changefreq: 'yearly', priority: 0.7 },
-    { url: '/pricing', changefreq: 'yearly', priority: 0.7 },
-    { url: '/about', changefreq: 'yearly', priority: 0.5 },
-    { url: '/faq', changefreq: 'yearly', priority: 0.5 },
-    { url: '/leaderboard', changefreq: 'weekly', priority: 0.6 },
-    { url: '/contact', changefreq: 'yearly', priority: 0.5 },
-    { url: '/support', changefreq: 'yearly', priority: 0.5 },
-  ];
-
-  let entries: SitemapEntry[] = [...staticPages];
-
   try {
+    // Static pages
+    const staticPages: SitemapEntry[] = [
+      { url: '/', changefreq: 'yearly', priority: 1.0 },
+      { url: '/map', changefreq: 'daily', priority: 0.8 },
+      { url: '/trending', changefreq: 'daily', priority: 0.8 },
+      { url: '/search', changefreq: 'yearly', priority: 0.7 },
+      { url: '/pricing', changefreq: 'yearly', priority: 0.7 },
+      { url: '/about', changefreq: 'yearly', priority: 0.5 },
+      { url: '/faq', changefreq: 'yearly', priority: 0.5 },
+      { url: '/leaderboard', changefreq: 'weekly', priority: 0.6 },
+      { url: '/contact', changefreq: 'yearly', priority: 0.5 },
+      { url: '/support', changefreq: 'yearly', priority: 0.5 },
+    ];
+
+    let entries: SitemapEntry[] = [...staticPages];
     const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      throw new Error('API URL not configured');
-    }
 
-    // Fetch published sales with individual controller & timeout per request
-    try {
-      const salesController = new AbortController();
-      const salesTimeout = setTimeout(() => salesController.abort(), 3000);
-      const salesRes = await fetch(`${apiUrl}/search/public?type=sales&limit=50000`, {
-        signal: salesController.signal,
-      });
-      clearTimeout(salesTimeout);
-
-      if (salesRes.ok) {
-        const salesData = await salesRes.json();
-        const sales = Array.isArray(salesData) ? salesData : salesData.sales || [];
-
-        sales.forEach((sale: any) => {
-          if (sale.id && sale.status === 'PUBLISHED') {
-            entries.push({
-              url: `/sales/${sale.id}`,
-              lastmod: sale.updatedAt ? new Date(sale.updatedAt).toISOString().split('T')[0] : undefined,
-              changefreq: 'daily',
-              priority: 0.8,
-            });
-          }
+    if (apiUrl) {
+      // Fetch published sales with individual controller & timeout per request
+      try {
+        const salesController = new AbortController();
+        const salesTimeout = setTimeout(() => salesController.abort(), 3000);
+        const salesRes = await fetch(`${apiUrl}/search/public?type=sales&limit=50000`, {
+          signal: salesController.signal,
         });
+        clearTimeout(salesTimeout);
+
+        if (salesRes.ok) {
+          const salesData = await salesRes.json();
+          const sales = Array.isArray(salesData) ? salesData : salesData.sales || [];
+
+          sales.forEach((sale: any) => {
+            if (sale.id && sale.status === 'PUBLISHED') {
+              entries.push({
+                url: `/sales/${sale.id}`,
+                lastmod: sale.updatedAt ? new Date(sale.updatedAt).toISOString().split('T')[0] : undefined,
+                changefreq: 'daily',
+                priority: 0.8,
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('[sitemap] Failed to fetch sales:', err);
       }
-    } catch (err) {
-      console.warn('[sitemap] Failed to fetch sales:', err);
-    }
 
-    // Fetch available items with individual controller & timeout per request
-    try {
-      const itemsController = new AbortController();
-      const itemsTimeout = setTimeout(() => itemsController.abort(), 3000);
-      const itemsRes = await fetch(`${apiUrl}/items/search?status=AVAILABLE,SOLD&limit=50000`, {
-        signal: itemsController.signal,
-      });
-      clearTimeout(itemsTimeout);
-
-      if (itemsRes.ok) {
-        const itemsData = await itemsRes.json();
-        const items = Array.isArray(itemsData) ? itemsData : itemsData.items || [];
-
-        items.forEach((item: any) => {
-          if (item.id && item.saleId) {
-            entries.push({
-              url: `/sales/${item.saleId}/items/${item.id}`,
-              lastmod: item.updatedAt ? new Date(item.updatedAt).toISOString().split('T')[0] : undefined,
-              changefreq: 'weekly',
-              priority: 0.8,
-            });
-          }
+      // Fetch available items with individual controller & timeout per request
+      try {
+        const itemsController = new AbortController();
+        const itemsTimeout = setTimeout(() => itemsController.abort(), 3000);
+        const itemsRes = await fetch(`${apiUrl}/items/search?status=AVAILABLE,SOLD&limit=50000`, {
+          signal: itemsController.signal,
         });
+        clearTimeout(itemsTimeout);
+
+        if (itemsRes.ok) {
+          const itemsData = await itemsRes.json();
+          const items = Array.isArray(itemsData) ? itemsData : itemsData.items || [];
+
+          items.forEach((item: any) => {
+            if (item.id && item.saleId) {
+              entries.push({
+                url: `/sales/${item.saleId}/items/${item.id}`,
+                lastmod: item.updatedAt ? new Date(item.updatedAt).toISOString().split('T')[0] : undefined,
+                changefreq: 'weekly',
+                priority: 0.8,
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('[sitemap] Failed to fetch items:', err);
       }
-    } catch (err) {
-      console.warn('[sitemap] Failed to fetch items:', err);
-    }
 
-    // Fetch claimed organizers with individual controller & timeout per request
-    try {
-      const orgController = new AbortController();
-      const orgTimeout = setTimeout(() => orgController.abort(), 3000);
-      const orgRes = await fetch(`${apiUrl}/organizers?claimed=true&limit=10000`, {
-        signal: orgController.signal,
-      });
-      clearTimeout(orgTimeout);
-
-      if (orgRes.ok) {
-        const orgData = await orgRes.json();
-        const organizers = Array.isArray(orgData) ? orgData : orgData.organizers || [];
-
-        organizers.forEach((org: any) => {
-          if (org.customStorefrontSlug) {
-            entries.push({
-              url: `/organizer/${org.customStorefrontSlug}`,
-              lastmod: org.updatedAt ? new Date(org.updatedAt).toISOString().split('T')[0] : undefined,
-              changefreq: 'weekly',
-              priority: 0.7,
-            });
-          }
+      // Fetch claimed organizers with individual controller & timeout per request
+      try {
+        const orgController = new AbortController();
+        const orgTimeout = setTimeout(() => orgController.abort(), 3000);
+        const orgRes = await fetch(`${apiUrl}/organizers?claimed=true&limit=10000`, {
+          signal: orgController.signal,
         });
+        clearTimeout(orgTimeout);
+
+        if (orgRes.ok) {
+          const orgData = await orgRes.json();
+          const organizers = Array.isArray(orgData) ? orgData : orgData.organizers || [];
+
+          organizers.forEach((org: any) => {
+            if (org.customStorefrontSlug) {
+              entries.push({
+                url: `/organizer/${org.customStorefrontSlug}`,
+                lastmod: org.updatedAt ? new Date(org.updatedAt).toISOString().split('T')[0] : undefined,
+                changefreq: 'weekly',
+                priority: 0.7,
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('[sitemap] Failed to fetch organizers:', err);
       }
-    } catch (err) {
-      console.warn('[sitemap] Failed to fetch organizers:', err);
     }
 
-    // City pages will be added here once city-slugs.ts is available in Phase 1.2
-    // For now, leave a placeholder
-    // TODO: Add city pages from city-slugs.ts after Phase 1.2 merges
-  } catch (err) {
-    console.error('[sitemap] Error building sitemap:', err);
-    // Fail open — return static pages only
-  }
+    // Limit to 50K URLs (Google limit)
+    if (entries.length > 50000) {
+      entries = entries.slice(0, 50000);
+    }
 
-  // Limit to 50K URLs (Google limit)
-  if (entries.length > 50000) {
-    entries = entries.slice(0, 50000);
-  }
-
-  // Generate XML
-  const baseUrl = 'https://finda.sale';
-  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+    // Generate XML
+    const baseUrl = 'https://finda.sale';
+    const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${entries.map(entry => `  <url>
     <loc>${baseUrl}${entry.url}</loc>${
@@ -142,13 +132,40 @@ ${entries.map(entry => `  <url>
   </url>`).join('\n')}
 </urlset>`;
 
-  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-  res.write(xmlContent);
-  res.end();
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.write(xmlContent);
+    res.end();
 
-  return {
-    props: {},
-  };
+    return {
+      props: {},
+    };
+  } catch (err) {
+    console.error('[sitemap] Unexpected error building sitemap:', err);
+
+    // Fallback: return minimal static XML on error
+    const staticPages = [
+      { url: '/', priority: 1.0 },
+      { url: '/map', priority: 0.8 },
+      { url: '/pricing', priority: 0.7 },
+      { url: '/about', priority: 0.5 },
+    ];
+
+    const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${staticPages.map(entry => `  <url>
+    <loc>https://finda.sale${entry.url}</loc>
+    <priority>${entry.priority}</priority>
+  </url>`).join('\n')}
+</urlset>`;
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.write(xmlContent);
+    res.end();
+
+    return {
+      props: {},
+    };
+  }
 };
 
 // Dummy component — not rendered (getServerSideProps handles response)
