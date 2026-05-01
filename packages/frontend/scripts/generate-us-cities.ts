@@ -170,7 +170,7 @@ async function fetchAndProcessCities(): Promise<void> {
     const name = f[pNameIdx]?.trim() || '';
     if (name) nameCount.set(name, (nameCount.get(name) || 0) + 1);
   }
-  const duplicateNames = new Set<string>([...nameCount.entries()].filter(([,c]) => c > 1).map(([n]) => n));
+  const duplicateNames = new Set<string>(Array.from(nameCount.entries()).filter(([,c]) => c > 1).map(([n]) => n));
 
   for (let i = 1; i < plotlyLines.length; i++) {
     if (!plotlyLines[i].trim()) continue;
