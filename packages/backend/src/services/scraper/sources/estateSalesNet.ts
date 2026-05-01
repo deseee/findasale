@@ -4,13 +4,17 @@
  * ADR-073: Directory Scraper Phase 1
  */
 
-import puppeteer, { type Browser } from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { type Browser } from 'puppeteer';
 import { RateLimiter } from '../rateLimiter';
 import { parseEstateSalesNetListing, extractEmails } from '../htmlParser';
 import { ingestScrapedListing, ScrapedItem } from '../index';
+import { getRandomUserAgent, jitterDelay } from '../userAgents';
+
+puppeteer.use(StealthPlugin());
 
 const ESTATESALES_BASE_URL = 'https://www.estatesales.net';
-const USER_AGENT = 'FindASaleBot/1.0 (+https://finda.sale/bot)';
 
 /**
  * Convert a metro string like "grand-rapids-mi" into a city URL path.
@@ -42,14 +46,22 @@ export async function scrapeEstateSalesNet(
 
     browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--window-size=1920,1080',
+        '--disable-blink-features=AutomationControlled',
+      ],
     });
 
     const metroUrl = metroToUrl(metro);
     console.log(`[EstateSalesNet] Fetching metro page: ${metroUrl}`);
 
     const page = await browser.newPage();
-    await page.setUserAgent(USER_AGENT);
+    await page.setUserAgent(getRandomUserAgent());
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
 
     // Navigate to metro listing page
     const response = await page.goto(metroUrl, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -90,6 +102,7 @@ export async function scrapeEstateSalesNet(
 
     // Process each sale link
     for (const saleUrl of saleLinks) {
+      await jitterDelay(800, 2500);
       const item = await parseEstateSalesNetSale(saleUrl, rateLimiter);
       if (!item) {
         stats.failed++;
@@ -132,7 +145,7 @@ export async function parseEstateSalesNetSale(
     }
 
     const response = await fetch(saleUrl, {
-      headers: { 'User-Agent': USER_AGENT },
+      headers: { 'User-Agent': getRandomUserAgent() },
       signal: AbortSignal.timeout(15000),
     });
 
