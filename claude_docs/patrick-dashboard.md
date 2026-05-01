@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S614 WRAP (Full)
+# Patrick's Dashboard — S615 WRAP
 
-## Status: S614 done + extended. 5-group parallel build + scraper anti-detection + unclaimed listing filter + ADR-076 spec. Push block below. Run 2 migrations + set 4 env vars in Railway. S615 = GH Actions scraper implementation.
+## Status: S615 done. Deleted-sale crashloop fully fixed (backend + frontend). Push block below — 3 new files on top of S614 block.
 
-**Headline:** S614 shipped the full plan. Extension work: EstateSalesNet and other scrapers now rotate real browser user-agents + jitter delays (stealth), scraped listings are hidden from public browse until claimed by the organizer, ADR-076 spec docs the GitHub Actions architecture for S615. One new crashloop fix for deleted sale pages (stops the skeleton/404 loop).
+**Headline:** The `/sales/cmes2woj...` skeleton/404 loop is fixed. Root cause was two-layer: (1) TanStack Query v5 kept polling because cached data prevented `status` from ever reaching `'error'` — fixed by checking `query.state.error` directly. (2) Backend ripple endpoint had no guard against deleted sales, flooding Railway logs with P2003 FK errors on every page mount — fixed with a sale existence check before recording. Both now deployed.
 
 ---
 
@@ -11,54 +11,25 @@
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
 | **P1 URGENT** | Fill `[Last Name]` ×3 + real cell in press release | **File Mon May 5, 9:00 AM EST** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
-| **P1** | Push S614 full wrap block (below) | Now | 33 files — use PowerShell pushblock |
-| **P1** | Run 2 new migrations after push deploys | After push | Commands below |
-| **P1** | `pnpm install` in `packages/backend` after deploy | After push | Picks up puppeteer-extra + stealth plugin |
+| **P1** | Push S615 wrap block (below) | Now | 3 files + wrap docs |
+| **P1** | Run 2 S614 migrations if not done yet | After push | Commands below |
+| **P1** | `pnpm install` in `packages/backend` if not done | After push | Picks up puppeteer-extra + stealth plugin |
 | **P2** | Add 4 Railway env vars | After push | `METRO_SYNC_ENABLED=true`, `CLAIM_EMAIL_ENABLED=true`, `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN` |
-| **P2** | Add GitHub Secrets for S615 | When ready for S615 | `RAILWAY_BACKEND_URL`, `INTERNAL_SCRAPER_KEY`, `ESTATESALESNET_ORGANIZER_ID` (see ADR-076) |
+| **P2** | Add GitHub Secrets for S616 (GH Actions scraper) | When ready | `RAILWAY_BACKEND_URL`, `INTERNAL_SCRAPER_KEY`, `ESTATESALESNET_ORGANIZER_ID` (see ADR-076) |
 | **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others |
 
 ---
 
-## 📦 Push Block — S614 Full Wrap
+## 📦 Push Block — S615 Wrap
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260501030000_metro_top_finds/migration.sql
-git add packages/database/prisma/migrations/20260501060000_organizer_claim_email/migration.sql
-git add packages/backend/src/index.ts
-git add packages/backend/src/jobs/metroSyncCron.ts
-git add packages/backend/src/jobs/claimEmailCron.ts
-git add packages/backend/src/services/scraper/enrichment.ts
-git add packages/backend/src/services/scraper/index.ts
-git add "packages/backend/src/services/scraper/sources/craigslist.ts"
-git add packages/backend/src/services/scraper/claimEmailService.ts
-git add packages/backend/src/jobs/scraperCron.ts
-git add packages/backend/src/controllers/citiesController.ts
-git add packages/backend/src/routes/cities.ts
-git add packages/frontend/lib/citiesController.ts
-git add "packages/frontend/pages/city/[slug].tsx"
-git add "packages/frontend/pages/guide/[slug].tsx"
-git add packages/frontend/data/seo-pages/index.json
-git add packages/frontend/data/seo-pages/generate-seo-content.js
-git add packages/frontend/data/seo-pages/generate.js
-git add packages/frontend/data/seo-pages/BUILD_GUIDE.md
-git add packages/frontend/scripts/generate-seo-index.ts
-git add packages/frontend/pages/server-sitemap.xml.tsx
-git add packages/frontend/package.json
-git add packages/backend/src/controllers/trendingController.ts
-git add packages/backend/src/controllers/saleController.ts
-git add packages/backend/src/services/itemSearchService.ts
-git add packages/backend/src/services/scraper/userAgents.ts
-git add "packages/backend/src/services/scraper/sources/estatesalesnet.ts"
-git add "packages/backend/src/services/scraper/sources/garagesalefinder.ts"
-git add packages/backend/package.json
+git add packages/backend/src/controllers/rippleController.ts
 git add "packages/frontend/pages/sales/[id].tsx"
-git add claude_docs/architecture/ADR-076-GITHUB-ACTIONS-SCRAPER.md
+git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: S614 full wrap — scraper anti-detection, unclaimed listing filter, deleted-sale loop fix, ADR-076 GH Actions spec"
+git commit -m "fix: S615 — deleted-sale crashloop + ripple FK guard + TanStack Query v5 error check"
 .\push.ps1
 ```
 
