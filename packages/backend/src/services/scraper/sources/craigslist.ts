@@ -1,6 +1,6 @@
 /**
- * Craigslist scraper adapter — Phase 2 Full Implementation
- * Scrapes estate/yard/garage sales from Craigslist using Cheerio + fetch
+ * Craigslist scraper adapter — RSS-based (bypasses WAF on datacenter IPs)
+ * Uses ?format=rss feeds instead of HTML search pages
  * ADR-073: Directory Scraper Phase 2
  * D-073-A: "Beg forgiveness" stance — scrape without permission
  */
@@ -12,12 +12,15 @@ import { getRandomUserAgent, jitterDelay } from '../userAgents';
 import { CraigslistSite } from '../craigslist-sites';
 
 /**
- * Fetch HTML from URL with error handling and timeout
+ * Fetch RSS XML from URL
  */
-async function fetchHtml(url: string): Promise<string | null> {
+async function fetchRss(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': getRandomUserAgent() },
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+      },
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) {
@@ -32,141 +35,133 @@ async function fetchHtml(url: string): Promise<string | null> {
 }
 
 /**
- * Parse Craigslist listing search page
- * Extracts individual listings from the HTML using verified selectors
+ * Extract Craigslist post ID from URL
+ * e.g. https://philadelphia.craigslist.org/gms/d/title/1234567890.html → "1234567890"
  */
-function parseListingPage(html: string, site: CraigslistSite, category: string): ScrapedItem[] {
+function extractPidFromUrl(url: string): string | null {
+  const match = url.match(/\/(\d+)\.html$/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Extract a sale date from listing title or description text.
+ * Looks for patterns like "May 3", "5/3", "Saturday May 3rd", etc.
+ */
+function extractSaleDateFromText(text: string): Date | null {
+  const now = new Date();
+
+  // Month name + day: "May 3", "May 3rd", "Saturday May 3"
+  const monthNameMatch = text.match(
+    /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?\b/i
+  );
+  if (monthNameMatch) {
+    const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const monthIdx = monthNames.findIndex((m) => monthNameMatch[1].toLowerCase().startsWith(m));
+    if (monthIdx >= 0) {
+      const day = parseInt(monthNameMatch[2], 10);
+      const candidate = new Date(now.getFullYear(), monthIdx, day);
+      if (candidate < now) candidate.setFullYear(candidate.getFullYear() + 1);
+      return candidate;
+    }
+  }
+
+  // Slash date: M/D or M/D/YY or M/D/YYYY
+  const slashMatch = text.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if (slashMatch) {
+    const month = parseInt(slashMatch[1], 10);
+    const day = parseInt(slashMatch[2], 10);
+    let year = slashMatch[3] ? parseInt(slashMatch[3], 10) : now.getFullYear();
+    if (year < 100) year += year < 50 ? 2000 : 1900;
+    const candidate = new Date(year, month - 1, day);
+    if (candidate < now) candidate.setFullYear(candidate.getFullYear() + 1);
+    return candidate;
+  }
+
+  return null;
+}
+
+/**
+ * Infer sale type from title/description keywords
+ */
+function inferSaleType(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.includes('auction')) return 'AUCTION';
+  if (lower.includes('estate')) return 'ESTATE';
+  if (lower.includes('flea market') || lower.includes('flea mkt')) return 'FLEA_MARKET';
+  return 'YARD';
+}
+
+/**
+ * Parse Craigslist RSS feed XML into ScrapedItems
+ */
+function parseRssFeed(xml: string, site: CraigslistSite, category: string): ScrapedItem[] {
   const listings: ScrapedItem[] = [];
 
   try {
-    const $ = cheerio.load(html);
+    const $ = cheerio.load(xml, { xmlMode: true });
+    const city = site.label.split(',')[0].trim();
+    const state = site.state;
 
-    // Verified selectors from S618 live probe
-    const rows = $('li.cl-search-result, .cl-static-search-result, [data-pid]');
-
-    rows.each((_, el) => {
+    $('item').each((_, el) => {
       try {
-        // Extract pid (data-pid) — required for dedup
-        const pid = $(el).attr('data-pid');
+        const title = $('title', el).text().trim();
+        const link = $('link', el).text().trim();
+        const descriptionRaw = $('description', el).text().trim();
+        const pubDateStr = $('pubDate', el).text().trim() || $('dc\\:date', el).text().trim();
+
+        if (!title || !link) return;
+
+        // Extract PID from URL for dedup
+        const pid = extractPidFromUrl(link);
         if (!pid) return;
 
-        // Extract title from titlestring link
-        const titleEl = $(el).find('a.titlestring').first();
-        const title = titleEl.text().trim();
-        if (!title) return;
+        // Strip HTML from description
+        const description = descriptionRaw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const fullText = `${title} ${description}`;
 
-        // Extract href and make absolute
-        let href = titleEl.attr('href') ?? '';
-        if (!href) return;
-        const sourceUrl = href.startsWith('http')
-          ? href
-          : `https://${site.subdomain}.craigslist.org${href.startsWith('/') ? '' : '/'}${href}`;
-
-        // Extract location and date text
-        const locationText = $(el).find('.meta, .result-meta').first().text().trim();
-
-        // Parse dates from location text: format "M/D,M/D,..." represents date range
-        let startDate: Date;
-        let endDate: Date;
-
-        const dateMatch = locationText.match(/^((?:\d{1,2}\/\d{1,2},?)+)/);
-        if (dateMatch) {
-          const dateStr = dateMatch[1];
-          const dates = dateStr.split(',').map((d) => d.trim()).filter((d) => d.length > 0);
-
-          const parseMonthDay = (mdStr: string): Date => {
-            const [month, day] = mdStr.split('/').map(Number);
-            const now = new Date();
-            let year = now.getFullYear();
-
-            // If month is in the past relative to current, assume next year
-            if (month < now.getMonth() + 1) {
-              year++;
-            }
-
-            return new Date(year, month - 1, day, 0, 0, 0, 0);
-          };
-
-          if (dates.length >= 2) {
-            startDate = parseMonthDay(dates[0]);
-            endDate = parseMonthDay(dates[dates.length - 1]);
-            // Set end date to 8pm
-            endDate.setHours(20, 0, 0, 0);
-          } else if (dates.length === 1) {
-            startDate = parseMonthDay(dates[0]);
-            endDate = new Date(startDate);
-            endDate.setDate(endDate.getDate() + 1);
-            endDate.setHours(20, 0, 0, 0);
-          } else {
-            // Fallback: today and tomorrow
-            startDate = new Date();
-            endDate = new Date(startDate);
-            endDate.setDate(endDate.getDate() + 1);
-          }
-        } else {
-          // No date match: use today and tomorrow
-          startDate = new Date();
-          endDate = new Date(startDate);
-          endDate.setDate(endDate.getDate() + 1);
+        // Parse start date from title/description, fallback to pubDate, fallback to today
+        let startDate = extractSaleDateFromText(fullText);
+        if (!startDate && pubDateStr) {
+          const pub = new Date(pubDateStr);
+          if (!isNaN(pub.getTime())) startDate = pub;
         }
+        if (!startDate) startDate = new Date();
 
-        // City and state from site
-        const city = site.label.split(',')[0].trim();
-        const state = site.state;
+        // End date: start + 1 day at 5pm
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 1);
+        endDate.setHours(17, 0, 0, 0);
 
-        // Address: use locationText or fallback
-        const address = locationText || 'See listing for address';
-
-        // Infer sale type from category and title
-        let saleType = 'YARD'; // default
-        if (category === 'est') {
-          saleType = 'ESTATE';
-        } else if (category === 'gms') {
-          const titleLower = title.toLowerCase();
-          if (titleLower.includes('yard') || titleLower.includes('garage')) {
-            saleType = 'YARD';
-          } else if (titleLower.includes('flea')) {
-            saleType = 'FLEA_MARKET';
-          }
-        }
-
-        // Create listing object
-        const listing: ScrapedItem = {
+        listings.push({
           title,
-          address,
+          address: 'See listing for address',
           city,
           state,
-          // zip is intentionally omitted (undefined) — Craigslist has no ZIP data
+          // zip intentionally omitted — Craigslist RSS has no ZIP data
           startDate,
           endDate,
-          description: 'Craigslist listing — see source URL for full details',
-          sourceUrl,
+          description: description.slice(0, 300) || 'Craigslist listing — see source URL for details',
+          sourceUrl: link,
           sourceName: 'Craigslist',
-          sourceItemId: pid,
-          scrapedMetadata: {
-            category,
-            subdomain: site.subdomain,
-            locationRaw: locationText,
-          },
-          saleType,
-        };
-
-        listings.push(listing);
+          sourceItemId: `cl:${pid}`,
+          scrapedMetadata: { category, subdomain: site.subdomain },
+          saleType: inferSaleType(fullText),
+        });
       } catch (err) {
-        console.debug('[Craigslist] Failed to parse individual listing:', err);
+        console.debug('[Craigslist] Failed to parse RSS item:', err);
       }
     });
 
-    console.log(`[Craigslist] Parsed ${listings.length} listings from search page (${site.label}, ${category})`);
+    console.log(`[Craigslist] Parsed ${listings.length} listings from RSS (${site.label}, ${category})`);
   } catch (err) {
-    console.error('[Craigslist] Error parsing listing page:', err);
+    console.error('[Craigslist] Error parsing RSS feed:', err);
   }
 
   return listings;
 }
 
 /**
- * Scrape Craigslist items for a specific metro site.
+ * Scrape Craigslist items for a specific metro site via RSS feed.
  * Returns raw ScrapedItem[] without ingesting to database.
  * Used by GitHub Actions workflow (run-craigslist.ts).
  */
@@ -175,25 +170,25 @@ export async function scrapeCraigslistItems(
   rateLimiter: RateLimiter
 ): Promise<ScrapedItem[]> {
   const allItems: ScrapedItem[] = [];
-  const seenPids = new Set<string>(); // Dedup within function by data-pid
+  const seenPids = new Set<string>();
 
   const categories = ['gms', 'est']; // gms = garage/moving sales, est = estate sales
 
   for (const category of categories) {
     try {
-      const url = `https://${site.subdomain}.craigslist.org/search/${category}?sort=date`;
+      // RSS feed URL — bypasses WAF that blocks HTML search pages from datacenter IPs
+      const url = `https://${site.subdomain}.craigslist.org/search/${category}?format=rss`;
 
       await rateLimiter.waitBeforeRequest(site.subdomain);
 
-      const html = await fetchHtml(url);
-      if (!html) {
-        console.warn(`[Craigslist] Failed to fetch ${site.label} (${category})`);
+      const xml = await fetchRss(url);
+      if (!xml) {
+        console.warn(`[Craigslist] Failed to fetch RSS for ${site.label} (${category})`);
         continue;
       }
 
-      const parsed = parseListingPage(html, site, category);
+      const parsed = parseRssFeed(xml, site, category);
 
-      // Deduplicate by sourceItemId
       for (const item of parsed) {
         if (item.sourceItemId && !seenPids.has(item.sourceItemId)) {
           seenPids.add(item.sourceItemId);
@@ -202,8 +197,6 @@ export async function scrapeCraigslistItems(
       }
 
       console.log(`[Craigslist] ${site.label} (${category}): ${parsed.length} listings, ${allItems.length} total after dedup`);
-
-      // Jitter between category requests
       await jitterDelay(400, 900);
     } catch (err) {
       console.error(`[Craigslist] Error scraping ${site.label} (${category}):`, err);
@@ -224,27 +217,13 @@ export async function scrapeCraigslist(
 ): Promise<{ created: number; updated: number; skipped: number; failed: number }> {
   const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
-  // Extract subdomain from metro string: "grand-rapids-mi" → "grandrapids"
   const subdomain = metro.replace(/-[a-z]{2}$/, '').replace(/-/g, '');
-
-  // Extract state: "grand-rapids-mi" → "MI"
   const stateMatch = metro.match(/-([a-z]{2})$/);
   const state = (stateMatch?.[1] ?? 'US').toUpperCase();
-
-  // Construct site object
-  const site: CraigslistSite = {
-    subdomain,
-    label: metro,
-    state,
-  };
+  const site: CraigslistSite = { subdomain, label: metro, state };
 
   try {
-    console.log(`[Craigslist] Starting scrape for ${metro} (${subdomain}, ${state})`);
-
     const items = await scrapeCraigslistItems(site, rateLimiter);
-    console.log(`[Craigslist] Found ${items.length} items for ${metro}`);
-
-    // Ingest each item
     for (const item of items) {
       const result = await ingestScrapedListing(item, organizerId);
       if (result.status === 'created') stats.created++;
@@ -252,8 +231,6 @@ export async function scrapeCraigslist(
       else if (result.status === 'skipped') stats.skipped++;
       else stats.failed++;
     }
-
-    console.log(`[Craigslist] ${metro} complete — created ${stats.created}, updated ${stats.updated}, skipped ${stats.skipped}, failed ${stats.failed}`);
     return stats;
   } catch (error) {
     console.error(`[Craigslist] Scrape failed for ${metro}:`, error);
