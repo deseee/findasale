@@ -118,7 +118,7 @@ export async function scrapeEstateSalesNetItems(
       return items;
     }
 
-    const records: EstatesalesNetApiRecord[] = await response.json();
+    const records = (await response.json()) as EstatesalesNetApiRecord[];
     console.log(`[EstateSalesNet] API returned ${records.length} sales for ${label}`);
 
     rateLimiter.clearBackoff(domain);
