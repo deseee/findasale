@@ -30,15 +30,14 @@ export const getServerSideProps: GetServerSideProps = async ({ res }) => {
       throw new Error('API URL not configured');
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
+    // Fetch published sales with individual controller & timeout per request
     try {
-      // Fetch published sales — use status PUBLISHED, not isPublished (field doesn't exist)
+      const salesController = new AbortController();
+      const salesTimeout = setTimeout(() => salesController.abort(), 3000);
       const salesRes = await fetch(`${apiUrl}/search/public?type=sales&limit=50000`, {
-        signal: controller.signal,
+        signal: salesController.signal,
       });
-      clearTimeout(timeout);
+      clearTimeout(salesTimeout);
 
       if (salesRes.ok) {
         const salesData = await salesRes.json();
@@ -59,12 +58,14 @@ export const getServerSideProps: GetServerSideProps = async ({ res }) => {
       console.warn('[sitemap] Failed to fetch sales:', err);
     }
 
+    // Fetch available items with individual controller & timeout per request
     try {
-      // Fetch available items
+      const itemsController = new AbortController();
+      const itemsTimeout = setTimeout(() => itemsController.abort(), 3000);
       const itemsRes = await fetch(`${apiUrl}/items/search?status=AVAILABLE,SOLD&limit=50000`, {
-        signal: controller.signal,
+        signal: itemsController.signal,
       });
-      clearTimeout(timeout);
+      clearTimeout(itemsTimeout);
 
       if (itemsRes.ok) {
         const itemsData = await itemsRes.json();
@@ -85,12 +86,14 @@ export const getServerSideProps: GetServerSideProps = async ({ res }) => {
       console.warn('[sitemap] Failed to fetch items:', err);
     }
 
+    // Fetch claimed organizers with individual controller & timeout per request
     try {
-      // Fetch claimed organizers with storefronts
+      const orgController = new AbortController();
+      const orgTimeout = setTimeout(() => orgController.abort(), 3000);
       const orgRes = await fetch(`${apiUrl}/organizers?claimed=true&limit=10000`, {
-        signal: controller.signal,
+        signal: orgController.signal,
       });
-      clearTimeout(timeout);
+      clearTimeout(orgTimeout);
 
       if (orgRes.ok) {
         const orgData = await orgRes.json();
