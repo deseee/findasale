@@ -1,47 +1,45 @@
-# Patrick's Dashboard — S606 Wrap (PR Wire Checklist + City Page TypeScript Fixes)
+# Patrick's Dashboard — S607 Wrap (Scraper Phase 1 + Vercel Build Fixes)
 
-## Status: PR Wire checklist ✅ written. City page TypeScript bugs ✅ fixed. Scraper Phase 1 → S607. P0 SSR fix still holding.
+## Status: Scraper Phase 1 ✅ implemented. Build ✅ green. 2 migrations need deploy. Scraper gated behind SCRAPER_ENABLED env var.
 
-**Headline:** Three things done this session — smoke test passed (P0 SSR fix from S605 still green), PR Wire launch checklist written end-to-end, and the city page TypeScript bugs left from S604 are fixed. Scraper Phase 1 deferred to S607 for clean context.
+**Headline:** ADR-073 Scraper Phase 1 is done — EstateSalesNet (Puppeteer), GarageSaleFinder (Cheerio), Craigslist stub, 50-metro national cron, admin routes, and startup wiring. Three Vercel build failures resolved mid-session (lockfile, 8 missing city files, regex flag). Build is green. Backend scraper files still need pushing.
 
 ---
 
-## ⚠️ Push Block — S606
+## ⚠️ Push Block — S607
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add packages/frontend/lib/city-slugs.ts
-git add packages/frontend/pages/city/[slug].tsx
-git add "claude_docs/strategy/s606-pr-wire-launch-checklist.md"
-git commit -m "S606: PR Wire checklist (May 5 deadline) + city page TypeScript fixes (population destructure + zipCodes normalization)"
+git add packages/backend/src/services/scraper/sources/estateSalesNet.ts
+git add packages/backend/src/services/scraper/sources/garageSaleFinder.ts
+git add packages/backend/src/services/scraper/sources/craigslist.ts
+git add packages/backend/src/jobs/scraperCron.ts
+git add packages/backend/src/index.ts
+git add packages/backend/src/routes/admin.ts
+git commit -m "S607: Scraper Phase 1 — EstateSalesNet Puppeteer + GarageSaleFinder Cheerio + Craigslist stub + 50-metro national cron + admin routes + startup wiring (ADR-073)"
 .\push.ps1
 ```
 
 ---
 
-## ✅ S606 Accomplishments
+## ✅ S607 Accomplishments
 
-**1. Smoke test** — /, /sales/[id] unauthenticated, /items/[id] all return 200. P0 SSR fix from S605 confirmed holding.
+**1. Scraper Phase 1 — complete (ADR-073):**
+- `estateSalesNet.ts` — Puppeteer scraper, metro-to-URL converter, 50 links/run cap, individual detail parsing with rate limiting
+- `garageSaleFinder.ts` — Cheerio + fetch scraper, server-rendered HTML, 50 links/run cap
+- `craigslist.ts` — stub only (ToS prohibits scraping; keeping for future partnership path)
+- `scraperCron.ts` — 50-metro national cron, EstateSalesNet at midnight UTC, GarageSaleFinder at 6am UTC, gated by `SCRAPER_ENABLED=true`
+- `index.ts` — `initScraperCron()` wired to server startup
+- `admin.ts` — 5 scraper routes wired (`/scraper/sources`, `/runs`, `/sales`, `/takedown`)
 
-**2. PR Wire launch checklist** → `claude_docs/strategy/s606-pr-wire-launch-checklist.md`
+**2. Three Vercel build fixes (all mid-session, all green):**
+- pnpm-lock.yaml out of date (robots-parser added S606) → Patrick ran `pnpm install`, pushed lockfile
+- 8 city lib/component files from S604/S605 never pushed to GitHub → pushed all 8
+- `/s` dotAll regex flag in markdown-to-html.ts → replaced with `[\s\S]`
 
-Six sections ready to execute:
-- **Section 1 (by Thu May 1):** Create PRNewswire account at prnewswire.com → eSpeed using `patrick@finda.sale`. Budget $595–795.
-- **Section 2 (by Fri May 2):** Fill in Version B press release — replace `[Last Name]` (3 places) and `[Phone: (555) 123-4567]` with your real info. File: `claude_docs/strategy/s603-pr-wire-blast-package.md` → Artifact 1, VERSION B.
-- **Section 3 (Tue May 5, 8:30 AM EST):** Paste Version B into PRNewswire, schedule for 9:00 AM EST, upload logo, submit.
-- **Section 4 (May 5–7):** Hand-mail to 12 outlets — Tier 1 GR local same day (5 contacts), Tier 2 MI state next day (4 contacts), Tier 3 trade pubs day after (3 contacts). Template is in the doc.
-- **Section 5 (May 6–7):** ProductHunt (Wed), IndieHackers (Wed), HN (Thu), Reddit (Thu), BetaList (Thu — takes 1-4 weeks, start now).
-- **Section 6 (before May 5):** Set up Google Alerts for "FindA.Sale", create tracking spreadsheet, note Vercel Analytics baseline as of May 4 EOD.
-
-**3. City page TypeScript fixes** — both bugs from S604 are fixed:
-- `pages/city/[slug].tsx` — `population` was missing from the component's destructuring but used in JSX. Fixed.
-- `lib/city-slugs.ts` — 13-city stub JSON has no `zipCodes` field, causing TypeScript failure when assigning to `Map<string, CityInfo>`. Fixed via `any[]` cast + `zipCodes: city.zipCodes ?? []` normalization across all 4 functions.
-
-City pages are ready to work once you regenerate the JSON (see action below).
-
-**4. Scraper Phase 1** — deferred to S607. ADR-073 spec is locked. S607 opens with this.
+Build is **green**. Backend scraper files still need wrap push.
 
 ---
 
@@ -49,27 +47,41 @@ City pages are ready to work once you regenerate the JSON (see action below).
 
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
-| **P0** | Push the S606 block above | Now | 5 files |
-| **P0** | Run `pnpm data:cities` from `packages/frontend` | Before S607 | Regenerates `data/us-cities-3000.json` with full ~3,000 cities (current file has 13). Takes ~30 seconds. |
-| **P1** | Create PRNewswire account (prnewswire.com → eSpeed) using `patrick@finda.sale` | Thu May 1 | Need billing in place before filing day |
-| **P1** | Fill in `[Last Name]` (×3) + real cell in Version B press release | Fri May 2 | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` |
-| **P1** | Verify `patrick@finda.sale` receives email | Before May 5 | ImprovMX → Gmail alias. Send yourself a test. |
-| **P1** | File PR Wire release on PRNewswire | Tue May 5, 8:30 AM EST | Schedule for exactly 9:00 AM EST |
-| **P2** | Send Tier 1 hand-mail outreach (5 GR contacts) | Tue May 5 afternoon | Template in checklist Section 4 |
+| **P0** | Push the S607 block above | Now | 8 files (6 backend + 2 wrap docs) |
+| **P0** | Run `prisma migrate deploy` for `20260501020000_scraper_phase1` | Before activating scraper | See migration block below |
+| **P1** | Set `SCRAPER_ENABLED=true` in Railway backend env | When ready to go live | Scraper is fully gated — won't run until you flip this |
+| **P1** | Run `pnpm data:cities` from `packages/frontend` | When ready | Regenerates `data/us-cities-3000.json` with full ~3,000 cities (current file has 13) |
+| **P2** | Fill in `[Last Name]` (×3) + real cell in press release | Fri May 2 | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
+| **P2** | File PR Wire release on PRNewswire | Tue May 5, 8:30 AM EST | Schedule for 9:00 AM EST |
 
 ---
 
-## 🚀 S607 Plan (Next Session)
+## 🗄️ Migration Deploy Block
 
-**First task:** Scraper Phase 1 — ~12 backend files per ADR-073. Targets: EstateSales.NET, Craigslist, GarageSaleFinder. National scope (all US metros — D-073-A locked "beg forgiveness"). Also includes schema migration, cron job, admin monitoring dashboard.
+Run this after pushing the S607 block:
 
-**Pre-read:** `claude_docs/architecture/ADR-073-DIRECTORY-SCRAPER.md` at session open.
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
-**Prerequisite:** `pnpm data:cities` must have run so the 3,000-city JSON exists before S607 dispatches city-related scraper work.
+This deploys `20260501020000_scraper_phase1` which adds: Sale scrape fields (sourceUrl, sourceName, lastScrapedAt, scrapeVersion, scrapedMetadata), Item.sourceItemId, ScrapedSalesJob table, ClaimEmail table.
+
+Note: `20260430220000_storefront_v2_claim_listing` (Organizer.isClaimed/isUnmanagedListing, ClaimRequest) may also be pending if it wasn't deployed with the S601 migrations — `migrate deploy` will apply it if needed.
 
 ---
 
-## Strategic Context (unchanged from S605)
+## 🚀 S608 Plan (Next Session)
+
+---
+
+**First task (S608):** Chrome QA the S601 Storefront v2 features (9 features, the carryover queue). Then PR Wire filing on May 5 if timing allows.
+
+---
+
+## Strategic Context
 
 **"Get too big to ignore before partners can react."** Scraper → metro pages → PR Wire → creators — all feed the same flywheel: build the most comprehensive sale-and-pricing index in the country before any competitor notices. Unmanaged listings convert organizers via the S601 Claim flow already shipped.
 
