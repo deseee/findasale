@@ -303,17 +303,20 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
     refetchOnWindowFocus: (query: any) => !query.state.error && query.state.status !== 'error', // Don't refetch 404s on tab focus
   });
 
+  // Gate secondary hooks on primary sale query success (prevent infinite loop on deleted sales)
+  const saleExists = !isError && !!sale;
+
   // Feature #39: Fetch photo op stations for this sale
-  const { data: photoOpStations = [] } = usePhotoOpStations(id as string);
+  const { data: photoOpStations = [] } = usePhotoOpStations(id as string, saleExists);
 
   // Feature #47: Fetch UGC photos for this sale
-  const { data: ugcPhotos = [], isLoading: ugcLoading } = useUGCPhotos(id as string);
+  const { data: ugcPhotos = [], isLoading: ugcLoading } = useUGCPhotos(id as string, saleExists);
 
   // Feature #84: Fetch approach notes for this sale (if user has saved it)
-  const { data: approachNotes, isLoading: approachNotesLoading } = useArrivalAssistant(id as string);
+  const { data: approachNotes, isLoading: approachNotesLoading } = useArrivalAssistant(id as string, saleExists);
 
   // Feature #67: Fetch social proof metrics for this sale
-  const { data: saleSocialProof, isLoading: socialProofLoading } = useSaleSocialProof(id as string);
+  const { data: saleSocialProof, isLoading: socialProofLoading } = useSaleSocialProof(id as string, saleExists);
 
   const handleBuyNow = (itemId: string, itemTitle: string) => {
     setCheckoutItem({ id: itemId, title: itemTitle });

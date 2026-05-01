@@ -31,25 +31,29 @@ export interface UGCPhoto {
 
 /**
  * Get approved photos for a specific sale
+ * @param saleId - The sale ID
+ * @param enabled - Optional: set to false to disable the query (e.g., when parent sale fails)
  */
-export const usePhotosForSale = (saleId: number) => {
+export const usePhotosForSale = (saleId: number, enabled = true) => {
   return useQuery({
     queryKey: ['ugcPhotos', 'sale', saleId],
     queryFn: async () => {
       const response = await api.get(`/ugc-photos/sale/${saleId}`);
       return response.data as UGCPhoto[];
     },
-    enabled: !!saleId,
+    enabled: enabled && !!saleId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
 /**
  * Alias for usePhotosForSale - accepts string or number saleId
+ * @param saleId - The sale ID (string or number)
+ * @param enabled - Optional: set to false to disable the query (e.g., when parent sale fails)
  */
-export const useUGCPhotos = (saleId: string | number) => {
+export const useUGCPhotos = (saleId: string | number, enabled = true) => {
   const numericSaleId = typeof saleId === 'string' ? parseInt(saleId, 10) : saleId;
-  return usePhotosForSale(numericSaleId);
+  return usePhotosForSale(numericSaleId, enabled);
 };
 
 /**

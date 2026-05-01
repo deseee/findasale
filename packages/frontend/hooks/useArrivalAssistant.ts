@@ -34,9 +34,11 @@ export interface NotificationResponse {
 /**
  * useArrivalAssistant — Fetch approach notes for a sale
  *
+ * @param saleId - The sale ID
+ * @param enabled - Optional: set to false to disable the query (e.g., when parent sale fails)
  * Returns: { notes, address, startDate, endDate, isLoading, error }
  */
-export function useArrivalAssistant(saleId: string | null) {
+export function useArrivalAssistant(saleId: string | null, enabled = true) {
   return useQuery<ApproachNotesResponse>({
     queryKey: ['approachNotes', saleId],
     queryFn: async () => {
@@ -44,7 +46,7 @@ export function useArrivalAssistant(saleId: string | null) {
       const res = await api.get(`/sales/${saleId}/approach-notes`);
       return res.data;
     },
-    enabled: !!saleId,
+    enabled: enabled && !!saleId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
