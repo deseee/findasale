@@ -9,6 +9,8 @@ import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
 import { scrapeEstateSalesNet } from './sources/estateSalesNet';
 import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
+import { scrapeCraigslist } from './sources/craigslist';
+import { enrichOrganizer } from './enrichment';
 
 export interface ScrapeJob {
   source: string;
@@ -67,12 +69,21 @@ export async function getOrCreateSystemOrganizer(): Promise<string> {
 
   _systemOrganizerId = created.organizer!.id;
   console.log(`[scraper] Created system organizer: ${_systemOrganizerId}`);
+
+  // Fire-and-forget enrichment (non-blocking)
+  enrichOrganizer(
+    created.organizer!.id,
+    'FindA.Sale Directory',
+    'National',
+    'US'
+  ).catch((err) => console.error('[scraper] Enrichment failed silently:', err));
+
   return _systemOrganizerId;
 }
 
 /**
  * Main scraping entry point.
- * Supports: EstateSalesNet | GarageSaleFinder | Craigslist (stub)
+ * Supports: EstateSalesNet | GarageSaleFinder | Craigslist
  */
 export async function runScrapeRun(source: string, metro: string): Promise<void> {
   const jobId = await createScrapeJob(source, metro);
@@ -89,6 +100,8 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
       stats = await scrapeEstateSalesNet(metro, systemOrganizerId, rateLimiter);
     } else if (source === 'GarageSaleFinder') {
       stats = await scrapeGarageSaleFinder(metro, systemOrganizerId, rateLimiter);
+    } else if (source === 'Craigslist') {
+      stats = await scrapeCraigslist(metro, systemOrganizerId, rateLimiter);
     } else {
       console.warn(`[scraper] Unknown source: ${source} — skipping`);
     }
