@@ -22,11 +22,10 @@ export const ingestFromGitHubActions = async (req: Request, res: Response): Prom
       return;
     }
 
-    const organizerId = req.body.organizerId;
-    if (!organizerId) {
-      res.status(400).json({ message: 'organizerId is required' });
-      return;
-    }
+    // organizerId is optional — ingestScrapedListing falls back to the system
+    // organizer (created via getOrCreateSystemOrganizer) when undefined. This
+    // is the correct path for unclaimed scraped listings.
+    const organizerId: string | undefined = req.body.organizerId || undefined;
 
     const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
