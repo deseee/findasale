@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "tsx scripts/generate-seo-index.ts",
     "build": "next build",
     "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "next lint",
-    "data:cities": "tsx scripts/generate-us-cities.ts"
+    "data:cities": "tsx scripts/generate-us-cities.ts",
+    "data:seo": "tsx scripts/generate-seo-index.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",

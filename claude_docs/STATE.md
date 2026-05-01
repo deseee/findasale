@@ -4,6 +4,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Current Status
 
+**Latest work (S614 — COMPLETE, 5-group parallel build: metro sync, scraper enrichment, Craigslist, claim email, SEO moat):** All 5 groups dispatched in parallel and returned. Smoke test: admin scraper ✅ loads; SSR sale page ✅ handles missing sale gracefully (404 state, not 500). Group 1 (ADR-074 Metro Sync Cron): `MetroTopFinds` model added to schema.prisma; migration `20260501030000_metro_top_finds` created; `metroSyncCron.ts` (nightly 04:00 UTC, 20 metros, gated by `METRO_SYNC_ENABLED=true`); `citiesController.ts` frontend query; `city/[slug].tsx` updated to consume real MetroTopFinds data; backend `citiesController.ts` + `routes/cities.ts` updated with `/:slug/top-finds` endpoint. Group 2 (Scraper Enrichment): `enrichment.ts` NEW — Google Places + Facebook Graph API fire-and-forget after organizer creation; `scraper/index.ts` updated; schema already had `googlePlaceId`/`facebookPageId` on Organizer (no migration needed). Group 3 (Craigslist ADR-073 Phase 2): `sources/craigslist.ts` stub REPLACED with real Cheerio+fetch impl, 31 metro mapping, 500ms rate limiting, multiple search queries; `scraperCron.ts` updated to add Craigslist at 12:00 UTC; `scraper/index.ts` updated with `scrapeCraigslist` call. ⚠️ Craigslist selectors are assumption-based — validate in first prod run. Group 4 (Claim Email Pipeline ADR-073 Phase 2): `OrganizerClaimEmail` model added to schema; migration `20260501060000_organizer_claim_email` created; `claimEmailService.ts` NEW — 3-touch Day 1/3/7 sequence to unmanaged organizers via Resend, max 50/batch, gated by `CLAIM_EMAIL_ENABLED=true`; `claimEmailCron.ts` NEW — daily 08:00 UTC. Group 5 (ADR-075 SEO Content Moat): 500 content entries generated into `data/seo-pages/index.json`; `pages/guide/[slug].tsx` NEW — ISR page (revalidate:86400), `getStaticPaths` from index.json, schema.org structured data, dark mode, mobile responsive; `server-sitemap.xml.tsx` updated with all 500 guide URLs; `package.json` prebuild script added. Index.ts merge verified: both `initMetroSyncCron` (line 226) and `initClaimEmailCron` (line 227) present. Schema conflicts verified clean: `ClaimEmail` relates to Sale (pre-existing), `OrganizerClaimEmail` relates to Organizer (new) — separate models. ⚠️ eBay Browse API query syntax for metro sync may need adjustment in prod. **Migrations to run:** `20260501030000_metro_top_finds` + `20260501060000_organizer_claim_email`. **New Railway env vars:** `METRO_SYNC_ENABLED=true`, `CLAIM_EMAIL_ENABLED=true`, `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN`. **Files changed (23 total):** `packages/database/prisma/schema.prisma`, `packages/database/prisma/migrations/20260501030000_metro_top_finds/migration.sql` (NEW), `packages/database/prisma/migrations/20260501060000_organizer_claim_email/migration.sql` (NEW), `packages/backend/src/index.ts`, `packages/backend/src/jobs/metroSyncCron.ts` (NEW), `packages/backend/src/jobs/claimEmailCron.ts` (NEW), `packages/backend/src/services/scraper/enrichment.ts` (NEW), `packages/backend/src/services/scraper/index.ts`, `packages/backend/src/services/scraper/sources/craigslist.ts`, `packages/backend/src/services/scraper/claimEmailService.ts` (NEW), `packages/backend/src/jobs/scraperCron.ts`, `packages/backend/src/controllers/citiesController.ts`, `packages/backend/src/routes/cities.ts`, `packages/frontend/lib/citiesController.ts` (NEW), `packages/frontend/pages/city/[slug].tsx`, `packages/frontend/pages/guide/[slug].tsx` (NEW), `packages/frontend/data/seo-pages/index.json` (NEW), `packages/frontend/data/seo-pages/generate-seo-content.js` (NEW), `packages/frontend/data/seo-pages/generate.js` (NEW), `packages/frontend/data/seo-pages/BUILD_GUIDE.md` (NEW), `packages/frontend/scripts/generate-seo-index.ts` (NEW), `packages/frontend/pages/server-sitemap.xml.tsx`, `packages/frontend/package.json`.
+
 **Latest work (S613 — COMPLETE, admin scraper page fully fixed + Railway cache-busted):** `/admin/scraper` page was 404 → redirecting → data load failure → white in dark mode → empty trigger dropdown — five successive bugs fixed. Root causes: (1) `@/hooks/useAuth` and `@/hooks/useToast` don't exist → Next.js route 404; fixed to `../../components/AuthContext` + `../../components/ToastContext`. (2) Auth check fired before auth resolved + used wrong field `roles` (array) vs `role` (string) → premature redirect; fixed with `isLoading: authLoading` gate. (3) `ScrapedSalesJob` table didn't exist → API 500 → Patrick ran `npx prisma migrate deploy + generate` (migration `20260501020000_scraper_phase1` confirmed deployed). (4) API response extraction wrong — `sourcesData` instead of `sourcesData.sources`, `runsData.runs` instead of `runsData.jobs`; fixed. (5) Trigger scrape dropdown was filtering to `enabled` sources only — with SCRAPER_ENABLED not yet baked into the running container all sources showed `enabled:false` → empty dropdown; fixed by removing filter + adding fallback. `Dockerfile.production` cache-bust comment updated to `2026-05-01` to force full Railway rebuild and pick up `SCRAPER_ENABLED=true`. Dark mode classes added throughout the page. Scraper scope clarified: EstateSalesNet (Puppeteer) + GarageSaleFinder (Cheerio) are live; Craigslist is Phase 2 stub. eBay is for price suggestions/city pages only (ADR-074), NOT a scrape source. Google/Yelp/Facebook enrichment is specced (ADR-073 Phase 2), not yet built. **Files changed:** `packages/frontend/pages/admin/scraper.tsx` (5 bug fixes + dark mode), `packages/backend/Dockerfile.production` (cache-bust). **S614 plan: metro sync cron (ADR-074), scraper enrichment, Craigslist impl, claim email pipeline, ADR-075 SEO pages — all parallel.**
 
 **Latest work (S612 — COMPLETE, city dataset regeneration + SCRAPER_ENABLED confirmed):** `pnpm data:cities` fixed and run. Two-pass fix: (1) kelvins CSV header mismatch — columns are uppercase (`CITY`, `STATE_CODE`, `COUNTY`) but script expected lowercase, and kelvins has no population column at all; (2) complete rewrite to two-source strategy — plotly/datasets (primary: 3,231 cities with population) + kelvins (enrichment: state/county via name+coordinate proximity matching). 2,723 population-sorted cities output, New York (8,287,238) → Ocean City (7,094). SCRAPER_ENABLED=true confirmed live by Patrick; scraper runs at 00:00 + 06:00 UTC daily. **Files changed:** `packages/frontend/scripts/generate-us-cities.ts` (rewritten), `packages/frontend/data/us-cities-3000.json` (regenerated — 2,723 cities), `claude_docs/patrick-dashboard.md`. **Pending Patrick actions:** (1) press release — fill `[Last Name]` ×3 + real cell in `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B, file PRNewswire May 5 9:00 AM EST (DEADLINE TOMORROW); (2) review + send 19 outreach drafts in Gmail (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 10 others from S596); (3) Chrome QA of S611 features (broadcast card, buyer's premium badge, tier lapse amber).
@@ -407,9 +409,45 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S614 — Parallel build: metro sync cron (ADR-074) + scraper enrichment + Craigslist + claim email pipeline + ADR-075 SEO pages.**
+**S615 — Run migrations + set env vars + QA carryover + verify Craigslist selectors in production.**
 
-### FIRST ACTION — push S613 wrap block
+### FIRST ACTION — push S614 wrap block (see below)
+
+### Patrick's immediate actions after push
+
+1. **Run 2 new migrations:**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+2. **Add Railway env vars** (Railway dashboard → findasale-backend → Variables):
+   - `METRO_SYNC_ENABLED=true`
+   - `CLAIM_EMAIL_ENABLED=true`
+   - `GOOGLE_PLACES_KEY` — your Google Maps Platform API key (Places API enabled)
+   - `FB_ACCESS_TOKEN` — Facebook Graph API user access token (v18.0)
+
+3. **URGENT — PRNewswire press release: May 5, 9:00 AM EST.** Fill `[Last Name]` ×3 + real cell in `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B before filing.
+4. **Review + send 19 outreach drafts in Gmail** (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others).
+
+### PREVIOUSLY pushed S613 wrap block
+Already pushed — commit: "fix: admin scraper page 5 bugs fixed, dark mode, Railway cache-bust + S613 wrap docs"
+
+### QA carryover (separate from S615 build work)
+- #356 broadcast card, #363 buyer's premium badge, tier lapse amber plan card, #361 Claim banner (user11 = Sunrise Consignment) — pending Chrome QA from S611/S612
+- DonationModal SettlementWizard end-to-end
+- Holds `/shopper` page end-to-end
+- PDF watermark visual confirmation
+- iCal footer in `.ics` description
+- Treasure hunt progress page
+- ConfirmDialog smoke test
+- Craigslist selector validation (first prod scrape run after `SCRAPER_ENABLED` triggers Craigslist at 12:00 UTC)
+
+**Passwords:** Test accounts `Seedy2025!`. user1=Alice (TEAMS), user2=Bob (PRO), user6=charity sale owner.
+
+### OLD S614 plan content below (COMPLETED this session)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale

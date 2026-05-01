@@ -67,7 +67,21 @@ export async function getServerSideProps() {
       priority: 0.6,
     }));
 
-    const fields = [...staticUrls, ...saleUrls, ...cityUrls, ...zipUrls, ...tagUrls];
+    // Generate guide URLs (ADR-075 SEO Content Moat)
+    let guideUrls: any[] = [];
+    try {
+      const indexData = require('../data/seo-pages/index.json') as Array<{ slug: string }>;
+      guideUrls = indexData.map((entry: any) => ({
+        loc: `${process.env.SITE_URL || 'https://finda.sale'}/guide/${entry.slug}`,
+        lastmod: '2026-05-01',
+        changefreq: 'weekly',
+        priority: 0.7,
+      }));
+    } catch (err) {
+      console.warn('Could not load guide entries for sitemap:', err);
+    }
+
+    const fields = [...staticUrls, ...saleUrls, ...cityUrls, ...zipUrls, ...tagUrls, ...guideUrls];
 
     return getServerSideSitemap(fields);
   } catch (error) {

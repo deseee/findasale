@@ -223,6 +223,8 @@ import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feat
 import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
 import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Phase 1: Backfill PriceBenchmark from Items with aiSuggestedPrice
 import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Directory scraper national cron
+import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
+import { initClaimEmailCron } from './jobs/claimEmailCron'; // ADR-073 Phase 2: Claim Email Pipeline — 3-touch sequence for unmanaged organizers
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -636,6 +638,12 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-073 Phase 1: Initialize directory scraper cron (gated by SCRAPER_ENABLED env var)
   initScraperCron();
+
+  // ADR-074: Initialize metro sync cron (gated by METRO_SYNC_ENABLED env var)
+  initMetroSyncCron();
+
+  // ADR-073 Phase 2: Initialize claim email cron (gated by CLAIM_EMAIL_ENABLED env var)
+  initClaimEmailCron();
 
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {

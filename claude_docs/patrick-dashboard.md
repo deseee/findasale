@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S613 COMPLETE
+# Patrick's Dashboard — S614 COMPLETE
 
-## Status: S613 DONE. Admin scraper page fully fixed (5 bugs). Railway cache-busted. S614 plan: metro sync cron + scraper enrichment + Craigslist + claim email pipeline + SEO pages — all parallel.
+## Status: S614 DONE. 5-group parallel build complete — metro sync cron, scraper enrichment, Craigslist, claim email pipeline, 500 SEO pages. Push block below. Run 2 migrations + set 4 env vars in Railway.
 
-**Headline:** `/admin/scraper` now works end-to-end: page loads, data loads, dark mode correct, trigger scrape dropdown populated. Railway rebuilding with `SCRAPER_ENABLED=true` baked in. Migration `20260501020000_scraper_phase1` confirmed deployed.
+**Headline:** S614 shipped everything in the S614 plan. Smoke test: admin scraper ✅, SSR sale page ✅. Index.ts merge verified (both cron inits present). Two new Prisma migrations ready to deploy. Craigslist selector validation needed on first prod scrape run.
 
 ---
 
@@ -11,22 +11,95 @@
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
 | **P1 URGENT** | Fill `[Last Name]` ×3 + real cell in press release | **File Mon May 5, 9:00 AM EST** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
-| **P2** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others (S596 batch) |
-| **P3** | Add Railway env vars after S614 builds land | After S614 | `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN`, `METRO_SYNC_ENABLED=true`, `CLAIM_EMAIL_ENABLED=true` |
+| **P1** | Push S614 wrap block (below) | Now | 23 files — use PowerShell pushblock |
+| **P1** | Run 2 new migrations after push deploys | After push | Commands below |
+| **P2** | Add 4 Railway env vars | After push | `METRO_SYNC_ENABLED=true`, `CLAIM_EMAIL_ENABLED=true`, `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN` |
+| **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others |
 
 ---
 
-## 📦 Push Block — S613 Wrap
+## 📦 Push Block — S614 Wrap
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/admin/scraper.tsx
-git add packages/backend/Dockerfile.production
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260501030000_metro_top_finds/migration.sql
+git add packages/database/prisma/migrations/20260501060000_organizer_claim_email/migration.sql
+git add packages/backend/src/index.ts
+git add packages/backend/src/jobs/metroSyncCron.ts
+git add packages/backend/src/jobs/claimEmailCron.ts
+git add packages/backend/src/services/scraper/enrichment.ts
+git add packages/backend/src/services/scraper/index.ts
+git add "packages/backend/src/services/scraper/sources/craigslist.ts"
+git add packages/backend/src/services/scraper/claimEmailService.ts
+git add packages/backend/src/jobs/scraperCron.ts
+git add packages/backend/src/controllers/citiesController.ts
+git add packages/backend/src/routes/cities.ts
+git add packages/frontend/lib/citiesController.ts
+git add "packages/frontend/pages/city/[slug].tsx"
+git add "packages/frontend/pages/guide/[slug].tsx"
+git add packages/frontend/data/seo-pages/index.json
+git add packages/frontend/data/seo-pages/generate-seo-content.js
+git add packages/frontend/data/seo-pages/generate.js
+git add packages/frontend/data/seo-pages/BUILD_GUIDE.md
+git add packages/frontend/scripts/generate-seo-index.ts
+git add packages/frontend/pages/server-sitemap.xml.tsx
+git add packages/frontend/package.json
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: admin scraper page 5 bugs fixed, dark mode, Railway cache-bust + S613 wrap docs"
+git commit -m "feat: S614 — metro sync cron (ADR-074), scraper enrichment, Craigslist impl, claim email pipeline (ADR-073 Phase 2), 500 SEO guide pages (ADR-075 Phase 1)"
 .\push.ps1
 ```
+
+---
+
+## 🔧 After Push Deploys — Run Migrations
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+**New tables this creates:**
+- `MetroTopFinds` — eBay sold items per city slug for city pages
+- `OrganizerClaimEmail` — 3-touch claim email tracking per unmanaged organizer
+
+---
+
+## ✅ S614 What Was Done
+
+### Group 1 — Metro Sync Cron (ADR-074)
+- `MetroTopFinds` Prisma model — stores eBay sold items per city for city page display
+- Nightly cron at 04:00 UTC, 20 US metros, top 12 items per metro, gated by `METRO_SYNC_ENABLED=true`
+- City pages (`/city/[slug]`) now pull real eBay sold-comp data instead of placeholders
+- Backend `/api/cities/:slug/top-finds` endpoint added
+
+### Group 2 — Scraper Enrichment
+- After the scraper creates an unmanaged organizer, `enrichOrganizer()` fires-and-forgets
+- Google Places API lookup → stores `googlePlaceId` on Organizer
+- Facebook Graph API search → stores `facebookPageId` on Organizer
+- Both gated by env var — graceful skip if keys not set
+- ⚠️ Needs: `GOOGLE_PLACES_KEY` + `FB_ACCESS_TOKEN` in Railway
+
+### Group 3 — Craigslist Scraper
+- `sources/craigslist.ts` stub replaced with real Cheerio+fetch implementation
+- 31 metro subdomain mapping, 500ms rate limiting between metros
+- Runs at 12:00 UTC daily (joins EstateSalesNet 00:00 + GarageSaleFinder 06:00)
+- ⚠️ Craigslist HTML selectors are assumption-based — validate on first prod run
+
+### Group 4 — Claim Email Pipeline
+- `OrganizerClaimEmail` model tracks which touch (1/2/3) each unmanaged organizer has received
+- 3-touch Day 1/3/7 sequence: "claim it free" → "shoppers are looking" → "last reminder"
+- Max 50 emails per daily batch, gated by `CLAIM_EMAIL_ENABLED=true`
+- Uses existing Resend integration
+
+### Group 5 — SEO Content Moat (ADR-075 Phase 1)
+- 500 JSON content entries: 250 "How to run a [sale type] in [City]" + 250 "[City] [sale type] pricing guide"
+- `/guide/[slug]` ISR page (24-hour cache, fallback: blocking, schema.org structured data)
+- All 500 URLs added to sitemap
+- All 50 major US cities included (Grand Rapids, MI included)
 
 ---
 

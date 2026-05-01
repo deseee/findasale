@@ -391,6 +391,8 @@ model Organizer {
   isClaimed               Boolean                @default(true) // Whether organizer profile has been claimed by owner
   isUnmanagedListing      Boolean                @default(false) // Whether this is an unmanaged/imported listing
   claimRequests           ClaimRequest[]
+  // ADR-073 Phase 2: Claim Email Pipeline — 3-touch outreach sequence
+  claimEmails             OrganizerClaimEmail[]
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 }
@@ -1935,6 +1937,25 @@ model Coupon {
 
   @@index([userId, status])
   @@index([code])
+}
+
+// ADR-074: Metro Sync — eBay sold items synced to populate city top-finds page
+model MetroTopFinds {
+  id            String   @id @default(cuid())
+  citySlug      String
+  metro         String
+  itemTitle     String
+  itemCategory  String?
+  soldPrice     Decimal
+  imageUrl      String?
+  ebayListingId String
+  soldAt        DateTime
+  updatedAt     DateTime @updatedAt
+
+  @@unique([citySlug, ebayListingId])
+  @@index([citySlug])
+  @@index([metro])
+  @@index([soldAt])
 }
 
 // Phase 2a: Rarity Boost — shopper spends 15 XP to boost legendary find odds for a specific sale
@@ -4286,4 +4307,22 @@ model ClaimEmail {
   @@index([saleId])
   @@index([organizerEmail])
   @@index([claimed])
+}
+
+// ADR-073 Phase 2: Claim Email Pipeline — 3-touch sequence for unmanaged organizers
+model OrganizerClaimEmail {
+  id             String   @id @default(cuid())
+  organizerId    String
+  organizer      Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  touchNumber    Int      // 1, 2, or 3
+  sentAt         DateTime @default(now())
+  status         String   @default("sent") // sent, bounced, opened
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizerId])
+  @@index([sentAt])
+  @@index([touchNumber])
+  @@unique([organizerId, touchNumber]) // One email per touch per organizer
 }

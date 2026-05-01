@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { getCityFromSlug, getAllCitySlugs, getNearestCities, getTopCategoriesForCity } from '@/lib/city-slugs';
 import { generateCityTip } from '@/lib/city-tips-generator';
 import { markdownToHtml } from '@/lib/markdown-to-html';
+import { getMetroTopFinds } from '@/lib/citiesController';
 import { CityHero } from '@/components/CityHero';
 import { CityTopFinds } from '@/components/CityTopFinds';
 import { CityRecentSales } from '@/components/CityRecentSales';
@@ -173,9 +174,20 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
     return { notFound: true };
   }
 
-  // For MVP, we'll use mock data. In Phase 2, these will come from a backend API
-  // GET /api/cities/:slug/data
-  const topFinds: any[] = [];
+  // ADR-074: Fetch real eBay sold items from MetroTopFinds table
+  const metroFinds = await getMetroTopFinds(slug);
+
+  // Transform MetroTopFinds into component format (map eBay data to item structure)
+  const topFinds = metroFinds.map((find) => ({
+    id: find.id,
+    title: find.itemTitle,
+    category: find.itemCategory,
+    actualPrice: parseFloat(find.soldPrice.toString()),
+    photoUrl: find.imageUrl,
+    soldAt: new Date(find.soldAt),
+  }));
+
+  // For future expansion: fetch recent sales from FindA.Sale database
   const recentSales: any[] = [];
 
   // Auto-generate tip using template
