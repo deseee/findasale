@@ -198,11 +198,14 @@ export async function ingestScrapedListing(
       };
     }
 
-    // Validate required fields
-    if (!listing.title || !listing.address || !listing.city || !listing.state || !listing.zip || !listing.startDate || !listing.endDate) {
+    // Validate required fields. Address is intentionally NOT required —
+    // EstateSalesNet (and similar directories) routinely hide street addresses
+    // for security/privacy until the day of the sale. zip + city + state is
+    // sufficient to place the sale on the map. Address can be filled in later.
+    if (!listing.title || !listing.city || !listing.state || !listing.zip || !listing.startDate || !listing.endDate) {
       return {
         status: 'failed',
-        reason: 'Missing required fields (title, address, city, state, zip, startDate, endDate)',
+        reason: 'Missing required fields (title, city, state, zip, startDate, endDate)',
       };
     }
 
