@@ -67,54 +67,85 @@ async function main() {
   );
   console.log(`[run-estatesalesnet] Total items collected (after dedup): ${allItems.length}`);
 
-  // POST to Railway in batches of 25
+  // POST to Railway in batches of 25, processed with bounded concurrency
+  // so one slow request doesn't gate the whole run. With CONCURRENCY=5 a full
+  // 220-batch national pass finishes in ~1 minute instead of ~5-7.
   const batchSize = 25;
+  const CONCURRENCY = 5;
+
+  const batches: { num: number; items: any[] }[] = [];
   for (let i = 0; i < allItems.length; i += batchSize) {
-    const batch = allItems.slice(i, i + batchSize);
-    const batchNum = Math.floor(i / batchSize) + 1;
-    const totalBatches = Math.ceil(allItems.length / batchSize);
+    batches.push({ num: Math.floor(i / batchSize) + 1, items: allItems.slice(i, i + batchSize) });
+  }
+  const totalBatches = batches.length;
+  const totals = { created: 0, updated: 0, skipped: 0, failed: 0, httpErrors: 0 };
+  let completed = 0;
 
+  async function postOne(batch: { num: number; items: any[] }): Promise<void> {
     try {
-      console.log(
-        `[run-estatesalesnet] Posting batch ${batchNum}/${totalBatches} (${batch.length} items)...`
-      );
-
       const response = await fetch(INGEST_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-scraper-key': SCRAPER_KEY,
+          'x-scraper-key': SCRAPER_KEY!,
         },
         body: JSON.stringify({
-          items: batch,
+          items: batch.items,
           organizerId: ORGANIZER_ID,
         }),
       });
 
+      completed++;
+
       if (!response.ok) {
         const error = await response.text();
+        totals.httpErrors++;
         console.error(
-          `[run-estatesalesnet] Batch ${batchNum} failed with status ${response.status}:`,
-          error
+          `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} failed with status ${response.status}: ${error.slice(0, 200)}`
         );
-        continue;
+        return;
       }
 
-      const result = await response.json() as {
+      const result = (await response.json()) as {
         stats: { created: number; updated: number; skipped: number; failed: number };
       };
+      totals.created += result.stats.created;
+      totals.updated += result.stats.updated;
+      totals.skipped += result.stats.skipped;
+      totals.failed += result.stats.failed;
       console.log(
-        `[run-estatesalesnet] Batch ${batchNum} ingested — ${result.stats.created} created, ${result.stats.skipped} skipped, ${result.stats.failed} failed`
+        `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} — ${result.stats.created}c / ${result.stats.skipped}s / ${result.stats.failed}f`
       );
     } catch (error) {
+      completed++;
+      totals.httpErrors++;
       console.error(
-        `[run-estatesalesnet] Failed to post batch ${batchNum}:`,
+        `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} threw:`,
         error instanceof Error ? error.message : String(error)
       );
     }
   }
 
-  console.log(`[run-estatesalesnet] All batches posted. Done.`);
+  // Worker pool: each worker pulls the next batch off a shared queue
+  const queue = batches.slice();
+  async function worker(): Promise<void> {
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (!next) return;
+      await postOne(next);
+    }
+  }
+
+  console.log(
+    `[run-estatesalesnet] Posting ${totalBatches} batches with concurrency ${CONCURRENCY}...`
+  );
+  const ingestStart = Date.now();
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+  const ingestSec = ((Date.now() - ingestStart) / 1000).toFixed(1);
+
+  console.log(
+    `[run-estatesalesnet] Ingest complete in ${ingestSec}s — ${totals.created} created, ${totals.skipped} skipped, ${totals.failed} failed (item-level), ${totals.httpErrors} batch HTTP errors`
+  );
 }
 
 main().catch((error) => {
