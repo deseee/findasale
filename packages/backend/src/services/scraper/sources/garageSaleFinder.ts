@@ -8,9 +8,9 @@ import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
 import { parseGarageSalesFinderListing, extractEmails } from '../htmlParser';
 import { ingestScrapedListing, ScrapedItem } from '../index';
+import { getRandomUserAgent, jitterDelay } from '../userAgents';
 
 const GARAGE_SALES_BASE_URL = 'https://www.garagesalefinder.com';
-const USER_AGENT = 'FindASaleBot/1.0 (+https://finda.sale/bot)';
 
 /**
  * Convert metro slug to GarageSaleFinder URL.
@@ -49,7 +49,7 @@ export async function scrapeGarageSaleFinder(
     }
 
     const response = await fetch(metroUrl, {
-      headers: { 'User-Agent': USER_AGENT },
+      headers: { 'User-Agent': getRandomUserAgent() },
       signal: AbortSignal.timeout(20000),
     });
 
@@ -86,6 +86,7 @@ export async function scrapeGarageSaleFinder(
 
     // Process each sale link (cap at 50 per metro per run)
     for (const saleUrl of saleLinks.slice(0, 50)) {
+      await jitterDelay(300, 1200);
       const item = await parseGarageSalesFinderSale(saleUrl, rateLimiter);
       if (!item) {
         stats.failed++;
@@ -124,7 +125,7 @@ export async function parseGarageSalesFinderSale(
     }
 
     const response = await fetch(saleUrl, {
-      headers: { 'User-Agent': USER_AGENT },
+      headers: { 'User-Agent': getRandomUserAgent() },
       signal: AbortSignal.timeout(15000),
     });
 
