@@ -39,7 +39,7 @@ interface ScrapedSale {
 }
 
 export default function ScraperAdminPage() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
   const [sources, setSources] = useState<Source[]>([]);
   const [runs, setRuns] = useState<ScrapeRun[]>([]);
@@ -49,13 +49,13 @@ export default function ScraperAdminPage() {
   const [selectedMetro, setSelectedMetro] = useState('Grand Rapids, MI');
   const [triggering, setTriggering] = useState(false);
 
-  // Check admin status
+  // Check admin status — wait for auth to resolve before redirecting
   useEffect(() => {
-    if (!user?.roles?.includes('ADMIN')) {
+    if (!authLoading && user?.role !== 'ADMIN') {
       window.location.href = '/';
       return;
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   // Load initial data
   useEffect(() => {
