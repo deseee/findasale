@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S610 Wrap (Storefront v2 Chrome QA complete)
+# Patrick's Dashboard — S611 Wrap (Storefront deferred features shipped)
 
-## Status: Storefront v2 ✅ all core features verified live. 2 features deferred. 1 line sort fix needs push.
+## Status: #356 Broadcast + #363 Buyer's Premium + Tier Lapse card fix all shipped. 4 files ready to push. Pending Chrome QA.
 
-**Headline:** All S601 storefront features are working live at `finda.sale/organizer/storefront/kellys-estate-sales`. The backend was returning only 12 fields — fixed in S609 to return 34. Chrome QA in S610 confirmed everything is rendering. One cosmetic bug found and fixed (hours sort order). Two features need future dispatch: #356 Broadcast storefront UI, #363 Buyer's Premium display.
+**Headline:** S611 dispatched 3 parallel agents. #356 (Broadcast storefront display) and #363 (Buyer's Premium badge) are now in the codebase. Tier Lapse plan card now shows amber when lapsed. Unclaimed organizer seed added for #361 positive-path QA. OG meta issue diagnosed: likely missing `INTERNAL_API_URL` in Vercel env vars. 19 outreach drafts from S596 still unsent in Gmail.
 
 ---
 
@@ -10,23 +10,28 @@
 
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
-| **P0** | Push S610 wrap block (below) | Now | Includes hours sort fix + STATE.md + dashboard |
+| **P0** | Push S611 wrap block (below) | Now | 4 code files + wrap docs |
 | **P1** | Run `prisma migrate deploy` (pending migrations) | Before scraper/claim features activate | See migration block below |
+| **P1** | Check Vercel env vars for `INTERNAL_API_URL` | Soon | Missing = ogData null on sales pages = no social OG previews |
 | **P1** | Set `SCRAPER_ENABLED=true` in Railway env | When ready to go live | Scraper fully gated — won't run until you flip this |
 | **P2** | Run `pnpm data:cities` from `packages/frontend` | When ready | Regenerates `data/us-cities-3000.json` with full ~3,000 cities |
 | **P2** | Fill in `[Last Name]` (×3) + real cell in press release | **May 5** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
 | **P2** | File PR Wire release on PRNewswire | Tue May 5, 9:00 AM EST | Schedule for 9:00 AM EST |
+| **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA, NASMM, ISA, etc. from S596 |
 
 ---
 
-## 📦 Push Block — S610 Wrap
+## 📦 Push Block — S611 Wrap
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/organizer/storefront/[slug].tsx
+git add packages/backend/src/routes/organizers.ts
+git add "packages/frontend/pages/organizer/storefront/[slug].tsx"
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/database/prisma/seed.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: storefront hours sort + S610 wrap docs (storefront v2 QA complete)"
+git commit -m "feat: #356 broadcast storefront, #363 buyer's premium, tier lapse amber, unclaimed seed + S611 wrap docs"
 .\push.ps1
 ```
 
@@ -47,39 +52,31 @@ Pending migrations:
 
 ---
 
-## ✅ S609+S610 What Was Done
+## ✅ S611 What Was Done
 
-**S609 — Backend root-cause fix:**
-- `packages/backend/src/routes/organizers.ts` — `GET /organizers/:id` expanded from 12 → 34 fields; `hours: true` added to Prisma includes; `isPinned` + `attendanceCount` added to sales select
-- `packages/frontend/pages/organizer/storefront/[slug].tsx` — `getOrgTypeLabel()` normalization helper (handles uppercase DB values), isClaimed state + claim banner, attendance count rendering
+**Agent A — #356 Broadcast + #363 Buyer's Premium:**
+- `packages/backend/src/routes/organizers.ts` — `GET /organizers/:id` now includes `broadcasts: { orderBy: sentAt desc, take: 1 }` + `auctionDetails: { select: { buyerPremiumRate: true } }` on sales
+- `packages/frontend/pages/organizer/storefront/[slug].tsx` — "Latest Update" card (broadcast message + relative time); amber "Buyer's Premium: n%" pill on AUCTION sale cards
 
-**S610 — Chrome QA + 1 bug fix:**
-- `packages/frontend/pages/organizer/storefront/[slug].tsx` — hours sorted by dayOfWeek (was insertion order)
+**Agent B — Tier Lapse plan card:**
+- `packages/frontend/pages/organizer/dashboard.tsx` — line 844: amber gradient/border/text/button when `isLapsed=true`; teal when not
 
-**QA Results (Chrome-verified):**
+**Agent C — Seed + OG meta diagnosis:**
+- `packages/database/prisma/seed.ts` — user11 = "Sunrise Consignment & Collectibles" (Muskegon MI, `isClaimed=false`, `isUnmanagedListing=true`); user12 = primary shopper
+- OG meta: no code fix needed — `INTERNAL_API_URL` env var missing in Vercel is the likely culprit
 
-| Feature | Result |
-|---------|--------|
-| #354 Business Hours | ✅ Mon–Sat rendered, correct times |
-| #355 Org Type Badges | ✅ "Estate Sales" + "Consignment" (uppercase normalized) |
-| #359 Pinned "Featured" badge | ✅ Amber pill on pinned sale card |
-| #361 Claim banner | ✅ Hidden for isClaimed:true (correct) |
-| #362 "👥 247 attended" | ✅ Under sale title |
-| Tagline (S609) | ✅ Italic in green header |
-| yearFounded (S609) | ✅ "Est. 2015" in About |
-| twitterUrl (S609) | ✅ "Twitter/X" link |
-| tiktokUrl (S609) | ✅ "TikTok" link |
-| #356 Broadcast | DEFERRED — no storefront frontend code |
-| #363 Buyer's Premium | DEFERRED — nested AuctionDetails query needed |
+**Draft contact audit:**
+- 19 drafts from S596 batch still unsent (Nick Loper, Codie Sanchez, NAA ×2, NASMM, senior-settlers, ISA, NESA, Antique Trader, AntiqueWeek, Amanda's Mercantile, 8 others)
 
 ---
 
-## 🚀 S611 Plan (Next Session)
+## 🚀 S612 Plan (Next Session)
 
-1. Smoke test: verify hours sort fix deployed (Mon, Tue, Wed, Thu, Fri, Sat order)
-2. Dispatch #356 Broadcast storefront UI to `findasale-dev`
-3. Dispatch #363 Buyer's Premium storefront display (add `auctionDetails` to sales include)
-4. Add unclaimed organizer to seed for #361 claim banner positive-path QA
+1. Push S611 block (above) — first action
+2. Run pending migrations
+3. Chrome QA: storefront broadcast card, buyer's premium badge, tier lapse amber
+4. Check Vercel for `INTERNAL_API_URL` — fix OG meta
+5. Verify #361 claim banner positive path (user11 storefront after re-seed)
 
 ---
 

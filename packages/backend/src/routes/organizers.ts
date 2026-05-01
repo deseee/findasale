@@ -749,7 +749,13 @@ router.get('/:id', async (req: Request, res: Response) => {
             saleType: true,
             isPinned: true,
             attendanceCount: true,
+            buyersPremiumPct: true,
           },
+        },
+        broadcasts: {
+          orderBy: { sentAt: 'desc' },
+          take: 1,
+          select: { message: true, sentAt: true },
         },
         hours: true,
         _count: { select: { followers: true } },
@@ -787,7 +793,13 @@ router.get('/:id', async (req: Request, res: Response) => {
               saleType: true,
               isPinned: true,
               attendanceCount: true,
+              buyersPremiumPct: true,
             },
+          },
+          broadcasts: {
+            orderBy: { sentAt: 'desc' },
+            take: 1,
+            select: { message: true, sentAt: true },
           },
           hours: true,
           _count: { select: { followers: true } },
@@ -860,8 +872,10 @@ router.get('/:id', async (req: Request, res: Response) => {
       timezone: organizer.timezone,
       byAppointment: organizer.byAppointment,
       hours: (organizer as any).hours || [],
-      // Sales (includes isPinned for #359, attendanceCount for #362)
+      // Sales (includes isPinned for #359, attendanceCount for #362, buyersPremiumPct for #363)
       sales: organizer.sales,
+      // Feature #356: Latest Broadcast
+      latestBroadcast: (organizer as any).broadcasts?.[0] || null,
       badges: organizer.user?.userBadges?.map((ub: any) => ({
         id: ub.badge.id,
         name: ub.badge.name,

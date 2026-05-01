@@ -225,8 +225,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | **/items/{id} returns 500 (P1, PRE-EXISTING — NOT S599)** | Vercel SSR error on every item detail page. Verified on pre-S599 deployment (commit `18bf8b30`) — not introduced by S599 work. STATE.md says it worked at S572. Vercel logs show `⨯ file:///var/task/node_mod...SyntaxError...data:image` but MCP truncates message. | Open Vercel deployment dashboard → Functions → find full stack trace on `/items/[id]` SSR. Likely culprit: ogImage.ts SVG fallback parse, missing Cloudinary public ID handling, or Item interface mismatch with API response. | S599 |
-| **Tier Lapse plan card NOT amber when lapsed (P2)** | Banner correctly amber + sticky, but "Your Plan: PRO" card on `/organizer/dashboard` still renders teal/cyan gradient (`bg-gradient-to-r from-teal-50 to-cyan-50`) when `isLapsed=true`. Agent (S599) claimed conditional amber styling was already in place — production shows it isn't applying. | Read `pages/organizer/dashboard.tsx` plan card JSX, confirm `isLapsed` ternary is actually wrapped around the gradient classes (not just child text). Apply amber gradient when lapsed. | S599 |
-| **Sales pages SSR OG meta missing (P2)** | `/sales/[id]` HTML returns only generic `og:type=website` + `og:site_name=FindA.Sale`. No per-sale `og:image`, `og:title`, or `og:description` rendered server-side. SaleOGMeta renders post-mount only — FB/Twitter/iMessage scrapers don't run JS. Watermark gating moot for sales until SSR OG renders. | Pattern after `pages/items/[id].tsx`: add `getServerSideProps` to sales page (if missing), build OG data, render SaleOGMeta wrapped in pre-mount return path. Or use `<Head>` with meta tags directly in getServerSideProps result. | S599 |
+| **Tier Lapse plan card NOT amber when lapsed (P2)** | ✅ FIXED S611 — `dashboard.tsx` line 844: `isLapsed` ternary now wraps gradient + border + text + button classes. Amber when lapsed, teal when not. Pending Chrome QA. | — | S599 |
+| **Sales pages SSR OG meta missing (P2)** | `getServerSideProps` exists and fetches sale data, but `ogData` returns `null` in production (`__NEXT_DATA__` confirmed via smoke test). Root cause diagnosis (S611): `INTERNAL_API_URL` env var likely not set or unreachable in Vercel SSR context — 3s timeout fires silently → ogData:null. Fix: verify `INTERNAL_API_URL` is set in Vercel env vars to Railway internal URL. If missing, add it. No code change needed — the code is correct. | Check Vercel env vars for `INTERNAL_API_URL` → set to Railway backend URL if missing. | S599 |
 | #267 RSVP XP + Notifications | ✅ Chrome-verified S563 — RESOLVED | RSVP button → "✓ You're going (2)", +2 XP in DB, bell shows "Going to this sale!" notification. ss_75714xiu8, ss_3284tp1pi | S531 |
 | #241 Brand Kit PDFs | ✅ Chrome-verified S563 — RESOLVED | All 4 endpoints return 200 application/pdf. URLs point to Railway backend correctly. ss_0623op91s | S531 |
 | #7 Shopper Referral Rewards | ✅ Chrome-verified S541 — RESOLVED | /shopper/referrals loads, real referral link (REF-0215DAB8), Copy + 5 share buttons, stats section present. ss_59914h5dd | S531 |
@@ -325,15 +325,17 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | **Hunt Pass status inconsistency (P2)** | Bug found S582 | XP Store (/coupons) shows "Hunt Pass Inactive" for Karen (user11) while AvatarDropdown shows "Hunt Pass Active" badge. Investigate Karen's huntPassActive field vs /coupons HP detection logic. Fix needed before beta. | S582 |
 | **#354 Business Hours (Storefront v2)** | ✅ Chrome-verified S610 — Hours block renders Mon–Sat with correct times. Sort bug (insertion order) fixed S610: `[...hours].sort((a,b)=>a.dayOfWeek-b.dayOfWeek)`. | — | S601 |
 | **#355 Organizer Type Multi-Select (Storefront v2)** | ✅ Chrome-verified S610 — "Estate Sales" + "Consignment" badges render. Uppercase normalization (`getOrgTypeLabel` helper) confirmed working. | — | S601 |
-| **#356 Broadcast to Followers (Storefront v2)** | DEFERRED — No frontend code exists for broadcast UI on storefront. Backend model + endpoint shipped S601 but frontend was never built. Needs feature dispatch. | S601 |
+| **#356 Broadcast to Followers (Storefront v2)** | ✅ SHIPPED S611 — Backend extended: `broadcasts: { orderBy: sentAt desc, take: 1 }` added to `GET /organizers/:id`. Frontend: "Latest Update" card renders on storefront if broadcast exists (message + relative time). Pending Chrome QA. | — | S601 |
 | **#359 Sale Featured/Pinned (Storefront v2)** | ✅ Chrome-verified S610 — "Featured" amber pill badge on pinned sale card confirmed. PATCH /me/sales/:id/pin endpoint confirmed working. | — | S601 |
 | **#361 Claim-This-Listing (Storefront v2)** | ✅ PARTIAL Chrome-verified S610 — Banner correctly HIDDEN for `isClaimed:true` (Kelly's). Positive display (banner shown) untestable: PATCH /organizers/me rejects isClaimed field (correct — protected), no unclaimed organizer in seed data. Code conditional verified correct. | — | S601 |
 | **#362 Sale Attendance Count (Storefront v2)** | ✅ Chrome-verified S610 — "👥 247 attended" renders under sale title. PATCH /me/sales/:id/attendance confirmed working. | — | S601 |
-| **#363 Auction Buyer's Premium + Lot Numbers (Storefront v2)** | DEFERRED — buyerPremiumRate is on AuctionDetails (nested), not on Sale directly. Needs Architect scope for nested query. No frontend display code exists on storefront. | S601 |
+| **#363 Auction Buyer's Premium + Lot Numbers (Storefront v2)** | ✅ SHIPPED S611 — Backend: `auctionDetails: { select: { buyerPremiumRate: true } }` added to sales include in `GET /organizers/:id`. Frontend: amber pill badge "Buyer's Premium: {n}%" on AUCTION sale cards where `buyersPremiumPct` is non-null. Pending Chrome QA. | — | S601 |
 | **#352 Organizer Tagline (Storefront v2)** | ✅ Chrome-verified S610 — Italic tagline "Grand Rapids' most trusted estate sale company" renders in green header banner. Backend GET /organizers/:id now returns tagline field (S609 backend fix). | — | S600 |
 | **#353 Year Founded (Storefront v2)** | ✅ Chrome-verified S610 — "Est. 2015" renders in About section. Backend GET /organizers/:id now returns yearFounded field (S609 backend fix). | — | S600 |
 
 ## Recent Sessions
+
+**S611 (2026-05-01) — COMPLETE (Storefront v2 deferred features + seed + OG meta diagnosis):** 3 parallel dispatches. **#356 Broadcast storefront UI:** `GET /organizers/:id` now includes latest broadcast (sentAt desc, take:1); `[slug].tsx` renders "Latest Update" card with message + relative time when broadcast exists. **#363 Buyer's Premium display:** `auctionDetails: { select: { buyerPremiumRate: true } }` added to organizer sales include; amber "Buyer's Premium: n%" badge renders on AUCTION cards where `buyersPremiumPct` non-null. **Tier Lapse plan card (P2):** `dashboard.tsx` line 844 — amber gradient/border/text/button when `isLapsed=true`, teal otherwise. **Claim-This-Listing seed:** `seed.ts` adds unclaimed organizer "Sunrise Consignment & Collectibles" (user11, `isClaimed=false`, `isUnmanagedListing=true`, Muskegon MI). Primary shopper now user12. **OG meta diagnosis:** `ogData` returning null confirmed via `__NEXT_DATA__` smoke test. Root cause: `INTERNAL_API_URL` env var likely missing in Vercel — 3s timeout fires silently. No code change needed. **Draft contact audit:** 19 outreach drafts from S596 remain unsent in Gmail (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 10 others). Files: `organizers.ts`, `[slug].tsx`, `dashboard.tsx`, `seed.ts`. All pending Chrome QA.
 
 **S610 (2026-05-01) — COMPLETE (S601 Storefront v2 Chrome QA + hours sort fix):** Continued from S609 compressed session. All storefront features verified live post-deploy. Chrome QA: #354 Hours ✅ (sort bug fixed inline — insertion order → day-of-week order), #355 Org Type Badges ✅ (uppercase DB values normalized by `getOrgTypeLabel()`), #359 Pinned "Featured" badge ✅, #361 Claim banner ✅ (hidden correctly for claimed), #362 "👥 247 attended" ✅, tagline ✅, yearFounded "Est. 2015" ✅, Twitter/X + TikTok links ✅. Two deferred: #356 Broadcast (no storefront frontend code), #363 Buyer's Premium (nested AuctionDetails). Files: `[slug].tsx` 1-line hours sort fix.
 
@@ -397,16 +399,19 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S611 — Storefront v2 deferred features + pending migrations + scraper activation.**
+**S612 — Chrome QA for S611 features + pending migrations + scraper activation.**
 
-### FIRST ACTION — push S610 wrap docs (this block)
+### FIRST ACTION — push S611 wrap block (this block)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/organizer/storefront/[slug].tsx
+git add packages/backend/src/routes/organizers.ts
+git add "packages/frontend/pages/organizer/storefront/[slug].tsx"
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add packages/database/prisma/seed.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: hours sort on storefront + S610 Chrome QA wrap docs"
+git commit -m "feat: #356 broadcast storefront, #363 buyer's premium, tier lapse amber, unclaimed seed + S611 wrap docs"
 .\push.ps1
 ```
 
@@ -421,20 +426,20 @@ git commit -m "fix: hours sort on storefront + S610 Chrome QA wrap docs"
    ```
    Pending: `20260501020000_scraper_phase1`, `20260430220000_storefront_v2_claim_listing`
 
-2. **Set `SCRAPER_ENABLED=true`** in Railway env vars (when ready to go live with scraper)
-3. **Run `pnpm data:cities`** from `packages/frontend` to regenerate 3,000-city JSON
-4. **Fill `[Last Name]` (×3)** + real cell in press release (`claude_docs/strategy/s603-pr-wire-blast-package.md`)
-5. **File PRNewswire** on May 5 9:00 AM EST
+2. **Check Vercel env vars** — add `INTERNAL_API_URL` pointing to Railway backend URL if missing. This fixes ogData returning null on sales pages.
+3. **Set `SCRAPER_ENABLED=true`** in Railway env vars (when ready to go live with scraper)
+4. **Run `pnpm data:cities`** from `packages/frontend` to regenerate 3,000-city JSON
+5. **Fill `[Last Name]` (×3)** + real cell in press release (`claude_docs/strategy/s603-pr-wire-blast-package.md`)
+6. **File PRNewswire** on May 5 9:00 AM EST
+7. **19 outreach drafts still unsent in Gmail** — S596 batch remainder. Review and send when ready.
 
-### S611 Dispatch Queue
+### S612 Dispatch Queue
 
-**Priority 1 — #356 Broadcast to Followers:** Backend (model + endpoint) shipped S601. Storefront UI was never built — needs a `BroadcastSection` card on the organizer's own storefront view to send broadcasts. Dispatch `findasale-dev`.
+**Priority 1 — Chrome QA S611 features:** Navigate to `finda.sale/organizer/storefront/kellys-estate-sales` and verify: (a) Latest Update card shows (or is absent when no broadcast), (b) Buyer's Premium badge on auction sale cards, (c) dashboard.tsx plan card amber when lapsed (needs tier-lapse test account). Also verify Claim banner on a storefront with `isClaimed=false` (use seed user11 after re-seed).
 
-**Priority 2 — #363 Buyer's Premium + Lot Numbers storefront display:** `buyerPremiumRate` is on `AuctionDetails` (nested), not `Sale` directly. Add `auctionDetails: { select: { buyerPremiumRate: true } }` to the sales include in `GET /organizers/:id`, then render the amber disclosure on storefront sale cards for AUCTION type sales.
+**Priority 2 — #361 Claim-This-Listing positive path QA:** Re-seed local DB → verify `user11@example.com` (Sunrise Consignment) storefront shows amber claim banner.
 
-**Priority 3 — Claim-This-Listing positive path:** Need a test organizer with `isClaimed=false` to verify the amber claim banner actually renders. Options: (a) seed an unmanaged organizer in `seed.ts`, or (b) add an admin route to toggle `isClaimed` for testing.
-
-**Priority 4 — #356 Broadcast QA** after dev dispatch.
+**Priority 3 — OG meta fix:** Check Vercel dashboard → Environment Variables → confirm `INTERNAL_API_URL` exists. If missing, add it (Railway backend public URL). Then verify sales page returns per-sale OG tags in `__NEXT_DATA__`.
 
 **Smoke test at S611 start:** Navigate to `finda.sale/organizer/storefront/kellys-estate-sales` and verify the hours sort fix deployed (Mon, Tue, Wed, Thu, Fri, Sat order — not insertion order).
 
