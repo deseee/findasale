@@ -310,6 +310,10 @@ export async function scrapeFacebookEventsForMetro(
     return [];
   }
 
+  // Debug: log first 3 URLs so we can diagnose filter misses
+  const previewUrls = results.slice(0, 3).map((r) => r.url).join(' | ');
+  console.log(`[FB-Events] Sample URLs (${metro.city}): ${previewUrls}`);
+
   for (const r of results) {
     const item = buildScrapedItem(r.url, r.title, r.content, metro, sourceApi);
     if (item) items.push(item);
