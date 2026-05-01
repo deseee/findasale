@@ -8,8 +8,7 @@
 import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
 import { ingestScrapedListing, ScrapedItem } from '../index';
-
-const USER_AGENT = 'FindASaleBot/1.0 (+https://finda.sale/bot)';
+import { getRandomUserAgent, jitterDelay } from '../userAgents';
 
 /**
  * Craigslist metro slug mapping for subdomain URLs
@@ -91,8 +90,8 @@ export async function scrapeCraigslist(
         stats.failed++;
       }
 
-      // Rate limiting: 500ms between metro requests
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Rate limiting: random jitter between metro requests
+      await jitterDelay(400, 1000);
     }
 
     console.log(`[Craigslist] ${metro} complete — created ${stats.created}, skipped ${stats.skipped}, failed ${stats.failed}`);
@@ -127,7 +126,7 @@ async function scrapeQuery(
       await rateLimiter.waitBeforeRequest(domain);
 
       const response = await fetch(url, {
-        headers: { 'User-Agent': USER_AGENT },
+        headers: { 'User-Agent': getRandomUserAgent() },
         signal: AbortSignal.timeout(15000),
       });
 
@@ -145,8 +144,8 @@ async function scrapeQuery(
 
       listings.push(...parsed);
 
-      // Small delay between searches
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Small delay with jitter between searches
+      await jitterDelay(200, 600);
     } catch (err) {
       console.warn(`[Craigslist] Failed to fetch ${url}:`, err);
     }
