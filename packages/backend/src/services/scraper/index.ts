@@ -3,6 +3,7 @@
  * Runs scraping jobs, manages dedup, tracks audit trail
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { ParsedListing } from './htmlParser';
 import { checkDuplicate } from './dedupe';
@@ -226,7 +227,7 @@ export async function ingestScrapedListing(
         sourceName: listing.sourceName,
         lastScrapedAt: new Date(),
         scrapeVersion: 1,
-        scrapedMetadata: listing.scrapedMetadata ?? null,
+        scrapedMetadata: listing.scrapedMetadata ?? Prisma.JsonNull,
       },
     });
 
