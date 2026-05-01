@@ -31,6 +31,7 @@ export default function CityPage(props: CityPageProps) {
   const {
     cityName,
     cityState,
+    population,
     topFinds,
     recentSales,
     tipContent,
