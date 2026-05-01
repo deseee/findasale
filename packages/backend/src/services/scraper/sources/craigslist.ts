@@ -74,22 +74,20 @@ function parseListingPage(html: string, site: CraigslistSite, category: string):
           const dateStr = dateMatch[1];
           const dates = dateStr.split(',').map((d) => d.trim()).filter((d) => d.length > 0);
 
+          const parseMonthDay = (mdStr: string): Date => {
+            const [month, day] = mdStr.split('/').map(Number);
+            const now = new Date();
+            let year = now.getFullYear();
+
+            // If month is in the past relative to current, assume next year
+            if (month < now.getMonth() + 1) {
+              year++;
+            }
+
+            return new Date(year, month - 1, day, 0, 0, 0, 0);
+          };
+
           if (dates.length >= 2) {
-            // Parse first and last dates
-            const parseMonthDay = (mdStr: string): Date => {
-              const [month, day] = mdStr.split('/').map(Number);
-              const now = new Date();
-              let year = now.getFullYear();
-
-              // If month is in the past relative to current, assume next year
-              if (month < now.getMonth() + 1) {
-                year++;
-              }
-
-              const d = new Date(year, month - 1, day, 0, 0, 0, 0);
-              return d;
-            };
-
             startDate = parseMonthDay(dates[0]);
             endDate = parseMonthDay(dates[dates.length - 1]);
             // Set end date to 8pm
