@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import { AuthRequest } from '../middleware/auth';
 import { recordRipple, getRippleSummary, getRippleTrend } from '../services/rippleService';
+import { prisma } from '../lib/prisma';
 
 // Validation schema for recording a ripple
 const recordRippleSchema = z.object({
@@ -27,6 +28,12 @@ export const createRipple = async (req: Request | AuthRequest, res: Response) =>
 
     const { type, metadata } = result.data;
     const userId = (req as AuthRequest).user?.id;
+
+    // Guard: silently return 200 if sale no longer exists (avoids FK cascade errors on deleted sales)
+    const saleExists = await prisma.sale.findUnique({ where: { id: saleId }, select: { id: true } });
+    if (!saleExists) {
+      return res.status(200).json({ message: 'Sale not found', saleId });
+    }
 
     await recordRipple(saleId, type, userId, metadata);
 
