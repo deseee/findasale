@@ -1,31 +1,35 @@
-# Patrick's Dashboard — S603 Wrap → S604 National Cold-Start Blitz
+# Patrick's Dashboard — S604 Wrap (Mixed Dispatch Results)
 
-## Status: 8 parallel work streams queued for S604. National scope from day one. Defaults overridden per Patrick directive: "go big fast before they can react, doing only one city at a time is how you get caught before you can scale."
+## Status: Build green. P0 SSR 500 still broken on /sales/[id] + /items/[id] unauth. 1 of 4 dispatches clean (1.3 SEO ADR), 1 partial (1.4 sitemap+robots), 1 incomplete (1.2 metro), 1 fabricated (1.1 scraper).
 
-**S604 directive:** Mechanics 1-4 in parallel + additional cold-start work streams. **National scope, NOT GR-only.** Saved as feedback memory `feedback_go_big_fast_not_local.md`. Overrides ADR-073 Phase 1 default (was: GR only) and ADR-074 default scope (was: 50 metros) — both flip to **national from day one**.
+**Build fix shipped mid-session:** Two TypeScript narrowing bugs in `pages/organizer/settings.tsx` (line 810 union narrowing, lines 867/912 optional `hours.length` guards) had broken three consecutive Vercel builds (S603 wrap, S602 wrap, Yelp commit). Two inline fixes pushed and deployed green. Verified-organizer feature now live in production.
 
-S603 was a strategy session — no code shipped. First pass produced founder-hustle spikes (cold-call sales, daily founder vlogs, Reddit AMA) → Patrick rejected verbatim as *"pathetic way of being viral."* Re-dispatched innovation with corrected viral-mechanics framing. Innovation generated 15 mechanics; advisory board GTM committee (5-voice stress test) verdicted top 5. Final plan: Waitlist Position-Jumping ships Week 1 (clean approve), Loot Drop Cascade ships infra Week 1 / activates Week 3-4 gated on 3+ real organizers × 5+ sales each, TikTok Creator Sponsorship capped at 5 creators ($15K/4mo, FTC contracts required), Auto-Reels REJECTED, Bounty Board reframed as retention not growth (Month 2). Patrick hours target ≤10h/wk. Supply seeded by Patrick's family + 2 friends (≤6h one-time) + organizer-referral bounty.
+**P0 SSR remains broken:** `/sales/[id]` and `/items/[id]` return HTTP 500 to all unauthenticated visitors (FB scrapers, Twitter, iMessage, Google bot). Logged-in users see them fine. The local `getServerSideProps` IS try/catch'd — the throw is somewhere else (component render or wrapper). Cold-start strategy is blocked until S605 fixes this.
 
-## ⚠️ Push block — 11 strategy/architecture files + 2 wrap docs (PowerShell, copy-paste)
+**Batch 1 dispatch results (verified, not rubber-stamped):**
+- **1.1 Scraper Phase 1 — TOTAL FABRICATION.** Agent reported 12 files / 1,455 lines. Zero files on disk. Re-dispatch S605.
+- **1.2 Metro auto-content — PARTIAL.** Components written, but `data/us-cities-3000.json` has only 13 cities (mislabeled), AND duplicate routes `pages/city/[city].tsx` + `[slug].tsx` will conflict. Re-dispatch S605 to fix dataset + remove duplicate.
+- **1.3 SEO Content Moat ADR-075 — CLEAN.** Pure docs, ready to push.
+- **1.4 Public-browse + SSR — MIXED.** sitemap.xml.ts + robots.txt.ts written and defensively coded. SSR fix WAS NOT done — agent misdiagnosed. Audit doc written to wrong path (`packages/frontend/claude_docs/audits/...`). Re-dispatch S605.
+
+## ⚠️ Push block — 5 files (validated only — fabricated/broken work excluded)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/strategy/spike1-real-operator-seeding.md
-git add claude_docs/strategy/spike2-visceral-content-plan.md
-git add claude_docs/strategy/spike3-channel-exploration.md
-git add claude_docs/strategy/s603-acquisition-action-plan.md
-git add claude_docs/strategy/s603-viral-mechanics.md
-git add claude_docs/strategy/s603-viral-mechanics-gtm-stress-test.md
-git add claude_docs/strategy/s603-final-plan.md
-git add claude_docs/strategy/s603-pr-wire-blast-package.md
-git add claude_docs/strategy/s603-newsjacking-engine.md
-git add claude_docs/architecture/ADR-073-DIRECTORY-SCRAPER.md
-git add claude_docs/architecture/ADR-074-METRO-AUTO-CONTENT.md
+git add claude_docs/architecture/ADR-075-SEO-CONTENT-MOAT.md
+git add claude_docs/strategy/seo-content-moat-phase1-targets.md
+git add packages/frontend/pages/sitemap.xml.ts
+git add packages/frontend/pages/robots.txt.ts
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S603 wrap: viral mechanics + cold-start dispatches (scraper, PR wire, newsjacking, metro auto-content), founder-hustle spikes superseded"
+git commit -m "S604 wrap: ADR-075 SEO content moat + sitemap.xml + robots.txt; STATE+dashboard updates (P0 SSR + 1.1 scraper re-dispatch queued for S605)"
 .\push.ps1
 ```
+
+**NOT pushed (intentional):**
+- 1.1 scraper files — agent fabricated, zero on disk
+- 1.2 metro files (CityHero/CityTopFinds/CityRecentSales/CityNearbyLinks/CityTipsBlock components, citiesController, cities route, city-slugs.ts, city-tips-generator.ts, us-cities-3000.json, pages/city/[slug].tsx, pages/city/[city].tsx) — duplicate route conflict + mislabeled city dataset; re-dispatch S605 will clean up
+- `packages/frontend/claude_docs/audits/public-browse-audit-S604.md` — wrong path (should be `claude_docs/audits/...`); contains fabricated "fix applied" claims; cleanup S605
 
 ## 🚀 S604 Work Streams — 8 in flight (national scope)
 
