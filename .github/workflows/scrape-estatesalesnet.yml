@@ -24,8 +24,13 @@ jobs:
         with:
           version: 8
 
-      - name: Install backend dependencies
-        run: pnpm install --filter backend
+      - name: Install dependencies
+        run: pnpm install --filter backend --filter database
+
+      - name: Generate Prisma client
+        run: cd packages/database && npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
 
       - name: Install Chromium for Puppeteer
         run: cd packages/backend && ./node_modules/.bin/puppeteer browsers install chrome
