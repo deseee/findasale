@@ -30,8 +30,10 @@ export interface PhotoOpSharesResponse {
 
 /**
  * React Query hook to fetch photo op stations for a sale
+ * @param saleId - The sale ID
+ * @param enabled - Optional: set to false to disable the query (e.g., when parent sale fails)
  */
-export function usePhotoOpStations(saleId: string) {
+export function usePhotoOpStations(saleId: string, enabled = true) {
   return useQuery({
     queryKey: ['photo-ops', saleId],
     queryFn: async () => {
@@ -40,7 +42,7 @@ export function usePhotoOpStations(saleId: string) {
     },
     staleTime: 30 * 1000, // 30 seconds
     gcTime: 5 * 60 * 1000, // 5 minutes
-    enabled: !!saleId,
+    enabled: enabled && !!saleId,
   });
 }
 
