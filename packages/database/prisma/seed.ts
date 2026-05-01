@@ -542,6 +542,32 @@ async function main() {
   }
   console.log(`✅ Created ${sales.length} sales`);
 
+  // ── Auction Details — buyer's premium for Martin Family Auctions ──────────
+  // Martin Family Auctions is organizer index 3
+  const martinFamilyOrganizer = organizers[3];
+  const martinAuctionSales = sales.filter((s: any) => s.organizerId === martinFamilyOrganizer.id && s.saleType === 'AUCTION');
+
+  for (const auctionSale of martinAuctionSales) {
+    // Update sale with buyer's premium percentage (15%)
+    await prisma.sale.update({
+      where: { id: auctionSale.id },
+      data: { buyersPremiumPct: new Decimal('15.00') },
+    });
+  }
+  console.log(`✅ Set buyer's premium (15%) for ${martinAuctionSales.length} Martin Family Auctions sales`);
+
+  // ── Organizer Broadcasts — message from Martin Family Auctions to followers ────
+  await prisma.organizerBroadcast.create({
+    data: {
+      organizerId: martinFamilyOrganizer.id,
+      subject: 'Weekend Auction Preview',
+      message: 'New auction items arriving this weekend — Tiffany lamps, Victorian furniture, and estate jewelry. Preview Friday 4–7pm!',
+      sentAt: new Date(),
+      recipientCount: 0,
+    },
+  });
+  console.log('✅ Created organizer broadcast for Martin Family Auctions');
+
   // ── Items (~12 per sale) ──────────────────────────────────────────────────
   console.log('📦 Creating items...');
   const items: any[] = [];
