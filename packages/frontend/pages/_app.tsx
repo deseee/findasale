@@ -1,7 +1,17 @@
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
-import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/next';
+import dynamic from 'next/dynamic';
+// SSR-skip these — @vercel/analytics 1.6.1 ESM build does `import { useEffect } from "react"`,
+// which fails Node's strict ESM loader against react@18 CJS and 500s every SSR page.
+// ssr:false defers them to the browser, where React is loaded as a real module.
+const Analytics = dynamic(
+  () => import('@vercel/analytics/react').then((m) => m.Analytics),
+  { ssr: false }
+);
+const SpeedInsights = dynamic(
+  () => import('@vercel/speed-insights/next').then((m) => m.SpeedInsights),
+  { ssr: false }
+);
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
