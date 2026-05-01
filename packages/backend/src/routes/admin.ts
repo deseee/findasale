@@ -44,7 +44,6 @@ import {
   listFraudSignals,
   reviewFraudSignal,
 } from '../controllers/referralController';
-
 const router = express.Router();
 
 // All admin routes require authentication and admin role

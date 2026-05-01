@@ -674,6 +674,8 @@ model Sale {
   purchases                   Purchase[]
   reviews                     Review[]
   conversations               Conversation[]
+  // ADR-073: Directory Scraper — email tracking for claim conversion
+  claimEmails                 ClaimEmail[]
   bounties                    MissingListingBounty[]
   flashDeals                  FlashDeal[]
   pickupSlots                 PickupSlot[]
@@ -767,6 +769,12 @@ model Sale {
   attendanceCount         Int?
   // Feature #363: Auction Buyer's Premium — percentage added to hammer price
   buyersPremiumPct        Decimal?                 @db.Decimal(5, 2)
+  // ADR-073: Directory Scraper — scraped listing metadata
+  sourceUrl               String?                  // Canonical URL on the source site (e.g., "https://estatesales.net/sales/12345")
+  sourceName              String?                  // Source identifier (e.g., "EstateSalesNet", "Craigslist", null = native FindA.Sale listing)
+  lastScrapedAt           DateTime?                // When this listing was last validated/updated from source
+  scrapeVersion           Int?                     // Version of scraper that ingested this (for audit/rollback)
+  scrapedMetadata         Json?                    // Arbitrary JSON: original_title, original_address, etc. (for dispute resolution)
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -976,6 +984,8 @@ model Item {
   compLookup                 ItemCompLookup?
   // Feature #363: Auction Lot Number — identifier for auction items
   lotNumber                  String?
+  // ADR-073: Directory Scraper — scraped item metadata
+  sourceItemId               String?                // e.g., "estatesales.net:item:67890" (dedupe key)
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -4231,4 +4241,49 @@ model ClaimRequest {
 
   @@index([organizerId])
   @@index([status])
+}
+
+// ADR-073: Directory Scraper — audit trail for scraping jobs
+model ScrapedSalesJob {
+  id          Int       @id @default(autoincrement())
+  source      String    // "EstateSalesNet", "GarageSaleFinder", etc.
+  metro       String    // "Grand Rapids, MI"
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  status      String    @default("PENDING") // PENDING | RUNNING | SUCCESS | PARTIAL_FAILURE | FAILED
+
+  itemsFound   Int @default(0)
+  itemsCreated Int @default(0)
+  itemsUpdated Int @default(0)
+  itemsSkipped Int @default(0) // Existing listings, deduplicated
+  itemsFailed  Int @default(0)
+
+  error   String? // If failed, the error message
+  logUrl  String? // Link to Railway logs
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([source, createdAt])
+  @@index([status])
+}
+
+// ADR-073: Directory Scraper — email tracking for claim conversion
+model ClaimEmail {
+  id             String   @id @default(cuid())
+  saleId         String
+  sale           Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  organizerEmail String   // Email address found in source listing
+  sentAt         DateTime @default(now())
+  opens          Int      @default(0)   // Email open count
+  clicks         Int      @default(0)  // Email click count
+  claimed        Boolean  @default(false) // Whether organizer claimed the listing after email
+  claimedAt      DateTime? // When claim occurred
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([saleId])
+  @@index([organizerEmail])
+  @@index([claimed])
 }
