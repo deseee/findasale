@@ -319,6 +319,15 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 | **Holds/Reservations countdown** | ✅ Chrome-verified S582 — RESOLVED | /shopper/holds shows "Your hold expires in 43:16:04", Purchase Now + Release Hold buttons present. Correct route is /shopper/holds (not /shopper/my-holds — that is a 404). | S575 |
 | **#235 DonationModal** | ✅ Chrome-verified S581 — user6@example.com → settlement for charity sale cmoezlc8s00q413p74kjv2r9a → Unsold Items section shows 3 items + "Donate Items & Get Tax Receipt" button. Items fetch URL fix (S579) confirmed working. ss_5338pakx7. | — | S575 |
 | **Hunt Pass status inconsistency (P2)** | Bug found S582 | XP Store (/coupons) shows "Hunt Pass Inactive" for Karen (user11) while AvatarDropdown shows "Hunt Pass Active" badge. Investigate Karen's huntPassActive field vs /coupons HP detection logic. Fix needed before beta. | S582 |
+| **#354 Business Hours (Storefront v2)** | Shipped S601 — Pending Chrome QA | Settings → 7-day time grid saves + timezone selector. Storefront `/organizer/storefront/[slug]` → Hours card renders. | S601 |
+| **#355 Organizer Type Multi-Select (Storefront v2)** | Shipped S601 — Pending Chrome QA | Settings → 8-type checkbox grid saves. Storefront → pill badges render below bio. | S601 |
+| **#356 Broadcast to Followers (Storefront v2)** | Shipped S601 — Pending Chrome QA | Settings → BroadcastSection: subject + message fields + Send button. POST /organizers/me/broadcast creates Notification rows for all followers. | S601 |
+| **#359 Sale Featured/Pinned (Storefront v2)** | Shipped S601 — Pending Chrome QA | Organizer sales page → pin toggle on sale card → sale shows amber "Featured" badge on storefront. | S601 |
+| **#361 Claim-This-Listing (Storefront v2)** | Shipped S601 — Pending Chrome QA | Unmanaged listing → amber claim banner on sale detail page → ClaimListingModal opens → POST /organizers/:id/claim. | S601 |
+| **#362 Sale Attendance Count (Storefront v2)** | Shipped S601 — Pending Chrome QA | Ended sale → number input + Save button → persists on reload. OrganizerSaleCard shows attendance count. | S601 |
+| **#363 Auction Buyer's Premium + Lot Numbers (Storefront v2)** | Shipped S601 — Pending Chrome QA | Create-sale (AUCTION) → buyer's premium % field saves. Item detail → amber lot number badge + buyer's premium disclosure. | S601 |
+| **#352 Organizer Tagline (Storefront v2)** | Shipped S600 — DISPLAY GAP | Schema: `Organizer.tagline String?`. Settings: tagline field with 120-char counter saves. BUT: `organizer/storefront/[slug].tsx` does NOT map or render tagline. Dispatch dev to add to BrandKitData interface + render below businessName. | S600 |
+| **#353 Year Founded (Storefront v2)** | Shipped S600 — DISPLAY GAP | Schema: `Organizer.yearFounded Int?`. Settings: numeric input saves. BUT: storefront page does NOT map or render yearFounded. Dispatch dev alongside tagline fix. | S600 |
 
 ## Recent Sessions
 

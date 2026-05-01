@@ -23,6 +23,12 @@ interface BrandKitData {
   facebook: string | null;
   instagram: string | null;
   etsy: string | null;
+  tagline: string | null;
+  yearFounded: number | null;
+  twitterUrl: string | null;
+  tiktokUrl: string | null;
+  youtubeUrl: string | null;
+  pinterestUrl: string | null;
   pickupWindows: string | null;
   timezone: string | null;
   byAppointment: boolean;
@@ -96,6 +102,12 @@ const OrganizerStorefront = () => {
           facebook: orgData.facebook,
           instagram: orgData.instagram,
           etsy: orgData.etsy,
+          tagline: orgData.tagline,
+          yearFounded: orgData.yearFounded,
+          twitterUrl: orgData.twitterUrl,
+          tiktokUrl: orgData.tiktokUrl,
+          youtubeUrl: orgData.youtubeUrl,
+          pinterestUrl: orgData.pinterestUrl,
           pickupWindows: orgData.pickupWindows,
           timezone: orgData.timezone,
           byAppointment: orgData.byAppointment || false,
@@ -182,6 +194,7 @@ const OrganizerStorefront = () => {
               {/* Header Info */}
               <div className="flex-1">
                 <h1 className="text-4xl font-bold mb-2">{brandKit.businessName}</h1>
+                {brandKit.tagline && <p className="text-lg opacity-80 italic mb-3">{brandKit.tagline}</p>}
                 {brandKit.bio && <p className="text-lg opacity-90 max-w-lg">{brandKit.bio}</p>}
               </div>
             </div>
@@ -210,6 +223,11 @@ const OrganizerStorefront = () => {
                 <p className="text-warm-700 dark:text-gray-300 mb-6">
                   {brandKit.bio || 'A professional sale organizer serving the Grand Rapids area.'}
                 </p>
+                {brandKit.yearFounded && (
+                  <p className="text-sm text-warm-500 dark:text-gray-400 mb-6">
+                    Est. {brandKit.yearFounded}
+                  </p>
+                )}
 
                 {/* Organizer Types */}
                 {brandKit.organizerTypes && brandKit.organizerTypes.length > 0 && (
@@ -300,6 +318,46 @@ const OrganizerStorefront = () => {
                       className="block text-amber-600 hover:underline font-medium"
                     >
                       Etsy Shop
+                    </a>
+                  )}
+                  {brandKit.twitterUrl && (
+                    <a
+                      href={brandKit.twitterUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-amber-600 hover:underline font-medium"
+                    >
+                      Twitter/X
+                    </a>
+                  )}
+                  {brandKit.tiktokUrl && (
+                    <a
+                      href={brandKit.tiktokUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-amber-600 hover:underline font-medium"
+                    >
+                      TikTok
+                    </a>
+                  )}
+                  {brandKit.youtubeUrl && (
+                    <a
+                      href={brandKit.youtubeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-amber-600 hover:underline font-medium"
+                    >
+                      YouTube
+                    </a>
+                  )}
+                  {brandKit.pinterestUrl && (
+                    <a
+                      href={brandKit.pinterestUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-amber-600 hover:underline font-medium"
+                    >
+                      Pinterest
                     </a>
                   )}
                 </div>
