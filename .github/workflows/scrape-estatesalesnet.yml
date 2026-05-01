@@ -28,7 +28,7 @@ jobs:
         run: pnpm install --filter backend
 
       - name: Install Chromium for Puppeteer
-        run: npx puppeteer browsers install chrome
+        run: cd packages/backend && ./node_modules/.bin/puppeteer browsers install chrome
 
       - name: Run EstateSalesNet scraper
         env:
@@ -38,4 +38,4 @@ jobs:
           PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
         run: |
           cd packages/backend
-          npx ts-node src/scripts/run-estatesalesnet.ts
+          ./node_modules/.bin/ts-node src/scripts/run-estatesalesnet.ts
