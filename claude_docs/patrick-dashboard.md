@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S614 COMPLETE
+# Patrick's Dashboard — S614 WRAP (Full)
 
-## Status: S614 DONE. 5-group parallel build complete — metro sync cron, scraper enrichment, Craigslist, claim email pipeline, 500 SEO pages. Push block below. Run 2 migrations + set 4 env vars in Railway.
+## Status: S614 done + extended. 5-group parallel build + scraper anti-detection + unclaimed listing filter + ADR-076 spec. Push block below. Run 2 migrations + set 4 env vars in Railway. S615 = GH Actions scraper implementation.
 
-**Headline:** S614 shipped everything in the S614 plan. Smoke test: admin scraper ✅, SSR sale page ✅. Index.ts merge verified (both cron inits present). Two new Prisma migrations ready to deploy. Craigslist selector validation needed on first prod scrape run.
+**Headline:** S614 shipped the full plan. Extension work: EstateSalesNet and other scrapers now rotate real browser user-agents + jitter delays (stealth), scraped listings are hidden from public browse until claimed by the organizer, ADR-076 spec docs the GitHub Actions architecture for S615. One new crashloop fix for deleted sale pages (stops the skeleton/404 loop).
 
 ---
 
@@ -11,14 +11,16 @@
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
 | **P1 URGENT** | Fill `[Last Name]` ×3 + real cell in press release | **File Mon May 5, 9:00 AM EST** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
-| **P1** | Push S614 wrap block (below) | Now | 23 files — use PowerShell pushblock |
+| **P1** | Push S614 full wrap block (below) | Now | 33 files — use PowerShell pushblock |
 | **P1** | Run 2 new migrations after push deploys | After push | Commands below |
+| **P1** | `pnpm install` in `packages/backend` after deploy | After push | Picks up puppeteer-extra + stealth plugin |
 | **P2** | Add 4 Railway env vars | After push | `METRO_SYNC_ENABLED=true`, `CLAIM_EMAIL_ENABLED=true`, `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN` |
+| **P2** | Add GitHub Secrets for S615 | When ready for S615 | `RAILWAY_BACKEND_URL`, `INTERNAL_SCRAPER_KEY`, `ESTATESALESNET_ORGANIZER_ID` (see ADR-076) |
 | **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others |
 
 ---
 
-## 📦 Push Block — S614 Wrap
+## 📦 Push Block — S614 Full Wrap
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -45,9 +47,18 @@ git add packages/frontend/data/seo-pages/BUILD_GUIDE.md
 git add packages/frontend/scripts/generate-seo-index.ts
 git add packages/frontend/pages/server-sitemap.xml.tsx
 git add packages/frontend/package.json
+git add packages/backend/src/controllers/trendingController.ts
+git add packages/backend/src/controllers/saleController.ts
+git add packages/backend/src/services/itemSearchService.ts
+git add packages/backend/src/services/scraper/userAgents.ts
+git add "packages/backend/src/services/scraper/sources/estatesalesnet.ts"
+git add "packages/backend/src/services/scraper/sources/garagesalefinder.ts"
+git add packages/backend/package.json
+git add "packages/frontend/pages/sales/[id].tsx"
+git add claude_docs/architecture/ADR-076-GITHUB-ACTIONS-SCRAPER.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "feat: S614 — metro sync cron (ADR-074), scraper enrichment, Craigslist impl, claim email pipeline (ADR-073 Phase 2), 500 SEO guide pages (ADR-075 Phase 1)"
+git commit -m "feat: S614 full wrap — scraper anti-detection, unclaimed listing filter, deleted-sale loop fix, ADR-076 GH Actions spec"
 .\push.ps1
 ```
 
@@ -144,6 +155,27 @@ $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev
 npx prisma migrate deploy
 npx prisma generate
 ```
+
+---
+
+## 🚀 S615 Plan — GitHub Actions Scraper (ADR-076)
+
+Full spec at `claude_docs/architecture/ADR-076-GITHUB-ACTIONS-SCRAPER.md`.
+
+**What:** Move EstateSalesNet Puppeteer scraper from Railway (static datacenter IP = easy to block) to GitHub Actions (rotating Azure IP pool = harder to block). Railway memory load drops significantly as a bonus.
+
+**Dev work (~3–4 hours):**
+1. `packages/backend/src/controllers/internalScraperController.ts` (NEW) — authenticated POST endpoint for GH Actions to push scraped data into Railway
+2. `packages/backend/src/routes/internal.ts` (NEW) — mounts the endpoint
+3. `packages/backend/src/scripts/run-estatesalesnet.ts` (NEW) — standalone script that runs outside Express, scrapes EstateSalesNet, POSTs batches to Railway
+4. `.github/workflows/scrape-estatesalesnet.yml` (NEW) — cron at midnight UTC, manual trigger
+5. Refactor `scrapeEstateSalesNet()` to return `ScrapedItem[]` instead of ingesting directly
+6. Gate EstateSalesNet out of `scraperCron.ts` via `USE_GH_ACTIONS_ESTATESALESNET=true` Railway env var
+
+**Patrick actions before S615 GH Actions goes live:**
+- Add `RAILWAY_BACKEND_URL`, `INTERNAL_SCRAPER_KEY`, `ESTATESALESNET_ORGANIZER_ID` to GitHub repo Secrets
+- Add `INTERNAL_SCRAPER_KEY` (same value) to Railway env vars
+- Set `USE_GH_ACTIONS_ESTATESALESNET=true` in Railway after GH Actions workflow is verified
 
 ---
 
