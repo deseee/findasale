@@ -84,7 +84,9 @@ export const csrfTokenCookie = (req: Request, res: Response, next: NextFunction)
  */
 export const validateCsrfToken = (req: Request, res: Response, next: NextFunction) => {
   // Skip CSRF for webhooks and external server-to-server callbacks (they use signature verification instead)
-  if (req.path.includes('/webhook') || req.path.includes('/stripe/webhook') || req.path.includes('/billing/webhook') || req.path.includes('/ebay/account-deletion')) {
+  // /api/internal/* routes are server-to-server (e.g. scraper ingest from GitHub Actions) and authenticate
+  // via x-scraper-key shared secret — same model as Stripe webhook signatures.
+  if (req.path.includes('/webhook') || req.path.includes('/stripe/webhook') || req.path.includes('/billing/webhook') || req.path.includes('/ebay/account-deletion') || req.path.includes('/api/internal/')) {
     return next();
   }
 
