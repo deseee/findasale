@@ -509,7 +509,7 @@ async function main() {
         continue;
       }
 
-      const result = await response.json();
+      const result = await response.json() as { stats: { created: number; updated: number; skipped: number; failed: number } };
       console.log(`[run-estatesalesnet] Batch ${batchNum} ingested — ${result.stats.created} created, ${result.stats.skipped} skipped, ${result.stats.failed} failed`);
     } catch (error) {
       console.error(`[run-estatesalesnet] Failed to post batch ${batchNum}:`, error instanceof Error ? error.message : String(error));
