@@ -77,13 +77,16 @@ export async function scrapeEstateSalesNetItems(
 
     // Extract all sale detail URLs from the listing page
     const saleLinks: string[] = await page.evaluate((baseUrl) => {
-      // Runs in browser context via Puppeteer — cast to avoid needing dom lib in tsconfig
+      // Runs in browser context via Puppeteer.
+      // Reference document via globalThis to avoid TS2584 (no dom lib in backend tsconfig).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const anchors = Array.from((document as any).querySelectorAll('a[href]') as any[]);
+      const doc = (globalThis as any).document;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anchors: any[] = Array.from(doc.querySelectorAll('a[href]'));
       const seen = new Set<string>();
       const links: string[] = [];
       for (const a of anchors) {
-        const href = (a as any).href as string;
+        const href: string = a.href;
         // Match sale detail URLs: /XX/City/some-sale-slug/12345
         if (
           href &&
