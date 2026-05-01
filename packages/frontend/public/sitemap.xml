@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://finda.sale/</loc><priority>1.0</priority><changefreq>daily</changefreq></url>
+  <url><loc>https://finda.sale/map</loc><priority>0.8</priority><changefreq>daily</changefreq></url>
+  <url><loc>https://finda.sale/trending</loc><priority>0.8</priority><changefreq>daily</changefreq></url>
+  <url><loc>https://finda.sale/search</loc><priority>0.7</priority></url>
+  <url><loc>https://finda.sale/pricing</loc><priority>0.7</priority></url>
+  <url><loc>https://finda.sale/about</loc><priority>0.5</priority></url>
+  <url><loc>https://finda.sale/faq</loc><priority>0.5</priority></url>
+  <url><loc>https://finda.sale/leaderboard</loc><priority>0.6</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://finda.sale/contact</loc><priority>0.5</priority></url>
+  <url><loc>https://finda.sale/support</loc><priority>0.5</priority></url>
+</urlset>
