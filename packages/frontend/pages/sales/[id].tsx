@@ -1692,6 +1692,11 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     }
     const sale = await res.json();
 
+    // Safeguard: check that sale has required fields for OG data
+    if (!sale?.id || !sale?.title) {
+      return { props: { ogData: null } };
+    }
+
     const ogData: OGSaleData = {
       id: sale.id,
       title: sale.title || '',
@@ -1711,8 +1716,9 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     };
 
     return { props: { ogData } };
-  } catch {
+  } catch (error) {
     // Fail open — page still works, OG tags fall back to CSR version
+    console.error('[sales/[id] getServerSideProps error]', error);
     return { props: { ogData: null } };
   }
 }
