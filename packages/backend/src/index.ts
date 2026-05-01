@@ -222,6 +222,7 @@ import { scheduleConsignorExpiryNoticeCron } from './jobs/consignorExpiryNoticeJ
 import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature #XXX: Referral reputation score recomputation
 import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
 import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Phase 1: Backfill PriceBenchmark from Items with aiSuggestedPrice
+import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Directory scraper national cron
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -632,6 +633,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // #94: Initialize coupon validation rate limiter (Redis)
   initCouponRateLimiter();
+
+  // ADR-073 Phase 1: Initialize directory scraper cron (gated by SCRAPER_ENABLED env var)
+  initScraperCron();
 
   // Log environment variables status for debugging (dev only)
   if (process.env.NODE_ENV !== 'production') {
