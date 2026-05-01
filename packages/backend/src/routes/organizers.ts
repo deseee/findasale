@@ -747,8 +747,11 @@ router.get('/:id', async (req: Request, res: Response) => {
             photoUrls: true,
             status: true,
             saleType: true,
+            isPinned: true,
+            attendanceCount: true,
           },
         },
+        hours: true,
         _count: { select: { followers: true } },
       },
     });
@@ -782,8 +785,11 @@ router.get('/:id', async (req: Request, res: Response) => {
               photoUrls: true,
               status: true,
               saleType: true,
+              isPinned: true,
+              attendanceCount: true,
             },
           },
+          hours: true,
           _count: { select: { followers: true } },
         },
       });
@@ -826,7 +832,35 @@ router.get('/:id', async (req: Request, res: Response) => {
       phone: organizer.phone,
       address: organizer.address,
       reputationTier: organizer.reputationTier,
+      // Profile fields (S609 + storefront)
+      bio: organizer.bio,
+      tagline: organizer.tagline,
+      yearFounded: organizer.yearFounded,
+      profilePhoto: organizer.profilePhoto,
+      website: organizer.website,
+      facebook: organizer.facebook,
+      instagram: organizer.instagram,
+      etsy: organizer.etsy,
+      twitterUrl: organizer.twitterUrl,
+      tiktokUrl: organizer.tiktokUrl,
+      youtubeUrl: organizer.youtubeUrl,
+      pinterestUrl: organizer.pinterestUrl,
+      // Brand kit fields (#355 org types, brand customization)
+      organizerTypes: organizer.organizerTypes,
+      brandLogoUrl: organizer.brandLogoUrl,
+      brandPrimaryColor: organizer.brandPrimaryColor,
+      brandSecondaryColor: organizer.brandSecondaryColor,
+      brandFontFamily: organizer.brandFontFamily,
+      brandBannerImageUrl: organizer.brandBannerImageUrl,
+      brandAccentColor: organizer.brandAccentColor,
+      customStorefrontSlug: organizer.customStorefrontSlug,
+      subscriptionTier: organizer.tier,
+      // Scheduling (#354 business hours)
       pickupWindows: organizer.pickupWindows,
+      timezone: organizer.timezone,
+      byAppointment: organizer.byAppointment,
+      hours: (organizer as any).hours || [],
+      // Sales (includes isPinned for #359, attendanceCount for #362)
       sales: organizer.sales,
       badges: organizer.user?.userBadges?.map((ub: any) => ({
         id: ub.badge.id,
@@ -839,7 +873,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       avgRating: Math.round(avgRating * 10) / 10,
       followerCount: (organizer as any)._count?.followers ?? 0,
       isFollowing,
-      isClaimed: (organizer as any).isClaimed,
+      isClaimed: organizer.isClaimed,
     });
   } catch (error) {
     console.error('Error fetching organizer profile:', error);

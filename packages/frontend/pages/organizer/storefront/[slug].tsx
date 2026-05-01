@@ -58,8 +58,10 @@ interface Sale {
   saleType?: string;
   photoUrls: string[];
   isPinned?: boolean;
+  attendanceCount?: number | null;
 }
 
+// Keys are lowercase to match settings UI values; normalize DB values before lookup.
 const ORGANIZER_TYPE_LABELS: Record<string, string> = {
   estate_sale: 'Estate Sales',
   yard_sale: 'Yard Sales',
@@ -71,6 +73,10 @@ const ORGANIZER_TYPE_LABELS: Record<string, string> = {
   liquidation: 'Liquidation',
 };
 
+// Normalize organizer type to label — handles both 'estate_sale' and 'ESTATE_SALE'.
+const getOrgTypeLabel = (type: string): string =>
+  ORGANIZER_TYPE_LABELS[type.toLowerCase()] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
 const OrganizerStorefront = () => {
   const router = useRouter();
   const { slug } = router.query;
@@ -79,6 +85,7 @@ const OrganizerStorefront = () => {
   const [sales, setSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isClaimed, setIsClaimed] = useState<boolean>(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -125,6 +132,7 @@ const OrganizerStorefront = () => {
 
         setBrandKit(brandData);
         setSales(orgData.sales || []);
+        setIsClaimed(orgData.isClaimed !== false); // default true; only show claim banner when explicitly false
       } catch (err: any) {
         console.error('Failed to fetch storefront data:', err);
         setError(err.response?.data?.message || 'Storefront not found');
@@ -212,6 +220,23 @@ const OrganizerStorefront = () => {
           </div>
         )}
 
+        {/* Feature #361: Claim-This-Listing Banner */}
+        {!isClaimed && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700 py-3 px-4">
+            <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                🏷️ Is this your business? Claim this listing to manage your storefront, add photos, and connect with shoppers.
+              </p>
+              <Link
+                href="/login"
+                className="shrink-0 text-xs font-semibold px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-full transition-colors"
+              >
+                Claim Listing
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Main Content */}
         <div className="max-w-6xl mx-auto px-4 py-12">
           {/* Organizer Info Card */}
@@ -237,7 +262,7 @@ const OrganizerStorefront = () => {
                         key={type}
                         className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
                       >
-                        {ORGANIZER_TYPE_LABELS[type] || type}
+                        {getOrgTypeLabel(type)}
                       </span>
                     ))}
                   </div>
@@ -465,6 +490,12 @@ const OrganizerStorefront = () => {
                         <p className="text-sm text-warm-600 dark:text-gray-400 mb-2">
                           {sale.city}, {sale.state}
                         </p>
+                        {/* Attendance count (#362) */}
+                        {sale.attendanceCount != null && sale.attendanceCount > 0 && (
+                          <p className="text-xs text-warm-500 dark:text-gray-400 mb-2">
+                            👥 {sale.attendanceCount.toLocaleString()} attended
+                          </p>
+                        )}
                         {sale.saleType === 'RETAIL' ? (
                           <div className="flex flex-col gap-2">
                             <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 w-fit">
