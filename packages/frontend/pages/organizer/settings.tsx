@@ -807,7 +807,7 @@ const OrganizerSettingsPage = () => {
                             <div className="text-sm text-warm-600 dark:text-gray-400 mb-2">{result.address}</div>
                             {result.rating && (
                               <div className="text-sm text-amber-600 dark:text-amber-400">
-                                ★ {result.rating} ({('userRatingsTotal' in result ? result.userRatingsTotal : result.reviewCount)} reviews)
+                                ★ {result.rating} ({'placeId' in result ? result.userRatingsTotal : result.reviewCount} reviews)
                               </div>
                             )}
                           </button>
