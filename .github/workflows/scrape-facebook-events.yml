@@ -2,7 +2,10 @@ name: Facebook Events Search Scraper
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 03:00 UTC daily — after ESN (00:00), CL (00:30), Eventbrite (01:00), RSS (02:00)
+    - cron: '0 3 * * 1'  # 03:00 UTC Mondays only (weekly)
+    # Weekly cadence: DDG is primary (free, no credits). Serper/ScaleSerp only
+    # fire when DDG is blocked — so credit burn is minimal. At 30 queries/week
+    # the Serper 2,500 signup pack lasts 19+ months even as 100% backup.
   workflow_dispatch:       # Manual trigger for testing
 
 jobs:
@@ -36,9 +39,10 @@ jobs:
         env:
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          SCALESERP_API_KEY: ${{ secrets.SCALESERP_API_KEY }}
           FB_EVENTS_ORGANIZER_ID: ${{ secrets.FB_EVENTS_ORGANIZER_ID }}
+          # TAVILY_API_KEY intentionally omitted — Tavily doesn't index FB events pages
         run: |
           cd packages/backend
           ./node_modules/.bin/ts-node src/scripts/run-search-facebook-events.ts

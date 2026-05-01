@@ -21,28 +21,19 @@ import { jitterDelay } from '../services/scraper/userAgents';
 const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') +
   '/api/internal/scraper/ingest';
-const SCRAPER_KEY    = process.env.INTERNAL_SCRAPER_KEY;
-const TAVILY_KEY     = process.env.TAVILY_API_KEY;
-const SERPER_KEY     = process.env.SERPER_API_KEY;
-const ORGANIZER_ID   = process.env.FB_EVENTS_ORGANIZER_ID;
+const SCRAPER_KEY     = process.env.INTERNAL_SCRAPER_KEY;
+const SERPER_KEY      = process.env.SERPER_API_KEY;
+const SCALESERP_KEY   = process.env.SCALESERP_API_KEY;
+const ORGANIZER_ID    = process.env.FB_EVENTS_ORGANIZER_ID;
 
 async function main() {
   if (!SCRAPER_KEY) {
     throw new Error('INTERNAL_SCRAPER_KEY environment variable is not set');
   }
-  if (!TAVILY_KEY && !SERPER_KEY) {
-    throw new Error('At least one of TAVILY_API_KEY or SERPER_API_KEY must be set');
-  }
-
-  if (!TAVILY_KEY) {
-    console.warn('[run-fb-events] No TAVILY_API_KEY — using Serper only');
-  }
-  if (!SERPER_KEY) {
-    console.warn('[run-fb-events] No SERPER_API_KEY — Tavily only, no fallback');
-  }
-  if (!ORGANIZER_ID) {
-    console.log('[run-fb-events] No FB_EVENTS_ORGANIZER_ID — will use system organizer');
-  }
+  // DuckDuckGo needs no key — backup keys are optional
+  if (!SERPER_KEY)    console.warn('[run-fb-events] No SERPER_API_KEY — DDG only, no Serper backup');
+  if (!SCALESERP_KEY) console.warn('[run-fb-events] No SCALESERP_API_KEY — no ScaleSerp backup');
+  if (!ORGANIZER_ID)  console.log('[run-fb-events] No FB_EVENTS_ORGANIZER_ID — will use system organizer');
 
   console.log(
     `[run-fb-events] Starting — ${SEARCH_METROS.length} metros, ingest URL: ${INGEST_URL}`
@@ -56,7 +47,10 @@ async function main() {
   // Scrape each metro sequentially with jitter to stay within rate limits
   for (const metro of SEARCH_METROS) {
     try {
-      const items = await scrapeFacebookEventsForMetro(metro, TAVILY_KEY, SERPER_KEY);
+      const items = await scrapeFacebookEventsForMetro(metro, {
+        serperKey:    SERPER_KEY,
+        scaleSerpKey: SCALESERP_KEY,
+      });
 
       for (const item of items) {
         if (item.sourceItemId && !seenIds.has(item.sourceItemId)) {
