@@ -1,0 +1,44 @@
+name: Facebook Events Search Scraper
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 03:00 UTC daily — after ESN (00:00), CL (00:30), Eventbrite (01:00), RSS (02:00)
+  workflow_dispatch:       # Manual trigger for testing
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --filter backend --filter database
+
+      - name: Generate Prisma client
+        run: cd packages/database && npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+
+      - name: Run Facebook Events search scraper
+        env:
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
+          INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          FB_EVENTS_ORGANIZER_ID: ${{ secrets.FB_EVENTS_ORGANIZER_ID }}
+        run: |
+          cd packages/backend
+          ./node_modules/.bin/ts-node src/scripts/run-search-facebook-events.ts
