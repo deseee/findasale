@@ -8,11 +8,12 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 
 interface Source {
-  name: string;
-  allowed: boolean;
-  baseUrl: string;
-  lastRun?: string;
-  status?: string;
+  source: string;
+  enabled: boolean;
+  lastRunAt?: string;
+  lastRunStatus?: string;
+  recentJobCount?: number;
+  recentItemsCreated?: number;
 }
 
 interface ScrapeRun {
@@ -77,9 +78,9 @@ export default function ScraperAdminPage() {
       const runsData = await runsRes.json();
       const salesData = await salesRes.json();
 
-      setSources(sourcesData);
-      setRuns(runsData.runs);
-      setSales(salesData.sales);
+      setSources(sourcesData.sources ?? []);
+      setRuns(runsData.jobs ?? []);
+      setSales(salesData.sales ?? []);
     } catch (error) {
       console.error('Failed to load scraper data:', error);
       showToast('Failed to load data', 'error');
@@ -135,47 +136,47 @@ export default function ScraperAdminPage() {
   };
 
   if (loading) {
-    return <div className="p-8">Loading scraper dashboard...</div>;
+    return <div className="p-8 dark:text-white">Loading scraper dashboard...</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <h1 className="text-3xl font-bold mb-8">Directory Scraper Management</h1>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
+      <h1 className="text-3xl font-bold mb-8 dark:text-white">Directory Scraper Management</h1>
 
       {/* Sources Status Section */}
-      <div className="bg-white rounded-lg shadow mb-8 p-6">
-        <h2 className="text-2xl font-semibold mb-4">Sources</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8 p-6">
+        <h2 className="text-2xl font-semibold mb-4 dark:text-white">Sources</h2>
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b">
-              <th className="text-left p-3">Source</th>
-              <th className="text-left p-3">Status</th>
-              <th className="text-left p-3">Last Run</th>
-              <th className="text-left p-3">Action</th>
+            <tr className="border-b dark:border-gray-700">
+              <th className="text-left p-3 dark:text-white">Source</th>
+              <th className="text-left p-3 dark:text-white">Status</th>
+              <th className="text-left p-3 dark:text-white">Last Run</th>
+              <th className="text-left p-3 dark:text-white">Action</th>
             </tr>
           </thead>
           <tbody>
             {sources.map((source) => (
-              <tr key={source.name} className="border-b hover:bg-gray-50">
-                <td className="p-3">{source.name}</td>
+              <tr key={source.source} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td className="p-3 dark:text-white">{source.source}</td>
                 <td className="p-3">
                   <span
                     className={`px-3 py-1 rounded text-sm ${
-                      source.allowed
+                      source.enabled
                         ? 'bg-green-100 text-green-800'
                         : 'bg-red-100 text-red-800'
                     }`}
                   >
-                    {source.allowed ? 'Allowed' : 'Blocked'}
+                    {source.enabled ? 'Allowed' : 'Blocked'}
                   </span>
                 </td>
-                <td className="p-3">
-                  {source.lastRun ? new Date(source.lastRun).toLocaleString() : 'Never'}
+                <td className="p-3 dark:text-white">
+                  {source.lastRunAt ? new Date(source.lastRunAt).toLocaleString() : 'Never'}
                 </td>
                 <td className="p-3">
-                  {source.allowed && (
+                  {source.enabled && (
                     <button
-                      onClick={() => handleTakedown(source.name)}
+                      onClick={() => handleTakedown(source.source)}
                       className="text-red-600 hover:text-red-800 font-semibold"
                     >
                       Emergency Takedown
@@ -189,17 +190,17 @@ export default function ScraperAdminPage() {
       </div>
 
       {/* Trigger Scrape Section */}
-      <div className="bg-white rounded-lg shadow mb-8 p-6">
-        <h2 className="text-2xl font-semibold mb-4">Trigger Scrape</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8 p-6">
+        <h2 className="text-2xl font-semibold mb-4 dark:text-white">Trigger Scrape</h2>
         <div className="flex gap-4 mb-4">
           <select
             value={selectedSource}
             onChange={(e) => setSelectedSource(e.target.value)}
-            className="px-4 py-2 border rounded"
+            className="px-4 py-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
           >
-            {sources.filter((s) => s.allowed).map((s) => (
-              <option key={s.name} value={s.name}>
-                {s.name}
+            {sources.filter((s) => s.enabled).map((s) => (
+              <option key={s.source} value={s.source}>
+                {s.source}
               </option>
             ))}
           </select>
@@ -207,7 +208,7 @@ export default function ScraperAdminPage() {
             type="text"
             value={selectedMetro}
             onChange={(e) => setSelectedMetro(e.target.value)}
-            className="px-4 py-2 border rounded flex-1"
+            className="px-4 py-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white flex-1"
             placeholder="Metro (e.g., Grand Rapids, MI)"
           />
           <button
@@ -221,25 +222,25 @@ export default function ScraperAdminPage() {
       </div>
 
       {/* Recent Runs Section */}
-      <div className="bg-white rounded-lg shadow mb-8 p-6">
-        <h2 className="text-2xl font-semibold mb-4">Recent Scrape Runs</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8 p-6">
+        <h2 className="text-2xl font-semibold mb-4 dark:text-white">Recent Scrape Runs</h2>
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b">
-              <th className="text-left p-3">Source</th>
-              <th className="text-left p-3">Metro</th>
-              <th className="text-left p-3">Status</th>
-              <th className="text-right p-3">Created</th>
-              <th className="text-right p-3">Updated</th>
-              <th className="text-right p-3">Skipped</th>
-              <th className="text-right p-3">Failed</th>
+            <tr className="border-b dark:border-gray-700">
+              <th className="text-left p-3 dark:text-white">Source</th>
+              <th className="text-left p-3 dark:text-white">Metro</th>
+              <th className="text-left p-3 dark:text-white">Status</th>
+              <th className="text-right p-3 dark:text-white">Created</th>
+              <th className="text-right p-3 dark:text-white">Updated</th>
+              <th className="text-right p-3 dark:text-white">Skipped</th>
+              <th className="text-right p-3 dark:text-white">Failed</th>
             </tr>
           </thead>
           <tbody>
             {runs.map((run) => (
-              <tr key={run.id} className="border-b hover:bg-gray-50">
-                <td className="p-3">{run.source}</td>
-                <td className="p-3">{run.metro}</td>
+              <tr key={run.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td className="p-3 dark:text-white">{run.source}</td>
+                <td className="p-3 dark:text-white">{run.metro}</td>
                 <td className="p-3">
                   <span
                     className={`px-3 py-1 rounded text-sm ${
@@ -253,10 +254,10 @@ export default function ScraperAdminPage() {
                     {run.status}
                   </span>
                 </td>
-                <td className="text-right p-3">{run.itemsCreated}</td>
-                <td className="text-right p-3">{run.itemsUpdated}</td>
-                <td className="text-right p-3">{run.itemsSkipped}</td>
-                <td className="text-right p-3 text-red-600">{run.itemsFailed}</td>
+                <td className="text-right p-3 dark:text-white">{run.itemsCreated}</td>
+                <td className="text-right p-3 dark:text-white">{run.itemsUpdated}</td>
+                <td className="text-right p-3 dark:text-white">{run.itemsSkipped}</td>
+                <td className="text-right p-3 text-red-600 dark:text-red-400">{run.itemsFailed}</td>
               </tr>
             ))}
           </tbody>
@@ -264,26 +265,26 @@ export default function ScraperAdminPage() {
       </div>
 
       {/* Scraped Sales Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-2xl font-semibold mb-4">Scraped Sales Overview</h2>
-        <p className="text-gray-600 mb-4">Showing {sales.length} recent scraped listings</p>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 className="text-2xl font-semibold mb-4 dark:text-white">Scraped Sales Overview</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">Showing {sales.length} recent scraped listings</p>
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b">
-              <th className="text-left p-3">Title</th>
-              <th className="text-left p-3">Source</th>
-              <th className="text-left p-3">Organizer</th>
-              <th className="text-left p-3">Claimed</th>
-              <th className="text-left p-3">Email Sent</th>
+            <tr className="border-b dark:border-gray-700">
+              <th className="text-left p-3 dark:text-white">Title</th>
+              <th className="text-left p-3 dark:text-white">Source</th>
+              <th className="text-left p-3 dark:text-white">Organizer</th>
+              <th className="text-left p-3 dark:text-white">Claimed</th>
+              <th className="text-left p-3 dark:text-white">Email Sent</th>
             </tr>
           </thead>
           <tbody>
             {sales.slice(0, 10).map((sale) => (
-              <tr key={sale.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 truncate">{sale.title}</td>
-                <td className="p-3 text-sm">{sale.sourceName}</td>
+              <tr key={sale.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td className="p-3 truncate dark:text-white">{sale.title}</td>
+                <td className="p-3 text-sm dark:text-white">{sale.sourceName}</td>
                 <td className="p-3">
-                  <span className={sale.organizer.isClaimed ? 'text-green-600' : 'text-gray-500'}>
+                  <span className={sale.organizer.isClaimed ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'}>
                     {sale.organizer.name}
                   </span>
                 </td>
@@ -291,7 +292,7 @@ export default function ScraperAdminPage() {
                   {sale.organizer.isClaimed ? (
                     <span className="text-green-600 font-semibold">✓ Claimed</span>
                   ) : (
-                    <span className="text-gray-500">Unclaimed</span>
+                    <span className="text-gray-500 dark:text-gray-400">Unclaimed</span>
                   )}
                 </td>
                 <td className="p-3">
@@ -300,7 +301,7 @@ export default function ScraperAdminPage() {
                       {sale.claimEmails[0].claimed ? 'Claimed' : 'Sent'}
                     </span>
                   ) : (
-                    <span className="text-gray-400">Not sent</span>
+                    <span className="text-gray-400 dark:text-gray-500">Not sent</span>
                   )}
                 </td>
               </tr>
