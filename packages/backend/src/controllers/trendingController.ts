@@ -11,7 +11,15 @@ export const getTrendingItems = async (req: Request, res: Response) => {
     const items = await prisma.item.findMany({
       where: {
         status: 'AVAILABLE',
-        sale: { status: 'PUBLISHED' },
+        sale: {
+          status: 'PUBLISHED',
+          organizer: {
+            OR: [
+              { isUnmanagedListing: false },
+              { isClaimed: true },
+            ],
+          },
+        },
         ...PUBLIC_ITEM_FILTER,
       },
       select: {
@@ -43,6 +51,12 @@ export const getTrendingSales = async (req: Request, res: Response) => {
       where: {
         status: 'PUBLISHED',
         endDate: { gte: now },
+        organizer: {
+          OR: [
+            { isUnmanagedListing: false },
+            { isClaimed: true },
+          ],
+        },
       },
       include: {
         organizer: { select: { user: { select: { name: true } } } },

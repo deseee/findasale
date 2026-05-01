@@ -146,6 +146,12 @@ export const listSales = async (req: Request, res: Response) => {
     const where: any = {
       status: 'PUBLISHED',
       isInventoryContainer: false,
+      organizer: {
+        OR: [
+          { isUnmanagedListing: false },
+          { isClaimed: true },
+        ],
+      },
     };
 
     if (query.city) {
@@ -161,7 +167,7 @@ export const listSales = async (req: Request, res: Response) => {
       if (query.startDate) where.startDate.gte = new Date(query.startDate);
       if (query.endDate) where.startDate.lte = new Date(query.endDate);
     }
-    
+
     if (query.lat && query.lng && query.radius) {
       const lat = parseFloat(query.lat);
       const lng = parseFloat(query.lng);
@@ -171,7 +177,7 @@ export const listSales = async (req: Request, res: Response) => {
       where.lat = { gte: lat - latDelta, lte: lat + latDelta };
       where.lng = { gte: lng - lngDelta, lte: lng + lngDelta };
     }
-    
+
     const [sales, total] = await Promise.all([
       prisma.sale.findMany({
         where,
@@ -1069,7 +1075,13 @@ export const getSalesByCity = async (req: Request, res: Response) => {
       where: {
         status: 'PUBLISHED',
         endDate: { gte: now },
-        city: { contains: citySlug, mode: 'insensitive' }
+        city: { contains: citySlug, mode: 'insensitive' },
+        organizer: {
+          OR: [
+            { isUnmanagedListing: false },
+            { isClaimed: true },
+          ],
+        },
       },
       skip,
       take: limitNum,
@@ -1088,7 +1100,13 @@ export const getSalesByCity = async (req: Request, res: Response) => {
       where: {
         status: 'PUBLISHED',
         endDate: { gte: now },
-        city: { contains: citySlug, mode: 'insensitive' }
+        city: { contains: citySlug, mode: 'insensitive' },
+        organizer: {
+          OR: [
+            { isUnmanagedListing: false },
+            { isClaimed: true },
+          ],
+        },
       }
     });
 
