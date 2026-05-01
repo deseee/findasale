@@ -8,7 +8,7 @@ import { ParsedListing } from './htmlParser';
 import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
 import { scrapeEstateSalesNet } from './sources/estatesalesnet';
-import { scrapeGarageSaleFinder } from './sources/garagesalefinder';
+import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
 import { scrapeCraigslist } from './sources/craigslist';
 import { enrichOrganizer } from './enrichment';
 
