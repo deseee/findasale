@@ -44,6 +44,13 @@ import {
   listFraudSignals,
   reviewFraudSignal,
 } from '../controllers/referralController';
+import {
+  getScrapeSourcesStatus,
+  triggerScrapeRun,
+  getScrapeRuns,
+  getScrapedSales,
+  emergencyTakedown,
+} from '../controllers/scraperController';
 const router = express.Router();
 
 // All admin routes require authentication and admin role
@@ -102,5 +109,12 @@ router.get('/curator/status', getCuratorStatus);
 router.post('/curator/run/:entryId', runCuratorReviewJobSingle);
 router.get('/curator/entries', getCuratorEntries);
 router.patch('/curator/entries/:entryId', updateCuratorEntry);
+
+// ADR-073 Phase 1: Directory scraper management
+router.get('/scraper/sources', getScrapeSourcesStatus);
+router.post('/scraper/runs', triggerScrapeRun);
+router.get('/scraper/runs', getScrapeRuns);
+router.get('/scraper/sales', getScrapedSales);
+router.post('/scraper/takedown', emergencyTakedown);
 
 export default router;
