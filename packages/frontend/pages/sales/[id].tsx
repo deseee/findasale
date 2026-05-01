@@ -298,7 +298,8 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
     },
     enabled: !!id,
     staleTime: 3000, // BUG-11: Cache for 3s to avoid repeated fetches from child components/effects
-    refetchInterval: 5000, // Refresh for live bid updates
+    retry: (failureCount, error: any) => error?.response?.status === 404 ? false : failureCount < 3,
+    refetchInterval: (data) => (data ? 5000 : false), // Only poll when sale exists; stop on 404/error
   });
 
   // Feature #39: Fetch photo op stations for this sale
