@@ -278,7 +278,7 @@ const OrganizerStorefront = () => {
                   <div className="mb-6 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
                     <h3 className="font-semibold text-warm-900 dark:text-gray-100 mb-3">Hours</h3>
                     <div className="space-y-1">
-                      {brandKit.hours.map((hour) => {
+                      {[...brandKit.hours].sort((a, b) => a.dayOfWeek - b.dayOfWeek).map((hour) => {
                         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                         const isClosed = !hour.openTime || !hour.closeTime;
                         return (
