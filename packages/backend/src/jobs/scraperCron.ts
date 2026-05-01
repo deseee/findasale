@@ -402,7 +402,6 @@ const NATIONAL_METROS = [
   'santa-clarita-ca',
   'hayward-ca',
   'palmdale-ca',
-  'sunnyvale-ca',
   'concord-ca',
   'visalia-ca',
   'roseville-ca',
@@ -451,7 +450,6 @@ const NATIONAL_METROS = [
  */
 async function runSourceAcrossMetros(source: string): Promise<void> {
   console.log(`[scraperCron] Starting ${source} run across ${NATIONAL_METROS.length} metros`);
-  let totalCreated = 0;
   let totalFailed = 0;
 
   for (const metro of NATIONAL_METROS) {
@@ -495,5 +493,5 @@ export function initScraperCron(): void {
     );
   });
 
-  console.log('[scraperCron] Scheduled: EstateSalesNet @ 00:00 UTC, GarageSaleFinder @ 06:00 UTC');
+  console.log(`[scraperCron] Scheduled: EstateSalesNet @ 00:00 UTC, GarageSaleFinder @ 06:00 UTC (${NATIONAL_METROS.length} metros)`);
 }
