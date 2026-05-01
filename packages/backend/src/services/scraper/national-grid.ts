@@ -127,4 +127,11 @@ export const NATIONAL_GRID: CoordinateCenter[] = [
 
   // Midwest — Green Bay area (fills gap)
   { label: 'green-bay-metro', lat: 44.5159, lng: -88.0133, radiusMiles: 250 },
+
+  // Gap-fillers identified by direct API coverage probe — three regions
+  // outside any 250mi circle that still have non-zero EstateSalesNet inventory.
+  // Mountain West rural (MT/WY/ND) confirmed empty so no fillers needed there.
+  { label: 'albuquerque-metro', lat: 35.0844, lng: -106.6504, radiusMiles: 250 },
+  { label: 'el-paso-metro', lat: 31.7619, lng: -106.4850, radiusMiles: 250 },
+  { label: 'boise-metro', lat: 43.6150, lng: -116.2023, radiusMiles: 250 },
 ];
