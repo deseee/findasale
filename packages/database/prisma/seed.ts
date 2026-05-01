@@ -50,6 +50,7 @@ const businessNames = [
   'Holland Home Clearouts',
   'South Bend Sale Co',
   'Toledo Estate Group',
+  'Sunrise Consignment & Collectibles', // Unclaimed listing for feature #361 testing
 ];
 
 const citiesByOrganizer = [
@@ -63,10 +64,11 @@ const citiesByOrganizer = [
   'Holland',
   'South Bend',
   'Toledo',
+  'Muskegon',
 ];
 
 const statesByOrganizer = [
-  'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'IN', 'OH',
+  'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'MI', 'IN', 'OH', 'MI',
 ];
 
 // Per-state zip code pools so IN/OH organizers don't get Michigan zips
@@ -88,6 +90,7 @@ const saleTypesByOrganizer: Array<'ESTATE' | 'YARD' | 'CONSIGNMENT' | 'AUCTION' 
   'ESTATE',       // Holland Home Clearouts
   'ESTATE',       // South Bend Sale Co
   'ESTATE',       // Toledo Estate Group
+  'CONSIGNMENT',  // Sunrise Consignment & Collectibles (unclaimed)
 ];
 
 // Realistic sale titles by type
@@ -129,6 +132,7 @@ const biosByOrganizer = [
   'I do probate estates and full home cleanouts. Solo operator, word of mouth.',
   'South Bend and surrounding towns. Estate sales, some downsizing, the occasional moving sale.',
   'Toledo-area estate and auction work. Twenty-plus years. Still figuring out the internet.',
+  'Curated consignment and collectibles near Muskegon. Specialty in mid-century modern and quality vintage.',
 ];
 
 const streetNames = [
@@ -384,16 +388,16 @@ async function main() {
   const users: any[] = [];
 
 
-  // 22 users: 1 admin (user1) + 9 organizers (user2-10) + 12 shoppers (user11-22).
-  // The 12 shoppers cover hardcoded references user11-15 (bids, Hunt Pass) and
-  // users[20]/users[21] (completed-sale purchases). Down from the original 100.
-  for (let i = 0; i < 22; i++) {
+  // 23 users: 1 admin (user1) + 11 organizers (user2-12, includes unclaimed user11) + 11 shoppers (user13-23).
+  // The shoppers cover hardcoded references for bids, Hunt Pass, and completed-sale purchases.
+  // user11 = unclaimed organizer for #361 Claim-This-Listing test (isClaimed=false).
+  for (let i = 0; i < 23; i++) {
     const firstName = firstNames[i % firstNames.length];
     const lastName  = lastNames[i % lastNames.length];
     const email     = `user${i + 1}@example.com`;
     const isAdmin   = i === 0;
-    const isOrg     = i < 10;
-    const isShopper = i >= 10;
+    const isOrg     = i < 11; // Now includes user11
+    const isShopper = i >= 11;
 
     // Compute roles array based on user type
     let rolesArray: string[];
@@ -415,21 +419,21 @@ async function main() {
 
         phone: `616-555-${String(i).padStart(4, '0')}`,
         referralCode: `REF-${uuidv4().substring(0, 8).toUpperCase()}`,
-        huntPassActive: i === 10, // user11 has Hunt Pass
+        huntPassActive: i === 11, // user12 has Hunt Pass
       },
     });
     users.push(user);
   }
   console.log(`✅ Created ${users.length} users`);
 
-  // ── Organizers (10 total, from users 1–10) ────────────────────────────────
-  console.log('🏢 Creating 10 organizers...');
+  // ── Organizers (11 total, from users 1–12, user11 unclaimed) ─────────────────
+  console.log('🏢 Creating 11 organizers...');
   const organizers: any[] = [];
-  // Subscription tiers by organizer index (0-based): 0=SIMPLE, 1=PRO, 2=TEAMS, rest=SIMPLE
-  // user1 = TEAMS + ADMIN (founder-level), user2 = PRO, user3 = SIMPLE
+  // Subscription tiers by organizer index (0-based): 0=TEAMS, 1=PRO, 2=SIMPLE, rest=SIMPLE
+  // user1 = TEAMS + ADMIN (founder-level), user2 = PRO, user3 = SIMPLE, user11 = unclaimed for #361 test
   const orgTiers: Record<number, string> = { 0: 'TEAMS', 1: 'PRO', 2: 'SIMPLE' };
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 11; i++) {
     const street = streetNames[i % streetNames.length];
     const number = 1000 + i * 123;
     const city = citiesByOrganizer[i];
@@ -454,6 +458,9 @@ async function main() {
         website:         `https://organizer${i + 1}.example.com`,
         stripeConnectId: stripeConnectId,
         subscriptionTier: (orgTiers[i] || 'SIMPLE') as any,
+        // #361 test: user11 (i=10) is an unclaimed organizer with scraper-created sales
+        isClaimed:       i === 10 ? false : true,
+        isUnmanagedListing: i === 10 ? true : false,
       },
     });
     organizers.push(organizer);
@@ -645,45 +652,45 @@ async function main() {
     purchasesCreated.push(p);
   }
 
-  // TD-02: 6+ specific purchases for user11 (primary shopper) — meets 5+ requirement
-  const user11       = users[10]; // user11@example.com
+  // TD-02: 6+ specific purchases for user12 (primary shopper, was user11 before unclaimed organizer added) — meets 5+ requirement
+  const user12       = users[11]; // user12@example.com
   const availItems   = items.filter((i: any) => i.status === 'AVAILABLE').slice(0, 6);
   for (const item of availItems) {
     await prisma.purchase.create({
       data: {
-        userId:               user11.id,
+        userId:               user12.id,
         itemId:               item.id,
         saleId:               item.saleId,
         amount:               item.price ?? 25,
         platformFeeAmount:    (item.price ?? 25) * 0.05,
         status:               'PAID',
-        stripePaymentIntentId: `pi_test_u11_${uuidv4().substring(0, 16)}`,
+        stripePaymentIntentId: `pi_test_u12_${uuidv4().substring(0, 16)}`,
       },
     });
   }
-  console.log(`✅ Created ${purchasesCreated.length + 6} purchases (user11 has 6+)`);
+  console.log(`✅ Created ${purchasesCreated.length + 6} purchases (user12 has 6+)`);
 
   // ── Bids on auction items ─────────────────────────────────────────────────
   console.log('🔨 Creating bids...');
   const [aItem1, aItem2, aItem3] = auctionItems;
-  const user12 = users[11];
   const user13 = users[12];
   const user14 = users[13];
   const user15 = users[14];
+  const user16 = users[15];
 
-  // Adams print: user14 → user15 outbid → user11 winning
+  // Adams print: user14 → user15 outbid → user12 winning
   await prisma.bid.create({ data: { userId: user14.id, itemId: aItem1.id, amount: 210, status: 'ACTIVE' } });
   await prisma.bid.create({ data: { userId: user15.id, itemId: aItem1.id, amount: 245, status: 'ACTIVE' } });
-  await prisma.bid.create({ data: { userId: user11.id, itemId: aItem1.id, amount: 280, status: 'WINNING' } });
+  await prisma.bid.create({ data: { userId: user12.id, itemId: aItem1.id, amount: 280, status: 'WINNING' } });
 
-  // Tiffany lamp: user11 outbid by user12
-  await prisma.bid.create({ data: { userId: user11.id, itemId: aItem2.id, amount: 320, status: 'ACTIVE' } });
-  await prisma.bid.create({ data: { userId: user12.id, itemId: aItem2.id, amount: 375, status: 'WINNING' } });
+  // Tiffany lamp: user12 outbid by user13
+  await prisma.bid.create({ data: { userId: user12.id, itemId: aItem2.id, amount: 320, status: 'ACTIVE' } });
+  await prisma.bid.create({ data: { userId: user13.id, itemId: aItem2.id, amount: 375, status: 'WINNING' } });
 
   // Rolex: competitive
-  await prisma.bid.create({ data: { userId: user12.id, itemId: aItem3.id, amount: 2600, status: 'ACTIVE' } });
-  await prisma.bid.create({ data: { userId: user13.id, itemId: aItem3.id, amount: 2850, status: 'ACTIVE' } });
-  await prisma.bid.create({ data: { userId: user14.id, itemId: aItem3.id, amount: 3100, status: 'WINNING' } });
+  await prisma.bid.create({ data: { userId: user13.id, itemId: aItem3.id, amount: 2600, status: 'ACTIVE' } });
+  await prisma.bid.create({ data: { userId: user14.id, itemId: aItem3.id, amount: 2850, status: 'ACTIVE' } });
+  await prisma.bid.create({ data: { userId: user15.id, itemId: aItem3.id, amount: 3100, status: 'WINNING' } });
 
   // Sync currentBid on auction items to reflect highest bid
   await prisma.item.update({ where: { id: aItem1.id }, data: { currentBid: 280 } });
@@ -691,18 +698,18 @@ async function main() {
   await prisma.item.update({ where: { id: aItem3.id }, data: { currentBid: 3100 } });
   console.log('✅ Created bids');
 
-  // ── Favorites / Likes (TD-02: at least 10 likes for user11) ─────────────────
+  // ── Favorites / Likes (TD-02: at least 10 likes for user12, primary shopper) ─────────────────
   const publishedSales = sales.filter((s: any) => s.status === 'PUBLISHED');
 
   // Sale favorites (4)
   for (const [idx, sale] of publishedSales.slice(0, 4).entries()) {
-    await prisma.favorite.create({ data: { userId: user11.id, saleId: sale.id } });
+    await prisma.favorite.create({ data: { userId: user12.id, saleId: sale.id } });
     if (idx < 2) {
-      await prisma.favorite.create({ data: { userId: user12.id, saleId: sale.id } });
+      await prisma.favorite.create({ data: { userId: user13.id, saleId: sale.id } });
     }
   }
 
-  // TD-02: Item favorites — user11 likes items from followed organizers to reach 10+ likes total
+  // TD-02: Item favorites — user12 likes items from followed organizers to reach 10+ likes total
   const itemsForLikes = items
     .filter((i: any) => i.status === 'AVAILABLE' &&
             (i.organizerId === organizers[0].id ||
@@ -711,7 +718,7 @@ async function main() {
     .slice(0, 8);
 
   for (const item of itemsForLikes) {
-    await prisma.favorite.create({ data: { userId: user11.id, itemId: item.id } });
+    await prisma.favorite.create({ data: { userId: user12.id, itemId: item.id } });
   }
 
   console.log(`✅ Created ${4 + itemsForLikes.length} favorites (sales + items)`);
@@ -723,26 +730,26 @@ async function main() {
   const twoDaysAgo = new Date(now.getTime() - 2 * 86400000);
 
   if (badgeMap.get('First Purchase')) {
-    await prisma.userBadge.create({ data: { userId: user11.id, badgeId: badgeMap.get('First Purchase')!, awardedAt: oneWeekAgo } });
+    await prisma.userBadge.create({ data: { userId: user12.id, badgeId: badgeMap.get('First Purchase')!, awardedAt: oneWeekAgo } });
   }
   if (badgeMap.get('Sale Scout')) {
-    await prisma.userBadge.create({ data: { userId: user11.id, badgeId: badgeMap.get('Sale Scout')!, awardedAt: twoDaysAgo } });
+    await prisma.userBadge.create({ data: { userId: user12.id, badgeId: badgeMap.get('Sale Scout')!, awardedAt: twoDaysAgo } });
   }
   if (badgeMap.get('Trail Blazer')) {
-    await prisma.userBadge.create({ data: { userId: user11.id, badgeId: badgeMap.get('Trail Blazer')!, awardedAt: new Date() } });
+    await prisma.userBadge.create({ data: { userId: user12.id, badgeId: badgeMap.get('Trail Blazer')!, awardedAt: new Date() } });
   }
   if (badgeMap.get('Social Butterfly')) {
-    await prisma.userBadge.create({ data: { userId: user12.id, badgeId: badgeMap.get('Social Butterfly')!, awardedAt: oneWeekAgo } });
+    await prisma.userBadge.create({ data: { userId: user13.id, badgeId: badgeMap.get('Social Butterfly')!, awardedAt: oneWeekAgo } });
   }
   console.log('✅ Created user badges');
 
   // ── Wishlists + items ─────────────────────────────────────────────────────
   console.log('💝 Creating wishlists...');
   const wishlist1 = await prisma.wishlist.create({
-    data: { userId: user11.id, name: 'Mid-Century Modern Hunt', occasion: 'decorating', isPublic: true },
+    data: { userId: user12.id, name: 'Mid-Century Modern Hunt', occasion: 'decorating', isPublic: true },
   });
   const wishlist2 = await prisma.wishlist.create({
-    data: { userId: user11.id, name: 'Vintage Jewelry', occasion: 'gifting', isPublic: false },
+    data: { userId: user12.id, name: 'Vintage Jewelry', occasion: 'gifting', isPublic: false },
   });
 
   // WishlistItems must link to existing Item records
@@ -762,22 +769,22 @@ async function main() {
 
   // ── Follows ───────────────────────────────────────────────────────────────
   console.log('🔔 Creating follows...');
-  // user11 follows organizers 1, 2, 3
+  // user12 follows organizers 1, 2, 3
   for (const org of organizers.slice(0, 3)) {
     await prisma.follow.create({
-      data: { userId: user11.id, organizerId: org.id },
+      data: { userId: user12.id, organizerId: org.id },
     });
   }
-  // user12 follows organizer 1
-  await prisma.follow.create({ data: { userId: user12.id, organizerId: organizers[0].id } });
+  // user13 follows organizer 1
+  await prisma.follow.create({ data: { userId: user13.id, organizerId: organizers[0].id } });
   console.log('✅ Created follows');
 
   // ── Sale RSVPs ────────────────────────────────────────────────────────────
   for (const sale of publishedSales.slice(0, 3)) {
-    await prisma.saleRSVP.create({ data: { userId: user11.id, saleId: sale.id } });
+    await prisma.saleRSVP.create({ data: { userId: user12.id, saleId: sale.id } });
   }
   if (publishedSales[0]) {
-    await prisma.saleRSVP.create({ data: { userId: user12.id, saleId: publishedSales[0].id } });
+    await prisma.saleRSVP.create({ data: { userId: user13.id, saleId: publishedSales[0].id } });
   }
   console.log('✅ Created RSVPs');
 
@@ -786,23 +793,23 @@ async function main() {
   const notifSale = publishedSales[0];
   if (notifSale) {
     await prisma.notification.create({
-      data: { userId: user11.id, type: 'sale_alert', title: 'Sale starting soon!', body: `${notifSale.title} starts tomorrow. Don't miss it.`, link: `/sales/${notifSale.id}`, read: false },
+      data: { userId: user12.id, type: 'sale_alert', title: 'Sale starting soon!', body: `${notifSale.title} starts tomorrow. Don't miss it.`, link: `/sales/${notifSale.id}`, read: false },
     });
   }
   await prisma.notification.create({
-    data: { userId: user11.id, type: 'badge', title: 'Badge earned: Trail Blazer! 🗺️', body: 'You completed your first treasure trail. +150 points added.', link: '/profile', read: true, createdAt: twoDaysAgo },
+    data: { userId: user12.id, type: 'badge', title: 'Badge earned: Trail Blazer! 🗺️', body: 'You completed your first treasure trail. +150 points added.', link: '/profile', read: true, createdAt: twoDaysAgo },
   });
   await prisma.notification.create({
-    data: { userId: user11.id, type: 'purchase', title: 'Purchase confirmed', body: 'Your purchase has been confirmed. Arrange pickup with the organizer.', link: '/purchases', read: true, createdAt: oneWeekAgo },
+    data: { userId: user12.id, type: 'purchase', title: 'Purchase confirmed', body: 'Your purchase has been confirmed. Arrange pickup with the organizer.', link: '/purchases', read: true, createdAt: oneWeekAgo },
   });
   await prisma.notification.create({
-    data: { userId: user11.id, type: 'message', title: 'New message from organizer', body: 'The organizer replied to your question about the Eames chair.', link: '/messages', read: false, createdAt: new Date(now.getTime() - 3600000) },
+    data: { userId: user12.id, type: 'message', title: 'New message from organizer', body: 'The organizer replied to your question about the Eames chair.', link: '/messages', read: false, createdAt: new Date(now.getTime() - 3600000) },
   });
   await prisma.notification.create({
-    data: { userId: user11.id, type: 'sale_alert', title: 'Wishlist match found!', body: 'An Eames chair was just listed near you — matches your wishlist.', link: '/wishlist', read: false, createdAt: new Date(now.getTime() - 86400000) },
+    data: { userId: user12.id, type: 'sale_alert', title: 'Wishlist match found!', body: 'An Eames chair was just listed near you — matches your wishlist.', link: '/wishlist', read: false, createdAt: new Date(now.getTime() - 86400000) },
   });
   await prisma.notification.create({
-    data: { userId: user11.id, type: 'flash_deal', title: 'Flash deal ending soon', body: '30% off the Persian Rug — sale ends in 2 hours.', link: notifSale ? `/sales/${notifSale.id}` : '/sales', read: false, createdAt: new Date(now.getTime() - 7200000) },
+    data: { userId: user12.id, type: 'flash_deal', title: 'Flash deal ending soon', body: '30% off the Persian Rug — sale ends in 2 hours.', link: notifSale ? `/sales/${notifSale.id}` : '/sales', read: false, createdAt: new Date(now.getTime() - 7200000) },
   });
   // Organizer notifications
   await prisma.notification.create({
@@ -814,26 +821,26 @@ async function main() {
 
 
   // ── Referrals ─────────────────────────────────────────────────────────────
-  // user12 → referred user11; user11 → referred user13
-  await prisma.referral.create({ data: { referrerId: user12.id, referredUserId: user11.id } });
-  await prisma.referral.create({ data: { referrerId: user11.id, referredUserId: user13.id } });
+  // user13 → referred user12; user12 → referred user14
+  await prisma.referral.create({ data: { referrerId: user13.id, referredUserId: user12.id } });
+  await prisma.referral.create({ data: { referrerId: user12.id, referredUserId: user14.id } });
   console.log('✅ Created referrals');
 
   // ── Missing Listing Bounties ──────────────────────────────────────────────
   // MissingListingBounty requires saleId — attach to active published sales
   if (publishedSales[0]) {
     await prisma.missingListingBounty.create({
-      data: { saleId: publishedSales[0].id, userId: user11.id, description: 'Looking for an original Eames fiberglass shell chair, any color, any condition.', offerPrice: 300, status: 'OPEN' },
+      data: { saleId: publishedSales[0].id, userId: user12.id, description: 'Looking for an original Eames fiberglass shell chair, any color, any condition.', offerPrice: 300, status: 'OPEN' },
     });
   }
   if (publishedSales[1]) {
     await prisma.missingListingBounty.create({
-      data: { saleId: publishedSales[1].id, userId: user11.id, description: 'Seeking a vintage Leica M3 camera in working condition with original case.', offerPrice: 400, status: 'OPEN' },
+      data: { saleId: publishedSales[1].id, userId: user12.id, description: 'Seeking a vintage Leica M3 camera in working condition with original case.', offerPrice: 400, status: 'OPEN' },
     });
   }
   if (publishedSales[2]) {
     await prisma.missingListingBounty.create({
-      data: { saleId: publishedSales[2].id, userId: user12.id, description: 'Old Craftsman 10" table saw, any year pre-1985.', offerPrice: 150, status: 'OPEN' },
+      data: { saleId: publishedSales[2].id, userId: user13.id, description: 'Old Craftsman 10" table saw, any year pre-1985.', offerPrice: 150, status: 'OPEN' },
     });
   }
   console.log('✅ Created bounties');
@@ -851,7 +858,7 @@ async function main() {
     await prisma.itemReservation.create({
       data: {
         itemId:    item.id,
-        userId:    [user11.id, user12.id, user14.id][idx],
+        userId:    [user12.id, user13.id, user15.id][idx],
         status:    idx === 0 ? 'CONFIRMED' : 'PENDING',
         expiresAt: tomorrowPlus3Days,
         note:      ['Held for Saturday pickup', 'Customer will confirm by Friday', 'On hold pending payment'][idx],
@@ -870,7 +877,7 @@ async function main() {
     await prisma.review.create({
       data: {
         saleId:      item.saleId,
-        userId:      [user11.id, user12.id, user14.id][idx],
+        userId:      [user12.id, user13.id, user15.id][idx],
         rating:      [5, 4, 5][idx],
         comment:     ['Arrived in perfect condition. The organizer was very helpful with questions.', 'Item matched the photos well. Fair price for the quality.', 'Exactly what I was looking for. Will shop here again!'][idx],
         createdAt:   [twoWeeksAgo, oneWeekAgo, twoDaysAgo][idx],
@@ -881,8 +888,8 @@ async function main() {
 
   // ── User Streaks ──────────────────────────────────────────────────────────
   // unique per [userId, type] — types: 'visit' | 'save' | 'buy'
-  await prisma.userStreak.create({ data: { userId: user11.id, type: 'visit', currentStreak: 5,  longestStreak: 5,  lastActivityDate: now } });
-  await prisma.userStreak.create({ data: { userId: user11.id, type: 'buy',   currentStreak: 2,  longestStreak: 3,  lastActivityDate: twoDaysAgo } });
+  await prisma.userStreak.create({ data: { userId: user12.id, type: 'visit', currentStreak: 5,  longestStreak: 5,  lastActivityDate: now } });
+  await prisma.userStreak.create({ data: { userId: user12.id, type: 'buy',   currentStreak: 2,  longestStreak: 3,  lastActivityDate: twoDaysAgo } });
   await prisma.userStreak.create({ data: { userId: users[1].id, type: 'visit', currentStreak: 12, longestStreak: 30, lastActivityDate: now } });
   await prisma.userStreak.create({ data: { userId: users[2].id, type: 'visit', currentStreak: 8,  longestStreak: 45, lastActivityDate: now } });
   console.log('✅ Created user streaks');
@@ -890,12 +897,12 @@ async function main() {
 
   // ── Points Transactions ───────────────────────────────────────────────────
   console.log('💰 Creating points transactions...');
-  await prisma.pointsTransaction.create({ data: { userId: user11.id, type: 'PURCHASE', points: 50,  description: 'First Purchase badge awarded',  createdAt: oneWeekAgo } });
-  await prisma.pointsTransaction.create({ data: { userId: user11.id, type: 'REVIEW',   points: 100, description: 'Referral bonus — referred user13', createdAt: twoDaysAgo } });
-  await prisma.pointsTransaction.create({ data: { userId: user11.id, type: 'VISIT',    points: 150, description: 'Trail Blazer badge awarded',       createdAt: new Date() } });
+  await prisma.pointsTransaction.create({ data: { userId: user12.id, type: 'PURCHASE', points: 50,  description: 'First Purchase badge awarded',  createdAt: oneWeekAgo } });
+  await prisma.pointsTransaction.create({ data: { userId: user12.id, type: 'REVIEW',   points: 100, description: 'Referral bonus — referred user14', createdAt: twoDaysAgo } });
+  await prisma.pointsTransaction.create({ data: { userId: user12.id, type: 'VISIT',    points: 150, description: 'Trail Blazer badge awarded',       createdAt: new Date() } });
   await prisma.pointsTransaction.create({ data: { userId: users[1].id, type: 'PURCHASE', points: 500, description: 'Monthly PRO organizer bonus',    createdAt: oneWeekAgo } });
   await prisma.pointsTransaction.create({ data: { userId: users[2].id, type: 'PURCHASE', points: 1000, description: 'Monthly TEAMS organizer bonus', createdAt: oneWeekAgo } });
-  await prisma.pointsTransaction.create({ data: { userId: user12.id, type: 'PURCHASE', points: 50, description: 'First Purchase badge awarded',      createdAt: twoWeeksAgo } });
+  await prisma.pointsTransaction.create({ data: { userId: user13.id, type: 'PURCHASE', points: 50, description: 'First Purchase badge awarded',      createdAt: twoWeeksAgo } });
   console.log('✅ Created points transactions');
 
   // ── Conversations + Messages ──────────────────────────────────────────────
@@ -906,16 +913,16 @@ async function main() {
   if (publishedSales.find((s: any) => s.organizerId === org1.id)) {
     const saleForConvo1 = publishedSales.find((s: any) => s.organizerId === org1.id)!;
     const convo1 = await prisma.conversation.create({
-      data: { shopperUserId: user11.id, organizerId: org1.id, saleId: saleForConvo1.id },
+      data: { shopperUserId: user12.id, organizerId: org1.id, saleId: saleForConvo1.id },
     });
     await prisma.message.create({
-      data: { conversationId: convo1.id, senderId: user11.id, body: 'Hi! Is the mid-century dresser still available?', createdAt: new Date(now.getTime() - 86400000 * 2) },
+      data: { conversationId: convo1.id, senderId: user12.id, body: 'Hi! Is the mid-century dresser still available?', createdAt: new Date(now.getTime() - 86400000 * 2) },
     });
     await prisma.message.create({
       data: { conversationId: convo1.id, senderId: users[0].id, body: "Yes, it's available! Comes with original hardware. Great condition.", createdAt: new Date(now.getTime() - 86400000 * 2 + 3600000) },
     });
     await prisma.message.create({
-      data: { conversationId: convo1.id, senderId: user11.id, body: 'Wonderful! Will you hold it if I come Saturday morning?', createdAt: new Date(now.getTime() - 86400000) },
+      data: { conversationId: convo1.id, senderId: user12.id, body: 'Wonderful! Will you hold it if I come Saturday morning?', createdAt: new Date(now.getTime() - 86400000) },
     });
   }
 
@@ -923,10 +930,10 @@ async function main() {
   const saleForConvo2 = publishedSales.find((s: any) => s.organizerId === org2.id);
   if (saleForConvo2 && saleForConvo2.id !== (publishedSales.find((s: any) => s.organizerId === org1.id) ?? {}).id) {
     const convo2 = await prisma.conversation.create({
-      data: { shopperUserId: user11.id, organizerId: org2.id, saleId: saleForConvo2.id },
+      data: { shopperUserId: user12.id, organizerId: org2.id, saleId: saleForConvo2.id },
     });
     await prisma.message.create({
-      data: { conversationId: convo2.id, senderId: user11.id, body: 'Is there flexibility on the Persian rug pricing?', createdAt: new Date(now.getTime() - 86400000 * 3) },
+      data: { conversationId: convo2.id, senderId: user12.id, body: 'Is there flexibility on the Persian rug pricing?', createdAt: new Date(now.getTime() - 86400000 * 3) },
     });
     await prisma.message.create({
       data: { conversationId: convo2.id, senderId: users[1].id, body: 'Best I can do is $700 cash — it is priced below market for a genuine Tabriz.', createdAt: new Date(now.getTime() - 86400000 * 3 + 7200000) },
@@ -1232,20 +1239,20 @@ async function main() {
 
   console.log('\n✨ Seed complete!');
   console.log('\n📋 Data Summary:');
-  console.log(`  • Users:            100 (user1=ADMIN, user2=PRO organizer, user3=TEAMS organizer, user11=primary shopper)`);
-  console.log(`  • Organizers:       10 (tiers: 1×SIMPLE admin, 1×PRO, 1×TEAMS, 7×SIMPLE) [TD-01: user2+user3 Stripe connected]`);
+  console.log(`  • Users:            23 (user1=ADMIN+organizer, user2=PRO organizer, user3=TEAMS organizer, user11=unclaimed organizer, user12=primary shopper)`);
+  console.log(`  • Organizers:       11 (tiers: 1×TEAMS, 1×PRO, 9×SIMPLE; user11=unclaimed w/ isClaimed=false) [#361 test]`);
   console.log(`  • Sales:            ${sales.length} (8 upcoming, 8 active, 5 ended, 4 draft)`);
   console.log(`  • Items:            ${items.length} + ${auctionItems.length} auction items [TD-04: stable picsum.photos URLs]`);
   console.log(`  • Auction items:    ${auctionItems.length} (Ansel Adams print, Tiffany lamp, Vintage Rolex)`);
-  console.log(`  • Purchases:        ${totalPurchases} [TD-02: 6 for user11 — exceeds 5+ requirement]`);
-  console.log(`  • Bids:             9 (user11 winning on Adams print, outbid on Tiffany lamp)`);
-  console.log(`  • Favorites/Likes:  ${totalFavorites} (4 sales + ${itemsForLikes.length} items) [TD-02: ${totalFavorites}+ for user11]`);
-  console.log(`  • Badges:           ${allBadges.length} types | user11 has 3 badges [TD-03: ✓ complete]`);
-  console.log(`  • Wishlists:        2 for user11 with items`);
-  console.log(`  • Notifications:    7 (6 for user11, 1 for organizer)`);
-  console.log(`  • Follows:          4 follows (user11 → orgs 1-3)`);
-  console.log(`  • Referrals:        2 (user12→user11→user13 chain)`);
-  console.log(`  • Bounties:         3 (2 for user11, 1 for user12)`);
+  console.log(`  • Purchases:        ${totalPurchases} [TD-02: 6 for user12 — exceeds 5+ requirement]`);
+  console.log(`  • Bids:             9 (user12 winning on Adams print, outbid on Tiffany lamp)`);
+  console.log(`  • Favorites/Likes:  ${totalFavorites} (4 sales + ${itemsForLikes.length} items) [TD-02: ${totalFavorites}+ for user12]`);
+  console.log(`  • Badges:           ${allBadges.length} types | user12 has 3 badges [TD-03: ✓ complete]`);
+  console.log(`  • Wishlists:        2 for user12 with items`);
+  console.log(`  • Notifications:    7 (6 for user12, 1 for organizer)`);
+  console.log(`  • Follows:          4 follows (user12 → orgs 1-3)`);
+  console.log(`  • Referrals:        2 (user13→user12→user14 chain)`);
+  console.log(`  • Bounties:         3 (2 for user12, 1 for user13)`);
   console.log(`  • Item Holds:       ${totalHolds} (user3 organizer) [NEW: TD-02 additional data]`);
   console.log(`  • Reviews:          ${totalReviews} (with ratings 4-5) [NEW: TD-02 additional data]`);
   console.log(`  • User streaks:     4 records`);
@@ -1255,7 +1262,8 @@ async function main() {
   console.log('   user1@example.com     — ADMIN + SIMPLE organizer');
   console.log('   user2@example.com     — PRO organizer [TD-01: Stripe acct_test_user2]');
   console.log('   user3@example.com     — TEAMS organizer [TD-01: Stripe acct_test_user3]');
-  console.log('   user11@example.com    — Shopper [TD-02: 6+ purchases, 10+ likes, badges, trail, reviews, holds]');
+  console.log('   user11@example.com    — Unclaimed organizer [#361 test: isClaimed=false, isUnmanagedListing=true]');
+  console.log('   user12@example.com    — Shopper [TD-02: 6+ purchases, 10+ likes, badges, trail, reviews, holds]');
   console.log('\n🔑 Real accounts (password: Seedy2025! locally):');
   console.log('   ***REDACTED-ADMIN-EMAIL***      — ADMIN + TEAMS organizer (Patrick)');
   console.log('   ***REDACTED-TEST-ORGANIZER-EMAIL***  — TEAMS organizer (Artifact MI)');

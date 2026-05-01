@@ -42,6 +42,7 @@ interface BrandKitData {
   brandAccentColor: string | null;
   customStorefrontSlug: string | null;
   subscriptionTier: string;
+  latestBroadcast?: { message: string; sentAt: string } | null;
 }
 
 interface Sale {
@@ -59,6 +60,7 @@ interface Sale {
   photoUrls: string[];
   isPinned?: boolean;
   attendanceCount?: number | null;
+  buyersPremiumPct?: number | null;
 }
 
 // Keys are lowercase to match settings UI values; normalize DB values before lookup.
@@ -76,6 +78,22 @@ const ORGANIZER_TYPE_LABELS: Record<string, string> = {
 // Normalize organizer type to label — handles both 'estate_sale' and 'ESTATE_SALE'.
 const getOrgTypeLabel = (type: string): string =>
   ORGANIZER_TYPE_LABELS[type.toLowerCase()] || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+// Format relative time (e.g., "3 days ago")
+const getRelativeTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} day${days !== 1 ? 's' : ''} ago`;
+  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  if (minutes > 0) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+  return 'just now';
+};
 
 const OrganizerStorefront = () => {
   const router = useRouter();
@@ -128,6 +146,7 @@ const OrganizerStorefront = () => {
           brandAccentColor: orgData.brandAccentColor,
           customStorefrontSlug: orgData.customStorefrontSlug,
           subscriptionTier: orgData.subscriptionTier || 'SIMPLE',
+          latestBroadcast: orgData.latestBroadcast || null,
         };
 
         setBrandKit(brandData);
@@ -435,6 +454,17 @@ const OrganizerStorefront = () => {
             </div>
           </div>
 
+          {/* Feature #356: Latest Broadcast */}
+          {brandKit.latestBroadcast && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-12 border-l-4 border-amber-500">
+              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-3">Latest Update</h2>
+              <p className="text-warm-700 dark:text-gray-300 mb-3">{brandKit.latestBroadcast.message}</p>
+              <p className="text-xs text-warm-500 dark:text-gray-400">
+                {getRelativeTime(brandKit.latestBroadcast.sentAt)}
+              </p>
+            </div>
+          )}
+
           {/* Active Sales */}
           <div>
             <h2 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-8">
@@ -495,6 +525,12 @@ const OrganizerStorefront = () => {
                           <p className="text-xs text-warm-500 dark:text-gray-400 mb-2">
                             👥 {sale.attendanceCount.toLocaleString()} attended
                           </p>
+                        )}
+                        {/* Buyer's Premium badge (#363) */}
+                        {sale.saleType === 'AUCTION' && sale.buyersPremiumPct != null && (
+                          <div className="inline-block text-xs font-semibold px-2 py-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 mb-3">
+                            Buyer's Premium: {sale.buyersPremiumPct}%
+                          </div>
                         )}
                         {sale.saleType === 'RETAIL' ? (
                           <div className="flex flex-col gap-2">
