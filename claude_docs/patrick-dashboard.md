@@ -1,8 +1,10 @@
-# Patrick's Dashboard — S615 WRAP
+# Patrick's Dashboard — S616 WRAP
 
-## Status: S615 done. Deleted-sale crashloop fully fixed (backend + frontend). Push block below — 3 new files on top of S614 block.
+## Status: S616 done. Deleted-sale loop FULLY fixed (the real root cause this time). All wrap commits already pushed mid-session.
 
-**Headline:** The `/sales/cmes2woj...` skeleton/404 loop is fixed. Root cause was two-layer: (1) TanStack Query v5 kept polling because cached data prevented `status` from ever reaching `'error'` — fixed by checking `query.state.error` directly. (2) Backend ripple endpoint had no guard against deleted sales, flooding Railway logs with P2003 FK errors on every page mount — fixed with a sale existence check before recording. Both now deployed.
+**Headline:** S615 fixed two real bugs but missed the actual driver of the loop. Today's smoking gun was a `setInterval` on `pages/sales/[id].tsx:211` that calls `queryClient.invalidateQueries(['sale', id])` every 5 seconds for live bid/inventory refresh. `invalidateQueries` forces a refetch and bypasses every `useQuery` guard (retry, refetchInterval, refetchOnWindowFocus). Fixed by checking query state inside the interval callback and skipping invalidation when the query is errored. Live-verified post-deploy: zero requests for the deleted sale URL across a 25-second monitoring window. Two commits shipped (`3ff17c1` + `73fc0a6`) — both already on main.
+
+**S615 wrap docs were left stale (still saying S615 in the header) — S616 wrap docs replace them.**
 
 ---
 
@@ -11,25 +13,25 @@
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
 | **P1 URGENT** | Fill `[Last Name]` ×3 + real cell in press release | **File Mon May 5, 9:00 AM EST** | File: `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
-| **P1** | Push S615 wrap block (below) | Now | 3 files + wrap docs |
+| **P1** | Push S616 wrap docs (block below) | Now | Just STATE.md + this file |
 | **P1** | Run 2 S614 migrations if not done yet | After push | Commands below |
 | **P1** | `pnpm install` in `packages/backend` if not done | After push | Picks up puppeteer-extra + stealth plugin |
 | **P2** | Add 4 Railway env vars | After push | `METRO_SYNC_ENABLED=true`, `CLAIM_EMAIL_ENABLED=true`, `GOOGLE_PLACES_KEY`, `FB_ACCESS_TOKEN` |
-| **P2** | Add GitHub Secrets for S616 (GH Actions scraper) | When ready | `RAILWAY_BACKEND_URL`, `INTERNAL_SCRAPER_KEY`, `ESTATESALESNET_ORGANIZER_ID` (see ADR-076) |
+| **P2** | Add GitHub Secrets for S617 GH Actions scraper | When ready | `RAILWAY_BACKEND_URL`, `INTERNAL_SCRAPER_KEY`, `ESTATESALESNET_ORGANIZER_ID` (see ADR-076) |
+| **P2** | Audit other `setInterval + invalidateQueries` patterns | S617 | Same bypass-the-guard bug likely lives in `/sales/[id]/checkin`, `/sales/[id]/photo-station`, organizer dashboard sale views |
 | **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others |
 
 ---
 
-## 📦 Push Block — S615 Wrap
+## 📦 Push Block — S616 Wrap (docs only)
+
+The two code commits are already on main (`3ff17c1` and `73fc0a6`). Only the wrap docs need pushing now.
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/rippleController.ts
-git add "packages/frontend/pages/sales/[id].tsx"
-git add packages/backend/Dockerfile.production
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "fix: S615 — deleted-sale crashloop + ripple FK guard + TanStack Query v5 error check"
+git commit -m "docs: S616 wrap — deleted-sale loop fully closed"
 .\push.ps1
 ```
 
