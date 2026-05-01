@@ -207,13 +207,16 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
     setMounted(true);
   }, []);
 
-  // Refresh sale data every 5 seconds to pick up new bids and inventory changes
+  // Refresh sale data every 5 seconds to pick up new bids and inventory changes.
+  // Skip invalidation when the query is in an error state (e.g. deleted sale 404) —
+  // otherwise this drives an infinite refetch loop that bypasses the useQuery's own retry/refetchInterval guards.
   useEffect(() => {
     if (!id) return;
-    const interval = setInterval(
-      () => queryClient.invalidateQueries({ queryKey: ['sale', id] }),
-      5000
-    );
+    const interval = setInterval(() => {
+      const queryState = queryClient.getQueryState(['sale', id]);
+      if (queryState?.status === 'error' || queryState?.error) return;
+      queryClient.invalidateQueries({ queryKey: ['sale', id] });
+    }, 5000);
     return () => clearInterval(interval);
   }, [id, queryClient]);
 
