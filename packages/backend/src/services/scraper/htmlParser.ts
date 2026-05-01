@@ -9,7 +9,7 @@ export interface ParsedListing {
   address: string;
   city: string;
   state: string;
-  zip: string;
+  zip?: string;
   startDate: Date;
   endDate: Date;
   organizerName?: string;

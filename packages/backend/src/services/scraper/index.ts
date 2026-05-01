@@ -200,12 +200,13 @@ export async function ingestScrapedListing(
 
     // Validate required fields. Address is intentionally NOT required —
     // EstateSalesNet (and similar directories) routinely hide street addresses
-    // for security/privacy until the day of the sale. zip + city + state is
-    // sufficient to place the sale on the map. Address can be filled in later.
-    if (!listing.title || !listing.city || !listing.state || !listing.zip || !listing.startDate || !listing.endDate) {
+    // for security/privacy until the day of the sale. ZIP is also not required
+    // for sources like Craigslist that don't provide postal codes. City + state
+    // is sufficient to place the sale on the map. Address and ZIP can be filled in later.
+    if (!listing.title || !listing.city || !listing.state || !listing.startDate || !listing.endDate) {
       return {
         status: 'failed',
-        reason: 'Missing required fields (title, city, state, zip, startDate, endDate)',
+        reason: 'Missing required fields (title, city, state, startDate, endDate)',
       };
     }
 
@@ -219,7 +220,7 @@ export async function ingestScrapedListing(
         address: listing.address,
         city: listing.city,
         state: listing.state,
-        zip: listing.zip,
+        zip: listing.zip ?? '', // ZIP absent for Craigslist — empty string satisfies schema non-null
         startDate: listing.startDate,
         endDate: listing.endDate,
         description: listing.description ?? null,
