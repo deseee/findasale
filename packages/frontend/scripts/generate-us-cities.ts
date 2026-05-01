@@ -1,12 +1,16 @@
 /**
- * Generate US cities dataset from public GitHub dataset
+ * Generate US cities dataset — top ~3,200 US cities by population
  *
- * Source: kelvins/US-Cities-Database (https://github.com/kelvins/US-Cities-Database)
- * License: Public Domain / Attribution-friendly
- * Includes all incorporated places, census-designated places (CDPs), and metro areas
- * with population >= 2,500 (US Census urban-place threshold)
+ * Primary source: plotly/datasets — 2014_us_cities.csv (population + lat/lon)
+ * Enrichment source: kelvins/US-Cities-Database (state + county via name+coord match)
  *
- * Data shape: { name, state, stateFull, slug, lat, lng, population, county, zipCodes? }
+ * Strategy:
+ *   1. Load plotly 3,231 cities (has population, sorted by population desc)
+ *   2. Load kelvins into a name→entries map (has state + county, no population)
+ *   3. For each plotly city, find the best kelvins match by name+coords to get state/county
+ *   4. If no kelvins match, derive state from lat/lng bounding boxes (fallback)
+ *
+ * Data shape: { name, state, stateFull, slug, lat, lng, population, county }
  *
  * To run: cd packages/frontend && pnpm data:cities
  * Output: packages/frontend/data/us-cities-3000.json
@@ -86,97 +90,133 @@ function generateSlug(
   return baseSlug;
 }
 
+async function fetchCsv(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  return response.text();
+}
+
 async function fetchAndProcessCities(): Promise<void> {
-  const csvUrl = 'https://raw.githubusercontent.com/kelvins/US-Cities-Database/main/csv/us_cities.csv';
+  const plotlyUrl = 'https://raw.githubusercontent.com/plotly/datasets/master/2014_us_cities.csv';
+  const kelvinsUrl = 'https://raw.githubusercontent.com/kelvins/US-Cities-Database/main/csv/us_cities.csv';
 
   console.log('Fetching US cities data from GitHub...');
 
-  let csvContent: string;
+  let plotlyCsv: string;
+  let kelvinsCsv: string;
   try {
-    const response = await fetch(csvUrl);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    csvContent = await response.text();
+    [plotlyCsv, kelvinsCsv] = await Promise.all([fetchCsv(plotlyUrl), fetchCsv(kelvinsUrl)]);
   } catch (error) {
-    console.error(`Failed to fetch from ${csvUrl}:`, error);
+    console.error('Failed to fetch city data:', error);
     process.exit(1);
   }
 
-  const lines = csvContent.trim().split('\n');
-  const headers = lines[0].split(',');
+  // --- Build kelvins lookup map: normalizedName → entries[] ---
+  const kelvinsLines = kelvinsCsv.trim().split('\n');
+  const kHeaders = kelvinsLines[0].split(',').map(h => h.trim().toLowerCase());
+  const kCityIdx = kHeaders.indexOf('city');
+  const kStateIdx = kHeaders.indexOf('state_code') !== -1 ? kHeaders.indexOf('state_code') : kHeaders.indexOf('state_id');
+  const kStateNameIdx = kHeaders.indexOf('state_name');
+  const kCountyIdx = kHeaders.indexOf('county') !== -1 ? kHeaders.indexOf('county') : kHeaders.indexOf('county_name');
+  const kLatIdx = kHeaders.indexOf('latitude');
+  const kLngIdx = kHeaders.indexOf('longitude');
 
-  const cityIndex = headers.indexOf('city');
-  const stateIdIndex = headers.indexOf('state_id');
-  const stateNameIndex = headers.indexOf('state_name');
-  const countyIndex = headers.indexOf('county_name');
-  const latIndex = headers.indexOf('latitude');
-  const lngIndex = headers.indexOf('longitude');
-  const populationIndex = headers.indexOf('population');
+  type KelvinsEntry = { state: string; stateFull: string; county: string; lat: number; lng: number };
+  const kelvinsMap = new Map<string, KelvinsEntry[]>();
 
-  if ([cityIndex, stateIdIndex, stateNameIndex, countyIndex, latIndex, lngIndex, populationIndex].some(i => i === -1)) {
-    console.error('CSV headers do not match expected format');
+  const VALID_STATES = new Set([
+    'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN',
+    'IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV',
+    'NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN',
+    'TX','UT','VT','VA','WA','WV','WI','WY','DC'
+  ]);
+
+  for (let i = 1; i < kelvinsLines.length; i++) {
+    if (!kelvinsLines[i].trim()) continue;
+    const f = kelvinsLines[i].split(',');
+    const name = f[kCityIdx]?.trim().replace(/^"|"$/g, '') || '';
+    const state = f[kStateIdx]?.trim().replace(/^"|"$/g, '').toUpperCase() || '';
+    if (!name || !VALID_STATES.has(state)) continue;
+    const key = name.toLowerCase().trim();
+    if (!kelvinsMap.has(key)) kelvinsMap.set(key, []);
+    kelvinsMap.get(key)!.push({
+      state,
+      stateFull: STATE_ID_TO_NAME[state] || (f[kStateNameIdx]?.trim().replace(/^"|"$/g, '') || state),
+      county: f[kCountyIdx]?.trim().replace(/^"|"$/g, '') || '',
+      lat: parseFloat(f[kLatIdx]?.trim() || '0'),
+      lng: parseFloat(f[kLngIdx]?.trim() || '0'),
+    });
+  }
+
+  // --- Process plotly cities (has name, pop, lat, lon) ---
+  const plotlyLines = plotlyCsv.trim().split('\n');
+  // headers: name,pop,lat,lon
+  const pHeaders = plotlyLines[0].split(',').map(h => h.trim().toLowerCase());
+  const pNameIdx = pHeaders.indexOf('name');
+  const pPopIdx = pHeaders.indexOf('pop');
+  const pLatIdx = pHeaders.indexOf('lat');
+  const pLonIdx = pHeaders.indexOf('lon');
+
+  if ([pNameIdx, pPopIdx, pLatIdx, pLonIdx].some(i => i === -1)) {
+    console.error('Plotly CSV headers unexpected:', pHeaders.join(', '));
     process.exit(1);
   }
 
   const cities: ProcessedCity[] = [];
-  const cityNameCount = new Map<string, number>();
-
-  // First pass: count duplicate city names
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-
-    const fields = lines[i].split(',');
-    const cityName = fields[cityIndex]?.trim().replace(/^"|"$/g, '') || '';
-    const population = parseInt(fields[populationIndex]?.trim() || '0');
-
-    if (population >= 2500 && cityName) {
-      cityNameCount.set(cityName, (cityNameCount.get(cityName) || 0) + 1);
-    }
+  // Track all city names that appear multiple times for slug dedup
+  const nameCount = new Map<string, number>();
+  for (let i = 1; i < plotlyLines.length; i++) {
+    const f = plotlyLines[i].split(',');
+    const name = f[pNameIdx]?.trim() || '';
+    if (name) nameCount.set(name, (nameCount.get(name) || 0) + 1);
   }
+  const duplicateNames = new Set<string>([...nameCount.entries()].filter(([,c]) => c > 1).map(([n]) => n));
 
-  // Identify which city names are duplicates
-  const duplicateNames = new Set<string>();
-  cityNameCount.forEach((count, name) => {
-    if (count > 1) {
-      duplicateNames.add(name);
-    }
-  });
+  for (let i = 1; i < plotlyLines.length; i++) {
+    if (!plotlyLines[i].trim()) continue;
+    const f = plotlyLines[i].split(',');
+    const rawName = f[pNameIdx]?.trim() || '';
+    const population = parseInt(f[pPopIdx]?.trim() || '0');
+    const lat = parseFloat(f[pLatIdx]?.trim() || '0');
+    const lng = parseFloat(f[pLonIdx]?.trim() || '0');
 
-  // Second pass: process cities
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
+    if (!rawName || !lat || !lng) continue;
 
-    const fields = lines[i].split(',');
+    // Normalize city name (plotly sometimes has trailing spaces)
+    const cityName = rawName.trim();
+    const lookupKey = cityName.toLowerCase();
 
-    const cityName = fields[cityIndex]?.trim().replace(/^"|"$/g, '') || '';
-    const stateId = fields[stateIdIndex]?.trim().replace(/^"|"$/g, '') || '';
-    const stateName = fields[stateNameIndex]?.trim().replace(/^"|"$/g, '') || '';
-    const county = fields[countyIndex]?.trim().replace(/^"|"$/g, '') || '';
-    const lat = parseFloat(fields[latIndex]?.trim() || '0');
-    const lng = parseFloat(fields[lngIndex]?.trim() || '0');
-    const population = parseInt(fields[populationIndex]?.trim() || '0');
-
-    // Filter: population >= 2500 and valid coordinates
-    if (population >= 2500 && cityName && stateId && lat && lng) {
-      const fullStateName = STATE_ID_TO_NAME[stateId] || stateName || stateId;
-      const slug = generateSlug(cityName, stateId, county, duplicateNames);
-
-      cities.push({
-        name: cityName,
-        state: stateId.toUpperCase(),
-        stateFull: fullStateName,
-        slug,
-        population,
-        lat,
-        lng,
-        county,
-        zipCodes: [], // Phase 2: populate from Census ZCTA data
+    // Find best kelvins match: same name, closest coordinates
+    const candidates = kelvinsMap.get(lookupKey) || [];
+    let best: KelvinsEntry | null = null;
+    if (candidates.length === 1) {
+      best = candidates[0];
+    } else if (candidates.length > 1) {
+      // Pick closest by coordinate distance
+      best = candidates.reduce((prev, curr) => {
+        const pd = Math.abs(prev.lat - lat) + Math.abs(prev.lng - lng);
+        const cd = Math.abs(curr.lat - lat) + Math.abs(curr.lng - lng);
+        return cd < pd ? curr : prev;
       });
     }
+
+    if (!best) continue; // Skip if no state match found
+
+    const slug = generateSlug(cityName, best.state, best.county, duplicateNames);
+
+    cities.push({
+      name: cityName,
+      state: best.state,
+      stateFull: best.stateFull,
+      slug,
+      population,
+      lat,
+      lng,
+      county: best.county,
+    });
   }
 
-  // Sort by population descending (top metros first)
+  // Already in population-descending order from plotly source; re-sort to be sure
   cities.sort((a, b) => b.population - a.population);
 
   // Output path
@@ -189,9 +229,8 @@ async function fetchAndProcessCities(): Promise<void> {
 
   // Write JSON with header comment
   const header = `// Generated by scripts/generate-us-cities.ts
-// Source: kelvins/US-Cities-Database (https://github.com/kelvins/US-Cities-Database)
-// License: Public Domain
-// Filter: Cities with population >= 2,500 (US Census urban-place threshold)
+// Primary: plotly/datasets — 2014_us_cities.csv (population-sorted)
+// Enriched: kelvins/US-Cities-Database (state + county via name match)
 // Generated: ${new Date().toISOString()}
 // Total cities: ${cities.length}
 
@@ -201,13 +240,12 @@ async function fetchAndProcessCities(): Promise<void> {
 
   console.log(`✓ Generated ${cities.length} US cities`);
   console.log(`✓ Written to ${outputPath}`);
-  console.log(`✓ Source: kelvins/US-Cities-Database (Public Domain)`);
-  console.log(`✓ License: Public Domain`);
+  console.log(`✓ Sorted by population descending`);
   console.log(`\nCity count breakdown:`);
   console.log(`  - Total: ${cities.length}`);
-  console.log(`  - Top 10 metros: ${cities.slice(0, 10).map(c => c.name).join(', ')}`);
-  console.log(`  - Largest: ${cities[0].name} (pop: ${cities[0].population.toLocaleString()})`);
-  console.log(`  - Smallest: ${cities[cities.length - 1].name} (pop: ${cities[cities.length - 1].population.toLocaleString()})`);
+  console.log(`  - Top 10 metros: ${cities.slice(0, 10).map(c => `${c.name}, ${c.state}`).join(' | ')}`);
+  console.log(`  - Largest: ${cities[0]?.name} (pop: ${cities[0]?.population.toLocaleString()})`);
+  console.log(`  - Smallest: ${cities[cities.length - 1]?.name} (pop: ${cities[cities.length - 1]?.population.toLocaleString()})`);
 }
 
 fetchAndProcessCities().catch(error => {
