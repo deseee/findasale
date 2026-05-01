@@ -198,7 +198,7 @@ export default function ScraperAdminPage() {
             onChange={(e) => setSelectedSource(e.target.value)}
             className="px-4 py-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
           >
-            {sources.filter((s) => s.enabled).map((s) => (
+            {(sources.length > 0 ? sources : [{ source: 'EstateSalesNet' }, { source: 'GarageSaleFinder' }]).map((s) => (
               <option key={s.source} value={s.source}>
                 {s.source}
               </option>
