@@ -452,8 +452,9 @@ async function main() {
   if (!SCRAPER_KEY) {
     throw new Error('INTERNAL_SCRAPER_KEY environment variable is not set');
   }
+  // ORGANIZER_ID is optional — backend falls back to system organizer if not set
   if (!ORGANIZER_ID) {
-    throw new Error('ESTATESALESNET_ORGANIZER_ID environment variable is not set');
+    console.log('[run-estatesalesnet] No ESTATESALESNET_ORGANIZER_ID set — will use system organizer');
   }
 
   console.log(`[run-estatesalesnet] Starting scrape of ${NATIONAL_METROS.length} metros`);
@@ -509,7 +510,7 @@ async function main() {
         continue;
       }
 
-      const result = await response.json();
+      const result = await response.json() as { stats: { created: number; updated: number; skipped: number; failed: number } };
       console.log(`[run-estatesalesnet] Batch ${batchNum} ingested — ${result.stats.created} created, ${result.stats.skipped} skipped, ${result.stats.failed} failed`);
     } catch (error) {
       console.error(`[run-estatesalesnet] Failed to post batch ${batchNum}:`, error instanceof Error ? error.message : String(error));
