@@ -143,7 +143,7 @@ export function extractEmails(text: string): string[] {
  */
 export function extractPhones(text: string): string[] {
   const phoneRegex = /\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})/g;
-  const matches = [];
+  const matches: string[] = [];
   let match;
   while ((match = phoneRegex.exec(text)) !== null) {
     matches.push(`${match[1]}-${match[2]}-${match[3]}`);
