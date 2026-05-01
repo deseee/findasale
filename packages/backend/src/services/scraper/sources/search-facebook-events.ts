@@ -276,32 +276,35 @@ export async function scrapeFacebookEventsForMetro(
   tavilyKey: string | undefined,
   serperKey: string | undefined
 ): Promise<ScrapedItem[]> {
-  const query = `site:facebook.com/events "estate sale" OR "garage sale" OR "yard sale" OR "estate auction" ${metro.city} ${metro.state}`;
+  // Serper uses Google SERP — site: operator works here.
+  // Broad OR gives Google room to match any sale-type event in the metro.
+  const query = `site:facebook.com/events ("estate sale" OR "garage sale" OR "yard sale" OR "estate auction") ${metro.city} ${metro.state}`;
   const items: ScrapedItem[] = [];
 
   let results: Array<{ url: string; title: string; content: string }> = [];
-  let sourceApi: 'tavily' | 'serper' = 'tavily';
+  let sourceApi: 'tavily' | 'serper' = 'serper';
 
-  // Try Tavily first
-  if (tavilyKey) {
+  // Serper first — it proxies real Google results where site: operator works.
+  // Tavily is an AI search index that doesn't index Facebook Events pages.
+  if (serperKey) {
     try {
-      results = await searchTavily(query, tavilyKey);
-      sourceApi = 'tavily';
-      console.log(`[FB-Events] Tavily OK for ${metro.city}, ${metro.state} — ${results.length} results`);
+      results = await searchSerper(query, serperKey);
+      sourceApi = 'serper';
+      console.log(`[FB-Events] Serper OK for ${metro.city}, ${metro.state} — ${results.length} results`);
     } catch (err) {
-      console.warn(`[FB-Events] Tavily failed for ${metro.city}, ${metro.state}:`, err instanceof Error ? err.message : err);
+      console.warn(`[FB-Events] Serper failed for ${metro.city}, ${metro.state}:`, err instanceof Error ? err.message : err);
       results = [];
     }
   }
 
-  // Fall back to Serper
-  if (results.length === 0 && serperKey) {
+  // Fall back to Tavily (lower hit rate for /events/ URLs but better than nothing)
+  if (results.length === 0 && tavilyKey) {
     try {
-      results = await searchSerper(query, serperKey);
-      sourceApi = 'serper';
-      console.log(`[FB-Events] Serper fallback for ${metro.city}, ${metro.state} — ${results.length} results`);
+      results = await searchTavily(query, tavilyKey);
+      sourceApi = 'tavily';
+      console.log(`[FB-Events] Tavily fallback for ${metro.city}, ${metro.state} — ${results.length} results`);
     } catch (err) {
-      console.warn(`[FB-Events] Serper also failed for ${metro.city}, ${metro.state}:`, err instanceof Error ? err.message : err);
+      console.warn(`[FB-Events] Tavily also failed for ${metro.city}, ${metro.state}:`, err instanceof Error ? err.message : err);
     }
   }
 
