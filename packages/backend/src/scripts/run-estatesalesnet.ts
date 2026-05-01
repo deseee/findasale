@@ -1,21 +1,19 @@
 /**
- * ADR-073: Directory Scraper — Scheduled Jobs
- * Runs daily scrapes across national metro list.
- * Gated by SCRAPER_ENABLED env var (set to "true" to activate).
+ * ADR-076: Standalone EstateSalesNet scraper for GitHub Actions
+ * Runs outside Express server, POSTs results to Railway backend
  *
- * Schedule:
- *   00:00 UTC — EstateSalesNet (all metros)
- *   06:00 UTC — GarageSaleFinder (all metros)
- *   12:00 UTC — Craigslist (all metros)
+ * Environment variables (from GitHub secrets):
+ * - RAILWAY_BACKEND_URL: https://backend-production-xxx.up.railway.app
+ * - INTERNAL_SCRAPER_KEY: shared secret for authentication
+ * - ESTATESALESNET_ORGANIZER_ID: organizer to attribute scraped listings to
+ *
+ * Usage: npx ts-node src/scripts/run-estatesalesnet.ts
  */
 
-import cron from 'node-cron';
-import { runScrapeRun } from '../services/scraper';
+import { scrapeEstateSalesNetItems } from '../services/scraper/sources/estatesalesnet';
+import { RateLimiter } from '../services/scraper/rateLimiter';
 
-/**
- * ~300 US metros by estate/yard sale activity — all cities 50k+ population.
- * Format: [city-slug]-[state-abbrev]
- */
+// National metros list — copied from scraperCron.ts
 const NATIONAL_METROS = [
   // Northeast — New York
   'new-york-ny',
@@ -445,67 +443,83 @@ const NATIONAL_METROS = [
   'honolulu-hi',
 ];
 
-/**
- * Run a source across all metros sequentially.
- * Sequential to respect rate limits — one metro at a time.
- */
-async function runSourceAcrossMetros(source: string): Promise<void> {
-  console.log(`[scraperCron] Starting ${source} run across ${NATIONAL_METROS.length} metros`);
-  let totalFailed = 0;
+const INGEST_URL = (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') + '/api/internal/scraper/ingest';
+const SCRAPER_KEY = process.env.INTERNAL_SCRAPER_KEY;
+const ORGANIZER_ID = process.env.ESTATESALESNET_ORGANIZER_ID;
 
+async function main() {
+  // Validate required env vars
+  if (!SCRAPER_KEY) {
+    throw new Error('INTERNAL_SCRAPER_KEY environment variable is not set');
+  }
+  if (!ORGANIZER_ID) {
+    throw new Error('ESTATESALESNET_ORGANIZER_ID environment variable is not set');
+  }
+
+  console.log(`[run-estatesalesnet] Starting scrape of ${NATIONAL_METROS.length} metros`);
+  console.log(`[run-estatesalesnet] Backend URL: ${INGEST_URL}`);
+
+  const rateLimiter = new RateLimiter({ requestsPerSecond: 1, maxRetries: 3 });
+  const allItems: any[] = [];
+  let successCount = 0;
+  let failureCount = 0;
+
+  // Scrape each metro sequentially
   for (const metro of NATIONAL_METROS) {
     try {
-      await runScrapeRun(source, metro);
+      console.log(`[run-estatesalesnet] Scraping ${metro}...`);
+      const items = await scrapeEstateSalesNetItems(metro, rateLimiter);
+      allItems.push(...items);
+      successCount++;
+      console.log(`[run-estatesalesnet] ${metro}: ${items.length} items`);
     } catch (error) {
-      totalFailed++;
-      console.error(`[scraperCron] ${source} failed for ${metro}:`, error);
-      // Continue to next metro — don't let one failure stop the run
+      failureCount++;
+      console.error(`[run-estatesalesnet] Failed for ${metro}:`, error instanceof Error ? error.message : String(error));
     }
   }
 
-  console.log(`[scraperCron] ${source} complete — ${NATIONAL_METROS.length - totalFailed} metros OK, ${totalFailed} failed`);
-}
+  console.log(`[run-estatesalesnet] Scraping complete — ${successCount} metros OK, ${failureCount} failed`);
+  console.log(`[run-estatesalesnet] Total items collected: ${allItems.length}`);
 
-/**
- * Initialize scraper cron jobs.
- * Called once at server startup via src/index.ts.
- */
-export function initScraperCron(): void {
-  if (process.env.SCRAPER_ENABLED !== 'true') {
-    console.log('[scraperCron] Scraper disabled — set SCRAPER_ENABLED=true to activate');
-    return;
+  // POST to Railway in batches of 25
+  const batchSize = 25;
+  for (let i = 0; i < allItems.length; i += batchSize) {
+    const batch = allItems.slice(i, i + batchSize);
+    const batchNum = Math.floor(i / batchSize) + 1;
+    const totalBatches = Math.ceil(allItems.length / batchSize);
+
+    try {
+      console.log(`[run-estatesalesnet] Posting batch ${batchNum}/${totalBatches} (${batch.length} items)...`);
+
+      const response = await fetch(INGEST_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-scraper-key': SCRAPER_KEY,
+        },
+        body: JSON.stringify({
+          items: batch,
+          organizerId: ORGANIZER_ID,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error(`[run-estatesalesnet] Batch ${batchNum} failed with status ${response.status}:`, error);
+        continue;
+      }
+
+      const result = await response.json();
+      console.log(`[run-estatesalesnet] Batch ${batchNum} ingested — ${result.stats.created} created, ${result.stats.skipped} skipped, ${result.stats.failed} failed`);
+    } catch (error) {
+      console.error(`[run-estatesalesnet] Failed to post batch ${batchNum}:`, error instanceof Error ? error.message : String(error));
+    }
   }
 
-  console.log('[scraperCron] Scraper cron initialized');
-
-  // ADR-076: EstateSalesNet: daily at 00:00 UTC (gated by USE_GH_ACTIONS_ESTATESALESNET)
-  // If GitHub Actions handles EstateSalesNet, skip the Railway cron
-  if (process.env.USE_GH_ACTIONS_ESTATESALESNET !== 'true') {
-    cron.schedule('0 0 * * *', async () => {
-      console.log('[scraperCron] EstateSalesNet daily run starting');
-      await runSourceAcrossMetros('EstateSalesNet').catch((err) =>
-        console.error('[scraperCron] EstateSalesNet run error:', err)
-      );
-    });
-  } else {
-    console.log('[scraperCron] EstateSalesNet skipped — GitHub Actions handles it (USE_GH_ACTIONS_ESTATESALESNET=true)');
-  }
-
-  // GarageSaleFinder: daily at 06:00 UTC (offset to avoid simultaneous runs)
-  cron.schedule('0 6 * * *', async () => {
-    console.log('[scraperCron] GarageSaleFinder daily run starting');
-    await runSourceAcrossMetros('GarageSaleFinder').catch((err) =>
-      console.error('[scraperCron] GarageSaleFinder run error:', err)
-    );
-  });
-
-  // Craigslist: daily at 12:00 UTC (offset to avoid simultaneous runs)
-  cron.schedule('0 12 * * *', async () => {
-    console.log('[scraperCron] Craigslist daily run starting');
-    await runSourceAcrossMetros('Craigslist').catch((err) =>
-      console.error('[scraperCron] Craigslist run error:', err)
-    );
-  });
-
-  console.log(`[scraperCron] Scheduled: EstateSalesNet @ 00:00 UTC, GarageSaleFinder @ 06:00 UTC, Craigslist @ 12:00 UTC (${NATIONAL_METROS.length} metros)`);
+  console.log(`[run-estatesalesnet] All batches posted. Done.`);
 }
+
+main().catch((error) => {
+  console.error('[run-estatesalesnet] Fatal error:', error);
+  process.exit(1);
+});

@@ -31,12 +31,18 @@ function formatDate(date: Date): string {
 }
 
 export function CityRecentSales({ citySlug, sales }: CityRecentSalesProps) {
+  // Convert "chicago-il" → "Chicago, IL"
+  const parts = citySlug.split('-');
+  const state = parts[parts.length - 1].toUpperCase();
+  const city = parts.slice(0, -1).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const displayName = `${city}, ${state}`;
+
   if (!sales.length) {
     return (
       <section className="py-12 px-4 md:px-8">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
-            Recent Sales in [City]
+            Recent Sales in {displayName}
           </h2>
           <p className="text-slate-600 dark:text-slate-400">
             No active sales listed yet. Check back soon!

@@ -226,6 +226,7 @@ import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Direct
 import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
 import { initClaimEmailCron } from './jobs/claimEmailCron'; // ADR-073 Phase 2: Claim Email Pipeline — 3-touch sequence for unmanaged organizers
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
+import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
 
 // Import + re-export shared Prisma singleton — all controllers/services import from here or lib/prisma
 import { prisma } from './lib/prisma';
@@ -528,6 +529,7 @@ app.use('/api/sale-waitlist', saleWaitlistRoutes);                     // Sale W
 app.use('/api/treasure-hunt', treasureHuntRoutes);                     // Daily Treasure Hunt
 app.use('/api/trending', trendingRoutes);                              // Trending Items & Sales
 app.use('/api/cities', citiesRoutes);                                  // ADR-074: Metro Sync city pages
+app.use('/api/internal', internalRoutes);                              // ADR-076: Internal scraper endpoint
 app.use('/api/unsubscribe', unsubscribeRoutes);                        // Unsubscribe / Preferences
 app.use('/api/earnings', earningsPdfRoutes);                           // Payout PDF Export (/api/earnings/pdf)
 app.use('/api/ab', abTestRoutes);                                      // A/B Testing Infrastructure
