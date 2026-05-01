@@ -24,7 +24,7 @@ interface MetroTopFind {
 export async function getMetroTopFinds(citySlug: string): Promise<MetroTopFind[]> {
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'}/api/cities/${citySlug}/top-finds`,
+      `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000'}/cities/${citySlug}/top-finds`,
       {
         method: 'GET',
         headers: {
