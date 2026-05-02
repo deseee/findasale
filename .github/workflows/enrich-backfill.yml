@@ -1,0 +1,14 @@
+name: Enrichment Backfill
+on:
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger enrichment backfill on Railway
+        run: |
+          curl -X POST \
+            -H "x-scraper-key: ${{ secrets.INTERNAL_SCRAPER_KEY }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/scraper/enrich-backfill"
