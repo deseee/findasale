@@ -9,6 +9,7 @@ import { getRandomUserAgent } from './userAgents';
 /**
  * Main enrichment entry point.
  * Looks up organizer data via ESN company-public-page API and Google Places.
+ * Also attempts contact email discovery via website scraping and sale descriptions.
  * Fire-and-forget; errors logged but not thrown.
  */
 export async function enrichOrganizer(
@@ -36,6 +37,8 @@ export async function enrichOrganizer(
         linkedInUrl: true,
         serviceAreas: true,
         esnOrgId: true,
+        contactEmail: true,
+        esnCompanyPageUrl: true,
       },
     });
 
@@ -44,9 +47,9 @@ export async function enrichOrganizer(
       return;
     }
 
-    // Skip only if already Google-enriched and no ESN data to add
-    if (organizer.googlePlaceId && !organizer.esnOrgId) {
-      console.info(`[Enrichment] Already enriched, no ESN ID — skipping: ${organizerId}`);
+    // Skip only if fully enriched: Google lookup done, no ESN data pending, contact email found
+    if (organizer.googlePlaceId && !organizer.esnOrgId && organizer.contactEmail) {
+      console.info(`[Enrichment] Already fully enriched — skipping: ${organizerId}`);
       return;
     }
 
@@ -86,6 +89,12 @@ export async function enrichOrganizer(
           updateData.esnMemberships = esnData.memberships;
         if (esnData.orgPackageType)
           updateData.esnPackageType = esnData.orgPackageType;
+        // ESN company page URL — stored as last-resort contact channel (never shown in primary outreach)
+        if (esnData.companyPageUrl && !organizer.esnCompanyPageUrl) {
+          updateData.esnCompanyPageUrl = esnData.companyPageUrl.startsWith('http')
+            ? esnData.companyPageUrl
+            : `https://www.estatesales.net${esnData.companyPageUrl}`;
+        }
       }
     }
 
@@ -114,13 +123,29 @@ export async function enrichOrganizer(
       }
     }
 
+    // Step 3: Contact email discovery
+    // Priority: website /contact page → sale description parsing
+    if (!organizer.contactEmail) {
+      const websiteToCheck = (updateData.website as string | undefined) ?? organizer.website;
+      if (websiteToCheck) {
+        const emailFromWebsite = await scrapeWebsiteForEmail(websiteToCheck);
+        if (emailFromWebsite) updateData.contactEmail = emailFromWebsite;
+      }
+
+      // Fallback: parse email patterns from scraped sale listing descriptions
+      if (!updateData.contactEmail) {
+        const emailFromDescriptions = await extractEmailFromSaleDescriptions(organizerId);
+        if (emailFromDescriptions) updateData.contactEmail = emailFromDescriptions;
+      }
+    }
+
     if (Object.keys(updateData).length > 0) {
       await prisma.organizer.update({
         where: { id: organizerId },
         data: updateData,
       });
       console.info(
-        `[Enrichment] Updated organizer ${organizerId}: ${JSON.stringify(updateData)}`
+        `[Enrichment] Updated organizer ${organizerId}: ${Object.keys(updateData).join(', ')}`
       );
     } else {
       console.info(`[Enrichment] No enrichment data found for ${organizerId}`);
@@ -153,31 +178,17 @@ async function lookupGooglePlace(
     url.searchParams.set('fields', 'place_id,name,formatted_address');
     url.searchParams.set('key', googlePlacesKey);
 
-    const response = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      console.warn(
-        `[Enrichment] Google Places API error: ${response.status} ${response.statusText}`
-      );
-      return null;
-    }
+    const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) return null;
 
     const data = (await response.json()) as {
-      candidates?: Array<{ place_id: string; name: string }>;
+      candidates?: Array<{ place_id: string }>;
       status: string;
     };
 
-    if (data.status !== 'OK' || !data.candidates || data.candidates.length === 0) {
-      return null;
-    }
-
+    if (data.status !== 'OK' || !data.candidates?.length) return null;
     return data.candidates[0]?.place_id || null;
-  } catch (error) {
-    console.warn(
-      `[Enrichment] Google Places lookup failed: ${error instanceof Error ? error.message : String(error)}`
-    );
+  } catch {
     return null;
   }
 }
@@ -191,33 +202,22 @@ async function fetchGooglePlaceDetails(
 ): Promise<{
   phone?: string;
   website?: string;
-  hoursText?: string[];
   photoReference?: string;
   formattedAddress?: string;
 } | null> {
   try {
     const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
     url.searchParams.set('place_id', placeId);
-    url.searchParams.set(
-      'fields',
-      'formatted_phone_number,website,opening_hours,photos,formatted_address'
-    );
+    url.searchParams.set('fields', 'formatted_phone_number,website,photos,formatted_address');
     url.searchParams.set('key', apiKey);
 
-    const response = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      console.warn(`[Enrichment] Place Details API error: ${response.status}`);
-      return null;
-    }
+    const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) return null;
 
     const data = (await response.json()) as {
       result?: {
         formatted_phone_number?: string;
         website?: string;
-        opening_hours?: { weekday_text?: string[] };
         photos?: Array<{ photo_reference: string }>;
         formatted_address?: string;
       };
@@ -225,24 +225,20 @@ async function fetchGooglePlaceDetails(
     };
 
     if (data.status !== 'OK' || !data.result) return null;
-
     return {
       phone: data.result.formatted_phone_number,
       website: data.result.website,
-      hoursText: data.result.opening_hours?.weekday_text,
       photoReference: data.result.photos?.[0]?.photo_reference,
       formattedAddress: data.result.formatted_address,
     };
-  } catch (error) {
-    console.warn(
-      `[Enrichment] Place Details lookup failed: ${error instanceof Error ? error.message : String(error)}`
-    );
+  } catch {
     return null;
   }
 }
 
 /**
  * Lookup EstateSales.NET company profile via company-public-page API.
+ * Returns enrichment data including company page URL (stored as last-resort contact channel).
  */
 async function lookupESNCompanyProfile(
   esnOrgId: number
@@ -258,8 +254,9 @@ async function lookupESNCompanyProfile(
   linkedInUrl?: string;
   twitterHandle?: string;
   youtubeUrl?: string;
-  memberships?: Array<{ id: number; name: string; shortDescription?: string; description?: string }>;
+  memberships?: Array<{ id: number; name: string; shortDescription?: string }>;
   orgPackageType?: string;
+  companyPageUrl?: string;
 } | null> {
   try {
     const query = JSON.stringify({ orgId: esnOrgId });
@@ -285,10 +282,104 @@ async function lookupESNCompanyProfile(
     return (await response.json()) as any;
   } catch (error) {
     console.warn(
-      `[Enrichment] ESN lookup failed for orgId=${esnOrgId}: ${error instanceof Error ? error.message : String(error)}`
+      `[Enrichment] ESN lookup failed for orgId=${esnOrgId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     );
     return null;
   }
+}
+
+/**
+ * Scrape organizer's website for a contact email address.
+ * Tries /contact, /contact-us, /about, then homepage in order.
+ * Extracts mailto: links first, then bare email patterns in page text.
+ */
+async function scrapeWebsiteForEmail(website: string): Promise<string | null> {
+  const base = website.replace(/\/+$/, '');
+  const pagesToTry = [`${base}/contact`, `${base}/contact-us`, `${base}/about`, base];
+
+  const mailtoPattern = /href=["']mailto:([^"'?\s]+)/gi;
+  const bareEmailPattern = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
+  const excluded = /noreply|no-reply|donotreply|do-not-reply|bounce|mailer-daemon/i;
+
+  for (const pageUrl of pagesToTry) {
+    try {
+      const response = await fetch(pageUrl, {
+        headers: { 'User-Agent': getRandomUserAgent(), Accept: 'text/html' },
+        signal: AbortSignal.timeout(8000),
+        redirect: 'follow',
+      });
+
+      if (!response.ok) continue;
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('text/html')) continue;
+
+      const html = await response.text();
+
+      // Priority 1: mailto: href attributes
+      mailtoPattern.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = mailtoPattern.exec(html)) !== null) {
+        const email = match[1].trim().toLowerCase();
+        if (email && !excluded.test(email)) return email;
+      }
+
+      // Priority 2: bare email addresses in page text
+      bareEmailPattern.lastIndex = 0;
+      while ((match = bareEmailPattern.exec(html)) !== null) {
+        const email = match[1].trim().toLowerCase();
+        // Skip asset paths that accidentally match the email pattern
+        if (/\.(png|jpg|gif|js|css|svg|woff)/.test(email)) continue;
+        if (!excluded.test(email)) return email;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract a contact email from the organizer's scraped sale listing descriptions.
+ * Checks up to 20 most recent scraped listings for embedded email addresses.
+ */
+async function extractEmailFromSaleDescriptions(organizerId: string): Promise<string | null> {
+  try {
+    const sales = await prisma.sale.findMany({
+      where: {
+        organizerId,
+        sourceName: { not: null },
+        description: { not: null },
+      },
+      select: { description: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    const emailPattern = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
+    const excluded = /noreply|no-reply|donotreply|bounce|example\.com/i;
+
+    for (const sale of sales) {
+      if (!sale.description) continue;
+      emailPattern.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = emailPattern.exec(sale.description)) !== null) {
+        const email = match[1].toLowerCase();
+        if (!excluded.test(email)) return email;
+      }
+    }
+  } catch (error) {
+    console.warn(
+      `[Enrichment] Description email parse failed for ${organizerId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+
+  return null;
 }
 
 /**
