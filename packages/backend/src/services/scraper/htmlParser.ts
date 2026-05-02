@@ -16,8 +16,10 @@ export interface ParsedListing {
   organizerEmail?: string;
   description?: string;
   photoUrls?: string[];
-  saleType?: string; // ESTATE | YARD | AUCTION | FLEA_MARKET
+  saleType?: string; // ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
   esnOrgId?: number; // EstateSales.NET numeric company ID
+  googlePlaceId?: string; // ADR-077: Google Places ID — dedup key for business directory listings
+  businessCategory?: string; // ADR-077: business type for Google Places-sourced organizers
 }
 
 /**
@@ -27,7 +29,6 @@ export function parseEstateSalesNetListing(html: string): Partial<ParsedListing>
   try {
     const $ = cheerio.load(html);
 
-    // EstateSales.NET specific selectors (may need adjustment based on actual HTML)
     const title = $('h1.sale-title').text().trim();
     const addressText = $('[data-address]').text().trim();
     const dateText = $('[data-dates]').text().trim();
@@ -36,7 +37,6 @@ export function parseEstateSalesNetListing(html: string): Partial<ParsedListing>
 
     if (!title || !addressText) return null;
 
-    // Parse address (format: "123 Main St, Grand Rapids, MI 49503")
     const addressMatch = addressText.match(
       /^(.+?),\s*(.+?),\s*([A-Z]{2})\s*(\d{5})(-\d{4})?$/
     );
@@ -44,7 +44,6 @@ export function parseEstateSalesNetListing(html: string): Partial<ParsedListing>
 
     const [, street, city, state, zip] = addressMatch;
 
-    // Parse dates (format: "Fri May 10 - Sun May 12, 2026")
     const dateMatch = dateText.match(/(\w+\s+\w+\s+\d+).*?(\w+\s+\w+\s+\d+,\s*\d{4})/);
     if (!dateMatch) return null;
 
@@ -85,14 +84,12 @@ export function parseGarageSalesFinderListing(html: string): Partial<ParsedListi
   try {
     const $ = cheerio.load(html);
 
-    // GarageSaleFinder specific selectors (generic fallback)
     const title = $('.sale-title, h1').first().text().trim();
     const addressText = $('.address, [data-address]').text().trim();
     const dateText = $('.dates, [data-dates]').text().trim();
 
     if (!title || !addressText) return null;
 
-    // Simple address parsing for yard sales
     const addressMatch = addressText.match(
       /^(.+?),\s*(.+?),\s*([A-Z]{2})\s*(\d{5})/
     );
@@ -100,7 +97,6 @@ export function parseGarageSalesFinderListing(html: string): Partial<ParsedListi
 
     const [, street, city, state, zip] = addressMatch;
 
-    // Parse date (flexible format)
     const startDate = new Date();
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 1);

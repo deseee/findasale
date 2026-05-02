@@ -1,6 +1,8 @@
-# Patrick's Dashboard — Week of May 2, 2026 (updated S623)
+# Patrick's Dashboard — Week of May 2, 2026 (updated S624)
 
 ## What Happened This Week (S623 addition)
+
+**S624 — ADR-077 Google Places Business Directory Scraper complete.** 11 business categories (antique malls, thrift stores, consignment shops, flea markets, auction houses, vintage shops, liquidation stores, estate sale companies, swap meets, used furniture stores) will now be ingested quarterly from Google Places across 100 US metros — creating permanent unmanaged organizer directory entries as Claim-able listings. Push block + migration needed from Patrick before first run.
 
 **S623 — Scraper audit complete.** 6 of 7 fixes shipped in one pass: lat/lng now stored on every ingested sale, `isAuctionSale` synced, `saleSchedule` captured in metadata, sale type tags auto-generated (estate-sale / auction / garage-sale / flea-market), Google Places API expanded to fetch rating data, and tiktokUrl now flows through ESN enrichment. Fix 7 (storing Google rating on Organizer) is blocked — Organizer schema needs `googleRating Decimal?` + `googleRatingCount Int?` fields. Dispatch findasale-architect when ready.
 
