@@ -169,9 +169,17 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
 }) => {
   const slug = params?.slug as string;
 
-  const city = getCityFromSlug(slug);
+  let city = getCityFromSlug(slug);
   if (!city) {
-    return { notFound: true };
+    // Slug may be for a scraped city not in us-cities-3000.json (e.g. 'nashville-tn').
+    // Parse city name and state from the slug rather than 404ing.
+    const parts = slug.split('-');
+    const stateCode = parts[parts.length - 1].toUpperCase();
+    const cityName = parts.slice(0, -1).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    if (parts.length < 2 || stateCode.length !== 2) {
+      return { notFound: true };
+    }
+    city = { name: cityName, state: stateCode, slug, population: 0, lat: 0, lng: 0, zipCodes: [] };
   }
 
   // ADR-074: Fetch real eBay sold items from MetroTopFinds table
