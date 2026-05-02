@@ -17,9 +17,10 @@ type ExplorerRank = 'INITIATE' | 'SCOUT' | 'RANGER' | 'SAGE' | 'GRANDMASTER';
  * @returns The effective unlock time for this user (may be before publishedAt if user is high rank)
  */
 export function getEffectivePublishTime(
-  publishedAt: Date,
+  publishedAt: Date | null,
   userRank: ExplorerRank = 'INITIATE'
 ): Date {
+  if (!publishedAt) return new Date(); // Scraped/unmanaged listings have no publishedAt — treat as available now
   const hoursEarly = RANK_EARLY_ACCESS_HOURS[userRank] || 0;
   const effectiveTime = new Date(publishedAt.getTime() - hoursEarly * 60 * 60 * 1000);
   return effectiveTime;

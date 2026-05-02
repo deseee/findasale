@@ -400,7 +400,7 @@ export const getSale = async (req: Request, res: Response) => {
     const isOrganizer = authReq.user?.id === sale.organizer.userId;
     const isAdmin = authReq.user?.role === 'ADMIN';
 
-    if (!isOrganizer && !isAdmin && sale.status === 'PUBLISHED') {
+    if (!isOrganizer && !isAdmin && sale.status === 'PUBLISHED' && sale.publishedAt) {
       // Get user's rank (default INITIATE if unauthenticated)
       const userRank = authReq.user?.explorerRank || 'INITIATE';
       const locked = isSaleLocked(sale.publishedAt, userRank);
