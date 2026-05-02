@@ -1,10 +1,12 @@
-# Patrick's Dashboard — Week of May 2, 2026 (updated S624)
+# Patrick's Dashboard — Week of May 2, 2026 (updated S625)
 
-## What Happened This Week (S623 addition)
+## What Happened This Week
 
-**S624 — ADR-077 Google Places Business Directory Scraper complete.** 11 business categories (antique malls, thrift stores, consignment shops, flea markets, auction houses, vintage shops, liquidation stores, estate sale companies, swap meets, used furniture stores) will now be ingested quarterly from Google Places across 100 US metros — creating permanent unmanaged organizer directory entries as Claim-able listings. Push block + migration needed from Patrick before first run.
+**S625 — Multi-source directory scraper + crawl management schema.** Four new scrapers now live: HERE Places (250k free/mo), Foursquare (1k/day free), OSM Overpass (free/open), plus Google Places switched to monthly — all $0/year total. Canada coverage added (15 metros); Quebec scrape-only with outreach suppressed per Bill 96 ruling. Full crawl management system schema deployed: `DirectoryCrawlQueue` + `DirectoryCrawlLog` + `DirectoryClaimEmail` models + 22 new Organizer lifecycle fields. Sub-area strategy designed for ~20 dense metros (auto-detect SATURATED at 60-result cap). Legal cleared Google ToS. **Next: build DirectoryCrawlQueueManager service + wire scrapers into queue.**
 
-**S623 — Scraper audit complete.** 6 of 7 fixes shipped in one pass: lat/lng now stored on every ingested sale, `isAuctionSale` synced, `saleSchedule` captured in metadata, sale type tags auto-generated (estate-sale / auction / garage-sale / flea-market), Google Places API expanded to fetch rating data, and tiktokUrl now flows through ESN enrichment. Fix 7 (storing Google rating on Organizer) is blocked — Organizer schema needs `googleRating Decimal?` + `googleRatingCount Int?` fields. Dispatch findasale-architect when ready.
+**S624 — ADR-077 Google Places Business Directory Scraper.** 11 business categories ingested monthly across 100 US metros. All pushed and deployed.
+
+**S623 — Scraper audit.** 6 of 7 pipeline fixes shipped. googleRating fields added this session.
 
 **Previously —** A massive scraper and outreach pipeline week. The agents shipped the entire sale-scraping infrastructure (EstateSalesNet, Craigslist, Eventbrite, and newspaper RSS feeds), found and fixed a root-cause bug that had been dumping all scraped organizer listings onto a single fake account instead of creating one record per real company, and cleaned up 5,833 misattributed sale records. On top of that, the Claim-This-Listing flow went live (organizers can now claim their auto-scraped listing via a magic-link email), and the organizer contact pipeline was extended to scrape company websites for real email addresses. Several strategy sessions also ran covering viral acquisition mechanics and the PR wire launch.
 
