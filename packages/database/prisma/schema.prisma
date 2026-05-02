@@ -305,6 +305,7 @@ model Organizer {
   googlePlaceId           String?  // Google Places Place ID e.g. "ChIJrTLr-GyuEmsRBfy61i59si4"
   googleRating            Decimal? // Cached from Google Places API — e.g. 4.8 (ADR-073)
   googleRatingCount       Int?     // Number of Google reviews — e.g. 312 (ADR-073)
+  businessCategory        String?  // ADR-077: ANTIQUE_MALL | ANTIQUE_DEALER | CONSIGNMENT | THRIFT_STORE | FLEA_MARKET | AUCTION_HOUSE | VINTAGE | ESTATE_SALE_CO | LIQUIDATION | USED_FURNITURE
   facebookPageId          String?  // Facebook Page ID (Phase 2)
   yelpBusinessId          String?  // Yelp Business ID (Phase 2)
   esnOrgId                Int?     // EstateSales.NET numeric company ID — used for company-public-page API

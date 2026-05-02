@@ -92,8 +92,21 @@ async function getOrCreateScrapedOrganizer(
   sourceName: string,
   city: string,
   state: string,
-  esnOrgId?: number
+  esnOrgId?: number,
+  googlePlaceId?: string,
+  businessCategory?: string
 ): Promise<string> {
+  // ADR-077: Check by googlePlaceId first — strongest dedup signal.
+  // Prevents duplicate organizers when the same business appears in multiple
+  // search queries (e.g., "antique mall" + "antique dealer" both return it).
+  if (googlePlaceId) {
+    const byPlaceId = await prisma.organizer.findFirst({
+      where: { googlePlaceId },
+      select: { id: true },
+    });
+    if (byPlaceId) return byPlaceId.id;
+  }
+
   // Try to find existing organizer by businessName + source
   // Use a pattern we can query: check isUnmanagedListing + businessName
   const existing = await prisma.organizer.findFirst({
@@ -144,6 +157,8 @@ async function getOrCreateScrapedOrganizer(
             isClaimed: false,
             isUnmanagedListing: true,
             esnOrgId,
+            googlePlaceId,
+            businessCategory,
           },
         },
       },
@@ -328,7 +343,9 @@ export async function ingestScrapedListing(
         listing.sourceName,
         listing.city,
         listing.state,
-        listing.esnOrgId
+        listing.esnOrgId,
+        listing.googlePlaceId,
+        listing.businessCategory
       );
     } else if (organizerId) {
       finalOrganizerId = organizerId;
