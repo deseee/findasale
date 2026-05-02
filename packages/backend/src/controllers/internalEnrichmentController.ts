@@ -9,15 +9,22 @@ import { enrichOrganizer } from '../services/scraper/enrichment';
 
 export async function runEnrichmentBackfill(req: Request, res: Response): Promise<void> {
   try {
-    // Find unmanaged organizers without Google Place data
-    const organizers = await prisma.organizer.findMany({
-      where: {
-        isUnmanagedListing: true,
-        googlePlaceId: null,
-        businessName: {
-          not: 'FindA.Sale Directory',
-        },
+    const enrichAll = req.query.all === 'true';
+
+    // Build where clause — ?all=true re-enriches everyone, default targets unenriched only
+    const where: Record<string, unknown> = {
+      isUnmanagedListing: true,
+      businessName: {
+        not: 'FindA.Sale Directory',
       },
+    };
+
+    if (!enrichAll) {
+      where.googlePlaceId = null;
+    }
+
+    const organizers = await prisma.organizer.findMany({
+      where: where as Parameters<typeof prisma.organizer.findMany>[0]['where'],
       select: {
         id: true,
         businessName: true,
@@ -26,10 +33,11 @@ export async function runEnrichmentBackfill(req: Request, res: Response): Promis
     });
 
     const count = organizers.length;
-    console.log(`[Backfill] Queued ${count} organizers for enrichment`);
+    const mode = enrichAll ? 'ALL (including previously enriched)' : 'UNENRICHED ONLY (googlePlaceId is null)';
+    console.log(`[Backfill] Mode: ${mode} — queued ${count} organizers`);
 
     // Respond immediately
-    res.status(202).json({ queued: count });
+    res.status(202).json({ queued: count, mode });
 
     // Process in background
     setImmediate(async () => {
