@@ -243,9 +243,6 @@ model User {
   reputationScore       ReferrerReputationScore?
   // QR Scanner Phase 2: scan event tracking
   qrScannerEvents       QRScannerEvent[]         @relation("QRScannerEventShopper")
-  // Feature #XXX: Verified Social Share XP System
-  saleShareLinks        SaleShareLink[]          @relation("SaleShareLinks")
-  saleShareLinkClicks   SaleShareLinkClick[]     @relation("SaleShareLinkClicks")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -261,20 +258,13 @@ model Organizer {
   id                      String                 @id @default(cuid())
   businessName            String
   phone                   String?
-  scrapedEmail            String? // Email from scraped data source
   address                 String
   bio                     String? // Organizer bio/description (optional)
-  tagline                 String? // Short tagline for storefront (120 char limit)
-  yearFounded             Int? // Year business was founded
   website                 String? // Business website URL
   profilePhoto            String? // Profile photo URL (Cloudinary)
   facebook                String? // Facebook page URL
   instagram               String? // Instagram profile URL
   etsy                    String? // Etsy shop URL
-  twitterUrl              String? // Twitter profile URL
-  tiktokUrl               String? // TikTok profile URL
-  youtubeUrl              String? // YouTube channel URL
-  pinterestUrl            String? // Pinterest profile URL
   serviceAreas            String? // CSV or JSON of cities/zip codes served
   pickupWindows           String? // Default pickup availability (JSON or text)
   userId                  String                 @unique
@@ -282,8 +272,6 @@ model Organizer {
   sales                   Sale[]
   saleTemplates           SaleTemplate[]
   stripeConnectId         String?
-  stripeConnectAccountId  String? // ACH Consignor Payouts — platform account ID for transfers
-  stripeConnectEnabled    Boolean                @default(false) // ACH Consignor Payouts — whether feature is enabled
   // Phase 17: Reputation
   reputationTier          String                 @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
   avgRating               Float?
@@ -300,21 +288,6 @@ model Organizer {
   verificationStatus      String                 @default("NONE") // NONE | PENDING | VERIFIED | REJECTED
   verificationNotes       String?
   verifiedAt              DateTime?
-  // Feature: Verified Organizer — automated verification sources (ADR-073)
-  verificationSource      String?  // GOOGLE | FACEBOOK | YELP | STRIPE_IDENTITY | MANUAL
-  googlePlaceId           String?  // Google Places Place ID e.g. "ChIJrTLr-GyuEmsRBfy61i59si4"
-  googleRating            Decimal? // Cached from Google Places API — e.g. 4.8 (ADR-073)
-  googleRatingCount       Int?     // Number of Google reviews — e.g. 312 (ADR-073)
-  businessCategory        String?  // ADR-077: ANTIQUE_MALL | ANTIQUE_DEALER | CONSIGNMENT | THRIFT_STORE | FLEA_MARKET | AUCTION_HOUSE | VINTAGE | ESTATE_SALE_CO | LIQUIDATION | USED_FURNITURE
-  facebookPageId          String?  // Facebook Page ID (Phase 2)
-  yelpBusinessId          String?  // Yelp Business ID (Phase 2)
-  esnOrgId                Int?     // EstateSales.NET numeric company ID — used for company-public-page API
-  linkedInUrl             String?  // LinkedIn profile URL
-  esnMemberships          Json?    // Professional association memberships from ESN (ASEL, ISA, ASA, etc.)
-  esnPackageType          String?  // ESN subscription tier: Gold_2016_Legacy, Silver, etc.
-  contactEmail            String?  // Contact email scraped from website /contact page or sale descriptions (ADR-073 Phase 2)
-  esnCompanyPageUrl       String?  // EstateSales.NET company profile URL — last-resort outreach channel (ADR-073 Phase 2)
-  stripeIdentitySessionId String?  // Stripe Identity verification session ID (Phase 2)
   // Feature #83: Estate Planning — executor account stub
   executorUserId          String?
   estateId                String? // Pre-wire: Estate Planning Toolkit — references future Estate model
@@ -387,49 +360,56 @@ model Organizer {
   shopifyShopDomain       String? // e.g. "myshop.myshopify.com"
   shopifyEnabled          Boolean                @default(false)
   shopifyListings         ShopifyListing[]
-  // Feature: Remove Watermark — TEAMS tier only
-  removeWatermarkEnabled  Boolean                @default(false)
-  // Feature #354: OrganizerHours — business hours and appointment settings
-  timezone                String? // e.g. "America/Detroit"
-  byAppointment           Boolean                @default(false)
-  hours                   OrganizerHours[]
-  // Feature #355: Organizer Types Multi-Select
-  organizerTypes          String[]               @default([])
-  // Feature #356: Organizer Broadcast to Followers
-  broadcasts              OrganizerBroadcast[]
-  // Feature #361: Claim-This-Listing — allow unclaimed profiles to be claimed
-  isClaimed               Boolean                @default(true) // Whether organizer profile has been claimed by owner
-  isUnmanagedListing      Boolean                @default(false) // Whether this is an unmanaged/imported listing
-  claimRequests           ClaimRequest[]
-  // ADR-073 Phase 2: Claim Email Pipeline — 3-touch outreach sequence
-  claimEmails             OrganizerClaimEmail[]
+  // Directory Crawl Management — organizer lifecycle and claim outreach tracking
+  directoryStatus          String   @default("ACTIVE") // "ACTIVE" | "UNCERTAIN" | "CLOSED" | "REOPENED"
+  directoryStatusSetAt     DateTime @default(now())
+  directoryStatusReason    String?
+  directoryNextCheckAt     DateTime?
+  directoryCheckIntervalDays Int   @default(90)
+  directoryLastCheckedAt   DateTime?
+  directoryLastCheckedSource String?
+  directoryDataHash        String?  // SHA256 of name|address|city|state for change detection
+  directoryHashUpdatedAt   DateTime?
+  directoryMostRecentSource String?  // Last source that updated this record
+  directoryMostRecentAt    DateTime?
+  hereBusinessId           String?  @unique
+  foursquareVenueId        String?  @unique
+  osmNodeId                String?  // Format: "node/12345" or "way/12345"
+  suppressOutreach         Boolean  @default(false) // Quebec Bill 96 deferral for QC records
+  directoryNextClaimEmailAt DateTime?
+  claimEmailIntervalDays   Int      @default(14)
+  claimStatus              String   @default("UNCLAIMED") // "UNCLAIMED" | "INVITED" | "CLAIMED" | "OPTED_OUT"
+  claimEmails              DirectoryClaimEmail[]
+  // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
+  verificationSource       String?
+  googlePlaceId            String?
+  facebookPageId           String?
+  yelpBusinessId           String?
+  stripeIdentitySessionId  String?
+  // ADR-073 Phase 2: ESN enrichment fields (migration 20260502000001)
+  esnOrgId                 Int?
+  linkedInUrl              String?
+  esnMemberships           Json?
+  esnPackageType           String?
+  // ADR-073 Phase 2: Contact acquisition fields (migration 20260502000002)
+  contactEmail             String?
+  esnCompanyPageUrl        String?
+  // Scraper contact fields (migration 20260502000100)
+  scrapedEmail             String?
+  // Google Places rating (migration 20260502010000)
+  googleRating             Decimal?
+  googleRatingCount        Int?
+  // Business category from directory scraping (migration 20260502020000)
+  businessCategory         String?
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
-}
 
-// Feature #354: Business hours — per-day operating hours for organizers
-model OrganizerHours {
-  id            String    @id @default(cuid())
-  organizerId   String
-  dayOfWeek     Int // 0=Sunday, 1=Monday, ..., 6=Saturday
-  openTime      String // HH:MM format, 24hr
-  closeTime     String // HH:MM format, 24hr
-  organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-
-  @@unique([organizerId, dayOfWeek])
-}
-
-// Feature #356: Organizer Broadcast to Followers — message delivery system
-model OrganizerBroadcast {
-  id             String    @id @default(cuid())
-  organizerId    String
-  subject        String
-  message        String
-  sentAt         DateTime  @default(now())
-  recipientCount Int       @default(0)
-  organizer      Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-
-  @@index([organizerId])
+  @@index([directoryStatus])
+  @@index([directoryNextCheckAt])
+  @@index([suppressOutreach])
+  @@index([claimStatus])
+  @@index([googlePlaceId])
+  @@index([esnOrgId])
 }
 
 // Pre-wire: API Keys for third-party integrations (Zapier, IFTTT, webhooks)
@@ -686,8 +666,6 @@ model Sale {
   purchases                   Purchase[]
   reviews                     Review[]
   conversations               Conversation[]
-  // ADR-073: Directory Scraper — email tracking for claim conversion
-  claimEmails                 ClaimEmail[]
   bounties                    MissingListingBounty[]
   flashDeals                  FlashDeal[]
   pickupSlots                 PickupSlot[]
@@ -773,20 +751,6 @@ model Sale {
   qrScannerEvents             QRScannerEvent[]
   // Feature #XXX: Automatic Markdown Cycles (PRO Tier) — time-based price reductions
   markdownCycles          MarkdownCycle[]
-  // Feature #XXX: Verified Social Share XP System
-  shareLinks              SaleShareLink[]
-  // Feature #359: Sale Pinned/Featured Flag
-  isPinned                Boolean                  @default(false)
-  // Feature #362: Sale Attendance Count — track shoppers who attended
-  attendanceCount         Int?
-  // Feature #363: Auction Buyer's Premium — percentage added to hammer price
-  buyersPremiumPct        Decimal?                 @db.Decimal(5, 2)
-  // ADR-073: Directory Scraper — scraped listing metadata
-  sourceUrl               String?                  // Canonical URL on the source site (e.g., "https://estatesales.net/sales/12345")
-  sourceName              String?                  // Source identifier (e.g., "EstateSalesNet", "Craigslist", null = native FindA.Sale listing)
-  lastScrapedAt           DateTime?                // When this listing was last validated/updated from source
-  scrapeVersion           Int?                     // Version of scraper that ingested this (for audit/rollback)
-  scrapedMetadata         Json?                    // Arbitrary JSON: original_title, original_address, etc. (for dispute resolution)
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -994,10 +958,6 @@ model Item {
   clusterConfidence          Float? // 0.0–1.0 from Haiku clustering pass
   // ADR-069 Phase 2: eBay comp lookup cache
   compLookup                 ItemCompLookup?
-  // Feature #363: Auction Lot Number — identifier for auction items
-  lotNumber                  String?
-  // ADR-073: Directory Scraper — scraped item metadata
-  sourceItemId               String?                // e.g., "estatesales.net:item:67890" (dedupe key)
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -1949,25 +1909,6 @@ model Coupon {
   @@index([code])
 }
 
-// ADR-074: Metro Sync — eBay sold items synced to populate city top-finds page
-model MetroTopFinds {
-  id            String   @id @default(cuid())
-  citySlug      String
-  metro         String
-  itemTitle     String
-  itemCategory  String?
-  soldPrice     Decimal
-  imageUrl      String?
-  ebayListingId String
-  soldAt        DateTime
-  updatedAt     DateTime @updatedAt
-
-  @@unique([citySlug, ebayListingId])
-  @@index([citySlug])
-  @@index([metro])
-  @@index([soldAt])
-}
-
 // Phase 2a: Rarity Boost — shopper spends 15 XP to boost legendary find odds for a specific sale
 model RarityBoost {
   id        String    @id @default(cuid())
@@ -2479,39 +2420,6 @@ model PhotoOpShare {
 
   @@index([stationId])
   @@index([userId])
-}
-
-// Feature #XXX: Verified Social Share XP System — organizer-generated shareable links
-model SaleShareLink {
-  id             String               @id @default(cuid())
-  saleId         String
-  sale           Sale                 @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  userId         String
-  user           User                 @relation("SaleShareLinks", fields: [userId], references: [id], onDelete: Cascade)
-  code           String               @unique
-  totalClicks    Int                  @default(0)   // all clicks including anonymous
-  uniqueClicks   Int                  @default(0)   // authenticated non-self unique clickers
-  totalXpAwarded Int                  @default(0)   // running XP total (max 20)
-  clicks         SaleShareLinkClick[]
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-
-  @@unique([saleId, userId])
-  @@index([code])
-  @@index([userId])
-}
-
-model SaleShareLinkClick {
-  id          String        @id @default(cuid())
-  shareLinkId String
-  shareLink   SaleShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
-  clickerId   String?       // null = anonymous
-  clicker     User?         @relation("SaleShareLinkClicks", fields: [clickerId], references: [id], onDelete: SetNull)
-  xpAwarded   Int           @default(0)
-  createdAt   DateTime      @default(now())
-
-  @@unique([shareLinkId, clickerId])  // one XP record per unique clicker per link
-  @@index([shareLinkId])
 }
 
 // Features #58-59: Achievement Badges & Streak Rewards
@@ -4144,8 +4052,6 @@ model Consignor {
   commissionRate Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
   notes          String?            @db.Text
   portalToken    String             @unique @default(cuid()) // capability URL token — permanent for MVP
-  stripeAccountId String?            // Consignor Stripe Express account for ACH payouts
-  stripeOnboarded Boolean            @default(false) // Whether consignor completed Stripe onboarding
   items          Item[]             @relation("ConsignorItems")
   payouts        ConsignorPayout[]
   createdAt      DateTime           @default(now())
@@ -4165,8 +4071,7 @@ model ConsignorPayout {
   totalSales       Decimal    @db.Decimal(10, 2) // sum of sold item prices for this consignor
   commissionAmount Decimal    @db.Decimal(10, 2) // totalSales * commissionRate / 100
   netPayout        Decimal    @db.Decimal(10, 2) // = commissionAmount (extensible for future deductions)
-  method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER" | "ACH"
-  stripeTransferId String?    // Stripe transfer ID for ACH payouts
+  method           String?    // "CASH" | "CHECK" | "VENMO" | "OTHER"
   paidAt           DateTime?
   notes            String?
   createdAt        DateTime   @default(now())
@@ -4258,84 +4163,80 @@ model QRScannerEvent {
   @@index([shopperId, createdAt])
 }
 
-// Feature #361: Claim-This-Listing — claim requests for unclaimed organizer profiles
-model ClaimRequest {
-  id                 String    @id @default(cuid())
-  organizerId        String
-  claimantEmail      String
-  claimantName       String
-  message            String?
-  status             String    @default("PENDING") // PENDING | APPROVED | REJECTED
-  createdAt          DateTime  @default(now())
-  reviewedAt         DateTime?
-  verificationToken  String?   @unique // Magic link token for email verification
-  emailVerifiedAt    DateTime? // Timestamp when email was verified via magic link
-  reviewedBy         String?   // Admin user ID who approved/rejected the claim
-  organizer          Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+// Directory Crawl Management System — scheduling and tracking for directory source scrapes
+model DirectoryCrawlQueue {
+  id                       String   @id @default(cuid())
+  metro                    String   // City name (e.g., "New York", "Toronto")
+  subArea                  String?  // District/borough (e.g., "Brooklyn"), null for metro-level
+  country                  String   @default("US") // ISO 2-char code: "US" or "CA"
+  province                 String?  // Canadian province abbreviation: "ON", "QC", "BC", etc.
+  sourceName               String   // Source identifier: "GooglePlaces" | "HEREPlaces" | "Foursquare" | "OSMOverpass"
+  queryType                String   // Query string used (e.g., "estate sale organizer")
+  locale                   String   @default("en") // "en" or "fr" — for Quebec French query variants
+  nextRunAt                DateTime // When this entry should be processed next
+  lastRunAt                DateTime?
+  lastResultCount          Int?
+  consecutiveZeroRuns      Int      @default(0)
+  isPaused                 Boolean  @default(false) // Auto-set after 3 consecutive zero runs
+  pauseReason              String?  // "ZERO_RESULTS" | "BUDGET_EXHAUSTED" | "MANUAL"
+  isSaturated              Boolean  @default(false) // true when lastResultCount = 60 (API cap hit)
+  budgetMonthYear          String   // Format: "2026-05" — tracks monthly budget period
+  requestsUsedThisPeriod   Int      @default(0)
+  requestsBudgetMax        Int      @default(5000)
+  priority                 Int      @default(50) // Higher = runs sooner in scheduler
+  backoffMultiplier        Float    @default(1.0) // Exponential backoff on failures
+  consecutiveErrors        Int      @default(0)
+  lastError                String?
+  pageTokenState           String?  // Cursor/page token for mid-crawl resume
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  logs DirectoryCrawlLog[]
+
+  @@unique([metro, subArea, sourceName, queryType])
+  @@index([nextRunAt])
+  @@index([sourceName, budgetMonthYear])
+  @@index([isSaturated])
+  @@index([country, province])
+}
+
+// Directory Crawl Log — audit trail for crawl runs (1-year retention)
+model DirectoryCrawlLog {
+  id                    String   @id @default(cuid())
+  queueId               String
+  queue                 DirectoryCrawlQueue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  runAt                 DateTime @default(now())
+  sourceName            String
+  metro                 String
+  subArea               String?
+  queryType             String
+  resultCount           Int
+  newOrganizersCreated  Int      @default(0)
+  organizersUpdated     Int      @default(0)
+  duplicatesSkipped     Int      @default(0)
+  errorMessage          String?
+  durationMs            Int?
+  createdAt             DateTime @default(now())
+
+  @@index([queueId])
+  @@index([runAt])
+  @@index([sourceName, runAt])
+}
+
+// Directory Claim Email — tracking table for claim conversion outreach
+model DirectoryClaimEmail {
+  id              String   @id @default(cuid())
+  organizerId     String
+  organizer       Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  emailAddress    String
+  sentAt          DateTime?
+  status          String   @default("PENDING") // "PENDING" | "SENT" | "BOUNCED" | "OPTED_OUT" | "CLAIMED"
+  attemptCount    Int      @default(0)
+  lastAttemptAt   DateTime?
+  nextAttemptAt   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([organizerId])
-  @@index([status])
-}
-
-// ADR-073: Directory Scraper — audit trail for scraping jobs
-model ScrapedSalesJob {
-  id          Int       @id @default(autoincrement())
-  source      String    // "EstateSalesNet", "GarageSaleFinder", etc.
-  metro       String    // "Grand Rapids, MI"
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
-  status      String    @default("PENDING") // PENDING | RUNNING | SUCCESS | PARTIAL_FAILURE | FAILED
-
-  itemsFound   Int @default(0)
-  itemsCreated Int @default(0)
-  itemsUpdated Int @default(0)
-  itemsSkipped Int @default(0) // Existing listings, deduplicated
-  itemsFailed  Int @default(0)
-
-  error   String? // If failed, the error message
-  logUrl  String? // Link to Railway logs
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([source, createdAt])
-  @@index([status])
-}
-
-// ADR-073: Directory Scraper — email tracking for claim conversion
-model ClaimEmail {
-  id             String   @id @default(cuid())
-  saleId         String
-  sale           Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  organizerEmail String   // Email address found in source listing
-  sentAt         DateTime @default(now())
-  opens          Int      @default(0)   // Email open count
-  clicks         Int      @default(0)  // Email click count
-  claimed        Boolean  @default(false) // Whether organizer claimed the listing after email
-  claimedAt      DateTime? // When claim occurred
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([saleId])
-  @@index([organizerEmail])
-  @@index([claimed])
-}
-
-// ADR-073 Phase 2: Claim Email Pipeline — 3-touch sequence for unmanaged organizers
-model OrganizerClaimEmail {
-  id             String   @id @default(cuid())
-  organizerId    String
-  organizer      Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
-  touchNumber    Int      // 1, 2, or 3
-  sentAt         DateTime @default(now())
-  status         String   @default("sent") // sent, bounced, opened
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([organizerId])
-  @@index([sentAt])
-  @@index([touchNumber])
-  @@unique([organizerId, touchNumber]) // One email per touch per organizer
+  @@index([status, nextAttemptAt])
 }
