@@ -357,6 +357,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S622 (2026-05-02) — COMPLETE (enrichment pipeline Phase 2: contactEmail + esnCompanyPageUrl):** Continuation of S621 scraper pipeline work. **Root cause confirmed + fixed (prior context):** `ingestScrapedListing` was checking `organizerId` parameter before `organizerName` — all ESN listings with a named organizer were dumping onto the single system organizer instead of per-company records. Fixed: `organizerName` now always wins; `organizerId` is fallback only. **Data cleanup:** 5,833 scraped sales attributed to system organizer (`system-scraper@finda.sale`) deleted via `cleanup-system-organizer-sales.sql`. **ESN enrichment fields:** Migration `20260502000001_add_esn_enrichment_fields` added `esnOrgId`, `linkedInUrl`, `esnMemberships`, `esnPackageType` to Organizer (applied to Railway). **FB log noise removed:** `lookupFacebookPage` function removed from `enrichment.ts`; `facebookPageId` removed from select; "already enriched" early return fixed to `googlePlaceId && !esnOrgId` logic. **Enrichment backfill `?all=true`:** `internalEnrichmentController.ts` updated to support `all=true` mode (enriches ALL unmanaged organizers, not just unenriched). `enrich-backfill.yml` GitHub Actions workflow updated with `all` input. **contactEmail + esnCompanyPageUrl (Phase 2):** New schema fields added. Migration `20260502000002_add_contact_email_esn_url` deployed. `enrichment.ts` now runs Step 3 after Google Places: scrapes `{website}/contact`, `/contact-us`, `/about`, homepage for mailto links and bare email patterns; falls back to parsing sale description text for embedded email addresses. `esnCompanyPageUrl` stored from ESN API `companyPageUrl` field (last-resort outreach channel — not surfaced in primary contact flow). **Patrick next actions:** Run ESN scraper (GitHub Actions) to rebuild sales under correct organizers; run Enrichment Backfill `all=true` to populate contact fields. **Files changed:** `packages/backend/src/services/scraper/enrichment.ts` (MCP push), `packages/backend/src/controllers/internalEnrichmentController.ts`, `packages/database/prisma/schema.prisma`, `packages/database/prisma/migrations/20260502000001_add_esn_enrichment_fields/migration.sql`, `packages/database/prisma/migrations/20260502000002_add_contact_email_esn_url/migration.sql`, `.github/workflows/enrich-backfill.yml`.
+
 **S621 (2026-05-02) — COMPLETE (claim magic link + per-organizer scraper attribution + Google News cleanup):** Three feature areas shipped and deployed. **Claim-This-Listing magic link flow (#361):** `ClaimListingModal` now opens directly (no login required); success state updated to "Check Your Email"; `POST /:id/claim` generates `crypto.randomBytes(32)` token, stores on `ClaimRequest`, sends Resend email with `/claim/verify/{token}` link; `GET /claim/verify/:token` validates 72-hour expiry and sets `emailVerifiedAt`; admin approve/reject endpoints added; all new routes placed before `/:id` catch-all. New frontend page `pages/claim/verify/[token].tsx` handles 5 states (loading / success / already-verified / expired / invalid). `ClaimRequest` schema: added `verificationToken String? @unique`, `emailVerifiedAt DateTime?`, `reviewedBy String?`. `Organizer.phone` made nullable; `scrapedEmail String?` added. **Per-organizer scraper attribution:** `getOrCreateScrapedOrganizer(businessName, sourceName, city, state)` helper added to `scraper/index.ts` — creates per-company organizer records using EstateSales.NET `orgName` field (email pattern `scraper+{slug}-{source}@system.finda.sale`). `ingestScrapedListing` routes to per-company organizer when `item.organizerName` present. **Google Places enrichment upgrade:** `enrichment.ts` now calls `place/details` API for `formatted_phone_number, website, opening_hours, photos, formatted_address`; organizer `phone/website/address/profilePhoto` updated after enrichment. **City/state deduplication fix:** `formatLocation()` helper in `[slug].tsx` prevents "California, CA" display when city field contains full US state name. **Google News disabled:** `NEWSPAPER_FEEDS = []` — deprecated S621 (produced 6000+ article junk records). **DB cleanup:** `DELETE FROM "Sale" WHERE "sourceName" = 'ClassifiedRSS'` executed — all Google News junk records removed. **Migrations deployed:** `20260502000000_claim_request_magic_link` (claim fields) + `20260502000100_organizer_phone_nullable` (phone nullable + scrapedEmail). Commit: `0b02a95b`. **Files changed:** `organizers.ts`, `scraper/index.ts`, `scraper/enrichment.ts`, `scraper/newspaper-feeds.ts`, `schema.prisma`, `[slug].tsx`, `ClaimListingModal.tsx`, `pages/claim/verify/[token].tsx`, 2 migration SQL files. **Pending Chrome QA:** claim flow end-to-end, verify page, #356 Broadcast card, #363 Buyer's Premium badge.
 
 **S619 (2026-05-01) — COMPLETE (Craigslist surgical fix + Eventbrite + Newspaper RSS scrapers):** Three scraper workflows shipped. Craigslist: full `sources/craigslist.ts` rewrite (both exports, verified selectors, real date parsing from .meta text, no synthetic ZIPs); `htmlParser.ts` zip optional; `scraper/index.ts` zip removed from validation + `?? ''` fallback in Prisma create; 4 subdomain typos fixed (craigslist-sites.ts). Eventbrite: new `sources/eventbrite.ts` + `run-eventbrite.ts` + `scrape-eventbrite.yml` (free API, 5 queries, national grid, page-3 cap, 01:00 UTC cron). Newspaper RSS: new `newspaper-feeds.ts` (62 Oodle + Google News feeds), `sources/newspaper-rss.ts` (Cheerio XML + keyword filter), `run-newspaper-rss.ts`, `scrape-newspaper-rss.yml` (02:00 UTC cron). Bug fixed: `rateLimiter.wait()` → `waitBeforeRequest(domain)` in newspaper-rss.ts. Cron stagger: ESN 00:00 → CL 00:30 → Eventbrite 01:00 → RSS 02:00 UTC. Pending Patrick: push block, trigger CL workflow manually, add `EVENTBRITE_API_KEY` secret (free at developer.eventbrite.com).
@@ -431,26 +433,49 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S622 — Chrome QA: claim flow end-to-end on Sunrise Consignment (user12 as shopper) + scraper pipeline verification.**
+**S623 — Scraper audit: verify end-to-end scrape pipeline is working as designed. Check update/upsert protocol. Chrome QA for claim flow (#361) + pending S611 features. DB should be accessible after Patrick's reboot.**
 
-### Patrick actions complete (S621)
-- ✅ Push committed (0b02a95b) — 6 files, claim magic link + scraper attribution + enrichment
-- ✅ Migration `20260502000100_organizer_phone_nullable` applied to Railway
+### Patrick actions complete (S622)
+- ✅ `git checkout packages/backend/src/services/scraper/index.ts && git pull` — enrichment.ts pulled
+- ✅ Schema updated: `contactEmail String?` + `esnCompanyPageUrl String?` added to Organizer
+- ✅ Migration `20260502000002_add_contact_email_esn_url` applied to Railway
 - ✅ Prisma client regenerated
-- ✅ Google News junk sales deleted (`DELETE FROM "Sale" WHERE "sourceName" = 'ClassifiedRSS'`)
+- ✅ enrichment.ts pushed to GitHub (contactEmail scraping + esnCompanyPageUrl via MCP)
+- ✅ 5,833 system-organizer sales deleted (cleanup-system-organizer-sales.sql ran S622 prior)
 
-### Patrick actions before S622
-1. **Add Railway env vars** (Railway dashboard → findasale-backend → Variables):
-   - `GOOGLE_PLACES_KEY` — Google Maps Platform API key (Places API + Places Details enabled)
-2. **PRNewswire press release** — file Mon May 5 9:00 AM EST. Fill `[Last Name]` ×3 + real cell in `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B.
-3. **Review + send 19 outreach drafts in Gmail** (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others).
+### Patrick actions before S623
+1. **Run ESN scraper** (GitHub Actions → Scrape EstateSalesNet → Run workflow) — rebuilds sales under per-company organizers now that ingest priority is fixed.
+2. **Run Enrichment Backfill with `all=true`** after scraper finishes — populates contactEmail, esnCompanyPageUrl on all organizer records.
+3. **Reboot computer** (DB should be visible to Claude VM again per Patrick).
 
-### S622 first tasks
-1. **Chrome QA — Claim-This-Listing (#361):** Login as user12 (shopper, `Seedy2025!`) → find Sunrise Consignment storefront → verify amber "Claim This Listing" banner shows → click → modal opens → submit name + email → verify "Check Your Email" success state → check Railway logs for Resend email dispatch.
-2. **Chrome QA — verify page:** Navigate to `/claim/verify/[token]` with a real token from DB — verify success state renders correctly.
-3. **Chrome QA — #356 Broadcast card + #363 Buyer's Premium badge** — both shipped S611, pending verification.
-4. **Scraper pipeline check:** Railway logs — confirm `getOrCreateScrapedOrganizer()` is creating per-company organizer records on next EstateSalesNet cron run (00:00 UTC).
-5. **TypeScript check:** `cd packages/backend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules`
+### S623 first tasks
+1. **Scraper audit — verify `getOrCreateScrapedOrganizer` is working:**
+   - Query DB: `SELECT COUNT(*) FROM "Organizer" WHERE "isUnmanagedListing" = true AND "businessName" != 'FindA.Sale Directory'` — should be growing vs the ~84 from before
+   - Check Railway logs for `[scraper] Created organizer:` lines on next ESN cron run (00:00 UTC)
+   - Verify a sample sale's `organizerId` links to the correct per-company organizer, NOT the system account
+2. **Update protocol audit — verify no sales are dumping on system organizer:**
+   - `SELECT COUNT(*) FROM "Sale" s JOIN "Organizer" o ON s."organizerId" = o.id JOIN "User" u ON o."userId" = u.id WHERE u.email = 'system-scraper@finda.sale' AND s."sourceName" IS NOT NULL` — should be 0 or very low (only listings with no organizer name)
+   - If non-zero, check ESN scraper source to confirm `item.organizerName` is being populated
+3. **contactEmail audit:** After backfill, `SELECT COUNT(*) FROM "Organizer" WHERE "isUnmanagedListing" = true AND "contactEmail" IS NOT NULL` — verify pipeline is finding emails
+4. **Chrome QA — Claim-This-Listing (#361):** Login as user12 (shopper, `Seedy2025!`) → find Sunrise Consignment storefront → verify amber "Claim This Listing" banner → click → modal → submit name + email → "Check Your Email" success state → Railway logs for Resend dispatch.
+5. **Chrome QA — #356 Broadcast card + #363 Buyer's Premium badge** — both shipped S611, pending verification.
+
+### Key context for S623
+- **contactEmail priority ladder:** contactEmail → phone → website contact form → facebook → instagram → esnCompanyPageUrl (last resort — don't reveal ESN data usage unless necessary)
+- **Update protocol concern:** Patrick flagged that we may not have a correct upsert/update protocol in place. `ingestScrapedListing` currently only creates (no update path for changed dates/descriptions on existing sales). `checkDuplicate` marks dupes as skipped and only touches `lastScrapedAt`. Verify this is acceptable or if we need a richer update path.
+- **Enrichment backfill skip condition:** `if (organizer.googlePlaceId && !organizer.esnOrgId && organizer.contactEmail)` — fully enriched orgs are skipped. New `contactEmail` field means orgs with google+contactEmail but no ESN data won't re-run unnecessarily.
+
+### QA carryover (separate from S623 audit work)
+- #356 broadcast card, #363 buyer's premium badge — pending Chrome QA from S611/S612
+- DonationModal SettlementWizard end-to-end
+- Holds `/shopper` page end-to-end
+- PDF watermark visual confirmation
+- iCal footer in `.ics` description
+- Treasure hunt progress page + via=qr guard (shipped S595, pending push+QA)
+- ConfirmDialog smoke test
+- Craigslist selector validation (first prod run)
+
+**Passwords:** Test accounts `Seedy2025!`. user1=Alice (TEAMS), user2=Bob (PRO), user6=charity sale owner, user12=shopper for claim flow.
 
 ### S617 audit candidate (P2, queued)
 
