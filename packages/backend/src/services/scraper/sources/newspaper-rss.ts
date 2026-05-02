@@ -15,8 +15,21 @@ import { RssFeed } from '../newspaper-feeds';
  */
 async function fetchRss(url: string): Promise<string | null> {
   try {
+    const domain = new URL(url).hostname.replace('www.', '');
     const res = await fetch(url, {
-      headers: { 'User-Agent': getRandomUserAgent() },
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': `https://www.${domain}/`,
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Upgrade-Insecure-Requests': '1',
+      },
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) {
