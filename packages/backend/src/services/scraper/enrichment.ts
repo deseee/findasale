@@ -40,6 +40,8 @@ export async function enrichOrganizer(
         esnOrgId: true,
         contactEmail: true,
         esnCompanyPageUrl: true,
+        googleRating: true,
+        googleRatingCount: true,
       },
     });
 
@@ -121,6 +123,9 @@ export async function enrichOrganizer(
               const photoUrl = getGooglePhotoUrl(details.photoReference, googlePlacesKey);
               if (photoUrl) updateData.profilePhoto = photoUrl;
             }
+            // Store Google rating — always refresh (rating changes over time)
+            if (details.rating != null) updateData.googleRating = details.rating;
+            if (details.userRatingsTotal != null) updateData.googleRatingCount = details.userRatingsTotal;
           }
         }
       }
