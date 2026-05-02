@@ -300,11 +300,10 @@ export async function ingestScrapedListing(
       };
     }
 
-    // Resolve organizer — route to per-organizer if name is provided
+    // Resolve organizer — organizer name always wins over passed organizerId.
+    // organizerId is only used as a fallback when the listing has no named organizer.
     let finalOrganizerId: string;
-    if (organizerId) {
-      finalOrganizerId = organizerId;
-    } else if (listing.organizerName && listing.organizerName.trim()) {
+    if (listing.organizerName && listing.organizerName.trim()) {
       finalOrganizerId = await getOrCreateScrapedOrganizer(
         listing.organizerName.trim(),
         listing.sourceName,
@@ -312,6 +311,8 @@ export async function ingestScrapedListing(
         listing.state,
         listing.esnOrgId
       );
+    } else if (organizerId) {
+      finalOrganizerId = organizerId;
     } else {
       finalOrganizerId = await getOrCreateSystemOrganizer();
     }
