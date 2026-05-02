@@ -8,6 +8,28 @@
 
 ## Audit Results
 
+### 🚨 Weekly Site Audit — 2026-05-02
+
+**1 CRITICAL, 3 HIGH findings.** Full report: `claude_docs/audits/weekly-audit-2026-05-02.md`
+
+**CRITICAL — C-001: Scraped sales all returning "Sale not found"**
+All scraped listing URLs (hundreds of sales from EstateSalesNet, Craigslist, etc.) return a "Sale not found" page. Root cause: the `20260501020000_scraper_phase1` migration likely did not deploy to production — the `isUnmanagedListing` column doesn't exist in the live DB. Every claim email link is broken. All scraper SEO value is zeroed.
+→ **Patrick action**: Run `npx prisma migrate deploy` with Railway DATABASE_URL. See fix instructions in C-001.
+
+**HIGH — H-002: Images not loading platform-wide**
+Sale cover images, item thumbnails, and purchase history item photos are all blank gray boxes. Affects organizer sales page, sale detail items, trending page, purchase history. Core photo-centric workflow is broken.
+→ Needs dev investigation of Cloudinary config / `next.config.js` domains.
+
+**HIGH — H-001: D-006 violated — Items section buried below Map on sale detail page**
+Shoppers have to scroll past the entire page (including map) to see what's for sale. Quick dev fix to reorder sections.
+
+**HIGH — H-003: City hub pages all 404**
+`/cities` index lists cities correctly but every city card link 404s. Slug mismatch between API (raw city name) and static JSON (slug format). The entire S604-S607 city SEO infrastructure is a dead end.
+
+**Also found**: Systemic horizontal overflow clips content on pricing, sale detail sidebar, guide, and home page (MEDIUM). Workspace empty state text near-invisible in dark mode (MEDIUM). Org messages copy is organizer-only (MEDIUM).
+
+---
+
 ### ⚠️ Brand Drift Alert — 2026-05-02
 
 Weekly brand drift scan completed. **No P0/P1 violations.** 8 P2 copy drift issues and 5 P3 cosmetic/comment issues found. Full report: `claude_docs/audits/brand-drift-2026-05-02.md`
