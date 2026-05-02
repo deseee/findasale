@@ -260,11 +260,17 @@ model Organizer {
   phone                   String?
   address                 String
   bio                     String? // Organizer bio/description (optional)
+  tagline                 String?  // Short one-liner for organizer profile
+  yearFounded             Int?     // Year organizer was established
   website                 String? // Business website URL
   profilePhoto            String? // Profile photo URL (Cloudinary)
   facebook                String? // Facebook page URL
   instagram               String? // Instagram profile URL
   etsy                    String? // Etsy shop URL
+  twitterUrl              String?  // Twitter/X profile URL
+  tiktokUrl               String?  // TikTok profile URL
+  youtubeUrl              String?  // YouTube channel URL
+  pinterestUrl            String?  // Pinterest profile URL
   serviceAreas            String? // CSV or JSON of cities/zip codes served
   pickupWindows           String? // Default pickup availability (JSON or text)
   userId                  String                 @unique
@@ -272,6 +278,9 @@ model Organizer {
   sales                   Sale[]
   saleTemplates           SaleTemplate[]
   stripeConnectId         String?
+  stripeConnectAccountId  String?  // Stripe Connect account ID (v2 onboarding)
+  stripeConnectEnabled    Boolean  @default(false) // Connect account fully onboarded
+  removeWatermarkEnabled  Boolean  @default(false) // PRO: remove FindA.Sale watermark from exports
   // Phase 17: Reputation
   reputationTier          String                 @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
   avgRating               Float?
