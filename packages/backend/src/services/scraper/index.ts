@@ -115,16 +115,19 @@ async function getOrCreateScrapedOrganizer(
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true, esnOrgId: true },
+    select: { id: true, esnOrgId: true, googlePlaceId: true, businessCategory: true },
   });
 
   if (existing) {
-    // If we now have esnOrgId and the existing organizer doesn't, update it
-    if (esnOrgId && !existing.esnOrgId) {
-      await prisma.organizer.update({
-        where: { id: existing.id },
-        data: { esnOrgId },
-      });
+    // Backfill fields we now have that the existing record is missing.
+    // Google Place ID and businessCategory are only added, never overwritten —
+    // preserving the highest-quality source data already stored.
+    const updates: Record<string, unknown> = {};
+    if (esnOrgId && !existing.esnOrgId) updates.esnOrgId = esnOrgId;
+    if (googlePlaceId && !existing.googlePlaceId) updates.googlePlaceId = googlePlaceId;
+    if (businessCategory && !existing.businessCategory) updates.businessCategory = businessCategory;
+    if (Object.keys(updates).length > 0) {
+      await prisma.organizer.update({ where: { id: existing.id }, data: updates });
     }
     return existing.id;
   }

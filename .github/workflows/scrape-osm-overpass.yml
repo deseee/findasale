@@ -1,16 +1,16 @@
-name: Google Places Business Directory Scraper
+name: OSM Overpass Business Directory Scraper
 
 on:
   schedule:
-    # Monthly: 1st of every month at 02:00 UTC
-    # Cost: ~3,300 requests/month (within 5,000 free tier — $0/month)
-    - cron: '0 2 1 * *'
+    # Weekly on Sunday at 05:00 UTC — focuses on flea markets, swap meets, and outdoor markets
+    # (most volatile category). Rotate full 100 metros each week.
+    - cron: '0 5 * * 0'
   workflow_dispatch:  # Manual trigger for testing
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 90   # 100 metros × 11 queries × up to 2 pages at 200ms delay
+    timeout-minutes: 60  # Overpass timeout is 30s per query; 100 metros should complete in 60 min
 
     steps:
       - name: Checkout
@@ -34,11 +34,10 @@ jobs:
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
 
-      - name: Run Google Places directory scraper
+      - name: Run OSM Overpass directory scraper
         env:
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
-          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
         run: |
           cd packages/backend
-          ./node_modules/.bin/ts-node src/scripts/run-google-places.ts
+          ./node_modules/.bin/ts-node src/scripts/run-osm-overpass.ts
