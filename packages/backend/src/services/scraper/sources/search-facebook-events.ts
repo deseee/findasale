@@ -122,6 +122,25 @@ export const SEARCH_METROS: MetroTarget[] = [
   { city: 'Portland',        state: 'OR' },
   { city: 'Spokane',         state: 'WA' },
   { city: 'Seattle',         state: 'WA' },
+  // Canada — Phase 1 (English markets: ON, BC, AB, MB, SK)
+  { city: 'Toronto',         state: 'ON' },
+  { city: 'Ottawa',          state: 'ON' },
+  { city: 'Hamilton',        state: 'ON' },
+  { city: 'London',          state: 'ON' },
+  { city: 'Kitchener',       state: 'ON' },
+  { city: 'Windsor',         state: 'ON' },
+  { city: 'St. Catharines',  state: 'ON' },
+  { city: 'Vancouver',       state: 'BC' },
+  { city: 'Victoria',        state: 'BC' },
+  { city: 'Kelowna',         state: 'BC' },
+  { city: 'Abbotsford',      state: 'BC' },
+  { city: 'Calgary',         state: 'AB' },
+  { city: 'Edmonton',        state: 'AB' },
+  { city: 'Winnipeg',        state: 'MB' },
+  { city: 'Saskatoon',       state: 'SK' },
+  { city: 'Regina',          state: 'SK' },
+  // Canada — Phase 2 (Atlantic + Quebec deferred for French localization)
+  { city: 'Halifax',         state: 'NS' },
 ];
 
 // ---------------------------------------------------------------------------
