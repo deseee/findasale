@@ -303,6 +303,8 @@ model Organizer {
   // Feature: Verified Organizer — automated verification sources (ADR-073)
   verificationSource      String?  // GOOGLE | FACEBOOK | YELP | STRIPE_IDENTITY | MANUAL
   googlePlaceId           String?  // Google Places Place ID e.g. "ChIJrTLr-GyuEmsRBfy61i59si4"
+  googleRating            Decimal? // Cached from Google Places API — e.g. 4.8 (ADR-073)
+  googleRatingCount       Int?     // Number of Google reviews — e.g. 312 (ADR-073)
   facebookPageId          String?  // Facebook Page ID (Phase 2)
   yelpBusinessId          String?  // Yelp Business ID (Phase 2)
   esnOrgId                Int?     // EstateSales.NET numeric company ID — used for company-public-page API
