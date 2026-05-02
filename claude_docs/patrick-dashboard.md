@@ -1,6 +1,8 @@
-# Patrick's Dashboard — Week of May 2, 2026 (updated S626)
+# Patrick's Dashboard — Week of May 2, 2026 (updated S627)
 
 ## What Happened This Week
+
+**S627 — All 4 weekly audit P0/P1 bugs fixed and Chrome-verified.** C-001 (scraped sale pages "Sale not found") — root cause was schema drift: `verificationSource` was never pushed to GitHub, so Railway's Prisma client didn't know about it. Patrick pushed the complete schema.prisma mid-session. A second crash then surfaced: the rank gate was calling `.getTime()` on `null` `publishedAt` (scraped sales have no publishedAt). Fixed with null guards in `saleController.ts` and `rankService.ts`. H-001 (items buried below map on sale detail) — fixed, items now above map. H-002 (images blank platform-wide) — fixed, Cloudinary added to Next.js image domains. H-003 (city hub pages all 404 for scraped cities) — fixed by adding slug-parsing fallback to `pages/city/[slug].tsx`: when a slug like `nashville-tn` isn't in the 2,723-city JSON, it now constructs the city name+state from the slug instead of 404ing. Verified live at finda.sale/city/nashville-tn. No pending Patrick actions — all code is on GitHub and deployed.
 
 **S626 — Organizer acquisition strategy v3 + records sync.** Strategy session, no code shipped. Multi-lens research (Innovation, Marketing, Customer Champion, Advisory Board with Risk+GTM+Growth subcommittees, Tech Stack, Cadence) on the cold-outreach pipeline that turns scraped organizer records into claimed listings. Synthesized into `claude_docs/strategy/organizer-acquisition-strategy.md`. **All seven open decisions resolved** — email-only Phase 1, no founder voice / institutional sender (`outreach@finda.sale` from "The FindA.Sale Team"), fully automated reply handling per S268 Zero-Human stack, **tooling: Workspace seat $6/mo + custom Postgres cron Phase 1, migrate to Instantly.ai at 500/day** (Resend stays transactional only — confirmed banned for cold outreach in their AUP, along with SendGrid/Postmark/Mailgun/Brevo/Zoho/SES). Plus full records sync — STATE.md, qa-backlog.md, decisions-log.md all brought current.
 
@@ -12,27 +14,18 @@
 
 **Previously —** A massive scraper and outreach pipeline week. The agents shipped the entire sale-scraping infrastructure (EstateSalesNet, Craigslist, Eventbrite, and newspaper RSS feeds), found and fixed a root-cause bug that had been dumping all scraped organizer listings onto a single fake account instead of creating one record per real company, and cleaned up 5,833 misattributed sale records. The Claim-This-Listing flow went live (organizers can now claim their auto-scraped listing via a magic-link email), and the organizer contact pipeline was extended to scrape company websites for real email addresses.
 
-## Open Audit Findings (still pending)
+## Open Audit Findings
 
-### 🚨 Weekly Site Audit — 2026-05-02
+### ✅ Weekly Site Audit — 2026-05-02 — ALL P0/P1 RESOLVED (S627)
 
-**1 CRITICAL, 3 HIGH findings.** Full report: `claude_docs/audits/weekly-audit-2026-05-02.md`. All four are now in qa-backlog.md under "ACTIVE QA QUEUE → S625 Weekly Site Audit Findings."
+Full report: `claude_docs/audits/weekly-audit-2026-05-02.md`. All four P0/P1 findings fixed and Chrome-verified in S627.
 
-**CRITICAL — C-001: Scraped sales all returning "Sale not found"**
-All scraped listing URLs return "Sale not found." Root cause: migration `20260501020000_scraper_phase1` likely did not deploy to production — `isUnmanagedListing` column missing in live DB. Every claim email link is broken. All scraper SEO value is zeroed.
-→ **Patrick action**: Run `npx prisma migrate deploy` with Railway URL. See block below.
+- ✅ **C-001**: Scraped sale pages "Sale not found" — fixed (schema drift + null publishedAt guard)
+- ✅ **H-001**: Items buried below map on sale detail — fixed (reordered)
+- ✅ **H-002**: Images blank platform-wide — fixed (Cloudinary domain in next.config.js)
+- ✅ **H-003**: City hub pages 404 for scraped cities — fixed (slug-parsing fallback in [slug].tsx)
 
-**HIGH — H-002: Images not loading platform-wide**
-Sale cover images, item thumbnails, and purchase history item photos all blank. Affects organizer sales, sale detail items, trending, purchase history. Core photo-centric workflow broken.
-→ Needs dev investigation of Cloudinary config / `next.config.js` domains.
-
-**HIGH — H-001: D-006 violated — Items section buried below Map on sale detail page**
-Shoppers must scroll past entire page to see items. Quick reorder fix.
-
-**HIGH — H-003: City hub pages all 404**
-`/cities` index lists cities but every city card link 404s. Slug mismatch between API (raw city name) and static JSON. The S604–S607 city SEO infrastructure is a dead end until fixed.
-
-**Also found**: Systemic horizontal overflow on pricing/sale detail/guide/home (P2). Workspace empty state near-invisible in dark mode (P2). Org messages copy organizer-only (P2).
+**Still open (P2)**: Systemic horizontal overflow on pricing/sale detail/guide/home. Workspace empty state near-invisible in dark mode. Org messages copy organizer-only. These are safe to batch into a single dev dispatch.
 
 ### ⚠️ Brand Drift Alert — 2026-05-02
 
@@ -72,27 +65,19 @@ All four are in qa-backlog under "Pre-existing Open Bugs."
 
 ## Action Items for Patrick
 
-- [ ] **Push S626 wrap block** — see push block below
-- [ ] **Run C-001 migration deploy** (block above) — fixes scraped sales 404, restores claim flow
+- [ ] **Push S627 wrap block** — see push block below
 - [ ] **Sign up HERE API** at developer.here.com → add `HERE_API_KEY` GitHub Secret
 - [ ] **Sign up Foursquare API** at location.foursquare.com/developer → add `FOURSQUARE_API_KEY` GitHub Secret
-- [ ] **GitHub Actions → Scrape EstateSalesNet → Run workflow** (rebuilds scraped sales)
+- [ ] **GitHub Actions → Scrape EstateSalesNet → Run workflow** (rebuilds scraped sales now that C-001 is fixed)
 - [ ] **GitHub Actions → Enrichment Backfill → Run with `all=true`** (after scraper finishes)
-- [ ] **Press release Version B** — fill `[Last Name]` ×3 + real cell number. File: `claude_docs/strategy/s603-pr-wire-blast-package.md`. Filing window: May 5, 9:00 AM EST.
 - [ ] **Review and send 19 outreach drafts in Gmail** (just need From set to patrick@finda.sale)
-- [ ] **Decide S627 first task** — outreach pipeline build vs. crawl queue manager vs. audit P0/P1 fixes (see STATE.md "## Next Session")
 
-## S626 Push Block
+## S627 Push Block
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/strategy/organizer-acquisition-strategy.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git add claude_docs/decisions-log.md
-git add claude_docs/operations/qa-backlog.md
-git commit -m "S626 — organizer acquisition strategy v3 (email-only Phase 1, Workspace+custom Postgres cron, no founder voice) + records sync (qa-backlog brought current, decisions-log entry)"
+git commit -m "docs: S627 wrap — C-001/H-001/H-002/H-003 all fixed and Chrome-verified"
 .\push.ps1
 ```
-
-The new memory file `feedback_no_founder_voice.md` and updated `MEMORY.md` live outside the project repo (in your Cowork memory directory) and are not part of this push.
