@@ -257,6 +257,25 @@ async function finishScrapeJob(
 }
 
 /**
+ * Map a saleType string to auto-generated tags for a new listing.
+ * Only applied on create — never overwrites organizer-curated tags on update.
+ */
+function saleTypeToTags(saleType?: string): string[] {
+  switch (saleType) {
+    case 'ESTATE':
+      return ['estate-sale'];
+    case 'AUCTION':
+      return ['auction'];
+    case 'GARAGE':
+      return ['garage-sale'];
+    case 'FLEA_MARKET':
+      return ['flea-market'];
+    default:
+      return [];
+  }
+}
+
+/**
  * Ingest a single scraped listing into the database.
  * Handles dedup, validation, and DB insertion.
  */
@@ -317,6 +336,16 @@ export async function ingestScrapedListing(
       finalOrganizerId = await getOrCreateSystemOrganizer();
     }
 
+    // Extract lat/lng from top-level or scrapedMetadata (ESN stores them in metadata)
+    const lat =
+      (listing as any).lat ??
+      (listing.scrapedMetadata?.lat as number | undefined) ??
+      null;
+    const lng =
+      (listing as any).lng ??
+      (listing.scrapedMetadata?.lng as number | undefined) ??
+      null;
+
     // Create the Sale
     const sale = await prisma.sale.create({
       data: {
@@ -330,6 +359,72 @@ export async function ingestScrapedListing(
         description: listing.description ?? null,
         status: 'PUBLISHED',
         saleType: listing.saleType ?? 'ESTATE',
+        isAuctionSale: listing.saleType === 'AUCTION',
+        lat,
+        lng,
+        tags: saleTypeToTags(listing.saleType),
+        organizerId: finalOrganizerId,
+        sourceUrl: listing.sourceUrl,
+        sourceName: listing.sourceName,
+        lastScrapedAt: new Date(),
+        scrapeVersion: 1,
+        scrapedMetadata: listing.scrapedMetadata ?? Prisma.JsonNull,
+      },
+    });
+
+    return { saleId: sale.id, status: 'created' };
+  } catch (error) {
+    console.error('[scraper] Failed to ingest listing:', error);
+    return {
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// Re-export utilities for adapters
+export { defaultRateLimiter };
+export * from './htmlParser';
+export * from './dedupe';
+export * from './rateLimiter';
+ description: listing.description ?? null,
+        status: 'PUBLISHED',
+        saleType: listing.saleType ?? 'ESTATE',
+        isAuctionSale: listing.saleType === 'AUCTION',
+        lat,
+        lng,
+        tags: saleTypeToTags(listing.saleType),
+        organizerId: finalOrganizerId,
+        sourceUrl: listing.sourceUrl,
+        sourceName: listing.sourceName,
+        lastScrapedAt: new Date(),
+        scrapeVersion: 1,
+        scrapedMetadata: listing.scrapedMetadata ?? Prisma.JsonNull,
+      },
+    });
+
+    return { saleId: sale.id, status: 'created' };
+  } catch (error) {
+    console.error('[scraper] Failed to ingest listing:', error);
+    return {
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// Re-export utilities for adapters
+export { defaultRateLimiter };
+export * from './htmlParser';
+export * from './dedupe';
+export * from './rateLimiter';
+        description: listing.description ?? null,
+        status: 'PUBLISHED',
+        saleType: listing.saleType ?? 'ESTATE',
+        isAuctionSale: listing.saleType === 'AUCTION',
+        lat,
+        lng,
+        tags: saleTypeToTags(listing.saleType),
         organizerId: finalOrganizerId,
         sourceUrl: listing.sourceUrl,
         sourceName: listing.sourceName,
