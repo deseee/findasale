@@ -1,5 +1,5 @@
 /**
- * ADR-073: Organizer Enrichment via Google Places & Facebook Graph APIs
+ * ADR-073: Organizer Enrichment via Google Places & ESN Company Profile APIs
  * Fires after organizer creation/update to populate verification data
  */
 
@@ -8,8 +8,7 @@ import { getRandomUserAgent } from './userAgents';
 
 /**
  * Main enrichment entry point.
- * Looks up organizer data via Google Places and Facebook Graph APIs.
- * Updates googlePlaceId and facebookPageId on the Organizer record.
+ * Looks up organizer data via ESN company-public-page API and Google Places.
  * Fire-and-forget; errors logged but not thrown.
  */
 export async function enrichOrganizer(
@@ -19,13 +18,11 @@ export async function enrichOrganizer(
   state: string
 ): Promise<void> {
   try {
-    // Fetch organizer to confirm it exists
     const organizer = await prisma.organizer.findUnique({
       where: { id: organizerId },
       select: {
         id: true,
         googlePlaceId: true,
-        facebookPageId: true,
         phone: true,
         website: true,
         address: true,
@@ -47,102 +44,73 @@ export async function enrichOrganizer(
       return;
     }
 
-    // Already enriched — skip
-    if (organizer.googlePlaceId && organizer.facebookPageId) {
-      console.info(`[Enrichment] Organizer already enriched: ${organizerId}`);
+    // Skip only if already Google-enriched and no ESN data to add
+    if (organizer.googlePlaceId && !organizer.esnOrgId) {
+      console.info(`[Enrichment] Already enriched, no ESN ID — skipping: ${organizerId}`);
       return;
     }
 
-    // Update organizer with any found values
     const updateData: Record<string, any> = {};
 
     // Step 1: ESN enrichment (highest priority for ESN-sourced organizers)
     if (organizer.esnOrgId) {
       const esnData = await lookupESNCompanyProfile(organizer.esnOrgId);
       if (esnData) {
-        // Map ESN fields to Organizer fields (only if organizer doesn't already have them)
-        if (esnData.primaryPhoneNumber && !organizer.phone) {
+        if (esnData.primaryPhoneNumber && !organizer.phone)
           updateData.phone = esnData.primaryPhoneNumber;
-        }
-        if (esnData.websiteUrl && !organizer.website) {
+        if (esnData.websiteUrl && !organizer.website)
           updateData.website = esnData.websiteUrl;
-        }
-        if (esnData.companyLogoUrl && !organizer.profilePhoto) {
+        if (esnData.companyLogoUrl && !organizer.profilePhoto)
           updateData.profilePhoto = esnData.companyLogoUrl;
-        }
         if (esnData.description && !organizer.bio) {
-          // Strip HTML tags from description
-          const plainText = esnData.description
+          updateData.bio = esnData.description
             .replace(/<[^>]*>/g, '')
             .replace(/\s+/g, ' ')
             .trim();
-          updateData.bio = plainText;
         }
-        if (esnData.facebookUrl && !organizer.facebook) {
+        if (esnData.facebookUrl && !organizer.facebook)
           updateData.facebook = esnData.facebookUrl;
-        }
-        if (esnData.instagramUrl && !organizer.instagram) {
+        if (esnData.instagramUrl && !organizer.instagram)
           updateData.instagram = esnData.instagramUrl;
-        }
-        if (esnData.twitterHandle && !organizer.twitterUrl) {
+        if (esnData.twitterHandle && !organizer.twitterUrl)
           updateData.twitterUrl = esnData.twitterHandle;
-        }
-        if (esnData.youtubeUrl && !organizer.youtubeUrl) {
+        if (esnData.youtubeUrl && !organizer.youtubeUrl)
           updateData.youtubeUrl = esnData.youtubeUrl;
-        }
-        if (esnData.pinterestUrl && !organizer.pinterestUrl) {
+        if (esnData.pinterestUrl && !organizer.pinterestUrl)
           updateData.pinterestUrl = esnData.pinterestUrl;
-        }
-        if (esnData.linkedInUrl && !organizer.linkedInUrl) {
+        if (esnData.linkedInUrl && !organizer.linkedInUrl)
           updateData.linkedInUrl = esnData.linkedInUrl;
-        }
-        if (esnData.metroAreaNames && !organizer.serviceAreas) {
+        if (esnData.metroAreaNames && !organizer.serviceAreas)
           updateData.serviceAreas = esnData.metroAreaNames.join(', ');
-        }
-        // Always update memberships and package type (structured data)
-        if (esnData.memberships) {
+        if (esnData.memberships)
           updateData.esnMemberships = esnData.memberships;
-        }
-        if (esnData.orgPackageType) {
+        if (esnData.orgPackageType)
           updateData.esnPackageType = esnData.orgPackageType;
-        }
       }
     }
 
-    // Step 2: Google Places & Facebook enrichment (fallback for fields not found in ESN)
-    const [placeId, fbPageId] = await Promise.all([
-      lookupGooglePlace(name, city, state),
-      lookupFacebookPage(name, city, state),
-    ]);
+    // Step 2: Google Places (fills address, phone, website, photo if still missing)
+    if (!organizer.googlePlaceId) {
+      const placeId = await lookupGooglePlace(name, city, state);
+      if (placeId) {
+        updateData.googlePlaceId = placeId;
 
-    if (placeId && !organizer.googlePlaceId) {
-      updateData.googlePlaceId = placeId;
-    }
-    if (fbPageId && !organizer.facebookPageId) {
-      updateData.facebookPageId = fbPageId;
-    }
-
-    // Fetch full Place Details if we found a place ID and Google API key is available
-    const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (placeId && googlePlacesKey) {
-      const details = await fetchGooglePlaceDetails(placeId, googlePlacesKey);
-      if (details) {
-        if (details.phone && !organizer.phone) {
-          updateData.phone = details.phone;
-        }
-        if (details.website && !organizer.website) {
-          updateData.website = details.website;
-        }
-        if (details.formattedAddress && !organizer.address) {
-          updateData.address = details.formattedAddress;
-        }
-        if (details.photoReference && !organizer.profilePhoto) {
-          const photoUrl = getGooglePhotoUrl(details.photoReference, googlePlacesKey);
-          if (photoUrl) {
-            updateData.profilePhoto = photoUrl;
+        const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
+        if (googlePlacesKey) {
+          const details = await fetchGooglePlaceDetails(placeId, googlePlacesKey);
+          if (details) {
+            if (details.phone && !organizer.phone && !updateData.phone)
+              updateData.phone = details.phone;
+            if (details.website && !organizer.website && !updateData.website)
+              updateData.website = details.website;
+            if (details.formattedAddress && !organizer.address)
+              updateData.address = details.formattedAddress;
+            if (details.photoReference && !organizer.profilePhoto && !updateData.profilePhoto) {
+              const photoUrl = getGooglePhotoUrl(details.photoReference, googlePlacesKey);
+              if (photoUrl) updateData.profilePhoto = photoUrl;
+            }
           }
         }
-        // Hours parsing deferred to Phase 2 — complex time format
       }
     }
 
@@ -162,7 +130,6 @@ export async function enrichOrganizer(
       `[Enrichment] Failed to enrich organizer ${organizerId}:`,
       error instanceof Error ? error.message : String(error)
     );
-    // Silent failure — enrichment is best-effort
   }
 }
 
@@ -176,10 +143,7 @@ async function lookupGooglePlace(
   state: string
 ): Promise<string | null> {
   const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!googlePlacesKey) {
-    console.warn('[Enrichment] GOOGLE_PLACES_API_KEY not set, skipping Places lookup');
-    return null;
-  }
+  if (!googlePlacesKey) return null;
 
   try {
     const query = `${name} ${city} ${state}`;
@@ -206,15 +170,10 @@ async function lookupGooglePlace(
     };
 
     if (data.status !== 'OK' || !data.candidates || data.candidates.length === 0) {
-      console.debug(`[Enrichment] No Google Places result for: ${query}`);
       return null;
     }
 
-    const placeId = data.candidates[0]?.place_id;
-    if (placeId) {
-      console.debug(`[Enrichment] Found Google Place: ${placeId}`);
-    }
-    return placeId || null;
+    return data.candidates[0]?.place_id || null;
   } catch (error) {
     console.warn(
       `[Enrichment] Google Places lookup failed: ${error instanceof Error ? error.message : String(error)}`
@@ -224,86 +183,7 @@ async function lookupGooglePlace(
 }
 
 /**
- * Lookup organizer via Facebook Graph API.
- * Searches for pages by name and performs simple name similarity check.
- * Returns page ID on success, null on failure or if not found.
- */
-async function lookupFacebookPage(
-  name: string,
-  city: string,
-  state: string
-): Promise<string | null> {
-  const fbAccessToken = process.env.FB_ACCESS_TOKEN;
-  if (!fbAccessToken) {
-    console.warn('[Enrichment] FB_ACCESS_TOKEN not set, skipping Facebook lookup');
-    return null;
-  }
-
-  try {
-    const query = `${name} ${city} ${state}`;
-    const url = new URL('https://graph.facebook.com/v18.0/search');
-    url.searchParams.set('q', query);
-    url.searchParams.set('type', 'page');
-    url.searchParams.set('fields', 'id,name');
-    url.searchParams.set('access_token', fbAccessToken);
-
-    const response = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      console.warn(
-        `[Enrichment] Facebook Graph API error: ${response.status} ${response.statusText}`
-      );
-      return null;
-    }
-
-    const data = (await response.json()) as {
-      data?: Array<{ id: string; name: string }>;
-    };
-
-    if (!data.data || data.data.length === 0) {
-      console.debug(`[Enrichment] No Facebook pages found for: ${query}`);
-      return null;
-    }
-
-    // Find best match: prefer exact match or substring match (case-insensitive)
-    const normalizedOrgName = name.toLowerCase();
-    let bestMatch = data.data[0]; // Fallback to first result
-
-    for (const page of data.data) {
-      const normalizedPageName = page.name.toLowerCase();
-      if (normalizedPageName === normalizedOrgName) {
-        // Exact match — use this
-        bestMatch = page;
-        break;
-      }
-      if (
-        normalizedOrgName.includes(normalizedPageName) ||
-        normalizedPageName.includes(normalizedOrgName)
-      ) {
-        // Partial match — use this if we haven't found exact
-        if (bestMatch.name.toLowerCase() !== normalizedOrgName) {
-          bestMatch = page;
-        }
-      }
-    }
-
-    if (bestMatch.id) {
-      console.debug(`[Enrichment] Found Facebook page: ${bestMatch.id} (${bestMatch.name})`);
-    }
-    return bestMatch.id || null;
-  } catch (error) {
-    console.warn(
-      `[Enrichment] Facebook Graph lookup failed: ${error instanceof Error ? error.message : String(error)}`
-    );
-    return null;
-  }
-}
-
-/**
  * Fetch full business details from Google Places Details API.
- * Returns phone, website, hours, photo reference, and formatted address.
  */
 async function fetchGooglePlaceDetails(
   placeId: string,
@@ -344,10 +224,7 @@ async function fetchGooglePlaceDetails(
       status: string;
     };
 
-    if (data.status !== 'OK' || !data.result) {
-      console.debug(`[Enrichment] No Place Details for ${placeId}`);
-      return null;
-    }
+    if (data.status !== 'OK' || !data.result) return null;
 
     return {
       phone: data.result.formatted_phone_number,
@@ -366,20 +243,14 @@ async function fetchGooglePlaceDetails(
 
 /**
  * Lookup EstateSales.NET company profile via company-public-page API.
- * Returns enrichment data (phone, website, logo, bio, social links, memberships, etc.) on success, null on failure.
  */
 async function lookupESNCompanyProfile(
   esnOrgId: number
 ): Promise<{
   primaryPhoneNumber?: string;
-  secondaryPhoneNumber?: string;
   websiteUrl?: string;
   companyLogoUrl?: string;
   description?: string;
-  cityName?: string;
-  stateCode?: string;
-  postalCodeNumber?: string;
-  primaryMetroAreaName?: string;
   metroAreaNames?: string[];
   instagramUrl?: string;
   pinterestUrl?: string;
@@ -411,32 +282,10 @@ async function lookupESNCompanyProfile(
       return null;
     }
 
-    const data = (await response.json()) as {
-      primaryPhoneNumber?: string;
-      secondaryPhoneNumber?: string;
-      websiteUrl?: string;
-      companyLogoUrl?: string;
-      description?: string;
-      cityName?: string;
-      stateCode?: string;
-      postalCodeNumber?: string;
-      primaryMetroAreaName?: string;
-      metroAreaNames?: string[];
-      instagramUrl?: string;
-      pinterestUrl?: string;
-      facebookUrl?: string;
-      linkedInUrl?: string;
-      twitterHandle?: string;
-      youtubeUrl?: string;
-      memberships?: Array<{ id: number; name: string; shortDescription?: string; description?: string }>;
-      orgPackageType?: string;
-    };
-
-    console.debug(`[Enrichment] Found ESN company profile for orgId=${esnOrgId}`);
-    return data;
+    return (await response.json()) as any;
   } catch (error) {
     console.warn(
-      `[Enrichment] ESN company profile lookup failed for orgId=${esnOrgId}: ${error instanceof Error ? error.message : String(error)}`
+      `[Enrichment] ESN lookup failed for orgId=${esnOrgId}: ${error instanceof Error ? error.message : String(error)}`
     );
     return null;
   }
@@ -444,7 +293,6 @@ async function lookupESNCompanyProfile(
 
 /**
  * Generate a public Google Places Photo URL.
- * Returns a URL that redirects to the actual image.
  */
 function getGooglePhotoUrl(photoReference: string, apiKey: string): string {
   const url = new URL('https://maps.googleapis.com/maps/api/place/photo');
