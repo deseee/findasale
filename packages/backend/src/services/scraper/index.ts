@@ -116,28 +116,41 @@ async function getOrCreateScrapedOrganizer(
   const sourceSlug = sourceName.toLowerCase();
   const systemEmail = `scraper+${slug}-${sourceSlug}@system.finda.sale`;
 
-  const created = await prisma.user.create({
-    data: {
-      email: systemEmail,
-      name: businessName,
-      password: null,
-      role: 'ORGANIZER',
-      roles: ['ORGANIZER'],
-      organizer: {
-        create: {
-          businessName,
-          phone: null,
-          address: `${city}, ${state}`,
-          bio: `Sale organizer based in ${city}, ${state}.`,
-          isClaimed: false,
-          isUnmanagedListing: true,
+  let newOrgId: string;
+  try {
+    const created = await prisma.user.create({
+      data: {
+        email: systemEmail,
+        name: businessName,
+        password: null,
+        role: 'ORGANIZER',
+        roles: ['ORGANIZER'],
+        organizer: {
+          create: {
+            businessName,
+            phone: null,
+            address: `${city}, ${state}`,
+            bio: `Sale organizer based in ${city}, ${state}.`,
+            isClaimed: false,
+            isUnmanagedListing: true,
+          },
         },
       },
-    },
-    include: { organizer: { select: { id: true } } },
-  });
-
-  const newOrgId = created.organizer!.id;
+      include: { organizer: { select: { id: true } } },
+    });
+    newOrgId = created.organizer!.id;
+  } catch (err: any) {
+    // P2002 = unique constraint violation (race condition — another concurrent batch
+    // created this organizer between our findFirst check and this create)
+    if (err?.code === 'P2002') {
+      const race = await prisma.organizer.findFirst({
+        where: { businessName, isUnmanagedListing: true },
+        select: { id: true },
+      });
+      if (race) return race.id;
+    }
+    throw err;
+  }
   console.log(`[scraper] Created organizer: ${newOrgId} for "${businessName}" (${sourceName})`);
 
   // Fire enrichment non-blocking
