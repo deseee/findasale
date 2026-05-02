@@ -1,5 +1,67 @@
 # QA Backlog — FindA.Sale
-**Last updated:** S565 QA-only pass — 46 bugs logged (2026-04-24)
+**Last updated:** S626 records sync — 2026-05-02. Added S601 storefront v2 batch + S625 weekly audit findings + 8 missing carryover items. Header reconciled with STATE.md and patrick-dashboard.md.
+
+---
+
+## 🔴 ACTIVE QA QUEUE — Pending Chrome verification (priority order)
+
+These are open as of S626. Each requires a real Chrome interaction with evidence per CLAUDE.md §9 QA Honesty Gate.
+
+### S625 Weekly Site Audit Findings (2026-05-02) — P0/P1 priority
+
+| Sev | ID | Item | Notes |
+|-----|----|------|-------|
+| **P0** | C-001 | Scraped sales return "Sale not found" | Migration `20260501020000_scraper_phase1` likely not deployed — `isUnmanagedListing` column missing in live DB. Every claim email link broken. Patrick action: run `npx prisma migrate deploy` with Railway URL. Full report: `claude_docs/audits/weekly-audit-2026-05-02.md`. |
+| **P1** | H-002 | Images not loading platform-wide | Sale covers, item thumbnails, purchase history photos all blank. Affects organizer sales, sale detail items, trending, purchase history. Likely Cloudinary config / next.config.js domains. |
+| **P1** | H-001 | D-006 violated — Items section buried below Map on sale detail page | Shoppers must scroll past entire page (incl. map) to see items. Quick dev fix to reorder. |
+| **P1** | H-003 | City hub pages all 404 | `/cities` index lists cities but every city card link 404s. Slug mismatch between API (raw city name) and static JSON. S604–S607 city SEO infra is dead. |
+| **P2** | — | Systemic horizontal overflow | Pricing, sale detail sidebar, guide, home page. From S625 audit. |
+| **P2** | — | Workspace empty state near-invisible in dark mode | From S625 audit. |
+| **P2** | — | Org messages copy is organizer-only | From S625 audit. |
+
+### Pre-existing Open Bugs (called out in patrick-dashboard.md S625, queued for next dev)
+
+| Sev | Item | Notes |
+|-----|------|-------|
+| **P0** | `/items/[id]` returns 500 platform-wide | Pre-existing since S572. S600 entry in STATE.md claims fixed via Cloudinary `b_rgb:fef3c7` background — verify in production before scheduling new dispatch. |
+| **P1** | Sale page social previews blank | Likely missing `INTERNAL_API_URL` env var in Vercel. Loot Drop social-share preview cards depend on this. |
+| **P1** | Hunt Pass shows "Inactive" in one part / "Active" in another | UI inconsistency across pages. |
+| **P1** | Tier-lapse warning banner is red and dismissible | Should be sticky amber per design. ~30 lines in `pages/organizer/dashboard.tsx`. S600 entry claims fixed — verify in production. |
+
+### S601 Storefront v2 Batch — Pending Chrome QA (shipped, never verified)
+
+All shipped S601, never Chrome-verified per S601 wrap notes. Test passwords `Seedy2025!`. user11 = Sunrise Consignment (isClaimed=false for #361 positive path).
+
+| # | Item | Test |
+|---|------|------|
+| 354 | Business Hours | Settings → hours editable → storefront displays |
+| 355 | Organizer Type multi-select | Settings → multi-select organizer types → storefront badge displays |
+| 356 | Broadcast to Followers (PRO) | Settings → Profile tab → Broadcast section → enter subject + message → send → green toast with recipient count → recent broadcasts list shows last 3. Non-PRO sees upgrade prompt. |
+| 358 | Follower Count Visibility Toggle | Queued — not yet shipped |
+| 359 | Sale Pinned/Featured | Sales page pin toggle → amber badge on storefront, pinned sorts first |
+| 360 | Social Links Expansion | Settings → Twitter/X, TikTok, YouTube, Pinterest fields save → storefront icon row displays |
+| 361 | Claim-This-Listing positive path | sales/[id] for unclaimed listing (user11) → amber claim banner → Claim This Listing → modal → name/email/message → submit → success screen + toast. 409 if already claimed or duplicate pending. |
+| 362 | Sale Attendance Count | Ended sale → attendance count number input + Save → persists on reload → OrganizerSaleCard shows count |
+| 363 | Auction Buyer's Premium + Lot Numbers | Create AUCTION sale → buyer's premium % input → items/[id] shows "Lot #X" + amber buyer's premium disclosure box → ItemCard shows amber lot number badge |
+
+### Other Open QA Items
+
+| Item | Source | Notes |
+|------|--------|-------|
+| Treasure hunt progress page + via=qr guard | S595 | Shipped S595, pending push+QA |
+| ConfirmDialog smoke test | Multiple | Site-wide confirm dialog component, never end-to-end Chrome verified |
+| Hydration #418 remaining instances | S572 root-cause fix | Audit needed for `/sales/[id]/checkin.tsx`, `/sales/[id]/photo-station.tsx`, organizer dashboard sale views — anywhere `setInterval + invalidateQueries` runs without query-state guard. S617 audit candidate. |
+| DonationModal SettlementWizard end-to-end | S614 carryover | Pending |
+| Holds `/shopper` page end-to-end | S614 carryover | Pending |
+| PDF watermark visual confirmation | S614 carryover | Print Kit, Marketing Kit, Earnings, Settlement Receipt. TEAMS-on vs SIMPLE comparison. |
+| iCal footer in `.ics` description | S614 carryover | Pending |
+| Craigslist selector validation | S614 carryover | First prod scrape run after `SCRAPER_ENABLED` triggers Craigslist at 12:00 UTC |
+
+### S626 New Items (organizer acquisition strategy build, when shipped)
+
+When the Architect → Dev cycle ships the outreach pipeline (`OutreachSuppression`, `OutreachTouch`, `OutreachSegment`, `LegalAlert` tables + Workspace SMTP integration + auto-classifier per S268), each becomes a Chrome QA item here. Reference: `claude_docs/strategy/organizer-acquisition-strategy.md`.
+
+---
 
 ---
 

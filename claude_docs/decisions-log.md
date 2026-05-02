@@ -5,6 +5,14 @@ Only decisions that affect future sessions — not implementation details.
 
 ---
 
+## 2026-05-02 (S626) — Organizer Acquisition Pipeline Locked (7 sub-decisions)
+
+**Status:** LOCKED
+**Made by:** Patrick
+**Rationale:** First-contact pipeline for the scraped organizer database. Full spec at `claude_docs/strategy/organizer-acquisition-strategy.md` v3. Key locked decisions: (a) Email-only Phase 1 — SMS/postcard deferred to Phase 2 contingent on reply rate <2.5% after 8 weeks. (b) **Sender is institutional — `outreach@finda.sale` from "The FindA.Sale Team."** No personal names, no "founder" voice, no silicon-valley positioning anywhere in user-facing copy. Saved to memory as `feedback_no_founder_voice.md`. (c) Touch 1 subject locked to "We built you a storefront on FindA.Sale" — no A/B test. (d) Reply handling fully automated per **D-S268 Zero-Human Automated Support Stack** — no SLA, no calendar booking, no human routing. (e) Send to all tiers (cost is rounding error at $6/mo for email-only). (f) **Cold-email tooling: Workspace seat $6/mo + custom Postgres cron Phase 1, migrate to Instantly.ai when daily volume crosses ~500/day.** Resend stays for transactional only. Confirmed via WebSearch that Resend, SendGrid, Postmark, Mailgun, Brevo, Zoho, and Amazon SES all explicitly ban cold outreach in their AUP. (g) Drive cold email traffic to existing `/video` page with `?src=outreach-[a/b/c]` parameter for attribution; do NOT build a new landing page. **Storefront preview** + `/video` link is the differentiator. EU + QC records excluded from Phase 1 outreach via SQL filter; revisit Phase 2 with consent-first opt-in.
+
+---
+
 ## 2026-04-25 (S575) — QR Treasure Hunt Geofence: KEPT (Not Dropping)
 
 **Status:** LOCKED
