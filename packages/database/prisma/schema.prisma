@@ -379,6 +379,8 @@ model Organizer {
   directoryNextClaimEmailAt DateTime?
   claimEmailIntervalDays   Int      @default(14)
   claimStatus              String   @default("UNCLAIMED") // "UNCLAIMED" | "INVITED" | "CLAIMED" | "OPTED_OUT"
+  isClaimed                Boolean  @default(true)  // True for all organizer-managed listings; scrapers set false
+  isUnmanagedListing       Boolean  @default(false) // True for scraped/unverified listings not yet claimed
   claimEmails              DirectoryClaimEmail[]
   // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
   verificationSource       String?
@@ -4212,6 +4214,7 @@ model DirectoryCrawlLog {
   queryType             String
   resultCount           Int
   newOrganizersCreated  Int      @default(0)
+ated  Int      @default(0)
   organizersUpdated     Int      @default(0)
   duplicatesSkipped     Int      @default(0)
   errorMessage          String?

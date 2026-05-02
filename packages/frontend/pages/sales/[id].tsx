@@ -986,50 +986,6 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
               <HypeMeter saleId={sale.id} />
               <LiveFeedTicker saleId={sale.id} />
             </div>
-
-            {/* Location Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
-              <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
-              {sale.lat && sale.lng ? (
-                <SaleMap
-                  singlePin={{
-                    lat: sale.lat,
-                    lng: sale.lng,
-                    label: `${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}`,
-                  }}
-                  entrancePin={sale.entranceLat && sale.entranceLng ? {
-                    lat: sale.entranceLat,
-                    lng: sale.entranceLng,
-                    note: sale.entranceNote,
-                  } : undefined}
-                  photoOpStations={photoOpStations}
-                  height="360px"
-                />
-              ) : (
-                <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                  <p className="text-warm-500 dark:text-gray-400">Location not available</p>
-                </div>
-              )}
-              <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
-                {sale.address}, {sale.city}, {sale.state} {sale.zip}
-              </p>
-              {sale.address && sale.city && sale.state && (
-                <button
-                  onClick={() => {
-                    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                      `${sale.address}, ${sale.city}, ${sale.state}`
-                    )}`;
-                    window.open(mapsUrl, '_blank');
-                  }}
-                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium text-sm transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2h-2a2 2 0 00-2 2v6m-6-10l3-3m0 0l3 3m-3-3v10" />
-                  </svg>
-                  Plan My Route in Maps
-                </button>
-              )}
-            </div>
           </div>
 
           {/* Sidebar */}
@@ -1534,6 +1490,50 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
               </>
             );
           })()}
+        </div>
+
+        {/* Location Card — D-006: Appears after Items section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4 text-warm-900 dark:text-gray-50">Location</h2>
+          {sale.lat && sale.lng ? (
+            <SaleMap
+              singlePin={{
+                lat: sale.lat,
+                lng: sale.lng,
+                label: `${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}`,
+              }}
+              entrancePin={sale.entranceLat && sale.entranceLng ? {
+                lat: sale.entranceLat,
+                lng: sale.entranceLng,
+                note: sale.entranceNote,
+              } : undefined}
+              photoOpStations={photoOpStations}
+              height="360px"
+            />
+          ) : (
+            <div className="h-72 bg-warm-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+              <p className="text-warm-500 dark:text-gray-400">Location not available</p>
+            </div>
+          )}
+          <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
+            {sale.address}, {sale.city}, {sale.state} {sale.zip}
+          </p>
+          {sale.address && sale.city && sale.state && (
+            <button
+              onClick={() => {
+                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                  `${sale.address}, ${sale.city}, ${sale.state}`
+                )}`;
+                window.open(mapsUrl, '_blank');
+              }}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium text-sm transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2h-2a2 2 0 00-2 2v6m-6-10l3-3m0 0l3 3m-3-3v10" />
+              </svg>
+              Plan My Route in Maps
+            </button>
+          )}
         </div>
 
         {/* Feature #47: UGC Photo Gallery */}

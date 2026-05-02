@@ -85,7 +85,7 @@ const CitiesPage = () => {
                 return (
                   <Link
                     key={`${cityData.city}-${cityData.state}`}
-                    href={`/city/${encodeURIComponent(cityData.city)}`}
+                    href={`/city/${encodeURIComponent(`${cityData.city.toLowerCase().replace(/\s+/g, '-')}-${cityData.state.toLowerCase()}`)}`}
                     className="card p-6 hover:shadow-lg transition-shadow"
                   >
                     <div className="flex items-start justify-between gap-4">
