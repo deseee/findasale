@@ -260,7 +260,8 @@ model User {
 model Organizer {
   id                      String                 @id @default(cuid())
   businessName            String
-  phone                   String
+  phone                   String?
+  scrapedEmail            String? // Email from scraped data source
   address                 String
   bio                     String? // Organizer bio/description (optional)
   tagline                 String? // Short tagline for storefront (120 char limit)

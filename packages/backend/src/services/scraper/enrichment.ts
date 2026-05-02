@@ -21,7 +21,15 @@ export async function enrichOrganizer(
     // Fetch organizer to confirm it exists
     const organizer = await prisma.organizer.findUnique({
       where: { id: organizerId },
-      select: { id: true, googlePlaceId: true, facebookPageId: true },
+      select: {
+        id: true,
+        googlePlaceId: true,
+        facebookPageId: true,
+        phone: true,
+        website: true,
+        address: true,
+        profilePhoto: true,
+      },
     });
 
     if (!organizer) {
@@ -48,6 +56,30 @@ export async function enrichOrganizer(
     }
     if (fbPageId && !organizer.facebookPageId) {
       updateData.facebookPageId = fbPageId;
+    }
+
+    // Fetch full Place Details if we found a place ID and Google API key is available
+    const googlePlacesKey = process.env.GOOGLE_PLACES_KEY;
+    if (placeId && googlePlacesKey) {
+      const details = await fetchGooglePlaceDetails(placeId, googlePlacesKey);
+      if (details) {
+        if (details.phone && !organizer.phone) {
+          updateData.phone = details.phone;
+        }
+        if (details.website && !organizer.website) {
+          updateData.website = details.website;
+        }
+        if (details.formattedAddress && !organizer.address) {
+          updateData.address = details.formattedAddress;
+        }
+        if (details.photoReference && !organizer.profilePhoto) {
+          const photoUrl = getGooglePhotoUrl(details.photoReference, googlePlacesKey);
+          if (photoUrl) {
+            updateData.profilePhoto = photoUrl;
+          }
+        }
+        // Hours parsing deferred to Phase 2 — complex time format
+      }
     }
 
     if (Object.keys(updateData).length > 0) {
@@ -203,4 +235,79 @@ async function lookupFacebookPage(
     );
     return null;
   }
+}
+
+/**
+ * Fetch full business details from Google Places Details API.
+ * Returns phone, website, hours, photo reference, and formatted address.
+ */
+async function fetchGooglePlaceDetails(
+  placeId: string,
+  apiKey: string
+): Promise<{
+  phone?: string;
+  website?: string;
+  hoursText?: string[];
+  photoReference?: string;
+  formattedAddress?: string;
+} | null> {
+  try {
+    const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
+    url.searchParams.set('place_id', placeId);
+    url.searchParams.set(
+      'fields',
+      'formatted_phone_number,website,opening_hours,photos,formatted_address'
+    );
+    url.searchParams.set('key', apiKey);
+
+    const response = await fetch(url.toString(), {
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      console.warn(`[Enrichment] Place Details API error: ${response.status}`);
+      return null;
+    }
+
+    const data = (await response.json()) as {
+      result?: {
+        formatted_phone_number?: string;
+        website?: string;
+        opening_hours?: { weekday_text?: string[] };
+        photos?: Array<{ photo_reference: string }>;
+        formatted_address?: string;
+      };
+      status: string;
+    };
+
+    if (data.status !== 'OK' || !data.result) {
+      console.debug(`[Enrichment] No Place Details for ${placeId}`);
+      return null;
+    }
+
+    return {
+      phone: data.result.formatted_phone_number,
+      website: data.result.website,
+      hoursText: data.result.opening_hours?.weekday_text,
+      photoReference: data.result.photos?.[0]?.photo_reference,
+      formattedAddress: data.result.formatted_address,
+    };
+  } catch (error) {
+    console.warn(
+      `[Enrichment] Place Details lookup failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+}
+
+/**
+ * Generate a public Google Places Photo URL.
+ * Returns a URL that redirects to the actual image.
+ */
+function getGooglePhotoUrl(photoReference: string, apiKey: string): string {
+  const url = new URL('https://maps.googleapis.com/maps/api/place/photo');
+  url.searchParams.set('maxwidth', '400');
+  url.searchParams.set('photo_reference', photoReference);
+  url.searchParams.set('key', apiKey);
+  return url.toString();
 }

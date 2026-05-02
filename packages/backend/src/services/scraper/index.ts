@@ -83,6 +83,72 @@ export async function getOrCreateSystemOrganizer(): Promise<string> {
 }
 
 /**
+ * Get or create a scraped organizer with per-source attribution.
+ * One system user per business per source (e.g., scraper+john-doe-estatesalesnet@system.finda.sale)
+ * Automatically triggers enrichment to fill in phone, website, logo.
+ */
+async function getOrCreateScrapedOrganizer(
+  businessName: string,
+  sourceName: string,
+  city: string,
+  state: string
+): Promise<string> {
+  // Try to find existing organizer by businessName + source
+  // Use a pattern we can query: check isUnmanagedListing + businessName
+  const existing = await prisma.organizer.findFirst({
+    where: {
+      businessName,
+      isUnmanagedListing: true,
+      address: { contains: city },
+    },
+    select: { id: true },
+  });
+
+  if (existing) return existing.id;
+
+  // Create new organizer
+  // Email pattern: scraper+{slug}@system.finda.sale
+  const slug = businessName
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 40);
+  const sourceSlug = sourceName.toLowerCase();
+  const systemEmail = `scraper+${slug}-${sourceSlug}@system.finda.sale`;
+
+  const created = await prisma.user.create({
+    data: {
+      email: systemEmail,
+      name: businessName,
+      password: null,
+      role: 'ORGANIZER',
+      roles: ['ORGANIZER'],
+      organizer: {
+        create: {
+          businessName,
+          phone: null,
+          address: `${city}, ${state}`,
+          bio: `Sale organizer based in ${city}, ${state}.`,
+          isClaimed: false,
+          isUnmanagedListing: true,
+        },
+      },
+    },
+    include: { organizer: { select: { id: true } } },
+  });
+
+  const newOrgId = created.organizer!.id;
+  console.log(`[scraper] Created organizer: ${newOrgId} for "${businessName}" (${sourceName})`);
+
+  // Fire enrichment non-blocking
+  enrichOrganizer(newOrgId, businessName, city, state).catch((err) =>
+    console.error('[scraper] Enrichment failed (non-blocking):', err)
+  );
+
+  return newOrgId;
+}
+
+/**
  * Main scraping entry point.
  * Supports: EstateSalesNet | GarageSaleFinder | Craigslist
  */
@@ -210,8 +276,20 @@ export async function ingestScrapedListing(
       };
     }
 
-    // Resolve organizer
-    const finalOrganizerId = organizerId ?? (await getOrCreateSystemOrganizer());
+    // Resolve organizer — route to per-organizer if name is provided
+    let finalOrganizerId: string;
+    if (organizerId) {
+      finalOrganizerId = organizerId;
+    } else if (listing.organizerName && listing.organizerName.trim()) {
+      finalOrganizerId = await getOrCreateScrapedOrganizer(
+        listing.organizerName.trim(),
+        listing.sourceName,
+        listing.city,
+        listing.state
+      );
+    } else {
+      finalOrganizerId = await getOrCreateSystemOrganizer();
+    }
 
     // Create the Sale
     const sale = await prisma.sale.create({

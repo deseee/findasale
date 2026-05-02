@@ -20,6 +20,8 @@ interface BrandKitData {
   businessName: string;
   bio: string | null;
   profilePhoto: string | null;
+  phone: string | null;
+  address: string | null;
   website: string | null;
   facebook: string | null;
   instagram: string | null;
@@ -150,6 +152,8 @@ const OrganizerStorefront = () => {
           businessName: orgData.businessName,
           bio: orgData.bio,
           profilePhoto: orgData.profilePhoto,
+          phone: orgData.phone,
+          address: orgData.address,
           website: orgData.website,
           facebook: orgData.facebook,
           instagram: orgData.instagram,
@@ -299,6 +303,26 @@ const OrganizerStorefront = () => {
                 <p className="text-warm-700 dark:text-gray-300 mb-6">
                   {brandKit.bio || 'A professional sale organizer serving the Grand Rapids area.'}
                 </p>
+
+                {/* Phone */}
+                {brandKit.phone && (
+                  <p className="text-warm-700 dark:text-gray-300 mb-3">
+                    <a
+                      href={`tel:${brandKit.phone}`}
+                      className="text-amber-600 hover:underline font-medium"
+                    >
+                      {brandKit.phone}
+                    </a>
+                  </p>
+                )}
+
+                {/* Address */}
+                {brandKit.address && (
+                  <p className="text-sm text-warm-600 dark:text-gray-400 mb-6">
+                    {brandKit.address}
+                  </p>
+                )}
+
                 {brandKit.yearFounded && (
                   <p className="text-sm text-warm-500 dark:text-gray-400 mb-6">
                     Est. {brandKit.yearFounded}
