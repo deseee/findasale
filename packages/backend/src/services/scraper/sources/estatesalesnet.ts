@@ -191,6 +191,7 @@ function parseApiRecordToScrapedItem(record: EstatesalesNetApiRecord): ScrapedIt
         apiResponse: record,
         lat: record.latitude,
         lng: record.longitude,
+        saleSchedule: record.saleSchedule ?? null,
       },
     };
   } catch (error) {

@@ -35,6 +35,7 @@ export async function enrichOrganizer(
         youtubeUrl: true,
         pinterestUrl: true,
         linkedInUrl: true,
+        tiktokUrl: true,
         serviceAreas: true,
         esnOrgId: true,
         contactEmail: true,
@@ -83,6 +84,8 @@ export async function enrichOrganizer(
           updateData.pinterestUrl = esnData.pinterestUrl;
         if (esnData.linkedInUrl && !organizer.linkedInUrl)
           updateData.linkedInUrl = esnData.linkedInUrl;
+        if (esnData.tiktokUrl && !organizer.tiktokUrl)
+          updateData.tiktokUrl = esnData.tiktokUrl;
         if (esnData.metroAreaNames && !organizer.serviceAreas)
           updateData.serviceAreas = esnData.metroAreaNames.join(', ');
         if (esnData.memberships)
@@ -195,6 +198,8 @@ async function lookupGooglePlace(
 
 /**
  * Fetch full business details from Google Places Details API.
+ * Requests rating and user_ratings_total for future storage once schema supports them
+ * (Organizer needs googleRating Decimal? and googleRatingCount Int? — flagged to Architect).
  */
 async function fetchGooglePlaceDetails(
   placeId: string,
@@ -204,11 +209,16 @@ async function fetchGooglePlaceDetails(
   website?: string;
   photoReference?: string;
   formattedAddress?: string;
+  rating?: number;
+  userRatingsTotal?: number;
 } | null> {
   try {
     const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
     url.searchParams.set('place_id', placeId);
-    url.searchParams.set('fields', 'formatted_phone_number,website,photos,formatted_address');
+    url.searchParams.set(
+      'fields',
+      'formatted_phone_number,website,photos,formatted_address,rating,user_ratings_total'
+    );
     url.searchParams.set('key', apiKey);
 
     const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
@@ -220,6 +230,8 @@ async function fetchGooglePlaceDetails(
         website?: string;
         photos?: Array<{ photo_reference: string }>;
         formatted_address?: string;
+        rating?: number;
+        user_ratings_total?: number;
       };
       status: string;
     };
@@ -230,6 +242,8 @@ async function fetchGooglePlaceDetails(
       website: data.result.website,
       photoReference: data.result.photos?.[0]?.photo_reference,
       formattedAddress: data.result.formatted_address,
+      rating: data.result.rating,
+      userRatingsTotal: data.result.user_ratings_total,
     };
   } catch {
     return null;
@@ -254,6 +268,7 @@ async function lookupESNCompanyProfile(
   linkedInUrl?: string;
   twitterHandle?: string;
   youtubeUrl?: string;
+  tiktokUrl?: string;
   memberships?: Array<{ id: number; name: string; shortDescription?: string }>;
   orgPackageType?: string;
   companyPageUrl?: string;
