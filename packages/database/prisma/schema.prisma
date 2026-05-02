@@ -309,6 +309,8 @@ model Organizer {
   linkedInUrl             String?  // LinkedIn profile URL
   esnMemberships          Json?    // Professional association memberships from ESN (ASEL, ISA, ASA, etc.)
   esnPackageType          String?  // ESN subscription tier: Gold_2016_Legacy, Silver, etc.
+  contactEmail            String?  // Contact email scraped from website /contact page or sale descriptions (ADR-073 Phase 2)
+  esnCompanyPageUrl       String?  // EstateSales.NET company profile URL — last-resort outreach channel (ADR-073 Phase 2)
   stripeIdentitySessionId String?  // Stripe Identity verification session ID (Phase 2)
   // Feature #83: Estate Planning — executor account stub
   executorUserId          String?
