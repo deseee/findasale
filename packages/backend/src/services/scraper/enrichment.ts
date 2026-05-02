@@ -59,7 +59,7 @@ export async function enrichOrganizer(
     }
 
     // Fetch full Place Details if we found a place ID and Google API key is available
-    const googlePlacesKey = process.env.GOOGLE_PLACES_KEY;
+    const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
     if (placeId && googlePlacesKey) {
       const details = await fetchGooglePlaceDetails(placeId, googlePlacesKey);
       if (details) {
@@ -111,9 +111,9 @@ async function lookupGooglePlace(
   city: string,
   state: string
 ): Promise<string | null> {
-  const googlePlacesKey = process.env.GOOGLE_PLACES_KEY;
+  const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!googlePlacesKey) {
-    console.warn('[Enrichment] GOOGLE_PLACES_KEY not set, skipping Places lookup');
+    console.warn('[Enrichment] GOOGLE_PLACES_API_KEY not set, skipping Places lookup');
     return null;
   }
 
