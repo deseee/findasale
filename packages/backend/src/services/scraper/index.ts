@@ -91,7 +91,8 @@ async function getOrCreateScrapedOrganizer(
   businessName: string,
   sourceName: string,
   city: string,
-  state: string
+  state: string,
+  esnOrgId?: number
 ): Promise<string> {
   // Try to find existing organizer by businessName + source
   // Use a pattern we can query: check isUnmanagedListing + businessName
@@ -101,10 +102,19 @@ async function getOrCreateScrapedOrganizer(
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true },
+    select: { id: true, esnOrgId: true },
   });
 
-  if (existing) return existing.id;
+  if (existing) {
+    // If we now have esnOrgId and the existing organizer doesn't, update it
+    if (esnOrgId && !existing.esnOrgId) {
+      await prisma.organizer.update({
+        where: { id: existing.id },
+        data: { esnOrgId },
+      });
+    }
+    return existing.id;
+  }
 
   // Create new organizer
   // Email pattern: scraper+{slug}@system.finda.sale
@@ -133,6 +143,7 @@ async function getOrCreateScrapedOrganizer(
             bio: `Sale organizer based in ${city}, ${state}.`,
             isClaimed: false,
             isUnmanagedListing: true,
+            esnOrgId,
           },
         },
       },
@@ -298,7 +309,8 @@ export async function ingestScrapedListing(
         listing.organizerName.trim(),
         listing.sourceName,
         listing.city,
-        listing.state
+        listing.state,
+        listing.esnOrgId
       );
     } else {
       finalOrganizerId = await getOrCreateSystemOrganizer();

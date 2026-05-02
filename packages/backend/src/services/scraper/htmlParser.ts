@@ -17,6 +17,7 @@ export interface ParsedListing {
   description?: string;
   photoUrls?: string[];
   saleType?: string; // ESTATE | YARD | AUCTION | FLEA_MARKET
+  esnOrgId?: number; // EstateSales.NET numeric company ID
 }
 
 /**

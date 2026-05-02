@@ -305,6 +305,10 @@ model Organizer {
   googlePlaceId           String?  // Google Places Place ID e.g. "ChIJrTLr-GyuEmsRBfy61i59si4"
   facebookPageId          String?  // Facebook Page ID (Phase 2)
   yelpBusinessId          String?  // Yelp Business ID (Phase 2)
+  esnOrgId                Int?     // EstateSales.NET numeric company ID — used for company-public-page API
+  linkedInUrl             String?  // LinkedIn profile URL
+  esnMemberships          Json?    // Professional association memberships from ESN (ASEL, ISA, ASA, etc.)
+  esnPackageType          String?  // ESN subscription tier: Gold_2016_Legacy, Silver, etc.
   stripeIdentitySessionId String?  // Stripe Identity verification session ID (Phase 2)
   // Feature #83: Estate Planning — executor account stub
   executorUserId          String?
