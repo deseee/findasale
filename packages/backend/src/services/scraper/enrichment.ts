@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '../../lib/prisma';
+import { getRandomUserAgent } from './userAgents';
 
 /**
  * Main enrichment entry point.
@@ -29,6 +30,15 @@ export async function enrichOrganizer(
         website: true,
         address: true,
         profilePhoto: true,
+        bio: true,
+        facebook: true,
+        instagram: true,
+        twitterUrl: true,
+        youtubeUrl: true,
+        pinterestUrl: true,
+        linkedInUrl: true,
+        serviceAreas: true,
+        esnOrgId: true,
       },
     });
 
@@ -43,14 +53,68 @@ export async function enrichOrganizer(
       return;
     }
 
-    // Lookup and update in parallel, but independently
+    // Update organizer with any found values
+    const updateData: Record<string, any> = {};
+
+    // Step 1: ESN enrichment (highest priority for ESN-sourced organizers)
+    if (organizer.esnOrgId) {
+      const esnData = await lookupESNCompanyProfile(organizer.esnOrgId);
+      if (esnData) {
+        // Map ESN fields to Organizer fields (only if organizer doesn't already have them)
+        if (esnData.primaryPhoneNumber && !organizer.phone) {
+          updateData.phone = esnData.primaryPhoneNumber;
+        }
+        if (esnData.websiteUrl && !organizer.website) {
+          updateData.website = esnData.websiteUrl;
+        }
+        if (esnData.companyLogoUrl && !organizer.profilePhoto) {
+          updateData.profilePhoto = esnData.companyLogoUrl;
+        }
+        if (esnData.description && !organizer.bio) {
+          // Strip HTML tags from description
+          const plainText = esnData.description
+            .replace(/<[^>]*>/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          updateData.bio = plainText;
+        }
+        if (esnData.facebookUrl && !organizer.facebook) {
+          updateData.facebook = esnData.facebookUrl;
+        }
+        if (esnData.instagramUrl && !organizer.instagram) {
+          updateData.instagram = esnData.instagramUrl;
+        }
+        if (esnData.twitterHandle && !organizer.twitterUrl) {
+          updateData.twitterUrl = esnData.twitterHandle;
+        }
+        if (esnData.youtubeUrl && !organizer.youtubeUrl) {
+          updateData.youtubeUrl = esnData.youtubeUrl;
+        }
+        if (esnData.pinterestUrl && !organizer.pinterestUrl) {
+          updateData.pinterestUrl = esnData.pinterestUrl;
+        }
+        if (esnData.linkedInUrl && !organizer.linkedInUrl) {
+          updateData.linkedInUrl = esnData.linkedInUrl;
+        }
+        if (esnData.metroAreaNames && !organizer.serviceAreas) {
+          updateData.serviceAreas = esnData.metroAreaNames.join(', ');
+        }
+        // Always update memberships and package type (structured data)
+        if (esnData.memberships) {
+          updateData.esnMemberships = esnData.memberships;
+        }
+        if (esnData.orgPackageType) {
+          updateData.esnPackageType = esnData.orgPackageType;
+        }
+      }
+    }
+
+    // Step 2: Google Places & Facebook enrichment (fallback for fields not found in ESN)
     const [placeId, fbPageId] = await Promise.all([
       lookupGooglePlace(name, city, state),
       lookupFacebookPage(name, city, state),
     ]);
 
-    // Update organizer with any found values
-    const updateData: Record<string, any> = {};
     if (placeId && !organizer.googlePlaceId) {
       updateData.googlePlaceId = placeId;
     }
@@ -295,6 +359,84 @@ async function fetchGooglePlaceDetails(
   } catch (error) {
     console.warn(
       `[Enrichment] Place Details lookup failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+}
+
+/**
+ * Lookup EstateSales.NET company profile via company-public-page API.
+ * Returns enrichment data (phone, website, logo, bio, social links, memberships, etc.) on success, null on failure.
+ */
+async function lookupESNCompanyProfile(
+  esnOrgId: number
+): Promise<{
+  primaryPhoneNumber?: string;
+  secondaryPhoneNumber?: string;
+  websiteUrl?: string;
+  companyLogoUrl?: string;
+  description?: string;
+  cityName?: string;
+  stateCode?: string;
+  postalCodeNumber?: string;
+  primaryMetroAreaName?: string;
+  metroAreaNames?: string[];
+  instagramUrl?: string;
+  pinterestUrl?: string;
+  facebookUrl?: string;
+  linkedInUrl?: string;
+  twitterHandle?: string;
+  youtubeUrl?: string;
+  memberships?: Array<{ id: number; name: string; shortDescription?: string; description?: string }>;
+  orgPackageType?: string;
+} | null> {
+  try {
+    const query = JSON.stringify({ orgId: esnOrgId });
+    const url = `https://www.estatesales.net/api/legacy/queries/companies/company-public-page?query=${encodeURIComponent(query)}&explicitTypes=DateTime`;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': getRandomUserAgent(),
+        Accept: 'application/json',
+        'Accept-Language': 'en-US',
+        Referer: 'https://www.estatesales.net/',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      console.warn(
+        `[Enrichment] ESN company profile API error: ${response.status} for orgId=${esnOrgId}`
+      );
+      return null;
+    }
+
+    const data = (await response.json()) as {
+      primaryPhoneNumber?: string;
+      secondaryPhoneNumber?: string;
+      websiteUrl?: string;
+      companyLogoUrl?: string;
+      description?: string;
+      cityName?: string;
+      stateCode?: string;
+      postalCodeNumber?: string;
+      primaryMetroAreaName?: string;
+      metroAreaNames?: string[];
+      instagramUrl?: string;
+      pinterestUrl?: string;
+      facebookUrl?: string;
+      linkedInUrl?: string;
+      twitterHandle?: string;
+      youtubeUrl?: string;
+      memberships?: Array<{ id: number; name: string; shortDescription?: string; description?: string }>;
+      orgPackageType?: string;
+    };
+
+    console.debug(`[Enrichment] Found ESN company profile for orgId=${esnOrgId}`);
+    return data;
+  } catch (error) {
+    console.warn(
+      `[Enrichment] ESN company profile lookup failed for orgId=${esnOrgId}: ${error instanceof Error ? error.message : String(error)}`
     );
     return null;
   }

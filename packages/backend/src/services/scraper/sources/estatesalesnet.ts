@@ -37,6 +37,7 @@ interface EstatesalesNetApiRecord {
   id: number;
   name: string;
   orgName: string;
+  orgId?: number; // EstateSales.NET numeric company ID for enrichment
   cityName: string;
   stateCode: string;
   postalCodeNumber: string;
@@ -73,6 +74,7 @@ export async function scrapeEstateSalesNetItems(
       'id',
       'name',
       'orgName',
+      'orgId',
       'cityName',
       'stateCode',
       'postalCodeNumber',
@@ -184,6 +186,7 @@ function parseApiRecordToScrapedItem(record: EstatesalesNetApiRecord): ScrapedIt
       sourceUrl,
       sourceName: 'EstateSalesNet',
       sourceItemId: `estatesales.net:${record.id}`,
+      esnOrgId: record.orgId ?? undefined,
       scrapedMetadata: {
         apiResponse: record,
         lat: record.latitude,
