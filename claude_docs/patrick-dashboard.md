@@ -1,8 +1,8 @@
-# Patrick's Dashboard — S620 WRAP
+# Patrick's Dashboard — S621 WRAP
 
-## Status: 🟢 3 scrapers ready to push — EstateSalesNet + Eventbrite + Newspaper RSS | Craigslist suspended (datacenter IP block) | 2 Facebook paths on roadmap (#364, #365)
+## Status: 🟢 Canada scraper expansion shipped — 92 metros + 9 CA grid centers | Advisory board CONDITIONAL GO | Roadmap #366–#371 added | Push block below
 
-**Headline:** S620 closed the Craigslist dead-end (datacenter IPs blocked at network level — RSS and HTML both 403) and researched Facebook data sources. Two legitimate Facebook paths added to roadmap: #364 Bing Search API event discovery (free, no Facebook interaction) and #365 Organizer Facebook Page Sync (OAuth onboarding, Graph API pull). S619 push block still outstanding — Eventbrite and Newspaper RSS are built and waiting.
+**Headline:** S621 expanded all scrapers to Canada (Facebook Events now covers 92 metros including ON, BC, AB, MB, SK; national grid covers 9 Canadian coordinate centers for Eventbrite). Advisory board returned CONDITIONAL GO on Canada platform expansion. Quebec Bill 96 identified as Phase 1 blocker — block QC at signup. MaxSold ($50k+ estates, 25–35% commission) is the wedge. 18-month window before Kijiji can react.
 
 ---
 
@@ -10,26 +10,26 @@
 
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
-| **P1** | Push S619+S620 files | Now | Block below |
+| **P1** | Push S619 + S620 + S621 files | Now | Combined block below |
 | **P1** | Add `EVENTBRITE_API_KEY` GitHub Secret | After push | Register free app at developer.eventbrite.com → private token → GitHub repo Settings → Secrets → New |
-| **P2** | Optional: add `EVENTBRITE_ORGANIZER_ID` + `RSS_ORGANIZER_ID` secrets | When ready | Both optional — backend falls back to system organizer if absent |
+| **P2** | Engage Canadian privacy lawyer | Before CA launch | CAD $3–5k estimated. Needed for PIPEDA privacy policy update + CCPSA ToS clause (#368) |
+| **P2** | Monitor GST/HST threshold monthly | Ongoing | Threshold: CA$30,000 annual Canadian revenue. No action until near threshold |
 | **P2** | Press release — fill `[Last Name]` ×3 + real cell | OVERDUE | `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
 | **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, etc |
 
 ---
 
-## 📊 What's Now in Production (after S619 push)
+## 📊 What's Now In Production (after S621 push)
 
-- **EstateSalesNet** — 5,499 sales nightly, 00:00 UTC, 40 national coordinate centers ✅
-- **Craigslist** — ❌ SUSPENDED — datacenter IPs blocked at network level (403 on RSS + HTML). Workflow exists but skip triggering.
-- **Eventbrite** — national grid, 5 search queries, 01:00 UTC — needs EVENTBRITE_API_KEY secret ⏳
+- **EstateSalesNet** — 5,499 sales nightly, 00:00 UTC, 40 US coordinate centers ✅
+- **Craigslist** — ❌ SUSPENDED — datacenter IPs blocked at network level. Workflow exists but don't trigger.
+- **Eventbrite** — national grid (now includes 9 CA centers), 5 search queries, 01:00 UTC — needs EVENTBRITE_API_KEY ⏳
 - **Newspaper/Oodle RSS** — 62 classified feeds across 27 metros, 02:00 UTC ⏳
-
-All scrapers POST to `/api/internal/scraper/ingest` with INTERNAL_SCRAPER_KEY auth. All dedup by sourceItemId.
+- **Facebook Events search** — 92 metros (75 US + 17 Canada Phase 1), weekly Monday 03:00 UTC ✅ (after S619 push)
 
 ---
 
-## 📦 Push Block — S619 + S620
+## 📦 Push Block — S619 + S620 + S621
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
@@ -45,27 +45,33 @@ git add packages/backend/src/services/scraper/newspaper-feeds.ts
 git add packages/backend/src/services/scraper/sources/newspaper-rss.ts
 git add packages/backend/src/scripts/run-newspaper-rss.ts
 git add .github/workflows/scrape-newspaper-rss.yml
+git add packages/backend/src/services/scraper/sources/search-facebook-events.ts
+git add packages/backend/src/services/scraper/national-grid.ts
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-git commit -m "feat: Eventbrite + Newspaper RSS scrapers; suspend Craigslist; add Facebook roadmap items #364-365
+git commit -m "feat(canada): S621 wrap — scraper expansion to 92 metros, 9 CA grid centers, roadmap #366-371, Canada CONDITIONAL GO
 
-- Eventbrite scraper: national grid API search, 5 query terms, page 3 cap
-- Newspaper/Oodle RSS scraper: 62 feeds across 27 metros
-- GitHub Actions workflows: scrape-eventbrite (01:00 UTC), scrape-newspaper-rss (02:00 UTC)
-- Craigslist RSS rewrite (bypasses WAF) — workflow exists but suspended (datacenter 403)
-- Roadmap #364: Bing Search API Facebook event discovery (queued S620)
-- Roadmap #365: Organizer Facebook Page Sync via Graph API OAuth (queued S621+)"
+- FB events scraper: 30 → 92 metros (75 US + 17 Canada Phase 1: ON, BC, AB, MB, SK)
+- National grid: 40 → 51 centers (9 Canadian added for Eventbrite + API scrapers)
+- Craigslist: suspended (datacenter IP block confirmed)
+- Eventbrite: national grid scraper with EVENTBRITE_API_KEY (needs GitHub secret)
+- Newspaper/Oodle RSS: 62 feeds across 27 metros
+- Roadmap #366-371: Canada scraper (shipped), infra, legal, Quebec flag, analytics, launch
+- Advisory board: CONDITIONAL GO — Quebec Bill 96 blocks QC in Phase 1
+- MaxSold wedge identified: 25-35% commission, $50k+ only, 18mo reaction window"
 
 .\push.ps1
 ```
 
 ---
 
-## 🚧 What's Queued for Next Session (S621)
+## 🚧 What's Queued for Next Session (S622)
 
-1. **Build #364 — Bing Facebook Event Discovery**: Get Bing Search API key (Azure → Cognitive Services → Bing Search v7, free tier). Build `sources/bing-facebook-events.ts` + `scripts/run-bing-facebook.ts` + `.github/workflows/scrape-bing-facebook.yml`. Query: `site:facebook.com/events "estate sale" [city]`. Parse Bing structured results → ingest. Cron: 03:00 UTC.
-2. **TypeScript check** — `cd packages/backend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules`.
-3. **S614 migrations** if not yet deployed: `20260501030000_metro_top_finds` + `20260501060000_organizer_claim_email`.
-4. **Storefront Chrome QA**: #356 Broadcast card, #363 Buyer's Premium badge (shipped S601, pending Chrome verification).
+1. **Chrome QA** — #356 Broadcast card + #363 Buyer's Premium badge (shipped S601, pending browser verification)
+2. **Canada Platform Core Infrastructure (#367)** — ~7–9 weeks engineering when ready: CAD currency display, postal code validation (A1A 1A1 regex), province selector, Stripe Connect CA, Newfoundland timezone (UTC+03:30)
+3. **Canada Legal Compliance (#368)** — required before any Canadian organizer onboards: PIPEDA privacy policy update, CCPSA ToS clause, data export endpoint (right of access), consent checkboxes
+4. **Quebec Bill 96 Feature Flag (#369)** — block QC province at signup, show waitlist modal. Required before any Canada launch
+5. **TypeScript check** — `cd packages/backend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules`
+6. **S614 migrations** if not yet deployed: `20260501030000_metro_top_finds` + `20260501060000_organizer_claim_email`
