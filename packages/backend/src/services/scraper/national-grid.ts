@@ -134,4 +134,18 @@ export const NATIONAL_GRID: CoordinateCenter[] = [
   { label: 'albuquerque-metro', lat: 35.0844, lng: -106.6504, radiusMiles: 250 },
   { label: 'el-paso-metro', lat: 31.7619, lng: -106.4850, radiusMiles: 250 },
   { label: 'boise-metro', lat: 43.6150, lng: -116.2023, radiusMiles: 250 },
+
+  // Canada — Phase 1 (ON, BC, AB, MB, SK)
+  // 250-mile radius covers full province clusters with overlap dedup in ingest layer
+  { label: 'toronto-metro',    lat: 43.6532, lng: -79.3832,  radiusMiles: 250 },
+  { label: 'ottawa-metro',     lat: 45.4215, lng: -75.6972,  radiusMiles: 250 },
+  { label: 'vancouver-metro',  lat: 49.2827, lng: -123.1207, radiusMiles: 250 },
+  { label: 'calgary-metro',    lat: 51.0447, lng: -114.0719, radiusMiles: 250 },
+  { label: 'edmonton-metro',   lat: 53.5461, lng: -113.4938, radiusMiles: 250 },
+  { label: 'winnipeg-metro',   lat: 49.8951, lng: -97.1384,  radiusMiles: 250 },
+  { label: 'saskatoon-metro',  lat: 52.1332, lng: -106.6700, radiusMiles: 250 },
+
+  // Canada — Phase 2 (Atlantic + Quebec — defer until French localization complete)
+  { label: 'montreal-metro',   lat: 45.5017, lng: -73.5673,  radiusMiles: 250 },
+  { label: 'halifax-metro',    lat: 44.6488, lng: -63.5752,  radiusMiles: 250 },
 ];
