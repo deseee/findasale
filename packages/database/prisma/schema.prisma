@@ -4256,3 +4256,21 @@ model DirectoryClaimEmail {
   @@index([organizerId])
   @@index([status, nextAttemptAt])
 }
+
+// ADR-074: Metro Sync — top eBay sold items per metro area, synced nightly by metroSyncCron
+model MetroTopFinds {
+  id             String   @id @default(cuid())
+  citySlug       String   // e.g. "grand-rapids-mi"
+  metro          String   // Display name: "Grand Rapids, MI"
+  itemTitle      String
+  itemCategory   String?  // condition string from eBay
+  soldPrice      Decimal  @db.Decimal(10, 2)
+  imageUrl       String?
+  ebayListingId  String   // eBay item ID
+  soldAt         DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([citySlug, ebayListingId])
+  @@index([citySlug, soldAt])
+}
