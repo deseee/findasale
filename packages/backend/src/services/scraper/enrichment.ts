@@ -129,6 +129,17 @@ export async function enrichOrganizer(
           }
         }
       }
+    } else if (organizer.googlePlaceId && organizer.googleRating == null) {
+      // Already have placeId but rating was never fetched (pre-dates rating fields).
+      // Fetch Details only — no new lookup needed.
+      const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
+      if (googlePlacesKey) {
+        const details = await fetchGooglePlaceDetails(organizer.googlePlaceId, googlePlacesKey);
+        if (details) {
+          if (details.rating != null) updateData.googleRating = details.rating;
+          if (details.userRatingsTotal != null) updateData.googleRatingCount = details.userRatingsTotal;
+        }
+      }
     }
 
     // Step 3: Contact email discovery
