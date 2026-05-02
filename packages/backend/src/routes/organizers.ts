@@ -715,6 +715,126 @@ router.get('/efficiency-stats', authenticate, async (req: AuthRequest, res: Resp
   }
 });
 
+// Feature #361: GET /organizers/claim/verify/:token — verify magic link email
+router.get('/claim/verify/:token', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    const claimRequest = await prisma.claimRequest.findUnique({
+      where: { verificationToken: token },
+      include: { organizer: { select: { id: true, businessName: true } } },
+    });
+
+    if (!claimRequest) {
+      return res.status(404).json({ message: 'Invalid or expired verification link' });
+    }
+
+    if (claimRequest.emailVerifiedAt) {
+      return res.status(200).json({ message: 'Email already verified', alreadyVerified: true });
+    }
+
+    // Check 72-hour expiry
+    const expiryMs = 72 * 60 * 60 * 1000;
+    if (Date.now() - claimRequest.createdAt.getTime() > expiryMs) {
+      return res.status(410).json({ message: 'Verification link has expired. Please submit a new claim request.' });
+    }
+
+    await prisma.claimRequest.update({
+      where: { id: claimRequest.id },
+      data: { emailVerifiedAt: new Date() },
+    });
+
+    return res.status(200).json({
+      message: 'Email verified successfully. We\'ll review your claim within 2-3 business days.',
+      organizerName: claimRequest.organizer.businessName,
+    });
+  } catch (error) {
+    console.error('Error verifying claim email:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #361: GET /organizers/admin/claim-requests — list all claim requests
+router.get('/admin/claim-requests', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    // Check admin role
+    const isAdmin = req.user?.roles?.includes('ADMIN') || req.user?.role === 'ADMIN';
+    if (!isAdmin) return res.status(403).json({ message: 'Admin access required' });
+
+    const { status } = req.query;
+
+    const claims = await prisma.claimRequest.findMany({
+      where: status ? { status: status as string } : {},
+      include: {
+        organizer: { select: { id: true, businessName: true, isClaimed: true } },
+      },
+      orderBy: [
+        { emailVerifiedAt: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ],
+    });
+
+    res.json(claims);
+  } catch (error) {
+    console.error('Error fetching claim requests:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #361: POST /organizers/admin/claim-requests/:id/approve
+router.post('/admin/claim-requests/:id/approve', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const isAdmin = req.user?.roles?.includes('ADMIN') || req.user?.role === 'ADMIN';
+    if (!isAdmin) return res.status(403).json({ message: 'Admin access required' });
+
+    const claim = await prisma.claimRequest.findUnique({
+      where: { id: req.params.id },
+      include: { organizer: true },
+    });
+
+    if (!claim) return res.status(404).json({ message: 'Claim not found' });
+    if (claim.status !== 'PENDING') return res.status(409).json({ message: 'Claim is not in PENDING state' });
+
+    // Approve: update claim status AND mark organizer as claimed
+    await prisma.$transaction([
+      prisma.claimRequest.update({
+        where: { id: claim.id },
+        data: { status: 'APPROVED', reviewedAt: new Date(), reviewedBy: req.user!.id },
+      }),
+      prisma.organizer.update({
+        where: { id: claim.organizerId },
+        data: { isClaimed: true, isUnmanagedListing: false },
+      }),
+    ]);
+
+    res.json({ success: true, message: 'Claim approved' });
+  } catch (error) {
+    console.error('Error approving claim:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Feature #361: POST /organizers/admin/claim-requests/:id/reject
+router.post('/admin/claim-requests/:id/reject', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const isAdmin = req.user?.roles?.includes('ADMIN') || req.user?.role === 'ADMIN';
+    if (!isAdmin) return res.status(403).json({ message: 'Admin access required' });
+
+    const claim = await prisma.claimRequest.findUnique({ where: { id: req.params.id } });
+    if (!claim) return res.status(404).json({ message: 'Claim not found' });
+
+    await prisma.claimRequest.update({
+      where: { id: claim.id },
+      data: { status: 'REJECTED', reviewedAt: new Date(), reviewedBy: req.user!.id },
+    });
+
+    res.json({ success: true, message: 'Claim rejected' });
+  } catch (error) {
+    console.error('Error rejecting claim:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Public: get organizer profile + their upcoming/active sales + badges + reputation
 // Supports lookup by ID (CUID) or by customStorefrontSlug (user-friendly slug)
 router.get('/:id', async (req: Request, res: Response) => {
@@ -1602,6 +1722,9 @@ router.get('/me/broadcasts', authenticate, async (req: AuthRequest, res: Respons
 // Feature #361: POST /organizers/:id/claim — submit claim request for unclaimed listing
 router.post('/:id/claim', async (req: Request, res: Response) => {
   try {
+    const { randomBytes } = require('crypto');
+    const { Resend } = require('resend');
+
     // Validate request body
     const validation = claimRequestSchema.safeParse(req.body);
     if (!validation.success) {
@@ -1612,66 +1735,32 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
     const organizerId = req.params.id;
 
     // Verify organizer exists
-    const organizer = await prisma.organizer.findUnique({
+    let foundOrganizer = await prisma.organizer.findUnique({
       where: { id: organizerId },
-      select: { id: true, isClaimed: true },
+      select: { id: true, isClaimed: true, businessName: true },
     });
 
-    if (!organizer) {
+    if (!foundOrganizer) {
       // Also try by slug
-      const organizerBySlug = await prisma.organizer.findUnique({
+      foundOrganizer = await prisma.organizer.findUnique({
         where: { customStorefrontSlug: organizerId },
-        select: { id: true, isClaimed: true },
+        select: { id: true, isClaimed: true, businessName: true },
       });
 
-      if (!organizerBySlug) {
+      if (!foundOrganizer) {
         return res.status(404).json({ message: 'Organizer not found' });
       }
-
-      // Use the found organizer
-      if (organizerBySlug.isClaimed) {
-        return res.status(409).json({ message: 'This listing is already claimed' });
-      }
-
-      // Check if PENDING claim already exists from this email
-      const existingClaim = await prisma.claimRequest.findFirst({
-        where: {
-          organizerId: organizerBySlug.id,
-          claimantEmail: claimantEmail,
-          status: 'PENDING',
-        },
-      });
-
-      if (existingClaim) {
-        return res.status(409).json({ message: 'A claim request is already pending for this email' });
-      }
-
-      // Create claim request
-      await prisma.claimRequest.create({
-        data: {
-          organizerId: organizerBySlug.id,
-          claimantEmail,
-          claimantName,
-          message: message || null,
-          status: 'PENDING',
-        },
-      });
-
-      return res.status(201).json({
-        success: true,
-        message: 'Your claim request has been submitted. We\'ll review it within 2-3 business days.',
-      });
     }
 
     // Check if already claimed
-    if (organizer.isClaimed) {
+    if (foundOrganizer.isClaimed) {
       return res.status(409).json({ message: 'This listing is already claimed' });
     }
 
     // Check if PENDING claim already exists from this email
     const existingClaim = await prisma.claimRequest.findFirst({
       where: {
-        organizerId: organizer.id,
+        organizerId: foundOrganizer.id,
         claimantEmail: claimantEmail,
         status: 'PENDING',
       },
@@ -1681,20 +1770,50 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
       return res.status(409).json({ message: 'A claim request is already pending for this email' });
     }
 
-    // Create claim request
-    await prisma.claimRequest.create({
+    // Generate verification token
+    const verificationToken = randomBytes(32).toString('hex');
+
+    // Create claim request with verification token
+    const claimRequest = await prisma.claimRequest.create({
       data: {
-        organizerId: organizer.id,
+        organizerId: foundOrganizer.id,
         claimantEmail,
         claimantName,
         message: message || null,
         status: 'PENDING',
+        verificationToken,
       },
     });
 
+    // Send verification email via Resend
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://finda.sale';
+    const verificationUrl = `${frontendUrl}/claim/verify/${verificationToken}`;
+
+    try {
+      await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL || 'notifications@finda.sale',
+        to: claimantEmail,
+        subject: `Verify your claim request for ${foundOrganizer.businessName}`,
+        html: `
+          <p>Hi ${claimantName},</p>
+          <p>Thank you for submitting a claim request for <strong>${foundOrganizer.businessName}</strong>.</p>
+          <p>To verify your email address and confirm your claim request, click the link below:</p>
+          <p><a href="${verificationUrl}" style="background-color: #b45309; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-block;">Verify Email Address</a></p>
+          <p>Or copy and paste this link in your browser: ${verificationUrl}</p>
+          <p>This link expires in 72 hours.</p>
+          <p>Once verified, we'll review your claim request within 2-3 business days.</p>
+          <p>If you didn't submit this request, you can safely ignore this email.</p>
+        `,
+      });
+    } catch (emailError) {
+      // Fail open: log error but don't prevent claim creation
+      console.error('Failed to send verification email:', emailError);
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Your claim request has been submitted. We\'ll review it within 2-3 business days.',
+      message: `Verification email sent to ${claimantEmail}. Please check your email and click the verification link to confirm your claim request.`,
     });
   } catch (error) {
     console.error('Error submitting claim request:', error);

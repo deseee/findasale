@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import api from '../../../lib/api';
+import ClaimListingModal from '../../../components/ClaimListingModal';
 
 interface BrandKitData {
   id: string;
@@ -95,6 +96,31 @@ const getRelativeTime = (dateString: string): string => {
   return 'just now';
 };
 
+// Feature #361: US state names for deduplication
+const US_STATE_NAMES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware',
+  'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
+  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi',
+  'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico',
+  'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania',
+  'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont',
+  'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'District of Columbia'
+];
+
+// Format location, deduplicating when city is actually a state name
+const formatLocation = (city: string | null | undefined, state: string | null | undefined): string | null => {
+  if (!city && !state) return null;
+  if (!city) return state || null;
+  if (!state) return city;
+
+  // If city is a full US state name, show only state abbreviation to avoid "California, CA"
+  if (US_STATE_NAMES.includes(city)) {
+    return state;
+  }
+
+  return `${city}, ${state}`;
+};
+
 const OrganizerStorefront = () => {
   const router = useRouter();
   const { slug } = router.query;
@@ -104,6 +130,7 @@ const OrganizerStorefront = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isClaimed, setIsClaimed] = useState<boolean>(true);
+  const [showClaimModal, setShowClaimModal] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -246,14 +273,19 @@ const OrganizerStorefront = () => {
               <p className="text-sm text-amber-800 dark:text-amber-200">
                 🏷️ Is this your business? Claim this listing to manage your storefront, add photos, and connect with shoppers.
               </p>
-              <Link
-                href="/login"
+              <button
+                onClick={() => setShowClaimModal(true)}
                 className="shrink-0 text-xs font-semibold px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-full transition-colors"
               >
                 Claim Listing
-              </Link>
+              </button>
             </div>
           </div>
+        )}
+
+        {/* Claim Listing Modal */}
+        {showClaimModal && brandKit && (
+          <ClaimListingModal organizerId={brandKit.id} onClose={() => setShowClaimModal(false)} />
         )}
 
         {/* Main Content */}
@@ -518,7 +550,7 @@ const OrganizerStorefront = () => {
                           {sale.title}
                         </h3>
                         <p className="text-sm text-warm-600 dark:text-gray-400 mb-2">
-                          {sale.city}, {sale.state}
+                          {formatLocation(sale.city, sale.state)}
                         </p>
                         {/* Attendance count (#362) */}
                         {sale.attendanceCount != null && sale.attendanceCount > 0 && (

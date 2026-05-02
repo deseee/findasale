@@ -4250,15 +4250,18 @@ model QRScannerEvent {
 
 // Feature #361: Claim-This-Listing — claim requests for unclaimed organizer profiles
 model ClaimRequest {
-  id            String    @id @default(cuid())
-  organizerId   String
-  claimantEmail String
-  claimantName  String
-  message       String?
-  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
-  createdAt     DateTime  @default(now())
-  reviewedAt    DateTime?
-  organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(cuid())
+  organizerId        String
+  claimantEmail      String
+  claimantName       String
+  message            String?
+  status             String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt          DateTime  @default(now())
+  reviewedAt         DateTime?
+  verificationToken  String?   @unique // Magic link token for email verification
+  emailVerifiedAt    DateTime? // Timestamp when email was verified via magic link
+  reviewedBy         String?   // Admin user ID who approved/rejected the claim
+  organizer          Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
 
   @@index([organizerId])
   @@index([status])
