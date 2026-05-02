@@ -412,6 +412,10 @@ model Organizer {
   googleRatingCount        Int?
   // Business category from directory scraping (migration 20260502020000)
   businessCategory         String?
+  // Organizer profile fields (migration 20260627000000)
+  timezone                 String?
+  byAppointment            Boolean  @default(false)
+  organizerTypes           String[] @default([])
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 
