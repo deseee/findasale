@@ -357,6 +357,8 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Recent Sessions
 
+**S621 (2026-05-02) — COMPLETE (claim magic link + per-organizer scraper attribution + Google News cleanup):** Three feature areas shipped and deployed. **Claim-This-Listing magic link flow (#361):** `ClaimListingModal` now opens directly (no login required); success state updated to "Check Your Email"; `POST /:id/claim` generates `crypto.randomBytes(32)` token, stores on `ClaimRequest`, sends Resend email with `/claim/verify/{token}` link; `GET /claim/verify/:token` validates 72-hour expiry and sets `emailVerifiedAt`; admin approve/reject endpoints added; all new routes placed before `/:id` catch-all. New frontend page `pages/claim/verify/[token].tsx` handles 5 states (loading / success / already-verified / expired / invalid). `ClaimRequest` schema: added `verificationToken String? @unique`, `emailVerifiedAt DateTime?`, `reviewedBy String?`. `Organizer.phone` made nullable; `scrapedEmail String?` added. **Per-organizer scraper attribution:** `getOrCreateScrapedOrganizer(businessName, sourceName, city, state)` helper added to `scraper/index.ts` — creates per-company organizer records using EstateSales.NET `orgName` field (email pattern `scraper+{slug}-{source}@system.finda.sale`). `ingestScrapedListing` routes to per-company organizer when `item.organizerName` present. **Google Places enrichment upgrade:** `enrichment.ts` now calls `place/details` API for `formatted_phone_number, website, opening_hours, photos, formatted_address`; organizer `phone/website/address/profilePhoto` updated after enrichment. **City/state deduplication fix:** `formatLocation()` helper in `[slug].tsx` prevents "California, CA" display when city field contains full US state name. **Google News disabled:** `NEWSPAPER_FEEDS = []` — deprecated S621 (produced 6000+ article junk records). **DB cleanup:** `DELETE FROM "Sale" WHERE "sourceName" = 'ClassifiedRSS'` executed — all Google News junk records removed. **Migrations deployed:** `20260502000000_claim_request_magic_link` (claim fields) + `20260502000100_organizer_phone_nullable` (phone nullable + scrapedEmail). Commit: `0b02a95b`. **Files changed:** `organizers.ts`, `scraper/index.ts`, `scraper/enrichment.ts`, `scraper/newspaper-feeds.ts`, `schema.prisma`, `[slug].tsx`, `ClaimListingModal.tsx`, `pages/claim/verify/[token].tsx`, 2 migration SQL files. **Pending Chrome QA:** claim flow end-to-end, verify page, #356 Broadcast card, #363 Buyer's Premium badge.
+
 **S619 (2026-05-01) — COMPLETE (Craigslist surgical fix + Eventbrite + Newspaper RSS scrapers):** Three scraper workflows shipped. Craigslist: full `sources/craigslist.ts` rewrite (both exports, verified selectors, real date parsing from .meta text, no synthetic ZIPs); `htmlParser.ts` zip optional; `scraper/index.ts` zip removed from validation + `?? ''` fallback in Prisma create; 4 subdomain typos fixed (craigslist-sites.ts). Eventbrite: new `sources/eventbrite.ts` + `run-eventbrite.ts` + `scrape-eventbrite.yml` (free API, 5 queries, national grid, page-3 cap, 01:00 UTC cron). Newspaper RSS: new `newspaper-feeds.ts` (62 Oodle + Google News feeds), `sources/newspaper-rss.ts` (Cheerio XML + keyword filter), `run-newspaper-rss.ts`, `scrape-newspaper-rss.yml` (02:00 UTC cron). Bug fixed: `rateLimiter.wait()` → `waitBeforeRequest(domain)` in newspaper-rss.ts. Cron stagger: ESN 00:00 → CL 00:30 → Eventbrite 01:00 → RSS 02:00 UTC. Pending Patrick: push block, trigger CL workflow manually, add `EVENTBRITE_API_KEY` secret (free at developer.eventbrite.com).
 
 **S616 (2026-05-01) — COMPLETE (deleted-sale loop — final root cause fix):** Patrick reported the loop persisted after S615 deployed. Live Chrome MCP investigation: 6×404 in 25 seconds (~2.5s cadence, faster than the 5s `refetchInterval`). Root cause: `useEffect` at `pages/sales/[id].tsx:211` ran `setInterval(() => queryClient.invalidateQueries(['sale', id]), 5000)` — `invalidateQueries` forces refetch and bypasses all `useQuery` guards. Two commits this session: `3ff17c1` (retry/refetchInterval guards on useQuery + `enabled` parameter added to 4 secondary hooks: `usePhotoOps`, `useArrivalAssistant`, `useUGCPhotos`, `useSocialProof`) and `73fc0a6` (the real fix: read `queryClient.getQueryState(['sale', id])` inside the interval and skip on error). Post-deploy live verified: zero requests for the deleted sale URL across 25s. Files: `usePhotoOps.ts`, `useArrivalAssistant.ts`, `useUGCPhotos.ts`, `useSocialProof.ts`, `pages/sales/[id].tsx`. Knock-on flagged for future P2 audit: other live-refresh `setInterval+invalidateQueries` patterns may have the same bypass-the-guard bug.
@@ -429,23 +431,26 @@ This document is the active state anchor for FindA.Sale, a two-sided marketplace
 
 ## Next Session
 
-**S620 — Verify scrapers live + next roadmap priorities.**
+**S622 — Chrome QA: claim flow end-to-end on Sunrise Consignment (user12 as shopper) + scraper pipeline verification.**
 
-### Patrick actions before S620
+### Patrick actions complete (S621)
+- ✅ Push committed (0b02a95b) — 6 files, claim magic link + scraper attribution + enrichment
+- ✅ Migration `20260502000100_organizer_phone_nullable` applied to Railway
+- ✅ Prisma client regenerated
+- ✅ Google News junk sales deleted (`DELETE FROM "Sale" WHERE "sourceName" = 'ClassifiedRSS'`)
 
-1. **Push S619 files** (11 files + wrap docs — block above).
-2. **Trigger Craigslist workflow manually** via GitHub Actions UI → "Craigslist Scraper" → Run workflow. Verify ingest in Railway logs before first cron run.
-3. **Add GitHub Secret: `EVENTBRITE_API_KEY`** — register free app at developer.eventbrite.com → copy private token → GitHub repo Settings → Secrets → New repository secret.
-4. **Optional:** `EVENTBRITE_ORGANIZER_ID` and `RSS_ORGANIZER_ID` (both optional — backend falls back to system organizer).
-5. `RAILWAY_BACKEND_URL` and `INTERNAL_SCRAPER_KEY` already exist from EstateSalesNet setup — no action needed.
+### Patrick actions before S622
+1. **Add Railway env vars** (Railway dashboard → findasale-backend → Variables):
+   - `GOOGLE_PLACES_KEY` — Google Maps Platform API key (Places API + Places Details enabled)
+2. **PRNewswire press release** — file Mon May 5 9:00 AM EST. Fill `[Last Name]` ×3 + real cell in `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B.
+3. **Review + send 19 outreach drafts in Gmail** (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others).
 
-### S620 first tasks
-- Smoke-test scrapers from Railway logs (post-push) — verify CL ingest, confirm Eventbrite and RSS workflows fire on schedule.
-- Run TypeScript check once bash VM is available: `cd packages/backend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules`.
-- Next roadmap priorities: ESP integration for claim-email pipeline; S614 migrations (`20260501030000_metro_top_finds` + `20260501060000_organizer_claim_email`) if not yet deployed; storefront Chrome QA items (#356 Broadcast, #363 Buyer's Premium).
-3. **`pnpm install`** in `packages/backend` to pick up `puppeteer-extra` + stealth plugin.
-4. **PRNewswire press release** — file Mon May 5 9:00 AM EST. Fill `[Last Name]` ×3 + real cell in `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B.
-5. **Review + send 19 outreach drafts in Gmail** (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others).
+### S622 first tasks
+1. **Chrome QA — Claim-This-Listing (#361):** Login as user12 (shopper, `Seedy2025!`) → find Sunrise Consignment storefront → verify amber "Claim This Listing" banner shows → click → modal opens → submit name + email → verify "Check Your Email" success state → check Railway logs for Resend email dispatch.
+2. **Chrome QA — verify page:** Navigate to `/claim/verify/[token]` with a real token from DB — verify success state renders correctly.
+3. **Chrome QA — #356 Broadcast card + #363 Buyer's Premium badge** — both shipped S611, pending verification.
+4. **Scraper pipeline check:** Railway logs — confirm `getOrCreateScrapedOrganizer()` is creating per-company organizer records on next EstateSalesNet cron run (00:00 UTC).
+5. **TypeScript check:** `cd packages/backend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules`
 
 ### S617 audit candidate (P2, queued)
 

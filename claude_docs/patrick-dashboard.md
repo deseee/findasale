@@ -1,8 +1,8 @@
 # Patrick's Dashboard — S621 WRAP
 
-## Status: 🟢 Canada scraper expansion shipped — 92 metros + 9 CA grid centers | Advisory board CONDITIONAL GO | Roadmap #366–#371 added | Push block below
+## Status: 🟢 Claim-This-Listing magic link live | Per-organizer scraper attribution shipped | Google News junk cleaned
 
-**Headline:** S621 expanded all scrapers to Canada (Facebook Events now covers 92 metros including ON, BC, AB, MB, SK; national grid covers 9 Canadian coordinate centers for Eventbrite). Advisory board returned CONDITIONAL GO on Canada platform expansion. Quebec Bill 96 identified as Phase 1 blocker — block QC at signup. MaxSold ($50k+ estates, 25–35% commission) is the wedge. 18-month window before Kijiji can react.
+**Headline:** S621 shipped the full claim-this-listing flow (#361) with magic link email verification, upgraded the scraper to create per-company organizer pages (not one dump-all organizer), enriched scraped organizers with full Google Places details (phone, address, photo), and deleted all 6000+ Google News junk "sales" from the DB.
 
 ---
 
@@ -10,68 +10,72 @@
 
 | Priority | Action | Deadline | Notes |
 |----------|--------|----------|-------|
-| **P1** | Push S619 + S620 + S621 files | Now | Combined block below |
-| **P1** | Add `EVENTBRITE_API_KEY` GitHub Secret | After push | Register free app at developer.eventbrite.com → private token → GitHub repo Settings → Secrets → New |
-| **P2** | Engage Canadian privacy lawyer | Before CA launch | CAD $3–5k estimated. Needed for PIPEDA privacy policy update + CCPSA ToS clause (#368) |
-| **P2** | Monitor GST/HST threshold monthly | Ongoing | Threshold: CA$30,000 annual Canadian revenue. No action until near threshold |
-| **P2** | Press release — fill `[Last Name]` ×3 + real cell | OVERDUE | `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B |
-| **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, etc |
+| **P1** | Add `GOOGLE_PLACES_API_KEY` Railway env var | ASAP | Railway dashboard → findasale-backend → Variables. Google Maps Platform key with Places API + Places Details enabled. Required for organizer enrichment to populate phone/address/photo on scraped pages. |
+| **P2** | Press release — fill `[Last Name]` ×3 + real cell | OVERDUE | `claude_docs/strategy/s603-pr-wire-blast-package.md` Version B. File Mon May 5 9:00 AM EST. |
+| **P3** | Review + send 19 outreach drafts in Gmail | When ready | Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, Antique Trader, AntiqueWeek, 8 others |
 
 ---
 
-## 📊 What's Now In Production (after S621 push)
+## 📊 What Shipped This Session (S621)
 
-- **EstateSalesNet** — 5,499 sales nightly, 00:00 UTC, 40 US coordinate centers ✅
-- **Craigslist** — ❌ SUSPENDED — datacenter IPs blocked at network level. Workflow exists but don't trigger.
-- **Eventbrite** — national grid (now includes 9 CA centers), 5 search queries, 01:00 UTC — needs EVENTBRITE_API_KEY ⏳
-- **Newspaper/Oodle RSS** — 62 classified feeds across 27 metros, 02:00 UTC ⏳
-- **Facebook Events search** — 92 metros (75 US + 17 Canada Phase 1), weekly Monday 03:00 UTC ✅ (after S619 push)
+### Claim-This-Listing (#361) — full flow live
+- **Modal:** Opens without requiring login. Claimant enters name + email + optional message.
+- **Backend:** Generates secure 64-char token, stores on `ClaimRequest`, sends Resend magic link email to `{frontendUrl}/claim/verify/{token}`.
+- **Verify page:** `/claim/verify/[token]` — 5 states: loading / success / already-verified / expired (72h) / invalid.
+- **Admin endpoints:** `GET /admin/claim-requests`, `POST /admin/claim-requests/:id/approve`, `POST /admin/claim-requests/:id/reject`.
+- **Schema:** `ClaimRequest` gained `verificationToken`, `emailVerifiedAt`, `reviewedBy`. `Organizer.phone` is now nullable. `scrapedEmail String?` added.
+
+### Per-organizer scraper attribution
+- `getOrCreateScrapedOrganizer()` creates one organizer per company name (using EstateSalesNet's `orgName` field).
+- Scraped sales now appear on their own company page, not one dump-all "FindA.Sale Directory" page.
+- Email pattern: `scraper+{slug}-{source}@system.finda.sale`.
+
+### Google Places enrichment upgrade
+- After finding a Place ID, the enrichment job now calls `place/details` for phone, website, formatted address, and profile photo.
+- Requires `GOOGLE_PLACES_KEY` env var in Railway.
+
+### City/state deduplication fix
+- `formatLocation()` helper prevents "California, CA" — shows only state code when city field contains a full US state name.
+
+### Google News disabled + DB cleaned
+- `NEWSPAPER_FEEDS = []` — Google News deprecated (articles about sales, not sale listings).
+- ~6000+ junk `ClassifiedRSS` sales deleted from production DB.
 
 ---
 
-## 📦 Push Block — S619 + S620 + S621
+## 📦 Push Block — S621 wrap docs only
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-git add packages/backend/src/services/scraper/htmlParser.ts
-git add packages/backend/src/services/scraper/index.ts
-git add packages/backend/src/services/scraper/craigslist-sites.ts
-git add packages/backend/src/services/scraper/sources/craigslist.ts
-git add packages/backend/src/services/scraper/sources/eventbrite.ts
-git add packages/backend/src/scripts/run-eventbrite.ts
-git add .github/workflows/scrape-eventbrite.yml
-git add packages/backend/src/services/scraper/newspaper-feeds.ts
-git add packages/backend/src/services/scraper/sources/newspaper-rss.ts
-git add packages/backend/src/scripts/run-newspaper-rss.ts
-git add .github/workflows/scrape-newspaper-rss.yml
-git add packages/backend/src/services/scraper/sources/search-facebook-events.ts
-git add packages/backend/src/services/scraper/national-grid.ts
-git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
 
-git commit -m "feat(canada): S621 wrap — scraper expansion to 92 metros, 9 CA grid centers, roadmap #366-371, Canada CONDITIONAL GO
-
-- FB events scraper: 30 → 92 metros (75 US + 17 Canada Phase 1: ON, BC, AB, MB, SK)
-- National grid: 40 → 51 centers (9 Canadian added for Eventbrite + API scrapers)
-- Craigslist: suspended (datacenter IP block confirmed)
-- Eventbrite: national grid scraper with EVENTBRITE_API_KEY (needs GitHub secret)
-- Newspaper/Oodle RSS: 62 feeds across 27 metros
-- Roadmap #366-371: Canada scraper (shipped), infra, legal, Quebec flag, analytics, launch
-- Advisory board: CONDITIONAL GO — Quebec Bill 96 blocks QC in Phase 1
-- MaxSold wedge identified: 25-35% commission, $50k+ only, 18mo reaction window"
-
+git commit -m "docs: S621 wrap — claim magic link + scraper attribution + Google News cleanup"
 .\push.ps1
 ```
 
 ---
 
-## 🚧 What's Queued for Next Session (S622)
+## 🔎 Pending Chrome QA (from this + prior sessions)
 
-1. **Chrome QA** — #356 Broadcast card + #363 Buyer's Premium badge (shipped S601, pending browser verification)
-2. **Canada Platform Core Infrastructure (#367)** — ~7–9 weeks engineering when ready: CAD currency display, postal code validation (A1A 1A1 regex), province selector, Stripe Connect CA, Newfoundland timezone (UTC+03:30)
-3. **Canada Legal Compliance (#368)** — required before any Canadian organizer onboards: PIPEDA privacy policy update, CCPSA ToS clause, data export endpoint (right of access), consent checkboxes
-4. **Quebec Bill 96 Feature Flag (#369)** — block QC province at signup, show waitlist modal. Required before any Canada launch
-5. **TypeScript check** — `cd packages/backend && npx tsc --noEmit --skipLibCheck 2>&1 | grep "error TS" | grep -v node_modules`
-6. **S614 migrations** if not yet deployed: `20260501030000_metro_top_finds` + `20260501060000_organizer_claim_email`
+| Item | What to Test | Status |
+|------|-------------|--------|
+| **#361 Claim flow** | Login as user12 (shopper, `Seedy2025!`) → Sunrise Consignment storefront → amber banner → modal → submit → "Check Your Email" success | ⏳ Pending |
+| **#361 Verify page** | Get token from DB → navigate to `/claim/verify/{token}` → confirm success state | ⏳ Pending |
+| **#356 Broadcast card** | Any organizer storefront with a broadcast → "Latest Update" card renders | ⏳ Pending |
+| **#363 Buyer's Premium badge** | AUCTION sale on storefront → amber "Buyer's Premium: n%" pill | ⏳ Pending |
+| **Tier Lapse plan card** | tier-lapse-test@example.com dashboard → plan card is amber when lapsed | ⏳ Pending |
+
+---
+
+## 🚦 Scraper Status
+
+| Source | Status | Notes |
+|--------|--------|-------|
+| EstateSalesNet | ✅ Live | 40 US coordinate centers, 00:00 UTC nightly |
+| Craigslist | ❌ Suspended | Datacenter IP block — don't trigger |
+| Eventbrite | ⏳ Needs key | Add `EVENTBRITE_API_KEY` GitHub Secret |
+| Newspaper/Oodle RSS | ✅ Wired | 02:00 UTC (no API key needed) |
+
+**Test accounts:** `Seedy2025!` for all seed users. user1=Alice (TEAMS), user2=Bob (PRO), user11=Sunrise Consignment (unclaimed organizer), user12=primary shopper.
