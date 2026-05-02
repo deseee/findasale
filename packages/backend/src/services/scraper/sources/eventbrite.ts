@@ -96,7 +96,6 @@ export async function scrapeEventbriteItems(
 
         // Build request URL with query params
         const params = new URLSearchParams({
-          token: apiKey,
           q: query,
           'location.latitude': String(lat),
           'location.longitude': String(lng),
@@ -112,6 +111,7 @@ export async function scrapeEventbriteItems(
         try {
           const response = await fetch(url, {
             headers: {
+              'Authorization': `Bearer ${apiKey}`,
               'User-Agent': getRandomUserAgent(),
               Accept: 'application/json',
             },
