@@ -781,6 +781,8 @@ model Sale {
   cashFloat                   Int?                     @default(0) // Starting cash register amount (cents)
   saleAssignments             SaleAssignment[]         @relation("SaleAssignments")
   prepTasks                   PrepTask[]               @relation("SalePrepTasks")
+  // S630: Pinned sales — organizer can pin a sale to top of listing (restored from 20260430000000_storefront_v2_hours_types_pinned)
+  isPinned                    Boolean                  @default(false)
   // eBay inventory import: hidden DRAFT container sale for organizer's inventory items
   isInventoryContainer        Boolean                  @default(false)
   // Feature #XXX: Retail Mode — saleType='RETAIL' indicates always-live storefront
