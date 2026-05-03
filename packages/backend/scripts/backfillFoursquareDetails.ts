@@ -84,8 +84,10 @@ async function backfillFoursquareDetails() {
       photoUrls: {
         isEmpty: true, // Array is empty
       },
-      scrapedMetadata: {
-        not: null,
+      NOT: {
+        scrapedMetadata: {
+          equals: 'DbNull' as any,
+        },
       },
     },
     select: {
@@ -147,7 +149,9 @@ async function backfillFoursquareDetails() {
       }
 
       // Merge scrapedMetadata
-      const currentMetadata = listing.scrapedMetadata || {};
+      const currentMetadata = (listing.scrapedMetadata && typeof listing.scrapedMetadata === 'object' && !Array.isArray(listing.scrapedMetadata))
+        ? (listing.scrapedMetadata as Record<string, unknown>)
+        : {};
       updateData.scrapedMetadata = {
         ...currentMetadata,
         hours: details.hours ?? null,
