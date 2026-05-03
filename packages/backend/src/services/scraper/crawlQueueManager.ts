@@ -26,12 +26,13 @@ export interface SeedEntry {
 
 /**
  * Get the next batch of crawl items ready to run
+ * - Filters by sourceName to isolate queue traffic per scraper
  * - Excludes paused items (isPaused=false required)
  * - Filters by nextRunAt <= now
  * - Orders by priority DESC, nextRunAt ASC
  * - Excludes saturated items unless no non-saturated items are ready
  */
-export async function getNextCrawlsToRun(limit: number): Promise<DirectoryCrawlQueue[]> {
+export async function getNextCrawlsToRun(limit: number, sourceName: string): Promise<DirectoryCrawlQueue[]> {
   const now = new Date();
 
   // First, try to get non-saturated items ready to run
@@ -39,6 +40,7 @@ export async function getNextCrawlsToRun(limit: number): Promise<DirectoryCrawlQ
     where: {
       isPaused: false,
       isSaturated: false,
+      sourceName,
       nextRunAt: { lte: now },
     },
     orderBy: [
@@ -59,6 +61,7 @@ export async function getNextCrawlsToRun(limit: number): Promise<DirectoryCrawlQ
     where: {
       isPaused: false,
       isSaturated: true,
+      sourceName,
       nextRunAt: { lte: now },
     },
     orderBy: [

@@ -35,7 +35,7 @@ async function main() {
   if (!GOOGLE_PLACES_API_KEY) throw new Error('GOOGLE_PLACES_API_KEY is not set');
 
   // Fetch next batch of queue items to crawl
-  const queueItems = await getNextCrawlsToRun(50); // Get up to 50 queue items ready to run
+  const queueItems = await getNextCrawlsToRun(50, 'GooglePlaces'); // Get up to 50 queue items ready to run
   console.log(`[run-google-places] Found ${queueItems.length} queue items ready to run`);
 
   if (queueItems.length === 0) {
