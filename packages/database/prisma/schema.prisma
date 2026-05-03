@@ -396,7 +396,7 @@ model Organizer {
   claimEmails              DirectoryClaimEmail[]
   // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
   verificationSource       String?
-  googlePlaceId            String?
+  googlePlaceId            String?  @unique
   facebookPageId           String?
   yelpBusinessId           String?
   stripeIdentitySessionId  String?
@@ -432,7 +432,6 @@ model Organizer {
   @@index([directoryNextCheckAt])
   @@index([suppressOutreach])
   @@index([claimStatus])
-  @@index([googlePlaceId])
   @@index([esnOrgId])
 }
 
@@ -2743,7 +2742,6 @@ model TrailStop {
   @@unique([trailId, order])
   @@index([trailId])
   @@index([stopType])
-  @@index([googlePlaceId])
 }
 
 // Feature #48: Treasure Trails — user check-in at a stop

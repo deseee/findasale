@@ -2,13 +2,13 @@ name: Scrape Foursquare Places
 
 on:
   schedule:
-    - cron: '0 3 3 * *'   # 3rd of month - batch 1 (metros 0-49)
-    - cron: '0 3 4 * *'   # 4th of month - batch 2 (metros 50-99)
+    - cron: '0 3 3 * *'   # 3rd of month — pulls next 50 queue items
+    - cron: '0 3 4 * *'   # 4th of month — pulls next 50 queue items
   workflow_dispatch:
-    inputs:
-      metro_batch:
-        description: 'Metro batch (1=first 50, 2=second 50, empty=all)'
-        required: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   scrape:
@@ -43,7 +43,6 @@ jobs:
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
           FOURSQUARE_API_KEY: ${{ secrets.FOURSQUARE_API_KEY }}
-          METRO_BATCH: ${{ github.event.inputs.metro_batch || (github.event.schedule == '0 3 3 * *' && '1') || (github.event.schedule == '0 3 4 * *' && '2') || '' }}
         run: |
           cd packages/backend
           ./node_modules/.bin/ts-node src/scripts/run-foursquare-places.ts
