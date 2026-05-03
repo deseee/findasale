@@ -246,6 +246,8 @@ model User {
   // Feature: Sale Share Links — referral share links created or clicked by this user
   saleShareLinks        SaleShareLink[]          @relation("SaleShareLinks")
   saleShareLinkClicks   SaleShareLinkClick[]     @relation("SaleShareLinkClicks")
+  // Feature: Shopper Organizer Introductions — organizers this shopper has introduced to FindA.Sale
+  shopperIntroductions  ShopperOrganizerIntroduction[] @relation("ShopperIntroductions")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -425,6 +427,8 @@ model Organizer {
   hours                    OrganizerHours[]
   // Feature: Claim Requests — incoming claim requests for unmanaged listings
   claimRequests            ClaimRequest[]
+  // Feature: Shopper Organizer Introductions — shoppers who introduced this organizer to FindA.Sale
+  shopperIntroductions     ShopperOrganizerIntroduction[] @relation("OrganizerIntroductions")
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 
@@ -4420,4 +4424,23 @@ model SaleShareLinkClick {
 
   @@unique([shareLinkId, clickerId])
   @@index([shareLinkId])
+}
+
+// Feature: Shopper Organizer Introduction — tracks when a shopper introduces an organizer to FindA.Sale
+// Used for referral XP awards: claimed storefront (200 XP), PRO upgrade within 60d (300 XP), quality tier (100 XP)
+model ShopperOrganizerIntroduction {
+  id           String    @id @default(cuid())
+  shopperId    String
+  shopper      User      @relation("ShopperIntroductions", fields: [shopperId], references: [id], onDelete: Cascade)
+  organizerId  String
+  organizer    Organizer @relation("OrganizerIntroductions", fields: [organizerId], references: [id], onDelete: Cascade)
+  introducedAt DateTime  @default(now())
+  claimedAt    DateTime?   // Set when organizer completes claim flow
+  upgradedAt   DateTime?   // Set when organizer upgrades to PRO (within 60d of introducedAt)
+  qualityAt    DateTime?   // Set when one-time quality tier XP is awarded
+
+  @@unique([shopperId, organizerId])
+  @@index([shopperId])
+  @@index([organizerId])
+  @@index([introducedAt])
 }
