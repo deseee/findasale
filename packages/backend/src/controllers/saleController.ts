@@ -20,6 +20,7 @@ import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feat
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
 import { awardXp, XP_AWARDS, applyHuntPassMultiplier, RANK_EARLY_ACCESS_HOURS } from '../services/xpService'; // Explorer's Guild XP awards
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
+import { checkCrewVisitBonus } from '../services/crewService'; // Crew visit XP multiplier
 import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
 import { isSaleLocked, getEffectivePublishTime, getMinutesUntilUnlock } from '../services/rankService'; // Rank-based early access gate
 
@@ -1718,8 +1719,17 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
     }
 
     // Award VISIT XP (5 base, 7 with Hunt Pass — same as sale visit per guild-primer)
-    const baseXp = XP_AWARDS.VISIT;
-    const finalXp = await applyHuntPassMultiplier(userId, baseXp);
+    let baseXp = XP_AWARDS.VISIT;
+
+    // Apply Hunt Pass multiplier (1.5x)
+    let finalXp = await applyHuntPassMultiplier(userId, baseXp);
+
+    // Apply crew visit bonus (1.25x) if user's crew visited together
+    const crewBonus = await checkCrewVisitBonus(userId, saleId);
+    if (crewBonus > 1.0) {
+      finalXp = Math.round(finalXp * crewBonus);
+    }
+
     const awardResult = await awardXp(userId, 'SALE_CHECKIN', finalXp, {
       saleId,
       description: `Checked in to sale: ${sale.title}`,

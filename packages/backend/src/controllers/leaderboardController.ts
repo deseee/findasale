@@ -130,3 +130,134 @@ export const getOrganizerLeaderboard = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Server error while fetching leaderboard' });
   }
 };
+
+/**
+ * Get top scouts (shoppers) by number of organizers they've introduced
+ * Counts ShopperOrganizerIntroduction records where claimedAt IS NOT NULL (claimed storefront)
+ * within the current calendar year (Jan 1 – Dec 31 UTC)
+ * Returns top 25 scouts with current user's rank included if applicable
+ */
+export const getScoutLeaderboard = async (req: Request, res: Response) => {
+  try {
+    const currentYear = new Date().getUTCFullYear();
+    const yearStart = new Date(`${currentYear}-01-01T00:00:00Z`);
+    const yearEnd = new Date(`${currentYear + 1}-01-01T00:00:00Z`);
+
+    // Get current user from auth (if logged in)
+    const authHeader = req.headers.authorization;
+    let currentUserId: string | null = null;
+
+    if (authHeader?.startsWith('Bearer ')) {
+      // Basic JWT parsing to extract userId (full parsing happens in auth middleware elsewhere)
+      try {
+        const token = authHeader.substring(7);
+        const decoded = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        currentUserId = decoded.userId || null;
+      } catch (e) {
+        // Token parse failed, continue without current user context
+      }
+    }
+
+    // Query: Count claimed introductions (claimedAt IS NOT NULL) grouped by shopperId, within current year
+    const scoutData = await prisma.shopperOrganizerIntroduction.groupBy({
+      by: ['shopperId'],
+      where: {
+        claimedAt: {
+          not: null,
+        },
+        introducedAt: {
+          gte: yearStart,
+          lt: yearEnd,
+        },
+      },
+      _count: {
+        organizerId: true,
+      },
+      orderBy: {
+        _count: {
+          organizerId: 'desc',
+        },
+      },
+      take: 25,
+    });
+
+    // Fetch user details for each scout
+    const scouts = await Promise.all(
+      scoutData.map(async (entry) => {
+        const user = await prisma.user.findUnique({
+          where: { id: entry.shopperId },
+          select: {
+            id: true,
+            name: true,
+            // avatarUrl not in schema, use placeholder or initials
+          },
+        });
+
+        return {
+          userId: entry.shopperId,
+          displayName: user?.name || 'Scout',
+          count: entry._count.organizerId,
+        };
+      })
+    );
+
+    // Determine current user's rank if logged in
+    let currentUserRank: number | null = null;
+    if (currentUserId) {
+      const userIntroductionCount = await prisma.shopperOrganizerIntroduction.count({
+        where: {
+          shopperId: currentUserId,
+          claimedAt: {
+            not: null,
+          },
+          introducedAt: {
+            gte: yearStart,
+            lt: yearEnd,
+          },
+        },
+      });
+
+      if (userIntroductionCount > 0) {
+        // Count how many scouts have MORE introductions
+        const betterScouts = await prisma.shopperOrganizerIntroduction.groupBy({
+          by: ['shopperId'],
+          where: {
+            claimedAt: {
+              not: null,
+            },
+            introducedAt: {
+              gte: yearStart,
+              lt: yearEnd,
+            },
+          },
+          _count: {
+            organizerId: true,
+          },
+        });
+
+        const currentUserRankValue = betterScouts.filter((s) => s._count.organizerId > userIntroductionCount).length + 1;
+        currentUserRank = currentUserRankValue;
+      }
+    }
+
+    // Map to final leaderboard format
+    const entries = scouts.map((scout, index) => ({
+      rank: index + 1,
+      userId: scout.userId,
+      displayName: scout.displayName,
+      avatarUrl: null, // No avatar field in User schema
+      count: scout.count,
+      isCurrentUser: scout.userId === currentUserId,
+    }));
+
+    res.json({
+      season: currentYear.toString(),
+      resetDate: new Date(`${currentYear + 1}-01-01T00:00:00Z`).toISOString(),
+      entries,
+      currentUserRank,
+    });
+  } catch (error) {
+    console.error('Error fetching scout leaderboard:', error);
+    res.status(500).json({ message: 'Server error while fetching leaderboard' });
+  }
+};
