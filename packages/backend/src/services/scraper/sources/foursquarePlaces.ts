@@ -81,7 +81,8 @@ async function fetchFoursquarePage(
     });
 
     if (!response.ok) {
-      console.warn(`[Foursquare] HTTP ${response.status} for "${query}" in ${city}, ${state}`);
+      const body = await response.text().catch(() => '(unreadable)');
+      console.warn(`[Foursquare] HTTP ${response.status} for "${query}" in ${city}, ${state} — ${body.slice(0, 300)}`);
       return null;
     }
     return (await response.json()) as FoursquarePlacesResponse;
@@ -201,7 +202,7 @@ export async function scrapeFoursquareQuery(
  * Supports METRO_BATCH env var: "1" for metros 0-49, "2" for metros 50-99, or empty for all
  */
 export async function runFoursquareScraper(metros?: string[], batch?: 1 | 2): Promise<ScrapedItem[]> {
-  const apiKey = process.env.FOURSQUARE_API_KEY;
+  const apiKey = process.env.FOURSQUARE_API_KEY?.trim();
   if (!apiKey) {
     throw new Error('FOURSQUARE_API_KEY is not set');
   }
