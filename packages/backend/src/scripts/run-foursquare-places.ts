@@ -45,7 +45,15 @@ async function main() {
 
   for (const queueItem of queueItems) {
     const { id: queueId, metro, subArea } = queueItem;
-    const searchLocation = subArea ? `${subArea}, ${metro}` : metro;
+    // Build Foursquare `near` string: "Suburb, ST" (not "Suburb, City, ST")
+    let searchLocation: string;
+    if (subArea) {
+      const stateMatch = metro.match(/,\s*([A-Z]{2,3})$/);
+      const state = stateMatch ? stateMatch[1] : '';
+      searchLocation = state ? `${subArea}, ${state}` : metro;
+    } else {
+      searchLocation = metro;
+    }
 
     try {
       const items = await runFoursquareScraper([searchLocation]);
