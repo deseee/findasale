@@ -69,6 +69,38 @@ export const ACHIEVEMENTS = [
     category: 'SHARED' as const,
     targetValue: 3,
   },
+  {
+    key: 'ACQUISITION_SPECIALIST_BRONZE',
+    name: 'Acquisition Specialist',
+    description: 'Introduced 1 organizer who claimed their storefront',
+    icon: '🏅',
+    category: 'SHOPPER' as const,
+    targetValue: 1,
+  },
+  {
+    key: 'ACQUISITION_SPECIALIST_SILVER',
+    name: 'Acquisition Specialist II',
+    description: 'Introduced 5 organizers who claimed their storefronts',
+    icon: '🏅',
+    category: 'SHOPPER' as const,
+    targetValue: 5,
+  },
+  {
+    key: 'ACQUISITION_SPECIALIST_GOLD',
+    name: 'Acquisition Specialist III',
+    description: 'Introduced 10 organizers who claimed their storefronts',
+    icon: '🏆',
+    category: 'SHOPPER' as const,
+    targetValue: 10,
+  },
+  {
+    key: 'ACQUISITION_SPECIALIST_PLATINUM',
+    name: 'Acquisition Specialist IV',
+    description: 'Introduced 50+ organizers who claimed their storefronts',
+    icon: '💎',
+    category: 'SHOPPER' as const,
+    targetValue: 50,
+  },
 ];
 
 /**
@@ -107,7 +139,8 @@ export type AchievementTrigger =
   | 'SALE_ATTENDED'
   | 'ITEM_LISTED'
   | 'SALE_CREATED'
-  | 'WEEKEND_VISIT';
+  | 'WEEKEND_VISIT'
+  | 'ORGANIZER_CLAIMED';
 
 /**
  * Check and award achievements based on trigger
@@ -126,6 +159,7 @@ export const checkAndAward = async (
       ITEM_LISTED: ['FIRST_ITEM_LISTED', 'HUNDRED_ITEMS_LISTED'],
       SALE_CREATED: ['FIRST_SALE_CREATED'],
       WEEKEND_VISIT: ['WEEKEND_WARRIOR', 'STREAK_3'],
+      ORGANIZER_CLAIMED: ['ACQUISITION_SPECIALIST_BRONZE', 'ACQUISITION_SPECIALIST_SILVER', 'ACQUISITION_SPECIALIST_GOLD', 'ACQUISITION_SPECIALIST_PLATINUM'],
     };
 
     const keysToCheck = triggerMap[trigger] || [];
@@ -255,6 +289,20 @@ const evaluateAchievementProgress = async (userId: string, achievementKey: strin
           where: { organizerId: organizer.id }
         });
         return saleCount;
+      }
+
+      case 'ACQUISITION_SPECIALIST_BRONZE':
+      case 'ACQUISITION_SPECIALIST_SILVER':
+      case 'ACQUISITION_SPECIALIST_GOLD':
+      case 'ACQUISITION_SPECIALIST_PLATINUM': {
+        // Count organizers this shopper has introduced who have claimed their storefront
+        const claimedCount = await prisma.shopperOrganizerIntroduction.count({
+          where: {
+            shopperId: userId,
+            claimedAt: { not: null }
+          }
+        });
+        return claimedCount;
       }
 
       case 'WEEKEND_WARRIOR':
