@@ -3,25 +3,28 @@
 /**
  * Email Enrichment Script for Organizers
  *
- * Finds contact email addresses for organizers by:
- * 1. Fetching their website homepage
- * 2. If no email, trying /contact page
- * 3. Extracting emails from HTML using htmlParser.extractEmails()
- * 4. Validating against exclusion list and basic rules
- * 5. Updating Organizer.contactEmail in database
+ * Three passes:
+ * Pass 1: Organizers with website — fetch homepage + /contact, extract email
+ * Pass 2: Organizers with no website — try Google Places + Yelp Fusion to find website, then scrape
+ * Pass 3: Enhanced fallback — for Pass 1 misses, try Places to find alternate website + scrape
  *
- * Rate limiting: 400ms between requests
+ * Rate limiting: 400ms between all requests (scrapes + API calls)
  * Timeout: 10 seconds per fetch
- * Batch size: 200 organizers per run
+ * Batch sizes: Pass 1 (200), Pass 2 (100), Pass 3 (all with website from Pass 1)
  *
  * Usage:
  *   DATABASE_URL=... npx ts-node scripts/enrichContactEmails.ts
+ *   DATABASE_URL=... GOOGLE_PLACES_API_KEY=... YELP_API_KEY=... npx ts-node scripts/enrichContactEmails.ts
  */
 
 import { PrismaClient } from '@prisma/client';
 import { extractEmails } from '../src/services/scraper/htmlParser';
 
 const prisma = new PrismaClient();
+
+// Environment variables — optional
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY ?? '';
+const YELP_API_KEY = process.env.YELP_API_KEY ?? '';
 
 // Email validation and filtering
 const BLOCKED_EMAIL_PATTERNS = [
@@ -66,9 +69,16 @@ function isValidEmail(email: string): boolean {
   return true;
 }
 
+// Extract city from address string (format: "123 Main St, Grand Rapids, MI 49503")
+function extractCityFromAddress(address: string): string {
+  const parts = address.split(',').map(p => p.trim());
+  return parts.length >= 2 ? parts[1] : '';
+}
+
 // Fetch with timeout and abort
 async function fetchWithTimeout(
   url: string,
+  options: RequestInit = {},
   timeoutMs: number = 10000
 ): Promise<string | null> {
   try {
@@ -76,10 +86,12 @@ async function fetchWithTimeout(
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const response = await fetch(url, {
+      ...options,
       signal: controller.signal,
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        ...options.headers,
       },
     });
 
@@ -123,18 +135,121 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Query Google Places Text Search API
+interface GooglePlacesResponse {
+  places?: Array<{
+    websiteUri?: string;
+    displayName?: { text: string };
+  }>;
+}
+
+async function queryGooglePlaces(
+  businessName: string,
+  city: string
+): Promise<string | null> {
+  if (!GOOGLE_PLACES_API_KEY) {
+    return null;
+  }
+
+  const query = `${businessName} ${city}`.trim();
+  
+  try {
+    const body = JSON.stringify({
+      textQuery: query,
+      maxResultCount: 1,
+    });
+
+    const response = await fetchWithTimeout(
+      'https://places.googleapis.com/v1/places:searchText',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+          'X-Goog-FieldMask': 'places.websiteUri,places.displayName',
+        },
+        body,
+      }
+    );
+
+    if (!response) return null;
+
+    const data: GooglePlacesResponse = JSON.parse(response);
+    if (data.places && data.places.length > 0 && data.places[0].websiteUri) {
+      return data.places[0].websiteUri;
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Query Yelp Fusion API
+interface YelpBusinessesResponse {
+  businesses?: Array<{
+    website?: string;
+    url?: string;
+  }>;
+}
+
+async function queryYelpFusion(
+  businessName: string,
+  city: string
+): Promise<string | null> {
+  if (!YELP_API_KEY) {
+    return null;
+  }
+
+  try {
+    const queryStr = `term=${encodeURIComponent(businessName)}&location=${encodeURIComponent(city)}&limit=1`;
+    const url = `https://api.yelp.com/v3/businesses/search?${queryStr}`;
+
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        Authorization: `Bearer ${YELP_API_KEY}`,
+      },
+    });
+
+    if (!response) return null;
+
+    const data: YelpBusinessesResponse = JSON.parse(response);
+    if (data.businesses && data.businesses.length > 0) {
+      // Use .website if available, NOT .url (which is the Yelp page)
+      return data.businesses[0].website || null;
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function main() {
   console.log('[Enrich] Starting contact email enrichment...\n');
 
+  if (!GOOGLE_PLACES_API_KEY) {
+    console.log('[Enrich] WARNING: GOOGLE_PLACES_API_KEY not set — Pass 2/3 Places queries will be skipped');
+  }
+  if (!YELP_API_KEY) {
+    console.log('[Enrich] WARNING: YELP_API_KEY not set — Pass 2 Yelp fallback will be skipped');
+  }
+  console.log('');
+
   const startTime = Date.now();
-  let processed = 0;
-  let found = 0;
-  let notFound = 0;
-  let errors = 0;
+  let pass1Found = 0;
+  let pass1NotFound = 0;
+  let pass1Errors = 0;
+  let pass2Found = 0;
+  let pass2NotFound = 0;
+  let pass2Errors = 0;
+  let pass3Found = 0;
+  let pass3NotFound = 0;
+  let pass3Errors = 0;
 
   try {
-    // Query organizers with website but no contactEmail
-    const organizers = await prisma.organizer.findMany({
+    // ===== PASS 1: Organizers with website =====
+    console.log('[Enrich] === PASS 1: Organizers with website ===\n');
+
+    const pass1Organizers = await prisma.organizer.findMany({
       where: {
         website: {
           not: null,
@@ -150,19 +265,20 @@ async function main() {
       take: 200,
     });
 
-    const total = organizers.length;
-    console.log(`[Enrich] Found ${total} organizers to process\n`);
+    const pass1Total = pass1Organizers.length;
+    console.log(`[Enrich] Found ${pass1Total} organizers with website to process\n`);
 
-    for (const org of organizers) {
-      processed++;
+    for (let i = 0; i < pass1Organizers.length; i++) {
+      const org = pass1Organizers[i];
+      const processed = i + 1;
       let email: string | null = null;
       let source = '';
 
       try {
         const baseDomain = getBaseDomain(org.website!);
         if (!baseDomain) {
-          console.log(`[Enrich] (${processed}/${total}) ${org.businessName}: invalid URL`);
-          errors++;
+          console.log(`[Enrich] (${processed}/${pass1Total}) ${org.businessName}: invalid URL`);
+          pass1Errors++;
           await sleep(400);
           continue;
         }
@@ -195,29 +311,260 @@ async function main() {
             data: { contactEmail: email },
           });
           console.log(
-            `[Enrich] (${processed}/${total}) ${org.businessName}: found ${email} (from ${source})`
+            `[Enrich] (${processed}/${pass1Total}) ${org.businessName}: found ${email} (from ${source})`
           );
-          found++;
+          pass1Found++;
         } else {
-          console.log(`[Enrich] (${processed}/${total}) ${org.businessName}: no email found`);
-          notFound++;
+          console.log(`[Enrich] (${processed}/${pass1Total}) ${org.businessName}: no email found`);
+          pass1NotFound++;
         }
       } catch (fetchError) {
         const message = fetchError instanceof Error ? fetchError.message : String(fetchError);
-        console.log(`[Enrich] (${processed}/${total}) ${org.businessName}: fetch error: ${message}`);
-        errors++;
+        console.log(`[Enrich] (${processed}/${pass1Total}) ${org.businessName}: fetch error: ${message}`);
+        pass1Errors++;
       }
 
       // Rate limiting
       await sleep(400);
     }
 
+    console.log(`\n[Enrich] Pass 1 Summary:`);
+    console.log(`  Found: ${pass1Found}`);
+    console.log(`  Not found: ${pass1NotFound}`);
+    console.log(`  Errors: ${pass1Errors}\n`);
+
+    // ===== PASS 2: Organizers without website =====
+    console.log('[Enrich] === PASS 2: Organizers without website (Places/Yelp) ===\n');
+
+    const pass2Organizers = await prisma.organizer.findMany({
+      where: {
+        website: null,
+        contactEmail: null,
+        isUnmanagedListing: true,
+      },
+      select: {
+        id: true,
+        businessName: true,
+        address: true,
+      },
+      take: 100,
+    });
+
+    const pass2Total = pass2Organizers.length;
+    console.log(`[Enrich] Found ${pass2Total} organizers without website to process\n`);
+
+    for (let i = 0; i < pass2Organizers.length; i++) {
+      const org = pass2Organizers[i];
+      const processed = i + 1;
+      let email: string | null = null;
+      let foundWebsite: string | null = null;
+      let source = '';
+
+      try {
+        const city = extractCityFromAddress(org.address);
+
+        // Try Google Places first
+        let website = await queryGooglePlaces(org.businessName, city);
+        if (website) {
+          foundWebsite = website;
+          source = 'Places';
+        } else if (GOOGLE_PLACES_API_KEY === '') {
+          console.log(
+            `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: GOOGLE_PLACES_API_KEY not set — skipping Places`
+          );
+          pass2NotFound++;
+          await sleep(400);
+          continue;
+        }
+
+        // Try Yelp if Places found nothing
+        if (!website) {
+          website = await queryYelpFusion(org.businessName, city);
+          if (website) {
+            foundWebsite = website;
+            source = 'Yelp';
+          }
+        }
+
+        // If website found, scrape for email and update DB
+        if (foundWebsite) {
+          // Update website first
+          await prisma.organizer.update({
+            where: { id: org.id },
+            data: { website: foundWebsite },
+          });
+
+          const baseDomain = getBaseDomain(foundWebsite);
+          if (baseDomain) {
+            // Try homepage
+            let html = await fetchWithTimeout(foundWebsite);
+            if (html) {
+              email = findFirstValidEmail(html);
+            }
+
+            // Try /contact if homepage failed
+            if (!email) {
+              const contactUrl = `${baseDomain}/contact`;
+              html = await fetchWithTimeout(contactUrl);
+              if (html) {
+                email = findFirstValidEmail(html);
+              }
+            }
+
+            // Update email if found
+            if (email) {
+              await prisma.organizer.update({
+                where: { id: org.id },
+                data: { contactEmail: email },
+              });
+              console.log(
+                `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: found ${email} (from ${source}→website scrape)`
+              );
+              pass2Found++;
+            } else {
+              console.log(
+                `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: found website ${foundWebsite} via ${source}, wrote to DB (no email yet)`
+              );
+              pass2NotFound++;
+            }
+          } else {
+            console.log(
+              `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: invalid website URL from ${source}`
+            );
+            pass2Errors++;
+          }
+        } else {
+          console.log(`[Enrich] (${processed}/${pass2Total}) ${org.businessName}: Places/Yelp: no result`);
+          pass2NotFound++;
+        }
+      } catch (fetchError) {
+        const message = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        console.log(`[Enrich] (${processed}/${pass2Total}) ${org.businessName}: error: ${message}`);
+        pass2Errors++;
+      }
+
+      // Rate limiting
+      await sleep(400);
+    }
+
+    console.log(`\n[Enrich] Pass 2 Summary:`);
+    console.log(`  Found: ${pass2Found}`);
+    console.log(`  Not found: ${pass2NotFound}`);
+    console.log(`  Errors: ${pass2Errors}\n`);
+
+    // ===== PASS 3: Enhanced fallback for Pass 1 misses =====
+    if (!GOOGLE_PLACES_API_KEY) {
+      console.log('[Enrich] Skipping Pass 3 (GOOGLE_PLACES_API_KEY not set)\n');
+    } else {
+      console.log('[Enrich] === PASS 3: Enhanced fallback (Places for Pass 1 misses) ===\n');
+
+      const pass3Organizers = await prisma.organizer.findMany({
+        where: {
+          website: {
+            not: null,
+          },
+          contactEmail: null,
+          isUnmanagedListing: true,
+        },
+        select: {
+          id: true,
+          businessName: true,
+          address: true,
+          website: true,
+        },
+        take: 100,
+      });
+
+      const pass3Total = pass3Organizers.length;
+      console.log(`[Enrich] Found ${pass3Total} organizers from Pass 1 with no email\n`);
+
+      for (let i = 0; i < pass3Organizers.length; i++) {
+        const org = pass3Organizers[i];
+        const processed = i + 1;
+        let email: string | null = null;
+
+        try {
+          const city = extractCityFromAddress(org.address);
+          if (!city) {
+            console.log(
+              `[Enrich] (${processed}/${pass3Total}) ${org.businessName}: could not extract city from address`
+            );
+            pass3NotFound++;
+            await sleep(400);
+            continue;
+          }
+
+          // Query Places for alternate website
+          const altWebsite = await queryGooglePlaces(org.businessName, city);
+          if (altWebsite && altWebsite !== org.website) {
+            // Different website found, try to scrape it
+            const baseDomain = getBaseDomain(altWebsite);
+            if (baseDomain) {
+              // Try homepage
+              let html = await fetchWithTimeout(altWebsite);
+              if (html) {
+                email = findFirstValidEmail(html);
+              }
+
+              // Try /contact if homepage failed
+              if (!email) {
+                const contactUrl = `${baseDomain}/contact`;
+                html = await fetchWithTimeout(contactUrl);
+                if (html) {
+                  email = findFirstValidEmail(html);
+                }
+              }
+
+              if (email) {
+                await prisma.organizer.update({
+                  where: { id: org.id },
+                  data: { contactEmail: email, website: altWebsite },
+                });
+                console.log(
+                  `[Enrich] (${processed}/${pass3Total}) ${org.businessName}: found ${email} (from Places alt-website scrape)`
+                );
+                pass3Found++;
+              } else {
+                console.log(
+                  `[Enrich] (${processed}/${pass3Total}) ${org.businessName}: found alt-website via Places, no email`
+                );
+                pass3NotFound++;
+              }
+            } else {
+              console.log(
+                `[Enrich] (${processed}/${pass3Total}) ${org.businessName}: invalid alt-website from Places`
+              );
+              pass3Errors++;
+            }
+          } else {
+            console.log(`[Enrich] (${processed}/${pass3Total}) ${org.businessName}: Places: no alt-website`);
+            pass3NotFound++;
+          }
+        } catch (fetchError) {
+          const message = fetchError instanceof Error ? fetchError.message : String(fetchError);
+          console.log(`[Enrich] (${processed}/${pass3Total}) ${org.businessName}: error: ${message}`);
+          pass3Errors++;
+        }
+
+        // Rate limiting
+        await sleep(400);
+      }
+
+      console.log(`\n[Enrich] Pass 3 Summary:`);
+      console.log(`  Found: ${pass3Found}`);
+      console.log(`  Not found: ${pass3NotFound}`);
+      console.log(`  Errors: ${pass3Errors}\n`);
+    }
+
+    // Final summary
     const elapsedSecs = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`\n[Enrich] Summary:`);
-    console.log(`  Processed: ${processed}`);
-    console.log(`  Found: ${found}`);
-    console.log(`  Not found: ${notFound}`);
-    console.log(`  Errors: ${errors}`);
+    console.log('[Enrich] === FINAL SUMMARY ===');
+    console.log(`  Pass 1: ${pass1Found} found, ${pass1NotFound} not found, ${pass1Errors} errors`);
+    console.log(`  Pass 2: ${pass2Found} found, ${pass2NotFound} not found, ${pass2Errors} errors`);
+    if (GOOGLE_PLACES_API_KEY) {
+      console.log(`  Pass 3: ${pass3Found} found, ${pass3NotFound} not found, ${pass3Errors} errors`);
+    }
+    console.log(`  Total found: ${pass1Found + pass2Found + pass3Found}`);
     console.log(`  Duration: ${elapsedSecs}s\n`);
   } finally {
     await prisma.$disconnect();
