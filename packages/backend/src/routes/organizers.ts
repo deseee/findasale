@@ -877,6 +877,20 @@ router.get('/:id', async (req: Request, res: Response) => {
           take: 1,
           select: { message: true, sentAt: true },
         },
+        shopperIntroductions: {
+          where: { claimedAt: { not: null } },
+          orderBy: { introducedAt: 'asc' },
+          take: 3,
+          select: {
+            shopper: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            introducedAt: true,
+          },
+        },
         hours: true,
         _count: { select: { followers: true } },
       },
@@ -920,6 +934,20 @@ router.get('/:id', async (req: Request, res: Response) => {
             orderBy: { sentAt: 'desc' },
             take: 1,
             select: { message: true, sentAt: true },
+          },
+          shopperIntroductions: {
+            where: { claimedAt: { not: null } },
+            orderBy: { introducedAt: 'asc' },
+            take: 3,
+            select: {
+              shopper: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+              introducedAt: true,
+            },
           },
           hours: true,
           _count: { select: { followers: true } },
@@ -1002,6 +1030,11 @@ router.get('/:id', async (req: Request, res: Response) => {
         description: ub.badge.description,
         iconUrl: ub.badge.iconUrl,
         awardedAt: ub.awardedAt,
+      })) || [],
+      foundingShoppers: (organizer as any).shopperIntroductions?.map((intro: any) => ({
+        id: intro.shopper.id,
+        name: intro.shopper.name,
+        introducedAt: intro.introducedAt,
       })) || [],
       reviewCount: reviews.length,
       avgRating: Math.round(avgRating * 10) / 10,

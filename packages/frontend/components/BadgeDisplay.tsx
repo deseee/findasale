@@ -39,6 +39,26 @@ const BadgeDisplay: React.FC<BadgeDisplayProps> = ({ badges, size = 'md' }) => {
       bg: 'bg-yellow-100',
       text: 'text-yellow-800',
       icon: '⭐'
+    },
+    'acquisition-specialist-bronze': {
+      bg: 'bg-yellow-100',
+      text: 'text-yellow-800',
+      icon: '🎯'
+    },
+    'acquisition-specialist-silver': {
+      bg: 'bg-gray-200',
+      text: 'text-gray-700',
+      icon: '⭐'
+    },
+    'acquisition-specialist-gold': {
+      bg: 'bg-yellow-50',
+      text: 'text-yellow-700',
+      icon: '🏆'
+    },
+    'acquisition-specialist-platinum': {
+      bg: 'bg-purple-100',
+      text: 'text-purple-800',
+      icon: '👑'
     }
   };
 

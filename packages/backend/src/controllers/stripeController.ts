@@ -17,6 +17,7 @@ import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, markHuntPassCancellation } from '../services/xpService'; // Explorer's Guild XP awards
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
+import { awardOrganizerClaimedXp, awardProUpgradeXp } from '../services/referralService'; // Organizer referral XP
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 import { evaluateReferralFraud, getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '../services/referralFraudService'; // D-XP-004: Referral Fraud Gate
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
@@ -1531,6 +1532,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       if (wasPastDueOrCanceled && isNowActive) {
         // Map Stripe price ID to tier
         let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
+        const oldTier = organizer.subscriptionTier;
         if (subscription.items?.data?.[0]?.price?.id) {
           const priceId = subscription.items.data[0].price.id;
           if (priceId === process.env.STRIPE_PRO_MONTHLY_PRICE_ID) newTier = 'PRO';
@@ -1545,6 +1547,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
             tokenVersion: organizer.tokenVersion + 1, // Invalidate stale JWTs
           }
         });
+
+        // Award XP if upgrading to PRO (resumption path)
+        if (oldTier !== 'PRO' && newTier === 'PRO') {
+          const xpResult = await awardProUpgradeXp(organizer.id);
+          if (xpResult?.success) {
+            console.log(
+              `[referral-xp] PRO upgrade XP awarded to shopper ${xpResult.shopperId} ` +
+              `for organizer ${organizer.id} (${xpResult.xpAwarded} XP)`
+            );
+          }
+        }
 
         // Record tier resumption in UserRoleSubscription (Feature #75)
         const roleSubscription = await prisma.userRoleSubscription.findFirst({
@@ -1565,6 +1578,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
       } else if (subscription.status === 'active' || subscription.status === 'past_due') {
         // Normal update: sync subscription status and tier with Stripe
         let newTier: 'SIMPLE' | 'PRO' | 'TEAMS' = 'SIMPLE';
+        const oldTier = organizer.subscriptionTier;
         if (subscription.items?.data?.[0]?.price?.id) {
           const priceId = subscription.items.data[0].price.id;
           if (priceId === process.env.STRIPE_PRO_MONTHLY_PRICE_ID) newTier = 'PRO';
@@ -1578,6 +1592,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
             subscriptionTier: newTier,
           }
         });
+
+        // Award XP if upgrading to PRO (normal update path)
+        if (oldTier !== 'PRO' && newTier === 'PRO') {
+          const xpResult = await awardProUpgradeXp(organizer.id);
+          if (xpResult?.success) {
+            console.log(
+              `[referral-xp] PRO upgrade XP awarded to shopper ${xpResult.shopperId} ` +
+              `for organizer ${organizer.id} (${xpResult.xpAwarded} XP)`
+            );
+          }
+        }
       }
 
       break;

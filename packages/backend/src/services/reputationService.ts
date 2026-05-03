@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { awardQualityTierXp } from './referralService';
 
 export interface ReputationBreakdown {
   holdResponseTime: number;
@@ -222,6 +223,15 @@ export async function recalculateShopperRating(organizerId: string): Promise<voi
     const avg = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
     const shopperRating = Math.round(avg * 10) / 10; // round to 1 decimal
 
+    // Check if we're crossing the 4.0 threshold for the first time
+    const previousRating = await prisma.organizerReputation.findUnique({
+      where: { organizerId: organizer.userId },
+      select: { shopperRating: true },
+    });
+
+    const wasBelowThreshold = !previousRating || (previousRating.shopperRating === null || previousRating.shopperRating < 4.0);
+    const isNowAboveThreshold = shopperRating >= 4.0;
+
     // Update or create the OrganizerReputation record (using User.id, not Organizer.id)
     await prisma.organizerReputation.upsert({
       where: { organizerId: organizer.userId },
@@ -233,6 +243,17 @@ export async function recalculateShopperRating(organizerId: string): Promise<voi
         shopperRating,
       },
     });
+
+    // Award XP to shopper who introduced this organizer if rating crosses 4.0 for first time
+    if (wasBelowThreshold && isNowAboveThreshold) {
+      const xpResult = await awardQualityTierXp(organizerId);
+      if (xpResult?.success) {
+        console.log(
+          `[reputationService] Quality tier XP awarded to shopper ${xpResult.shopperId} ` +
+          `for organizer ${organizerId} reaching 4.0+ rating (${xpResult.xpAwarded} XP)`
+        );
+      }
+    }
 
     console.log(
       `[reputationService] shopperRating updated for organizer ${organizerId}: ` +

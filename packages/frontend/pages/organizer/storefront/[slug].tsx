@@ -15,6 +15,12 @@ import Link from 'next/link';
 import api from '../../../lib/api';
 import ClaimListingModal from '../../../components/ClaimListingModal';
 
+interface Shopper {
+  id: string;
+  name: string;
+  introducedAt: string;
+}
+
 interface BrandKitData {
   id: string;
   businessName: string;
@@ -46,6 +52,7 @@ interface BrandKitData {
   customStorefrontSlug: string | null;
   subscriptionTier: string;
   latestBroadcast?: { message: string; sentAt: string } | null;
+  foundingShoppers?: Shopper[];
 }
 
 interface Sale {
@@ -178,6 +185,7 @@ const OrganizerStorefront = () => {
           customStorefrontSlug: orgData.customStorefrontSlug,
           subscriptionTier: orgData.subscriptionTier || 'SIMPLE',
           latestBroadcast: orgData.latestBroadcast || null,
+          foundingShoppers: orgData.foundingShoppers || [],
         };
 
         setBrandKit(brandData);
@@ -518,6 +526,32 @@ const OrganizerStorefront = () => {
               <p className="text-xs text-warm-500 dark:text-gray-400">
                 {getRelativeTime(brandKit.latestBroadcast.sentAt)}
               </p>
+            </div>
+          )}
+
+          {/* Founding Shoppers */}
+          {brandKit.foundingShoppers && brandKit.foundingShoppers.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-12">
+              <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Discovered By</h2>
+              <div className="flex items-center gap-3">
+                <div className="flex -space-x-3">
+                  {brandKit.foundingShoppers.slice(0, 3).map((shopper) => (
+                    <div
+                      key={shopper.id}
+                      className="h-10 w-10 rounded-full bg-gradient-to-br from-sage-400 to-sage-600 flex items-center justify-center text-white text-xs font-bold border-2 border-white dark:border-gray-800"
+                      title={shopper.name}
+                    >
+                      {shopper.name.charAt(0).toUpperCase()}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-sm text-warm-700 dark:text-gray-300">
+                  Discovered by <span className="font-semibold">{brandKit.foundingShoppers[0]?.name}</span>
+                  {brandKit.foundingShoppers.length > 1 && (
+                    <span> and {brandKit.foundingShoppers.length - 1} other{brandKit.foundingShoppers.length > 2 ? 's' : ''}</span>
+                  )}
+                </p>
+              </div>
             </div>
           )}
 

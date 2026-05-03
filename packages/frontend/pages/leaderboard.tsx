@@ -26,11 +26,23 @@ interface OrganizerRank {
   totalItemsSold: number;
 }
 
+interface ScoutRank {
+  rank: number;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  count: number;
+  isCurrentUser: boolean;
+}
+
 const Leaderboard = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'shoppers' | 'organizers'>('shoppers');
+  const [activeTab, setActiveTab] = useState<'shoppers' | 'organizers' | 'scouts'>('shoppers');
   const [shoppers, setShoppers] = useState<ShopperRank[]>([]);
   const [organizers, setOrganizers] = useState<OrganizerRank[]>([]);
+  const [scouts, setScouts] = useState<ScoutRank[]>([]);
+  const [scoutSeason, setScoutSeason] = useState<string>('');
+  const [scoutResetDate, setScoutResetDate] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,13 +58,17 @@ const Leaderboard = () => {
       setLoading(true);
       setError(null);
 
-      const [shoppersRes, organizersRes] = await Promise.all([
+      const [shoppersRes, organizersRes, scoutsRes] = await Promise.all([
         api.get('/leaderboard/shoppers'),
         api.get('/leaderboard/organizers'),
+        api.get('/leaderboard/scouts'),
       ]);
 
       setShoppers(shoppersRes.data);
       setOrganizers(organizersRes.data);
+      setScouts(scoutsRes.data.entries);
+      setScoutSeason(scoutsRes.data.season);
+      setScoutResetDate(scoutsRes.data.resetDate);
     } catch (err) {
       console.error('Error fetching leaderboards:', err);
       setError('Failed to load leaderboard data');
@@ -113,6 +129,16 @@ const Leaderboard = () => {
               }`}
             >
               Top Organizers
+            </button>
+            <button
+              onClick={() => setActiveTab('scouts')}
+              className={`px-6 py-3 font-semibold transition-colors ${
+                activeTab === 'scouts'
+                  ? 'text-amber-600 border-b-2 border-amber-600'
+                  : 'text-warm-600 dark:text-warm-400 hover:text-warm-900'
+              }`}
+            >
+              Scout Leaderboard
             </button>
           </div>
 
@@ -235,6 +261,59 @@ const Leaderboard = () => {
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* Scouts Tab */}
+          {!loading && activeTab === 'scouts' && (
+            <div>
+              <div className="space-y-3">
+                {scouts.length === 0 ? (
+                  <div className="text-center py-12 bg-warm-50 dark:bg-gray-800 rounded-lg">
+                    <p className="text-warm-600 dark:text-warm-400">No scouts yet. Introduce organizers to earn a spot!</p>
+                  </div>
+                ) : (
+                  scouts.map((scout) => (
+                    <div
+                      key={scout.userId}
+                      className={`bg-gradient-to-r ${getRankColor(scout.rank)} dark:from-gray-800 dark:to-gray-700 rounded-lg p-4 border border-warm-200 dark:border-gray-700 transition-transform hover:scale-102 ${
+                        scout.isCurrentUser ? 'ring-2 ring-amber-500' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        {/* Rank and Name */}
+                        <div className="flex items-center gap-4 flex-1">
+                          <div className="text-3xl font-bold text-amber-600 w-12 text-center">
+                            {getMedalEmoji(scout.rank)}
+                          </div>
+                          <div>
+                            <p className="text-warm-900 dark:text-warm-100 font-semibold text-lg">
+                              {scout.displayName}
+                              {scout.isCurrentUser && (
+                                <span className="text-sm text-amber-600 font-normal ml-2">(You)</span>
+                              )}
+                            </p>
+                            <p className="text-sm text-warm-600 dark:text-warm-400">Scout</p>
+                          </div>
+                        </div>
+
+                        {/* Organizers Introduced */}
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-amber-600">{scout.count}</p>
+                          <p className="text-xs text-warm-600 dark:text-warm-400">
+                            organizer{scout.count !== 1 ? 's' : ''} introduced
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-center">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Resets Jan 1 · Top 10 scouts earn XP at season end · {scoutSeason ? `Season ${scoutSeason}` : ''}
+                </p>
+              </div>
             </div>
           )}
 

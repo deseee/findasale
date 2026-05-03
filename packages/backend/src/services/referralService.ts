@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
-import { awardXp, checkMonthlyXpCap, XP_AWARDS } from './xpService';
+import { awardXp, checkMonthlyXpCap, applyHuntPassMultiplier, XP_AWARDS } from './xpService';
 
 const REWARD_POINTS_PER_REFERRAL = 50;
 const REWARD_CREDIT_PER_REFERRAL = 5.0; // $5 store credit
@@ -161,17 +161,67 @@ export async function awardOrganizerClaimedXp(
   organizerId: string,
 ): Promise<{ success: boolean; xpAwarded: number; capRemaining: number } | null> {
   try {
-    // [BLOCKED] Awaiting schema confirmation: ShopperOrganizerIntroduction model must exist
-    // STUB IMPLEMENTATION BELOW — will be completed once schema model is added
+    // Find matching introduction record
+    const introduction = await prisma.shopperOrganizerIntroduction.findUnique({
+      where: {
+        shopperId_organizerId: {
+          shopperId,
+          organizerId,
+        },
+      },
+    });
 
-    // TODO: When ShopperOrganizerIntroduction exists, implement:
-    // 1. Check monthly XP cap: remaining = await checkMonthlyXpCap(shopperId, 'ORGANIZER_CLAIMED_MONTHLY')
-    // 2. If remaining > 0, award XP: await awardXp(shopperId, 'SHOPPER_INTRODUCED_ORGANIZER_CLAIMED', Math.min(remaining, XP_AWARDS.SHOPPER_INTRODUCED_ORGANIZER_CLAIMED))
-    // 3. Update ShopperOrganizerIntroduction record: set claimedAt = now
-    // 4. Return { success: true, xpAwarded, capRemaining }
+    // Not found or already claimed
+    if (!introduction || introduction.claimedAt) {
+      return null;
+    }
 
-    console.warn('[referralService] awardOrganizerClaimedXp stubbed — awaiting ShopperOrganizerIntroduction schema');
-    return null;
+    // Check monthly XP cap
+    const capRemaining = await checkMonthlyXpCap(shopperId, 'ORGANIZER_CLAIMED_MONTHLY');
+    if (capRemaining <= 0) {
+      return {
+        success: false,
+        xpAwarded: 0,
+        capRemaining: 0,
+      };
+    }
+
+    // Award XP with Hunt Pass multiplier
+    const baseXp = XP_AWARDS.SHOPPER_INTRODUCED_ORGANIZER_CLAIMED;
+    const xpToAward = await applyHuntPassMultiplier(shopperId, baseXp);
+    const awardAmount = Math.min(capRemaining, xpToAward);
+
+    const result = await awardXp(
+      shopperId,
+      'SHOPPER_INTRODUCED_ORGANIZER_CLAIMED',
+      awardAmount,
+      {
+        description: `Organizer claim by organizer ${organizerId}`,
+      },
+    );
+
+    if (!result) {
+      return null;
+    }
+
+    // Mark introduction as claimed
+    await prisma.shopperOrganizerIntroduction.update({
+      where: {
+        shopperId_organizerId: {
+          shopperId,
+          organizerId,
+        },
+      },
+      data: {
+        claimedAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      xpAwarded: awardAmount,
+      capRemaining: capRemaining - awardAmount,
+    };
   } catch (error) {
     console.error('[referralService] awardOrganizerClaimedXp error:', error);
     return null;
@@ -191,19 +241,62 @@ export async function awardProUpgradeXp(
   organizerId: string,
 ): Promise<{ success: boolean; shopperId?: string; xpAwarded?: number } | null> {
   try {
-    // [BLOCKED] Awaiting schema confirmation: ShopperOrganizerIntroduction model must exist
-    // STUB IMPLEMENTATION BELOW — will be completed once schema model is added
+    // Calculate 60-day window
+    const now = new Date();
+    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-    // TODO: When ShopperOrganizerIntroduction exists, implement:
-    // 1. Calculate 60-day window: now = new Date(), sixtyDaysAgo = new Date(now - 60*24*60*60*1000)
-    // 2. Query ShopperOrganizerIntroduction where organizerId = arg AND introducedAt >= sixtyDaysAgo AND upgradedAt IS NULL
-    // 3. If found: award XP: await awardXp(shopperId, 'ORGANIZER_REFERRAL_PRO_UPGRADE', XP_AWARDS.ORGANIZER_REFERRAL_PRO_UPGRADE)
-    // 4. Update ShopperOrganizerIntroduction: set upgradedAt = now
-    // 5. Return { success: true, shopperId, xpAwarded }
-    // 6. If not found: Return { success: false }
+    // Query for introduction within 60d that hasn't been upgraded yet
+    const introduction = await prisma.shopperOrganizerIntroduction.findFirst({
+      where: {
+        organizerId,
+        introducedAt: {
+          gte: sixtyDaysAgo,
+        },
+        upgradedAt: null,
+      },
+    });
 
-    console.warn('[referralService] awardProUpgradeXp stubbed — awaiting ShopperOrganizerIntroduction schema');
-    return null;
+    // Not found or already upgraded
+    if (!introduction) {
+      return {
+        success: false,
+      };
+    }
+
+    const shopperId = introduction.shopperId;
+
+    // Award XP with Hunt Pass multiplier
+    const baseXp = XP_AWARDS.ORGANIZER_REFERRAL_PRO_UPGRADE;
+    const xpToAward = await applyHuntPassMultiplier(shopperId, baseXp);
+
+    const result = await awardXp(
+      shopperId,
+      'ORGANIZER_REFERRAL_PRO_UPGRADE',
+      xpToAward,
+      {
+        description: `PRO upgrade by organizer ${organizerId}`,
+      },
+    );
+
+    if (!result) {
+      return null;
+    }
+
+    // Mark introduction as upgraded
+    await prisma.shopperOrganizerIntroduction.update({
+      where: {
+        id: introduction.id,
+      },
+      data: {
+        upgradedAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      shopperId,
+      xpAwarded: xpToAward,
+    };
   } catch (error) {
     console.error('[referralService] awardProUpgradeXp error:', error);
     return null;
@@ -222,18 +315,52 @@ export async function awardQualityTierXp(
   organizerId: string,
 ): Promise<{ success: boolean; shopperId?: string; xpAwarded?: number } | null> {
   try {
-    // [BLOCKED] Awaiting schema confirmation: ShopperOrganizerIntroduction model must exist
-    // STUB IMPLEMENTATION BELOW — will be completed once schema model is added
+    // Query for first introduction that hasn't received quality tier XP yet
+    const introduction = await prisma.shopperOrganizerIntroduction.findFirst({
+      where: {
+        organizerId,
+        qualityAt: null,
+      },
+    });
 
-    // TODO: When ShopperOrganizerIntroduction exists, implement:
-    // 1. Query ShopperOrganizerIntroduction where organizerId = arg AND qualityAt IS NULL (take first match)
-    // 2. If found: award XP: await awardXp(shopperId, 'ORGANIZER_REFERRAL_QUALITY_TIER', XP_AWARDS.ORGANIZER_REFERRAL_QUALITY_TIER)
-    // 3. Update ShopperOrganizerIntroduction: set qualityAt = now
-    // 4. Return { success: true, shopperId, xpAwarded }
-    // 5. If not found: Return { success: false }
+    // Not found or already awarded
+    if (!introduction) {
+      return {
+        success: false,
+      };
+    }
 
-    console.warn('[referralService] awardQualityTierXp stubbed — awaiting ShopperOrganizerIntroduction schema');
-    return null;
+    const shopperId = introduction.shopperId;
+    const baseXp = XP_AWARDS.ORGANIZER_REFERRAL_QUALITY_TIER;
+
+    const result = await awardXp(
+      shopperId,
+      'ORGANIZER_REFERRAL_QUALITY_TIER',
+      baseXp,
+      {
+        description: `Organizer quality tier (4.0+ rating) for organizer ${organizerId}`,
+      },
+    );
+
+    if (!result) {
+      return null;
+    }
+
+    // Mark introduction as quality tier awarded
+    await prisma.shopperOrganizerIntroduction.update({
+      where: {
+        id: introduction.id,
+      },
+      data: {
+        qualityAt: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      shopperId,
+      xpAwarded: baseXp,
+    };
   } catch (error) {
     console.error('[referralService] awardQualityTierXp error:', error);
     return null;
