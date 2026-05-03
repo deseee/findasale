@@ -766,6 +766,13 @@ model Sale {
   qrScannerEvents             QRScannerEvent[]
   // Feature #XXX: Automatic Markdown Cycles (PRO Tier) — time-based price reductions
   markdownCycles          MarkdownCycle[]
+  // ADR-073: Scraped listing metadata (restored — fields already in DB via 20260501020000_scraper_phase1)
+  sourceUrl                   String?                  // Source listing URL (EstateSalesNet, GooglePlaces, etc.)
+  sourceName                  String?                  // Source identifier
+  lastScrapedAt               DateTime?                // Last time this listing appeared in a scrape
+  scrapeVersion               Int?                     // Scrape update counter
+  scrapedMetadata             Json?                    // Raw API payload for audit/enrichment
+  claimEmails                 ClaimEmail[]
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -973,6 +980,8 @@ model Item {
   clusterConfidence          Float? // 0.0–1.0 from Haiku clustering pass
   // ADR-069 Phase 2: eBay comp lookup cache
   compLookup                 ItemCompLookup?
+  // ADR-073: scraped item dedup (restored — field already in DB via 20260501020000_scraper_phase1)
+  sourceItemId               String?                // Source platform's item ID for dedup
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -4273,4 +4282,46 @@ model MetroTopFinds {
 
   @@unique([citySlug, ebayListingId])
   @@index([citySlug, soldAt])
+}
+
+// ADR-073: Scraper audit log — one row per scraper run (restored from 20260501020000_scraper_phase1)
+model ScrapedSalesJob {
+  id           Int       @id @default(autoincrement())
+  source       String
+  metro        String
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  status       String    @default("PENDING")
+  itemsFound   Int       @default(0)
+  itemsCreated Int       @default(0)
+  itemsUpdated Int       @default(0)
+  itemsSkipped Int       @default(0)
+  itemsFailed  Int       @default(0)
+  error        String?
+  logUrl       String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([source, createdAt])
+  @@index([status])
+}
+
+// ADR-073: Claim email tracking for scraped sale organizer outreach (restored from 20260501020000_scraper_phase1)
+// Note: DirectoryClaimEmail (above) tracks directory organizer outreach — this tracks scraped sale claim conversion
+model ClaimEmail {
+  id             String    @id @default(cuid())
+  saleId         String
+  sale           Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  organizerEmail String
+  sentAt         DateTime  @default(now())
+  opens          Int       @default(0)
+  clicks         Int       @default(0)
+  claimed        Boolean   @default(false)
+  claimedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([saleId])
+  @@index([organizerEmail])
+  @@index([claimed])
 }
