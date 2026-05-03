@@ -239,7 +239,7 @@ export async function seedQueue(entries: SeedEntry[]): Promise<void> {
       where: {
         metro_subArea_sourceName_queryType: {
           metro: entry.metro,
-          subArea: entry.subArea || null,
+          subArea: (entry.subArea ?? null) as string,
           sourceName: entry.sourceName,
           queryType: entry.queryType,
         },
