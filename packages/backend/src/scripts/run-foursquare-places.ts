@@ -1,13 +1,13 @@
 /**
  * ADR-077: Foursquare v3 Places Business Directory Scraper — GitHub Actions runner
- * Queries Foursquare Places Search API across 100 US metros + 7 Canadian metros × 11 queries.
+ * Queries Foursquare Places Search API across queue items filtered by getNextCrawlsToRun().
  * Deduplicates by fsqId, then POSTs results to Railway backend for ingestion.
+ * Records crawl success/failure in DirectoryCrawlLog.
  *
  * Environment variables (from GitHub secrets):
  * - RAILWAY_BACKEND_URL: https://backend-production-xxx.up.railway.app
  * - INTERNAL_SCRAPER_KEY: shared secret for /api/internal/scraper/ingest
  * - FOURSQUARE_API_KEY: Foursquare v3 API key (also set on Railway)
- * - METRO_BATCH: "1" for metros 0-49, "2" for metros 50-99, empty for all (optional)
  *
  * Usage: npx ts-node src/scripts/run-foursquare-places.ts
  * Cost estimate: Free tier allows 100k monthly searches
@@ -16,22 +16,12 @@
 import {
   runFoursquareScraper,
 } from '../services/scraper/sources/foursquarePlaces';
-import { GOOGLE_PLACES_METROS } from '../services/scraper/sources/googlePlaces';
 import { ScrapedItem } from '../services/scraper/index';
+import { getNextCrawlsToRun, recordCrawlSuccess, recordCrawlFailure } from '../services/scraper/crawlQueueManager';
 
 const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') + '/api/internal/scraper/ingest';
 const SCRAPER_KEY = process.env.INTERNAL_SCRAPER_KEY;
-
-const CANADIAN_METROS = [
-  'Toronto, ON',
-  'Vancouver, BC',
-  'Calgary, AB',
-  'Edmonton, AB',
-  'Ottawa, ON',
-  'Winnipeg, MB',
-  'Halifax, NS',
-];
 
 const BATCH_SIZE = 25;
 const CONCURRENCY = 5;
@@ -39,33 +29,43 @@ const CONCURRENCY = 5;
 async function main() {
   if (!SCRAPER_KEY) throw new Error('INTERNAL_SCRAPER_KEY is not set');
 
-  const metroBatchEnv = process.env.METRO_BATCH;
-  let batch: 1 | 2 | undefined;
-  if (metroBatchEnv === '1') batch = 1;
-  else if (metroBatchEnv === '2') batch = 2;
+  // Fetch next batch of queue items to crawl
+  const queueItems = await getNextCrawlsToRun(50); // Get up to 50 queue items ready to run
+  console.log(`[run-foursquare-places] Found ${queueItems.length} queue items ready to run`);
 
-  const allMetros = [...GOOGLE_PLACES_METROS, ...CANADIAN_METROS];
-  let targetMetros = allMetros;
-  if (batch === 1) {
-    targetMetros = allMetros.slice(0, 50);
-  } else if (batch === 2) {
-    targetMetros = allMetros.slice(50, 100);
+  if (queueItems.length === 0) {
+    console.log('[run-foursquare-places] No queue items ready — exiting');
+    return;
   }
 
-  console.log(
-    `[run-foursquare-places] Starting: ${targetMetros.length} metros (batch: ${batch ?? 'all'})`
-  );
   console.log(`[run-foursquare-places] Backend: ${INGEST_URL}`);
 
   let allItems: ScrapedItem[] = [];
-  try {
-    allItems = await runFoursquareScraper(targetMetros, batch);
-  } catch (err) {
-    console.error('[run-foursquare-places] Scraper error:', err instanceof Error ? err.message : String(err));
-    process.exit(1);
+  const results = { succeeded: 0, failed: 0 };
+
+  for (const queueItem of queueItems) {
+    const { id: queueId, metro, subArea } = queueItem;
+    const searchLocation = subArea ? `${subArea}, ${metro}` : metro;
+
+    try {
+      const items = await runFoursquareScraper([searchLocation]);
+      allItems = allItems.concat(items);
+
+      await recordCrawlSuccess(queueId, items.length);
+      results.succeeded++;
+      console.log(`[run-foursquare-places] ${searchLocation}: +${items.length} results`);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[run-foursquare-places] Error — ${searchLocation}: ${errorMsg}`);
+
+      await recordCrawlFailure(queueId, errorMsg);
+      results.failed++;
+    }
   }
 
-  console.log(`[run-foursquare-places] Scraping complete — ${allItems.length} unique businesses`);
+  console.log(
+    `[run-foursquare-places] Scraping complete — ${allItems.length} unique businesses, ${results.succeeded} succeeded, ${results.failed} failed`
+  );
 
   if (allItems.length === 0) {
     console.log('[run-foursquare-places] No items to ingest — exiting');
