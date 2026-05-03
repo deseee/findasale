@@ -40,5 +40,7 @@ jobs:
       - name: Run enrichment script
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          YELP_API_KEY: ${{ secrets.YELP_API_KEY }}
           NODE_ENV: production
         run: cd packages/backend && npx ts-node scripts/enrichContactEmails.ts
