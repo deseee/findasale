@@ -1,0 +1,143 @@
+name: ESN Sale Detail Enrichment
+
+on:
+  workflow_dispatch:
+    inputs:
+      batches:
+        description: 'Number of parallel batches (1-6)'
+        required: false
+        default: '3'
+      batch_size:
+        description: 'Sales per batch (max 200)'
+        required: false
+        default: '150'
+  schedule:
+    # Run once daily at 3 AM UTC for ongoing new scraped sales
+    - cron: '0 3 * * *'
+
+jobs:
+  enrich:
+    strategy:
+      matrix:
+        batch_index: [0, 1, 2]  # 3 parallel jobs by default
+      fail-fast: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Fetch batch of unenriched sales
+        id: fetch
+        run: |
+          OFFSET=$(( ${{ matrix.batch_index }} * ${{ github.event.inputs.batch_size || 150 }} ))
+          RESPONSE=$(curl -s -f \
+            -H "x-scraper-key: ${{ secrets.INTERNAL_SCRAPER_KEY }}" \
+            "${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/enrich-sale-details/batch?limit=${{ github.event.inputs.batch_size || 150 }}&offset=${OFFSET}")
+          echo "response=${RESPONSE}" >> $GITHUB_OUTPUT
+          SALE_COUNT=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['sales']))")
+          echo "sale_count=${SALE_COUNT}" >> $GITHUB_OUTPUT
+          echo "Fetched ${SALE_COUNT} sales for batch index ${{ matrix.batch_index }}"
+
+      - name: Enrich sale details
+        run: |
+          python3 << 'EOF'
+          import json, time, random, urllib.request, urllib.error, re, os, sys
+
+          response = json.loads(os.environ['FETCH_RESPONSE'])
+          sales = response.get('sales', [])
+
+          if not sales:
+              print("No sales to enrich in this batch")
+              sys.exit(0)
+
+          results = []
+
+          for i, sale in enumerate(sales):
+              sale_id = sale['id']
+              source_url = sale['sourceUrl']
+
+              # Random delay 5-15 seconds (stealth)
+              delay = random.uniform(5, 15)
+              if i > 0:
+                  time.sleep(delay)
+
+              try:
+                  req = urllib.request.Request(
+                      source_url,
+                      headers={
+                          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                          'Referer': 'https://www.estatesales.net/',
+                          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                          'Accept-Language': 'en-US,en;q=0.5',
+                      }
+                  )
+                  with urllib.request.urlopen(req, timeout=15) as resp:
+                      if resp.status == 429:
+                          print(f"429 received — stopping batch early")
+                          break
+                      html = resp.read().decode('utf-8', errors='replace')
+              except Exception as e:
+                  print(f"Fetch error for {sale_id}: {e}")
+                  continue
+
+              # Extract SaleEvent schema.org block
+              schema_blocks = re.findall(r'<script[^>]*application/ld\+json[^>]*>([\s\S]*?)</script>', html)
+              description = None
+              images = []
+
+              for block in schema_blocks:
+                  try:
+                      data = json.loads(block.strip())
+                      if data.get('@type') == 'SaleEvent':
+                          if data.get('description'):
+                              description = re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', data['description'])).strip()
+                          img = data.get('image', [])
+                          if isinstance(img, str):
+                              images = [img]
+                          elif isinstance(img, list):
+                              images = img
+                          break
+                  except:
+                      continue
+
+              if description or images:
+                  result = {'id': sale_id}
+                  if description:
+                      result['description'] = description
+                  if images:
+                      result['photoUrls'] = images[:5]
+                  results.append(result)
+                  print(f"[{i+1}/{len(sales)}] Enriched {sale_id}: desc={bool(description)}, photos={len(images)}")
+              else:
+                  print(f"[{i+1}/{len(sales)}] No data found for {sale_id}")
+
+          # Write results to file for next step
+          with open('/tmp/enrichment_results.json', 'w') as f:
+              json.dump({'results': results}, f)
+
+          print(f"Done: {len(results)}/{len(sales)} enriched")
+          EOF
+        env:
+          FETCH_RESPONSE: ${{ steps.fetch.outputs.response }}
+
+      - name: Post results to backend
+        run: |
+          if [ ! -f /tmp/enrichment_results.json ]; then
+            echo "No results file found — batch had no sales"
+            exit 0
+          fi
+
+          RESULTS=$(cat /tmp/enrichment_results.json)
+          RESULT_COUNT=$(echo "$RESULTS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d['results']))")
+
+          if [ "$RESULT_COUNT" -eq "0" ]; then
+            echo "No results to post"
+            exit 0
+          fi
+
+          curl -s -f -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-scraper-key: ${{ secrets.INTERNAL_SCRAPER_KEY }}" \
+            -d "$RESULTS" \
+            "${{ secrets.RAILWAY_BACKEND_URL }}/api/internal/enrich-sale-details/bulk"
+
+          echo "Posted ${RESULT_COUNT} enriched results"
