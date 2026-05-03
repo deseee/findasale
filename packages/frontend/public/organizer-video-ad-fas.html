@@ -1,0 +1,2451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FindA.Sale — Marketing Video (45s)</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0D0D0D;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  padding: 20px;
+}
+
+/* ── Embed mode: strip chrome so iframe host owns framing ── */
+body.embed {
+  min-height: auto;
+  padding: 0;
+  display: block;
+  background: transparent;
+}
+body.embed #player {
+  border-radius: 0;
+  box-shadow: none;
+}
+body.embed #info,
+body.embed #timer { display: none; }
+
+/* ── 9:16 Player ── */
+#player {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  background: #0A0A0A;
+  overflow: hidden;
+  border-radius: 44px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 40px 100px rgba(0,0,0,0.8);
+  flex-shrink: 0;
+}
+
+/* ── Scenes ── */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  padding: 40px 36px;
+}
+.scene.active { opacity: 1; }
+
+/* ── Progress Bar ── */
+#progress-bar {
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: #F97316;
+  width: 0%;
+  z-index: 200;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── Replay ── */
+#replay-btn {
+  position: absolute;
+  bottom: 36px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 10px 28px;
+  border-radius: 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  display: none;
+  z-index: 300;
+  transition: background 0.2s;
+}
+#replay-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── Play overlay (click to start) ── */
+#play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  z-index: 400;
+  cursor: pointer;
+  border-radius: 44px;
+  transition: opacity 0.3s;
+  padding: 60px 36px 80px;
+}
+#play-overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+}
+.overlay-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.overlay-logo .a-dot { color: #F97316; }
+.overlay-watch {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.42);
+}
+.play-icon {
+  width: 72px; height: 72px;
+  background: rgba(217,119,6,0.9);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 16px rgba(217,119,6,0.15);
+}
+.play-icon svg { margin-left: 5px; }
+
+/* ────────────────────────────────
+   SCENE 1 — HOOK
+──────────────────────────────── */
+#s1 { background: #0A0A0A; gap: 0; }
+
+.s1-number {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 120px;
+  font-weight: 900;
+  color: #F97316;
+  line-height: 1;
+  letter-spacing: -5px;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.s1-number.in { opacity: 1; transform: scale(1); }
+
+.s1-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: -0.5px;
+  margin-top: 10px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s ease;
+}
+.s1-label.in { opacity: 1; transform: translateY(0); }
+
+.s1-pain {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.60);
+  text-align: center;
+  margin-top: 30px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.s1-pain.in { opacity: 1; transform: translateY(0); }
+
+.s1-reveal {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 42px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  margin-top: 18px;
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.s1-reveal.in { opacity: 1; transform: translateY(0) scale(1); }
+
+/* ────────────────────────────────
+   SCENE 2 — PRODUCT DEMO
+──────────────────────────────── */
+#s2 { background: #111118; padding: 32px 24px; justify-content: center; }
+
+.s2-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 28px;
+}
+.s2-headline.in { opacity: 1; transform: translateY(0); }
+
+/* Phone mockup */
+.phone-wrap {
+  position: relative;
+  width: 288px;
+  height: 576px;
+  flex-shrink: 0;
+}
+.phone-shell {
+  width: 100%;
+  height: 100%;
+  background: #1C1C2E;
+  border-radius: 28px;
+  border: 2px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+/* Dynamic island */
+.phone-island {
+  position: absolute;
+  top: 10px; left: 50%;
+  transform: translateX(-50%);
+  width: 88px; height: 26px;
+  background: #000;
+  border-radius: 14px;
+  z-index: 10;
+}
+/* Phone screen */
+.phone-screen {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.35s ease;
+}
+.phone-screen.hidden { opacity: 0; pointer-events: none; }
+
+/* Camera screen */
+.cam-screen {
+  height: 100%;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 30px;
+}
+.cam-viewfinder {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cam-subject {
+  width: 160px; height: 200px;
+  background: transparent;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cam-subject::after {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border: 2px solid rgba(217,119,6,0.45);
+  border-radius: 18px;
+  animation: camPulse 1.5s ease-in-out infinite;
+}
+@keyframes camPulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+.lamp-svg-cam { width: 140px; height: 176px; }
+.lamp-svg-review { width: 120px; height: 150px; }
+.cam-shutter {
+  position: relative; z-index: 5;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  border: 4px solid rgba(255,255,255,0.4);
+  cursor: pointer;
+  box-shadow: 0 0 0 0 rgba(255,255,255,0.5);
+  animation: shutterReady 2s ease-in-out infinite;
+}
+@keyframes shutterReady {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.0); }
+  50% { box-shadow: 0 0 0 8px rgba(255,255,255,0.15); }
+}
+.cam-shutter.tapped {
+  animation: shutterTap 0.3s ease forwards;
+}
+@keyframes shutterTap {
+  0% { transform: scale(1); background: rgba(255,255,255,0.9); }
+  50% { transform: scale(0.85); background: rgba(217,119,6,0.9); }
+  100% { transform: scale(1); background: rgba(255,255,255,0.9); }
+}
+.cam-label {
+  position: absolute;
+  top: 46px; left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+  z-index: 5;
+  white-space: nowrap;
+}
+
+/* Flash overlay */
+.flash-overlay {
+  position: absolute;
+  inset: 0; z-index: 50;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+.flash-overlay.flash { animation: flashAnim 0.5s ease forwards; }
+@keyframes flashAnim {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Review/form screen */
+.review-screen {
+  background: #F9F7F4;
+  padding: 48px 18px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+  height: 100%;
+  box-sizing: border-box;
+}
+.review-photo {
+  width: 100%;
+  height: 190px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #8B7355 0%, #6B5B3E 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.review-photo-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.auto-badge {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: #F97316;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 6px;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.auto-badge.in { opacity: 1; transform: scale(1); }
+
+.form-field {
+  background: white;
+  border-radius: 12px;
+  padding: 13px 15px;
+  border: 1.5px solid rgba(0,0,0,0.06);
+}
+.field-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #8B7355;
+  margin-bottom: 4px;
+}
+.field-value {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1A1A1A;
+  min-height: 20px;
+}
+.field-value.typing::after {
+  content: '|';
+  animation: blink 0.7s step-end infinite;
+  color: #F97316;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+.publish-btn {
+  margin-top: 6px;
+  background: #F97316;
+  color: white;
+  border-radius: 14px;
+  padding: 17px;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.publish-btn.in { opacity: 1; transform: translateY(0); }
+.publish-btn.tapped {
+  animation: btnTap 0.3s ease forwards;
+}
+@keyframes btnTap {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); background: #B45309; }
+  100% { transform: scale(1); }
+}
+
+/* Success screen */
+.success-screen {
+  background: #0A0A0A;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 24px 48px;
+  height: 100%;
+  box-sizing: border-box;
+}
+.success-ring {
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.12);
+  border: 2.5px solid #10B981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.success-ring.in { opacity: 1; transform: scale(1); }
+.success-ring-pulse {
+  position: absolute;
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  border: 2.5px solid #10B981;
+  opacity: 0;
+}
+.success-ring-pulse.pulse {
+  animation: ringPulse 0.8s ease forwards 0.3s;
+}
+@keyframes ringPulse {
+  0% { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+.success-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #10B981;
+  opacity: 0;
+  transition: opacity 0.4s 0.2s ease;
+}
+.success-title.in { opacity: 1; }
+.success-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  color: rgba(255,255,255,0.60);
+  opacity: 0;
+  transition: opacity 0.4s 0.4s ease;
+  text-align: center;
+  line-height: 1.5;
+}
+.success-sub.in { opacity: 1; }
+
+/* Counter */
+.counter-wrap {
+  position: relative;
+  width: 100%;
+  padding: 0 4px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.counter-wrap.in { opacity: 1; transform: translateY(0); }
+.counter-bar-bg {
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.counter-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #F97316, #F59E0B);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 2.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.counter-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.60);
+  text-align: center;
+  margin-bottom: 4px;
+}
+.counter-num {
+  color: #F97316;
+  font-weight: 800;
+}
+
+.items-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  margin-top: 4px;
+}
+.items-row {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.88);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.items-row.in { opacity: 1; transform: translateX(0); }
+.items-check {
+  color: #10B981;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.s2-subline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  margin-top: 18px;
+}
+.s2-subline.in { opacity: 1; transform: translateY(0); }
+.s2-subline span { color: #F97316; }
+
+/* ────────────────────────────────
+   SCENE 2b — SHARE / DISTRIBUTION
+──────────────────────────────── */
+#s_share { background: #0A0A14; padding: 32px 24px; justify-content: center; gap: 0; }
+
+/* Listing card */
+.listing-card {
+  background: #1C1C2A; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px; overflow: hidden; width: 100%; max-width: 340px;
+  display: flex; flex-direction: row; align-items: center;
+  margin-bottom: 16px; opacity: 0; transform: translateY(8px) scale(0.97);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+.listing-card.in { opacity: 1; transform: translateY(0) scale(1); }
+.listing-card-img {
+  width: 96px; height: 96px; flex-shrink: 0;
+  background: linear-gradient(135deg, #8B7355, #6B5B3E);
+  display: flex; align-items: center; justify-content: center; position: relative;
+}
+.lamp-svg-card { width: 58px; height: 72px; }
+.listing-live-dot {
+  position: absolute; top: 5px; left: 5px;
+  background: #10B981; color: white; font-family: 'Inter', sans-serif;
+  font-size: 8px; font-weight: 700; letter-spacing: 0.4px;
+  padding: 2px 5px; border-radius: 4px;
+}
+.listing-card-body { flex: 1; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.listing-card-title { font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; color: rgba(255,255,255,0.9); }
+.listing-card-row { display: flex; align-items: center; justify-content: space-between; }
+.listing-card-price { font-family: 'Montserrat', sans-serif; font-size: 21px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+.listing-card-buy {
+  background: #F97316; color: #000;
+  font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 800;
+  padding: 7px 14px; border-radius: 8px; letter-spacing: -0.2px;
+}
+.share-headline {
+  font-family: 'Montserrat', sans-serif; font-size: 28px; font-weight: 800;
+  color: #FFFFFF; text-align: center; letter-spacing: -0.4px; line-height: 1.2;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease; margin-bottom: 6px;
+}
+.share-headline.in { opacity: 1; transform: translateY(0); }
+.share-headline span { color: #F97316; }
+.share-sub {
+  font-family: 'Inter', sans-serif; font-size: 15px; color: rgba(255,255,255,0.50);
+  text-align: center; margin-bottom: 22px; opacity: 0; transition: opacity 0.4s 0.15s ease;
+}
+.share-sub.in { opacity: 1; }
+.platform-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  width: 100%; max-width: 340px;
+}
+.plat-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  opacity: 0; transform: translateY(10px) scale(0.88);
+  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.34,1.2,0.64,1);
+}
+.plat-tile.in { opacity: 1; transform: translateY(0) scale(1); }
+.plat-logo {
+  width: 72px; height: 72px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4); overflow: hidden; flex-shrink: 0;
+}
+.plat-name {
+  font-family: 'Inter', sans-serif; font-size: 9px; font-weight: 600;
+  color: rgba(255,255,255,0.45); text-align: center; letter-spacing: 0.2px;
+}
+.share-btn-wrap {
+  margin-top: 16px; width: 100%; max-width: 340px; opacity: 0;
+  transform: translateY(6px); transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.share-btn-wrap.in { opacity: 1; transform: translateY(0); }
+.share-action-btn {
+  background: rgba(249,115,22,0.10); border: 1px solid rgba(249,115,22,0.40);
+  border-radius: 12px; padding: 13px 20px; text-align: center;
+  font-family: 'Montserrat', sans-serif; font-size: 14px; font-weight: 700;
+  color: #F97316; letter-spacing: -0.2px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+
+/* ────────────────────────────────
+   SCENE 3 — POS / PAYMENTS
+──────────────────────────────── */
+#s3 { background: #0D0D15; gap: 0; padding: 44px 4px; justify-content: center; }
+
+.s3-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  margin-bottom: 36px;
+}
+.s3-headline.in { opacity: 1; transform: translateY(0); }
+.s3-headline span { color: #F97316; }
+
+.phones-row {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.mini-phone {
+  display: flex;
+  flex-direction: column;
+  width: 160px;
+  min-height: 380px;
+  border-radius: 26px;
+  border: 2px solid rgba(255,255,255,0.18);
+  overflow: hidden;
+  background: #111122;
+  box-shadow: 0 20px 56px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 3px rgba(255,255,255,0.04);
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.mini-phone.in { opacity: 1; transform: translateY(0); }
+/* Dynamic island bar at top */
+.mini-phone-top {
+  height: 20px;
+  background: #0A0A14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mini-dynamic-island {
+  width: 40px; height: 10px;
+  background: #000;
+  border-radius: 6px;
+}
+.mini-phone-header {
+  background: rgba(255,255,255,0.03);
+  padding: 6px 10px 5px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.mini-phone-role {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.70);
+}
+/* Home indicator bar at bottom */
+.mini-phone-bottom {
+  height: 16px;
+  background: #0A0A14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mini-home-bar {
+  width: 38px; height: 3px;
+  background: rgba(255,255,255,0.22);
+  border-radius: 2px;
+}
+.mini-phone-body { padding: 14px 12px; flex: 1; }
+
+/* Organizer phone */
+.pos-total {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+.pos-item {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: rgba(255,255,255,0.60);
+  margin-bottom: 12px;
+}
+.pos-charge-btn {
+  background: #F97316;
+  color: white;
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.pos-charge-btn.tapped { animation: posTap 0.3s ease; }
+@keyframes posTap {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.93); background: #B45309; }
+  100% { transform: scale(1); background: #F97316; }
+}
+
+/* Payment beam */
+.payment-beam {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  align-self: center;
+  padding-top: 30px;
+}
+.payment-beam.in { opacity: 1; }
+.beam-dots {
+  display: flex;
+  gap: 4px;
+}
+.beam-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #F97316;
+  opacity: 0;
+}
+.beam-dot:nth-child(1) { animation: dotPulse 1.2s 0s ease-in-out infinite; }
+.beam-dot:nth-child(2) { animation: dotPulse 1.2s 0.2s ease-in-out infinite; }
+.beam-dot:nth-child(3) { animation: dotPulse 1.2s 0.4s ease-in-out infinite; }
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+.beam-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+  min-width: 44px;
+  color: rgba(255,255,255,0.60);
+}
+
+/* Shopper phone */
+.shopper-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 8px;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+.shopper-pending.hidden { opacity: 0; display: none; }
+.shopper-amount {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: rgba(255,255,255,0.2);
+  letter-spacing: -0.5px;
+}
+.shopper-waiting {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  color: rgba(255,255,255,0.2);
+  letter-spacing: 0.5px;
+}
+.shopper-success {
+  gap: 6px;
+  padding: 16px 8px;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.shopper-success.in { opacity: 1; }
+.shopper-check {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.15);
+  border: 1.5px solid #10B981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.shopper-check.in { opacity: 1; transform: scale(1); }
+.shopper-paid-amount {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: #10B981;
+  letter-spacing: -0.5px;
+  opacity: 0;
+  transition: opacity 0.4s 0.2s ease;
+}
+.shopper-paid-amount.in { opacity: 1; }
+.shopper-paid-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
+  color: rgba(255,255,255,0.4);
+  opacity: 0;
+  transition: opacity 0.4s 0.3s ease;
+}
+.shopper-paid-label.in { opacity: 1; }
+
+.s3-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 14px;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  width: 100%;
+  padding: 0 10px;
+}
+.s3-sub.in { opacity: 1; }
+/* Three stat pills */
+.s3-pills { display: flex; flex-direction: column; gap: 8px; }
+.s3-pill {
+  width: 100%; background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10); border-radius: 16px;
+  padding: 18px 18px; display: flex; flex-direction: row;
+  align-items: center; gap: 14px; text-align: left;
+}
+.s3-pill-icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
+.s3-pill-label {
+  font-family: 'Inter', sans-serif; font-size: 15.5px; font-weight: 600;
+  color: rgba(255,255,255,0.85); line-height: 1.3; white-space: nowrap;
+}
+
+/* Card auth on shopper phone */
+.card-auth {
+  gap: 7px;
+  padding: 10px 8px;
+  transition: opacity 0.3s ease;
+}
+.card-auth.hidden { opacity: 0; pointer-events: none; }
+.card-request-amount {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #FFFFFF;
+  letter-spacing: -0.5px;
+}
+.card-item-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.60);
+  text-align: center;
+}
+.card-chip {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-number {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.60);
+  letter-spacing: 1px;
+}
+.card-brand {
+  width: 16px; height: 10px;
+  background: linear-gradient(135deg, #F97316, #F59E0B);
+  border-radius: 2px;
+}
+.auth-btn {
+  width: 100%;
+  background: #10B981;
+  color: white;
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auth-btn.tapped { animation: authTap 0.3s ease forwards; }
+@keyframes authTap {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.93); background: #059669; }
+  100% { transform: scale(1); }
+}
+
+/* Phone state grid stacker — keeps phone size fixed during swap */
+.phone-states {
+  display: grid;
+  width: 100%;
+  height: 100%;
+}
+.phone-states > * {
+  grid-area: 1 / 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Organizer pos-content */
+#pos-content {
+  gap: 6px; padding: 10px;
+  transition: opacity 0.3s ease;
+}
+#pos-content.hidden { opacity: 0; pointer-events: none; }
+
+/* Organizer received state */
+.org-received {
+  gap: 4px;
+  padding: 8px;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.org-received.in { opacity: 1; }
+.org-received-check {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: rgba(16,185,129,0.15);
+  border: 1.5px solid #10B981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  color: #fff;
+  margin-bottom: 2px;
+}
+.org-received-amount {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: #10B981;
+  letter-spacing: -0.5px;
+}
+.org-received-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+}
+
+/* Beam return direction: shopper → organizer (right → left)
+   With row-reverse: child1=right, child2=mid, child3=left.
+   Delay 0s on child1 (right/shopper) makes the pulse travel right→left. */
+.payment-beam.return .beam-dots { flex-direction: row-reverse; }
+.payment-beam.return .beam-dot:nth-child(1) { animation: dotPulse 1.2s 0s ease-in-out infinite; }
+.payment-beam.return .beam-dot:nth-child(2) { animation: dotPulse 1.2s 0.2s ease-in-out infinite; }
+.payment-beam.return .beam-dot:nth-child(3) { animation: dotPulse 1.2s 0.4s ease-in-out infinite; }
+.payment-beam.return .beam-dot { background: #10B981; }
+.beam-label.paid { color: #10B981; }
+
+/* ────────────────────────────────
+   SCENE 4 — EBAY PUSH
+──────────────────────────────── */
+#s4 { background: #0A0A0A; gap: 0; padding: 48px 32px; justify-content: center; }
+
+.s4-headline {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -0.5px;
+  margin-bottom: 18px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  line-height: 1.15;
+}
+.s4-headline.in { opacity: 1; transform: translateY(0); }
+.s4-headline em { font-style: normal; color: #F97316; }
+
+/* ────────────────────────────────
+   UNIFIED EBAY CARD — one card, two overlay states
+   Card never moves or resizes. Interior cross-fades on tap.
+──────────────────────────────── */
+.ebay-card {
+  display: grid;
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.16);
+  border-radius: 20px;
+  margin-top: 22px;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.35s ease, transform 0.35s ease,
+              border-color 0.55s ease, background 0.55s ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+}
+.ebay-card.in { opacity: 1; transform: translateY(0); }
+.ebay-card.confirmed {
+  border-color: rgba(16,185,129,0.55);
+  background: rgba(16,185,129,0.07);
+}
+.ebay-card-inner {
+  grid-area: 1 / 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 26px 24px; gap: 12px;
+  transition: opacity 0.4s ease;
+}
+#ebay-post { opacity: 0; pointer-events: none; }
+#ebay-post.in { opacity: 1; pointer-events: auto; }
+/* Pre-tap: count + label + push row */
+.ebay-count-big {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 58px; font-weight: 900;
+  color: #fff; letter-spacing: -2px; line-height: 1;
+}
+.ebay-count-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px; color: rgba(255,255,255,0.62);
+  text-align: center; line-height: 1.4; margin-bottom: 6px;
+}
+.ebay-push-row {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: #0E0E0E;
+  border: 1.5px solid rgba(255,255,255,0.11);
+  border-radius: 14px; padding: 15px 20px;
+}
+.ebay-push-row.tapped { animation: ebayTap 0.3s ease forwards; }
+@keyframes ebayTap {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.96); background: #1a1a1a; }
+  100% { transform: scale(1); }
+}
+.ebay-push-text {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 18px; font-weight: 800;
+  color: #F97316; letter-spacing: -0.2px;
+}
+/* Post-tap: confirm ring + message */
+.ebay-confirm-ring-big {
+  width: 82px; height: 82px; border-radius: 50%;
+  background: rgba(16,185,129,0.14);
+  border: 2.5px solid #10B981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px; color: #fff;
+}
+.ebay-confirm-title-big {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 21px; font-weight: 800;
+  color: #10B981; text-align: center;
+}
+.ebay-confirm-sub-big {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; color: rgba(255,255,255,0.44);
+  text-align: center;
+}
+
+/* Sale summary + reports */
+.s4-summary {
+  margin-top: 20px; width: 100%;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 14px; padding: 22px 20px;
+  display: flex; align-items: center; justify-content: space-around;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s4-summary.in { opacity: 1; transform: translateY(0); }
+.s4-stat { text-align: center; }
+.s4-stat-num {
+  font-family: 'Montserrat', sans-serif; font-size: 34px; font-weight: 900;
+  color: #fff; letter-spacing: -0.5px; line-height: 1;
+}
+.s4-stat-label {
+  font-family: 'Inter', sans-serif; font-size: 11px;
+  color: rgba(255,255,255,0.42); margin-top: 4px;
+}
+.s4-stat-div { width: 1px; height: 44px; background: rgba(255,255,255,0.11); }
+.s4-reports {
+  margin-top: 10px; width: 100%;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px; padding: 18px 18px;
+  display: flex; align-items: center; gap: 14px;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.s4-reports.in { opacity: 1; transform: translateY(0); }
+.s4-report-icons {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex-shrink: 0;
+}
+.s4-report-icon {
+  width: 52px; height: 52px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+@keyframes iconPulse {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.s4-report-icon.in { animation: iconPulse 0.9s ease; }
+.s4-report-copy {
+  font-family: 'Inter', sans-serif; font-size: 12px;
+  color: rgba(255,255,255,0.62); line-height: 1.55;
+}
+.s4-report-copy strong {
+  font-family: 'Montserrat', sans-serif; font-weight: 800;
+  color: rgba(255,255,255,0.92); display: block; font-size: 17px; margin-bottom: 4px;
+}
+
+/* ────────────────────────────────
+   SCENE 5 — CTA
+──────────────────────────────── */
+#s5 { background: #050505; gap: 0; }
+
+.cta-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  margin-bottom: 32px;
+}
+.cta-logo-wrap.in { opacity: 1; transform: translateY(0); }
+.cta-logo {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 52px;
+  font-weight: 900;
+  letter-spacing: -1.8px;
+  color: #FFFFFF;
+  line-height: 1;
+}
+.cta-logo .a-dot { color: #F97316; }
+.cta-tagline {
+  font-family: 'Inter', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  margin-top: 12px;
+}
+
+.cta-main {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 60px;
+  font-weight: 900;
+  color: #FFFFFF;
+  text-align: center;
+  letter-spacing: -2.2px;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.5s 0.1s ease, transform 0.5s 0.1s cubic-bezier(0.34,1.3,0.64,1);
+}
+.cta-main.in { opacity: 1; transform: scale(1); }
+.cta-main em { font-style: normal; color: #F97316; }
+
+.cta-sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 19px;
+  color: rgba(255,255,255,0.7);
+  text-align: center;
+  margin-top: 18px;
+  opacity: 0;
+  transition: opacity 0.5s 0.4s ease;
+}
+.cta-sub.in { opacity: 1; }
+
+.cta-url {
+  display: inline-block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #F97316;
+  margin-top: 40px;
+  opacity: 0;
+  transition: opacity 0.5s 0.6s ease;
+  letter-spacing: -0.3px;
+}
+.cta-url.in { opacity: 1; }
+
+/* Animated amber glow bg for CTA */
+.cta-glow {
+  position: absolute;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(217,119,6,0.12) 0%, transparent 70%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: glowPulse 3s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+/* ── Scene Navigation ── */
+#scene-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+.nav-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.75);
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
+#scene-dots {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.scene-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: background 0.25s, transform 0.25s;
+  flex-shrink: 0;
+}
+.scene-dot.active { background: #F97316; transform: scale(1.4); }
+.scene-dot:hover:not(.active) { background: rgba(255,255,255,0.45); }
+
+/* ── Info panel below player ── */
+#info {
+  margin-top: 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.7;
+}
+#info strong { color: rgba(255,255,255,0.5); }
+
+/* ── Timer display ── */
+#timer {
+  position: absolute;
+  top: 16px; right: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  z-index: 150;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<div id="player">
+
+  <!-- Timer -->
+  <div id="timer">0:00</div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar"></div>
+
+  <!-- Play overlay -->
+  <div id="play-overlay">
+    <div class="overlay-brand">
+      <div class="overlay-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="overlay-watch">Watch — 45 Seconds</div>
+    </div>
+    <div class="play-icon">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M8 5L23 14L8 23V5Z" fill="white"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ── Scene 1: Hook ── -->
+  <div class="scene" id="s1">
+    <div class="s1-number" id="s1-number">100</div>
+    <div class="s1-label" id="s1-label">item listings.</div>
+    <div class="s1-pain" id="s1-pain">Used to take all day.</div>
+    <div class="s1-reveal" id="s1-reveal">Not anymore!</div>
+  </div>
+
+  <!-- ── Scene 2: Product Demo ── -->
+  <div class="scene" id="s2">
+    <div class="s2-headline" id="s2-headline">Snap a photo.<br><span style="color:#F97316">You're done.</span></div>
+
+    <div class="phone-wrap">
+      <div class="phone-shell">
+        <div class="phone-island"></div>
+
+        <!-- Camera screen -->
+        <div class="phone-screen" id="cam-screen">
+          <div class="cam-screen">
+            <div class="cam-viewfinder">
+              <div class="cam-subject">
+                <svg class="lamp-svg-cam" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <!-- Finial (top cap) -->
+                  <rect x="34" y="2" width="12" height="5" rx="2.5" fill="rgba(139,115,85,0.25)" stroke="rgba(217,119,6,0.85)" stroke-width="1.4"/>
+                  <!-- Shade: narrow top, wide bottom (empire style) -->
+                  <path d="M31 7 L49 7 L66 43 L14 43 Z" fill="rgba(139,115,85,0.18)" stroke="rgba(217,119,6,0.92)" stroke-width="1.8" stroke-linejoin="round"/>
+                  <!-- Glow inside shade -->
+                  <ellipse cx="40" cy="27" rx="11" ry="10" fill="rgba(251,191,36,0.1)" stroke="rgba(251,191,36,0.45)" stroke-width="1.2"/>
+                  <!-- Socket collar -->
+                  <rect x="36" y="43" width="8" height="7" rx="2" fill="rgba(139,115,85,0.22)" stroke="rgba(180,150,100,0.65)" stroke-width="1.3"/>
+                  <!-- Stem -->
+                  <line x1="40" y1="50" x2="40" y2="68" stroke="rgba(180,150,100,0.75)" stroke-width="2.5" stroke-linecap="round"/>
+                  <!-- Base upper tier -->
+                  <rect x="24" y="68" width="32" height="8" rx="3" fill="rgba(139,115,85,0.25)" stroke="rgba(217,119,6,0.75)" stroke-width="1.5"/>
+                  <!-- Base lower tier -->
+                  <rect x="28" y="76" width="24" height="6" rx="2.5" fill="rgba(110,90,60,0.2)" stroke="rgba(180,150,100,0.5)" stroke-width="1"/>
+                </svg>
+              </div>
+            </div>
+            <div class="cam-label">Point &amp; Snap</div>
+            <div class="cam-shutter" id="cam-shutter"></div>
+          </div>
+        </div>
+
+        <!-- Review screen -->
+        <div class="phone-screen hidden" id="review-screen">
+          <div class="review-screen">
+            <div class="review-photo">
+              <svg class="lamp-svg-review" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Finial -->
+                <rect x="34" y="2" width="12" height="5" rx="2.5" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+                <!-- Shade: narrow top, wide bottom -->
+                <path d="M31 7 L49 7 L66 43 L14 43 Z" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.78)" stroke-width="2" stroke-linejoin="round"/>
+                <!-- Glow inside shade -->
+                <ellipse cx="40" cy="27" rx="11" ry="10" fill="rgba(251,191,36,0.22)" stroke="rgba(251,191,36,0.75)" stroke-width="1.3"/>
+                <!-- Socket collar -->
+                <rect x="36" y="43" width="8" height="7" rx="2" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.5)" stroke-width="1.3"/>
+                <!-- Stem -->
+                <line x1="40" y1="50" x2="40" y2="68" stroke="rgba(255,255,255,0.62)" stroke-width="2.5" stroke-linecap="round"/>
+                <!-- Base upper tier -->
+                <rect x="24" y="68" width="32" height="8" rx="3" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.62)" stroke-width="1.5"/>
+                <!-- Base lower tier -->
+                <rect x="28" y="76" width="24" height="6" rx="2.5" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+              </svg>
+              <div class="auto-badge" id="auto-badge">✦ Auto-tagged</div>
+            </div>
+            <div class="form-field">
+              <div class="field-label">Title</div>
+              <div class="field-value" id="field-title"></div>
+            </div>
+            <div class="form-field">
+              <div class="field-label">Price</div>
+              <div class="field-value" id="field-price"></div>
+            </div>
+            <div class="form-field">
+              <div class="field-label">Category</div>
+              <div class="field-value" id="field-cat"></div>
+            </div>
+            <div class="publish-btn" id="publish-btn">Publish Item →</div>
+          </div>
+        </div>
+
+        <!-- Success screen -->
+        <div class="phone-screen hidden" id="success-screen">
+          <div class="success-screen">
+            <div style="position:relative;display:flex;align-items:center;justify-content:center;">
+              <div class="success-ring-pulse" id="ring-pulse"></div>
+              <div class="success-ring" id="success-ring">✓</div>
+            </div>
+            <div class="success-title" id="success-title">Published!</div>
+            <div class="success-sub" id="success-sub">Live on FindA.Sale<br>📍 Added to the map</div>
+            <div class="counter-wrap" id="counter-wrap" style="margin-top:20px;">
+              <div class="counter-text">Items listed: <span class="counter-num" id="counter-num">75</span></div>
+              <div class="counter-bar-bg"><div class="counter-bar-fill" id="counter-fill"></div></div>
+            </div>
+            <div class="items-summary" id="items-summary">
+              <div class="items-row" id="ir1"><span class="items-check">✓</span> 100 Photos Enhanced</div>
+              <div class="items-row" id="ir2"><span class="items-check">✓</span> 100 Prices Researched</div>
+              <div class="items-row" id="ir3"><span class="items-check">✓</span> 100 Descriptions Written</div>
+              <div class="items-row" id="ir4"><span class="items-check">✓</span> 100 Price Tags Ready To Print</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flash overlay -->
+        <div class="flash-overlay" id="flash-overlay"></div>
+      </div>
+    </div>
+
+    <div class="s2-subline" id="s2-subline">100 items.<br><span style="white-space:nowrap">Under an hour.</span></div>
+  </div>
+
+  <!-- ── Scene 2b: Share / Live Distribution ── -->
+  <div class="scene" id="s_share">
+    <div class="listing-card" id="listing-card">
+      <div class="listing-card-img">
+        <svg class="lamp-svg-card" viewBox="0 0 80 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="34" y="2" width="12" height="5" rx="2.5" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.65)" stroke-width="1.4"/>
+          <path d="M31 7 L49 7 L66 43 L14 43 Z" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.78)" stroke-width="2" stroke-linejoin="round"/>
+          <ellipse cx="40" cy="27" rx="11" ry="10" fill="rgba(251,191,36,0.22)" stroke="rgba(251,191,36,0.75)" stroke-width="1.3"/>
+          <rect x="36" y="43" width="8" height="7" rx="2" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.5)" stroke-width="1.3"/>
+          <line x1="40" y1="50" x2="40" y2="68" stroke="rgba(255,255,255,0.62)" stroke-width="2.5" stroke-linecap="round"/>
+          <rect x="24" y="68" width="32" height="8" rx="3" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.62)" stroke-width="1.5"/>
+          <rect x="28" y="76" width="24" height="6" rx="2.5" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        </svg>
+        <div class="listing-live-dot">● LIVE</div>
+      </div>
+      <div class="listing-card-body">
+        <div class="listing-card-title">Vintage Brass Lamp</div>
+        <div class="listing-card-row">
+          <div class="listing-card-price">$45.00</div>
+          <div class="listing-card-buy">Buy Now</div>
+        </div>
+      </div>
+    </div>
+    <div class="share-headline" id="share-hl">Share it everywhere.<br><span>One tap.</span></div>
+    <div class="share-sub" id="share-sub">Push your listing to every platform instantly.</div>
+    <div class="platform-grid">
+      <!-- 1. Facebook -->
+      <div class="plat-tile" id="pt2">
+        <div class="plat-logo" style="background:#1877F2;">
+          <svg viewBox="0 0 32 32" width="52" height="52" xmlns="http://www.w3.org/2000/svg">
+            <text x="16" y="26" font-family="Georgia,serif" font-size="26" font-weight="900" fill="white" text-anchor="middle">f</text>
+          </svg>
+        </div>
+        <div class="plat-name">Facebook</div>
+      </div>
+      <!-- 2. Nextdoor -->
+      <div class="plat-tile" id="pt3">
+        <div class="plat-logo" style="background:#00B246;">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 4L29 15H25V28H7V15H3Z" fill="white" opacity="0.95"/>
+            <rect x="13" y="19" width="6" height="9" rx="1" fill="#00B246"/>
+          </svg>
+        </div>
+        <div class="plat-name">Nextdoor</div>
+      </div>
+      <!-- 3. Instagram -->
+      <div class="plat-tile" id="pt6">
+        <div class="plat-logo" style="background:linear-gradient(135deg,#FFDC80 0%,#FCAF45 15%,#F77737 30%,#E1306C 55%,#C13584 75%,#833AB4 100%);">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="5" width="24" height="22" rx="6" stroke="white" stroke-width="2"/>
+            <circle cx="16" cy="16" r="5.5" stroke="white" stroke-width="2"/>
+            <circle cx="23.5" cy="8.5" r="1.5" fill="white"/>
+          </svg>
+        </div>
+        <div class="plat-name">Instagram</div>
+      </div>
+      <!-- 4. eBay -->
+      <div class="plat-tile" id="pt1">
+        <div class="plat-logo" style="background:#fff;">
+          <svg viewBox="-2 -2 78 46" width="66" height="39" xmlns="http://www.w3.org/2000/svg">
+            <text x="1" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#E53238">e</text>
+            <text x="21" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#0064D2">B</text>
+            <text x="39" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#F5AF02">a</text>
+            <text x="54" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#86B817">y</text>
+          </svg>
+        </div>
+        <div class="plat-name">eBay</div>
+      </div>
+      <!-- 5. Craigslist -->
+      <div class="plat-tile" id="pt9">
+        <div class="plat-logo" style="background:#7B3FB3;">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="11" stroke="white" stroke-width="2.5"/>
+            <line x1="16" y1="5" x2="16" y2="27" stroke="white" stroke-width="2.5"/>
+            <line x1="6.5" y1="21.5" x2="16" y2="16" stroke="white" stroke-width="2.5"/>
+            <line x1="25.5" y1="21.5" x2="16" y2="16" stroke="white" stroke-width="2.5"/>
+          </svg>
+        </div>
+        <div class="plat-name">Craigslist</div>
+      </div>
+      <!-- 6. EstateSales.net -->
+      <div class="plat-tile" id="pt5">
+        <div class="plat-logo" style="background:#C0392B;">
+          <div style="display:flex;flex-direction:column;align-items:center;line-height:1.1;">
+            <span style="font-family:'Montserrat',sans-serif;font-size:24px;font-weight:900;color:white;letter-spacing:-0.5px;">ES</span>
+            <span style="font-family:'Inter',sans-serif;font-size:11px;font-weight:700;color:rgba(255,255,255,0.7);letter-spacing:0.5px;">.NET</span>
+          </div>
+        </div>
+        <div class="plat-name">EstateSales.net</div>
+      </div>
+      <!-- 7. Pinterest -->
+      <div class="plat-tile" id="pt7">
+        <div class="plat-logo" style="background:#E60023;">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <text x="16" y="25" font-family="Georgia,serif" font-size="28" font-weight="900" fill="white" text-anchor="middle">P</text>
+          </svg>
+        </div>
+        <div class="plat-name">Pinterest</div>
+      </div>
+      <!-- 8. TikTok -->
+      <div class="plat-tile" id="pt10">
+        <div class="plat-logo" style="background:#010101;">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M19.5 6h-3v13.5c0 1.4-1.1 2.5-2.5 2.5s-2.5-1.1-2.5-2.5S12.6 17 14 17c.3 0 .5 0 .8.1V14c-.3 0-.5-.1-.8-.1C10.4 13.9 8 16.3 8 19.5S10.4 25 13.5 25 19 22.6 19 19.5V12c1 .7 2.2 1.1 3.5 1.2V10c-1.6-.1-3-1.1-3-4z" fill="white"/>
+          </svg>
+        </div>
+        <div class="plat-name">TikTok</div>
+      </div>
+      <!-- 9. WhatsApp -->
+      <div class="plat-tile" id="pt11">
+        <div class="plat-logo" style="background:#25D366;">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 4C9.4 4 4 9.4 4 16c0 2.1.5 4.1 1.5 5.9L4 28l6.3-1.5C12 27.5 14 28 16 28c6.6 0 12-5.4 12-12S22.6 4 16 4zm0 2c5.5 0 10 4.5 10 10s-4.5 10-10 10c-1.8 0-3.5-.5-5-1.3l-.4-.2-3.7.9.9-3.6-.2-.4C6.5 19.5 6 17.8 6 16 6 10.5 10.5 6 16 6zm-3.5 6.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1.1 2.8 1.2 3c.1.2 2.1 3.3 5.2 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2.1-1.4.3-.7.3-1.2.2-1.4-.1-.2-.3-.2-.6-.4s-1.8-.9-2.1-1-.4-.2-.6.2c-.2.3-.7.9-.9 1.1-.1.2-.3.2-.6.1-.3-.1-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.6-2-.2-.3 0-.4.1-.6.2-.2.3-.3.5-.5.1-.2.2-.3.3-.5.1-.2 0-.4-.1-.6-.1-.2-.6-1.5-.8-2.1-.2-.5-.5-.5-.7-.5h-.6z" fill="white"/>
+          </svg>
+        </div>
+        <div class="plat-name">WhatsApp</div>
+      </div>
+      <!-- 10. X — centered, full-size icon -->
+      <div class="plat-tile" id="pt8">
+        <div class="plat-logo" style="background:#000;">
+          <svg viewBox="0 0 32 32" width="50" height="50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <text x="16" y="25" font-family="Arial Black,sans-serif" font-size="24" font-weight="900" fill="white" text-anchor="middle">𝕏</text>
+          </svg>
+        </div>
+        <div class="plat-name">X</div>
+      </div>
+      <!-- 11. Shopify -->
+      <div class="plat-tile" id="pt4">
+        <div class="plat-logo" style="background:#008060;">
+          <svg viewBox="0 0 32 32" width="50" height="50" xmlns="http://www.w3.org/2000/svg">
+            <text x="16" y="25" font-family="Arial Black,sans-serif" font-size="26" font-weight="900" fill="white" text-anchor="middle">S</text>
+          </svg>
+        </div>
+        <div class="plat-name">Shopify</div>
+      </div>
+      <!-- 12. +more -->
+      <div class="plat-tile" id="pt12">
+        <div class="plat-logo" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);">
+          <span style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:rgba(255,255,255,0.7);">+more</span>
+        </div>
+        <div class="plat-name">&amp; more</div>
+      </div>
+    </div>
+    <div class="share-btn-wrap" id="share-btn-wrap">
+      <div class="share-action-btn">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2 7H12M7 2L12 7L7 12" stroke="#F97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Share to all platforms
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scene 3: POS / Payments ── -->
+  <div class="scene" id="s3">
+    <div class="s3-headline" id="s3-headline">Shoppers Pay<br><span>on their phone.</span></div>
+
+    <div class="phones-row">
+      <!-- Organizer phone -->
+      <div class="mini-phone" id="org-phone">
+        <div class="mini-phone-top"><div class="mini-dynamic-island"></div></div>
+        <div class="mini-phone-header">
+          <div class="mini-phone-role">Organizer</div>
+        </div>
+        <div class="mini-phone-body">
+          <div class="phone-states">
+            <div id="pos-content">
+              <div class="pos-total">$45.00</div>
+              <div class="pos-item">Vintage Brass Lamp</div>
+              <div class="pos-charge-btn" id="pos-btn">Charge →</div>
+            </div>
+            <div class="org-received" id="org-received">
+              <div class="org-received-check">✓</div>
+              <div class="org-received-amount">$45.00</div>
+              <div class="org-received-label">Received</div>
+            </div>
+          </div>
+        </div>
+        <div class="mini-phone-bottom"><div class="mini-home-bar"></div></div>
+      </div>
+
+      <!-- Beam -->
+      <div class="payment-beam" id="pay-beam">
+        <div class="beam-dots">
+          <div class="beam-dot"></div>
+          <div class="beam-dot"></div>
+          <div class="beam-dot"></div>
+        </div>
+        <div class="beam-label" id="beam-label">Request</div>
+      </div>
+
+      <!-- Shopper phone -->
+      <div class="mini-phone" id="shop-phone" style="transition-delay:0.1s;">
+        <div class="mini-phone-top"><div class="mini-dynamic-island"></div></div>
+        <div class="mini-phone-header">
+          <div class="mini-phone-role">Shopper</div>
+        </div>
+        <div class="mini-phone-body">
+          <div class="phone-states">
+            <div class="card-auth" id="card-auth">
+              <div class="card-request-amount">$45.00</div>
+              <div class="card-item-label">Vintage Brass Lamp</div>
+              <div class="card-chip">
+                <div class="card-number">···· 4821</div>
+                <div class="card-brand"></div>
+              </div>
+              <div class="auth-btn" id="auth-btn">Authorize →</div>
+            </div>
+            <div class="shopper-success" id="shopper-success">
+              <div class="shopper-check" id="shopper-check">✓</div>
+              <div class="shopper-paid-amount" id="paid-amount">$45.00</div>
+              <div class="shopper-paid-label" id="paid-label">Paid</div>
+            </div>
+          </div>
+        </div>
+        <div class="mini-phone-bottom"><div class="mini-home-bar"></div></div>
+      </div>
+    </div>
+
+    <div class="s3-sub" id="s3-sub">
+      <div class="s3-pills">
+        <div class="s3-pill">
+          <div class="s3-pill-icon">📱</div>
+          <div class="s3-pill-label">No card reader necessary.</div>
+        </div>
+        <div class="s3-pill">
+          <div class="s3-pill-icon">💵</div>
+          <div class="s3-pill-label">Cash, receipts &amp; returns handled.</div>
+        </div>
+        <div class="s3-pill">
+          <div class="s3-pill-icon">⚡</div>
+          <div class="s3-pill-label">Instant payouts.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scene 4: eBay Push ── -->
+  <div class="scene" id="s4">
+    <div class="s4-headline" id="s4-headline">Sale ends.<br><em>One tap to eBay.</em></div>
+
+    <div class="ebay-card" id="ebay-card">
+      <!-- State 1: pre-tap -->
+      <div class="ebay-card-inner" id="ebay-pre">
+        <div class="ebay-count-big">38</div>
+        <div class="ebay-count-label">unsold items still have value</div>
+        <div class="ebay-push-row" id="ebay-push-row">
+          <svg viewBox="-2 -2 78 46" width="60" height="35" xmlns="http://www.w3.org/2000/svg">
+            <text x="1" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#E53238">e</text>
+            <text x="21" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#0064D2">B</text>
+            <text x="39" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#F5AF02">a</text>
+            <text x="54" y="32" font-family="Arial Black,sans-serif" font-size="30" font-weight="900" fill="#86B817">y</text>
+          </svg>
+          <div class="ebay-push-text">Push →</div>
+        </div>
+      </div>
+      <!-- State 2: post-tap (same grid cell — cross-fades in) -->
+      <div class="ebay-card-inner" id="ebay-post">
+        <div class="ebay-confirm-ring-big">✓</div>
+        <div class="ebay-confirm-title-big">38 items live on eBay</div>
+        <div class="ebay-confirm-sub-big">Listed in under a second</div>
+      </div>
+    </div>
+    <div class="s4-summary" id="s4-summary">
+      <div class="s4-stat">
+        <div class="s4-stat-num">62</div>
+        <div class="s4-stat-label">items sold</div>
+      </div>
+      <div class="s4-stat-div"></div>
+      <div class="s4-stat">
+        <div class="s4-stat-num">$2,340</div>
+        <div class="s4-stat-label">revenue</div>
+      </div>
+      <div class="s4-stat-div"></div>
+      <div class="s4-stat">
+        <div class="s4-stat-num" id="s4-stat-ebay">0</div>
+        <div class="s4-stat-label">to eBay</div>
+      </div>
+    </div>
+    <div class="s4-reports" id="s4-reports">
+      <div class="s4-report-icons">
+        <!-- Excel spreadsheet grid -->
+        <div class="s4-report-icon" id="s4-icon-excel" style="background:#1D6F42;">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="1.5" stroke="white" stroke-width="1.5" fill="rgba(255,255,255,0.08)"/>
+            <line x1="3" y1="8.5" x2="21" y2="8.5" stroke="white" stroke-width="1"/>
+            <line x1="3" y1="14" x2="21" y2="14" stroke="white" stroke-width="1"/>
+            <line x1="9.5" y1="3" x2="9.5" y2="21" stroke="white" stroke-width="1"/>
+            <line x1="15.5" y1="3" x2="15.5" y2="21" stroke="white" stroke-width="1"/>
+          </svg>
+        </div>
+        <!-- PDF -->
+        <div class="s4-report-icon" id="s4-icon-pdf" style="background:#F40F02;">
+          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">PDF</text>
+          </svg>
+        </div>
+        <!-- CSV -->
+        <div class="s4-report-icon" id="s4-icon-csv" style="background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);">
+          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="rgba(255,255,255,0.82)" text-anchor="middle">CSV</text>
+          </svg>
+        </div>
+        <!-- QuickBooks -->
+        <div class="s4-report-icon" id="s4-icon-qb" style="background:#2CA01C;">
+          <svg viewBox="0 0 24 24" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+            <text x="12" y="17" font-family="Arial Black,sans-serif" font-size="10" font-weight="900" fill="white" text-anchor="middle">QB</text>
+          </svg>
+        </div>
+      </div>
+      <div class="s4-report-copy" id="s4-report-copy">
+        <strong>Reports &amp; Exports</strong>Excel · PDF · QuickBooks · CSV · Webhooks
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scene 5: CTA ── -->
+  <div class="scene" id="s5">
+    <div class="cta-glow"></div>
+    <div class="cta-logo-wrap" id="cta-logo">
+      <div class="cta-logo">Find<span class="a-dot">A.</span>Sale</div>
+      <div class="cta-tagline">Every sale.</div>
+    </div>
+    <div class="cta-main" id="cta-main">Try it<br><em>free.</em></div>
+    <div class="cta-sub" id="cta-sub">No credit card. No commitment.</div>
+    <div class="cta-url" id="cta-url">https://finda.sale</div>
+  </div>
+
+  <!-- Pause indicator -->
+  <div id="pause-indicator" style="
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:350;
+  ">
+    <div style="
+      width:60px; height:60px; border-radius:50%;
+      background:rgba(0,0,0,0.6); backdrop-filter:blur(8px);
+      display:flex; align-items:center; justify-content:center;
+      border:1.5px solid rgba(255,255,255,0.15);
+    ">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect x="4" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+        <rect x="13" y="3" width="5" height="16" rx="2" fill="rgba(255,255,255,0.8)"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Replay button -->
+  <button id="replay-btn">↺ &nbsp;Play again</button>
+
+</div>
+
+<!-- Scene navigation -->
+<div id="scene-nav">
+  <button class="nav-btn" id="prev-btn">&#8249;</button>
+  <div id="scene-dots">
+    <div class="scene-dot active" data-scene="0" title="Scene 1: Hook"></div>
+    <div class="scene-dot" data-scene="1" title="Scene 2: Product Demo"></div>
+    <div class="scene-dot" data-scene="2" title="Scene 2b: Share"></div>
+    <div class="scene-dot" data-scene="3" title="Scene 3: Payments"></div>
+    <div class="scene-dot" data-scene="4" title="Scene 4: eBay Push"></div>
+    <div class="scene-dot" data-scene="5" title="Scene 5: CTA"></div>
+  </div>
+  <button class="nav-btn" id="next-btn">&#8250;</button>
+</div>
+
+<div id="info">
+  <strong>FindA.Sale — 45-second Marketing Video</strong><br>
+  9:16 vertical · TikTok / YouTube Shorts format<br>
+  Click the player to start · Screen-record to capture
+</div>
+
+<script>
+// ── Embed mode: activate via ?embed=1 on the iframe src ──
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.body.classList.add('embed');
+}
+
+// ── State ──
+let startTime = null;
+let rafId = null;
+let running = false;
+let paused = false;
+let pauseStart = null;
+const DURATION = 45000;
+const sceneIds = ['s1', 's2', 's_share', 's3', 's4', 's5'];
+const sceneStarts = [0, 4000, 19500, 26500, 36000, 42500]; // Scene 4: 36–42.5s, Scene 5: 42.5–45s
+let currentScene = 0;
+
+// ── DOM refs ──
+const player       = document.getElementById('player');
+const playOverlay  = document.getElementById('play-overlay');
+const progressBar  = document.getElementById('progress-bar');
+const replayBtn    = document.getElementById('replay-btn');
+const timerEl      = document.getElementById('timer');
+const counterNum   = document.getElementById('counter-num');
+const counterFill  = document.getElementById('counter-fill');
+
+// Scene els
+const scenes = sceneIds.map(id => document.getElementById(id));
+
+// ── Helper: add class after delay ──
+function addAt(el, cls, delay) {
+  if (!el) return;
+  return setTimeout(() => el.classList.add(cls), delay);
+}
+
+// ── Helper: animate counter ──
+function animateCounter(from, to, duration, onTick) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+    onTick(Math.round(from + (to - from) * ease));
+    if (t < 1) requestAnimationFrame(step);
+    else onTick(to);
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Typewriter effect ──
+function typeIn(el, text, delay, speed) {
+  setTimeout(() => {
+    el.textContent = '';
+    el.classList.add('typing');
+    let i = 0;
+    const iv = setInterval(() => {
+      el.textContent += text[i++];
+      if (i >= text.length) { clearInterval(iv); el.classList.remove('typing'); }
+    }, speed || 50);
+  }, delay);
+}
+
+// ── Show/hide scene ──
+function showScene(id) {
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  const idx = sceneIds.indexOf(id);
+  if (idx >= 0) { currentScene = idx; updateDots(); }
+}
+
+// ── Sync nav dots to current scene ──
+function updateDots() {
+  document.querySelectorAll('.scene-dot').forEach(function(dot, i) {
+    dot.classList.toggle('active', i === currentScene);
+  });
+}
+
+// ── Jump to scene by index (0–5) ──
+function seekToScene(n) {
+  n = Math.max(0, Math.min(5, n));
+  running = false;
+  cancelAnimationFrame(rafId);
+  playOverlay.classList.add('hidden');
+  replayBtn.style.display = 'none';
+  resetAll();
+  const seekMs = sceneStarts[n];
+  startTime = performance.now() - seekMs;
+  nextEvent = 0;
+  while (nextEvent < events.length && events[nextEvent].at < seekMs) { nextEvent++; }
+  showScene(sceneIds[n]);
+  paused = false;
+  running = true;
+  rafId = requestAnimationFrame(tick);
+}
+
+// ── Reset all ──
+function resetAll() {
+  // Scene 1
+  ['s1-number','s1-label','s1-pain','s1-reveal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  // Scene 2
+  document.getElementById('s2-headline').classList.remove('in');
+  document.getElementById('cam-screen').classList.remove('hidden');
+  document.getElementById('review-screen').classList.add('hidden');
+  document.getElementById('success-screen').classList.add('hidden');
+  document.getElementById('cam-shutter').classList.remove('tapped');
+  document.getElementById('flash-overlay').classList.remove('flash');
+  document.getElementById('auto-badge').classList.remove('in');
+  ['field-title','field-price','field-cat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '';
+  });
+  document.getElementById('publish-btn').classList.remove('in','tapped');
+  document.getElementById('success-ring').classList.remove('in');
+  document.getElementById('ring-pulse').classList.remove('pulse');
+  document.getElementById('success-title').classList.remove('in');
+  document.getElementById('success-sub').classList.remove('in');
+  document.getElementById('counter-wrap').classList.remove('in');
+  document.getElementById('counter-fill').style.width = '75%';
+  document.getElementById('counter-fill').style.transition = 'none';
+  counterNum.textContent = '75';
+  ['ir1','ir2','ir3','ir4'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('in');
+  });
+  document.getElementById('s2-subline').classList.remove('in');
+  // Scene 2b — Share
+  ['listing-card','share-hl','share-sub','share-btn-wrap'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.remove('in');
+  });
+  ['pt1','pt2','pt3','pt4','pt5','pt6','pt7','pt8','pt9','pt10','pt11','pt12'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.remove('in');
+  });
+  // Scene 3
+  document.getElementById('s3-headline').classList.remove('in');
+  document.getElementById('org-phone').classList.remove('in');
+  document.getElementById('shop-phone').classList.remove('in');
+  const beam = document.getElementById('pay-beam');
+  beam.classList.remove('in','return');
+  const beamLabel = document.getElementById('beam-label');
+  beamLabel.textContent = 'Request';
+  beamLabel.classList.remove('paid');
+  document.getElementById('pos-btn').classList.remove('tapped');
+  document.getElementById('pos-content').classList.remove('hidden');
+  document.getElementById('org-received').classList.remove('in');
+  document.getElementById('card-auth').classList.remove('hidden');
+  document.getElementById('auth-btn').classList.remove('tapped');
+  document.getElementById('shopper-success').classList.remove('in');
+  document.getElementById('shopper-check').classList.remove('in');
+  document.getElementById('paid-amount').classList.remove('in');
+  document.getElementById('paid-label').classList.remove('in');
+  document.getElementById('s3-sub').classList.remove('in');
+  // Scene 4 — eBay push
+  document.getElementById('s4-headline').classList.remove('in');
+  ['s4-icon-excel','s4-icon-pdf','s4-icon-qb','s4-icon-csv'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.remove('in');
+  });
+  document.getElementById('ebay-card').classList.remove('in', 'confirmed');
+  document.getElementById('ebay-push-row').classList.remove('tapped');
+  document.getElementById('ebay-pre').style.opacity = '';
+  document.getElementById('ebay-post').classList.remove('in');
+  document.getElementById('s4-summary').classList.remove('in');
+  document.getElementById('s4-reports').classList.remove('in');
+  document.getElementById('s4-stat-ebay').textContent = '0';
+  // Scene 5
+  document.getElementById('cta-logo').classList.remove('in');
+  document.getElementById('cta-main').classList.remove('in');
+  document.getElementById('cta-sub').classList.remove('in');
+  document.getElementById('cta-url').classList.remove('in');
+  // UI
+  scenes.forEach(s => { if (s) s.classList.remove('active'); });
+  progressBar.style.width = '0%';
+  progressBar.style.transition = 'none';
+  timerEl.textContent = '0:00';
+  replayBtn.style.display = 'none';
+  pauseIndicator.style.opacity = '0';
+}
+
+// ── Timeline events ── (ms offset)
+// Pacing philosophy: every text element needs time to be seen, read, and felt.
+// Minimum on-screen: short phrase = 1.5s, full sentence = 2.5s, CTA = 3s+
+const events = [
+
+  // SCENE 1 — Hook (0–4500ms)
+  // "200 / item listings." sits 1.5s before pain arrives.
+  // "Not anymore." sits 1.3s before cut — enough to land.
+  { at: 0,    fn: () => { showScene('s1'); addAt(document.getElementById('s1-number'),'in',0); addAt(document.getElementById('s1-label'),'in',200); addAt(document.getElementById('s1-pain'),'in',350); } },
+  { at: 2600, fn: () => { addAt(document.getElementById('s1-reveal'),'in',0); } },
+  // cut to s2 at 4000ms (reveal on screen 1.4s)
+
+  // SCENE 2 — Product Demo (4000ms–22000ms)
+  // Headline reads for 2.2s before shutter. Review card is fully populated
+  // by AI instantly — no typing. Card visible 2s before publish button shows.
+  // Publish btn sits 1.8s before tap. Counter. Checklist. Subline holds 2.9s.
+  { at: 4000, fn: () => { showScene('s2'); addAt(document.getElementById('s2-headline'),'in',0); } },
+
+  // Shutter tap at 6700ms (2.2s on headline)
+  { at: 6700, fn: () => {
+    document.getElementById('cam-shutter').classList.add('tapped');
+    setTimeout(() => { document.getElementById('flash-overlay').classList.add('flash'); }, 150);
+    setTimeout(() => {
+      // 800ms transition — viewer registers the photo was taken
+      document.getElementById('cam-screen').classList.add('hidden');
+      document.getElementById('review-screen').classList.remove('hidden');
+      // AI auto-filled instantly — fields appear together, no typing
+      setTimeout(() => {
+        document.getElementById('field-title').textContent = 'Vintage Brass Lamp';
+        document.getElementById('field-price').textContent = '$45.00';
+      }, 280);
+      setTimeout(() => {
+        document.getElementById('field-cat').textContent = 'Lighting & Fixtures';
+        addAt(document.getElementById('auto-badge'), 'in', 60);
+        // Publish button appears with the completed card — already rendered when you see it
+        addAt(document.getElementById('publish-btn'), 'in', 300);
+      }, 480);
+    }, 800);
+  }},
+
+  // Publish tap at 9800ms (btn on screen since ~8780ms = ~1s visible — decisive)
+  { at: 9800, fn: () => {
+    document.getElementById('publish-btn').classList.add('tapped');
+    setTimeout(() => {
+      document.getElementById('review-screen').classList.add('hidden');
+      document.getElementById('success-screen').classList.remove('hidden');
+      addAt(document.getElementById('success-ring'), 'in', 100);
+      addAt(document.getElementById('ring-pulse'), 'pulse', 100);
+      addAt(document.getElementById('success-title'), 'in', 280);
+      addAt(document.getElementById('success-sub'), 'in', 500);
+    }, 1150);
+  }},
+
+  // Counter at 13000ms (1.35s on success screen before counting)
+  { at: 13000, fn: () => {
+    addAt(document.getElementById('counter-wrap'),'in',0);
+    setTimeout(() => {
+      document.getElementById('counter-fill').style.transition = 'width 1.3s cubic-bezier(0.25,0.46,0.45,0.94)';
+      document.getElementById('counter-fill').style.width = '100%';
+      animateCounter(75, 100, 1300, (v) => { counterNum.textContent = v; });
+    }, 200);
+  }},
+
+  // Checklist rows stagger in as counter hits 100 (~14500ms)
+  { at: 14500, fn: () => { addAt(document.getElementById('ir1'),'in',0); } },
+  { at: 14850, fn: () => { addAt(document.getElementById('ir2'),'in',0); } },
+  { at: 15200, fn: () => { addAt(document.getElementById('ir3'),'in',0); } },
+  { at: 15550, fn: () => { addAt(document.getElementById('ir4'),'in',0); } },
+
+  // Subline at 15900ms — sits 3.6s before scene cut
+  { at: 15900, fn: () => { addAt(document.getElementById('s2-subline'),'in',0); } },
+  // cut to s_share at 19500ms
+
+  // SCENE 2b — SHARE / DISTRIBUTION (19500ms–26500ms)
+  { at: 19500, fn: () => {
+    showScene('s_share');
+    addAt(document.getElementById('listing-card'),'in',0);
+    addAt(document.getElementById('share-hl'),'in',300);
+    addAt(document.getElementById('share-sub'),'in',700);
+  }},
+  { at: 20800, fn: () => { addAt(document.getElementById('pt1'),'in',0); } },
+  { at: 20950, fn: () => { addAt(document.getElementById('pt2'),'in',0); } },
+  { at: 21100, fn: () => { addAt(document.getElementById('pt3'),'in',0); } },
+  { at: 21250, fn: () => { addAt(document.getElementById('pt4'),'in',0); } },
+  { at: 21400, fn: () => { addAt(document.getElementById('pt5'),'in',0); } },
+  { at: 21550, fn: () => { addAt(document.getElementById('pt6'),'in',0); } },
+  { at: 21700, fn: () => { addAt(document.getElementById('pt7'),'in',0); } },
+  { at: 21850, fn: () => { addAt(document.getElementById('pt8'),'in',0); } },
+  { at: 22000, fn: () => { addAt(document.getElementById('pt9'),'in',0); } },
+  { at: 22150, fn: () => { addAt(document.getElementById('pt10'),'in',0); } },
+  { at: 22300, fn: () => { addAt(document.getElementById('pt11'),'in',0); } },
+  { at: 22450, fn: () => { addAt(document.getElementById('pt12'),'in',0); } },
+  { at: 22650, fn: () => { addAt(document.getElementById('share-btn-wrap'),'in',0); } },
+  // cut to s3 at 26500ms
+
+  // SCENE 3 — POS / Payments (26500ms–36000ms)
+  // Phones appear and settle before any interaction.
+  // Bullet points appear before charge tap so viewer reads them first.
+  { at: 26500, fn: () => {
+    showScene('s3');
+    addAt(document.getElementById('s3-headline'),'in',0);
+    addAt(document.getElementById('org-phone'),'in',700);
+    addAt(document.getElementById('shop-phone'),'in',1100);
+  }},
+
+  // Bullet points appear once phones are settled (before charge tap)
+  { at: 27600, fn: () => { addAt(document.getElementById('s3-sub'),'in',0); } },
+
+  // Organizer taps Charge at 29500ms (1.9s after phones settle)
+  { at: 29500, fn: () => {
+    document.getElementById('pos-btn').classList.add('tapped');
+    addAt(document.getElementById('pay-beam'),'in',400);
+  }},
+
+  // Shopper taps Authorize at 32100ms (2.2s after beam)
+  { at: 32100, fn: () => {
+    document.getElementById('auth-btn').classList.add('tapped');
+    setTimeout(() => {
+      const beam = document.getElementById('pay-beam');
+      const label = document.getElementById('beam-label');
+      beam.classList.add('return');
+      label.textContent = '\u2002Paid\u2002';
+      label.classList.add('paid');
+      document.getElementById('card-auth').classList.add('hidden');
+      document.getElementById('shopper-success').classList.add('in');
+      addAt(document.getElementById('shopper-check'),'in',100);
+      addAt(document.getElementById('paid-amount'),'in',260);
+      addAt(document.getElementById('paid-label'),'in',420);
+    }, 350);
+  }},
+
+  // Organizer receives at 34100ms (visible 1.9s before cut)
+  { at: 34100, fn: () => {
+    document.getElementById('pos-content').classList.add('hidden');
+    document.getElementById('org-received').classList.add('in');
+  }},
+  // cut to s4 at 36000ms
+
+  // SCENE 4 — eBay Push (36000ms–42500ms = 6.5s)
+  // Card slides in. Button on screen 1.5s before tap.
+  // Cross-fade: pre → post inside same card. No layout shift.
+  // Reports breathe 3s before cut.
+  { at: 36000, fn: () => {
+    showScene('s4');
+    addAt(document.getElementById('s4-headline'),'in',0);
+    addAt(document.getElementById('ebay-card'),'in',600);
+    addAt(document.getElementById('s4-summary'),'in',1000);
+    addAt(document.getElementById('s4-reports'),'in',1400);
+  }},
+
+  // Tap at 38100ms (card on screen 1.5s)
+  { at: 38100, fn: () => {
+    document.getElementById('ebay-push-row').classList.add('tapped');
+    setTimeout(() => {
+      document.getElementById('ebay-card').classList.add('confirmed');
+      document.getElementById('ebay-pre').style.opacity = '0';
+      addAt(document.getElementById('ebay-post'),'in',100);
+      animateCounter(0, 38, 800, (v) => {
+        document.getElementById('s4-stat-ebay').textContent = v;
+      });
+    }, 300);
+  }},
+
+  // Report icons pulse one-by-one when vo-11 starts (39950ms)
+  { at: 39950, fn: () => {
+    addAt(document.getElementById('s4-icon-excel'), 'in', 0);
+    addAt(document.getElementById('s4-icon-pdf'),   'in', 160);
+    addAt(document.getElementById('s4-icon-csv'),   'in', 320);
+    addAt(document.getElementById('s4-icon-qb'),    'in', 480);
+  }},
+  // cut to s5 at 42500ms
+
+  // SCENE 5 — CTA (~1s total, tight stagger)
+  { at: 42500, fn: () => {
+    showScene('s5');
+    addAt(document.getElementById('cta-logo'),'in',0);
+    addAt(document.getElementById('cta-main'),'in',120);
+    addAt(document.getElementById('cta-sub'),'in',240);
+    addAt(document.getElementById('cta-url'),'in',360);
+  }},
+
+  // End at 43700ms
+  { at: 43700, fn: () => {
+    running = false;
+    cancelAnimationFrame(rafId);
+    replayBtn.style.display = 'block';
+  }}
+];
+
+// ── RAF loop ──
+let nextEvent = 0;
+function tick(now) {
+  if (!running) return;
+  const elapsed = now - startTime;
+
+  while (nextEvent < events.length && elapsed >= events[nextEvent].at) {
+    events[nextEvent].fn();
+    nextEvent++;
+  }
+
+  const pct = Math.min((elapsed / DURATION) * 100, 100);
+  progressBar.style.width = pct + '%';
+
+  const secs = Math.min(Math.floor(elapsed / 1000), 45);
+  const ss = String(secs % 60).padStart(2,'0');
+  timerEl.textContent = `0:${ss}`;
+
+  if (elapsed < DURATION) {
+    rafId = requestAnimationFrame(tick);
+  }
+}
+
+function start() {
+  resetAll();
+  nextEvent = 0;
+  running = true;
+  paused = false;
+  pauseStart = null;
+  startTime = performance.now();
+  requestAnimationFrame(tick);
+}
+
+// ── Pause / Resume ──
+const pauseIndicator = document.getElementById('pause-indicator');
+let pauseFlashTimer = null;
+
+function togglePause() {
+  if (!startTime || (!running && !paused)) return; // not started or finished
+  if (paused) {
+    // Resume: shift startTime forward by how long we were paused
+    const pauseDuration = performance.now() - pauseStart;
+    startTime += pauseDuration;
+    pauseStart = null;
+    paused = false;
+    running = true;
+    pauseIndicator.style.opacity = '0';
+    rafId = requestAnimationFrame(tick);
+  } else {
+    // Pause
+    paused = true;
+    pauseStart = performance.now();
+    running = false;
+    cancelAnimationFrame(rafId);
+    // Flash the pause icon then fade it out
+    pauseIndicator.style.opacity = '1';
+    clearTimeout(pauseFlashTimer);
+    pauseFlashTimer = setTimeout(() => {
+      if (paused) pauseIndicator.style.opacity = '0.35';
+    }, 600);
+  }
+}
+
+player.addEventListener('click', (e) => {
+  if (e.target.closest('#play-overlay')) return;
+  if (e.target.closest('#replay-btn')) return;
+  if (!startTime) return;
+  togglePause();
+});
+
+// ── Play overlay ──
+playOverlay.addEventListener('click', () => {
+  playOverlay.classList.add('hidden');
+  start();
+});
+
+// ── Replay ──
+replayBtn.addEventListener('click', () => {
+  replayBtn.style.display = 'none';
+  start();
+});
+
+// ── Scene navigation ──
+document.getElementById('prev-btn').addEventListener('click', function() {
+  seekToScene(currentScene - 1);
+});
+document.getElementById('next-btn').addEventListener('click', function() {
+  seekToScene(currentScene + 1);
+});
+document.querySelectorAll('.scene-dot').forEach(function(dot) {
+  dot.addEventListener('click', function() {
+    seekToScene(parseInt(this.dataset.scene));
+  });
+});
+</script>
+
+<script>
+// ── Voiceover + Background Music ──
+(function() {
+
+  // ── Background music config ──
+  var BG_SRC    = 'bg-music.mp3';
+  var BG_OFFSET = 12;     // seconds into the track to start from
+  var BG_END    = 57.85;  // seconds into the track to stop (0 = no limit)
+  var BG_VOL    = 0.18;  // background music level
+  var VO_GAIN   = 2.5;   // VO amplification (>1.0 via Web Audio API)
+
+  var bgMusic = new Audio(BG_SRC);
+  bgMusic.preload = 'auto';
+  bgMusic.volume = BG_VOL;
+  bgMusic.loop = false;
+
+  var CLIPS = [
+    { at: 250,   src: 'fas-01-boosted.mp3' },  // You've got three days...
+    { at: 6250,  src: 'fas-02-boosted.mp3' },  // That used to mean sticky tags...
+    { at: 11200, src: 'fas-03-boosted.mp3' },  // Now you just take a photo.
+    { at: 13250, src: 'fas-04-boosted.mp3' },  // FindA.Sale scans the item...
+    { at: 19450, src: 'fas-05-boosted.mp3' },  // A hundred items, done before lunch.
+    { at: 22050, src: 'fas-06-boosted.mp3' },  // Your sale goes live...
+    { at: 28850, src: 'fas-07-boosted.mp3' },  // At the sale — they scan, they pay...
+    { at: 32850, src: 'fas-08-boosted.mp3' },  // No card reader necessary.
+    { at: 34800, src: 'fas-09-boosted.mp3' },  // Everything happens right on your phone.
+    { at: 37400, src: 'fas-10-boosted.mp3' },  // Leftovers? One tap to eBay.
+    { at: 40200, src: 'fas-11-boosted.mp3' },  // After sale reports...
+    { at: 42700, src: 'fas-12-boosted.mp3' },  // FindA.Sale. Run your sale. Every Sale.
+    { at: 44050, src: 'fas-13-boosted.mp3' },  // [new line — tune timing]
+  ];
+
+  // Preload VO as plain Audio elements
+  var audios = CLIPS.map(function(c) {
+    var a = new Audio(c.src);
+    a.preload = 'auto';
+    a.volume = 1.0;
+    return a;
+  });
+
+  var timers = [];
+  var bgStopTimer = null;
+  var startedAt = null;
+  var pausedAt = null;
+  var isPaused = false;
+
+  function clearBgStop() {
+    if (bgStopTimer) { clearTimeout(bgStopTimer); bgStopTimer = null; }
+  }
+
+  function scheduleBgStop(delayMs) {
+    clearBgStop();
+    if (BG_END > 0 && delayMs > 0) {
+      bgStopTimer = setTimeout(function() { bgMusic.pause(); bgStopTimer = null; }, delayMs);
+    }
+  }
+
+  function stopAll() {
+    timers.forEach(function(t) { clearTimeout(t); });
+    timers = [];
+    clearBgStop();
+    audios.forEach(function(a) { a.pause(); a.currentTime = 0; });
+    bgMusic.pause();
+    bgMusic.currentTime = 0;
+  }
+
+  function scheduleFrom(offsetMs) {
+    timers.forEach(function(t) { clearTimeout(t); });
+    timers = [];
+    CLIPS.forEach(function(clip, i) {
+      var delay = clip.at - offsetMs;
+      if (delay < 0) return;
+      var t = setTimeout(function() {
+        audios[i].currentTime = 0;
+        audios[i].play().catch(function() {});
+      }, delay);
+      timers.push(t);
+    });
+  }
+
+  function startAudio() {
+    stopAll();
+    startedAt = performance.now();
+    pausedAt = null;
+    isPaused = false;
+    bgMusic.currentTime = BG_OFFSET;
+    bgMusic.play().catch(function() {});
+    scheduleBgStop((BG_END - BG_OFFSET) * 1000);
+    scheduleFrom(0);
+  }
+
+  function pauseAudio() {
+    timers.forEach(function(t) { clearTimeout(t); });
+    timers = [];
+    clearBgStop();
+    pausedAt = performance.now();
+    audios.forEach(function(a) { if (!a.paused) a.pause(); });
+    bgMusic.pause();
+  }
+
+  function resumeAudio() {
+    if (pausedAt === null) return;
+    var elapsed = pausedAt - startedAt;
+    var bgRemaining = (BG_END - BG_OFFSET) * 1000 - elapsed;
+    audios.forEach(function(a) { if (a.paused && a.currentTime > 0) a.play().catch(function() {}); });
+    bgMusic.play().catch(function() {});
+    scheduleBgStop(bgRemaining);
+    bgMusic.play().catch(function() {});
+    scheduleFrom(elapsed);
+    startedAt = performance.now() - elapsed;
+    pausedAt = null;
+  }
+
+  // Start audio on play/replay click — allow="autoplay" on the iframe unlocks the frame's audio context
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('#play-overlay') || e.target.closest('#replay-btn')) {
+      startAudio();
+    }
+  }, true);
+
+  // Pause / resume audio alongside visual pause
+  document.getElementById('player').addEventListener('click', function(e) {
+    if (e.target.closest('#play-overlay') || e.target.closest('#replay-btn')) return;
+    if (!startedAt) return;
+    if (isPaused) {
+      isPaused = false;
+      resumeAudio();
+    } else {
+      isPaused = true;
+      pauseAudio();
+    }
+  });
+})();
+</script>
+</body>
+</html>
+
