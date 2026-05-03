@@ -1,6 +1,6 @@
-# Patrick's Dashboard — Week of May 3, 2026 (updated S629)
+# Patrick's Dashboard — Week of May 3, 2026 (updated S630)
 
-## Next Session — S630: Email Creative Session
+## Next Session — S631: Email Creative Session
 
 **Goal:** Finalize all 4 outreach email templates. Pure creative work — the pipeline infrastructure, product research, and psychology frameworks are all done. Next session just needs to write copy that converts.
 
@@ -14,6 +14,8 @@
 ---
 
 ## What Happened This Week
+
+**S630 — Schema drift repair, storefront 500 fixed.** Diagnosed storefront 500 via Railway logs — `PrismaClientValidationError: Unknown field 'attendanceCount'`. Root cause: S624/S625 multi-schema syncs wiped model definitions from `schema.prisma` while DB tables remained intact. Full audit found 3 entire missing models (ClaimRequest, SaleShareLink, SaleShareLinkClick) + missing ClaimEmail definition + missing Consignor stripe fields + missing inverse relations on User/Sale/Organizer. All restored — no migrations needed. Cache-busted Railway rebuild. Local `prisma generate` validated clean. Wait for Railway rebuild to confirm storefront is live.
 
 **S629 — CI/Railway fixes + crawl queue + P2 polish + email creative iteration.** Fixed 4 CI TypeScript errors (schema drift — ScrapedSalesJob and scraper fields dropped from schema.prisma again). Fixed Railway `endDate` non-nullable Prisma filter crash. Built DirectoryCrawlQueueManager with 20-metro subAreaConfig and exponential backoff logic. Shipped P2 polish: `/sales` public page, disclosure label on scraped sale cards, overflow-x fix. Ran multi-round email creative session — S626 subject line unlocked, business guru psychology brief generated, current best draft is warmer and leads with organizer pain but Patrick wants a dedicated creative session to push it further.
 
@@ -69,11 +71,10 @@ All four are in qa-backlog under "Pre-existing Open Bugs."
 
 ## This Week's Priority
 
-1. **Push the S629 wrap block** (below) — gets everything current on GitHub.
-2. **Run `prisma generate`** after the schema push (see block below).
-3. **S630: Email creative session** — finalize 4 outreach templates, then the pipeline build can start.
-4. **Sign up HERE + Foursquare APIs** — `developer.here.com` + `location.foursquare.com/developer`, add both keys as GitHub Secrets.
-5. **Send the 19 outreach drafts in Gmail** — Nick Loper, Codie Sanchez, trade associations. Long overdue since S596.
+1. **Wait for Railway rebuild** (S630 push triggered it) — storefront should come back live.
+2. **S631: Email creative session** — finalize 4 outreach templates, then the pipeline build can start.
+3. **Sign up HERE + Foursquare APIs** — `developer.here.com` + `location.foursquare.com/developer`, add both keys as GitHub Secrets.
+4. **Send the 19 outreach drafts in Gmail** — Nick Loper, Codie Sanchez, trade associations. Long overdue since S596.
 
 ## Action Items for Patrick
 
