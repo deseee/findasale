@@ -83,9 +83,29 @@ export async function getOrCreateSystemOrganizer(): Promise<string> {
 }
 
 /**
+ * Normalize a business name for dedup matching: lowercase, remove non-alphanumeric, collapse whitespace.
+ * Example: "Antque Mall & Co." → "antque mall co"
+ */
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, '') // Remove special chars except spaces
+    .replace(/\s+/g, ' ') // Collapse multiple spaces to single
+    .trim();
+}
+
+/**
  * Get or create a scraped organizer with per-source attribution.
  * One system user per business per source (e.g., scraper+john-doe-estatesalesnet@system.finda.sale)
  * Automatically triggers enrichment to fill in phone, website, logo.
+ *
+ * Dedup strategy (in priority order):
+ * 1. googlePlaceId (exact match)
+ * 2. foursquareVenueId (exact match)
+ * 3. hereBusinessId (exact match)
+ * 4. name + city (normalized case-insensitive DB match)
+ *
+ * When a match is found, backfill missing cross-source IDs to merge data.
  */
 async function getOrCreateScrapedOrganizer(
   businessName: string,
@@ -94,38 +114,90 @@ async function getOrCreateScrapedOrganizer(
   state: string,
   esnOrgId?: number,
   googlePlaceId?: string,
+  foursquareVenueId?: string,
+  hereBusinessId?: string,
   businessCategory?: string
 ): Promise<string> {
-  // ADR-077: Check by googlePlaceId first — strongest dedup signal.
-  // Prevents duplicate organizers when the same business appears in multiple
-  // search queries (e.g., "antique mall" + "antique dealer" both return it).
+  // ADR-077 Phase 2: Multi-source dedup
+  // Check by googlePlaceId first — strongest dedup signal.
   if (googlePlaceId) {
     const byPlaceId = await prisma.organizer.findFirst({
       where: { googlePlaceId },
-      select: { id: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true },
     });
-    if (byPlaceId) return byPlaceId.id;
+    if (byPlaceId) {
+      // Backfill missing source IDs
+      const updates: Record<string, unknown> = {};
+      if (foursquareVenueId && !byPlaceId.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
+      if (hereBusinessId && !byPlaceId.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+      if (esnOrgId) updates.esnOrgId = esnOrgId;
+      if (businessCategory) updates.businessCategory = businessCategory;
+      if (Object.keys(updates).length > 0) {
+        await prisma.organizer.update({ where: { id: byPlaceId.id }, data: updates });
+      }
+      return byPlaceId.id;
+    }
   }
 
-  // Try to find existing organizer by businessName + source
-  // Use a pattern we can query: check isUnmanagedListing + businessName
-  const existing = await prisma.organizer.findFirst({
+  // Check by foursquareVenueId if present
+  if (foursquareVenueId) {
+    const byFoursquare = await prisma.organizer.findFirst({
+      where: { foursquareVenueId },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true },
+    });
+    if (byFoursquare) {
+      const updates: Record<string, unknown> = {};
+      if (googlePlaceId && !byFoursquare.googlePlaceId) updates.googlePlaceId = googlePlaceId;
+      if (hereBusinessId && !byFoursquare.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+      if (esnOrgId) updates.esnOrgId = esnOrgId;
+      if (businessCategory) updates.businessCategory = businessCategory;
+      if (Object.keys(updates).length > 0) {
+        await prisma.organizer.update({ where: { id: byFoursquare.id }, data: updates });
+      }
+      return byFoursquare.id;
+    }
+  }
+
+  // Check by hereBusinessId if present
+  if (hereBusinessId) {
+    const byHere = await prisma.organizer.findFirst({
+      where: { hereBusinessId },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true },
+    });
+    if (byHere) {
+      const updates: Record<string, unknown> = {};
+      if (googlePlaceId && !byHere.googlePlaceId) updates.googlePlaceId = googlePlaceId;
+      if (foursquareVenueId && !byHere.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
+      if (esnOrgId) updates.esnOrgId = esnOrgId;
+      if (businessCategory) updates.businessCategory = businessCategory;
+      if (Object.keys(updates).length > 0) {
+        await prisma.organizer.update({ where: { id: byHere.id }, data: updates });
+      }
+      return byHere.id;
+    }
+  }
+
+  // Fallback: Try to find existing organizer by normalized businessName + city
+  // Fetch candidates in the same city that are unmanaged listings, then match by normalized name
+  const candidates = await prisma.organizer.findMany({
     where: {
-      businessName,
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true, esnOrgId: true, googlePlaceId: true, businessCategory: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true },
   });
 
+  const normalizedName = normalizeName(businessName);
+  const existing = candidates.find((c) => normalizeName(c.businessName) === normalizedName);
+
   if (existing) {
-    // Backfill fields we now have that the existing record is missing.
-    // Google Place ID and businessCategory are only added, never overwritten —
-    // preserving the highest-quality source data already stored.
+    // Backfill all source IDs we now have
     const updates: Record<string, unknown> = {};
-    if (esnOrgId && !existing.esnOrgId) updates.esnOrgId = esnOrgId;
     if (googlePlaceId && !existing.googlePlaceId) updates.googlePlaceId = googlePlaceId;
-    if (businessCategory && !existing.businessCategory) updates.businessCategory = businessCategory;
+    if (foursquareVenueId && !existing.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
+    if (hereBusinessId && !existing.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+    if (esnOrgId) updates.esnOrgId = esnOrgId;
+    if (businessCategory) updates.businessCategory = businessCategory;
     if (Object.keys(updates).length > 0) {
       await prisma.organizer.update({ where: { id: existing.id }, data: updates });
     }
@@ -348,6 +420,8 @@ export async function ingestScrapedListing(
         listing.state,
         listing.esnOrgId,
         listing.googlePlaceId,
+        listing.foursquareVenueId,
+        listing.hereBusinessId,
         listing.businessCategory
       );
     } else if (organizerId) {
