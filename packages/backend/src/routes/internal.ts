@@ -6,6 +6,7 @@
 import express from 'express';
 import { ingestFromGitHubActions } from '../controllers/internalScraperController';
 import { runEnrichmentBackfill } from '../controllers/internalEnrichmentController';
+import { triggerSaleDetailEnrichment, getSaleDetailEnrichmentStatus } from '../controllers/internalSaleDetailEnrichmentController';
 
 const router = express.Router();
 
@@ -14,5 +15,11 @@ router.post('/scraper/ingest', ingestFromGitHubActions);
 
 // POST /api/internal/scraper/enrich-backfill — backfill Google Places data on unmanaged listings
 router.post('/scraper/enrich-backfill', runEnrichmentBackfill);
+
+// POST /api/internal/enrich-sale-details — trigger ESN sale detail enrichment (description + photos)
+router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
+
+// GET /api/internal/enrich-sale-details/status — check unenriched sales count
+router.get('/enrich-sale-details/status', getSaleDetailEnrichmentStatus);
 
 export default router;

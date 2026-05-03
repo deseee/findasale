@@ -225,6 +225,7 @@ import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Ph
 import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Directory scraper national cron
 import { initMetroSyncCron } from './jobs/metroSyncCron'; // ADR-074: Metro Sync — eBay sold items nightly cron
 import { initClaimEmailCron } from './jobs/claimEmailCron'; // ADR-073 Phase 2: Claim Email Pipeline — 3-touch sequence for unmanaged organizers
+import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
 
@@ -609,6 +610,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #309: Register consignor expiry notice cron (daily at 2 AM UTC)
   scheduleConsignorExpiryNoticeCron();
+
+  // ADR-075: Register EstateSales.NET sale detail enrichment cron (every 4 hours at :00 UTC)
+  scheduleSaleDetailEnrichmentCron();
 
   // Feature #244 Phase 3: Register eBay sold sync cron (every 15 minutes — polling fallback)
   startEbaySoldSyncCron();
