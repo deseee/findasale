@@ -48,6 +48,8 @@ interface OrganizerProfile {
   reviewCount?: number;
   followerCount: number;
   isFollowing: boolean;
+  isClaimed: boolean;
+  isUnmanagedListing: boolean;
 }
 
 const OrganizerProfilePage = () => {
@@ -101,7 +103,7 @@ const OrganizerProfilePage = () => {
                 <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">{organizer.businessName}</h1>
                 <ReputationTier tier={organizer.reputationTier} size="sm" />
               </div>
-              {typeof organizer.reputationScore === 'number' && (
+              {typeof organizer.reputationScore === 'number' && !organizer.isUnmanagedListing && (
                 <div className="mb-3 flex items-center gap-2">
                   <ReputationBadge
                     score={organizer.reputationScore}
@@ -147,6 +149,15 @@ const OrganizerProfilePage = () => {
                   </div>
                 )}
               </div>
+              {organizer.isUnmanagedListing && (
+                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <p className="text-sm text-blue-900 dark:text-blue-100 font-semibold mb-1">This listing hasn't been claimed yet.</p>
+                  <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">Are you {organizer.businessName}? Claim it to add your bio, photos, and connect directly with shoppers.</p>
+                  <Link href={`/register?claim=${organizer.id}`} className="inline-block bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1.5 px-3 rounded transition-colors">
+                    Claim This Listing
+                  </Link>
+                </div>
+              )}
             </div>
             <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ml-4">
               {organizer.sales.length} sale{organizer.sales.length !== 1 ? 's' : ''}
@@ -244,8 +255,10 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
             loading="lazy"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-warm-400 text-xs">No photo</span>
+          <div className="absolute inset-0 bg-gray-800 border border-gray-700 rounded-lg flex flex-col items-center justify-center p-4">
+            <div className="text-3xl mb-2">📍</div>
+            <h4 className="text-white text-sm font-semibold text-center line-clamp-2 mb-1">{sale.title}</h4>
+            <p className="text-gray-400 text-xs text-center">{formatDate(sale.startDate)}</p>
           </div>
         )}
         {/* Badge overlays */}
