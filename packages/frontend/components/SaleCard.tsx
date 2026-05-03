@@ -46,6 +46,7 @@ interface Sale {
   // Rank-Based Early Access
   locked?: boolean;
   minutesUntilUnlock?: number;
+  sourceName?: string; // P2: Disclosure label for scraped sales
 }
 
 interface BadgeConfig {
@@ -230,6 +231,12 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale }) => {
               </span>
             )}
           </div>
+
+          {sale.sourceName && (
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 border-t border-warm-100 dark:border-gray-700 pt-2">
+              Sourced from public records · details may vary
+            </p>
+          )}
         </div>
       </div>
     </div>
