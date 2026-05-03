@@ -694,7 +694,7 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
                 <RippleIndicator saleId={sale.id} size="md" />
               </div>
               <p className="text-lg text-warm-700 dark:text-gray-300 mb-4">
-                {sale.address}, {sale.city}, {sale.state} {sale.zip}
+                {sale.address ? `${sale.address}, ` : ''}{sale.city}, {sale.state} {sale.zip}
               </p>
               <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
                 {format(saleStartDate, 'MMM d, yyyy h:mm a')} - {format(saleEndDate, 'MMM d, yyyy h:mm a')}
