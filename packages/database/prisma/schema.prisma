@@ -243,6 +243,9 @@ model User {
   reputationScore       ReferrerReputationScore?
   // QR Scanner Phase 2: scan event tracking
   qrScannerEvents       QRScannerEvent[]         @relation("QRScannerEventShopper")
+  // Feature: Sale Share Links — referral share links created or clicked by this user
+  saleShareLinks        SaleShareLink[]          @relation("SaleShareLinks")
+  saleShareLinkClicks   SaleShareLinkClick[]     @relation("SaleShareLinkClicks")
 
   @@unique([oauthProvider, oauthId]) // Prevent duplicate OAuth accounts
   @@index([guildXp])
@@ -420,6 +423,8 @@ model Organizer {
   broadcasts               OrganizerBroadcast[]
   // Feature #354: Business hours
   hours                    OrganizerHours[]
+  // Feature: Claim Requests — incoming claim requests for unmanaged listings
+  claimRequests            ClaimRequest[]
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 
@@ -808,6 +813,8 @@ model Sale {
   scrapeVersion               Int?                     // Scrape update counter
   scrapedMetadata             Json?                    // Raw API payload for audit/enrichment
   claimEmails                 ClaimEmail[]
+  // Feature: Sale Share Links — referral share links for this sale
+  shareLinks                  SaleShareLink[]
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -4113,6 +4120,8 @@ model Consignor {
   commissionRate Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
   notes          String?            @db.Text
   portalToken    String             @unique @default(cuid()) // capability URL token — permanent for MVP
+  stripeAccountId String?           // Stripe Connect account ID for consignor payouts
+  stripeOnboarded Boolean           @default(false) // Whether consignor has completed Stripe onboarding
   items          Item[]             @relation("ConsignorItems")
   payouts        ConsignorPayout[]
   createdAt      DateTime           @default(now())
@@ -4362,4 +4371,55 @@ model ClaimEmail {
   @@index([claimed])
 }
 
+// Feature: Claim Requests — incoming claim requests from organizers wanting to claim unmanaged listings
+model ClaimRequest {
+  id                 String    @id @default(cuid())
+  organizerId        String
+  claimantEmail      String
+  claimantName       String
+  message            String?
+  status             String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt          DateTime  @default(now())
+  reviewedAt         DateTime?
+  verificationToken  String?   @unique
+  emailVerifiedAt    DateTime?
+  reviewedBy         String?
+  organizer          Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
 
+  @@index([organizerId])
+  @@index([status])
+}
+
+// Feature: Sale Share Links — per-user referral links to a sale with click tracking and XP rewards
+model SaleShareLink {
+  id             String               @id @default(cuid())
+  saleId         String
+  sale           Sale                 @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User                 @relation("SaleShareLinks", fields: [userId], references: [id], onDelete: Cascade)
+  code           String               @unique
+  totalClicks    Int                  @default(0)
+  uniqueClicks   Int                  @default(0)
+  totalXpAwarded Int                  @default(0)
+  clicks         SaleShareLinkClick[]
+  createdAt      DateTime             @default(now())
+  updatedAt       updatedAt      DateTime             @updatedAt
+
+  @@unique([saleId, userId])
+  @@index([code])
+  @@index([userId])
+}
+
+// Feature: Sale Share Link Clicks — individual click events for share link analytics
+model SaleShareLinkClick {
+  id          String        @id @default(cuid())
+  shareLinkId String
+  shareLink   SaleShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+  clickerId   String?
+  clicker     User?         @relation("SaleShareLinkClicks", fields: [clickerId], references: [id], onDelete: SetNull)
+  xpAwarded   Int           @default(0)
+  createdAt   DateTime      @default(now())
+
+  @@unique([shareLinkId, clickerId])
+  @@index([shareLinkId])
+}
