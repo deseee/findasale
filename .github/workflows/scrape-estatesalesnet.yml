@@ -2,13 +2,17 @@ name: EstateSalesNet Scraper
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Midnight UTC — matches current Railway cron slot
-  workflow_dispatch:       # Manual trigger for testing
+    - cron: '0 0 * * *'  # Midnight UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -36,7 +40,6 @@ jobs:
         env:
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
-          ESTATESALESNET_ORGANIZER_ID: ${{ secrets.ESTATESALESNET_ORGANIZER_ID }}
         run: |
           cd packages/backend
           ./node_modules/.bin/ts-node src/scripts/run-estatesalesnet.ts

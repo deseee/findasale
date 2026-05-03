@@ -2,15 +2,17 @@ name: Google Places Business Directory Scraper
 
 on:
   schedule:
-    # Monthly: 1st of every month at 02:00 UTC
-    # Cost: ~3,300 requests/month (within 5,000 free tier — $0/month)
-    - cron: '0 2 1 * *'
-  workflow_dispatch:  # Manual trigger for testing
+    - cron: '0 2 1 * *'  # Monthly: 1st of every month at 02:00 UTC (~$0/month in free tier)
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 90   # 100 metros × 11 queries × up to 2 pages at 200ms delay
+    timeout-minutes: 90
 
     steps:
       - name: Checkout

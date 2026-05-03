@@ -2,13 +2,17 @@ name: Craigslist Scraper
 
 on:
   schedule:
-    - cron: '30 0 * * *'  # 00:30 UTC — 30 min after EstateSalesNet to avoid concurrent ingest contention
-  workflow_dispatch:       # Manual trigger for testing
+    - cron: '30 0 * * *'  # 00:30 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30   # Longer timeout to account for per-site rate limiting (~80 sites)
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -36,7 +40,6 @@ jobs:
         env:
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
-          CRAIGSLIST_ORGANIZER_ID: ${{ secrets.CRAIGSLIST_ORGANIZER_ID }}
         run: |
           cd packages/backend
           ./node_modules/.bin/ts-node src/scripts/run-craigslist.ts

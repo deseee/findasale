@@ -1,19 +1,51 @@
-# Patrick's Dashboard — Week of May 3, 2026 (updated S632)
+# Patrick's Dashboard — Week of May 3, 2026 (updated S633)
 
-## Next Session — S633: Email Creative Session
+## Next Session — S634
 
-**Goal:** Finalize all 4 outreach email templates. Pure creative work — the pipeline infrastructure, product research, and psychology frameworks are all done. Next session just needs to write copy that converts.
+**Patrick must do before S634 starts:**
+1. Push the S633 block (below)
+2. `git rm .github/workflows/test-esn-api-access.yml` then commit it in the same push
+3. Run the migration block (below) against Railway
 
-**What's ready to use:**
-- Full product feature context read (Auto Tags, Smart Pricing, QR checkout, shopper map/notifications, Flash Deals, Virtual Queue)
-- Business guru brief: Hormozi, Ogilvy, StoryBrand, curiosity gap, you/I ratio, specificity=credibility
-- Best draft from S629 — leads with organizer pain, needs more warmth and personality
-- S626 acquisition strategy at `claude_docs/strategy/organizer-acquisition-strategy.md`
-- Touch 1 subject line is UNLOCKED — write what earns the open
+**S634 goal options:** Email creative session (finalize 4 outreach email templates) OR dispatch remaining open bugs (OG meta fix, Hunt Pass status, sales/[id] 500).
+
+---
+
+## Patrick Actions — Do Now (S633 Wrap)
+
+### Step 1 — Push S633 changes
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add .github/workflows/scrape-estatesalesnet.yml
+git add .github/workflows/scrape-craigslist.yml
+git add .github/workflows/scrape-newspaper-rss.yml
+git add .github/workflows/scrape-facebook-events.yml
+git add .github/workflows/scrape-foursquare.yml
+git add .github/workflows/scrape-google-places.yml
+git add .github/workflows/scrape-here-places.yml
+git add .github/workflows/scrape-osm-overpass.yml
+git rm .github/workflows/test-esn-api-access.yml
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260503100000_organizer_unique_source_ids/migration.sql
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix(scraper): S633 — workflow fleet overhaul (concurrency, timeouts, cron stagger) + googlePlaceId @unique P1 fix"
+.\push.ps1
+```
+
+### Step 2 — Run migration on Railway
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
 
 ---
 
 ## What Happened This Week
+
+**S633 — GitHub Actions workflow fleet overhaul + googlePlaceId @unique.** Full audit and repair of all 11 GH Actions scraper workflows. 8 workflows rewritten: all now have `concurrency` blocks to queue overlapping runs without cancelling them. `scrape-estatesalesnet.yml` timeout extended 10→25 min (production ESN run confirmed ~19 min). `scrape-newspaper-rss.yml` cron staggered to 02:30 UTC (was clashing with Google Places on 1st of month). `scrape-foursquare.yml` broken `METRO_BATCH` env var removed — completely unused by the runner. All deprecated `*_ORGANIZER_ID` secrets removed. `test-esn-api-access.yml` flagged for deletion (needs `git rm`). P1 schema fix: `googlePlaceId String? @unique` + migration with dedup cleanup step. Bug fixes for /items/[id] 500, OG meta, Hunt Pass, and tier-lapse banner were dispatched but agent did not write code — all remain pending.
 
 **S632 — Scraper fleet audit + P0/P1 fixes.** Audited all 9 scraper workflows across three dimensions: API health, deduplication logic, and GitHub Actions batching. Found and fixed two critical issues. **P0 dedup fix:** The `getOrCreateScrapedOrganizer()` function was only checking `googlePlaceId` then falling back to exact string match — meaning the same business appearing in Google Places, HERE, and Foursquare would create 3 separate Organizer rows. Fixed with proper ID-priority lookup (googlePlaceId → foursquareVenueId → hereBusinessId → normalized name match) plus cross-source backfill (when a match is found, missing source IDs are written onto the existing record). Also added name normalization so typos like "Antque Mall" vs "Antique Mall" don't create duplicates. **P1 retry fix:** All 9 runner scripts were missing 502/503 retry logic — Railway cold starts were silently dropping ingest batches. All runners now retry 3 times with exponential backoff (2s, 4s, 8s). **Still pending P1:** `googlePlaceId` needs a `@unique` DB constraint in schema.prisma (race-condition duplicate prevention) — needs a migration, coming next session.
 
