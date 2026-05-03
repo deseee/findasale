@@ -101,7 +101,7 @@ const OrganizerProfilePage = () => {
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100">{organizer.businessName}</h1>
-                <ReputationTier tier={organizer.reputationTier} size="sm" />
+                {!organizer.isUnmanagedListing && <ReputationTier tier={organizer.reputationTier} size="sm" />}
               </div>
               {typeof organizer.reputationScore === 'number' && !organizer.isUnmanagedListing && (
                 <div className="mb-3 flex items-center gap-2">
