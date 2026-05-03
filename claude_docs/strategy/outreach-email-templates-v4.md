@@ -1,4 +1,4 @@
-# Outreach Email Templates — v7 (S630)
+# Outreach Email Templates — v8 (S636)
 
 **Status:** FINAL — approved for Dev wiring
 **Owner:** Patrick
@@ -15,12 +15,9 @@
 >
 > Your sale may be fantastic, but if your buyers don't know when and where to find you, it won't matter.
 >
-> We understand the challenges you face organizing a sale: short lead time, little visibility and sales discovered only after they ended.
->
-> Let us help. We built [Business Name] a free storefront on FindA.Sale — it puts you on the map before shoppers start searching, not after.
+> We built [Business Name] a free storefront on FindA.Sale — it puts you on the map before shoppers start searching, not after.
 >
 > Take a look: **[preview link]**
->
 > 2-minute walkthrough: **[video link]**
 >
 > It's free to claim your page. No credit card needed.
@@ -32,15 +29,16 @@
 
 ## Touch 2 — Day 4 — Non-openers of Touch 1 only
 
-> **Subject:** In case it got buried — [Business Name] on FindA.Sale
+> **Subject:** Most shoppers find a sale after it's over
 >
-> We sent a note a few days ago about a free storefront for [Business Name] on FindA.Sale. Sending it again in case it got buried.
+> By the time the Facebook post goes up or the signs hit the corners, the best things are already gone. Most people find out too late.
+>
+> [Business Name] has a free page on FindA.Sale — it shows up before people start searching, not after the weekend wraps up. Takes about 30 seconds to claim.
 >
 > Take a look: **[preview link]**
->
 > 2-minute walkthrough: **[video link]**
 >
-> Free to claim. No credit card needed.
+> No credit card needed.
 >
 > — The FindA.Sale Team
 > [physical address] · [unsubscribe link]
@@ -70,11 +68,9 @@
 
 > **Subject:** Last note
 >
-> This is the last note we'll send about [Business Name] on FindA.Sale. We won't reach out again.
+> Four notes, no response — we get it. This is the last one.
 >
-> If you ever want it, it's here whenever you're ready: **[preview link]**
->
-> Your first sale is free on the full toolkit. No credit card needed.
+> [Business Name]'s storefront stays live on FindA.Sale. If anything changes and you want to claim it, it's here whenever you're ready: **[preview link]**
 >
 > — The FindA.Sale Team
 > [physical address] · [unsubscribe link]
