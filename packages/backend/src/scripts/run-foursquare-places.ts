@@ -14,10 +14,12 @@
  */
 
 import {
-  runFoursquareScraper,
+  scrapeFoursquareQuery,
 } from '../services/scraper/sources/foursquarePlaces';
 import { ScrapedItem } from '../services/scraper/index';
 import { getNextCrawlsToRun, recordCrawlSuccess, recordCrawlFailure } from '../services/scraper/crawlQueueManager';
+import { PLACES_QUERIES } from '../services/scraper/sources/googlePlaces';
+import { QUERY_TYPE_TO_SEARCH } from '../services/scraper/subAreaConfig';
 
 const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') + '/api/internal/scraper/ingest';
@@ -55,8 +57,21 @@ async function main() {
       searchLocation = metro;
     }
 
+    // Find the matching query config for this queue item's queryType
+    const searchTerm = QUERY_TYPE_TO_SEARCH[queueItem.queryType as keyof typeof QUERY_TYPE_TO_SEARCH];
+    const queryConfig = PLACES_QUERIES.find((q) => q.query === searchTerm);
+    if (!queryConfig) {
+      console.warn(`[run-foursquare-places] No query config for queryType="${queueItem.queryType}" — skipping`);
+      await recordCrawlFailure(queueId, `No query config for queryType: ${queueItem.queryType}`);
+      results.failed++;
+      continue;
+    }
+
+    const apiKey = process.env.FOURSQUARE_API_KEY?.trim();
+    if (!apiKey) throw new Error('FOURSQUARE_API_KEY is not set');
+
     try {
-      const items = await runFoursquareScraper([searchLocation]);
+      const items = await scrapeFoursquareQuery(apiKey, queryConfig, searchLocation);
       allItems = allItems.concat(items);
 
       await recordCrawlSuccess(queueId, items.length);
