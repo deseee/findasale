@@ -696,17 +696,25 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
               <p className="text-lg text-warm-700 dark:text-gray-300 mb-4">
                 {sale.address ? `${sale.address}, ` : ''}{sale.city}, {sale.state} {sale.zip}
               </p>
-              <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
-                {format(saleStartDate, 'MMM d, yyyy h:mm a')} - {format(saleEndDate, 'MMM d, yyyy h:mm a')}
-              </p>
+              {sale.saleType === 'RETAIL' ? (
+                <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
+                  Permanent Storefront · Always Open
+                </p>
+              ) : (
+                <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
+                  {format(saleStartDate, 'MMM d, yyyy h:mm a')} - {format(saleEndDate, 'MMM d, yyyy h:mm a')}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2 mt-2">
                 {sale.status && (
                   <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                    sale.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' :
+                    sale.saleType === 'RETAIL'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                      : sale.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200' :
                     sale.status === 'upcoming' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200' :
                     'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                   }`}>
-                    {sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
+                    {sale.saleType === 'RETAIL' ? 'Open' : sale.status.charAt(0).toUpperCase() + sale.status.slice(1)}
                   </span>
                 )}
                 {sale.saleType && (
