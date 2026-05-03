@@ -4265,7 +4265,6 @@ model DirectoryCrawlLog {
   queryType             String
   resultCount           Int
   newOrganizersCreated  Int      @default(0)
-ated  Int      @default(0)
   organizersUpdated     Int      @default(0)
   duplicatesSkipped     Int      @default(0)
   errorMessage          String?
@@ -4354,3 +4353,5 @@ model ClaimEmail {
   @@index([organizerEmail])
   @@index([claimed])
 }
+
+
