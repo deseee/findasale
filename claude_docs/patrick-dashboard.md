@@ -1,18 +1,47 @@
-# Patrick's Dashboard — Week of May 3, 2026 (updated S634)
+# Patrick's Dashboard — Week of May 3, 2026 (updated S635)
 
-## Next Session — S635
+## Next Session — S636
 
-**Patrick must do before S635 starts:**
-1. Push the S634 block (below) — backfill TS fixes + founding shoppers + CLAUDE.md + interface fix + wrap docs
-2. Push the S633 block (below) — 8 workflow YMLs + schema + migration (still outstanding from S633)
-3. `git rm .github/workflows/test-esn-api-access.yml` (include in S633 commit)
-4. Run the migration block (below) for googlePlaceId @unique
+**Patrick must do before S636 starts:**
+1. Push S635 block (below)
+2. Run `prisma migrate deploy` for `20260628000000_add_shopper_organizer_introduction` (S635 migration)
+3. Push S634 block (below) if not yet done
+4. Push S633 block (below) if not yet done + `git rm .github/workflows/test-esn-api-access.yml`
+5. Run `prisma migrate deploy` for `20260503100000_organizer_unique_source_ids` (googlePlaceId @unique)
 
-**S635 goal: Email creative session.** Finalize all 4 outreach email templates — deferred 3 sessions. No more code blockers. Pure creative.
+**S636 goal: Email creative session.** Finalize all 4 outreach email templates — deferred 4 sessions now.
 
 ---
 
-## Patrick Actions — Do Now (S634 Wrap)
+## Patrick Actions — Do Now (S635 Wrap)
+
+### Step 1 — Push S635 changes
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/services/xpService.ts
+git add packages/backend/src/services/referralService.ts
+git add packages/backend/src/routes/organizers.ts
+git add packages/database/prisma/schema.prisma
+git add "packages/database/prisma/migrations/20260628000000_add_shopper_organizer_introduction/migration.sql"
+git add packages/backend/src/services/achievementService.ts
+git add "packages/frontend/pages/organizers/[id].tsx"
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "feat(guild): S635 — organizer referral XP mechanic, schema, badges, founding shopper"
+.\push.ps1
+```
+
+### Step 2 — Run S635 migration on Railway
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
+```
+
+---
+
+## Patrick Actions — Still Outstanding (S634 Wrap)
 
 ### Step 1 — Push S634 changes
 ```powershell
@@ -64,6 +93,8 @@ npx ts-node scripts/backfillFoursquareDetails.ts
 ---
 
 ## What Happened This Week
+
+**S635 — Organizer referral XP mechanic.** Full implementation: ShopperOrganizerIntroduction schema + migration, 7 new XP constants in xpService.ts, 3 XP award functions in referralService.ts (claimed storefront 200 XP / PRO upgrade 300 XP / quality tier 100 XP, all with Hunt Pass multiplier and monthly caps), claim approval wired to fire awardOrganizerClaimedXp, 4 Acquisition Specialist cosmetic badges, "Discovered by" amber section on organizer profiles. Railway SyntaxError crash (duplicate function declarations from two write passes) diagnosed and fixed. guild-primer.tsx already had the 3 new rows from the first agent dispatch. Memory rule added: all subagent dispatches must include git diff --stat verification.
 
 **S634 — RETAIL scraper pipeline + founding shoppers + behavioral overhaul.** RETAIL listings now chain Foursquare Details API to pull hours, website, phone — stored in `scrapedMetadata.hours_display`. New `backfillFoursquareDetails.ts` script will enrich existing RETAIL listings once run against Railway. Organizer profile page now shows "Discovered by" amber section with founding shopper avatar stack. Behavioral system: CLAUDE.md §0 added (mandatory roadmap-first session start), conversation-defaults updated (friction gate — find info yourself before asking Patrick; push verification loop; evidence-based session gate), findasale-dev skill updated (mandatory acceptance criteria block). Also fixed Vercel build error: `scrapedMetadata` was missing from the Sale TypeScript interface.
 
