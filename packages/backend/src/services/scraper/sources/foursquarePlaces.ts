@@ -1,7 +1,7 @@
 /**
- * ADR-077: Foursquare v3 API Business Directory Scraper
+ * ADR-077: Foursquare Places API Business Directory Scraper
  * Ingests secondhand/resale businesses as unmanaged organizer directory entries.
- * Uses Foursquare Places Search API (cursor-based pagination, max 2 pages = 100 results per query).
+ * Uses Foursquare Places Search API (new places-api.foursquare.com host, max 50 results per query).
  *
  * Businesses sourced here get:
  * - Organizer record with isUnmanagedListing=true, businessCategory
@@ -9,14 +9,16 @@
  * - Enrichment triggered immediately
  * - Claim email delivered by existing claimEmailService when campaign runs
  *
- * Note: Foursquare API v3 auth uses raw API key in Authorization header (not Bearer).
+ * Auth: Service API Key in Authorization: Bearer header + X-Places-Api-Version header.
+ * New endpoint: places-api.foursquare.com (migrated from api.foursquare.com/v3).
+ * Lat/lng now included in free tier response.
  */
 
 import { ScrapedItem } from '../index';
 import { PLACES_QUERIES, GOOGLE_PLACES_METROS } from './googlePlaces';
 
-const FOURSQUARE_API_BASE = 'https://api.foursquare.com/v3/places/search';
-const MAX_PAGES = 2;
+const FOURSQUARE_API_BASE = 'https://places-api.foursquare.com/places/search';
+const FOURSQUARE_API_VERSION = '2025-06-17';
 const REQUEST_DELAY_MS = 300;
 
 // Canadian metros (excluding Montreal/Quebec City per suppressOutreach policy at DB level)
@@ -31,12 +33,14 @@ const CANADIAN_METROS = [
 ];
 
 interface FoursquarePlace {
-  fsq_id: string;
+  fsq_place_id: string;
   name: string;
+  latitude?: number;
+  longitude?: number;
   location?: {
     address?: string;
-    city?: string;
-    state?: string;
+    locality?: string;  // city
+    region?: string;    // state
     country?: string;
     postcode?: string;
   };
@@ -45,7 +49,6 @@ interface FoursquarePlace {
   }>;
   tel?: string;
   website?: string;
-  closed_bucket?: 'Closed' | 'VeryLikelyClosed' | 'LikelyClosed' | 'TemporarilyClosed' | 'LikelyOpen';
 }
 
 interface FoursquarePlacesResponse {
@@ -70,11 +73,11 @@ async function fetchFoursquarePage(
     url.searchParams.set('query', query);
     url.searchParams.set('near', `${city}, ${state}`);
     url.searchParams.set('limit', String(limit));
-    url.searchParams.set('fields', 'fsq_id,name,location,categories,tel,website,closed_bucket');
 
     const response = await fetch(url.toString(), {
       headers: {
-        Authorization: apiKey,
+        Authorization: `Bearer ${apiKey}`,
+        'X-Places-Api-Version': FOURSQUARE_API_VERSION,
         Accept: 'application/json',
       },
       signal: AbortSignal.timeout(12000),
@@ -83,7 +86,6 @@ async function fetchFoursquarePage(
     if (!response.ok) {
       let body = '(no body)';
       try {
-        // Use a separate controller so body read isn't killed by the fetch AbortSignal
         body = await Promise.race([
           response.text(),
           new Promise<string>((_, rej) => setTimeout(() => rej(new Error('body timeout')), 5000)),
@@ -108,8 +110,8 @@ function parseCityState(
   place: FoursquarePlace,
   metroFallback: string
 ): { city: string; state: string } {
-  if (place.location?.city && place.location?.state) {
-    return { city: place.location.city, state: place.location.state };
+  if (place.location?.locality && place.location?.region) {
+    return { city: place.location.locality, state: place.location.region };
   }
   // Fallback: parse from metro string "City, ST"
   const fallbackMatch = metroFallback.match(/^(.+),\s*([A-Z]{2})$/);
@@ -121,8 +123,7 @@ function parseCityState(
 
 /**
  * Scrape Foursquare for a single query + metro combination.
- * Returns up to 100 results (2 pages × 50).
- * Filters out closed businesses.
+ * Returns up to 50 results per query (new API max per request).
  */
 export async function scrapeFoursquareQuery(
   apiKey: string,
@@ -130,7 +131,7 @@ export async function scrapeFoursquareQuery(
   metro: string
 ): Promise<ScrapedItem[]> {
   // Parse metro into city and state
-  const metroMatch = metro.match(/^(.+),\s*([A-Z]{2})$/);
+  const metroMatch = metro.match(/^(.+),\s*([A-Z]{2,3})$/);
   if (!metroMatch) {
     console.warn(`[Foursquare] Invalid metro format: ${metro}`);
     return [];
@@ -141,66 +142,55 @@ export async function scrapeFoursquareQuery(
   const results: ScrapedItem[] = [];
   const seenIds = new Set<string>();
 
-  for (let page = 0; page < MAX_PAGES; page++) {
-    if (page > 0) {
-      await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS));
+  const response = await fetchFoursquarePage(apiKey, queryConfig.query, city, state);
+
+  if (!response || response.results.length === 0) {
+    return results;
+  }
+
+  for (const place of response.results) {
+    if (seenIds.has(place.fsq_place_id)) continue;
+    seenIds.add(place.fsq_place_id);
+
+    // Apply blocklist
+    if (queryConfig.blocklist) {
+      const nameLower = place.name.toLowerCase();
+      if (queryConfig.blocklist.some((block: string) => nameLower.includes(block))) continue;
     }
 
-    const response = await fetchFoursquarePage(apiKey, queryConfig.query, city, state);
+    const { city: placeCity, state: placeState } = parseCityState(place, metro);
+    const now = new Date();
+    const endDate = new Date(now);
+    endDate.setFullYear(endDate.getFullYear() + 1);
 
-    if (!response || response.results.length === 0) {
-      break;
-    }
-
-    for (const place of response.results) {
-      // Skip closed businesses
-      if (place.closed_bucket === 'Closed' || place.closed_bucket === 'VeryLikelyClosed') {
-        continue;
-      }
-
-      if (seenIds.has(place.fsq_id)) continue;
-      seenIds.add(place.fsq_id);
-
-      // Apply blocklist
-      if (queryConfig.blocklist) {
-        const nameLower = place.name.toLowerCase();
-        if (queryConfig.blocklist.some((block: string) => nameLower.includes(block))) continue;
-      }
-
-      const { city: placeCity, state: placeState } = parseCityState(place, metro);
-      const now = new Date();
-      const endDate = new Date(now);
-      endDate.setFullYear(endDate.getFullYear() + 1);
-
-      const item: ScrapedItem = {
-        title: `${place.name} — ${queryConfig.label} in ${placeCity}, ${placeState}`,
-        address: place.location?.address ?? '',
-        city: placeCity,
-        state: placeState,
-        zip: place.location?.postcode ?? '',
-        startDate: now,
-        endDate,
-        description: null as any,
-        saleType: queryConfig.saleType,
-        organizerName: place.name,
+    const item: ScrapedItem = {
+      title: `${place.name} — ${queryConfig.label} in ${placeCity}, ${placeState}`,
+      address: place.location?.address ?? '',
+      city: placeCity,
+      state: placeState,
+      zip: place.location?.postcode ?? '',
+      startDate: now,
+      endDate,
+      description: null as any,
+      saleType: queryConfig.saleType,
+      organizerName: place.name,
+      businessCategory: queryConfig.category,
+      sourceName: 'Foursquare',
+      sourceUrl: `https://foursquare.com/v/${place.name.replace(/\s+/g, '-').toLowerCase()}/${place.fsq_place_id}`,
+      sourceItemId: place.fsq_place_id,
+      scrapedMetadata: {
         businessCategory: queryConfig.category,
-        sourceName: 'Foursquare',
-        sourceUrl: `https://foursquare.com/v/${place.name.replace(/\s+/g, '-').toLowerCase()}/${place.fsq_id}`,
-        sourceItemId: place.fsq_id,
-        scrapedMetadata: {
-          businessCategory: queryConfig.category,
-          fsqId: place.fsq_id,
-          lat: null, // Foursquare v3 doesn't return lat/lng without paid tier
-          lng: null,
-          phone: place.tel ?? null,
-          website: place.website ?? null,
-          formattedAddress: place.location?.address ?? null,
-          searchQuery: queryConfig.query,
-        },
-      };
+        fsqId: place.fsq_place_id,
+        lat: place.latitude ?? null,
+        lng: place.longitude ?? null,
+        phone: place.tel ?? null,
+        website: place.website ?? null,
+        formattedAddress: place.location?.address ?? null,
+        searchQuery: queryConfig.query,
+      },
+    };
 
-      results.push(item);
-    }
+    results.push(item);
   }
 
   return results;
@@ -208,14 +198,12 @@ export async function scrapeFoursquareQuery(
 
 /**
  * Main scraper function for Foursquare Places
- * Supports METRO_BATCH env var: "1" for metros 0-49, "2" for metros 50-99, or empty for all
  */
 export async function runFoursquareScraper(metros?: string[], batch?: 1 | 2): Promise<ScrapedItem[]> {
   const apiKey = process.env.FOURSQUARE_API_KEY?.trim();
   if (!apiKey) {
     throw new Error('FOURSQUARE_API_KEY is not set');
   }
-  console.log(`[Foursquare] Key: length=${apiKey.length}, prefix=${apiKey.substring(0, 4)}, suffix=${apiKey.slice(-4)}`);
 
   const allMetros = metros && metros.length > 0 ? metros : [...GOOGLE_PLACES_METROS, ...CANADIAN_METROS];
 
