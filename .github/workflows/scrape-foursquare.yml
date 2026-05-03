@@ -39,6 +39,7 @@ jobs:
 
       - name: Run Foursquare scraper
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
           FOURSQUARE_API_KEY: ${{ secrets.FOURSQUARE_API_KEY }}
