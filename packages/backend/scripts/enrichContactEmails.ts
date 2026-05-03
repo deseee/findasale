@@ -29,6 +29,14 @@ const BLOCKED_EMAIL_PATTERNS = [
   /^no-reply[@]/i,
   /^donotreply[@]/i,
   /[@]system\.finda\.sale$/i,
+  // Third-party platform emails that appear in widgets on organizer sites
+  /[@]estatesales\.net$/i,
+  /[@]estatesales\.com$/i,
+  /[@]gsalr\.com$/i,
+  /[@]garagesalefinder\.com$/i,
+  /[@]craigslist\.org$/i,
+  /[@]facebook\.com$/i,
+  /[@]google\.com$/i,
 ];
 
 // File extensions that are NOT valid email TLDs — catches image/asset filenames like join-our-team@2x.png
