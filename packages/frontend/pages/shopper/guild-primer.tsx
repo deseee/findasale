@@ -141,9 +141,9 @@ const GuildPrimerPage = () => {
             )}
 
             {!user && (
-              <div className="mt-12 bg-sage-50 dark:bg-sage-900/20 border border-sage-200 dark:border-sage-700 rounded-lg p-6">
-                <p className="text-warm-900 dark:text-warm-100">
-                  <Link href="/login" className="font-semibold text-sage-700 dark:text-sage-300 underline hover:text-sage-800">
+              <div className="mt-12 bg-sage-50 dark:bg-gray-800 border border-sage-200 dark:border-gray-600 rounded-lg p-6">
+                <p className="text-warm-900 dark:text-gray-100">
+                  <Link href="/login" className="font-semibold text-sage-700 dark:text-sage-400 underline hover:text-sage-700 dark:hover:text-sage-300">
                     Log in
                   </Link>{' '}
                   to see your personal progress toward your next rank.
@@ -434,6 +434,24 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">75</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">When your referred organizer goes live with a sale</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Discover a new organizer</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">10</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">15</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Manual submission — max 1000 XP/month per shopper</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Organizer you introduced claims their storefront</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">200</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">300</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Verified claim — max 1000 XP/month per shopper</td>
+                    </tr>
+                    <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Organizer you introduced upgrades to PRO</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">300</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">450</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Within 60 days of introduction — one-time per organizer</td>
                     </tr>
                   </tbody>
                 </table>
