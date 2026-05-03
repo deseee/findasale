@@ -4403,7 +4403,7 @@ model SaleShareLink {
   totalXpAwarded Int                  @default(0)
   clicks         SaleShareLinkClick[]
   createdAt      DateTime             @default(now())
-  updatedAt       updatedAt      DateTime             @updatedAt
+  updatedAt      DateTime             @updatedAt
 
   @@unique([saleId, userId])
   @@index([code])
