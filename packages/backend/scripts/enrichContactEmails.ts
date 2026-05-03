@@ -31,12 +31,26 @@ const BLOCKED_EMAIL_PATTERNS = [
   /[@]system\.finda\.sale$/i,
 ];
 
+// File extensions that are NOT valid email TLDs — catches image/asset filenames like join-our-team@2x.png
+const BLOCKED_TLDS = new Set([
+  'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'avif',
+  'css', 'js', 'json', 'xml', 'txt', 'pdf', 'zip',
+  'mp4', 'mp3', 'woff', 'woff2', 'ttf', 'eot',
+]);
+
 function isValidEmail(email: string): boolean {
   // Basic email format check
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(email)) return false;
 
-  // Check against blocked patterns
+  // Reject retina/HiDPI asset patterns like name@2x.png, name@3x.jpg
+  if (/@\d+x\.[a-z]+$/i.test(email)) return false;
+
+  // Reject if TLD is a file extension (catches asset filenames)
+  const tld = email.split('.').pop()?.toLowerCase() ?? '';
+  if (BLOCKED_TLDS.has(tld)) return false;
+
+  // Check against blocked sender patterns
   for (const pattern of BLOCKED_EMAIL_PATTERNS) {
     if (pattern.test(email)) return false;
   }
