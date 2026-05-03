@@ -87,6 +87,7 @@ interface Sale {
     subscriptionTier?: string; // Feature #65: Subscription Tiers (SIMPLE, PRO, TEAMS, ENTERPRISE)
     removeWatermarkEnabled?: boolean; // Feature: OG watermark removal toggle (TEAMS only)
     isClaimed?: boolean; // Feature #361: Claim-This-Listing
+    isUnmanagedListing?: boolean; // True for scraped/unverified listings
     badges?: Array<{
       id: string;
       name: string;
@@ -1002,8 +1003,8 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
               </div>
             )}
 
-            {/* Photo Station card — visible to all except organizer */}
-            {!isOrganizer && (
+            {/* Photo Station card — visible to all except organizer and unmanaged (scraped) listings */}
+            {!isOrganizer && !sale.organizer.isUnmanagedListing && (
               <Link href={`/sales/${sale.id}/photo-station`} className="block bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 mb-8 hover:shadow-md transition">
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">📸</span>
@@ -1500,7 +1501,7 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
               singlePin={{
                 lat: sale.lat,
                 lng: sale.lng,
-                label: `${sale.title} — ${sale.address}, ${sale.city}, ${sale.state}`,
+                label: `${sale.title} — ${sale.address ? `${sale.address}, ` : ''}${sale.city}, ${sale.state}`,
               }}
               entrancePin={sale.entranceLat && sale.entranceLng ? {
                 lat: sale.entranceLat,
@@ -1516,14 +1517,15 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
             </div>
           )}
           <p className="mt-3 text-sm text-warm-500 dark:text-gray-400">
-            {sale.address}, {sale.city}, {sale.state} {sale.zip}
+            {sale.address ? `${sale.address}, ` : ''}{sale.city}, {sale.state} {sale.zip}
           </p>
-          {sale.address && sale.city && sale.state && (
+          {sale.city && sale.state && (
             <button
               onClick={() => {
-                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                  `${sale.address}, ${sale.city}, ${sale.state}`
-                )}`;
+                const destination = sale.address
+                  ? `${sale.address}, ${sale.city}, ${sale.state}`
+                  : `${sale.city}, ${sale.state}`;
+                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
                 window.open(mapsUrl, '_blank');
               }}
               className="mt-4 inline-flex items-center gap-2 px-4 py-2 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium text-sm transition-colors"

@@ -373,6 +373,7 @@ export const getSale = async (req: Request, res: Response) => {
           select: {
             id: true, userId: true, businessName: true, phone: true, address: true,
             tier: true, verificationStatus: true, verificationSource: true, subscriptionTier: true, removeWatermarkEnabled: true,
+            isClaimed: true, isUnmanagedListing: true,
             user: { select: { userBadges: { include: { badge: true } } } }
           }
         },
@@ -451,6 +452,7 @@ export const getSale = async (req: Request, res: Response) => {
         reviewCount: reviews.length,
         tier: organizer.tier, verificationStatus: organizer.verificationStatus, verificationSource: organizer.verificationSource,
         subscriptionTier: organizer.subscriptionTier, removeWatermarkEnabled: organizer.removeWatermarkEnabled,
+        isClaimed: organizer.isClaimed, isUnmanagedListing: organizer.isUnmanagedListing,
       },
     });
 
