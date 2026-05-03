@@ -1745,11 +1745,3 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     return { props: { ogData: null } };
   }
 }
-      } : undefined,
-    };
-
-    return { props: { ogData } };
-  } catch {
-    return { props: { ogData: null } };
-  }
-}
