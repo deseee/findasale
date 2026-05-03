@@ -783,6 +783,10 @@ model Sale {
   prepTasks                   PrepTask[]               @relation("SalePrepTasks")
   // S630: Pinned sales — organizer can pin a sale to top of listing (restored from 20260430000000_storefront_v2_hours_types_pinned)
   isPinned                    Boolean                  @default(false)
+  // Feature #362: Sale Attendance Count — track shoppers who attended
+  attendanceCount             Int?
+  // Feature #363: Auction Buyer's Premium — percentage added to hammer price
+  buyersPremiumPct            Decimal?                 @db.Decimal(5, 2)
   // eBay inventory import: hidden DRAFT container sale for organizer's inventory items
   isInventoryContainer        Boolean                  @default(false)
   // Feature #XXX: Retail Mode — saleType='RETAIL' indicates always-live storefront
@@ -1011,6 +1015,8 @@ model Item {
   clusterConfidence          Float? // 0.0–1.0 from Haiku clustering pass
   // ADR-069 Phase 2: eBay comp lookup cache
   compLookup                 ItemCompLookup?
+  // Feature #363: Auction Lot Number — identifier for auction items
+  lotNumber                  String?
   // ADR-073: scraped item dedup (restored — field already in DB via 20260501020000_scraper_phase1)
   sourceItemId               String?                // Source platform's item ID for dedup
   createdAt                  DateTime               @default(now())
