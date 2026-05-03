@@ -1,7 +1,8 @@
 /**
  * ADR-077: HERE Places Business Directory Scraper — GitHub Actions runner
- * Queries HERE Discover API across 100 US metros + 7 Canadian metros × 11 queries.
+ * Queries HERE Discover API across queue items filtered by getNextCrawlsToRun().
  * Deduplicates by placeId, then POSTs results to Railway backend for ingestion.
+ * Records crawl success/failure in DirectoryCrawlLog.
  *
  * Environment variables (from GitHub secrets):
  * - RAILWAY_BACKEND_URL: https://backend-production-xxx.up.railway.app
@@ -15,22 +16,12 @@
 import {
   runHEREPlacesScraper,
 } from '../services/scraper/sources/herePlaces';
-import { GOOGLE_PLACES_METROS } from '../services/scraper/sources/googlePlaces';
 import { ScrapedItem } from '../services/scraper/index';
+import { getNextCrawlsToRun, recordCrawlSuccess, recordCrawlFailure } from '../services/scraper/crawlQueueManager';
 
 const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') + '/api/internal/scraper/ingest';
 const SCRAPER_KEY = process.env.INTERNAL_SCRAPER_KEY;
-
-const CANADIAN_METROS = [
-  'Toronto, ON',
-  'Vancouver, BC',
-  'Calgary, AB',
-  'Edmonton, AB',
-  'Ottawa, ON',
-  'Winnipeg, MB',
-  'Halifax, NS',
-];
 
 const BATCH_SIZE = 25;
 const CONCURRENCY = 5;
@@ -38,19 +29,43 @@ const CONCURRENCY = 5;
 async function main() {
   if (!SCRAPER_KEY) throw new Error('INTERNAL_SCRAPER_KEY is not set');
 
-  const allMetros = [...GOOGLE_PLACES_METROS, ...CANADIAN_METROS];
-  console.log(`[run-here-places] Starting: ${allMetros.length} metros`);
+  // Fetch next batch of queue items to crawl
+  const queueItems = await getNextCrawlsToRun(50); // Get up to 50 queue items ready to run
+  console.log(`[run-here-places] Found ${queueItems.length} queue items ready to run`);
+
+  if (queueItems.length === 0) {
+    console.log('[run-here-places] No queue items ready — exiting');
+    return;
+  }
+
   console.log(`[run-here-places] Backend: ${INGEST_URL}`);
 
   let allItems: ScrapedItem[] = [];
-  try {
-    allItems = await runHEREPlacesScraper(allMetros);
-  } catch (err) {
-    console.error('[run-here-places] Scraper error:', err instanceof Error ? err.message : String(err));
-    process.exit(1);
+  const results = { succeeded: 0, failed: 0 };
+
+  for (const queueItem of queueItems) {
+    const { id: queueId, metro, subArea } = queueItem;
+    const searchLocation = subArea ? `${subArea}, ${metro}` : metro;
+
+    try {
+      const items = await runHEREPlacesScraper([searchLocation]);
+      allItems = allItems.concat(items);
+
+      await recordCrawlSuccess(queueId, items.length);
+      results.succeeded++;
+      console.log(`[run-here-places] ${searchLocation}: +${items.length} results`);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[run-here-places] Error — ${searchLocation}: ${errorMsg}`);
+
+      await recordCrawlFailure(queueId, errorMsg);
+      results.failed++;
+    }
   }
 
-  console.log(`[run-here-places] Scraping complete — ${allItems.length} unique businesses`);
+  console.log(
+    `[run-here-places] Scraping complete — ${allItems.length} unique businesses, ${results.succeeded} succeeded, ${results.failed} failed`
+  );
 
   if (allItems.length === 0) {
     console.log('[run-here-places] No items to ingest — exiting');

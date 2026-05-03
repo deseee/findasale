@@ -1,7 +1,8 @@
 /**
  * ADR-077: Google Places Business Directory Scraper — GitHub Actions runner
- * Queries Google Places Text Search across 100 metros × 11 queries.
+ * Queries Google Places Text Search across queue items filtered by getNextCrawlsToRun().
  * Deduplicates by placeId, then POSTs results to Railway backend for ingestion.
+ * Records crawl success/failure in DirectoryCrawlLog.
  *
  * Environment variables (from GitHub secrets):
  * - RAILWAY_BACKEND_URL: https://backend-production-xxx.up.railway.app
@@ -15,9 +16,9 @@
 import {
   scrapeGooglePlacesQuery,
   PLACES_QUERIES,
-  GOOGLE_PLACES_METROS,
 } from '../services/scraper/sources/googlePlaces';
 import { ScrapedItem } from '../services/scraper/index';
+import { getNextCrawlsToRun, recordCrawlSuccess, recordCrawlFailure } from '../services/scraper/crawlQueueManager';
 
 const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') + '/api/internal/scraper/ingest';
@@ -26,54 +27,68 @@ const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 
 const BATCH_SIZE = 25;
 const CONCURRENCY = 5;
-/** Delay between metros to respect Google's 50 QPS limit across all queries */
-const METRO_DELAY_MS = 200;
+/** Delay between queries to respect Google's rate limits */
+const QUERY_DELAY_MS = 200;
 
 async function main() {
   if (!SCRAPER_KEY) throw new Error('INTERNAL_SCRAPER_KEY is not set');
   if (!GOOGLE_PLACES_API_KEY) throw new Error('GOOGLE_PLACES_API_KEY is not set');
 
-  console.log(
-    `[run-google-places] Starting: ${GOOGLE_PLACES_METROS.length} metros × ${PLACES_QUERIES.length} queries`
-  );
+  // Fetch next batch of queue items to crawl
+  const queueItems = await getNextCrawlsToRun(50); // Get up to 50 queue items ready to run
+  console.log(`[run-google-places] Found ${queueItems.length} queue items ready to run`);
+
+  if (queueItems.length === 0) {
+    console.log('[run-google-places] No queue items ready — exiting');
+    return;
+  }
+
   console.log(`[run-google-places] Backend: ${INGEST_URL}`);
 
   const allItems: ScrapedItem[] = [];
   const seenPlaceIds = new Set<string>(); // Cross-query dedup by placeId
-  let metroCount = 0;
   let apiErrors = 0;
 
-  for (const metro of GOOGLE_PLACES_METROS) {
-    metroCount++;
-    let metroTotal = 0;
+  for (const queueItem of queueItems) {
+    const { id: queueId, metro, subArea } = queueItem;
+    const queryConfig = PLACES_QUERIES.find((q) => q.query === queueItem.queryType);
 
-    for (const queryConfig of PLACES_QUERIES) {
-      try {
-        const items = await scrapeGooglePlacesQuery(GOOGLE_PLACES_API_KEY, queryConfig, metro);
-
-        for (const item of items) {
-          const placeId = item.sourceItemId;
-          if (placeId && !seenPlaceIds.has(placeId)) {
-            seenPlaceIds.add(placeId);
-            allItems.push(item);
-            metroTotal++;
-          }
-        }
-      } catch (err) {
-        apiErrors++;
-        console.error(
-          `[run-google-places] Error — metro=${metro} query="${queryConfig.query}":`,
-          err instanceof Error ? err.message : String(err)
-        );
-      }
-
-      // Brief pause between queries within the same metro
-      await new Promise((resolve) => setTimeout(resolve, METRO_DELAY_MS));
+    if (!queryConfig) {
+      console.warn(`[run-google-places] Unknown queryType: ${queueItem.queryType} — skipping`);
+      continue;
     }
 
-    console.log(
-      `[run-google-places] (${metroCount}/${GOOGLE_PLACES_METROS.length}) ${metro}: +${metroTotal} new (total: ${allItems.length})`
-    );
+    let metroTotal = 0;
+    const searchLocation = subArea ? `${subArea}, ${metro}` : metro;
+
+    try {
+      const items = await scrapeGooglePlacesQuery(GOOGLE_PLACES_API_KEY, queryConfig, searchLocation);
+
+      for (const item of items) {
+        const placeId = item.sourceItemId;
+        if (placeId && !seenPlaceIds.has(placeId)) {
+          seenPlaceIds.add(placeId);
+          allItems.push(item);
+          metroTotal++;
+        }
+      }
+
+      // Record success in crawl queue
+      await recordCrawlSuccess(queueId, metroTotal);
+      console.log(
+        `[run-google-places] ${searchLocation} / ${queryConfig.query}: +${metroTotal} new (total: ${allItems.length})`
+      );
+    } catch (err) {
+      apiErrors++;
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[run-google-places] Error — ${searchLocation}/${queryConfig.query}: ${errorMsg}`);
+
+      // Record failure in crawl queue
+      await recordCrawlFailure(queueId, errorMsg);
+    }
+
+    // Brief pause between queries
+    await new Promise((resolve) => setTimeout(resolve, QUERY_DELAY_MS));
   }
 
   console.log(

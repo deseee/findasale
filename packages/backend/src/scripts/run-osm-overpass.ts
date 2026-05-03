@@ -1,7 +1,8 @@
 /**
  * OSM Overpass Business Directory Scraper — GitHub Actions runner
- * Queries Overpass API across metros to discover secondhand/resale businesses.
+ * Queries Overpass API across queue items filtered by getNextCrawlsToRun().
  * Deduplicates by OSM ID, then POSTs results to Railway backend for ingestion.
+ * Records crawl success/failure in DirectoryCrawlLog.
  *
  * Environment variables (from GitHub secrets):
  * - RAILWAY_BACKEND_URL: https://backend-production-xxx.up.railway.app
@@ -13,8 +14,9 @@
  * Cost estimate: ~$0 — OSM Overpass is free and open, no API key required
  */
 
-import { scrapeOSMMetro, OSM_METROS } from '../services/scraper/sources/osmOverpass';
+import { scrapeOSMMetro } from '../services/scraper/sources/osmOverpass';
 import { ScrapedItem } from '../services/scraper/index';
+import { getNextCrawlsToRun, recordCrawlSuccess, recordCrawlFailure } from '../services/scraper/crawlQueueManager';
 
 const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') + '/api/internal/scraper/ingest';
@@ -22,25 +24,33 @@ const SCRAPER_KEY = process.env.INTERNAL_SCRAPER_KEY;
 
 const BATCH_SIZE = 25;
 const CONCURRENCY = 3;
-/** Delay between metros to respect Overpass server load */
-const METRO_DELAY_MS = 500;
+/** Delay between queries to respect Overpass server load */
+const QUERY_DELAY_MS = 500;
 
 async function main() {
   if (!SCRAPER_KEY) throw new Error('INTERNAL_SCRAPER_KEY is not set');
 
-  console.log(`[run-osm-overpass] Starting: ${OSM_METROS.length} metros`);
+  // Fetch next batch of queue items to crawl
+  const queueItems = await getNextCrawlsToRun(50); // Get up to 50 queue items ready to run
+  console.log(`[run-osm-overpass] Found ${queueItems.length} queue items ready to run`);
+
+  if (queueItems.length === 0) {
+    console.log('[run-osm-overpass] No queue items ready — exiting');
+    return;
+  }
+
   console.log(`[run-osm-overpass] Backend: ${INGEST_URL}`);
 
   const allItems: ScrapedItem[] = [];
-  const seenIds = new Set<string>(); // Cross-metro dedup by sourceItemId (OSM ID)
-  let metroCount = 0;
-  let queryErrors = 0;
+  const seenIds = new Set<string>(); // Cross-query dedup by sourceItemId (OSM ID)
+  const results = { succeeded: 0, failed: 0 };
 
-  for (const metro of OSM_METROS) {
-    metroCount++;
+  for (const queueItem of queueItems) {
+    const { id: queueId, metro, subArea } = queueItem;
+    const searchLocation = subArea ? `${subArea}, ${metro}` : metro;
 
     try {
-      const items = await scrapeOSMMetro(metro);
+      const items = await scrapeOSMMetro(searchLocation);
       let metroNew = 0;
 
       for (const item of items) {
@@ -52,23 +62,23 @@ async function main() {
         }
       }
 
-      console.log(
-        `[run-osm-overpass] (${metroCount}/${OSM_METROS.length}) ${metro}: +${metroNew} new (total: ${allItems.length})`
-      );
+      await recordCrawlSuccess(queueId, metroNew);
+      results.succeeded++;
+      console.log(`[run-osm-overpass] ${searchLocation}: +${metroNew} new (total: ${allItems.length})`);
     } catch (err) {
-      queryErrors++;
-      console.error(
-        `[run-osm-overpass] Error — metro=${metro}:`,
-        err instanceof Error ? err.message : String(err)
-      );
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[run-osm-overpass] Error — ${searchLocation}: ${errorMsg}`);
+
+      await recordCrawlFailure(queueId, errorMsg);
+      results.failed++;
     }
 
-    // Delay between metros
-    await new Promise((resolve) => setTimeout(resolve, METRO_DELAY_MS));
+    // Delay between queries
+    await new Promise((resolve) => setTimeout(resolve, QUERY_DELAY_MS));
   }
 
   console.log(
-    `[run-osm-overpass] Scraping complete — ${allItems.length} unique businesses, ${queryErrors} query errors`
+    `[run-osm-overpass] Scraping complete — ${allItems.length} unique businesses, ${results.succeeded} succeeded, ${results.failed} failed`
   );
 
   if (allItems.length === 0) {
