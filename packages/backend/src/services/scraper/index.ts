@@ -409,6 +409,44 @@ export async function ingestScrapedListing(
       };
     }
 
+    // RETAIL deduplication: check if same address already exists
+    if (listing.saleType === 'RETAIL') {
+      const existing = await prisma.sale.findFirst({
+        where: {
+          address: listing.address || '',
+          city: listing.city,
+          state: listing.state,
+          saleType: 'RETAIL',
+        },
+      });
+      
+      if (existing) {
+        // Update existing record with better data
+        const updates: any = {};
+        if (listing.description) updates.description = listing.description;
+        if (listing.photoUrls && listing.photoUrls.length > 0) updates.photoUrls = listing.photoUrls;
+        if (listing.scrapedMetadata) {
+          updates.scrapedMetadata = {
+            ...(existing.scrapedMetadata || {}),
+            ...listing.scrapedMetadata,
+          };
+        }
+        
+        if (Object.keys(updates).length > 0) {
+          await prisma.sale.update({
+            where: { id: existing.id },
+            data: { ...updates, lastScrapedAt: new Date() },
+          });
+        }
+        
+        return {
+          saleId: existing.id,
+          status: 'updated',
+          reason: 'RETAIL duplicate merged',
+        };
+      }
+    }
+
     // Resolve organizer — organizer name always wins over passed organizerId.
     // organizerId is only used as a fallback when the listing has no named organizer.
     let finalOrganizerId: string;
@@ -456,6 +494,7 @@ export async function ingestScrapedListing(
         isAuctionSale: listing.saleType === 'AUCTION',
         lat,
         lng,
+        photoUrls: listing.photoUrls ?? [],
         tags: saleTypeToTags(listing.saleType),
         organizerId: finalOrganizerId,
         sourceUrl: listing.sourceUrl,

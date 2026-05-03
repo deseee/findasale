@@ -104,6 +104,55 @@ async function fetchFoursquarePage(
 }
 
 /**
+ * Fetch detailed information for a single Foursquare place.
+ * Retrieves hours, photos, description, and other metadata.
+ */
+interface FoursquarePlaceDetails {
+  hours?: {
+    display?: string;
+    open_now?: boolean;
+    regular?: Array<{ day: number; open: string; close: string }>;
+  };
+  photos?: Array<{
+    prefix: string;
+    suffix: string;
+    width?: number;
+    height?: number;
+  }>;
+  description?: string;
+  rating?: number;
+}
+
+async function fetchFoursquareDetails(
+  apiKey: string,
+  fsqId: string
+): Promise<FoursquarePlaceDetails | null> {
+  try {
+    const url = new URL(`https://places-api.foursquare.com/places/${fsqId}`);
+    url.searchParams.set('fields', 'hours,photos,description,rating');
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'X-Places-Api-Version': FOURSQUARE_API_VERSION,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!response.ok) {
+      console.warn(`[Foursquare Details] HTTP ${response.status} for fsqId=${fsqId}`);
+      return null;
+    }
+
+    return (await response.json()) as FoursquarePlaceDetails;
+  } catch (err) {
+    console.warn(`[Foursquare Details] Fetch error for fsqId=${fsqId}:`, err instanceof Error ? err.message : String(err));
+    return null;
+  }
+}
+
+/**
  * Parse city and state from Foursquare location or metro fallback
  */
 function parseCityState(
@@ -163,21 +212,39 @@ export async function scrapeFoursquareQuery(
     const endDate = new Date(now);
     endDate.setFullYear(endDate.getFullYear() + 1);
 
+    // Fetch detailed information for this place
+    const details = await fetchFoursquareDetails(apiKey, place.fsq_place_id);
+
+    const { city: placeCity, state: placeState } = parseCityState(place, metro);
+    const now = new Date();
+    const endDate = new Date(now);
+    endDate.setFullYear(endDate.getFullYear() + 1);
+
+    // Extract up to 3 photos
+    const photoUrls: string[] = [];
+    if (details?.photos && details.photos.length > 0) {
+      for (let i = 0; i < Math.min(3, details.photos.length); i++) {
+        const photo = details.photos[i];
+        photoUrls.push(`${photo.prefix}original${photo.suffix}`);
+      }
+    }
+
     const item: ScrapedItem = {
-      title: `${place.name} — ${queryConfig.label} in ${placeCity}, ${placeState}`,
+      title: place.name,
       address: place.location?.address ?? '',
       city: placeCity,
       state: placeState,
       zip: place.location?.postcode ?? '',
       startDate: now,
       endDate,
-      description: null as any,
+      description: details?.description ?? null,
       saleType: queryConfig.saleType,
       organizerName: place.name,
       businessCategory: queryConfig.category,
       sourceName: 'Foursquare',
       sourceUrl: `https://foursquare.com/v/${place.name.replace(/\s+/g, '-').toLowerCase()}/${place.fsq_place_id}`,
       sourceItemId: place.fsq_place_id,
+      photoUrls,
       scrapedMetadata: {
         businessCategory: queryConfig.category,
         fsqId: place.fsq_place_id,
@@ -187,10 +254,16 @@ export async function scrapeFoursquareQuery(
         website: place.website ?? null,
         formattedAddress: place.location?.address ?? null,
         searchQuery: queryConfig.query,
+        hours: details?.hours ?? null,
+        hours_display: details?.hours?.display ?? null,
+        rating: details?.rating ?? null,
       },
     };
 
     results.push(item);
+
+    // Rate limiting: 200ms between detail calls
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
   return results;
@@ -261,3 +334,4 @@ export async function runFoursquareScraper(metros?: string[], batch?: 1 | 2): Pr
 
   return allItems;
 }
+                                                      
