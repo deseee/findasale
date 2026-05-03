@@ -1727,4 +1727,29 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     const ogData: OGSaleData = {
       id: sale.id,
       title: sale.title || '',
-      description: 
+      description: sale.description || null,
+      city: sale.city || '',
+      state: sale.state || '',
+      startDate: sale.startDate || '',
+      photoUrl: sale.photoUrls?.[0] || null,
+      itemCount: sale.items?.length || 0,
+      organizer: sale.organizer ? {
+        subscriptionTier: sale.organizer.subscriptionTier,
+        removeWatermarkEnabled: sale.organizer.removeWatermarkEnabled,
+        businessName: sale.organizer.businessName,
+      } : undefined,
+    };
+
+    return { props: { ogData } };
+  } catch {
+    return { props: { ogData: null } };
+  }
+}
+      } : undefined,
+    };
+
+    return { props: { ogData } };
+  } catch {
+    return { props: { ogData: null } };
+  }
+}
