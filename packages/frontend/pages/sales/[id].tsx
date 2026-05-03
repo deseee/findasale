@@ -1017,8 +1017,8 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
               </Link>
             )}
 
-            {/* Treasure Hunt card — visible to all except organizer */}
-            {!isOrganizer && sale.treasureHuntEnabled && (
+            {/* Treasure Hunt card — visible to all except organizer and unmanaged (scraped) listings */}
+            {!isOrganizer && !sale.organizer.isUnmanagedListing && sale.treasureHuntEnabled && (
               <Link href={`/sales/${sale.id}/treasure-hunt-qr/progress`} className="block bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-8 hover:shadow-md transition">
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">🎯</span>
