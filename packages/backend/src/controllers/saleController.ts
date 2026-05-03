@@ -146,12 +146,10 @@ export const listSales = async (req: Request, res: Response) => {
     const where: any = {
       status: 'PUBLISHED',
       isInventoryContainer: false,
-      organizer: {
-        OR: [
-          { isUnmanagedListing: false },
-          { isClaimed: true },
-        ],
-      },
+      OR: [
+        { endDate: null },
+        { endDate: { gte: new Date() } },
+      ],
     };
 
     if (query.city) {
@@ -1076,12 +1074,6 @@ export const getSalesByCity = async (req: Request, res: Response) => {
         status: 'PUBLISHED',
         endDate: { gte: now },
         city: { contains: citySlug, mode: 'insensitive' },
-        organizer: {
-          OR: [
-            { isUnmanagedListing: false },
-            { isClaimed: true },
-          ],
-        },
       },
       skip,
       take: limitNum,
@@ -1101,12 +1093,6 @@ export const getSalesByCity = async (req: Request, res: Response) => {
         status: 'PUBLISHED',
         endDate: { gte: now },
         city: { contains: citySlug, mode: 'insensitive' },
-        organizer: {
-          OR: [
-            { isUnmanagedListing: false },
-            { isClaimed: true },
-          ],
-        },
       }
     });
 
