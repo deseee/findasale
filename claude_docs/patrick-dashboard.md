@@ -1,6 +1,21 @@
-# Patrick's Dashboard — Week of May 2, 2026 (updated S628)
+# Patrick's Dashboard — Week of May 3, 2026 (updated S629)
+
+## Next Session — S630: Email Creative Session
+
+**Goal:** Finalize all 4 outreach email templates. Pure creative work — the pipeline infrastructure, product research, and psychology frameworks are all done. Next session just needs to write copy that converts.
+
+**What's ready to use:**
+- Full product feature context read (Auto Tags, Smart Pricing, QR checkout, shopper map/notifications, Flash Deals, Virtual Queue)
+- Business guru brief: Hormozi, Ogilvy, StoryBrand, curiosity gap, you/I ratio, specificity=credibility
+- Best draft from S629 — leads with organizer pain, needs more warmth and personality
+- S626 acquisition strategy at `claude_docs/strategy/organizer-acquisition-strategy.md`
+- Touch 1 subject line is UNLOCKED — write what earns the open
+
+---
 
 ## What Happened This Week
+
+**S629 — CI/Railway fixes + crawl queue + P2 polish + email creative iteration.** Fixed 4 CI TypeScript errors (schema drift — ScrapedSalesJob and scraper fields dropped from schema.prisma again). Fixed Railway `endDate` non-nullable Prisma filter crash. Built DirectoryCrawlQueueManager with 20-metro subAreaConfig and exponential backoff logic. Shipped P2 polish: `/sales` public page, disclosure label on scraped sale cards, overflow-x fix. Ran multi-round email creative session — S626 subject line unlocked, business guru psychology brief generated, current best draft is warmer and leads with organizer pain but Patrick wants a dedicated creative session to push it further.
 
 **S628 — MetroTopFinds crash fixed + 3,635 scraped sales unblocked nationally.** Two P0 fixes. (1) Railway backend was crashing on every city page request (`prisma.metroTopFinds` was `undefined`) because the `MetroTopFinds` model was lost from `schema.prisma` during S625's schema sync. Fixed by restoring the model and forcing a Railway rebuild — Prisma client now regenerates with the model. (2) Discovered that ALL 3,635 scraped sales were invisible on the homepage, Trending, search, and category pages — a filter added in S614 (`isUnmanagedListing: false OR isClaimed: true`) was silently blocking every scraped organizer from every public query. Advisory board voted 6+0 to show scraped listings publicly. Removed the filter from 14 query locations across trendingController, saleController, and itemSearchService. Added a stale-sale date guard so expired scraped sales don't show. Chrome-verified: Trending page now shows sales from Kalamazoo, Holland, Branford CT, Pasadena MD, Worcester MA, Hagerstown MD. No Patrick actions needed — all deployed.
 
@@ -54,26 +69,58 @@ All four are in qa-backlog under "Pre-existing Open Bugs."
 
 ## This Week's Priority
 
-1. **Push the S628 wrap block** (below) — gets the docs current on GitHub.
-2. **Run GitHub Actions → Scrape EstateSalesNet → Run workflow** — scraped sales are now publicly visible; a fresh ingest will populate Trending and city pages with current data.
-3. **Send the 19 outreach drafts sitting in Gmail** — Nick Loper, Codie Sanchez, trade associations. Ready since S596, long overdue.
+1. **Push the S629 wrap block** (below) — gets everything current on GitHub.
+2. **Run `prisma generate`** after the schema push (see block below).
+3. **S630: Email creative session** — finalize 4 outreach templates, then the pipeline build can start.
 4. **Sign up HERE + Foursquare APIs** — `developer.here.com` + `location.foursquare.com/developer`, add both keys as GitHub Secrets.
-5. **Next session:** dispatch the organizer outreach pipeline build (S626 strategy v3) — scraped sales are live, outreach is the next unlock.
+5. **Send the 19 outreach drafts in Gmail** — Nick Loper, Codie Sanchez, trade associations. Long overdue since S596.
 
 ## Action Items for Patrick
 
-- [ ] **Push S628 wrap block** — see push block below
-- [ ] **GitHub Actions → Scrape EstateSalesNet → Run workflow** (fresh ingest now that scraped sales are visible)
+- [ ] **Push S629 wrap block** — see push block below
+- [ ] **Run `prisma generate`** after schema push (block below)
+- [ ] **S630** — creative session on 4 outreach emails
 - [ ] **Sign up HERE API** at developer.here.com → add `HERE_API_KEY` GitHub Secret
 - [ ] **Sign up Foursquare API** at location.foursquare.com/developer → add `FOURSQUARE_API_KEY` GitHub Secret
-- [ ] **Review and send 19 outreach drafts in Gmail** (just need From set to patrick@finda.sale)
+- [ ] **Review and send 19 outreach drafts in Gmail**
 
-## S628 Push Block
+## S629 Push Block
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+
+git add packages/database/prisma/schema.prisma
+git add packages/database/prisma/migrations/20260503000000_restore_scraper_phase1_schema/migration.sql
+git add packages/backend/Dockerfile.production
+git add packages/backend/src/controllers/saleController.ts
+git commit -m "fix(backend): restore scraper phase1 schema drift, fix endDate filter, cache-bust Dockerfile"
+
+git add packages/backend/src/services/scraper/crawlQueueManager.ts
+git add packages/backend/src/services/scraper/subAreaConfig.ts
+git add packages/backend/src/scripts/seed-crawl-queue.ts
+git add packages/backend/src/scripts/run-google-places.ts
+git add packages/backend/src/scripts/run-here-places.ts
+git add packages/backend/src/scripts/run-foursquare-places.ts
+git add packages/backend/src/scripts/run-osm-overpass.ts
+git commit -m "feat(scraper): DirectoryCrawlQueueManager + 20-metro subAreaConfig"
+
+git add packages/frontend/components/SaleCard.tsx
+git add packages/frontend/pages/sales/index.tsx
+git add packages/frontend/styles/globals.css
+git commit -m "feat(frontend): /sales page, sourced-from disclosure, overflow-x fix"
+
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S628 wrap — MetroTopFinds crash fixed, scraped sales unblocked on all public feeds"
+git commit -m "docs: S629 wrap"
+
 .\push.ps1
+```
+
+**After push — run migration and regenerate Prisma client:**
+
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+npx prisma migrate deploy
+npx prisma generate
 ```
