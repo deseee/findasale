@@ -456,24 +456,6 @@ model OrganizerBroadcast {
   @@index([organizerId])
 }
 
-// ADR-074: MetroTopFinds — eBay sold items synced per metro for city hub pages
-model MetroTopFinds {
-  id            String   @id @default(cuid())
-  citySlug      String
-  metro         String
-  itemTitle     String
-  itemCategory  String?
-  soldPrice     Decimal  @db.Decimal(10, 2)
-  imageUrl      String?
-  ebayListingId String
-  soldAt        DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([citySlug, ebayListingId])
-  @@index([citySlug, soldAt])
-}
-
 // Pre-wire: API Keys for third-party integrations (Zapier, IFTTT, webhooks)
 model ApiKey {
   id          String    @id @default(cuid())
