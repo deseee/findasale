@@ -11,6 +11,7 @@ import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, ge
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
 import { getCheatsheet, getItemsForLabels, createLabelBatch, printLabelBatch } from '../controllers/labelComposerController';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { awardOrganizerClaimedXp } from '../services/referralService';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 
 const router = Router();
@@ -806,6 +807,11 @@ router.post('/admin/claim-requests/:id/approve', authenticate, async (req: AuthR
         data: { isClaimed: true, isUnmanagedListing: false },
       }),
     ]);
+
+    // Award XP to any shopper who introduced this organizer
+    awardOrganizerClaimedXp(claim.organizerId).catch(err =>
+      console.error('[XP] awardOrganizerClaimedXp failed silently:', err)
+    );
 
     res.json({ success: true, message: 'Claim approved' });
   } catch (error) {
