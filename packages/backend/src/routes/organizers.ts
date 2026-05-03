@@ -633,7 +633,7 @@ router.get('/:saleId/signs/hang-tag', authenticate, getHangTagKit);
 router.get('/:saleId/signs/full-kit', authenticate, getFullSignKitPDF);
 
 // Feature #241: GET /api/organizers/:saleId/print-kit/price-sheet
-// Download pre-printed price cheat sheet (27 price points, 3×9 grid)
+// Download pre-printed price cheat sheet (27 price points, 3x9 grid)
 router.get('/:saleId/print-kit/price-sheet', authenticate, getPriceSheet);
 
 // Label Sheet Composer — batch QR pricetag generation
@@ -1008,6 +1008,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       followerCount: (organizer as any)._count?.followers ?? 0,
       isFollowing,
       isClaimed: organizer.isClaimed,
+      isUnmanagedListing: organizer.isUnmanagedListing,
     });
   } catch (error) {
     console.error('Error fetching organizer profile:', error);
@@ -1296,7 +1297,7 @@ router.get('/sale-pulse/:saleId', authenticate, async (req: AuthRequest, res: Re
     const shopperQuestions = saleData?._count?.conversations ?? 0;
     const shopperCount = saleData?._count?.subscribers ?? 0;
 
-    // Buzz score: views×0.3 + saves×0.4 + questions×0.3, normalized 0-100
+    // Buzz score: views x0.3 + saves x0.4 + questions x0.3, normalized 0-100
     const rawScore = pageViews * 0.3 + itemSaves * 0.4 + shopperQuestions * 0.3;
     const buzzscore = Math.min(100, Math.round(rawScore));
 
