@@ -81,9 +81,7 @@ async function fetchFoursquarePage(
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        console.warn(`[Foursquare] Rate limited (HTTP 429) for "${query}" in ${city}, ${state}`);
-      }
+      console.warn(`[Foursquare] HTTP ${response.status} for "${query}" in ${city}, ${state}`);
       return null;
     }
     return (await response.json()) as FoursquarePlacesResponse;
