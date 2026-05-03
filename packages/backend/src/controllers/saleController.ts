@@ -146,10 +146,7 @@ export const listSales = async (req: Request, res: Response) => {
     const where: any = {
       status: 'PUBLISHED',
       isInventoryContainer: false,
-      OR: [
-        { endDate: null },
-        { endDate: { gte: new Date() } },
-      ],
+      endDate: { gte: new Date() },
     };
 
     if (query.city) {
