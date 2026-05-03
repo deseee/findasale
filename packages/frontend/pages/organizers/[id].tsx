@@ -34,6 +34,12 @@ interface Badge {
   iconUrl?: string;
 }
 
+interface FoundingShopper {
+  id: string;
+  name: string;
+  introducedAt: string;
+}
+
 interface OrganizerProfile {
   id: string;
   businessName: string;
@@ -44,6 +50,7 @@ interface OrganizerProfile {
   reputationIsNew?: boolean; // Feature #71
   sales: Sale[];
   badges?: Badge[];
+  foundingShoppers?: FoundingShopper[];
   avgRating?: number;
   reviewCount?: number;
   followerCount: number;
@@ -156,6 +163,32 @@ const OrganizerProfilePage = () => {
                   <Link href={`/register?claim=${organizer.id}`} className="inline-block bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-1.5 px-3 rounded transition-colors">
                     Claim This Listing
                   </Link>
+                </div>
+              )}
+              {organizer.foundingShoppers && organizer.foundingShoppers.length > 0 && (
+                <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 uppercase tracking-wide mb-3">Discovered by</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex -space-x-2">
+                      {organizer.foundingShoppers.map((shopper, idx) => (
+                        <div
+                          key={shopper.id}
+                          className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xs font-bold border-2 border-white dark:border-gray-800 relative"
+                          title={shopper.name}
+                        >
+                          {shopper.name.charAt(0).toUpperCase()}
+                        </div>
+                      ))}
+                    </div>
+                    <span className="text-sm text-amber-900 dark:text-amber-100">
+                      {organizer.foundingShoppers.length === 1
+                        ? organizer.foundingShoppers[0].name
+                        : organizer.foundingShoppers.length === 2
+                        ? `${organizer.foundingShoppers[0].name} & ${organizer.foundingShoppers[1].name}`
+                        : `${organizer.foundingShoppers[0].name} and ${organizer.foundingShoppers.length - 1} others`
+                      }
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -275,7 +308,7 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
       <div className="flex flex-col flex-1 p-3">
         <Link href={`/sales/${sale.id}`}>
           <h3 className="font-semibold text-sm text-warm-900 dark:text-gray-100 leading-snug line-clamp-1 mb-1">{sale.title}</h3>
-          <p className="text-xs text-warm-500 dark:text-gray-400">{formatDate(sale.startDate)} – {formatDate(sale.endDate)} · {sale.city}, {sale.state}</p>
+          <p className="text-xs text-warm-500 dark:text-gray-400">{formatDate(sale.startDate)}</p>
         </Link>
       </div>
     </div>
