@@ -1,6 +1,8 @@
-# Patrick's Dashboard — Week of May 2, 2026 (updated S627)
+# Patrick's Dashboard — Week of May 2, 2026 (updated S628)
 
 ## What Happened This Week
+
+**S628 — MetroTopFinds crash fixed + 3,635 scraped sales unblocked nationally.** Two P0 fixes. (1) Railway backend was crashing on every city page request (`prisma.metroTopFinds` was `undefined`) because the `MetroTopFinds` model was lost from `schema.prisma` during S625's schema sync. Fixed by restoring the model and forcing a Railway rebuild — Prisma client now regenerates with the model. (2) Discovered that ALL 3,635 scraped sales were invisible on the homepage, Trending, search, and category pages — a filter added in S614 (`isUnmanagedListing: false OR isClaimed: true`) was silently blocking every scraped organizer from every public query. Advisory board voted 6+0 to show scraped listings publicly. Removed the filter from 14 query locations across trendingController, saleController, and itemSearchService. Added a stale-sale date guard so expired scraped sales don't show. Chrome-verified: Trending page now shows sales from Kalamazoo, Holland, Branford CT, Pasadena MD, Worcester MA, Hagerstown MD. No Patrick actions needed — all deployed.
 
 **S627 — All 4 weekly audit P0/P1 bugs fixed and Chrome-verified.** C-001 (scraped sale pages "Sale not found") — root cause was schema drift: `verificationSource` was never pushed to GitHub, so Railway's Prisma client didn't know about it. Patrick pushed the complete schema.prisma mid-session. A second crash then surfaced: the rank gate was calling `.getTime()` on `null` `publishedAt` (scraped sales have no publishedAt). Fixed with null guards in `saleController.ts` and `rankService.ts`. H-001 (items buried below map on sale detail) — fixed, items now above map. H-002 (images blank platform-wide) — fixed, Cloudinary added to Next.js image domains. H-003 (city hub pages all 404 for scraped cities) — fixed by adding slug-parsing fallback to `pages/city/[slug].tsx`: when a slug like `nashville-tn` isn't in the 2,723-city JSON, it now constructs the city name+state from the slug instead of 404ing. Verified live at finda.sale/city/nashville-tn. No pending Patrick actions — all code is on GitHub and deployed.
 
@@ -52,32 +54,26 @@ All four are in qa-backlog under "Pre-existing Open Bugs."
 
 ## This Week's Priority
 
-1. **Run the C-001 migration fix.** This is blocking the entire scraped-listing experience. One PowerShell command:
-   ```powershell
-   cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-   npx prisma migrate deploy
-   npx prisma generate
-   ```
-2. **Get the scraper pipeline fully running** — manually trigger ESN scraper + Enrichment Backfill (`all=true`).
-3. **Send the 19 outreach drafts sitting in Gmail** — Nick Loper, Codie Sanchez, the trade associations, and others. Ready since S596.
-4. **Decide on S627 first task** — the strategy doc is locked, you can dispatch the outreach pipeline build (option 2) or the crawl queue manager (option 1) or focus on the audit P0/P1 fixes. Recommended order is in STATE.md "## Next Session."
+1. **Push the S628 wrap block** (below) — gets the docs current on GitHub.
+2. **Run GitHub Actions → Scrape EstateSalesNet → Run workflow** — scraped sales are now publicly visible; a fresh ingest will populate Trending and city pages with current data.
+3. **Send the 19 outreach drafts sitting in Gmail** — Nick Loper, Codie Sanchez, trade associations. Ready since S596, long overdue.
+4. **Sign up HERE + Foursquare APIs** — `developer.here.com` + `location.foursquare.com/developer`, add both keys as GitHub Secrets.
+5. **Next session:** dispatch the organizer outreach pipeline build (S626 strategy v3) — scraped sales are live, outreach is the next unlock.
 
 ## Action Items for Patrick
 
-- [ ] **Push S627 wrap block** — see push block below
+- [ ] **Push S628 wrap block** — see push block below
+- [ ] **GitHub Actions → Scrape EstateSalesNet → Run workflow** (fresh ingest now that scraped sales are visible)
 - [ ] **Sign up HERE API** at developer.here.com → add `HERE_API_KEY` GitHub Secret
 - [ ] **Sign up Foursquare API** at location.foursquare.com/developer → add `FOURSQUARE_API_KEY` GitHub Secret
-- [ ] **GitHub Actions → Scrape EstateSalesNet → Run workflow** (rebuilds scraped sales now that C-001 is fixed)
-- [ ] **GitHub Actions → Enrichment Backfill → Run with `all=true`** (after scraper finishes)
 - [ ] **Review and send 19 outreach drafts in Gmail** (just need From set to patrick@finda.sale)
 
-## S627 Push Block
+## S628 Push Block
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S627 wrap — C-001/H-001/H-002/H-003 all fixed and Chrome-verified"
+git commit -m "docs: S628 wrap — MetroTopFinds crash fixed, scraped sales unblocked on all public feeds"
 .\push.ps1
 ```
