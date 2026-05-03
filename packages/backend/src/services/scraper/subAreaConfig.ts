@@ -70,6 +70,30 @@ const NYC: SeedEntry[] = [
       priority: 95,
     }))
   ),
+  // Foursquare for each sub-area
+  ...['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'New York, NY',
+      subArea,
+      country: 'US',
+      sourceName: 'Foursquare',
+      queryType,
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 90,
+    }))
+  ),
+  // OSM for each sub-area
+  ...['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'New York, NY',
+      subArea,
+      country: 'US',
+      sourceName: 'OSM',
+      queryType,
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 85,
+    }))
+  ),
 ];
 
 const LA: SeedEntry[] = [
@@ -94,6 +118,28 @@ const LA: SeedEntry[] = [
       queryType,
       requestsBudgetMax: BUDGETS.HERE,
       priority: 95,
+    }))
+  ),
+  ...['Los Angeles', 'Santa Monica', 'Long Beach', 'Pasadena', 'Burbank'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Los Angeles, CA',
+      subArea,
+      country: 'US',
+      sourceName: 'Foursquare',
+      queryType,
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 90,
+    }))
+  ),
+  ...['Los Angeles', 'Santa Monica', 'Long Beach', 'Pasadena', 'Burbank'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Los Angeles, CA',
+      subArea,
+      country: 'US',
+      sourceName: 'OSM',
+      queryType,
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 85,
     }))
   ),
 ];
@@ -122,6 +168,28 @@ const CHICAGO: SeedEntry[] = [
       priority: 95,
     }))
   ),
+  ...['Chicago', 'Oak Park', 'Evanston', 'Schaumburg', 'Des Plaines'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Chicago, IL',
+      subArea,
+      country: 'US',
+      sourceName: 'Foursquare',
+      queryType,
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 90,
+    }))
+  ),
+  ...['Chicago', 'Oak Park', 'Evanston', 'Schaumburg', 'Des Plaines'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Chicago, IL',
+      subArea,
+      country: 'US',
+      sourceName: 'OSM',
+      queryType,
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 85,
+    }))
+  ),
 ];
 
 const DALLAS_FW: SeedEntry[] = [
@@ -146,6 +214,28 @@ const DALLAS_FW: SeedEntry[] = [
       queryType,
       requestsBudgetMax: BUDGETS.HERE,
       priority: 95,
+    }))
+  ),
+  ...['Dallas', 'Fort Worth', 'Arlington', 'Irving', 'Plano'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Dallas, TX',
+      subArea,
+      country: 'US',
+      sourceName: 'Foursquare',
+      queryType,
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 90,
+    }))
+  ),
+  ...['Dallas', 'Fort Worth', 'Arlington', 'Irving', 'Plano'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Dallas, TX',
+      subArea,
+      country: 'US',
+      sourceName: 'OSM',
+      queryType,
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 85,
     }))
   ),
 ];
@@ -174,6 +264,28 @@ const HOUSTON: SeedEntry[] = [
       priority: 95,
     }))
   ),
+  ...['Houston', 'Spring', 'Pasadena', 'Baytown', 'Pearland'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Houston, TX',
+      subArea,
+      country: 'US',
+      sourceName: 'Foursquare',
+      queryType,
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 90,
+    }))
+  ),
+  ...['Houston', 'Spring', 'Pasadena', 'Baytown', 'Pearland'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Houston, TX',
+      subArea,
+      country: 'US',
+      sourceName: 'OSM',
+      queryType,
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 85,
+    }))
+  ),
 ];
 
 const DC: SeedEntry[] = [
@@ -200,6 +312,28 @@ const DC: SeedEntry[] = [
       priority: 95,
     }))
   ),
+  ...['Washington', 'Arlington', 'Bethesda', 'Alexandria', 'Rockville'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Washington, DC',
+      subArea,
+      country: 'US',
+      sourceName: 'Foursquare',
+      queryType,
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 90,
+    }))
+  ),
+  ...['Washington', 'Arlington', 'Bethesda', 'Alexandria', 'Rockville'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Washington, DC',
+      subArea,
+      country: 'US',
+      sourceName: 'OSM',
+      queryType,
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 85,
+    }))
+  ),
 ];
 
 const PHILADELPHIA: SeedEntry[] = [
@@ -224,6 +358,28 @@ const PHILADELPHIA: SeedEntry[] = [
       queryType,
       requestsBudgetMax: BUDGETS.HERE,
       priority: 95,
+    }))
+  ),
+  ...['Philadelphia', 'Cheltenham', 'Chester', 'Upper Darby', 'Bensalem'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Philadelphia, PA',
+      subArea,
+      country: 'US',
+      sourceName: 'Foursquare',
+      queryType,
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 90,
+    }))
+  ),
+  ...['Philadelphia', 'Cheltenham', 'Chester', 'Upper Darby', 'Bensalem'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Philadelphia, PA',
+      subArea,
+      country: 'US',
+      sourceName: 'OSM',
+      queryType,
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 85,
     }))
   ),
 ];
@@ -268,6 +424,28 @@ const TIER2: SeedEntry[] = TIER2_METROS.flatMap(({ name, subAreas }) => [
       priority: 70,
     }))
   ),
+  ...subAreas.flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: name,
+      subArea,
+      country: 'US',
+      sourceName: 'Foursquare',
+      queryType,
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 65,
+    }))
+  ),
+  ...subAreas.flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: name,
+      subArea,
+      country: 'US',
+      sourceName: 'OSM',
+      queryType,
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 60,
+    }))
+  ),
 ]);
 
 // ==============================================================================
@@ -302,6 +480,32 @@ const TORONTO: SeedEntry[] = [
       priority: 85,
     }))
   ),
+  ...['Toronto', 'North York', 'Scarborough', 'Etobicoke', 'Mississauga'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Toronto, ON',
+      subArea,
+      country: 'CA',
+      province: 'ON',
+      sourceName: 'Foursquare',
+      queryType,
+      locale: 'en',
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 80,
+    }))
+  ),
+  ...['Toronto', 'North York', 'Scarborough', 'Etobicoke', 'Mississauga'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Toronto, ON',
+      subArea,
+      country: 'CA',
+      province: 'ON',
+      sourceName: 'OSM',
+      queryType,
+      locale: 'en',
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 75,
+    }))
+  ),
 ];
 
 const VANCOUVER: SeedEntry[] = [
@@ -332,6 +536,32 @@ const VANCOUVER: SeedEntry[] = [
       priority: 75,
     }))
   ),
+  ...['Vancouver', 'Burnaby', 'Surrey', 'Richmond', 'Coquitlam'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Vancouver, BC',
+      subArea,
+      country: 'CA',
+      province: 'BC',
+      sourceName: 'Foursquare',
+      queryType,
+      locale: 'en',
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 70,
+    }))
+  ),
+  ...['Vancouver', 'Burnaby', 'Surrey', 'Richmond', 'Coquitlam'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Vancouver, BC',
+      subArea,
+      country: 'CA',
+      province: 'BC',
+      sourceName: 'OSM',
+      queryType,
+      locale: 'en',
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 65,
+    }))
+  ),
 ];
 
 const CALGARY: SeedEntry[] = [
@@ -360,6 +590,32 @@ const CALGARY: SeedEntry[] = [
       locale: 'en',
       requestsBudgetMax: BUDGETS.HERE,
       priority: 65,
+    }))
+  ),
+  ...['Calgary', 'Airdrie', 'Okotoks', 'Canmore'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Calgary, AB',
+      subArea,
+      country: 'CA',
+      province: 'AB',
+      sourceName: 'Foursquare',
+      queryType,
+      locale: 'en',
+      requestsBudgetMax: BUDGETS.FOURSQUARE,
+      priority: 60,
+    }))
+  ),
+  ...['Calgary', 'Airdrie', 'Okotoks', 'Canmore'].flatMap((subArea) =>
+    Object.keys(QUERY_TYPE_TO_SEARCH).map((queryType) => ({
+      metro: 'Calgary, AB',
+      subArea,
+      country: 'CA',
+      province: 'AB',
+      sourceName: 'OSM',
+      queryType,
+      locale: 'en',
+      requestsBudgetMax: BUDGETS.OSM,
+      priority: 55,
     }))
   ),
 ];

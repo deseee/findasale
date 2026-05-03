@@ -30,7 +30,7 @@ async function main() {
   if (!SCRAPER_KEY) throw new Error('INTERNAL_SCRAPER_KEY is not set');
 
   // Fetch next batch of queue items to crawl
-  const queueItems = await getNextCrawlsToRun(50); // Get up to 50 queue items ready to run
+  const queueItems = await getNextCrawlsToRun(50, 'Foursquare'); // Get up to 50 queue items ready to run
   console.log(`[run-foursquare-places] Found ${queueItems.length} queue items ready to run`);
 
   if (queueItems.length === 0) {
