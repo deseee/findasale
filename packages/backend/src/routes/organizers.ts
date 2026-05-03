@@ -809,9 +809,17 @@ router.post('/admin/claim-requests/:id/approve', authenticate, async (req: AuthR
     ]);
 
     // Award XP to any shopper who introduced this organizer
-    awardOrganizerClaimedXp(claim.organizerId).catch(err =>
-      console.error('[XP] awardOrganizerClaimedXp failed silently:', err)
-    );
+    prisma.shopperOrganizerIntroduction.findFirst({
+      where: { organizerId: claim.organizerId, claimedAt: null },
+      orderBy: { introducedAt: 'asc' },
+      select: { shopperId: true },
+    }).then(intro => {
+      if (intro) {
+        awardOrganizerClaimedXp(intro.shopperId, claim.organizerId).catch(err =>
+          console.error('[XP] awardOrganizerClaimedXp failed silently:', err)
+        );
+      }
+    }).catch(err => console.error('[XP] intro lookup failed:', err));
 
     res.json({ success: true, message: 'Claim approved' });
   } catch (error) {
