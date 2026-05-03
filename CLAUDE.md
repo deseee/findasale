@@ -21,6 +21,20 @@ equivalents. Custom skills have project context; generics don't.
 
 ---
 
+## 0. Session Start (MANDATORY — first action every session, no exceptions)
+
+1. Read `claude_docs/STATE.md` in full.
+2. Read `claude_docs/strategy/roadmap.md` — identify all items marked BROKEN, PENDING, or Pending Chrome QA.
+3. Present Patrick: "Outstanding: [top 3 by priority]. My recommendation: [P1 item]."
+
+**Never ask "what would you like to work on today?" — the roadmap answers that.**
+
+**Friction gate (fires before asking Patrick for ANYTHING):** Can you find it yourself in .env files, the codebase, memory, STATE.md, or any accessible file in under 60 seconds? If yes, find it. Do not ask Patrick. Asking for information you can retrieve is friction and erodes trust. The .env files are accessible. The codebase is accessible. Memory is accessible. Use them.
+
+**Roadmap is the work queue — not documentation.** Every session must advance at least one roadmap item. Every item touched must have its roadmap row updated before wrap. Findings from audits go into the roadmap immediately, not into session summaries that get rotated out.
+
+---
+
 ## 1. Project Purpose
 
 FindA.Sale is a PWA for secondary sale organizers (estate sales, yard sales, auctions, flea markets, consignment).

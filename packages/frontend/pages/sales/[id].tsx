@@ -134,6 +134,8 @@ interface Sale {
     clueText: string;
     category?: string;
   }>;
+  // RETAIL scraper metadata (hours_display, website, phone, etc.)
+  scrapedMetadata?: Record<string, unknown> | null;
 }
 
 interface Bid {
