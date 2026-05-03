@@ -416,6 +416,10 @@ model Organizer {
   timezone                 String?
   byAppointment            Boolean  @default(false)
   organizerTypes           String[] @default([])
+  // Feature #356: Organizer broadcasts to followers
+  broadcasts               OrganizerBroadcast[]
+  // Feature #354: Business hours
+  hours                    OrganizerHours[]
   createdAt               DateTime               @default(now())
   updatedAt               DateTime               @updatedAt
 
@@ -425,6 +429,49 @@ model Organizer {
   @@index([claimStatus])
   @@index([googlePlaceId])
   @@index([esnOrgId])
+}
+
+// Feature #354: OrganizerHours — business hours per day of week
+model OrganizerHours {
+  id          String    @id @default(cuid())
+  organizerId String
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int
+  openTime    String
+  closeTime   String
+
+  @@unique([organizerId, dayOfWeek])
+}
+
+// Feature #356: OrganizerBroadcast — messages sent to organizer followers
+model OrganizerBroadcast {
+  id             String    @id @default(cuid())
+  organizerId    String
+  organizer      Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  subject        String
+  message        String
+  sentAt         DateTime  @default(now())
+  recipientCount Int       @default(0)
+
+  @@index([organizerId])
+}
+
+// ADR-074: MetroTopFinds — eBay sold items synced per metro for city hub pages
+model MetroTopFinds {
+  id            String   @id @default(cuid())
+  citySlug      String
+  metro         String
+  itemTitle     String
+  itemCategory  String?
+  soldPrice     Decimal  @db.Decimal(10, 2)
+  imageUrl      String?
+  ebayListingId String
+  soldAt        DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([citySlug, ebayListingId])
+  @@index([citySlug, soldAt])
 }
 
 // Pre-wire: API Keys for third-party integrations (Zapier, IFTTT, webhooks)
