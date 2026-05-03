@@ -178,8 +178,8 @@ const nextConfig = {
   async rewrites() {
     return [
       // S486: Marketing landing page with embedded 38s demo video
-      // Served at finda.sale/video — old: /video.html, new: /organizer-video-ad-fas.html (swapped S629)
-      { source: '/video', destination: '/organizer-video-ad-fas.html' },
+      // Served at finda.sale/video from public/video.html (embeds organizer-video-ad-fas.html)
+      { source: '/video', destination: '/video.html' },
     ];
   },
 
