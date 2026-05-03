@@ -106,6 +106,15 @@ export const XP_AWARDS = {
   REFERRAL_ORG_FIRST_SALE: 50,  // Referrer earns when referred organizer posts first sale
   ORGANIZER_REFERRAL_PURCHASE: 500,  // Referrer organizer earns when referred organizer makes external purchase
 
+  // Organizer Referral / Scouting (shopper side — new S627)
+  SHOPPER_INTRODUCED_ORGANIZER_CLAIMED: 200,    // Organizer claims storefront via shopper intro
+  ORGANIZER_REFERRAL_PRO_UPGRADE: 300,          // Referred organizer upgrades to PRO within 60 days
+  ORGANIZER_REFERRAL_QUALITY_TIER: 100,         // One-time: organizer reaches 4.0+ rating
+  ORGANIZER_DISCOVERY_MANUAL: 10,               // Shopper manually submits new organizer contact
+  SCOUT_LEADERBOARD_SEASONAL_1ST: 250,          // Seasonal leaderboard end reward — 1st place
+  SCOUT_LEADERBOARD_SEASONAL_2ND_5TH: 150,     // 2nd–5th place
+  SCOUT_LEADERBOARD_SEASONAL_6TH_10TH: 50,     // 6th–10th place
+
   // Bounties
   BOUNTY_FULFILLMENT_SHOPPER: 25, // Shopper earns for fulfilling a bounty request
 };
@@ -151,6 +160,7 @@ export const MONTHLY_XP_CAPS = {
   RSVP: 10,                   // Max 10 XP from RSVPs per calendar month
   CONDITION_RATING: 50,       // Organizer earns max 50 XP/month from condition submissions
   COMMUNITY_VALUATION: 100,   // Max 100 XP/month from price opinions (20 valuations × 5 XP)
+  ORGANIZER_CLAIMED_MONTHLY: 1000,  // Max XP from organizer-claimed rewards per month (≈5 organizers) — S627
 };
 
 // Daily XP caps (exploit prevention)
