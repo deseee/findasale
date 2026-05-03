@@ -13,12 +13,6 @@ export const getTrendingItems = async (req: Request, res: Response) => {
         status: 'AVAILABLE',
         sale: {
           status: 'PUBLISHED',
-          organizer: {
-            OR: [
-              { isUnmanagedListing: false },
-              { isClaimed: true },
-            ],
-          },
         },
         ...PUBLIC_ITEM_FILTER,
       },
@@ -51,12 +45,6 @@ export const getTrendingSales = async (req: Request, res: Response) => {
       where: {
         status: 'PUBLISHED',
         endDate: { gte: now },
-        organizer: {
-          OR: [
-            { isUnmanagedListing: false },
-            { isClaimed: true },
-          ],
-        },
       },
       include: {
         organizer: { select: { user: { select: { name: true } } } },
