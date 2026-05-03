@@ -366,7 +366,7 @@ export const getItemById = async (req: Request, res: Response) => {
     };
 
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
-    const isOwner = authReq.user?.id === item.sale!.organizer.userId;
+    const isOwner = authReq.user?.id === item.sale?.organizer?.userId;
 
     // For everyone else, enforce public visibility rules: must be active.
     // Allow NULL draftStatus (legacy/seeded items pre-Rapidfire) and PUBLISHED items.
