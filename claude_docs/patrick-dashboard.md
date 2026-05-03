@@ -1,6 +1,6 @@
-# Patrick's Dashboard — Week of May 3, 2026 (updated S630)
+# Patrick's Dashboard — Week of May 3, 2026 (updated S631)
 
-## Next Session — S631: Email Creative Session
+## Next Session — S632: Email Creative Session
 
 **Goal:** Finalize all 4 outreach email templates. Pure creative work — the pipeline infrastructure, product research, and psychology frameworks are all done. Next session just needs to write copy that converts.
 
@@ -14,6 +14,8 @@
 ---
 
 ## What Happened This Week
+
+**S631 — Foursquare Places API migration fix.** The scraper was getting 401 "Invalid request token" on every API call. Root cause: Foursquare migrated their entire Places API to a new domain (`places-api.foursquare.com`) and new auth format (`Authorization: Bearer <key>` + `X-Places-Api-Version` header). Old endpoint is deprecated. Also fixed: city doubling bug ("Chicago, Chicago, IL" → "Chicago, IL"), 11× API waste (was running all 11 query types per queue item instead of 1), and unreadable error response bodies. Confirmed working: Patrick ran it live and got 1,322 businesses scraped from 50 queue items with 0 failures. The scraper is fully operational. **New issue found:** Railway cold start caused first 5 ingest batches to 502 (backend sleeping when 5 concurrent workers hit it); 125 businesses scraped but not ingested this run. Retry logic fix coming in S632.
 
 **S630 — Schema drift repair, storefront 500 fixed.** Diagnosed storefront 500 via Railway logs — `PrismaClientValidationError: Unknown field 'attendanceCount'`. Root cause: S624/S625 multi-schema syncs wiped model definitions from `schema.prisma` while DB tables remained intact. Full audit found 3 entire missing models (ClaimRequest, SaleShareLink, SaleShareLinkClick) + missing ClaimEmail definition + missing Consignor stripe fields + missing inverse relations on User/Sale/Organizer. All restored — no migrations needed. Cache-busted Railway rebuild. Local `prisma generate` validated clean. Wait for Railway rebuild to confirm storefront is live.
 
@@ -71,57 +73,29 @@ All four are in qa-backlog under "Pre-existing Open Bugs."
 
 ## This Week's Priority
 
-1. **Wait for Railway rebuild** (S630 push triggered it) — storefront should come back live.
-2. **S631: Email creative session** — finalize 4 outreach templates, then the pipeline build can start.
-3. **Sign up HERE + Foursquare APIs** — `developer.here.com` + `location.foursquare.com/developer`, add both keys as GitHub Secrets.
+1. **Push S631 block below** — 2 scraper files + wrap docs.
+2. **S632: Email creative session** — finalize 4 outreach templates, then the pipeline build can start.
+3. **Sign up HERE API** — `developer.here.com`, add `HERE_API_KEY` GitHub Secret (overdue since S625).
 4. **Send the 19 outreach drafts in Gmail** — Nick Loper, Codie Sanchez, trade associations. Long overdue since S596.
 
 ## Action Items for Patrick
 
-- [ ] **Push S629 wrap block** — see push block below
-- [ ] **Run `prisma generate`** after schema push (block below)
-- [ ] **S630** — creative session on 4 outreach emails
+- [ ] **Push S631 wrap block** — see push block below
 - [ ] **Sign up HERE API** at developer.here.com → add `HERE_API_KEY` GitHub Secret
-- [ ] **Sign up Foursquare API** at location.foursquare.com/developer → add `FOURSQUARE_API_KEY` GitHub Secret
 - [ ] **Review and send 19 outreach drafts in Gmail**
 
-## S629 Push Block
+## S631 Push Block
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 
-git add packages/database/prisma/schema.prisma
-git add packages/database/prisma/migrations/20260503000000_restore_scraper_phase1_schema/migration.sql
-git add packages/backend/Dockerfile.production
-git add packages/backend/src/controllers/saleController.ts
-git commit -m "fix(backend): restore scraper phase1 schema drift, fix endDate filter, cache-bust Dockerfile"
-
-git add packages/backend/src/services/scraper/crawlQueueManager.ts
-git add packages/backend/src/services/scraper/subAreaConfig.ts
-git add packages/backend/src/scripts/seed-crawl-queue.ts
-git add packages/backend/src/scripts/run-google-places.ts
-git add packages/backend/src/scripts/run-here-places.ts
+git add packages/backend/src/services/scraper/sources/foursquarePlaces.ts
 git add packages/backend/src/scripts/run-foursquare-places.ts
-git add packages/backend/src/scripts/run-osm-overpass.ts
-git commit -m "feat(scraper): DirectoryCrawlQueueManager + 20-metro subAreaConfig"
-
-git add packages/frontend/components/SaleCard.tsx
-git add packages/frontend/pages/sales/index.tsx
-git add packages/frontend/styles/globals.css
-git commit -m "feat(frontend): /sales page, sourced-from disclosure, overflow-x fix"
+git commit -m "fix(scraper): Foursquare Places API migration — new endpoint, Bearer auth, single-query per queue item"
 
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: S629 wrap"
+git commit -m "docs: S631 wrap"
 
 .\push.ps1
-```
-
-**After push — run migration and regenerate Prisma client:**
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
-npx prisma migrate deploy
-npx prisma generate
 ```
