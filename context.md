@@ -1,5 +1,5 @@
 # Dynamic Project Context
-*Generated at 2026-04-26T08:13:27.959Z*
+*Generated at 2026-05-03T08:13:35.928Z*
 *Run `node scripts/update-context.js` on Windows to refresh.*
 
 ## Last Session
@@ -17,11 +17,11 @@ See report for details.
 ## Signals
 ⚠ Env drift — in .env.example but missing from .env: MAILERLITE_SHOPPERS_GROUP_ID, CLOUDINARY_AVG_IMAGE_SIZE_KB, AI_COST_CEILING_USD, OLLAMA_URL, OLLAMA_VISION_MODEL, GOOGLE_PLACES_API_KEY, EBAY_DELETION_ENDPOINT_URL, EBAY_VERIFICATION_TOKEN, OSRM_API_URL, RATE_LIMIT_WHITELIST_IPS
 ⚠ 10+ TODO/FIXME markers in source (showing up to 5):
-  /sessions/affectionate-modest-keller/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:261:      // TODO: implement distance sorting once Sales have consistent lat/lng
-  /sessions/affectionate-modest-keller/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:269:        // TODO: add category filter if needed
-  /sessions/affectionate-modest-keller/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:296:      distance: null, // TODO: calculate if lat/lng available
-  /sessions/affectionate-modest-keller/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:514:        checkoutUrl: null, // TODO: integrate Stripe
-  /sessions/affectionate-modest-keller/mnt/FindaSale/packages/backend/src/controllers/heatmapController.ts:26:    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+  /sessions/determined-festive-thompson/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:261:      // TODO: implement distance sorting once Sales have consistent lat/lng
+  /sessions/determined-festive-thompson/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:269:        // TODO: add category filter if needed
+  /sessions/determined-festive-thompson/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:296:      distance: null, // TODO: calculate if lat/lng available
+  /sessions/determined-festive-thompson/mnt/FindaSale/packages/backend/src/controllers/bountyController.ts:514:        checkoutUrl: null, // TODO: integrate Stripe
+  /sessions/determined-festive-thompson/mnt/FindaSale/packages/backend/src/controllers/citiesController.ts:111:    // TODO: Phase 2 — implement nightly cron job
 
 ## Project File Tree
 ```
@@ -1614,6 +1614,19 @@ See report for details.
 ├── .githooks/
 │   ├── pre-commit
 │   └── pre-push
+├── .github/
+│   └── workflows/
+│       ├── enrich-backfill.yml
+│       ├── scrape-craigslist.yml
+│       ├── scrape-estatesalesnet.yml
+│       ├── scrape-eventbrite.yml
+│       ├── scrape-facebook-events.yml
+│       ├── scrape-foursquare.yml
+│       ├── scrape-google-places.yml
+│       ├── scrape-here-places.yml
+│       ├── scrape-newspaper-rss.yml
+│       ├── scrape-osm-overpass.yml
+│       └── test-esn-api-access.yml
 ├── .gitignore
 ├── .last-wrap
 ├── .skills/
@@ -1627,6 +1640,8 @@ See report for details.
 │       └── skill-creator/
 │           └── SKILL.md
 ├── CLAUDE.md
+├── GROUP5_CHANGED_FILES.txt
+├── IMPLEMENTATION_SUMMARY_GROUP5.md
 ├── Organizer_Acquisition_Playbook.md
 ├── Organizer_Acquisition_Playbook_v2.md
 ├── PRICING_ENGINE_UPDATES_SUMMARY.txt
@@ -1687,6 +1702,10 @@ See report for details.
 │   │   ├── ADR-070-MARKSOLD-POS-INVOICE.md
 │   │   ├── ADR-071-ETSY-COMP-FETCH.md
 │   │   ├── ADR-072-IN-APP-QR-SCANNER.md
+│   │   ├── ADR-073-DIRECTORY-SCRAPER.md
+│   │   ├── ADR-074-METRO-AUTO-CONTENT.md
+│   │   ├── ADR-075-SEO-CONTENT-MOAT.md
+│   │   ├── ADR-076-GITHUB-ACTIONS-SCRAPER.md
 │   │   ├── ADR-EXPLORER_GUILD_RANK_ARCHITECTURE.md
 │   │   ├── ADR-EXPLORER_GUILD_RANK_DEV_CHECKLIST.md
 │   │   ├── ADR-PHASE4-BRIEF.md
@@ -1716,6 +1735,7 @@ See report for details.
 │   │   ├── brand-drift-2026-04-07.md
 │   │   ├── brand-drift-2026-04-14.md
 │   │   ├── brand-drift-2026-04-21.md
+│   │   ├── brand-drift-2026-05-02.md
 │   │   ├── business-plan-brand-review-2026-03-19.md
 │   │   ├── chrome-audit-2026-03-20-roadmap-updates.md
 │   │   ├── chrome-audit-2026-03-20.md
@@ -1727,6 +1747,7 @@ See report for details.
 │   │   ├── daily-friction-audit-2026-04-03.md
 │   │   ├── design-critique-2026-03-18.md
 │   │   ├── doc-structure-audit-2026-03-22.md
+│   │   ├── ebay-sync-audit-S590.md
 │   │   ├── frontend-pages-inventory-S294.html
 │   │   ├── organizer-happy-path-s216.md
 │   │   ├── passkey-qa-audit-s200.md
@@ -1751,12 +1772,17 @@ See report for details.
 │   │   ├── weekly-audit-2026-04-02.md
 │   │   ├── weekly-audit-2026-04-09.md
 │   │   ├── weekly-audit-2026-04-16.md
-│   │   └── weekly-audit-2026-04-23.md
+│   │   ├── weekly-audit-2026-04-23.md
+│   │   └── weekly-audit-2026-05-02.md
 │   ├── beta-launch/ (5 files)
 │   ├── brand/ (11 files)
 │   ├── brand-voice/
 │   │   └── COLLECTORS_GUILD_BRAND_VOICE.md
-│   ├── competitor-intel/ (5 files)
+│   ├── competitor-intel/ (6 files)
+│   ├── content/
+│   │   └── city-tips/
+│   │       ├── README.md
+│   │       └── grand-rapids-mi.md
 │   ├── decisions-log.md
 │   ├── design/
 │   │   ├── PRICE_RESEARCH_CARD_UX_SPEC.md
@@ -1783,10 +1809,12 @@ See report for details.
 │   ├── guides/ (2 files)
 │   ├── handoffs/
 │   │   └── 125_csv_export_handoff.md
-│   ├── health-reports/ (16 files)
+│   ├── health-reports/ (17 files)
 │   ├── human-QA-walkthrough-findings.md
-│   ├── improvement-memos/ (6 files)
+│   ├── improvement-memos/ (7 files)
 │   ├── innovation-shopper-engagement-ideas.md
+│   ├── legal/
+│   │   └── rvm-tcpa-compliance-review.md
 │   ├── legal-hold-to-pay-risk-review.md
 │   ├── logs/ (3 files)
 │   ├── marketing/
@@ -1798,7 +1826,8 @@ See report for details.
 │   │   │   ├── content-2026-04-02.md
 │   │   │   ├── content-2026-04-09.md
 │   │   │   ├── content-2026-04-16.md
-│   │   │   └── content-2026-04-23.md
+│   │   │   ├── content-2026-04-23.md
+│   │   │   └── content-2026-05-02.md
 │   │   ├── demand-gen-playbook-organizer-acquisition.md
 │   │   ├── landing-page-html-template.html
 │   │   ├── peer-conversation-scripts.md
@@ -1806,14 +1835,21 @@ See report for details.
 │   ├── monthly-digest-2026-04.md
 │   ├── next-session-brief.md
 │   ├── next-session-prompt.md
-│   ├── operations/ (83 files)
+│   ├── operations/ (84 files)
 │   ├── patrick-dashboard.md
 │   ├── patrick-walkthrough-S248.md
 │   ├── payment-testing-content-package.md
 │   ├── pre-sale-payment-testing-guide.md
 │   ├── pricing-data-sources-research.md
+│   ├── reports/
+│   │   └── monthly-digest-2026-05.md
 │   ├── research/ (51 files)
 │   ├── security/
+│   │   ├── CRAWL_AUDIT_EXEC_SUMMARY.md
+│   │   ├── CRAWL_IMPLEMENTATION_PRIORITY.md
+│   │   ├── CRAWL_PRELAUNCH_CHECKLIST.md
+│   │   ├── CRAWL_SYSTEM_SECURITY_AUDIT.md
+│   │   ├── README_CRAWL_AUDIT.md
 │   │   └── scraping-threat-model.md
 │   ├── self-healing/ (1 files)
 │   ├── session-log.md
@@ -1827,7 +1863,7 @@ See report for details.
 │   │   ├── explorers-guild-master-spec.md
 │   │   ├── pos-upgrade-architecture-spec.md
 │   │   └── pos-upgrade-ux-flows.md
-│   ├── strategy/ (37 files)
+│   ├── strategy/ (60 files)
 │   ├── ux-audits/
 │   │   └── explorer-guild-phase2-audit.md
 │   ├── ux-shopper-engagement-ecosystem.md
@@ -1837,6 +1873,7 @@ See report for details.
 │   │   ├── 2026-04-08.md
 │   │   ├── 2026-04-15.md
 │   │   ├── 2026-04-22.md
+│   │   ├── 2026-05-02.md
 │   │   ├── PROMOTE_PAGE_UX_SPEC.md
 │   │   ├── S256-UX-HANDOFF.md
 │   │   ├── S256-UX-SPECS-41-items-onboarding.md
@@ -1857,6 +1894,7 @@ See report for details.
 │   │   ├── teams-card-reader-hardware-section-S524.md
 │   │   └── ux-audit-S236.md
 │   └── workflow-retrospectives/ (4 files)
+├── cleanup-system-organizer-sales.sql
 ├── conversation-defaults-SKILL-v8.md.tmp.35852.1773930503120
 ├── findasale-pin-logo.svg
 ├── frontend-pages-inventory-S294.html
@@ -2514,19 +2552,30 @@ See report for details.
 │   │   │   ├── constants/
 │   │   │   │   ├── cheatsheet.ts
 │   │   │   │   └── tierLimits.ts
-│   │   │   ├── controllers/ (132 files)
+│   │   │   ├── controllers/ (139 files)
 │   │   │   ├── helpers/
 │   │   │   │   └── itemQueries.ts
 │   │   │   ├── index.ts
 │   │   │   ├── instrument.ts
-│   │   │   ├── jobs/ (37 files)
+│   │   │   ├── jobs/ (40 files)
 │   │   │   ├── lib/ (17 files)
 │   │   │   ├── middleware/ (13 files)
 │   │   │   ├── models/ (1 files)
-│   │   │   ├── routes/ (116 files)
-│   │   │   ├── services/ (72 files)
+│   │   │   ├── routes/ (120 files)
+│   │   │   ├── scripts/
+│   │   │   │   ├── run-craigslist.ts
+│   │   │   │   ├── run-estatesalesnet.ts
+│   │   │   │   ├── run-eventbrite.ts
+│   │   │   │   ├── run-foursquare-places.ts
+│   │   │   │   ├── run-google-places.ts
+│   │   │   │   ├── run-here-places.ts
+│   │   │   │   ├── run-newspaper-rss.ts
+│   │   │   │   ├── run-osm-overpass.ts
+│   │   │   │   ├── run-search-facebook-events.ts
+│   │   │   │   └── seed-crawl-queue.ts
+│   │   │   ├── services/ (73 files)
 │   │   │   ├── types/ (2 files)
-│   │   │   └── utils/ (13 files)
+│   │   │   └── utils/ (14 files)
 │   │   └── tsconfig.json
 │   ├── database/
 │   │   ├── .env
@@ -2538,9 +2587,10 @@ See report for details.
 │   │   ├── prisma/
 │   │   │   ├── EXPLORER_PROFILE_DECISION.md
 │   │   │   ├── fix-seed-city.ts
-│   │   │   ├── migrations/ (223 migrations)
+│   │   │   ├── migrations/ (246 migrations)
 │   │   │   ├── schema.prisma
 │   │   │   ├── schema.prisma.backup
+│   │   │   ├── schema.prisma.edit
 │   │   │   ├── schema.prisma.working
 │   │   │   ├── seed.ts
 │   │   │   ├── seedEncyclopedia.ts
@@ -3150,18 +3200,31 @@ See report for details.
 │   │   ├── CLAUDE.md
 │   │   ├── Dockerfile
 │   │   ├── FEATURE_33_OG_META_WIRING.md
-│   │   ├── components/ (247 files)
+│   │   ├── claude_docs/
+│   │   │   └── audits/
+│   │   │       └── public-browse-audit-S604.md
+│   │   ├── components/ (255 files)
 │   │   ├── context/ (2 files)
 │   │   ├── contexts/ (3 files)
+│   │   ├── data/
+│   │   │   ├── seo-pages/
+│   │   │   │   ├── BUILD_GUIDE.md
+│   │   │   │   ├── generate-seo-content.js
+│   │   │   │   ├── generate.js
+│   │   │   │   └── index.json
+│   │   │   └── us-cities-3000.json
 │   │   ├── hooks/ (70 files)
-│   │   ├── lib/ (14 files)
+│   │   ├── lib/ (18 files)
 │   │   ├── next-env.d.ts
 │   │   ├── next-sitemap.config.js
 │   │   ├── next.config.js
 │   │   ├── package.json
-│   │   ├── pages/ (68 files)
+│   │   ├── pages/ (70 files)
 │   │   ├── postcss.config.js
-│   │   ├── public/ (28 files)
+│   │   ├── public/ (87 files)
+│   │   ├── scripts/
+│   │   │   ├── generate-seo-index.ts
+│   │   │   └── generate-us-cities.ts
 │   │   ├── sentry.client.config.ts
 │   │   ├── sentry.edge.config.ts
 │   │   ├── sentry.server.config.ts
@@ -3174,6 +3237,7 @@ See report for details.
 │   ├── package.json
 │   └── shared/
 │       ├── CLAUDE.md
+│       ├── imageProxyUtil.ts
 │       ├── package.json
 │       ├── src/
 │       │   ├── cloudinaryUtils.ts
@@ -3190,6 +3254,10 @@ See report for details.
 ├── push.ps1
 ├── query.sql
 ├── railway.toml
+├── reset-artifact-verification.js
+├── rvm-a2p-10dlc-package.md
+├── rvm-scripts-v1.md
+├── rvm-scripts-v2.md
 ├── sale-progress-prototype.html
 ├── sale-progress-prototype.jsx
 ├── scripts/
@@ -3200,9 +3268,13 @@ See report for details.
 │   ├── session-wrap-check.sh
 │   ├── statusline-token-usage.sh
 │   ├── stress-test.js
+│   ├── test-archive-ph.mjs
+│   ├── test-archive-scrape.mjs
+│   ├── test-proxy-rotation.mjs
 │   └── update-context.js
 ├── test-import.csv
-└── updated-skills/
+├── updated-skills/
+└── verify-ts.ps1
 
 ```
 
