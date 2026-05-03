@@ -350,10 +350,24 @@ export const register = async (req: Request, res: Response) => {
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
     let organizerProfile = null;
+    let subscriptionLapsed = false;
     if (user.role === 'ORGANIZER' || user.roles?.includes('ORGANIZER')) {
       organizerProfile = await prisma.organizer.findUnique({
         where: { userId: user.id }
       });
+
+      // Feature #75: Check subscription lapse status from roleSubscriptions
+      const roleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: {
+          userId: user.id,
+          role: 'ORGANIZER',
+        },
+      });
+
+      if (roleSubscription) {
+        // Subscription is lapsed if tierLapsedAt is set AND tierResumedAt is null
+        subscriptionLapsed = roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
+      }
     }
 
     // Generate JWT — include name, referralCode so AuthContext can decode without a round-trip
@@ -372,6 +386,7 @@ export const register = async (req: Request, res: Response) => {
         emailVerified: user.emailVerified, // S512: gate dashboard banner
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
+        subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         createdAt: user.createdAt.toISOString(),
@@ -493,11 +508,25 @@ export const oauthLogin = async (req: Request, res: Response) => {
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
     let organizerProfile = null;
+    let subscriptionLapsed = false;
     const hasOrganizerRole = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
     if (hasOrganizerRole) {
       organizerProfile = await prisma.organizer.findUnique({
         where: { userId: user.id }
       });
+
+      // Feature #75: Check subscription lapse status from roleSubscriptions
+      const roleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: {
+          userId: user.id,
+          role: 'ORGANIZER',
+        },
+      });
+
+      if (roleSubscription) {
+        // Subscription is lapsed if tierLapsedAt is set AND tierResumedAt is null
+        subscriptionLapsed = roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
+      }
     }
 
     // Feature #72 Phase 2: Include roles array from user.roles (array field in User model)
@@ -515,6 +544,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
         emailVerified: user.emailVerified, // S512: gate dashboard banner
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
+        subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         createdAt: user.createdAt.toISOString(),
@@ -654,11 +684,25 @@ export const login = async (req: Request, res: Response) => {
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
     let organizerProfile = null;
+    let subscriptionLapsed = false;
     const hasOrganizerRole = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
     if (hasOrganizerRole) {
       organizerProfile = await prisma.organizer.findUnique({
         where: { userId: user.id }
       });
+
+      // Feature #75: Check subscription lapse status from roleSubscriptions
+      const roleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: {
+          userId: user.id,
+          role: 'ORGANIZER',
+        },
+      });
+
+      if (roleSubscription) {
+        // Subscription is lapsed if tierLapsedAt is set AND tierResumedAt is null
+        subscriptionLapsed = roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
+      }
     }
 
     // Generate JWT — include referralCode so AuthContext can decode without a round-trip
@@ -677,6 +721,7 @@ export const login = async (req: Request, res: Response) => {
         emailVerified: user.emailVerified, // S512: gate dashboard banner
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
+        subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         createdAt: user.createdAt.toISOString(),
@@ -790,6 +835,16 @@ export const redeemInvite = async (req: Request, res: Response) => {
       where: { userId }
     });
 
+    // Feature #75: Check subscription lapse status from roleSubscriptions
+    const roleSubscription = await prisma.userRoleSubscription.findFirst({
+      where: {
+        userId: userId,
+        role: 'ORGANIZER',
+      },
+    });
+
+    const subscriptionLapsed = roleSubscription && roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
+
     const userRoles = updatedUser.roles && updatedUser.roles.length > 0 ? updatedUser.roles : ['ORGANIZER'];
     const token = jwt.sign(
       {
@@ -803,6 +858,7 @@ export const redeemInvite = async (req: Request, res: Response) => {
         emailVerified: updatedUser.emailVerified, // S512: gate dashboard banner
         subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
         subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
+        subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
         organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
         onboardingComplete: organizerProfile?.onboardingComplete ?? false,
         createdAt: updatedUser.createdAt.toISOString(),
