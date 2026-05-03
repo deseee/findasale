@@ -95,6 +95,21 @@ function normalizeName(name: string): string {
 }
 
 /**
+ * Validate and sanitize an email address for storage.
+ * Returns the email if valid and external (not @system.finda.sale), otherwise null.
+ */
+function isValidExternalEmail(email?: string): string | null {
+  if (!email || typeof email !== 'string') return null;
+  const trimmed = email.trim();
+  // Basic email regex check
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(trimmed)) return null;
+  // Exclude system emails
+  if (trimmed.includes('@system.finda.sale')) return null;
+  return trimmed;
+}
+
+/**
  * Get or create a scraped organizer with per-source attribution.
  * One system user per business per source (e.g., scraper+john-doe-estatesalesnet@system.finda.sale)
  * Automatically triggers enrichment to fill in phone, website, logo.
@@ -116,22 +131,25 @@ async function getOrCreateScrapedOrganizer(
   googlePlaceId?: string,
   foursquareVenueId?: string,
   hereBusinessId?: string,
-  businessCategory?: string
+  businessCategory?: string,
+  contactEmail?: string
 ): Promise<string> {
   // ADR-077 Phase 2: Multi-source dedup
   // Check by googlePlaceId first — strongest dedup signal.
   if (googlePlaceId) {
     const byPlaceId = await prisma.organizer.findFirst({
       where: { googlePlaceId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true },
     });
     if (byPlaceId) {
-      // Backfill missing source IDs
+      // Backfill missing source IDs and email
       const updates: Record<string, unknown> = {};
       if (foursquareVenueId && !byPlaceId.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
       if (hereBusinessId && !byPlaceId.hereBusinessId) updates.hereBusinessId = hereBusinessId;
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
+      const validEmail = isValidExternalEmail(contactEmail);
+      if (validEmail && !byPlaceId.contactEmail) updates.contactEmail = validEmail;
       if (Object.keys(updates).length > 0) {
         await prisma.organizer.update({ where: { id: byPlaceId.id }, data: updates });
       }
@@ -143,7 +161,7 @@ async function getOrCreateScrapedOrganizer(
   if (foursquareVenueId) {
     const byFoursquare = await prisma.organizer.findFirst({
       where: { foursquareVenueId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true },
     });
     if (byFoursquare) {
       const updates: Record<string, unknown> = {};
@@ -151,6 +169,8 @@ async function getOrCreateScrapedOrganizer(
       if (hereBusinessId && !byFoursquare.hereBusinessId) updates.hereBusinessId = hereBusinessId;
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
+      const validEmail = isValidExternalEmail(contactEmail);
+      if (validEmail && !byFoursquare.contactEmail) updates.contactEmail = validEmail;
       if (Object.keys(updates).length > 0) {
         await prisma.organizer.update({ where: { id: byFoursquare.id }, data: updates });
       }
@@ -162,7 +182,7 @@ async function getOrCreateScrapedOrganizer(
   if (hereBusinessId) {
     const byHere = await prisma.organizer.findFirst({
       where: { hereBusinessId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true },
     });
     if (byHere) {
       const updates: Record<string, unknown> = {};
@@ -170,6 +190,8 @@ async function getOrCreateScrapedOrganizer(
       if (foursquareVenueId && !byHere.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
+      const validEmail = isValidExternalEmail(contactEmail);
+      if (validEmail && !byHere.contactEmail) updates.contactEmail = validEmail;
       if (Object.keys(updates).length > 0) {
         await prisma.organizer.update({ where: { id: byHere.id }, data: updates });
       }
@@ -191,13 +213,15 @@ async function getOrCreateScrapedOrganizer(
   const existing = candidates.find((c) => normalizeName(c.businessName) === normalizedName);
 
   if (existing) {
-    // Backfill all source IDs we now have
+    // Backfill all source IDs and email we now have
     const updates: Record<string, unknown> = {};
     if (googlePlaceId && !existing.googlePlaceId) updates.googlePlaceId = googlePlaceId;
     if (foursquareVenueId && !existing.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
     if (hereBusinessId && !existing.hereBusinessId) updates.hereBusinessId = hereBusinessId;
     if (esnOrgId) updates.esnOrgId = esnOrgId;
     if (businessCategory) updates.businessCategory = businessCategory;
+    const validEmail = isValidExternalEmail(contactEmail);
+    if (validEmail && !existing.contactEmail) updates.contactEmail = validEmail;
     if (Object.keys(updates).length > 0) {
       await prisma.organizer.update({ where: { id: existing.id }, data: updates });
     }
@@ -216,6 +240,7 @@ async function getOrCreateScrapedOrganizer(
 
   let newOrgId: string;
   try {
+    const validEmail = isValidExternalEmail(contactEmail);
     const created = await prisma.user.create({
       data: {
         email: systemEmail,
@@ -234,6 +259,7 @@ async function getOrCreateScrapedOrganizer(
             esnOrgId,
             googlePlaceId,
             businessCategory,
+            contactEmail: validEmail || null,
           },
         },
       },
@@ -460,7 +486,8 @@ export async function ingestScrapedListing(
         listing.googlePlaceId,
         listing.foursquareVenueId,
         listing.hereBusinessId,
-        listing.businessCategory
+        listing.businessCategory,
+        listing.organizerEmail
       );
     } else if (organizerId) {
       finalOrganizerId = organizerId;
