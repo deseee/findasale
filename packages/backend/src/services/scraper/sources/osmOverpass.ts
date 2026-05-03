@@ -387,7 +387,7 @@ export async function scrapeOSMMetro(metro: string): Promise<ScrapedItem[]> {
 
     const item: ScrapedItem = {
       // Sale fields
-      title: `${name} in ${city}, ${state}`,
+      title: name,
       address,
       city,
       state,
@@ -411,6 +411,7 @@ export async function scrapeOSMMetro(metro: string): Promise<ScrapedItem[]> {
         lng,
         phone: tags.phone ?? null,
         website: tags.website ?? null,
+        hours_display: tags.opening_hours ?? null,
       },
     };
 
@@ -419,3 +420,4 @@ export async function scrapeOSMMetro(metro: string): Promise<ScrapedItem[]> {
 
   return results;
 }
+                        

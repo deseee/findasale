@@ -697,9 +697,16 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
                 {sale.address ? `${sale.address}, ` : ''}{sale.city}, {sale.state} {sale.zip}
               </p>
               {sale.saleType === 'RETAIL' ? (
-                <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
-                  Permanent Storefront · Always Open
-                </p>
+                <>
+                  <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
+                    Permanent Storefront · Always Open
+                  </p>
+                  {(sale.scrapedMetadata as any)?.hours_display && (
+                    <p className="text-sm text-warm-600 dark:text-gray-400 mb-4">
+                      🕐 {(sale.scrapedMetadata as any).hours_display}
+                    </p>
+                  )}
+                </>
               ) : (
                 <p className="text-sm text-warm-600 dark:text-gray-300 mb-4">
                   {format(saleStartDate, 'MMM d, yyyy h:mm a')} - {format(saleEndDate, 'MMM d, yyyy h:mm a')}
@@ -1718,25 +1725,4 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     const ogData: OGSaleData = {
       id: sale.id,
       title: sale.title || '',
-      description: sale.description || null,
-      city: sale.city || '',
-      state: sale.state || '',
-      startDate: sale.startDate || '',
-      photoUrl: Array.isArray(sale.photoUrls) && sale.photoUrls.length > 0
-        ? sale.photoUrls[0]
-        : null,
-      itemCount: Array.isArray(sale.items) ? sale.items.length : 0,
-      organizer: sale.organizer ? {
-        subscriptionTier: sale.organizer.subscriptionTier,
-        removeWatermarkEnabled: sale.organizer.removeWatermarkEnabled,
-        businessName: sale.organizer.businessName,
-      } : undefined,
-    };
-
-    return { props: { ogData } };
-  } catch (error) {
-    // Fail open — page still works, OG tags fall back to CSR version
-    console.error('[sales/[id] getServerSideProps error]', error);
-    return { props: { ogData: null } };
-  }
-}
+      description: 
