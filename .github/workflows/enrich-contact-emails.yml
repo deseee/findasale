@@ -16,22 +16,26 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: '**/pnpm-lock.yaml'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
         with:
           version: 8
 
       - name: Install dependencies
-        run: cd packages/backend && pnpm install --frozen-lockfile
+        run: pnpm install --filter backend --filter database
+
+      - name: Generate Prisma client
+        run: cd packages/database && npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
 
       - name: Run enrichment script
         env:
