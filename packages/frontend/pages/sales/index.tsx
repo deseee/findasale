@@ -151,6 +151,7 @@ export default function SalesPage() {
 
 export async function getStaticProps() {
   return {
+    props: {},
     revalidate: 3600, // ISR: revalidate every hour
   };
 }

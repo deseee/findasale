@@ -209,7 +209,7 @@ export default function GuidePage({
 export async function getStaticPaths(): Promise<GetStaticPathsResult> {
   try {
     // Import the index data
-    const indexData = require('../data/seo-pages/index.json') as Array<{ slug: string }>;
+    const indexData = require('../../data/seo-pages/index.json') as Array<{ slug: string }>;
 
     const paths = indexData.map((entry) => ({
       params: { slug: entry.slug },
@@ -240,7 +240,7 @@ export async function getStaticProps(
 
   try {
     // Import the index data
-    const indexData = require('../data/seo-pages/index.json') as GuidePageProps[];
+    const indexData = require('../../data/seo-pages/index.json') as GuidePageProps[];
 
     // Find entry by slug
     const entry = indexData.find((e) => e.slug === slug);
