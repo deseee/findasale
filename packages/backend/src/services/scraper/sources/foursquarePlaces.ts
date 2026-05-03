@@ -81,8 +81,17 @@ async function fetchFoursquarePage(
     });
 
     if (!response.ok) {
-      const body = await response.text().catch(() => '(unreadable)');
-      console.warn(`[Foursquare] HTTP ${response.status} for "${query}" in ${city}, ${state} — ${body.slice(0, 300)}`);
+      let body = '(no body)';
+      try {
+        // Use a separate controller so body read isn't killed by the fetch AbortSignal
+        body = await Promise.race([
+          response.text(),
+          new Promise<string>((_, rej) => setTimeout(() => rej(new Error('body timeout')), 5000)),
+        ]);
+      } catch (e) {
+        body = `(body read failed: ${e instanceof Error ? e.message : String(e)})`;
+      }
+      console.warn(`[Foursquare] HTTP ${response.status} for "${query}" in ${city}, ${state} — ${body.slice(0, 400)}`);
       return null;
     }
     return (await response.json()) as FoursquarePlacesResponse;
@@ -206,6 +215,7 @@ export async function runFoursquareScraper(metros?: string[], batch?: 1 | 2): Pr
   if (!apiKey) {
     throw new Error('FOURSQUARE_API_KEY is not set');
   }
+  console.log(`[Foursquare] Key: length=${apiKey.length}, prefix=${apiKey.substring(0, 4)}, suffix=${apiKey.slice(-4)}`);
 
   const allMetros = metros && metros.length > 0 ? metros : [...GOOGLE_PLACES_METROS, ...CANADIAN_METROS];
 
