@@ -103,49 +103,78 @@ async function main() {
   let completed = 0;
 
   async function postOne(batch: { num: number; items: any[] }): Promise<void> {
-    try {
-      const res = await fetch(INGEST_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-scraper-key': SCRAPER_KEY!,
-        },
-        body: JSON.stringify({
-          items: batch.items,
-          organizerId: ORGANIZER_ID,
-        }),
-      });
+    const MAX_RETRIES = 3;
+    let attempt = 0;
 
-      completed++;
+    while (attempt < MAX_RETRIES) {
+      try {
+        const res = await fetch(INGEST_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-scraper-key': SCRAPER_KEY!,
+          },
+          body: JSON.stringify({
+            items: batch.items,
+            organizerId: ORGANIZER_ID,
+          }),
+        });
 
-      if (!res.ok) {
-        const err = await res.text();
+        completed++;
+
+        if (!res.ok) {
+          if ((res.status === 502 || res.status === 503) && attempt < MAX_RETRIES - 1) {
+            attempt++;
+            const delayMs = Math.pow(2, attempt) * 1000;
+            console.log(
+              `[run-fb-events] (${completed}/${totalBatches}) Batch ${batch.num} ` +
+              `HTTP ${res.status} — retrying in ${delayMs}ms (attempt ${attempt}/${MAX_RETRIES})`
+            );
+            await new Promise((r) => setTimeout(r, delayMs));
+            continue;
+          }
+
+          const err = await res.text();
+          totals.httpErrors++;
+          console.error(
+            `[run-fb-events] (${completed}/${totalBatches}) Batch ${batch.num} ` +
+            `HTTP ${res.status}: ${err.slice(0, 200)}`
+          );
+          return;
+        }
+
+        const result = (await res.json()) as {
+          stats: { created: number; updated: number; skipped: number; failed: number };
+        };
+        totals.created  += result.stats.created;
+        totals.updated  += result.stats.updated;
+        totals.skipped  += result.stats.skipped;
+        totals.failed   += result.stats.failed;
+        console.log(
+          `[run-fb-events] (${completed}/${totalBatches}) Batch ${batch.num} — ` +
+          `${result.stats.created}c / ${result.stats.skipped}s / ${result.stats.failed}f`
+        );
+        return;
+      } catch (err) {
+        if (attempt < MAX_RETRIES - 1) {
+          attempt++;
+          const delayMs = Math.pow(2, attempt) * 1000;
+          console.log(
+            `[run-fb-events] (${completed}/${totalBatches}) Batch ${batch.num} ` +
+            `network error — retrying in ${delayMs}ms`
+          );
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+
+        completed++;
         totals.httpErrors++;
         console.error(
-          `[run-fb-events] (${completed}/${totalBatches}) Batch ${batch.num} ` +
-          `HTTP ${res.status}: ${err.slice(0, 200)}`
+          `[run-fb-events] (${completed}/${totalBatches}) Batch ${batch.num} threw:`,
+          err instanceof Error ? err.message : String(err)
         );
         return;
       }
-
-      const result = (await res.json()) as {
-        stats: { created: number; updated: number; skipped: number; failed: number };
-      };
-      totals.created  += result.stats.created;
-      totals.updated  += result.stats.updated;
-      totals.skipped  += result.stats.skipped;
-      totals.failed   += result.stats.failed;
-      console.log(
-        `[run-fb-events] (${completed}/${totalBatches}) Batch ${batch.num} — ` +
-        `${result.stats.created}c / ${result.stats.skipped}s / ${result.stats.failed}f`
-      );
-    } catch (err) {
-      completed++;
-      totals.httpErrors++;
-      console.error(
-        `[run-fb-events] (${completed}/${totalBatches}) Batch ${batch.num} threw:`,
-        err instanceof Error ? err.message : String(err)
-      );
     }
   }
 

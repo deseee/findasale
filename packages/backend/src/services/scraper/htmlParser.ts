@@ -19,6 +19,8 @@ export interface ParsedListing {
   saleType?: string; // ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
   esnOrgId?: number; // EstateSales.NET numeric company ID
   googlePlaceId?: string; // ADR-077: Google Places ID — dedup key for business directory listings
+  foursquareVenueId?: string; // ADR-077 Phase 2: Foursquare venue ID — cross-source dedup
+  hereBusinessId?: string; // ADR-077 Phase 2: HERE business ID — cross-source dedup
   businessCategory?: string; // ADR-077: business type for Google Places-sourced organizers
 }
 

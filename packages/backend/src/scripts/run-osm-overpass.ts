@@ -99,41 +99,70 @@ async function main() {
   let completed = 0;
 
   async function postBatch(batch: { num: number; items: ScrapedItem[] }): Promise<void> {
-    try {
-      const response = await fetch(INGEST_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-scraper-key': SCRAPER_KEY!,
-        },
-        body: JSON.stringify({ items: batch.items }),
-      });
-      completed++;
-      if (!response.ok) {
-        const text = await response.text();
+    const MAX_RETRIES = 3;
+    let attempt = 0;
+
+    while (attempt < MAX_RETRIES) {
+      try {
+        const response = await fetch(INGEST_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-scraper-key': SCRAPER_KEY!,
+          },
+          body: JSON.stringify({ items: batch.items }),
+        });
+        completed++;
+
+        if (!response.ok) {
+          if ((response.status === 502 || response.status === 503) && attempt < MAX_RETRIES - 1) {
+            attempt++;
+            const delayMs = Math.pow(2, attempt) * 1000;
+            console.log(
+              `[run-osm-overpass] (${completed}/${totalBatches}) Batch ${batch.num} HTTP ${response.status} — retrying in ${delayMs}ms (attempt ${attempt}/${MAX_RETRIES})`
+            );
+            await new Promise((r) => setTimeout(r, delayMs));
+            continue;
+          }
+
+          const text = await response.text();
+          totals.httpErrors++;
+          console.error(
+            `[run-osm-overpass] (${completed}/${totalBatches}) Batch ${batch.num} HTTP ${response.status}: ${text.slice(0, 200)}`
+          );
+          return;
+        }
+
+        const result = (await response.json()) as {
+          stats: { created: number; updated: number; skipped: number; failed: number };
+        };
+        totals.created += result.stats.created;
+        totals.updated += result.stats.updated;
+        totals.skipped += result.stats.skipped;
+        totals.failed += result.stats.failed;
+        console.log(
+          `[run-osm-overpass] (${completed}/${totalBatches}) Batch ${batch.num} — ${result.stats.created}c / ${result.stats.skipped}s / ${result.stats.failed}f`
+        );
+        return;
+      } catch (err) {
+        if (attempt < MAX_RETRIES - 1) {
+          attempt++;
+          const delayMs = Math.pow(2, attempt) * 1000;
+          console.log(
+            `[run-osm-overpass] (${completed}/${totalBatches}) Batch ${batch.num} network error — retrying in ${delayMs}ms`
+          );
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+
+        completed++;
         totals.httpErrors++;
         console.error(
-          `[run-osm-overpass] (${completed}/${totalBatches}) Batch ${batch.num} HTTP ${response.status}: ${text.slice(0, 200)}`
+          `[run-osm-overpass] (${completed}/${totalBatches}) Batch ${batch.num} threw:`,
+          err instanceof Error ? err.message : String(err)
         );
         return;
       }
-      const result = (await response.json()) as {
-        stats: { created: number; updated: number; skipped: number; failed: number };
-      };
-      totals.created += result.stats.created;
-      totals.updated += result.stats.updated;
-      totals.skipped += result.stats.skipped;
-      totals.failed += result.stats.failed;
-      console.log(
-        `[run-osm-overpass] (${completed}/${totalBatches}) Batch ${batch.num} — ${result.stats.created}c / ${result.stats.skipped}s / ${result.stats.failed}f`
-      );
-    } catch (err) {
-      completed++;
-      totals.httpErrors++;
-      console.error(
-        `[run-osm-overpass] (${completed}/${totalBatches}) Batch ${batch.num} threw:`,
-        err instanceof Error ? err.message : String(err)
-      );
     }
   }
 
