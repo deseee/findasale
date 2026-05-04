@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface RecentSale {
   id: string;
@@ -8,6 +9,7 @@ interface RecentSale {
   endDate: string;
   organizerName?: string;
   status: 'listing' | 'active' | 'ended';
+  photoUrl?: string;
 }
 
 interface CityRecentSalesProps {
@@ -70,6 +72,26 @@ export function CityRecentSales({ citySlug, sales }: CityRecentSalesProps) {
               className="block bg-white dark:bg-slate-800 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow border border-slate-200 dark:border-slate-700"
             >
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                {/* Photo thumbnail */}
+                {sale.photoUrl ? (
+                  <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 relative rounded-md overflow-hidden bg-slate-200 dark:bg-slate-700">
+                    <Image
+                      src={sale.photoUrl}
+                      alt={sale.title}
+                      fill
+                      className="object-cover"
+                      sizes="80px"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-md bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                )}
+                
                 <div className="flex-1 min-w-0">
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white truncate hover:text-blue-600 dark:hover:text-blue-400">
                     {sale.title}
