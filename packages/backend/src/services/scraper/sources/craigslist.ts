@@ -15,23 +15,27 @@ import { CraigslistSite } from '../craigslist-sites';
  * Fetch RSS XML from URL
  */
 async function fetchRss(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) {
-      console.warn(`[Craigslist] HTTP ${res.status} for ${url}`);
-      return null;
+  // Route through OpenRSS proxy to avoid datacenter IP blocks (Railway/GH Actions IPs are blocklisted by Craigslist)
+  const proxyUrl = `https://openrss.org/${url}`;
+  for (const attemptUrl of [proxyUrl, url]) {
+    try {
+      const res = await fetch(attemptUrl, {
+        headers: {
+          'User-Agent': getRandomUserAgent(),
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!res.ok) {
+        console.warn(`[Craigslist] HTTP ${res.status} for ${attemptUrl}`);
+        continue;
+      }
+      return await res.text();
+    } catch (err) {
+      console.warn(`[Craigslist] Fetch error for ${attemptUrl}:`, err instanceof Error ? err.message : err);
     }
-    return await res.text();
-  } catch (err) {
-    console.warn(`[Craigslist] Fetch error for ${url}:`, err instanceof Error ? err.message : err);
-    return null;
   }
+  return null;
 }
 
 /**
