@@ -228,14 +228,17 @@ async function getOrCreateScrapedOrganizer(
   }
 
   // Create new organizer
-  // Email pattern: scraper+{slug}@system.finda.sale
+  // Email pattern: scraper+{slug}-{city}-{state}-{source}@system.finda.sale
+  // Include city+state to avoid collisions across metros (e.g. two "Goodwill" locations)
   const slug = businessName
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '-')
     .replace(/-+/g, '-')
     .slice(0, 40);
+  const citySlug = city.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 20);
+  const stateSlug = state.toLowerCase().slice(0, 3);
   const sourceSlug = sourceName.toLowerCase();
-  const systemEmail = `scraper+${slug}-${sourceSlug}@system.finda.sale`;
+  const systemEmail = `scraper+${slug}-${citySlug}-${stateSlug}-${sourceSlug}@system.finda.sale`;
 
   let newOrgId: string;
   try {
@@ -266,16 +269,39 @@ async function getOrCreateScrapedOrganizer(
     });
     newOrgId = created.organizer!.id;
   } catch (err: any) {
-    // P2002 = unique constraint violation (race condition — another concurrent batch
-    // created this organizer between our findFirst check and this create)
-    if (err?.code === 'P2002') {
-      const race = await prisma.organizer.findFirst({
-        where: { businessName, isUnmanagedListing: true },
-        select: { id: true },
+    // P2002 = unique constraint on email — either a race condition or a same-name/same-city
+    // business from a different source. Retry with a timestamp suffix to get a unique email.
+    if (err?.code === 'P2002' && err?.meta?.target?.includes('email')) {
+      const validEmail = isValidExternalEmail(contactEmail);
+      const fallbackEmail = `scraper+${slug}-${citySlug}-${stateSlug}-${sourceSlug}-${Date.now()}@system.finda.sale`;
+      const created2 = await prisma.user.create({
+        data: {
+          email: fallbackEmail,
+          name: businessName,
+          password: null,
+          role: 'ORGANIZER',
+          roles: ['ORGANIZER'],
+          organizer: {
+            create: {
+              businessName,
+              phone: null,
+              address: `${city}, ${state}`,
+              bio: `Sale organizer based in ${city}, ${state}.`,
+              isClaimed: false,
+              isUnmanagedListing: true,
+              esnOrgId,
+              googlePlaceId,
+              businessCategory,
+              contactEmail: validEmail || null,
+            },
+          },
+        },
+        include: { organizer: { select: { id: true } } },
       });
-      if (race) return race.id;
+      newOrgId = created2.organizer!.id;
+    } else {
+      throw err;
     }
-    throw err;
   }
   console.log(`[scraper] Created organizer: ${newOrgId} for "${businessName}" (${sourceName})`);
 

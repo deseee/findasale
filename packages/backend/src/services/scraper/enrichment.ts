@@ -107,7 +107,16 @@ export async function enrichOrganizer(
     if (!organizer.googlePlaceId) {
       const placeId = await lookupGooglePlace(name, city, state);
       if (placeId) {
-        updateData.googlePlaceId = placeId;
+        // Guard: skip if this placeId already belongs to a different organizer (P2002 prevention)
+        const alreadyOwned = await prisma.organizer.findFirst({
+          where: { googlePlaceId: placeId, NOT: { id: organizerId } },
+          select: { id: true },
+        });
+        if (alreadyOwned) {
+          console.info(`[Enrichment] googlePlaceId ${placeId} already owned by ${alreadyOwned.id} — skipping for ${organizerId}`);
+        } else {
+          updateData.googlePlaceId = placeId;
+        }
 
         const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
         if (googlePlacesKey) {
