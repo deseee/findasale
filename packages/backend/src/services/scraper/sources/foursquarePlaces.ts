@@ -215,11 +215,6 @@ export async function scrapeFoursquareQuery(
     // Fetch detailed information for this place
     const details = await fetchFoursquareDetails(apiKey, place.fsq_place_id);
 
-    const { city: placeCity, state: placeState } = parseCityState(place, metro);
-    const now = new Date();
-    const endDate = new Date(now);
-    endDate.setFullYear(endDate.getFullYear() + 1);
-
     // Extract up to 3 photos
     const photoUrls: string[] = [];
     if (details?.photos && details.photos.length > 0) {
@@ -237,7 +232,7 @@ export async function scrapeFoursquareQuery(
       zip: place.location?.postcode ?? '',
       startDate: now,
       endDate,
-      description: details?.description ?? null,
+      description: details?.description ?? undefined,
       saleType: queryConfig.saleType,
       organizerName: place.name,
       businessCategory: queryConfig.category,
