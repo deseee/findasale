@@ -206,7 +206,7 @@ async function getOrCreateScrapedOrganizer(
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true },
   });
 
   const normalizedName = normalizeName(businessName);
@@ -453,8 +453,8 @@ export async function ingestScrapedListing(
         if (listing.photoUrls && listing.photoUrls.length > 0) updates.photoUrls = listing.photoUrls;
         if (listing.scrapedMetadata) {
           updates.scrapedMetadata = {
-            ...(existing.scrapedMetadata || {}),
-            ...listing.scrapedMetadata,
+            ...((existing.scrapedMetadata as Record<string, unknown>) || {}),
+            ...(listing.scrapedMetadata as Record<string, unknown>),
           };
         }
         
