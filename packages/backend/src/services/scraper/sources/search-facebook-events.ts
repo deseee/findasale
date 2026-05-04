@@ -3,16 +3,17 @@
  * ADR-073: Directory Scraper — search-based adapter
  *
  * Priority chain (cheapest/most-durable first):
- *   1. DuckDuckGo HTML  — no API key, no credits, uses Bing's index (free forever)
+ *   1. Brave Search API — independent index, $5/month free credit with attribution
  *   2. Serper.dev       — Google SERP proxy, credit-based ($50/50k pack)
  *   3. ScaleSerp        — Google SERP proxy, 125 free/month + paid
  *
+ * DuckDuckGo removed: Bing index does not reliably index facebook.com/events pages.
  * Tavily excluded: it is an AI search index that does not contain
  * facebook.com/events pages (confirmed — returns groups/marketplace only).
  *
  * Cron: weekly (Monday 03:00 UTC)
  * At 30 metros/week × 52 weeks = 1,560 Serper credits/year (backup only fires
- * when DDG is rate-limited or blocked, so real credit burn is much lower).
+ * when Brave is rate-limited, so real credit burn is much lower).
  */
 
 import * as cheerio from 'cheerio';
@@ -243,73 +244,36 @@ function buildScrapedItem(
 }
 
 // ---------------------------------------------------------------------------
-// Engine 1: DuckDuckGo HTML (primary — no API key, no credits)
+// Engine 1: Brave Search API (primary — independent index, free tier available)
 // ---------------------------------------------------------------------------
 
-/**
- * DuckDuckGo HTML endpoint scraper.
- * DDG uses Bing's index and does index public Facebook event pages.
- * The html.duckduckgo.com endpoint is the plain-HTML version used by
- * text browsers — it requires no JS and returns stable CSS classes.
- *
- * DDG redirect URLs contain the real target in the `uddg` query param.
- * Example: /l/?uddg=https%3A%2F%2Fwww.facebook.com%2Fevents%2F123456
- */
-async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
-  // POST is more reliable than GET for DDG HTML (avoids some CAPTCHA triggers)
-  const body = new URLSearchParams({ q: query, b: '', kl: 'us-en' });
+interface BraveResponse {
+  web?: {
+    results?: Array<{ url: string; title: string; description?: string }>;
+  };
+}
 
-  const response = await fetch('https://html.duckduckgo.com/html/', {
-    method: 'POST',
+async function searchBrave(query: string, apiKey: string): Promise<SearchResult[]> {
+  const params = new URLSearchParams({ q: query, count: '10' });
+  const response = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent':   getRandomUserAgent(),
-      'Accept':       'text/html,application/xhtml+xml',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Referer':      'https://duckduckgo.com/',
+      'X-Subscription-Token': apiKey,
+      'Accept': 'application/json',
     },
-    body: body.toString(),
     signal: AbortSignal.timeout(20_000),
   });
 
   if (!response.ok) {
-    throw new Error(`DDG HTML ${response.status}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`Brave ${response.status}: ${body.slice(0, 200)}`);
   }
 
-  const html = await response.text();
-  const $    = cheerio.load(html);
-  const results: SearchResult[] = [];
-
-  // DDG HTML structure (stable across recent years):
-  //   div.result > div.result__body
-  //     h2.result__title > a.result__a[href="/l/?uddg=URL"]
-  //     div.result__snippet
-  $('div.result').each((_i, el) => {
-    const anchor  = $(el).find('a.result__a').first();
-    const rawHref = anchor.attr('href') ?? '';
-    const snippet = $(el).find('.result__snippet').text().trim();
-    const title   = anchor.text().trim();
-
-    // Extract real URL from DDG redirect
-    let url = '';
-    try {
-      // href is like /l/?uddg=ENCODED_URL[&rut=HASH]
-      const uddg = rawHref.match(/[?&]uddg=([^&]+)/);
-      if (uddg) {
-        url = decodeURIComponent(uddg[1]);
-      } else if (rawHref.startsWith('http')) {
-        url = rawHref;
-      }
-    } catch {
-      // malformed — skip
-    }
-
-    if (url && title) {
-      results.push({ url, title, snippet });
-    }
-  });
-
-  return results;
+  const data = (await response.json()) as BraveResponse;
+  return (data.web?.results ?? []).map((r) => ({
+    url:     r.url,
+    title:   r.title,
+    snippet: r.description ?? '',
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +341,7 @@ async function searchScaleSerp(query: string, apiKey: string): Promise<SearchRes
 // ---------------------------------------------------------------------------
 
 export interface FbSearchOptions {
+  braveKey?:     string;
   serperKey?:    string;
   scaleSerpKey?: string;
 }
@@ -385,7 +350,7 @@ export interface FbSearchOptions {
  * Scrape Facebook Events for a single metro via search engines.
  *
  * Priority:
- *   1. DuckDuckGo HTML (free, no credits — always tried first)
+ *   1. Brave Search API (independent index, try first)
  *   2. Serper.dev        (Google SERP proxy, credit backup)
  *   3. ScaleSerp         (Google SERP proxy, second credit backup)
  *
@@ -402,18 +367,20 @@ export async function scrapeFacebookEventsForMetro(
   let rawResults: SearchResult[] = [];
   let usedEngine = '';
 
-  // --- Engine 1: DuckDuckGo (free) ---
-  try {
-    rawResults = await searchDuckDuckGo(query);
-    usedEngine = 'duckduckgo';
-    console.log(
-      `[FB-Events] DDG OK for ${metro.city}, ${metro.state} — ${rawResults.length} results`
-    );
-  } catch (err) {
-    console.warn(
-      `[FB-Events] DDG failed for ${metro.city}, ${metro.state}:`,
-      err instanceof Error ? err.message : err
-    );
+  // --- Engine 1: Brave Search API (primary) ---
+  if (opts.braveKey) {
+    try {
+      rawResults = await searchBrave(query, opts.braveKey);
+      usedEngine = 'brave';
+      console.log(
+        `[FB-Events] Brave OK for ${metro.city}, ${metro.state} — ${rawResults.length} results`
+      );
+    } catch (err) {
+      console.warn(
+        `[FB-Events] Brave failed for ${metro.city}, ${metro.state}:`,
+        err instanceof Error ? err.message : err
+      );
+    }
   }
 
   // --- Engine 2: Serper (backup) ---
