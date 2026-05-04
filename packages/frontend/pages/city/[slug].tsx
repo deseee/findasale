@@ -224,7 +224,7 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
     category: find.itemCategory,
     actualPrice: parseFloat(find.soldPrice.toString()),
     photoUrl: find.imageUrl,
-    soldAt: new Date(find.soldAt),
+    soldAt: new Date(find.soldAt).toISOString(),
   }));
 
   // Fetch recent sales from FindA.Sale database
