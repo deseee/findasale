@@ -108,12 +108,14 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ## Next Session — S641
 
-**Primary goal:** Dev dispatch — wire outreach email templates into Postgres cron (Phase 1 acquisition pipeline). 4 templates in `claude_docs/strategy/outreach-email-templates-v4.md`. Ready to build.
+**Primary goal:** Deep-dive cold email tool audit before any signup decision. Patrick flagged S640 research as shallow — recommendations flipped 4+ times on surface-level single-search reads. Do it properly: pull pricing pages directly, read actual API docs, find Reddit threads with real agency/operator opinions (not SEO review sites), compare contact limits, deliverability benchmarks from independent sources, and webhook/API architecture for Postgres cron integration. Tools to audit: Smartlead, Instantly, Saleshandy, Snov.io. Deliver a single final verdict with evidence.
+
+**Secondary:** Dev dispatch — wire outreach email templates into Postgres cron. 4 templates in `claude_docs/strategy/outreach-email-templates-v4.md`. Blocked on tool decision (need to know which API to target).
 
 **Patrick pending actions:**
-- Push S640 block (4 files: Layout.tsx, messages/index.tsx, _document.tsx, city/[slug].tsx)
-- Sign up for cold outreach tool (Instantly.ai recommended at $37/mo — see S640 research) to get DKIM record for `outreach.finda.sale`
+- Push S640 block (4 files: Layout.tsx, messages/index.tsx, _document.tsx, city/[slug].tsx + STATE.md + patrick-dashboard.md)
 - Send 19 queued Gmail outreach drafts (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.)
+- Hold on cold email tool signup until S641 audit completes
 
 **Email context (don't re-derive):**
 - Strategy doc: `claude_docs/strategy/organizer-acquisition-strategy.md`

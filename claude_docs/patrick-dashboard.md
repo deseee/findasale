@@ -2,11 +2,11 @@
 
 ## What Happened This Week
 
-S639: Investigated $47.22 Google Places API charge on your $100 Google Cloud bill. The $200/month free credit is gone — Google replaced it with subscription tiers in early 2025. Pay as you go is still the right plan at your usage level. Fixed the underlying cost driver in enrichment.ts (you pushed it yourself): removed unnecessary `rating`/`user_ratings_total` fields from Place Details requests, added a 30-day TTL cache so the same organizer doesn't get re-fetched, and added skip logic so organizers who already have both phone and website don't get re-enriched. Also set a hard daily quota cap on the Places API: 15,000 requests/day (was Unlimited), which puts a hard ceiling of ~$15/day even if something goes wrong.
+S640: Email infrastructure audit + P2 brand drift batch. (1) Resend audit: CLAIM_EMAIL_ENABLED was firing at 200% daily usage but all sends targeted @system.finda.sale placeholders — no real organizer ever received email. Now disabled. (2) outreach.finda.sale subdomain: SPF + DMARC records added to Vercel DNS. DKIM pending cold outreach tool signup. (3) HERE_API_KEY confirmed done by Patrick. (4) P2 brand drift: 4 files fixed (overflow, messages copy, global meta, city page titles). (5) Cold email tool research session — shallow assessments flagged by Patrick, needs a proper deep-dive audit next session before any tool decision is made.
 
-S638: HERE geocoding fallback shipped. Six scraper fleet bugs fixed (HERE coordinate dedup, Foursquare 429, Railway P2002 email+placeId, ARG_MAX curl crash). All confirmed live on GitHub.
+S639: Investigated $47.22 Google Places API charge. enrichment.ts cost fix pushed (removed rating fields, added 30-day TTL cache, skip logic). Google Places quota hard-capped at 15,000/day. Pay as you go confirmed correct plan.
 
-Previous: Email hit rate 1.4% → 31% (SMTP verifier), 4 outreach templates finalized and ready to wire into send pipeline.
+S638: HERE geocoding fallback shipped. Six scraper fleet bugs fixed. Email hit rate 1.4% → 31% (SMTP verifier). 4 outreach templates finalized.
 
 ## Audit Results (Weekly + Brand Drift — May 2)
 
@@ -37,6 +37,6 @@ No items in DECISIONS.md currently marked PENDING. All standing decisions (D-001
 
 ## Action Items for Patrick
 
-- [ ] **Add `HERE_API_KEY` GitHub Secret** — code is live in herePlaces.ts but the secret isn't in GitHub repo settings yet, so the workflow can't call it. Go to github.com/deseee/findasale → Settings → Secrets → Actions → New secret.
+- [ ] **Push S640 wrap block** (see below)
+- [ ] **Cold email tool decision** — hold off until next session completes a proper deep-dive audit. Tools evaluated: Smartlead, Instantly, Saleshandy, Snov.io, Success.ai, YAMM, GMass, Reply.io, Seamless.ai. Research was surface-level — next session audits everything properly before any signup.
 - [ ] **Send 19 queued Gmail outreach drafts** (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.)
-- [ ] **Push S639 wrap docs** (STATE.md + patrick-dashboard.md — pushblock below)
