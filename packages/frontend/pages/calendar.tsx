@@ -115,7 +115,52 @@ const CalendarPage = () => {
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>Sale Calendar - FindA.Sale</title>
-        <meta name="description" content="Browse upcoming sales on our interactive calendar" />
+        <meta
+          name="description"
+          content="Browse upcoming estate sales, yard sales, auctions, and flea markets by date. Sales happening this weekend near you."
+        />
+        <meta property="og:title" content="Sale Calendar - FindA.Sale" />
+        <meta
+          property="og:description"
+          content="Browse upcoming estate sales, yard sales, auctions, and flea markets by date. Sales happening this weekend near you."
+        />
+        <meta property="og:url" content="https://finda.sale/calendar" />
+        <meta property="og:image" content="https://finda.sale/og-image.png" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'CollectionPage',
+              name: 'Sale Calendar',
+              description: 'Browse upcoming estate sales, yard sales, auctions, and flea markets by date. Sales happening this weekend near you.',
+              url: 'https://finda.sale/calendar',
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'Home',
+                  item: 'https://finda.sale',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: 'Calendar',
+                  item: 'https://finda.sale/calendar',
+                },
+              ],
+            }),
+          }}
+        />
       </Head>
 
       <main className="container mx-auto px-4 py-8">

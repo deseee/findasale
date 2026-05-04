@@ -611,6 +611,60 @@ const FAQPage = () => {
       <Head>
         <title>FAQ – FindA.Sale</title>
         <meta name="description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the community resale marketplace." />
+        <meta property="og:title" content="FAQ \u2013 FindA.Sale" />
+        <meta property="og:description" content="Frequently asked questions about buying and selling on FindA.Sale \u2014 the community resale marketplace." />
+        <meta property="og:url" content="https://finda.sale/faq" />
+        <meta property="og:image" content="https://finda.sale/og-image.png" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'FAQPage',
+              mainEntity: [
+                ...shopperFAQs.slice(0, 5).map((faq) => ({
+                  '@type': 'Question',
+                  name: faq.question,
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: typeof faq.answer === 'string' ? faq.answer : 'See full answer on finda.sale/faq',
+                  },
+                })),
+                ...organizerFAQs.slice(0, 5).map((faq) => ({
+                  '@type': 'Question',
+                  name: faq.question,
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: typeof faq.answer === 'string' ? faq.answer : 'See full answer on finda.sale/faq',
+                  },
+                })),
+              ],
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'Home',
+                  item: 'https://finda.sale',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: 'FAQ',
+                  item: 'https://finda.sale/faq',
+                },
+              ],
+            }),
+          }}
+        />
       </Head>
 
       <div className="min-h-screen bg-white dark:bg-gray-800">

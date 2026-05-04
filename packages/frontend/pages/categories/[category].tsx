@@ -40,10 +40,58 @@ const CategoryPage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>{label} — Browse by Category — FindA.Sale</title>
+        <title>{label} — FindA.Sale</title>
         <meta
           name="description"
-          content={`Browse ${label} items from sales near you on FindA.Sale`}
+          content={`Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`}
+        />
+        <meta property="og:title" content={`${label} — FindA.Sale`} />
+        <meta
+          property="og:description"
+          content={`Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`}
+        />
+        <meta property="og:url" content={`https://finda.sale/categories/${category}`} />
+        <meta property="og:image" content="https://finda.sale/og-image.png" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'CollectionPage',
+              name: label,
+              description: `Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`,
+              url: `https://finda.sale/categories/${category}`,
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'Home',
+                  item: 'https://finda.sale',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: 'Categories',
+                  item: 'https://finda.sale/categories',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 3,
+                  name: label,
+                  item: `https://finda.sale/categories/${category}`,
+                },
+              ],
+            }),
+          }}
         />
       </Head>
 

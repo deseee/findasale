@@ -1,6 +1,6 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import Head from 'next/head';
-import { getCityFromSlug, getAllCitySlugs, getNearestCities, getTopCategoriesForCity } from '@/lib/city-slugs';
+import { getCityFromSlug, getAllCitySlugs, getAllCities, getNearestCities, getTopCategoriesForCity } from '@/lib/city-slugs';
 import { generateCityTip } from '@/lib/city-tips-generator';
 import { markdownToHtml } from '@/lib/markdown-to-html';
 import { getMetroTopFinds } from '@/lib/citiesController';
@@ -170,6 +170,8 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
   const slug = params?.slug as string;
 
   let city = getCityFromSlug(slug);
+  let apiSlug = slug; // Track the slug to use for API calls (may differ from incoming slug)
+
   if (!city) {
     // Slug may be for a scraped city not in us-cities-3000.json (e.g. 'nashville-tn').
     // Parse city name and state from the slug rather than 404ing.
@@ -179,11 +181,24 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
     if (parts.length < 2 || stateCode.length !== 2) {
       return { notFound: true };
     }
-    city = { name: cityName, state: stateCode, slug, population: 0, lat: 0, lng: 0, zipCodes: [] };
+
+    // Try to find the canonical slug from the JSON using name+state
+    const allCities = getAllCities();
+    const matchedCity = allCities.find(
+      (c) => c.name.toLowerCase() === cityName.toLowerCase() && c.state === stateCode
+    );
+
+    if (matchedCity) {
+      city = matchedCity;
+      apiSlug = matchedCity.slug; // Use the canonical slug for API calls
+    } else {
+      city = { name: cityName, state: stateCode, slug, population: 0, lat: 0, lng: 0, zipCodes: [] };
+      apiSlug = `${cityName.toLowerCase().replace(/\s+/g, '-')}-${stateCode.toLowerCase()}`; // Construct API slug
+    }
   }
 
   // ADR-074: Fetch real eBay sold items from MetroTopFinds table
-  const metroFinds = await getMetroTopFinds(slug);
+  const metroFinds = await getMetroTopFinds(apiSlug);
 
   // Transform MetroTopFinds into component format (map eBay data to item structure)
   const topFinds = metroFinds.map((find) => ({
