@@ -5,8 +5,9 @@
  * Environment variables (from GitHub secrets):
  * - RAILWAY_BACKEND_URL:  https://backend-production-xxx.up.railway.app
  * - INTERNAL_SCRAPER_KEY: shared secret for /api/internal/scraper/ingest auth
- * - TAVILY_API_KEY:       primary search API (1,000 free queries/month)
+ * - BRAVE_API_KEY:        primary search API (free tier with attribution)
  * - SERPER_API_KEY:       fallback search API (paid credits)
+ * - SCALESERP_API_KEY:    second fallback search API (paid credits)
  * - FB_EVENTS_ORGANIZER_ID: optional — backend falls back to system organizer
  *
  * Usage: npx ts-node src/scripts/run-search-facebook-events.ts
@@ -22,6 +23,7 @@ const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') +
   '/api/internal/scraper/ingest';
 const SCRAPER_KEY     = process.env.INTERNAL_SCRAPER_KEY;
+const BRAVE_KEY       = process.env.BRAVE_API_KEY;
 const SERPER_KEY      = process.env.SERPER_API_KEY;
 const SCALESERP_KEY   = process.env.SCALESERP_API_KEY;
 const ORGANIZER_ID    = process.env.FB_EVENTS_ORGANIZER_ID;
@@ -30,8 +32,9 @@ async function main() {
   if (!SCRAPER_KEY) {
     throw new Error('INTERNAL_SCRAPER_KEY environment variable is not set');
   }
-  // DuckDuckGo needs no key — backup keys are optional
-  if (!SERPER_KEY)    console.warn('[run-fb-events] No SERPER_API_KEY — DDG only, no Serper backup');
+  // Brave key is optional but recommended — fallbacks available
+  if (!BRAVE_KEY)     console.warn('[run-fb-events] No BRAVE_API_KEY — will use Serper/ScaleSerp only');
+  if (!SERPER_KEY)    console.warn('[run-fb-events] No SERPER_API_KEY — Brave/ScaleSerp only, no Serper backup');
   if (!SCALESERP_KEY) console.warn('[run-fb-events] No SCALESERP_API_KEY — no ScaleSerp backup');
   if (!ORGANIZER_ID)  console.log('[run-fb-events] No FB_EVENTS_ORGANIZER_ID — will use system organizer');
 
@@ -48,6 +51,7 @@ async function main() {
   for (const metro of SEARCH_METROS) {
     try {
       const items = await scrapeFacebookEventsForMetro(metro, {
+        braveKey:     BRAVE_KEY,
         serperKey:    SERPER_KEY,
         scaleSerpKey: SCALESERP_KEY,
       });
