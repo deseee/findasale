@@ -21,7 +21,7 @@ const statusColors: Record<string, string> = {
   ended: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
 };
 
-function formatDate(date: Date): string {
+function formatDate(date: string | Date): string {
   return new Date(date).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
