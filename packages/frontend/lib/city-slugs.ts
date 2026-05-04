@@ -91,6 +91,19 @@ export function getNearestCities(
  * Get top categories for a city (stub for now — will be computed from eBay data in backend)
  */
 export function getTopCategoriesForCity(slug: string): string[] {
-  // This will be enhanced in Phase 2 with real eBay data
-  return ['Furniture', 'Vintage', 'Collectibles', 'Art', 'Home & Garden'];
+  // Standard estate/yard sale categories
+  return [
+    'Furniture',
+    'Vintage',
+    'Collectibles',
+    'Art',
+    'Home & Garden',
+    'Tools',
+    'Jewelry',
+    'Electronics',
+    'Books',
+    'Clothing',
+    'Antiques',
+    'Kitchenware',
+  ];
 }

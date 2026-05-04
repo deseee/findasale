@@ -45,7 +45,7 @@ export function CityNearbyLinks({
             <p className="text-slate-600 dark:text-slate-400 mb-4">
               Browse by category:
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mb-4">
               {topCategories.map((category) => (
                 <Link
                   key={category}
@@ -56,6 +56,12 @@ export function CityNearbyLinks({
                 </Link>
               ))}
             </div>
+            <Link
+              href={`/search?city=${currentCity.slug}`}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+            >
+              Browse all →
+            </Link>
           </div>
         </div>
 

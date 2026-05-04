@@ -18,6 +18,7 @@ interface RecentSale {
   endDate: string;
   organizerName?: string;
   status: 'listing' | 'active' | 'ended';
+  photoUrl?: string;
 }
 
 interface CityPageProps {
@@ -267,6 +268,7 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
           organizerName: sale.organizer?.businessName,
+          photoUrl: sale.photoUrls?.[0] ?? undefined,
           status,
         };
       });
