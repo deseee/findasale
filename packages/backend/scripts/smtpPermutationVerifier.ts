@@ -60,6 +60,48 @@ const COMMON_PREFIXES = [
 // Fake address used for catch-all detection
 const CATCH_ALL_PROBE = 'xyzzy_notreal_84729';
 
+// Third-party platform domains — organizer's website points to a platform, not their own domain.
+// Probing these finds platform emails, not organizer emails. Skip entirely.
+const PLATFORM_DOMAINS = new Set([
+  'facebook.com', 'instagram.com', 'twitter.com', 'linkedin.com',
+  'youtube.com', 'tiktok.com',
+  'ctbids.com',           // Caring Transitions platform
+  'hibid.com',            // HiBid auction platform
+  'estatesales.net',      // EstateSales.NET
+  'estatesales.org',      // EstateSales.org
+  'gsalr.com',            // GSALR
+  'garagesalefinder.com',
+  'estatesale.com',
+  'auctionzip.com',
+  'proxibid.com',
+  'invaluable.com',
+  'liveauctioneers.com',
+  'biddingowl.com',
+  'maxanet.com',
+  'linqapp.com',          // Contact link generator — not an email
+  'cardscan.com',
+  'linktr.ee',
+  'bio.link',
+  'square.site',
+  'squarespace.com',
+  'wixsite.com',
+]);
+
+// MX hostnames whose port 25 is reliably blocked from cloud/GitHub Actions runners.
+// Fall back to best-guess info@ rather than burning timeout budget.
+const BLOCKED_MX_HOSTS = new Set([
+  'smtp.secureserver.net',    // GoDaddy
+  'mailstore1.secureserver.net',
+  'pphosted.com',             // Proofpoint
+  'mx1-us1.ppe-hosted.com',   // Proofpoint hosted
+  'mx2-us1.ppe-hosted.com',
+  'mimecast.com',             // Mimecast
+  'us-smtp-inbound-1.mimecast.com',
+  'us-smtp-inbound-2.mimecast.com',
+  'protection.outlook.com',   // Microsoft 365 (often blocks port 25 probes)
+  'mail.protection.outlook.com',
+]);
+
 // ---- Helpers ---------------------------------------------------------------
 
 function sleep(ms: number): Promise<void> {
@@ -69,10 +111,23 @@ function sleep(ms: number): Promise<void> {
 function getDomain(websiteUrl: string): string | null {
   try {
     const url = new URL(websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`);
-    return url.hostname.replace(/^www\./, '');
+    const hostname = url.hostname.replace(/^www\./, '');
+    // Strip subdomains for platform detection (e.g. foo.hibid.com → hibid.com)
+    const parts = hostname.split('.');
+    const apex = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+    if (PLATFORM_DOMAINS.has(hostname) || PLATFORM_DOMAINS.has(apex)) return null;
+    return hostname;
   } catch {
     return null;
   }
+}
+
+function isBlockedMxHost(mxHost: string): boolean {
+  const lower = mxHost.toLowerCase();
+  for (const blocked of BLOCKED_MX_HOSTS) {
+    if (lower === blocked || lower.endsWith(`.${blocked}`)) return true;
+  }
+  return false;
 }
 
 async function processWithConcurrency<T>(
@@ -264,7 +319,7 @@ async function main() {
 
     const domain = getDomain(org.website!);
     if (!domain) {
-      console.log(`${prefix}: invalid website URL`);
+      console.log(`${prefix}: platform domain or invalid URL — skipping`);
       errors++;
       return;
     }
@@ -286,6 +341,18 @@ async function main() {
     if (!mxHost) {
       console.log(`${prefix}: no MX record for ${domain}`);
       noMx++;
+      return;
+    }
+
+    // Known-blocked MX host — fall back to best-guess rather than timing out
+    if (isBlockedMxHost(mxHost)) {
+      const email = bestGuessEmail(domain);
+      await prisma.organizer.update({
+        where: { id: org.id },
+        data: { contactEmail: email },
+      });
+      console.log(`${prefix}: ${mxHost} blocked from cloud runners → best-guess ${email}`);
+      found++;
       return;
     }
 
