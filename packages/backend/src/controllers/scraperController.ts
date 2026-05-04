@@ -8,7 +8,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { runScrapeRun } from '../services/scraper';
 
-const VALID_SOURCES = ['EstateSalesNet', 'GarageSaleFinder', 'Craigslist'];
+const VALID_SOURCES = ['EstateSalesNet', 'GarageSaleFinder', 'FacebookMarketplace'];
 
 /**
  * GET /admin/scraper/sources

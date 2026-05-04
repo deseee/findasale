@@ -10,6 +10,7 @@ import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
 import { scrapeEstateSalesNet } from './sources/estatesalesnet';
 import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
+import { scrapeFacebookMarketplace } from './sources/facebook-marketplace';
 import { enrichOrganizer } from './enrichment';
 
 export interface ScrapeJob {
@@ -332,6 +333,8 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
       stats = await scrapeEstateSalesNet(metro, systemOrganizerId, rateLimiter);
     } else if (source === 'GarageSaleFinder') {
       stats = await scrapeGarageSaleFinder(metro, systemOrganizerId, rateLimiter);
+    } else if (source === 'FacebookMarketplace') {
+      stats = await scrapeFacebookMarketplace(metro, systemOrganizerId, rateLimiter);
     } else {
       console.warn(`[scraper] Unknown source: ${source} — skipping`);
     }
