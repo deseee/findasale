@@ -2,41 +2,43 @@
 
 ## What Happened This Week
 
-S640: Email infrastructure audit + P2 brand drift batch. (1) Resend audit: CLAIM_EMAIL_ENABLED was firing at 200% daily usage but all sends targeted @system.finda.sale placeholders — no real organizer ever received email. Now disabled. (2) outreach.finda.sale subdomain: SPF + DMARC records added to Vercel DNS. DKIM pending cold outreach tool signup. (3) HERE_API_KEY confirmed done by Patrick. (4) P2 brand drift: 4 files fixed (overflow, messages copy, global meta, city page titles). (5) Cold email tool research session — shallow assessments flagged by Patrick, needs a proper deep-dive audit next session before any tool decision is made.
+**S641 — Cold Outreach Deep-Audit + Two-Sided Pipeline Sync.** Four parallel research dispatches (~57k words, ~80 primary sources) replaced S640's shallow single-search-per-tool premise. Verdict: **BUILD don't BUY** for cold email. All four leading vendors (Smartlead, Instantly, Saleshandy, Snov.io) are campaign-orchestrators that contradict our Postgres-as-source-of-truth design. Workspace + Postgres cron path: 8 dev days, $6/mo, zero portability risk vs. tool path 7 days, $30–94/mo, dual-write debt by month 3. **S640 nearly signed us up for Smartlead — that would have been wrong** (Smartlead Pro allows only one global webhook fatal for our per-touch state machine, plus 49 documented outages in 12 months). If we ever do buy, **Saleshandy is the right tool**, not Smartlead or Instantly. Critical correction: shopper-side SEO is the demand-side marketplace flywheel — runs parallel to the cold-email build, not behind it. Existing scaffolding (`/city/[slug]`, `/categories/`, `/neighborhoods/`, etc.) needs an audit pass. RVM permanently killed (FCC 2022 TCPA ruling). LinkedIn via Expandi (~$99/mo) and NESA/NAA/NASMM partnership outreach queued as parallel innovation pilots. Roadmap entries #374–#376 added.
 
-S639: Investigated $47.22 Google Places API charge. enrichment.ts cost fix pushed (removed rating fields, added 30-day TTL cache, skip logic). Google Places quota hard-capped at 15,000/day. Pay as you go confirmed correct plan.
+**S640 — Email Audit + Brand Drift Batch.** Resend audit revealed `claimEmailService.ts` was firing 200%/day usage but all sends targeted `@system.finda.sale` placeholders — no real organizer ever received email. Now disabled. `outreach.finda.sale` subdomain DNS: SPF + DMARC live, DKIM pending Workspace keypair (S643). HERE_API_KEY confirmed. P2 brand drift: 4 files fixed.
 
-S638: HERE geocoding fallback shipped. Six scraper fleet bugs fixed. Email hit rate 1.4% → 31% (SMTP verifier). 4 outreach templates finalized.
+**S639 — Google Places Cost.** $47.22 charge investigated. enrichment.ts cost fix shipped. Quota hard-capped at 15,000/day.
 
-## Audit Results (Weekly + Brand Drift — May 2)
+**S638 — Scraper Fleet.** HERE geocoding fallback shipped. Six bugs fixed. SMTP verifier hit rate 1.4% → 31%.
 
-**Weekly Site Audit found:**
-- **1 Critical:** Scraped sale pages return "Sale not found" — the `/sales/[id]` URLs for every scraped listing (hundreds of sales across Nashville, Chicago, Atlanta, etc.) are currently broken. Claim email links don't work. This is likely a database migration that didn't deploy. Routed to dev.
-- **3 High:** (1) Items section on sale pages appears below the map instead of above it — buyers scroll past inventory. (2) Images not loading across the platform — blank gray boxes where sale photos should appear. (3) City hub pages all 404 — the `/cities` index lists cities correctly but every single link leads to a dead page.
-- **3 Medium / 3 Low:** Layout overflow on some pages, dark mode contrast failure in workspace, organizer-only copy on the shared messages page. Lower priority but all documented.
+## Two-Sided Pipeline (Locked This Week)
 
-**Brand Drift Audit found 14 items (all P2/P3):**
-- 8 places where "flea markets" or "auctions" are missing from copy that should be inclusive of all sale types (onboarding modal, Twitter meta, FAQ, referral share text, etc.)
-- Robot emoji (🤖) in the price research panel — visually signals "AI" to users, which is banned
-- 6 developer comments using "estate sale" as the default framing (cosmetic, but shapes agent output)
-- All 14 are batched and ready to route to dev — no Patrick decision needed.
+| Track | Status | Owner | Cost |
+|---|---|---|---|
+| **Cold Outreach Email Build** (#374) | Spec dispatch S642 → Dev S643 | Architect → Dev | $6/mo (Workspace seat) |
+| **Shopper-Side SEO Audit** (#375) | Audit dispatch S642 → Dev S643 | Architect + SEO Audit → Dev | $0 (existing pages) |
+| **LinkedIn Pilot** (#376) | Spec S642, launch Week 4 | Sales-Ops | ~$99/mo (Expandi) |
+| **Partnership Outreach** | 19 drafts queued in Patrick's Gmail | Patrick (manual send) | $0 |
+| **Postcard** | Gated to Phase 2 (email reply rate <2.5% after 8 weeks) | Deferred | — |
+| **RVM / Voicemail** | KILLED — TCPA $500–$1,500/violation | — | — |
 
 ## Pending Decisions
 
-No items in DECISIONS.md currently marked PENDING. All standing decisions (D-001 through D-010) are locked.
+**One decision needed from Patrick:** confirm "build, don't buy" verdict for cold email. No objection = S642 launches in parallel architect + SEO + marketing + sales-ops dispatches. If you want to push back on any part of the verdict, this is the moment. The full evidence base is in `claude_docs/research/cold-outreach-2026-05/` (4 docs).
 
 ## Beta Tester Impact
 
-**Right now, beta testers would hit:** broken sale pages for any scraped listing, missing photos across most of the site, and dead city pages. These are real blockers if you're showing the product to anyone. The outreach pipeline isn't wired yet, so no cold emails are going out yet. The referral system (shoppers earning XP for introducing organizers) is built but its database migration may not be deployed yet — depends on whether the S635 push block was completed.
+The cold-outreach pipeline still isn't sending — S643 is the build session, then 14-day domain warm-up. Real organizer outreach starts ~3 weeks out. Pre-existing P1 bugs from earlier weeks (broken `/sales/[id]` for scraped listings, blank photos site-wide, dead `/cities/[slug]` from old QA) — verify status during S642 architect spec passes since those are blockers if anyone clicks a real preview link.
 
 ## This Week's Priority
 
-1. **Wire outreach emails into Postgres cron** — the templates are done (S636), the pipeline is ready, this is S639's primary goal.
-2. **Fix the C-001 migration** — scraped sales returning "not found" blocks the entire scraper infrastructure from being publicly useful.
-3. **Image loading investigation** — blank photos across the platform is a confidence killer. Worth a quick Cloudinary/next.config.js check before any beta demo.
+1. **S642 — parallel dispatch (4 agents in one message):** cold-outreach spec + shopper-SEO audit + 19 partnership drafts + LinkedIn pilot setup. Detailed dispatch plan in STATE.md "## Next Session — S642".
+2. **S643 — Dev build batch:** cold-outreach pipeline build (8 days) + shopper-SEO P0 fixes (parallel different files).
+3. **Patrick parallel work:** send the 19 queued partnership drafts; provision `outreach@finda.sale` Workspace seat.
 
 ## Action Items for Patrick
 
-- [ ] **Push S640 wrap block** (see below)
-- [ ] **Cold email tool decision** — hold off until next session completes a proper deep-dive audit. Tools evaluated: Smartlead, Instantly, Saleshandy, Snov.io, Success.ai, YAMM, GMass, Reply.io, Seamless.ai. Research was surface-level — next session audits everything properly before any signup.
-- [ ] **Send 19 queued Gmail outreach drafts** (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.)
+- [ ] **Push S641 wrap block** (see push block below)
+- [ ] **Confirm "build, don't buy" verdict** — no objection = S642 dispatches launch
+- [ ] **Send 19 queued Gmail partnership outreach drafts** (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez, etc.) — runs in parallel, no infrastructure dependency
+- [ ] **Provision second Workspace seat** for `outreach@finda.sale` ($6/mo) — needed before S643 Dev build, not blocking S642 specs
+- [ ] **Remove `_spf.smartlead.ai` from outreach.finda.sale SPF record** during next DNS housekeeping pass (we are not signing up for Smartlead) — can wait for S643 when Workspace SPF includes get added in the same edit

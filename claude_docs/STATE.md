@@ -4,13 +4,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S640 — Email Audit + Brand Drift Batch (COMPLETE)**
+**Latest: S641 — Cold Outreach Deep-Audit + Two-Sided Pipeline Sync (COMPLETE — research only, no code)**
 
-(1) Resend audit complete: `claimEmailService.ts` was firing 200%/day usage but all sends targeted `@system.finda.sale` placeholder addresses — no real organizer received email. Set `CLAIM_EMAIL_ENABLED=false` to stop. (2) `outreach.finda.sale` subdomain DNS records added to Vercel: SPF (`v=spf1 include:_spf.smartlead.ai ~all`) ✅ and DMARC (`v=DMARC1; p=none; rua=mailto:dmarc@outreach.finda.sale`) ✅. DKIM pending Smartlead signup. (3) HERE_API_KEY GitHub Secret confirmed added by Patrick — HERE geocoding fallback now fully wired. (4) P2 brand drift batch shipped: 4 files fixed — Layout.tsx (overflow-x-hidden), messages/index.tsx (role-neutral empty state), _document.tsx (inclusive sale-type meta/keywords), city/[slug].tsx (inclusive titles + meta). All other brand drift pages (map, calendar, trending, categories) were already clean from S532.
+Four parallel research dispatches (~57k words, ~80 primary sources) replacing S640's shallow single-search-per-tool premise. Verdict: **BUILD don't BUY** for cold email — all four leading vendors (Smartlead, Instantly, Saleshandy, Snov.io) are campaign-orchestrators that contradict our Postgres-as-source-of-truth design. Workspace + Postgres cron path: 8 dev days, $6/mo, zero portability risk. Tool path: 7 dev days, $30–94/mo, dual-write reconciliation debt by month 3. **S640 nearly signed us up for Smartlead — that would have been wrong** (Smartlead Pro allows only one global webhook, fatal for our per-touch state machine; 49 documented outages in 12 months). If we ever do buy, **Saleshandy is the right tool**, not Smartlead or Instantly. **Critical correction**: shopper-side SEO is NOT deferrable — it's the demand-side marketplace flywheel and runs parallel to the cold-email build, not behind it. Existing scaffolding (`/city/[slug]`, `/categories/`, `/neighborhoods/`, etc.) needs an audit pass for indexing/structured-data/link-graph/SSR completeness. Innovation pilots queued: LinkedIn via Expandi (~$99/mo, defer 2 weeks past email warm-up) + NESA/NAA/NASMM partnership outreach (~$0). RVM permanently killed (FCC 2022). Roadmap entries #374–#376 added. Strategy doc: `claude_docs/strategy/cold-outreach-deep-audit-S641.md`. Evidence: `claude_docs/research/cold-outreach-2026-05/`.
 
-**Files changed (4):** packages/frontend/components/Layout.tsx, packages/frontend/pages/messages/index.tsx, packages/frontend/pages/_document.tsx, packages/frontend/pages/city/[slug].tsx
+**Files changed (5):** claude_docs/strategy/cold-outreach-deep-audit-S641.md (NEW), claude_docs/strategy/roadmap.md (v130 + #374–#376), claude_docs/research/cold-outreach-2026-05/* (4 NEW research docs), claude_docs/STATE.md, claude_docs/patrick-dashboard.md
 
-**Patrick actions:** Push S640 block below.
+**Patrick actions:** (1) Push S641 block below. (2) Confirm "build, don't buy" so S642 dispatches can launch in parallel. (3) Send 19 queued Gmail partnership outreach drafts (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez) — runs in parallel to cold-email build, no infrastructure dependency. (4) Provision second Workspace seat for `outreach@finda.sale` ($6/mo) — needed before S643 Dev build, no rush.
+
+---
+
+### S640 — Email Audit + Brand Drift Batch (COMPLETE)
+
+(1) Resend audit complete: `claimEmailService.ts` was firing 200%/day usage but all sends targeted `@system.finda.sale` placeholder addresses — no real organizer received email. Set `CLAIM_EMAIL_ENABLED=false` to stop. (2) `outreach.finda.sale` subdomain DNS records added to Vercel: SPF (`v=spf1 include:_spf.smartlead.ai ~all`) ✅ and DMARC (`v=DMARC1; p=none; rua=mailto:dmarc@outreach.finda.sale`) ✅. DKIM pending Smartlead signup. (3) HERE_API_KEY GitHub Secret confirmed added by Patrick. (4) P2 brand drift batch shipped: 4 files fixed (Layout.tsx, messages/index.tsx, _document.tsx, city/[slug].tsx). **NOTE S641:** the Smartlead SPF entry needs to be removed — S641 audit confirmed we are NOT signing up for Smartlead. Workspace SPF includes get added during S643 Dev build.
 
 ---
 
@@ -106,27 +112,50 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S641
+## Next Session — S642 (PARALLEL DISPATCH PLANNED)
 
-**Primary goal:** Deep-dive cold email tool audit before any signup decision. Patrick flagged S640 research as shallow — recommendations flipped 4+ times on surface-level single-search reads. Do it properly: pull pricing pages directly, read actual API docs, find Reddit threads with real agency/operator opinions (not SEO review sites), compare contact limits, deliverability benchmarks from independent sources, and webhook/API architecture for Postgres cron integration. Tools to audit: Smartlead, Instantly, Saleshandy, Snov.io. Deliver a single final verdict with evidence.
+**Primary goal:** Spec out both pipelines simultaneously via parallel agent dispatches. Cold-email build verdict locked S641 (BUILD don't BUY). Shopper-side SEO confirmed parallel critical workstream (not deferred behind email). Two architects + one innovation agent in parallel.
 
-**Secondary:** Dev dispatch — wire outreach email templates into Postgres cron. 4 templates in `claude_docs/strategy/outreach-email-templates-v4.md`. Blocked on tool decision (need to know which API to target).
+### S642 dispatch plan (one message, four `Agent(subagent_type='general-purpose')` calls in parallel)
 
-**Patrick pending actions:**
-- Push S640 block (4 files: Layout.tsx, messages/index.tsx, _document.tsx, city/[slug].tsx + STATE.md + patrick-dashboard.md)
-- Send 19 queued Gmail outreach drafts (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.)
-- Hold on cold email tool signup until S641 audit completes
+**Agent 1 — Cold Outreach Spec (architect, embed `findasale-architect` skill context)**
+Prompt: "Convert `claude_docs/strategy/OUTREACH_EMAIL_ARCHITECTURE.md` into a tightened S643-ready dev spec given S641 audit findings. Drop the Phase-2-Instantly migration assumption. Document IMAP reply parsing path explicitly (S641 architecture audit confirmed Workspace path requires +2–3 days for IMAP vs. tool path's webhook). Verify Workspace 500/day claim against current 2026 Google docs (S641 found this is a reputation milestone, not a technical cap). Update DKIM section — drop Smartlead, use Workspace-generated keypair. Specify the ~8 dev-day breakdown with exact files to create/modify. Output: spec.md ready for findasale-dev S643 dispatch."
 
-**Email context (don't re-derive):**
-- Strategy doc: `claude_docs/strategy/organizer-acquisition-strategy.md`
-- 4 templates in `claude_docs/strategy/outreach-email-templates-v4.md`
-- Touch 1 subject line: "Where do buyers find [Business Name]?" (curiosity gap, locked)
-- Constraints: SHORT (4–6 sentences), one CTA, no "AI" language, inclusive sale types, no fabricated stats, CAN-SPAM compliant
-- SMTP verifier live at 31% email hit rate — data pipeline ready, send pipeline not yet built
-- `outreach.finda.sale` subdomain: SPF ✅ DMARC ✅ DKIM ⏳ (pending cold outreach tool signup)
+**Agent 2 — Shopper SEO Audit (architect, embed `findasale-architect` + `marketing:seo-audit` skill context)**
+Prompt: "Audit existing shopper-side discovery SEO infrastructure. Verified-existing pages: `/city/[slug]`, `/cities`, `/categories`, `/categories/[category]`, `/neighborhoods`, `/neighborhoods/[slug]`, `/city-heat-index`, `/encyclopedia`, `/guide`, `/calendar`, `/map`, individual `/sales/[id]` and `/organizers/[id]` pages. Verify: (a) sitemap.xml coverage of all dynamic slugs, (b) per-slug unique title + meta + canonical, (c) Schema.org structured data presence (Event, Place, LocalBusiness), (d) URL pattern matches shopper-search intent ('estate sales near me', '[city] yard sales', '[zip] garage sales'), (e) SSR completeness (no JS-only Googlebot rendering), (f) internal link graph (city→neighborhood→sale→organizer→category PageRank flow), (g) Google Search Console index coverage, (h) orphaned pages with no internal links. Output: audit findings + prioritized P0/P1/P2 fix list ready for findasale-dev S643 dispatch."
 
-**Other pending work:**
-- Pre-existing open bugs: /items/[id] 500, sale social previews blank, Hunt Pass status inconsistency, tier-lapse banner styling
+**Agent 3 — Partnership Outreach Drafts (innovation/marketing, embed `findasale-marketing` skill context)**
+Prompt: "Patrick has 19 partnership outreach drafts queued in Gmail (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.). Read those drafts (or if not accessible, draft fresh based on `claude_docs/strategy/cold-outreach-deep-audit-S641.md` §5.2 partnership channel framing). Verify each: institutional voice (no founder voice), no 'AI' word, inclusive sale types, one CTA, value-led not ask-led. Recommend send sequence + cadence. Output: 19 polished drafts ready for Patrick to send manually from his existing Gmail."
+
+**Agent 4 — LinkedIn Pilot Setup (innovation, embed `findasale-sales-ops` skill context)**
+Prompt: "Spec the LinkedIn outreach pilot via Expandi (~$99/mo). Identify Sales Navigator query for finding estate-sale/auction/consignment owners. Draft the multi-channel sequence (LinkedIn touch 1 → email touch 1 → LinkedIn touch 2 → email touch 2). Calculate target list size for first 30-day pilot. Risk register (LinkedIn rate limits, account safety, message variation requirements). Output: pilot launch checklist Patrick can execute Week 4 of the cold-email rollout."
+
+### Why parallel and not sequential
+All four agents read independent context. Cold-outreach spec doesn't depend on SEO audit and vice versa. Partnership drafts and LinkedIn spec are independent of both. Sequential dispatch wastes ~3× the wall-clock for the same work. Per CLAUDE.md §7 batch dispatch: budget ~1.5–2k tokens per agent in main context post-return. Wrap S642 if context >170k.
+
+### S643 dispatch plan (after S642 specs return, sequential — Dev work has file conflicts)
+- `findasale-dev` for cold outreach build (8 days estimated, may split across S643/S644)
+- `findasale-dev` for shopper SEO P0 fixes (parallel batch — different files than cold-email build, can run simultaneously per CLAUDE.md §7 BATCH DISPATCH PROTOCOL)
+
+### Patrick pending actions for S642
+- Push S641 block (5 file groups, see below)
+- Confirm "build, don't buy" verdict — no objection = green light to S642 dispatch
+- Send the 19 partnership outreach drafts (independent of S642 dispatch — runs in parallel)
+- Provision `outreach@finda.sale` second Workspace seat ($6/mo) — needed before S643 Dev build, not blocking S642
+- Generate Workspace App Password for `outreach@finda.sale` and store as env var (will be in S643 push block)
+
+### Locked context (don't re-derive)
+- Verdict: BUILD Workspace + Postgres cron, do NOT sign up for Smartlead/Instantly/Saleshandy/Snov
+- Saleshandy is fallback if (a) volume crosses 5,000/day OR (b) inbox placement <70% after 30-day warm-up OR (c) reply auto-classifier proves <90% accurate
+- 4 templates locked S636 (`outreach-email-templates-v4.md`)
+- DNS: SPF + DMARC live, DKIM via Workspace (not Smartlead — remove Smartlead SPF entry during S643 housekeeping)
+- Reply handling fully automated per D-S268
+- Shopper-side SEO is parallel critical infra (memory: feedback_seo_two_sided_distinction.md)
+- RVM permanently killed (FCC 2022 TCPA ruling)
+- Postcard gated to Phase 2 (only if email reply rate <2.5% after 8 weeks)
+
+### Other pending work (rolled forward)
+- Pre-existing bugs: /items/[id] 500, sale social previews blank, Hunt Pass status inconsistency, tier-lapse banner styling — defer past S642/S643 outreach build unless they block beta demos
 
 ---
 
