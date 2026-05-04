@@ -4,8 +4,11 @@
  * Email Enrichment Script for Organizers
  *
  * Three passes:
- * Pass 1: Organizers with website — fetch homepage + /contact, extract email
- * Pass 2: Organizers with no website — try Google Places + Yelp Fusion to find website, then scrape
+ * Pass 1: Organizers with website — sitemap discovery + fixed URL patterns, extract email
+ *   Step 1: Fetch sitemap.xml, parse <loc> tags for contact/about/hire/team/staff/reach, try up to 5
+ *   Step 2: Try fixed pattern list: homepage, /contact, /contact-us, /about, /hire-us, /book-now, /team, /staff, etc.
+ *   Footer emails are scanned by findFirstValidEmail() — already included in HTML scrape
+ * Pass 2: Organizers with no website — try Google Places to find website, then scrape
  * Pass 3: Enhanced fallback — for Pass 1 misses, try Places to find alternate website + scrape
  *
  * Rate limiting: 400ms between all requests (scrapes + API calls)
@@ -14,7 +17,7 @@
  *
  * Usage:
  *   DATABASE_URL=... npx ts-node scripts/enrichContactEmails.ts
- *   DATABASE_URL=... GOOGLE_PLACES_API_KEY=... YELP_API_KEY=... npx ts-node scripts/enrichContactEmails.ts
+ *   DATABASE_URL=... GOOGLE_PLACES_API_KEY=... npx ts-node scripts/enrichContactEmails.ts
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -24,7 +27,6 @@ const prisma = new PrismaClient();
 
 // Environment variables — optional
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY ?? '';
-const YELP_API_KEY = process.env.YELP_API_KEY ?? '';
 
 // Email validation and filtering
 const BLOCKED_EMAIL_PATTERNS = [
@@ -184,43 +186,48 @@ async function queryGooglePlaces(
   }
 }
 
-// Query Yelp Fusion API
-interface YelpBusinessesResponse {
-  businesses?: Array<{
-    website?: string;
-    url?: string;
-  }>;
-}
+// Fetch sitemap and extract contact-related URLs
+async function fetchSitemapUrls(baseDomain: string): Promise<string[]> {
+  const candidateUrls: string[] = [];
+  const sitemapPatterns = [
+    `${baseDomain}/sitemap.xml`,
+    `${baseDomain}/sitemap_index.xml`,
+  ];
 
-async function queryYelpFusion(
-  businessName: string,
-  city: string
-): Promise<string | null> {
-  if (!YELP_API_KEY) {
-    return null;
-  }
-
-  try {
-    const queryStr = `term=${encodeURIComponent(businessName)}&location=${encodeURIComponent(city)}&limit=1`;
-    const url = `https://api.yelp.com/v3/businesses/search?${queryStr}`;
-
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        Authorization: `Bearer ${YELP_API_KEY}`,
-      },
-    });
-
-    if (!response) return null;
-
-    const data: YelpBusinessesResponse = JSON.parse(response);
-    if (data.businesses && data.businesses.length > 0) {
-      // Use .website if available, NOT .url (which is the Yelp page)
-      return data.businesses[0].website || null;
+  for (const sitemapUrl of sitemapPatterns) {
+    try {
+      const sitemapHtml = await fetchWithTimeout(sitemapUrl);
+      if (sitemapHtml) {
+        // Extract <loc> URLs from sitemap XML
+        const locMatches = sitemapHtml.match(/<loc>([^<]+)<\/loc>/g);
+        if (locMatches) {
+          for (const match of locMatches) {
+            const url = match.replace(/<\/?loc>/g, '');
+            // Check if URL contains contact-related keywords (case-insensitive)
+            const lowerUrl = url.toLowerCase();
+            if (
+              lowerUrl.includes('contact') ||
+              lowerUrl.includes('about') ||
+              lowerUrl.includes('hire') ||
+              lowerUrl.includes('book') ||
+              lowerUrl.includes('team') ||
+              lowerUrl.includes('staff') ||
+              lowerUrl.includes('reach')
+            ) {
+              candidateUrls.push(url);
+              if (candidateUrls.length >= 5) break; // Limit to 5 candidates
+            }
+          }
+        }
+      }
+    } catch {
+      // Sitemap fetch failed, continue
     }
-    return null;
-  } catch (error) {
-    return null;
+
+    if (candidateUrls.length >= 5) break;
   }
+
+  return candidateUrls;
 }
 
 async function main() {
@@ -228,9 +235,6 @@ async function main() {
 
   if (!GOOGLE_PLACES_API_KEY) {
     console.log('[Enrich] WARNING: GOOGLE_PLACES_API_KEY not set — Pass 2/3 Places queries will be skipped');
-  }
-  if (!YELP_API_KEY) {
-    console.log('[Enrich] WARNING: YELP_API_KEY not set — Pass 2 Yelp fallback will be skipped');
   }
   console.log('');
 
@@ -283,24 +287,50 @@ async function main() {
           continue;
         }
 
-        // Try homepage first
-        let html = await fetchWithTimeout(org.website!);
-        if (html) {
-          email = findFirstValidEmail(html);
-          if (email) {
-            source = 'homepage';
-          }
-        }
+        // Fixed URL pattern list — try in order, stop on first email found
+        const urlPatterns = [
+          org.website!, // Homepage
+          `${baseDomain}/contact`,
+          `${baseDomain}/contact-us`,
+          `${baseDomain}/contactus`,
+          `${baseDomain}/about`,
+          `${baseDomain}/about-us`,
+          `${baseDomain}/about-us/contact`,
+          `${baseDomain}/hire-us`,
+          `${baseDomain}/book-now`,
+          `${baseDomain}/booking`,
+          `${baseDomain}/work-with-us`,
+          `${baseDomain}/reach-us`,
+          `${baseDomain}/team`,
+          `${baseDomain}/staff`,
+        ];
 
-        // Try /contact page if not found
-        if (!email) {
-          const contactUrl = `${baseDomain}/contact`;
-          html = await fetchWithTimeout(contactUrl);
+        // Step 1: Try sitemap-discovered contact URLs first (most targeted)
+        const sitemapUrls = await fetchSitemapUrls(baseDomain);
+        for (const url of sitemapUrls) {
+          const html = await fetchWithTimeout(url);
           if (html) {
             email = findFirstValidEmail(html);
             if (email) {
-              source = '/contact';
+              source = `sitemap→${new URL(url).pathname || 'root'}`;
+              break;
             }
+          }
+          await sleep(400);
+        }
+
+        // Step 2: If not found in sitemap, try fixed URL patterns
+        if (!email) {
+          for (const url of urlPatterns) {
+            const html = await fetchWithTimeout(url);
+            if (html) {
+              email = findFirstValidEmail(html);
+              if (email) {
+                source = new URL(url).pathname || 'homepage';
+                break;
+              }
+            }
+            await sleep(400);
           }
         }
 
@@ -324,8 +354,7 @@ async function main() {
         pass1Errors++;
       }
 
-      // Rate limiting
-      await sleep(400);
+      // Rate limiting already handled in loop — no additional sleep needed
     }
 
     console.log(`\n[Enrich] Pass 1 Summary:`);
@@ -334,7 +363,7 @@ async function main() {
     console.log(`  Errors: ${pass1Errors}\n`);
 
     // ===== PASS 2: Organizers without website =====
-    console.log('[Enrich] === PASS 2: Organizers without website (Places/Yelp) ===\n');
+    console.log('[Enrich] === PASS 2: Organizers without website (Places) ===\n');
 
     const pass2Organizers = await prisma.organizer.findMany({
       where: {
@@ -377,14 +406,6 @@ async function main() {
           continue;
         }
 
-        // Try Yelp if Places found nothing
-        if (!website) {
-          website = await queryYelpFusion(org.businessName, city);
-          if (website) {
-            foundWebsite = website;
-            source = 'Yelp';
-          }
-        }
 
         // If website found, scrape for email and update DB
         if (foundWebsite) {
@@ -434,7 +455,7 @@ async function main() {
             pass2Errors++;
           }
         } else {
-          console.log(`[Enrich] (${processed}/${pass2Total}) ${org.businessName}: Places/Yelp: no result`);
+          console.log(`[Enrich] (${processed}/${pass2Total}) ${org.businessName}: Places: no result`);
           pass2NotFound++;
         }
       } catch (fetchError) {
