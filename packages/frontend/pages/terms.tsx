@@ -10,7 +10,7 @@ const TermsPage = () => {
     <>
       <Head>
         <title>Terms of Service – FindA.Sale</title>
-        <meta name="description" content={`Terms of Service for FindA.Sale — the marketplace for estate sales, yard sales, auctions, and flea markets in ${defaultCity} and beyond.`} />
+        <meta name="description" content={`Terms of Service for FindA.Sale — the marketplace for yard sales, garage sales, estate sales, auctions, and flea markets in ${defaultCity} and beyond.`} />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-12">
@@ -34,7 +34,7 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">2. Description of Service</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-              FindA.Sale is an online marketplace that connects organizers of estate sales, yard sales, auctions, and flea markets ("Organizers") with shoppers ("Buyers"). The Company facilitates transactions but is not a party to any sale between Organizer and Buyer.
+              FindA.Sale is an online marketplace that connects organizers of yard sales, garage sales, estate sales, auctions, and flea markets ("Organizers") with shoppers ("Buyers"). The Company facilitates transactions but is not a party to any sale between Organizer and Buyer.
               We do not own, inspect, or guarantee any items listed on the Platform.
             </p>
           </section>
@@ -53,7 +53,7 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">4. Organizer Terms</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
-              Organizers may list items from estate sales, yard sales, auctions, or flea markets for fixed-price purchase or auction. By listing items you represent
+              Organizers may list items from yard sales, garage sales, estate sales, auctions, or flea markets for fixed-price purchase or auction. By listing items you represent
               that you have the legal right to sell those items and that all listing information is accurate.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
@@ -112,7 +112,7 @@ const TermsPage = () => {
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">5. Buyer Terms</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               <strong>All sales are final.</strong> Because items are second-hand or bulk goods sold by individual
-              Organizers (from estate sales, yard sales, auctions, or flea markets), we do not accept returns or issue
+              Organizers (from yard sales, garage sales, estate sales, auctions, or flea markets), we do not accept returns or issue
               refunds except where required by law or where the item was materially misdescribed.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
@@ -212,13 +212,13 @@ const TermsPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">11. Limitation of Liability</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
-              TO THE MAXIMUM EXTENT PERMITTED BY LAW, FIND\u0410.SALE LLC AND ITS MEMBERS, OFFICERS, AND AGENTS SHALL NOT
+              TO THE MAXIMUM EXTENT PERMITTED BY LAW, FINDА.SALE LLC AND ITS MEMBERS, OFFICERS, AND AGENTS SHALL NOT
               BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM YOUR
               USE OF THE PLATFORM, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               OUR TOTAL LIABILITY TO YOU FOR ANY CLAIM ARISING FROM OR RELATED TO THESE TERMS OR YOUR USE OF THE
-              PLATFORM SHALL NOT EXCEED THE GREATER OF (A) $100 OR (B) THE FEES PAID BY YOU TO FIND\u0410.SALE IN THE
+              PLATFORM SHALL NOT EXCEED THE GREATER OF (A) $100 OR (B) THE FEES PAID BY YOU TO FINDА.SALE IN THE
               THREE MONTHS PRECEDING THE CLAIM.
             </p>
           </section>

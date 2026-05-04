@@ -23,7 +23,7 @@ const AboutPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">Our Mission</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-              We're here to connect communities through estate sales, garage sales, yard sales, flea markets,
+              We're here to connect communities through yard sales, garage sales, estate sales, flea markets,
               auctions, and every kind of secondhand event worth visiting. FindA.Sale helps organizers
               reach shoppers and reduces the administrative burden that keeps events from happening.
             </p>
