@@ -100,6 +100,13 @@ const BLOCKED_MX_HOSTS = new Set([
   'us-smtp-inbound-2.mimecast.com',
   'protection.outlook.com',   // Microsoft 365 (often blocks port 25 probes)
   'mail.protection.outlook.com',
+  // Smaller shared hosts confirmed blocked from GitHub Actions/cloud runners
+  'hostedemail.com',          // Hosted Email (cust.*.hostedemail.com pattern)
+  'ipage.com',                // iPage hosting
+  'homesteadmail.com',        // Homestead
+  'magicbrain.net',           // Magic Brain hosting
+  'inbound.homesteadmail.com',
+  'mx.ipage.com',
 ]);
 
 // ---- Helpers ---------------------------------------------------------------
@@ -400,13 +407,26 @@ async function main() {
     }
 
     if (!verified) {
-      // Check if we got mostly timeouts/errors (port 25 likely blocked)
+      // Check if we got timeouts/errors (port 25 likely blocked)
       const probe = await smtpCheck(`info@${domain}`, mxHost);
       if (probe === 'timeout' || probe === 'error') {
-        console.log(`${prefix}: SMTP unreachable (port 25 blocked or ${mxHost} unresponsive)`);
+        // Server unreachable — write best-guess rather than lose the organizer
+        const email = bestGuessEmail(domain);
+        await prisma.organizer.update({
+          where: { id: org.id },
+          data: { contactEmail: email },
+        });
+        console.log(`${prefix}: SMTP unreachable (${mxHost}) → best-guess ${email}`);
         smtpFail++;
       } else {
-        console.log(`${prefix}: no matching pattern for ${domain}`);
+        // Server reachable but rejected all prefixes — write info@ as last-resort fallback
+        // The domain has active email hosting; info@ is the safest guess
+        const email = bestGuessEmail(domain);
+        await prisma.organizer.update({
+          where: { id: org.id },
+          data: { contactEmail: email },
+        });
+        console.log(`${prefix}: no pattern matched, server reachable → fallback ${email}`);
         noMatch++;
       }
     }
@@ -417,8 +437,8 @@ async function main() {
   console.log(`  Verified & written:  ${found}`);
   console.log(`  Catch-all (written): ${catchAll}`);
   console.log(`  No MX record:        ${noMx}`);
-  console.log(`  SMTP unreachable:    ${smtpFail}`);
-  console.log(`  No pattern matched:  ${noMatch}`);
+  console.log(`  SMTP unreachable (best-guess written): ${smtpFail}`);
+  console.log(`  No pattern matched (fallback written): ${noMatch}`);
   console.log(`  Errors:              ${errors}`);
   console.log(`  Duration: ${elapsed}s\n`);
 
