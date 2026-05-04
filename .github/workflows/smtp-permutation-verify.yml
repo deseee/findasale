@@ -1,0 +1,50 @@
+name: SMTP Permutation Verifier
+
+on:
+  # Run daily at 2am (after enrichment has had time to populate websites)
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      smtp_verify:
+        description: 'Enable SMTP verification (false = best-guess info@ only)'
+        required: false
+        default: 'true'
+
+concurrency:
+  group: smtp-permutation-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --filter backend --filter database
+
+      - name: Generate Prisma client
+        run: cd packages/database && npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+
+      - name: Run SMTP permutation verifier
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SMTP_VERIFY: ${{ github.event.inputs.smtp_verify || 'true' }}
+          NODE_ENV: production
+        run: cd packages/backend && npx ts-node scripts/smtpPermutationVerifier.ts
