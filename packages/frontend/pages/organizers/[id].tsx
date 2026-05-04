@@ -100,11 +100,9 @@ const OrganizerProfilePage = () => {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: organizer.businessName,
-    ...(organizer.bio && { description: organizer.bio }),
     url: `https://finda.sale/organizers/${organizer.id}`,
-    ...(organizer.brandLogoUrl && { image: organizer.brandLogoUrl }),
+    image: 'https://finda.sale/og-image.png',
     ...(organizer.phone && { telephone: organizer.phone }),
-    ...(organizer.website && { sameAs: organizer.website }),
     ...(organizerCity && organizerState && {
       address: {
         '@type': 'PostalAddress',
@@ -147,7 +145,7 @@ const OrganizerProfilePage = () => {
         <title>{organizer.businessName} – FindA.Sale</title>
         <meta name="description" content={`Browse upcoming estate sales, auctions, yard sales, and more from ${organizer.businessName}${locationSuffix} — FindA.Sale.`} />
         <meta property="og:title" content={`${organizer.businessName} | FindA.Sale`} />
-        <meta property="og:image" content={organizer.brandLogoUrl || 'https://finda.sale/og-image.png'} />
+        <meta property="og:image" content="https://finda.sale/og-image.png" />
         <meta property="og:description" content={`Estate sales, auctions, and more from ${organizer.businessName}${locationSuffix}.`} />
         <meta property="og:type" content="business.business" />
         <meta property="og:url" content={`https://finda.sale/organizers/${organizer.id}`} />
