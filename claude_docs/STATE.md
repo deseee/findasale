@@ -4,7 +4,17 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S639 — Google Places Billing + Cost Optimizations (COMPLETE)**
+**Latest: S640 — Email Audit + Brand Drift Batch (COMPLETE)**
+
+(1) Resend audit complete: `claimEmailService.ts` was firing 200%/day usage but all sends targeted `@system.finda.sale` placeholder addresses — no real organizer received email. Set `CLAIM_EMAIL_ENABLED=false` to stop. (2) `outreach.finda.sale` subdomain DNS records added to Vercel: SPF (`v=spf1 include:_spf.smartlead.ai ~all`) ✅ and DMARC (`v=DMARC1; p=none; rua=mailto:dmarc@outreach.finda.sale`) ✅. DKIM pending Smartlead signup. (3) HERE_API_KEY GitHub Secret confirmed added by Patrick — HERE geocoding fallback now fully wired. (4) P2 brand drift batch shipped: 4 files fixed — Layout.tsx (overflow-x-hidden), messages/index.tsx (role-neutral empty state), _document.tsx (inclusive sale-type meta/keywords), city/[slug].tsx (inclusive titles + meta). All other brand drift pages (map, calendar, trending, categories) were already clean from S532.
+
+**Files changed (4):** packages/frontend/components/Layout.tsx, packages/frontend/pages/messages/index.tsx, packages/frontend/pages/_document.tsx, packages/frontend/pages/city/[slug].tsx
+
+**Patrick actions:** Push S640 block below.
+
+---
+
+### S639 — Google Places Billing + Cost Optimizations (COMPLETE)
 
 (1) Discovered $47.22 Google Places API charge on $100 Google Cloud bill. Root cause: enrichment.ts fetching `rating`/`user_ratings_total` fields unnecessarily, no caching, no skip logic. (2) enrichment.ts cost fix pushed by Patrick at 12:32 UTC May 4: removed rating fields from Place Details request, added skip logic when organizer already has both phone AND website, added module-level 30-day TTL cache (`placeIdCache` Map). (3) Google Cloud quota hard cap set: Places API "Requests per day" reduced from Unlimited → 15,000 (~$15/day worst case). Path used: IAM & Admin → Quotas (Maps Platform quotas page had rendering issues). (4) Confirmed Google's $200/month free credit is GONE — replaced by subscription tiers (Starter $100/mo, Essentials $275/mo). Pay as you go is correct plan for current usage. No action needed. (5) All S633–S638 pushes confirmed live on GitHub via commit log. STATE.md was stale — Patrick had been pushing regularly.
 
@@ -96,11 +106,14 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S640
+## Next Session — S641
 
-**Primary goal:** Dev dispatch — wire outreach email templates into Postgres cron (Phase 1 acquisition pipeline). 4 templates finalized in S636 at `claude_docs/strategy/outreach-email-templates-v4.md`. Ready to build.
+**Primary goal:** Dev dispatch — wire outreach email templates into Postgres cron (Phase 1 acquisition pipeline). 4 templates in `claude_docs/strategy/outreach-email-templates-v4.md`. Ready to build.
 
-**Patrick pending actions:** None outstanding — all S633–S639 work is live on GitHub.
+**Patrick pending actions:**
+- Push S640 block (4 files: Layout.tsx, messages/index.tsx, _document.tsx, city/[slug].tsx)
+- Sign up for cold outreach tool (Instantly.ai recommended at $37/mo — see S640 research) to get DKIM record for `outreach.finda.sale`
+- Send 19 queued Gmail outreach drafts (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.)
 
 **Email context (don't re-derive):**
 - Strategy doc: `claude_docs/strategy/organizer-acquisition-strategy.md`
@@ -108,11 +121,9 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 - Touch 1 subject line: "Where do buyers find [Business Name]?" (curiosity gap, locked)
 - Constraints: SHORT (4–6 sentences), one CTA, no "AI" language, inclusive sale types, no fabricated stats, CAN-SPAM compliant
 - SMTP verifier live at 31% email hit rate — data pipeline ready, send pipeline not yet built
+- `outreach.finda.sale` subdomain: SPF ✅ DMARC ✅ DKIM ⏳ (pending cold outreach tool signup)
 
 **Other pending work:**
-- HERE_API_KEY GitHub Secret — HERE geocoding fallback code is live (S638) but secret needs to be added to GitHub repo secrets so the workflow actually calls it
-- Send 19 Gmail outreach drafts (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.)
-- P2 brand drift batch (8 items — single dev dispatch)
 - Pre-existing open bugs: /items/[id] 500, sale social previews blank, Hunt Pass status inconsistency, tier-lapse banner styling
 
 ---
@@ -156,8 +167,8 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 - Reply handling: fully automated per decisions-log S268 (no SLA, no human routing)
 - 19 Gmail outreach drafts queued (Nick Loper, Codie Sanchez, trade associations)
 
-**Carryover from S638:**
-- HERE geocoding fallback code is live in herePlaces.ts — but `HERE_API_KEY` GitHub Secret still needs to be added to repo secrets for the workflow to call it
+**Carryover from S640:**
+- `outreach.finda.sale` subdomain: SPF ✅ DMARC ✅ DKIM ⏳ — need cold outreach tool (Instantly.ai or Smartlead) to generate DKIM keypair, then add CNAME to Vercel DNS
 
 ---
 

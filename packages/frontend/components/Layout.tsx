@@ -692,7 +692,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   );
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col overflow-x-hidden">
       <OfflineIndicator /> {/* Feature #69: Local-First Offline Mode */}
       {/* Skip to main content — keyboard/screen reader accessibility */}
       <a
