@@ -13,12 +13,12 @@ import { CityNearbyLinks } from '@/components/CityNearbyLinks';
 interface RecentSale {
   id: string;
   title: string;
-  address: string;
+  address: string | null;
   startDate: string;
   endDate: string;
-  organizerName?: string;
+  organizerName: string | null;
   status: 'listing' | 'active' | 'ended';
-  photoUrl?: string;
+  photoUrl: string | null;
 }
 
 interface CityPageProps {
@@ -239,7 +239,6 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
       {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        next: { revalidate: 3600 }, // Cache for 1 hour
       }
     );
 
@@ -264,11 +263,11 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
         return {
           id: sale.id,
           title: sale.title,
-          address: sale.address,
+          address: sale.address ?? null,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
-          organizerName: sale.organizer?.businessName,
-          photoUrl: sale.photoUrls?.[0] ?? undefined,
+          organizerName: sale.organizer?.businessName ?? null,
+          photoUrl: sale.photoUrls?.[0] ?? null,
           status,
         };
       });

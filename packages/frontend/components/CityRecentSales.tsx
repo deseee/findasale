@@ -4,12 +4,12 @@ import Image from 'next/image';
 interface RecentSale {
   id: string;
   title: string;
-  address: string;
+  address: string | null;
   startDate: string;
   endDate: string;
-  organizerName?: string;
+  organizerName: string | null;
   status: 'listing' | 'active' | 'ended';
-  photoUrl?: string;
+  photoUrl: string | null;
 }
 
 interface CityRecentSalesProps {
