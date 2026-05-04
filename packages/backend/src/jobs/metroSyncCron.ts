@@ -202,11 +202,10 @@ export function initMetroSyncCron(): void {
     return;
   }
 
-  // Schedule for 04:00 UTC nightly
-  // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('0 4 * * *', async () => {
+  // TEMP: one-time run at 17:20 UTC 2026-05-04 to seed MetroTopFinds — revert to '0 4 * * *' after
+  cron.schedule('20 17 * * *', async () => {
     await syncAllMetros();
   });
 
-  console.log('[MetroSync] Cron registered — runs daily at 04:00 UTC');
+  console.log('[MetroSync] Cron registered — runs at 17:20 UTC (TEMP — revert to 04:00 after seeding)');
 }
