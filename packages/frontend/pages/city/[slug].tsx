@@ -173,27 +173,33 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
   let apiSlug = slug; // Track the slug to use for API calls (may differ from incoming slug)
 
   if (!city) {
-    // Slug may be for a scraped city not in us-cities-3000.json (e.g. 'nashville-tn').
-    // Parse city name and state from the slug rather than 404ing.
     const parts = slug.split('-');
-    const stateCode = parts[parts.length - 1].toUpperCase();
-    const cityName = parts.slice(0, -1).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    if (parts.length < 2 || stateCode.length !== 2) {
-      return { notFound: true };
-    }
-
-    // Try to find the canonical slug from the JSON using name+state
+    const lastPart = parts[parts.length - 1].toUpperCase();
     const allCities = getAllCities();
-    const matchedCity = allCities.find(
-      (c) => c.name.toLowerCase() === cityName.toLowerCase() && c.state === stateCode
-    );
 
-    if (matchedCity) {
-      city = matchedCity;
-      apiSlug = matchedCity.slug; // Use the canonical slug for API calls
+    if (lastPart.length !== 2) {
+      // No state suffix (e.g. 'grand-rapids') — find by prefix match against canonical slugs
+      const prefixMatch = allCities.find((c) => c.slug.startsWith(slug + '-'));
+      if (prefixMatch) {
+        city = prefixMatch;
+        apiSlug = prefixMatch.slug;
+      } else {
+        return { notFound: true };
+      }
     } else {
-      city = { name: cityName, state: stateCode, slug, population: 0, lat: 0, lng: 0, zipCodes: [] };
-      apiSlug = `${cityName.toLowerCase().replace(/\s+/g, '-')}-${stateCode.toLowerCase()}`; // Construct API slug
+      // Has state suffix (e.g. 'grand-rapids-mi') — match by name + state
+      const stateCode = lastPart;
+      const cityName = parts.slice(0, -1).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const matchedCity = allCities.find(
+        (c) => c.name.toLowerCase() === cityName.toLowerCase() && c.state === stateCode
+      );
+      if (matchedCity) {
+        city = matchedCity;
+        apiSlug = matchedCity.slug;
+      } else {
+        city = { name: cityName, state: stateCode, slug, population: 0, lat: 0, lng: 0, zipCodes: [] };
+        apiSlug = `${cityName.toLowerCase().replace(/\s+/g, '-')}-${stateCode.toLowerCase()}`;
+      }
     }
   }
 
