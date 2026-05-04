@@ -1768,6 +1768,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <ul className="space-y-2">
                 <li><Link href="/" className="text-warm-400 hover:text-white">Home</Link></li>
                 <li><Link href="/about" className="text-warm-400 hover:text-white">About</Link></li>
+                <li><Link href="/pricing" className="text-warm-400 hover:text-white">Pricing</Link></li>
                 <li><Link href="/leaderboard" className="text-warm-400 hover:text-white">Leaderboard</Link></li>
                 <li><Link href="/contact" className="text-warm-400 hover:text-white">Contact</Link></li>
                 <li><Link href="/support" className="text-warm-400 hover:text-white">Support</Link></li>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Calendar, TrendingUp, Zap, Heart } from 'lucide-react';
+import { Calendar, TrendingUp, Zap, Heart, Tag } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import useUnreadMessages from '../hooks/useUnreadMessages';
 
@@ -195,7 +195,7 @@ const BottomTabNav = () => {
           <div className="fixed bottom-14 left-0 right-0 bg-white dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 rounded-t-xl z-50 pb-safe md:hidden">
             <div className="p-4">
               <h3 className="text-xs font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-3">Explore</h3>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <Link href="/feed" onClick={() => setExploreSheetOpen(false)}
                   className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-warm-50 dark:bg-gray-800 text-warm-900 dark:text-warm-100">
                   <Zap size={20} className="text-amber-500" />
@@ -210,6 +210,11 @@ const BottomTabNav = () => {
                   className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-warm-50 dark:bg-gray-800 text-warm-900 dark:text-warm-100">
                   <Heart size={20} className="text-rose-500" />
                   <span className="text-xs font-medium">Wishlist</span>
+                </Link>
+                <Link href="/pricing" onClick={() => setExploreSheetOpen(false)}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-warm-50 dark:bg-gray-800 text-warm-900 dark:text-warm-100">
+                  <Tag size={20} className="text-amber-500" />
+                  <span className="text-xs font-medium">Pricing</span>
                 </Link>
               </div>
             </div>
