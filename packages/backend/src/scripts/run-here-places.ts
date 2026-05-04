@@ -43,23 +43,45 @@ async function main() {
   let allItems: ScrapedItem[] = [];
   const results = { succeeded: 0, failed: 0 };
 
-  for (const queueItem of queueItems) {
-    const { id: queueId, metro, subArea } = queueItem;
-    const searchLocation = subArea ? `${subArea}, ${metro}` : metro;
+  // Deduplicate queue items by (metro, subArea).
+  // The queue has one row per (metro, subArea, queryType), but runHEREPlacesScraper always
+  // runs all query categories regardless of queryType. Scrape each unique location once
+  // and mark ALL matching queue rows complete to avoid 6x duplicate work.
+  const locationMap = new Map<string, { searchLocation: string; queueIds: string[] }>();
+  for (const item of queueItems) {
+    const key = `${item.metro}::${item.subArea ?? ''}`;
+    const searchLocation = item.subArea ? `${item.subArea}, ${item.metro}` : item.metro;
+    if (!locationMap.has(key)) {
+      locationMap.set(key, { searchLocation, queueIds: [] });
+    }
+    locationMap.get(key)!.queueIds.push(item.id);
+  }
 
+  console.log(
+    `[run-here-places] Deduped to ${locationMap.size} unique locations from ${queueItems.length} queue items`
+  );
+
+  for (const { searchLocation, queueIds } of locationMap.values()) {
     try {
       const items = await runHEREPlacesScraper([searchLocation]);
       allItems = allItems.concat(items);
 
-      await recordCrawlSuccess(queueId, items.length);
-      results.succeeded++;
-      console.log(`[run-here-places] ${searchLocation}: +${items.length} results`);
+      // Mark all queue rows for this location as complete
+      for (const queueId of queueIds) {
+        await recordCrawlSuccess(queueId, items.length);
+      }
+      results.succeeded += queueIds.length;
+      console.log(
+        `[run-here-places] ${searchLocation}: +${items.length} results (${queueIds.length} queue rows marked complete)`
+      );
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error(`[run-here-places] Error — ${searchLocation}: ${errorMsg}`);
 
-      await recordCrawlFailure(queueId, errorMsg);
-      results.failed++;
+      for (const queueId of queueIds) {
+        await recordCrawlFailure(queueId, errorMsg);
+      }
+      results.failed += queueIds.length;
     }
   }
 

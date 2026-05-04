@@ -100,9 +100,37 @@ function parseCityState(
   return { city: 'Unknown', state: 'US' };
 }
 
+/** In-memory geocode cache for sub-areas not in the static table. Persists for the duration of a scraper run. */
+const geocodeCache = new Map<string, { lat: number; lng: number } | null>();
+
 /**
- * Get coordinates for a metro. Simple parsing from metro string.
- * For real implementation, would geocode via Nominatim or HERE Geocoding API.
+ * Geocode a location string using HERE Geocoding API.
+ * Used as fallback when the static lookup table misses (e.g. sub-area combos like "Bronx, New York, NY").
+ */
+async function geocodeWithHERE(location: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
+  if (geocodeCache.has(location)) {
+    return geocodeCache.get(location)!;
+  }
+  try {
+    const url = `https://geocode.search.hereapi.com/v1/geocode?q=${encodeURIComponent(location)}&apiKey=${apiKey}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) {
+      geocodeCache.set(location, null);
+      return null;
+    }
+    const data = await response.json() as { items?: Array<{ position?: { lat: number; lng: number } }> };
+    const coords = data.items?.[0]?.position ?? null;
+    geocodeCache.set(location, coords);
+    return coords;
+  } catch {
+    geocodeCache.set(location, null);
+    return null;
+  }
+}
+
+/**
+ * Get coordinates for a metro. Checks static table first, then falls back to HERE Geocoding API.
+ * Static table covers all standalone metros; HERE Geocoding handles sub-area combos like "Bronx, New York, NY".
  */
 function getMetroCoordinates(metro: string): { lat: number; lng: number } | null {
   const metroLookup: Record<string, { lat: number; lng: number }> = {
@@ -232,10 +260,15 @@ export async function scrapeHEREQuery(
   queryConfig: any,
   metro: string
 ): Promise<ScrapedItem[]> {
-  const coords = getMetroCoordinates(metro);
+  let coords = getMetroCoordinates(metro);
   if (!coords) {
-    console.warn(`[HEREPlaces] No coordinates for metro: ${metro}`);
-    return [];
+    // Static table miss — try HERE Geocoding API (handles sub-area strings like "Bronx, New York, NY")
+    coords = await geocodeWithHERE(metro, apiKey);
+    if (!coords) {
+      console.warn(`[HEREPlaces] No coordinates for metro: ${metro} (static + geocode both failed)`);
+      return [];
+    }
+    console.log(`[HEREPlaces] Geocoded "${metro}" → ${coords.lat},${coords.lng}`);
   }
 
   const query = `${queryConfig.query} in ${metro}`;
