@@ -1,5 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
+import api from '../lib/api';
 
 export default function VerifyEmail() {
   const router = useRouter();
@@ -12,28 +13,17 @@ export default function VerifyEmail() {
 
     const verifyEmail = async () => {
       try {
-        const response = await fetch('/api/auth/verify-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setStatus('success');
-          setMessage(data.message || 'Email verified successfully! You can now create sales.');
-          // Redirect to dashboard after 2 seconds
-          setTimeout(() => {
-            router.push('/organizer/dashboard');
-          }, 2000);
-        } else {
-          setStatus('error');
-          setMessage(data.message || 'Failed to verify email. The link may have expired.');
-        }
-      } catch (error) {
+        const response = await api.post('/auth/verify-email', { token });
+        setStatus('success');
+        setMessage(response.data.message || 'Email verified successfully! You can now create sales.');
+        setTimeout(() => {
+          router.push('/organizer/dashboard');
+        }, 2000);
+      } catch (error: any) {
         setStatus('error');
-        setMessage('An error occurred while verifying your email.');
+        setMessage(
+          error?.response?.data?.message || 'Failed to verify email. The link may have expired.'
+        );
       }
     };
 
@@ -54,7 +44,7 @@ export default function VerifyEmail() {
 
         {status === 'success' && (
           <div>
-            <div className="text-green-600 text-5xl mb-4">✓</div>
+            <div className="text-green-600 text-5xl mb-4">&#10003;</div>
             <p className="text-slate-700 text-lg font-medium mb-2">Success!</p>
             <p className="text-slate-600 mb-6">{message}</p>
             <p className="text-slate-500 text-sm">Redirecting to your dashboard...</p>
@@ -63,11 +53,11 @@ export default function VerifyEmail() {
 
         {status === 'error' && (
           <div>
-            <div className="text-red-600 text-5xl mb-4">✕</div>
+            <div className="text-red-600 text-5xl mb-4">&#10005;</div>
             <p className="text-slate-700 text-lg font-medium mb-2">Verification Failed</p>
             <p className="text-slate-600 mb-6">{message}</p>
             <button
-              onClick={() => router.push('/auth/login')}
+              onClick={() => router.push('/login')}
               className="inline-block bg-amber-600 text-white px-6 py-2 rounded font-medium hover:bg-amber-700 transition"
             >
               Back to Login
