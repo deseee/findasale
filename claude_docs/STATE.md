@@ -4,13 +4,24 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S635 — Organizer Referral XP Mechanic (COMPLETE)**
+**Latest: S637 — Email Acquisition Pipeline: Concurrency + SMTP Verifier (COMPLETE)**
 
-Full implementation shipped: ShopperOrganizerIntroduction schema model + migration, 7 new XP constants (200–300 XP per action), 3 award functions in referralService with Hunt Pass 1.5× multiplier and monthly caps (1000 XP cap on claimed storefront), claim approval endpoint wired to fire awardOrganizerClaimedXp, 4 Acquisition Specialist cosmetic badges, "Discovered by" amber section on organizer profiles with founding shopper avatar stack. Migration applied. Railway SyntaxError crash (duplicate functions from two write passes) diagnosed and fixed. guild-primer.tsx already had 3 new rows. TypeScript: zero errors.
+enrichContactEmails.ts upgraded with pull-queue concurrency (SCRAPE_CONCURRENCY=10, PLACES_CONCURRENCY=5, processWithConcurrency helper). New smtpPermutationVerifier.ts: MX lookup → RCPT TO prefix probing (15 prefixes) → catch-all detection → DB write. No mail sent. PLATFORM_DOMAINS set blocks Facebook/Instagram/HiBid/ctbids/linqapp/instacard etc. BLOCKED_MX_HOSTS set (GoDaddy/Proofpoint/Mimecast/M365 + smaller hosts) writes best-guess info@ immediately instead of timing out. No-match fallback and SMTP-unreachable fallback also write info@ rather than losing the organizer. New smtp-permutation-verify.yml workflow (daily 2am UTC). Live run results: 128 verified, 27 catch-all, 160 no MX, 53 SMTP unreachable, 48 no match — ~31% email hit rate vs ~1.4% HTML-scraper-only. Workflow cohesion audit: all 9 scraper scripts confirmed to exist, all 4 internal routes wired (ingest, enrich-backfill, batch, bulk), ts-node installed, pnpm filter names match — fleet is cohesive.
 
 ---
 
-## Recent Sessions (S631–S636)
+## Recent Sessions (S632–S637)
+
+### S637 — Email Acquisition Pipeline: Concurrency + SMTP Verifier
+**COMPLETE — Data pipeline: email hit rate 1.4% → 31%**
+
+(1) enrichContactEmails.ts: added `processWithConcurrency<T>` pull-queue helper, SCRAPE_CONCURRENCY=10, PLACES_CONCURRENCY=5. All 3 pass loops converted from sequential to concurrent. (2) smtpPermutationVerifier.ts (NEW): MX lookup via dns.promises, RCPT TO handshake via raw TCP sockets, 15 common prefixes in priority order, catch-all detection via gibberish probe, PLATFORM_DOMAINS blocklist (Facebook/social platforms, HiBid, ctbids, linqapp, instacard, squarespace, wixsite etc.), BLOCKED_MX_HOSTS blocklist (GoDaddy, Proofpoint, Mimecast, M365, hostedemail, ipage, homesteadmail, magicbrain), best-guess info@ fallback on blocked/unreachable/no-match. SMTP_VERIFY=false env var for best-guess-only mode. (3) smtp-permutation-verify.yml (NEW): daily 2am UTC + workflow_dispatch. (4) Workflow cohesion audit: all 9 scraper scripts exist, internal.ts complete (all 4 routes), controller exports all 4 functions, ts-node v10.9.1 installed, pnpm filter names match — fleet cohesive.
+
+**Files changed (3):** enrichContactEmails.ts (concurrency), smtpPermutationVerifier.ts (NEW), smtp-permutation-verify.yml (NEW) — confirmed on GitHub.
+
+**Patrick actions:** No push needed — files confirmed on GitHub. Wrap doc push only (STATE.md + patrick-dashboard.md).
+
+---
 
 ### S636 — Email Creative Session
 **COMPLETE — No code, no migrations**
@@ -60,13 +71,6 @@ Three parallel audits on workflows, dedup logic, API health. **P0 dedup fix:** `
 
 ---
 
-### S631 — Foursquare Places API Migration Fix
-**COMPLETE — Data source: API endpoint/auth/parsing modernized**
-
-Foursquare migrated entire Places API (old `api.foursquare.com/v3` → new `places-api.foursquare.com`). Four bugs fixed: (1) 401 Invalid token — new endpoint requires `Authorization: Bearer <key>` + `X-Places-Api-Version: 2025-06-17` header. Fields changed (fsq_id→fsq_place_id, city→location.locality, closed_bucket removed, lat/lng top-level). (2) City doubling "Chicago, Chicago, IL" — extract state code from metro, use `${subArea}, ${state}`. (3) 11× API waste — script called runFoursquareScraper([location]) which ran all 11 queries per location; fixed to single query via QUERY_TYPE_TO_SEARCH lookup. (4) Unreadable error bodies — response.text() threw due to AbortSignal timeout; fixed with Promise.race + 5s fallback. **Confirmed live:** 1,322 businesses scraped, 50/50 succeeded. Cold-start issue found: first 5 of 53 ingest batches returned 502 (backend sleeping under concurrent load). Wakes after 1–2s; batches 6+ succeeded. Fix: add 502 retry to all scraper runners (handled in S632).
-
-**Files changed (2):** foursquarePlaces.ts (complete rewrite), run-foursquare-places.ts (subArea fix + single-query)
-
 ---
 
 ## Blocked/Unverified Queue
@@ -80,23 +84,13 @@ Foursquare migrated entire Places API (old `api.foursquare.com/v3` → new `plac
 
 ---
 
-## Next Session — S637
+## Next Session — S638
 
-**Primary goal:** Dev dispatch — wire outreach email templates into Postgres cron (Phase 1 acquisition pipeline). OR return to roadmap P1 items per STATE.md.
+**Primary goal:** Dev dispatch — wire outreach email templates into Postgres cron (Phase 1 acquisition pipeline). 4 templates finalized in S636 at `claude_docs/strategy/outreach-email-templates-v4.md`. Ready to build.
 
-**Patrick pending actions from S636:**
-1. No push needed — S636 was docs-only (outreach-email-templates-v4.md already in workspace)
-2. All S635 pending actions still outstanding (push block, migration, S634/S633 blocks if not done)
-
-**Primary goal: Email creative session.** Finalize all 4 outreach email templates. Deferred 4 sessions now (S632→S633→S634→S635). No more code blockers — this session is pure creative copywriting.
-
-**Patrick must do before S636 starts:**
-1. Push S635 block (referral XP + CLAUDE.md updates + wrap docs)
-2. Run `prisma migrate deploy` for 20260628 migration
-3. Push S634 block (backfill script + founding shoppers + behavioral updates) — if not yet done
-4. Push S633 block (8 workflows + schema @unique) — if not yet done
-5. `git rm .github/workflows/test-esn-api-access.yml` in S633 push
-6. Run `prisma migrate deploy` + `prisma generate` for googlePlaceId @unique constraint
+**Patrick pending actions from S637:**
+1. Push wrap docs only (see pushblock below)
+2. All S635/634/633 push blocks still outstanding if not yet done
 
 **After S635 push deploys, run backfill:**
 ```powershell
