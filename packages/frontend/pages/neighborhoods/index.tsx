@@ -37,9 +37,51 @@ const NeighborhoodsPage = () => {
         <title>Sales by Neighborhood | FindA.Sale</title>
         <meta
           name="description"
-          content="Browse upcoming sales by neighborhood. Find estate sales, yard sales, garage sales, and more near you on FindA.Sale."
+          content="Find estate sales, yard sales, and auctions in neighborhoods near you. Hyper-local sale discovery on FindA.Sale."
         />
+        <meta property="og:title" content="Sales by Neighborhood | FindA.Sale" />
+        <meta
+          property="og:description"
+          content="Find estate sales, yard sales, and auctions in neighborhoods near you. Hyper-local sale discovery on FindA.Sale."
+        />
+        <meta property="og:url" content="https://finda.sale/neighborhoods" />
+        <meta property="og:image" content="https://finda.sale/og-image.png" />
         <link rel="canonical" href="https://finda.sale/neighborhoods" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'CollectionPage',
+              name: 'Sales by Neighborhood',
+              description: 'Find estate sales, yard sales, and auctions in neighborhoods near you. Hyper-local sale discovery on FindA.Sale.',
+              url: 'https://finda.sale/neighborhoods',
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'Home',
+                  item: 'https://finda.sale',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: 'Neighborhoods',
+                  item: 'https://finda.sale/neighborhoods',
+                },
+              ],
+            }),
+          }}
+        />
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">

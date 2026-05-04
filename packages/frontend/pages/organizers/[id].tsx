@@ -87,11 +87,72 @@ const OrganizerProfilePage = () => {
   const upcomingSales = organizer.sales.filter(s => new Date(s.endDate) >= new Date());
   const pastSales = organizer.sales.filter(s => new Date(s.endDate) < new Date());
 
+  // Extract city and state from first sale if available
+  const firstSale = organizer.sales?.[0];
+  const organizerCity = firstSale?.city || null;
+  const organizerState = firstSale?.state || null;
+
+  // Prepare location string for descriptions
+  const locationSuffix = organizerCity && organizerState ? ` in ${organizerCity}, ${organizerState}` : '';
+
+  // LocalBusiness schema JSON-LD
+  const localBusinessSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: organizer.businessName,
+    ...(organizer.bio && { description: organizer.bio }),
+    url: `https://finda.sale/organizers/${organizer.id}`,
+    ...(organizer.brandLogoUrl && { image: organizer.brandLogoUrl }),
+    ...(organizer.phone && { telephone: organizer.phone }),
+    ...(organizer.website && { sameAs: organizer.website }),
+    ...(organizerCity && organizerState && {
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: organizerCity,
+        addressRegion: organizerState,
+        addressCountry: 'US',
+      },
+    }),
+  };
+
+  // BreadcrumbList schema JSON-LD
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Home',
+        item: 'https://finda.sale',
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'Organizers',
+        item: 'https://finda.sale/trending',
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: organizer.businessName,
+        item: `https://finda.sale/organizers/${organizer.id}`,
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
         <title>{organizer.businessName} – FindA.Sale</title>
-        <meta name="description" content={`Sales by ${organizer.businessName} — browse upcoming estate sales, auctions, garage sales, and more`} />
+        <meta name="description" content={`Browse upcoming estate sales, auctions, yard sales, and more from ${organizer.businessName}${locationSuffix} — FindA.Sale.`} />
+        <meta property="og:title" content={`${organizer.businessName} | FindA.Sale`} />
+        <meta property="og:image" content={organizer.brandLogoUrl || 'https://finda.sale/og-image.png'} />
+        <meta property="og:description" content={`Estate sales, auctions, and more from ${organizer.businessName}${locationSuffix}.`} />
+        <meta property="og:type" content="business.business" />
+        <meta property="og:url" content={`https://finda.sale/organizers/${organizer.id}`} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
       </Head>
 
       <main className="container mx-auto px-4 py-8 max-w-4xl">

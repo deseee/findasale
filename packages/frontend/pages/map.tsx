@@ -281,12 +281,53 @@ const MapPage = () => {
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex flex-col">
       <Head>
         <title>FindA.Sale Map — Sales Near You</title>
-        <meta name="description" content="View sales on an interactive map near you" />
+        <meta
+          name="description"
+          content="View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time."
+        />
         <meta property="og:title" content="FindA.Sale Map — Sales Near You" />
-        <meta property="og:description" content="See all upcoming sales on an interactive map. Filter by date and find sales near you." />
+        <meta
+          property="og:description"
+          content="View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time."
+        />
         <meta property="og:url" content="https://finda.sale/map" />
-        <meta property="og:image" content="https://finda.sale/og-default.png" />
+        <meta property="og:image" content="https://finda.sale/og-image.png" />
         <meta name="twitter:card" content="summary" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'CollectionPage',
+              name: 'Sales Near You — Interactive Map',
+              description: 'View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time.',
+              url: 'https://finda.sale/map',
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'Home',
+                  item: 'https://finda.sale',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: 'Map',
+                  item: 'https://finda.sale/map',
+                },
+              ],
+            }),
+          }}
+        />
       </Head>
 
       {/* Header Strip */}

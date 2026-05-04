@@ -454,6 +454,45 @@ const GuidePage = () => {
       <Head>
         <title>Organizer Guide – FindA.Sale</title>
         <meta name="description" content="Complete guide for sale organizers on FindA.Sale — create sales, add items, manage inventory, and get paid." />
+        <meta property="og:title" content="Organizer Guide – FindA.Sale" />
+        <meta property="og:description" content="Complete guide for sale organizers on FindA.Sale — create sales, add items, manage inventory, and get paid." />
+        <meta property="og:url" content="https://finda.sale/guide" />
+        <meta property="og:image" content="https://finda.sale/og-image.png" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'CollectionPage',
+              name: 'Organizer Guide',
+              description: 'Complete guide for sale organizers on FindA.Sale — create sales, add items, manage inventory, and get paid.',
+              url: 'https://finda.sale/guide',
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'Home',
+                  item: 'https://finda.sale',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: 'Guide',
+                  item: 'https://finda.sale/guide',
+                },
+              ],
+            }),
+          }}
+        />
       </Head>
 
       <div className="min-h-screen bg-white dark:bg-gray-800">

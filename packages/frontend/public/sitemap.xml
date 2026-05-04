@@ -1,13 +1,31 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Core discovery pages -->
   <url><loc>https://finda.sale/</loc><priority>1.0</priority><changefreq>daily</changefreq></url>
-  <url><loc>https://finda.sale/map</loc><priority>0.8</priority><changefreq>daily</changefreq></url>
+  <url><loc>https://finda.sale/map</loc><priority>0.9</priority><changefreq>daily</changefreq></url>
   <url><loc>https://finda.sale/trending</loc><priority>0.8</priority><changefreq>daily</changefreq></url>
-  <url><loc>https://finda.sale/search</loc><priority>0.7</priority></url>
-  <url><loc>https://finda.sale/pricing</loc><priority>0.7</priority></url>
-  <url><loc>https://finda.sale/about</loc><priority>0.5</priority></url>
-  <url><loc>https://finda.sale/faq</loc><priority>0.5</priority></url>
+  <url><loc>https://finda.sale/search</loc><priority>0.8</priority><changefreq>daily</changefreq></url>
+
+  <!-- Discovery catalog pages -->
+  <url><loc>https://finda.sale/cities</loc><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://finda.sale/categories</loc><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://finda.sale/encyclopedia</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://finda.sale/city-heat-index</loc><priority>0.7</priority><changefreq>weekly</changefreq></url>
+
+  <!-- Pricing and info pages -->
+  <url><loc>https://finda.sale/pricing</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
   <url><loc>https://finda.sale/leaderboard</loc><priority>0.6</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://finda.sale/contact</loc><priority>0.5</priority></url>
-  <url><loc>https://finda.sale/support</loc><priority>0.5</priority></url>
+
+  <!-- Support pages -->
+  <url><loc>https://finda.sale/about</loc><priority>0.6</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://finda.sale/contact</loc><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://finda.sale/faq</loc><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://finda.sale/support</loc><priority>0.5</priority><changefreq>monthly</changefreq></url>
+
+  <!-- Legal pages -->
+  <url><loc>https://finda.sale/terms</loc><priority>0.4</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://finda.sale/privacy</loc><priority>0.4</priority><changefreq>monthly</changefreq></url>
+
+  <!-- Dynamic content served via server-sitemap.xml -->
+  <!-- Includes: sales/[id], cities/[city], neighborhoods/[slug], tags/[slug], guides/[slug] -->
 </urlset>

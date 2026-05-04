@@ -62,7 +62,49 @@ const CategoriesIndexPage = () => {
         <title>Browse by Category — FindA.Sale</title>
         <meta
           name="description"
-          content="Browse items by category on FindA.Sale. Furniture, antiques, jewelry, tools, and more."
+          content="Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you."
+        />
+        <meta property="og:title" content="Browse by Category — FindA.Sale" />
+        <meta
+          property="og:description"
+          content="Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you."
+        />
+        <meta property="og:url" content="https://finda.sale/categories" />
+        <meta property="og:image" content="https://finda.sale/og-image.png" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'CollectionPage',
+              name: 'Browse by Category',
+              description: 'Shop antiques, furniture, jewelry, tools, collectibles, and more from estate sales, auctions, and yard sales near you.',
+              url: 'https://finda.sale/categories',
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                {
+                  '@type': 'ListItem',
+                  position: 1,
+                  name: 'Home',
+                  item: 'https://finda.sale',
+                },
+                {
+                  '@type': 'ListItem',
+                  position: 2,
+                  name: 'Categories',
+                  item: 'https://finda.sale/categories',
+                },
+              ],
+            }),
+          }}
         />
       </Head>
 

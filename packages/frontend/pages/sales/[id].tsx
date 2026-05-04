@@ -640,7 +640,7 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
         sale ? (
           <Head>
             <title>{sale.title} – FindA.Sale</title>
-            <meta name="description" content={sale.description} />
+            <meta name="description" content={`${sale.saleType || 'Sale'} in ${sale.city}, ${sale.state} — browse items and get directions on FindA.Sale.`} />
             <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
             <meta property="og:description" content={sale.description} />
             <meta property="og:image" content={sale.photoUrls[0] || ''} />
@@ -654,6 +654,73 @@ const SaleDetailPage: React.FC<{ ogData?: OGSaleData | null }> = ({ ogData }) =>
           <meta name="twitter:image" content={sale.photoUrls[0] || ''} />
           </Head>
         ) : null
+      )}
+
+      {/* Event schema.org + Breadcrumb JSON-LD */}
+      {sale && (
+        <Head>
+          <script type="application/ld+json" dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Event',
+              'name': sale.title,
+              'description': sale.description || undefined,
+              'startDate': sale.startDate,
+              'endDate': sale.endDate,
+              'eventStatus': 'https://schema.org/EventScheduled',
+              'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
+              'location': {
+                '@type': 'Place',
+                'name': sale.title,
+                'address': {
+                  '@type': 'PostalAddress',
+                  'streetAddress': sale.address || undefined,
+                  'addressLocality': sale.city,
+                  'addressRegion': sale.state,
+                  'addressCountry': 'US',
+                  'postalCode': sale.zip || undefined,
+                }
+              },
+              ...(sale.organizer && sale.organizer.businessName ? {
+                'organizer': {
+                  '@type': 'Organization',
+                  'name': sale.organizer.businessName,
+                  'url': `https://finda.sale/organizers/${sale.organizer.id}`
+                }
+              } : {}),
+              'url': `https://finda.sale/sales/${sale.id}`,
+              ...(sale.photoUrls && sale.photoUrls[0] ? {
+                'image': sale.photoUrls[0]
+              } : {})
+            })
+          }} />
+          <script type="application/ld+json" dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              'itemListElement': [
+                {
+                  '@type': 'ListItem',
+                  'position': 1,
+                  'name': 'Home',
+                  'item': 'https://finda.sale'
+                },
+                {
+                  '@type': 'ListItem',
+                  'position': 2,
+                  'name': 'Sales',
+                  'item': 'https://finda.sale/trending'
+                },
+                {
+                  '@type': 'ListItem',
+                  'position': 3,
+                  'name': sale.title,
+                  'item': `https://finda.sale/sales/${sale.id}`
+                }
+              ]
+            })
+          }} />
+        </Head>
       )}
 
       {/* Feature #121: Leave Sale Warning Modal */}
