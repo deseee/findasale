@@ -499,13 +499,13 @@ export function initScraperCron(): void {
     );
   });
 
-  // Craigslist: daily at 12:00 UTC (offset to avoid simultaneous runs)
+  // FacebookMarketplace: daily at 12:00 UTC (offset to avoid simultaneous runs)
   cron.schedule('0 12 * * *', async () => {
-    console.log('[scraperCron] Craigslist daily run starting');
-    await runSourceAcrossMetros('Craigslist').catch((err) =>
-      console.error('[scraperCron] Craigslist run error:', err)
+    console.log('[scraperCron] FacebookMarketplace daily run starting');
+    await runSourceAcrossMetros('FacebookMarketplace').catch((err) =>
+      console.error('[scraperCron] FacebookMarketplace run error:', err)
     );
   });
 
-  console.log(`[scraperCron] Scheduled: EstateSalesNet @ 00:00 UTC, GarageSaleFinder @ 06:00 UTC, Craigslist @ 12:00 UTC (${NATIONAL_METROS.length} metros)`);
+  console.log(`[scraperCron] Scheduled: EstateSalesNet @ 00:00 UTC, GarageSaleFinder @ 06:00 UTC, FacebookMarketplace @ 12:00 UTC (${NATIONAL_METROS.length} metros)`);
 }
