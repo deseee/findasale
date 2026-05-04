@@ -44,8 +44,8 @@ export default function CityPage(props: CityPageProps) {
     slug,
   } = props;
 
-  const title = `Top Estate Sale Finds in ${cityName}, ${cityState} This Week | FindA.Sale`;
-  const description = `Browse this week's best estate sale finds in ${cityName}—real prices, real discounts, real items. Find deals on furniture, vintage, collectibles & more.`;
+  const title = `Sales & Auctions in ${cityName}, ${cityState} | FindA.Sale`;
+  const description = `Find upcoming estate sales, yard sales, auctions, and garage sales in ${cityName}—real prices, real discounts, real items. Browse furniture, vintage, collectibles & more.`;
   const url = `https://finda.sale/city/${slug}`;
   const imageUrl = `https://finda.sale/api/og?city=${cityName}&state=${cityState}`;
 
@@ -54,7 +54,7 @@ export default function CityPage(props: CityPageProps) {
       <Head>
         <title>{title}</title>
         <meta name="description" content={description} />
-        <meta name="keywords" content={`estate sales ${cityName} ${cityState}, antiques, vintage furniture, auctions, yard sales`} />
+        <meta name="keywords" content={`estate sales ${cityName} ${cityState}, yard sales, garage sales, auctions, antiques, vintage furniture`} />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:image" content={imageUrl} />
@@ -75,8 +75,8 @@ export default function CityPage(props: CityPageProps) {
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'ItemList',
-              name: `Top Estate Sale Finds in ${cityName}, ${cityState}`,
-              description: `This week's best-valued items from estate sales in ${cityName}.`,
+              name: `Top Finds in ${cityName}, ${cityState}`,
+              description: `This week's best-valued items from sales and auctions in ${cityName}.`,
               itemListElement: topFinds.slice(0, 5).map((item, idx) => ({
                 '@type': 'ListItem',
                 position: idx + 1,

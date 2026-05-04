@@ -99,9 +99,7 @@ const MessagesPage = () => {
           <EmptyState
             icon="💬"
             heading="No messages yet"
-            subtext={user.roles?.includes('ORGANIZER')
-              ? "When shoppers ask about your items or sales, messages will appear here. Check back soon!"
-              : "Questions about items? Message an organizer from any sale page to ask details or make an offer."}
+            subtext="No messages yet. Start a conversation — visit a sale and tap 'Message Organizer' to get in touch."
             cta={{ label: 'Browse Sales', href: '/' }}
           />
         )}
