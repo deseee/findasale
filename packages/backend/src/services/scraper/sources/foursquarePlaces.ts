@@ -334,4 +334,3 @@ export async function runFoursquareScraper(metros?: string[], batch?: 1 | 2): Pr
 
   return allItems;
 }
-                                                      
