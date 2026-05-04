@@ -255,9 +255,9 @@ export function initMetroSyncCron(): void {
     return;
   }
 
-  // TEST: fires at 17:42 UTC — revert to '0 4 * * *' after confirming token flow works
+  // TEST: fires at 18:15 UTC (2:15 PM ET) — revert to '0 4 * * *' after confirming token flow works
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('42 17 * * *', async () => {
+  cron.schedule('15 18 * * *', async () => {
     await syncAllMetros();
   });
 
