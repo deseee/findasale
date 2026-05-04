@@ -10,7 +10,6 @@ import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
 import { scrapeEstateSalesNet } from './sources/estatesalesnet';
 import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
-import { scrapeCraigslist } from './sources/craigslist';
 import { enrichOrganizer } from './enrichment';
 
 export interface ScrapeJob {
@@ -290,7 +289,7 @@ async function getOrCreateScrapedOrganizer(
 
 /**
  * Main scraping entry point.
- * Supports: EstateSalesNet | GarageSaleFinder | Craigslist
+ * Supports: EstateSalesNet | GarageSaleFinder
  */
 export async function runScrapeRun(source: string, metro: string): Promise<void> {
   const jobId = await createScrapeJob(source, metro);
@@ -307,8 +306,6 @@ export async function runScrapeRun(source: string, metro: string): Promise<void>
       stats = await scrapeEstateSalesNet(metro, systemOrganizerId, rateLimiter);
     } else if (source === 'GarageSaleFinder') {
       stats = await scrapeGarageSaleFinder(metro, systemOrganizerId, rateLimiter);
-    } else if (source === 'Craigslist') {
-      stats = await scrapeCraigslist(metro, systemOrganizerId, rateLimiter);
     } else {
       console.warn(`[scraper] Unknown source: ${source} — skipping`);
     }
@@ -426,7 +423,7 @@ export async function ingestScrapedListing(
     // Validate required fields. Address is intentionally NOT required —
     // EstateSalesNet (and similar directories) routinely hide street addresses
     // for security/privacy until the day of the sale. ZIP is also not required
-    // for sources like Craigslist that don't provide postal codes. City + state
+    // Some sources don't provide postal codes. City + state
     // is sufficient to place the sale on the map. Address and ZIP can be filled in later.
     if (!listing.title || !listing.city || !listing.state || !listing.startDate || !listing.endDate) {
       return {
@@ -512,7 +509,7 @@ export async function ingestScrapedListing(
         address: listing.address,
         city: listing.city,
         state: listing.state,
-        zip: listing.zip ?? '', // ZIP absent for Craigslist — empty string satisfies schema non-null
+        zip: listing.zip ?? '', // ZIP may be absent for some sources — empty string satisfies schema non-null
         startDate: listing.startDate,
         endDate: listing.endDate,
         description: listing.description ?? null,
