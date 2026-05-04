@@ -54,12 +54,64 @@ interface EbaySoldItem {
   itemId: string;
 }
 
+// Token cache — eBay tokens last 2 hours; refresh 5 min early
+let cachedToken: { token: string; expires: number } | null = null;
+
+/**
+ * Fetch an eBay OAuth token via the Vercel proxy's ?action=token endpoint.
+ * Returns the access_token string, or null on failure.
+ */
+async function fetchEbayToken(): Promise<string | null> {
+  if (cachedToken && cachedToken.expires > Date.now()) {
+    return cachedToken.token;
+  }
+
+  const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
+  const proxySecret = process.env.EBAY_PROXY_SECRET;
+
+  try {
+    const response = await fetch(`${frontendUrl}/api/proxy/ebay?action=token`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`[MetroSync] Token fetch failed: ${response.status}`);
+      return null;
+    }
+
+    const data = (await response.json()) as { access_token?: string; expires_in?: number };
+    if (!data.access_token) {
+      console.error('[MetroSync] Token response missing access_token:', JSON.stringify(data).slice(0, 200));
+      return null;
+    }
+
+    // Cache for (expires_in - 5 min), default 2h - 5min = 115 min
+    const ttlMs = ((data.expires_in ?? 7200) - 300) * 1000;
+    cachedToken = { token: data.access_token, expires: Date.now() + ttlMs };
+    console.log('[MetroSync] eBay OAuth token fetched successfully');
+    return data.access_token;
+  } catch (error) {
+    console.error('[MetroSync] Token fetch error:', error);
+    return null;
+  }
+}
+
 /**
  * Search eBay for sold items matching estate sale keywords in a specific metro.
  * Returns top 12 results sorted by most recent sale.
  */
 async function fetchEbaySoldItems(metro: MetroConfig): Promise<EbaySoldItem[]> {
   try {
+    const accessToken = await fetchEbayToken();
+    if (!accessToken) {
+      console.error(`[MetroSync] Skipping ${metro.slug} — no eBay token`);
+      return [];
+    }
+
     // Build search query: estate sale OR yard sale OR garage sale + location
     const query = encodeURIComponent(`("estate sale" OR "yard sale" OR "garage sale") location:"${metro.ebayLocation}"`);
 
@@ -76,6 +128,7 @@ async function fetchEbaySoldItems(metro: MetroConfig): Promise<EbaySoldItem[]> {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
           ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
         },
       }
@@ -202,9 +255,9 @@ export function initMetroSyncCron(): void {
     return;
   }
 
-  // Schedule for 04:00 UTC nightly
+  // TEST: fires at 17:42 UTC — revert to '0 4 * * *' after confirming token flow works
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('0 4 * * *', async () => {
+  cron.schedule('42 17 * * *', async () => {
     await syncAllMetros();
   });
 
