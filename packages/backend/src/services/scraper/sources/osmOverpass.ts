@@ -15,7 +15,11 @@
 import { ScrapedItem } from '../index';
 
 const NOMINATIM_API_BASE = 'https://nominatim.openstreetmap.org';
-const OVERPASS_API_BASE = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',           // primary
+  'https://overpass.kumi.systems/api/interpreter',     // EU mirror
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter', // RU mirror
+];
 
 /** Cache geocoded bounding boxes to avoid repeat requests */
 const boundingBoxCache = new Map<string, { minlat: number; maxlat: number; minlon: number; maxlon: number }>();
@@ -231,7 +235,10 @@ async function getMetroBoundingBox(
     url.searchParams.set('addressdetails', '0');
 
     const response = await fetch(url.toString(), {
-      headers: { 'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)' },
+      headers: {
+        'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)',
+        'Accept': 'application/json',
+      },
       signal: AbortSignal.timeout(12000),
     });
 
@@ -271,29 +278,43 @@ function buildOverpassQuery(bbox: { minlat: number; maxlat: number; minlon: numb
 
 /**
  * Query Overpass API and return raw elements.
+ * Tries multiple mirrors in order to handle datacenter IP blocking and rate limits.
  */
 async function queryOverpass(
   query: string
 ): Promise<OverpassElement[] | null> {
-  try {
-    const response = await fetch(OVERPASS_API_BASE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: AbortSignal.timeout(35000), // Overpass timeout is 30s
-    });
+  for (const endpoint of OVERPASS_MIRRORS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(35000), // Overpass timeout is 30s
+      });
 
-    if (!response.ok) {
-      console.warn(`[OSM] Overpass API HTTP ${response.status}`);
-      return null;
+      if (response.status === 429) {
+        // Rate limited — wait and try next mirror
+        console.warn(`[OSM] ${endpoint} rate limited (429) — trying next mirror`);
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+
+      if (!response.ok) {
+        console.warn(`[OSM] ${endpoint} HTTP ${response.status} — trying next mirror`);
+        continue;
+      }
+
+      const data = (await response.json()) as OverpassResponse;
+      return data.elements ?? [];
+    } catch (err) {
+      console.warn(`[OSM] ${endpoint} error:`, err instanceof Error ? err.message : err, '— trying next mirror');
     }
-
-    const data = (await response.json()) as OverpassResponse;
-    return data.elements ?? [];
-  } catch (err) {
-    console.warn(`[OSM] Overpass API error:`, err);
-    return null;
   }
+  console.warn(`[OSM] All Overpass mirrors failed`);
+  return null;
 }
 
 /**
