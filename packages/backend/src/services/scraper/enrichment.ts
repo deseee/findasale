@@ -6,6 +6,10 @@
 import { prisma } from '../../lib/prisma';
 import { getRandomUserAgent } from './userAgents';
 
+// In-memory cache for Google Place lookups — 30-day TTL
+const placeIdCache = new Map<string, { placeId: string; cachedAt: number }>();
+const PLACE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 /**
  * Main enrichment entry point.
  * Looks up organizer data via ESN company-public-page API and Google Places.
@@ -120,33 +124,24 @@ export async function enrichOrganizer(
 
         const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
         if (googlePlacesKey) {
-          const details = await fetchGooglePlaceDetails(placeId, googlePlacesKey);
-          if (details) {
-            if (details.phone && !organizer.phone && !updateData.phone)
-              updateData.phone = details.phone;
-            if (details.website && !organizer.website && !updateData.website)
-              updateData.website = details.website;
-            if (details.formattedAddress && !organizer.address)
-              updateData.address = details.formattedAddress;
-            if (details.photoReference && !organizer.profilePhoto && !updateData.profilePhoto) {
-              const photoUrl = getGooglePhotoUrl(details.photoReference, googlePlacesKey);
-              if (photoUrl) updateData.profilePhoto = photoUrl;
+          // Skip expensive Place Details call if phone and website already populated (ESN-sourced)
+          const hasPhone = organizer.phone || updateData.phone;
+          const hasWebsite = organizer.website || updateData.website;
+          if (!hasPhone || !hasWebsite) {
+            const details = await fetchGooglePlaceDetails(placeId, googlePlacesKey);
+            if (details) {
+              if (details.phone && !organizer.phone && !updateData.phone)
+                updateData.phone = details.phone;
+              if (details.website && !organizer.website && !updateData.website)
+                updateData.website = details.website;
+              if (details.formattedAddress && !organizer.address)
+                updateData.address = details.formattedAddress;
+              if (details.photoReference && !organizer.profilePhoto && !updateData.profilePhoto) {
+                const photoUrl = getGooglePhotoUrl(details.photoReference, googlePlacesKey);
+                if (photoUrl) updateData.profilePhoto = photoUrl;
+              }
             }
-            // Store Google rating — always refresh (rating changes over time)
-            if (details.rating != null) updateData.googleRating = details.rating;
-            if (details.userRatingsTotal != null) updateData.googleRatingCount = details.userRatingsTotal;
           }
-        }
-      }
-    } else if (organizer.googlePlaceId && organizer.googleRating == null) {
-      // Already have placeId but rating was never fetched (pre-dates rating fields).
-      // Fetch Details only — no new lookup needed.
-      const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
-      if (googlePlacesKey) {
-        const details = await fetchGooglePlaceDetails(organizer.googlePlaceId, googlePlacesKey);
-        if (details) {
-          if (details.rating != null) updateData.googleRating = details.rating;
-          if (details.userRatingsTotal != null) updateData.googleRatingCount = details.userRatingsTotal;
         }
       }
     }
@@ -189,6 +184,7 @@ export async function enrichOrganizer(
 /**
  * Lookup organizer via Google Places API.
  * Returns place ID on success, null on failure or if not found.
+ * Caches results for 30 days to avoid redundant API calls.
  */
 async function lookupGooglePlace(
   name: string,
@@ -197,6 +193,15 @@ async function lookupGooglePlace(
 ): Promise<string | null> {
   const googlePlacesKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!googlePlacesKey) return null;
+
+  // Build cache key from normalized input
+  const cacheKey = `${name}|${city}|${state}`.toLowerCase();
+
+  // Check for valid cached entry
+  const cached = placeIdCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < PLACE_CACHE_TTL_MS) {
+    return cached.placeId;
+  }
 
   try {
     const query = `${name} ${city} ${state}`;
@@ -215,7 +220,15 @@ async function lookupGooglePlace(
     };
 
     if (data.status !== 'OK' || !data.candidates?.length) return null;
-    return data.candidates[0]?.place_id || null;
+
+    const placeId = data.candidates[0]?.place_id || null;
+
+    // Cache successful lookups only (not null results, we retry those)
+    if (placeId) {
+      placeIdCache.set(cacheKey, { placeId, cachedAt: Date.now() });
+    }
+
+    return placeId;
   } catch {
     return null;
   }
@@ -223,8 +236,7 @@ async function lookupGooglePlace(
 
 /**
  * Fetch full business details from Google Places Details API.
- * Requests rating and user_ratings_total for future storage once schema supports them
- * (Organizer needs googleRating Decimal? and googleRatingCount Int? — flagged to Architect).
+ * Requests phone, website, address, and photo — not rating fields (cost optimization).
  */
 async function fetchGooglePlaceDetails(
   placeId: string,
@@ -234,15 +246,13 @@ async function fetchGooglePlaceDetails(
   website?: string;
   photoReference?: string;
   formattedAddress?: string;
-  rating?: number;
-  userRatingsTotal?: number;
 } | null> {
   try {
     const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
     url.searchParams.set('place_id', placeId);
     url.searchParams.set(
       'fields',
-      'formatted_phone_number,website,photos,formatted_address,rating,user_ratings_total'
+      'formatted_phone_number,website,photos,formatted_address'
     );
     url.searchParams.set('key', apiKey);
 
@@ -255,8 +265,6 @@ async function fetchGooglePlaceDetails(
         website?: string;
         photos?: Array<{ photo_reference: string }>;
         formatted_address?: string;
-        rating?: number;
-        user_ratings_total?: number;
       };
       status: string;
     };
@@ -267,8 +275,6 @@ async function fetchGooglePlaceDetails(
       website: data.result.website,
       photoReference: data.result.photos?.[0]?.photo_reference,
       formattedAddress: data.result.formatted_address,
-      rating: data.result.rating,
-      userRatingsTotal: data.result.user_ratings_total,
     };
   } catch {
     return null;
