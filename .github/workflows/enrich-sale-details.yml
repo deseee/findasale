@@ -16,13 +16,25 @@ on:
     - cron: '0 3 * * *'
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          BATCHES=${{ github.event.inputs.batches || 3 }}
+          python3 -c "import json; print(json.dumps(list(range(int('$BATCHES')))))" > /tmp/matrix.json
+          echo "matrix=$(cat /tmp/matrix.json)" >> $GITHUB_OUTPUT
+
   enrich:
+    needs: setup
     strategy:
       matrix:
-        batch_index: [0, 1, 2]  # 3 parallel jobs by default
+        batch_index: ${{ fromJSON(needs.setup.outputs.matrix) }}
       fail-fast: false
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Fetch batch of unenriched sales
