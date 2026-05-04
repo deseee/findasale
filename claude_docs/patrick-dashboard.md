@@ -2,9 +2,11 @@
 
 ## What Happened This Week
 
-S638 was a reactive session — you ran the GH Actions fleet live and shared logs as things broke. Six scraper bugs fixed: HERE Places was returning identical results for every NYC borough (all got the same coordinates from the static table; fixed by adding a live Geocoding API fallback). HERE was also running 5–6x per location because the queue has 6 queryType rows per borough but the scraper ignored queryType — fixed by deduplicating queue items to unique locations before scraping. foursquarePlaces.ts had null byte corruption at EOF causing TypeScript to hallucinate duplicate declarations — stripped the bytes, then fixed the real underlying duplicate code block. Foursquare was hitting HTTP 429 on detail API calls because the free tier allows only ~500/day; removed all detail calls (base fields are enough for initial ingest). Railway was throwing P2002 errors on both email uniqueness (same-name businesses like "Goodwill" generated identical system emails — fixed by including city+state in the email pattern) and on googlePlaceId (enrichment was trying to assign a placeId already owned by another organizer — fixed with a pre-update conflict check). Finally, enrich-sale-details.yml was crashing with "Argument list too long" because 150 sales of JSON was being passed as a shell variable to curl — fixed by writing to a temp file and using `curl -d @file` instead.
+S639: Investigated $47.22 Google Places API charge on your $100 Google Cloud bill. The $200/month free credit is gone — Google replaced it with subscription tiers in early 2025. Pay as you go is still the right plan at your usage level. Fixed the underlying cost driver in enrichment.ts (you pushed it yourself): removed unnecessary `rating`/`user_ratings_total` fields from Place Details requests, added a 30-day TTL cache so the same organizer doesn't get re-fetched, and added skip logic so organizers who already have both phone and website don't get re-enriched. Also set a hard daily quota cap on the Places API: 15,000 requests/day (was Unlimited), which puts a hard ceiling of ~$15/day even if something goes wrong.
 
-Previous week summary: email hit rate 1.4% → 31%, SMTP verifier shipped, 4 outreach templates finalized.
+S638: HERE geocoding fallback shipped. Six scraper fleet bugs fixed (HERE coordinate dedup, Foursquare 429, Railway P2002 email+placeId, ARG_MAX curl crash). All confirmed live on GitHub.
+
+Previous: Email hit rate 1.4% → 31% (SMTP verifier), 4 outreach templates finalized and ready to wire into send pipeline.
 
 ## Audit Results (Weekly + Brand Drift — May 2)
 
@@ -35,8 +37,6 @@ No items in DECISIONS.md currently marked PENDING. All standing decisions (D-001
 
 ## Action Items for Patrick
 
-- [ ] **Push S638 block** (see pushblock below — 6 scraper files + STATE.md + patrick-dashboard.md + decisions-log.md + roadmap.md)
-- [ ] **Check if S635, S634, S633 push blocks were completed** — if not, those sessions' code never made it to GitHub
-- [ ] **Run S633 migration** (`prisma migrate deploy`) for the googlePlaceId uniqueness fix — if not done yet
-- [ ] **Sign up for HERE API** at developer.here.com and add `HERE_API_KEY` as a GitHub Secret — outstanding since S625
+- [ ] **Add `HERE_API_KEY` GitHub Secret** — code is live in herePlaces.ts but the secret isn't in GitHub repo settings yet, so the workflow can't call it. Go to github.com/deseee/findasale → Settings → Secrets → Actions → New secret.
 - [ ] **Send 19 queued Gmail outreach drafts** (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.)
+- [ ] **Push S639 wrap docs** (STATE.md + patrick-dashboard.md — pushblock below)

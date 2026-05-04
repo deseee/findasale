@@ -4,13 +4,23 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S638 — Scraper Fleet Reactive Fixes (COMPLETE)**
+**Latest: S639 — Google Places Billing + Cost Optimizations (COMPLETE)**
 
-Six reactive scraper fleet fixes shipped while Patrick ran GH Actions workflows live. (1) herePlaces.ts `baseMmetro`/`baseMretto` typo → `baseMetro`. (2) HERE Places returning same 123 results for all NYC boroughs — static coordinate table had no sub-area entries; added HERE Geocoding API fallback (`geocodeWithHERE()`, 8s timeout, module-level cache). (3) HERE Places running 5–6× per metro — queue has 6 queryType rows per borough but scraper ignored queryType, running all 11 queries per row; fixed by deduplicating queue items by `(metro, subArea)` before scraping (50 items → 10 unique locations). (4) foursquarePlaces.ts null byte corruption (54 null bytes at EOF → TS1127/TS2451) — stripped with python3 `data.rstrip(b'\x00')`; exposed real bug: duplicate 4-line block (lines 210/218) → removed second occurrence; TS2322 `null` vs `undefined` → fixed. (5) Foursquare HTTP 429 on detail API — free tier ~500/day, far below national scraping volume; removed all detail API calls, base search fields sufficient. (6) Railway P2002 on email unique constraint — "Goodwill"-style same-name businesses generated identical system emails; added `citySlug`+`stateSlug` to email pattern + `Date.now()` fallback. Railway P2002 on googlePlaceId in enrichment — added `findFirst` conflict check before writing googlePlaceId. enrich-sale-details.yml ARG_MAX `Argument list too long` — `curl -d "$RESULTS"` with 150-sale JSON exceeded Linux shell limit; replaced with `curl -d @/tmp/enrichment_results.json` (file-based) throughout.
+(1) Discovered $47.22 Google Places API charge on $100 Google Cloud bill. Root cause: enrichment.ts fetching `rating`/`user_ratings_total` fields unnecessarily, no caching, no skip logic. (2) enrichment.ts cost fix pushed by Patrick at 12:32 UTC May 4: removed rating fields from Place Details request, added skip logic when organizer already has both phone AND website, added module-level 30-day TTL cache (`placeIdCache` Map). (3) Google Cloud quota hard cap set: Places API "Requests per day" reduced from Unlimited → 15,000 (~$15/day worst case). Path used: IAM & Admin → Quotas (Maps Platform quotas page had rendering issues). (4) Confirmed Google's $200/month free credit is GONE — replaced by subscription tiers (Starter $100/mo, Essentials $275/mo). Pay as you go is correct plan for current usage. No action needed. (5) All S633–S638 pushes confirmed live on GitHub via commit log. STATE.md was stale — Patrick had been pushing regularly.
 
-**Files changed (6):** herePlaces.ts, run-here-places.ts, foursquarePlaces.ts, scraper/index.ts (email dedup), enrichment.ts (googlePlaceId conflict check), enrich-sale-details.yml (ARG_MAX fix)
+**Files changed (1):** enrichment.ts (cost optimization — already on GitHub, commit 12:32 UTC May 4)
 
-**Patrick actions:** Push S638 block (see Next Session).
+**Patrick actions:** None. All work is live.
+
+---
+
+### S638 — Scraper Fleet Reactive Fixes (COMPLETE — confirmed pushed)
+
+Six reactive scraper fleet fixes shipped. (1) herePlaces.ts `baseMmetro`/`baseMretto` typo → `baseMetro`. (2) HERE Places returning same 123 results for all NYC boroughs — added HERE Geocoding API fallback (`geocodeWithHERE()`, 8s timeout, module-level cache). (3) HERE Places running 5–6× per metro — fixed by deduplicating queue items by `(metro, subArea)` before scraping (50 items → 10 unique locations). (4) foursquarePlaces.ts null byte corruption, duplicate block, TS2322 null/undefined — all fixed. (5) Foursquare HTTP 429 on detail API — removed all detail API calls. (6) Railway P2002 on email unique constraint + googlePlaceId — fixed. ARG_MAX `curl -d "$RESULTS"` → file-based curl.
+
+**Files changed (6):** herePlaces.ts, run-here-places.ts, foursquarePlaces.ts, scraper/index.ts, enrichment.ts, enrich-sale-details.yml
+
+**Patrick actions:** None — all pushed, confirmed on GitHub (commit 10:07 UTC May 4).
 
 ---
 
@@ -21,7 +31,7 @@ enrichContactEmails.ts upgraded with pull-queue concurrency (SCRAPE_CONCURRENCY=
 
 ---
 
-## Recent Sessions (S632–S637)
+## Recent Sessions (S636–S639)
 
 ### S637 — Email Acquisition Pipeline: Concurrency + SMTP Verifier
 **COMPLETE — Data pipeline: email hit rate 1.4% → 31%**
@@ -86,31 +96,21 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S639
+## Next Session — S640
 
 **Primary goal:** Dev dispatch — wire outreach email templates into Postgres cron (Phase 1 acquisition pipeline). 4 templates finalized in S636 at `claude_docs/strategy/outreach-email-templates-v4.md`. Ready to build.
 
-**Patrick pending actions from S638:**
-1. Push S638 block (below)
-2. All S635/634/633 push blocks still outstanding if not yet done
-
-**After S635 push deploys, run backfill:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\backend
-$env:DATABASE_URL="[see CLAUDE.md credentials — Railway DATABASE_URL]"
-$env:FOURSQUARE_API_KEY="[see CLAUDE.md credentials — FOURSQUARE_API_KEY]"
-npx ts-node scripts/backfillFoursquareDetails.ts
-```
+**Patrick pending actions:** None outstanding — all S633–S639 work is live on GitHub.
 
 **Email context (don't re-derive):**
 - Strategy doc: `claude_docs/strategy/organizer-acquisition-strategy.md`
-- Touch 1 subject line UNLOCKED: write what earns the open
-- S629 best draft leads with organizer pain (T1), pricing (T3), QR checkout (T4)
-- Business guru brief: Hormozi value-first, Ogilvy one-person rule, curiosity gap, specificity=credibility, high you/I ratio
+- 4 templates in `claude_docs/strategy/outreach-email-templates-v4.md`
+- Touch 1 subject line: "Where do buyers find [Business Name]?" (curiosity gap, locked)
 - Constraints: SHORT (4–6 sentences), one CTA, no "AI" language, inclusive sale types, no fabricated stats, CAN-SPAM compliant
+- SMTP verifier live at 31% email hit rate — data pipeline ready, send pipeline not yet built
 
-**Other pending work (after emails):**
-- Sign up HERE API at developer.here.com → add `HERE_API_KEY` GitHub Secret (outstanding since S625)
+**Other pending work:**
+- HERE_API_KEY GitHub Secret — HERE geocoding fallback code is live (S638) but secret needs to be added to GitHub repo secrets so the workflow actually calls it
 - Send 19 Gmail outreach drafts (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.)
 - P2 brand drift batch (8 items — single dev dispatch)
 - Pre-existing open bugs: /items/[id] 500, sale social previews blank, Hunt Pass status inconsistency, tier-lapse banner styling
@@ -156,8 +156,8 @@ npx ts-node scripts/backfillFoursquareDetails.ts
 - Reply handling: fully automated per decisions-log S268 (no SLA, no human routing)
 - 19 Gmail outreach drafts queued (Nick Loper, Codie Sanchez, trade associations)
 
-**Carryover from S625:**
-- Sign up HERE API at developer.here.com → add `HERE_API_KEY` GitHub Secret (overdue)
+**Carryover from S638:**
+- HERE geocoding fallback code is live in herePlaces.ts — but `HERE_API_KEY` GitHub Secret still needs to be added to repo secrets for the workflow to call it
 
 ---
 
