@@ -212,17 +212,10 @@ export async function scrapeFoursquareQuery(
     const endDate = new Date(now);
     endDate.setFullYear(endDate.getFullYear() + 1);
 
-    // Fetch detailed information for this place
-    const details = await fetchFoursquareDetails(apiKey, place.fsq_place_id);
-
-    // Extract up to 3 photos
-    const photoUrls: string[] = [];
-    if (details?.photos && details.photos.length > 0) {
-      for (let i = 0; i < Math.min(3, details.photos.length); i++) {
-        const photo = details.photos[i];
-        photoUrls.push(`${photo.prefix}original${photo.suffix}`);
-      }
-    }
+    // NOTE: Detail calls (hours, photos, description) are skipped during scraping.
+    // Foursquare free tier allows only ~500 detail calls/day — far below the volume
+    // needed for national scraping. Base search fields are sufficient for initial ingest.
+    // Hours/photos/description can be enriched in a separate pass.
 
     const item: ScrapedItem = {
       title: place.name,
@@ -232,14 +225,14 @@ export async function scrapeFoursquareQuery(
       zip: place.location?.postcode ?? '',
       startDate: now,
       endDate,
-      description: details?.description ?? undefined,
+      description: undefined,
       saleType: queryConfig.saleType,
       organizerName: place.name,
       businessCategory: queryConfig.category,
       sourceName: 'Foursquare',
       sourceUrl: `https://foursquare.com/v/${place.name.replace(/\s+/g, '-').toLowerCase()}/${place.fsq_place_id}`,
       sourceItemId: place.fsq_place_id,
-      photoUrls,
+      photoUrls: [],
       scrapedMetadata: {
         businessCategory: queryConfig.category,
         fsqId: place.fsq_place_id,
@@ -249,16 +242,13 @@ export async function scrapeFoursquareQuery(
         website: place.website ?? null,
         formattedAddress: place.location?.address ?? null,
         searchQuery: queryConfig.query,
-        hours: details?.hours ?? null,
-        hours_display: details?.hours?.display ?? null,
-        rating: details?.rating ?? null,
+        hours: null,
+        hours_display: null,
+        rating: null,
       },
     };
 
     results.push(item);
-
-    // Rate limiting: 200ms between detail calls
-    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 
   return results;
