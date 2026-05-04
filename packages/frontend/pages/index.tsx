@@ -498,7 +498,8 @@ const HomePage = () => {
                   <EmptyState
                     icon="🔍"
                     heading={`No items found for "${searchQuery}"`}
-                    subtext="Try a different keyword, or browse all nearby sales to discover great finds."
+                    subtext="Try a different keyword, or browse all nearby sales."
+                    cta={{ label: 'Browse Nearby Sales', onClick: () => setSearchQuery('') }}
                   />
                 )}
               </>
