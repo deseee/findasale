@@ -47,10 +47,14 @@ router.get('/', async (req: Request, res: Response) => {
     const { q, type, page, limit, priceMin, priceMax, condition, category, saleStatus, sortBy } = validatedQuery;
     const skip = (page - 1) * limit;
 
+    // Strip ", ST" state suffix so "san diego, CA" → "san diego" for city matching
+    const cityQuery = q.replace(/,\s*[A-Za-z]{2}$/, '').trim();
+
     const textWhere = {
       OR: [
         { title: { contains: q, mode: 'insensitive' as const } },
         { description: { contains: q, mode: 'insensitive' as const } },
+        { city: { contains: cityQuery, mode: 'insensitive' as const } },
       ],
     };
 
