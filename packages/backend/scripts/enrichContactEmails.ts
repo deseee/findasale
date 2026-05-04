@@ -11,9 +11,10 @@
  * Pass 2: Organizers with no website — try Google Places to find website, then scrape
  * Pass 3: Enhanced fallback — for Pass 1 misses, try Places to find alternate website + scrape
  *
- * Rate limiting: 400ms between all requests (scrapes + API calls)
+ * Rate limiting: 400ms between sequential URL attempts per organizer
  * Timeout: 10 seconds per fetch
- * Batch sizes: Pass 1 (200), Pass 2 (100), Pass 3 (all with website from Pass 1)
+ * Batch sizes: Pass 1 (200), Pass 2 (100), Pass 3 (100)
+ * Concurrency: Pass 1 = 10 workers (different domains), Pass 2/3 = 5 workers (shared Places quota)
  *
  * Usage:
  *   DATABASE_URL=... npx ts-node scripts/enrichContactEmails.ts
@@ -135,6 +136,33 @@ function findFirstValidEmail(html: string): string | null {
 // Sleep helper for rate limiting
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Concurrency limits
+const SCRAPE_CONCURRENCY = 10; // Each organizer hits a different domain — safe to parallelize
+const PLACES_CONCURRENCY = 5;  // Shared API quota — conservative cap
+
+/**
+ * Process items with bounded concurrency using a pull-queue pattern.
+ * Each worker slot pulls the next available item until the queue is empty.
+ * No external dependencies required.
+ */
+async function processWithConcurrency<T>(
+  items: T[],
+  worker: (item: T, index: number, total: number) => Promise<void>,
+  concurrency: number
+): Promise<void> {
+  let idx = 0;
+  const total = items.length;
+  async function runSlot(): Promise<void> {
+    while (idx < total) {
+      const i = idx++;
+      await worker(items[i], i, total);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, total) }, runSlot)
+  );
 }
 
 // Query Google Places Text Search API
@@ -272,8 +300,7 @@ async function main() {
     const pass1Total = pass1Organizers.length;
     console.log(`[Enrich] Found ${pass1Total} organizers with website to process\n`);
 
-    for (let i = 0; i < pass1Organizers.length; i++) {
-      const org = pass1Organizers[i];
+    await processWithConcurrency(pass1Organizers, async (org, i) => {
       const processed = i + 1;
       let email: string | null = null;
       let source = '';
@@ -283,8 +310,7 @@ async function main() {
         if (!baseDomain) {
           console.log(`[Enrich] (${processed}/${pass1Total}) ${org.businessName}: invalid URL`);
           pass1Errors++;
-          await sleep(400);
-          continue;
+          return;
         }
 
         // Fixed URL pattern list — try in order, stop on first email found
@@ -335,7 +361,6 @@ async function main() {
         }
 
         if (email) {
-          // Update database
           await prisma.organizer.update({
             where: { id: org.id },
             data: { contactEmail: email },
@@ -353,9 +378,7 @@ async function main() {
         console.log(`[Enrich] (${processed}/${pass1Total}) ${org.businessName}: fetch error: ${message}`);
         pass1Errors++;
       }
-
-      // Rate limiting already handled in loop — no additional sleep needed
-    }
+    }, SCRAPE_CONCURRENCY);
 
     console.log(`\n[Enrich] Pass 1 Summary:`);
     console.log(`  Found: ${pass1Found}`);
@@ -382,8 +405,7 @@ async function main() {
     const pass2Total = pass2Organizers.length;
     console.log(`[Enrich] Found ${pass2Total} organizers without website to process\n`);
 
-    for (let i = 0; i < pass2Organizers.length; i++) {
-      const org = pass2Organizers[i];
+    await processWithConcurrency(pass2Organizers, async (org, i) => {
       const processed = i + 1;
       let email: string | null = null;
       let foundWebsite: string | null = null;
@@ -393,7 +415,7 @@ async function main() {
         const city = extractCityFromAddress(org.address);
 
         // Try Google Places first
-        let website = await queryGooglePlaces(org.businessName, city);
+        const website = await queryGooglePlaces(org.businessName, city);
         if (website) {
           foundWebsite = website;
           source = 'Places';
@@ -402,14 +424,11 @@ async function main() {
             `[Enrich] (${processed}/${pass2Total}) ${org.businessName}: GOOGLE_PLACES_API_KEY not set — skipping Places`
           );
           pass2NotFound++;
-          await sleep(400);
-          continue;
+          return;
         }
-
 
         // If website found, scrape for email and update DB
         if (foundWebsite) {
-          // Update website first
           await prisma.organizer.update({
             where: { id: org.id },
             data: { website: foundWebsite },
@@ -425,6 +444,7 @@ async function main() {
 
             // Try /contact if homepage failed
             if (!email) {
+              await sleep(400);
               const contactUrl = `${baseDomain}/contact`;
               html = await fetchWithTimeout(contactUrl);
               if (html) {
@@ -432,7 +452,6 @@ async function main() {
               }
             }
 
-            // Update email if found
             if (email) {
               await prisma.organizer.update({
                 where: { id: org.id },
@@ -463,10 +482,7 @@ async function main() {
         console.log(`[Enrich] (${processed}/${pass2Total}) ${org.businessName}: error: ${message}`);
         pass2Errors++;
       }
-
-      // Rate limiting
-      await sleep(400);
-    }
+    }, PLACES_CONCURRENCY);
 
     console.log(`\n[Enrich] Pass 2 Summary:`);
     console.log(`  Found: ${pass2Found}`);
@@ -499,8 +515,7 @@ async function main() {
       const pass3Total = pass3Organizers.length;
       console.log(`[Enrich] Found ${pass3Total} organizers from Pass 1 with no email\n`);
 
-      for (let i = 0; i < pass3Organizers.length; i++) {
-        const org = pass3Organizers[i];
+      await processWithConcurrency(pass3Organizers, async (org, i) => {
         const processed = i + 1;
         let email: string | null = null;
 
@@ -511,14 +526,12 @@ async function main() {
               `[Enrich] (${processed}/${pass3Total}) ${org.businessName}: could not extract city from address`
             );
             pass3NotFound++;
-            await sleep(400);
-            continue;
+            return;
           }
 
           // Query Places for alternate website
           const altWebsite = await queryGooglePlaces(org.businessName, city);
           if (altWebsite && altWebsite !== org.website) {
-            // Different website found, try to scrape it
             const baseDomain = getBaseDomain(altWebsite);
             if (baseDomain) {
               // Try homepage
@@ -529,6 +542,7 @@ async function main() {
 
               // Try /contact if homepage failed
               if (!email) {
+                await sleep(400);
                 const contactUrl = `${baseDomain}/contact`;
                 html = await fetchWithTimeout(contactUrl);
                 if (html) {
@@ -566,10 +580,7 @@ async function main() {
           console.log(`[Enrich] (${processed}/${pass3Total}) ${org.businessName}: error: ${message}`);
           pass3Errors++;
         }
-
-        // Rate limiting
-        await sleep(400);
-      }
+      }, PLACES_CONCURRENCY);
 
       console.log(`\n[Enrich] Pass 3 Summary:`);
       console.log(`  Found: ${pass3Found}`);
