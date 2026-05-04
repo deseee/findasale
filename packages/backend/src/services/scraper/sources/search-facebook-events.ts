@@ -2,9 +2,9 @@
  * Facebook Events discovery via search engines
  * ADR-073: Directory Scraper — search-based adapter
  *
- * Priority chain (cheapest/most-durable first):
- *   1. Brave Search API — independent index, $5/month free credit with attribution
- *   2. Serper.dev       — Google SERP proxy, credit-based ($50/50k pack)
+ * Priority chain (best geo-targeting first):
+ *   1. Serper.dev       — Google SERP proxy, credit-based ($50/50k pack), best location-specific results
+ *   2. Brave Search API — independent index, $5/month free credit with attribution
  *   3. ScaleSerp        — Google SERP proxy, 125 free/month + paid
  *
  * DuckDuckGo removed: Bing index does not reliably index facebook.com/events pages.
@@ -12,8 +12,8 @@
  * facebook.com/events pages (confirmed — returns groups/marketplace only).
  *
  * Cron: weekly (Monday 03:00 UTC)
- * At 30 metros/week × 52 weeks = 1,560 Serper credits/year (backup only fires
- * when Brave is rate-limited, so real credit burn is much lower).
+ * At 30 metros/week × 52 weeks = 1,560 Serper credits/year (primary use for accurate
+ * location-specific results; Brave fallback is rate-limited, so real primary-usage is high).
  */
 
 import * as cheerio from 'cheerio';
@@ -150,7 +150,11 @@ export const SEARCH_METROS: MetroTarget[] = [
 
 /** Extract numeric Facebook event ID from any FB events URL variant. */
 function extractFbEventId(url: string): string | null {
-  const match = url.match(/facebook\.com\/events\/(\d+)/);
+  // Match direct event URLs: /events/123456
+  let match = url.match(/facebook\.com\/events\/(\d+)/);
+  if (match) return match[1];
+  // Match search-redirect URLs: /events/s/some-text/123456/
+  match = url.match(/facebook\.com\/events\/s\/[^/]+\/(\d+)/);
   return match ? match[1] : null;
 }
 
@@ -244,7 +248,7 @@ function buildScrapedItem(
 }
 
 // ---------------------------------------------------------------------------
-// Engine 1: Brave Search API (primary — independent index, free tier available)
+// Engine 2: Brave Search API (backup — independent index, free tier available)
 // ---------------------------------------------------------------------------
 
 interface BraveResponse {
@@ -350,9 +354,9 @@ export interface FbSearchOptions {
  * Scrape Facebook Events for a single metro via search engines.
  *
  * Priority:
- *   1. Brave Search API (independent index, try first)
- *   2. Serper.dev        (Google SERP proxy, credit backup)
- *   3. ScaleSerp         (Google SERP proxy, second credit backup)
+ *   1. Serper.dev        (Google SERP proxy, best geo-targeting, primary)
+ *   2. Brave Search API  (independent index, free fallback)
+ *   3. ScaleSerp         (Google SERP proxy, second fallback)
  *
  * Returns ScrapedItem[] without ingesting.
  */
@@ -367,33 +371,33 @@ export async function scrapeFacebookEventsForMetro(
   let rawResults: SearchResult[] = [];
   let usedEngine = '';
 
-  // --- Engine 1: Brave Search API (primary) ---
-  if (opts.braveKey) {
+  // --- Engine 1: Serper (primary — best geo-targeting) ---
+  if (opts.serperKey) {
     try {
-      rawResults = await searchBrave(query, opts.braveKey);
-      usedEngine = 'brave';
+      rawResults = await searchSerper(query, opts.serperKey);
+      usedEngine = 'serper';
       console.log(
-        `[FB-Events] Brave OK for ${metro.city}, ${metro.state} — ${rawResults.length} results`
+        `[FB-Events] Serper OK for ${metro.city}, ${metro.state} — ${rawResults.length} results`
       );
     } catch (err) {
       console.warn(
-        `[FB-Events] Brave failed for ${metro.city}, ${metro.state}:`,
+        `[FB-Events] Serper failed for ${metro.city}, ${metro.state}:`,
         err instanceof Error ? err.message : err
       );
     }
   }
 
-  // --- Engine 2: Serper (backup) ---
-  if (rawResults.length === 0 && opts.serperKey) {
+  // --- Engine 2: Brave (backup — free fallback) ---
+  if (rawResults.length === 0 && opts.braveKey) {
     try {
-      rawResults = await searchSerper(query, opts.serperKey);
-      usedEngine = 'serper';
+      rawResults = await searchBrave(query, opts.braveKey);
+      usedEngine = 'brave';
       console.log(
-        `[FB-Events] Serper backup for ${metro.city}, ${metro.state} — ${rawResults.length} results`
+        `[FB-Events] Brave backup for ${metro.city}, ${metro.state} — ${rawResults.length} results`
       );
     } catch (err) {
       console.warn(
-        `[FB-Events] Serper failed for ${metro.city}, ${metro.state}:`,
+        `[FB-Events] Brave failed for ${metro.city}, ${metro.state}:`,
         err instanceof Error ? err.message : err
       );
     }
