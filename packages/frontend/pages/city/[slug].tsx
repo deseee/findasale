@@ -10,6 +10,16 @@ import { CityRecentSales } from '@/components/CityRecentSales';
 import { CityTipsBlock } from '@/components/CityTipsBlock';
 import { CityNearbyLinks } from '@/components/CityNearbyLinks';
 
+interface RecentSale {
+  id: string;
+  title: string;
+  address: string;
+  startDate: string;
+  endDate: string;
+  organizerName?: string;
+  status: 'listing' | 'active' | 'ended';
+}
+
 interface CityPageProps {
   slug: string;
   cityName: string;
@@ -19,7 +29,7 @@ interface CityPageProps {
   lng: number;
   zipCodes: string[];
   topFinds: any[];
-  recentSales: any[];
+  recentSales: RecentSale[];
   tipContent: string;
   nearbyCities: any[];
   topCategories: string[];
@@ -216,8 +226,60 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
     soldAt: new Date(find.soldAt),
   }));
 
-  // For future expansion: fetch recent sales from FindA.Sale database
-  const recentSales: any[] = [];
+  // Fetch recent sales from FindA.Sale database
+  let recentSales: RecentSale[] = [];
+  let activeSalesCount = 0;
+  let totalItemsCount = 0;
+
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const citySalesResponse = await fetch(
+      `${apiBaseUrl}/sales/city/${encodeURIComponent(city.name)}?limit=6`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        next: { revalidate: 3600 }, // Cache for 1 hour
+      }
+    );
+
+    if (citySalesResponse.ok) {
+      const citySalesData = await citySalesResponse.json();
+      activeSalesCount = citySalesData.total || 0;
+
+      // Transform sales into component format
+      recentSales = (citySalesData.sales || []).map((sale: any) => {
+        const now = new Date();
+        const startDate = new Date(sale.startDate);
+        const endDate = new Date(sale.endDate);
+
+        // Determine status based on dates
+        let status: 'listing' | 'active' | 'ended' = 'listing';
+        if (startDate <= now && now <= endDate) {
+          status = 'active';
+        } else if (now > endDate) {
+          status = 'ended';
+        }
+
+        return {
+          id: sale.id,
+          title: sale.title,
+          address: sale.address,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          organizerName: sale.organizer?.businessName,
+          status,
+        };
+      });
+
+      // Sum item counts from all returned sales
+      totalItemsCount = citySalesData.sales
+        ? citySalesData.sales.reduce((sum: number, sale: any) => sum + (sale._count?.items || 0), 0)
+        : 0;
+    }
+  } catch (error) {
+    console.error(`[city page] Error fetching sales for ${city.name}:`, error);
+    // Fall back to empty state — ISR will retry next revalidation
+  }
 
   // Auto-generate tip using template
   const regionType = city.state === 'MI' ? 'midwest' : 'western'; // Simplified for MVP
@@ -247,8 +309,8 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({
       tipContent,
       nearbyCities,
       topCategories,
-      activeSalesCount: 0,
-      totalItemsCount: 0,
+      activeSalesCount,
+      totalItemsCount,
       lastUpdated: new Date().toISOString(),
     },
     revalidate: 86400, // Revalidate every 24 hours (ISR)

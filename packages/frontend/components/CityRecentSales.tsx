@@ -4,8 +4,8 @@ interface RecentSale {
   id: string;
   title: string;
   address: string;
-  startDate: Date;
-  endDate: Date;
+  startDate: string;
+  endDate: string;
   organizerName?: string;
   status: 'listing' | 'active' | 'ended';
 }
