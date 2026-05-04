@@ -1,6 +1,8 @@
-# Patrick's Dashboard — Week of May 4, 2026
+# Patrick's Dashboard — Week of May 4, 2026 (S643 wrap)
 
 ## What Happened This Week
+
+**S643 — Help Library Plan + Roadmap Entries.** Built `claude_docs/strategy/guide-and-video-library-plan.md` — a 75-guide written + video library covering organizer workflows (rapidfire mode, review queue + pricing, where to post flyers, POS, settlement, eBay, holds, brand kit, promote page), shopper workflows (find-a-sale, holds, condition grades, Hunt Pass, Guild, community), and trust mechanics (organizer reputation, refer-a-friend, introduce-organizer S635). Three parallel research agents mapped 50+ organizer surfaces, 42 shopper surfaces, 11 trust/community features. Existing-coverage audit categorized drafts as **FRESH (47), THIN (18), WRAPPER (10)** — surfaces existing content (`/guide`, `/faq`, `/condition-guide`, `/shopper/guild-primer`) instead of duplicating. Total writing load ~51,500 words. **No phases** — work plan is two flat steps: draft everything first → site prep + slot in approved drafts. Roadmap rows added: **#377** Help Library Drafts (write-only), **#378** Site Surface (`/guides` route + FAQ inbound links + slot in, blocked on #377). v131 entry added.
 
 **S641 — Cold Outreach Deep-Audit + Two-Sided Pipeline Sync.** Four parallel research dispatches (~57k words, ~80 primary sources) replaced S640's shallow single-search-per-tool premise. Verdict: **BUILD don't BUY** for cold email. All four leading vendors (Smartlead, Instantly, Saleshandy, Snov.io) are campaign-orchestrators that contradict our Postgres-as-source-of-truth design. Workspace + Postgres cron path: 8 dev days, $6/mo, zero portability risk vs. tool path 7 days, $30–94/mo, dual-write debt by month 3. **S640 nearly signed us up for Smartlead — that would have been wrong** (Smartlead Pro allows only one global webhook fatal for our per-touch state machine, plus 49 documented outages in 12 months). If we ever do buy, **Saleshandy is the right tool**, not Smartlead or Instantly. Critical correction: shopper-side SEO is the demand-side marketplace flywheel — runs parallel to the cold-email build, not behind it. Existing scaffolding (`/city/[slug]`, `/categories/`, `/neighborhoods/`, etc.) needs an audit pass. RVM permanently killed (FCC 2022 TCPA ruling). LinkedIn via Expandi (~$99/mo) and NESA/NAA/NASMM partnership outreach queued as parallel innovation pilots. Roadmap entries #374–#376 added.
 
@@ -31,14 +33,17 @@ The cold-outreach pipeline still isn't sending — S643 is the build session, th
 
 ## This Week's Priority
 
-1. **S642 — parallel dispatch (4 agents in one message):** cold-outreach spec + shopper-SEO audit + 19 partnership drafts + LinkedIn pilot setup. Detailed dispatch plan in STATE.md "## Next Session — S642".
-2. **S643 — Dev build batch:** cold-outreach pipeline build (8 days) + shopper-SEO P0 fixes (parallel different files).
-3. **Patrick parallel work:** send the 19 queued partnership drafts; provision `outreach@finda.sale` Workspace seat.
+1. **S644 — Patrick chooses one track:**
+   - **Track A** — Help Library Drafting Cluster 1 (Photo Workflow, 6 drafts including rapidfire mode + lighting/framing). Dispatch `findasale-marketing` skill. ~7,000 words. Read + voice-check before cluster 2.
+   - **Track B** — Cold Outreach + Shopper SEO Parallel Specs (the deferred S642 plan: 4 agents in one message — outreach spec + SEO audit + partnership drafts + LinkedIn pilot setup).
+   - **Track C** — Pre-existing P1 bug fixes (/items/[id] 500, sale social previews, Hunt Pass status, tier-lapse banner).
+2. **Patrick parallel work** (independent of S644 track): send the 19 queued partnership drafts; provision `outreach@finda.sale` Workspace seat.
 
 ## Action Items for Patrick
 
-- [ ] **Push S641 wrap block** (see push block below)
-- [ ] **Confirm "build, don't buy" verdict** — no objection = S642 dispatches launch
-- [ ] **Send 19 queued Gmail partnership outreach drafts** (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez, etc.) — runs in parallel, no infrastructure dependency
-- [ ] **Provision second Workspace seat** for `outreach@finda.sale` ($6/mo) — needed before S643 Dev build, not blocking S642 specs
-- [ ] **Remove `_spf.smartlead.ai` from outreach.finda.sale SPF record** during next DNS housekeeping pass (we are not signing up for Smartlead) — can wait for S643 when Workspace SPF includes get added in the same edit
+- [ ] **Push S643 wrap block** (see push block below) — also pushes S641 cold outreach roadmap + dashboard work that wasn't pushed last session
+- [ ] **Read the help library plan** at `claude_docs/strategy/guide-and-video-library-plan.md` — decide which S644 track to dispatch first
+- [ ] **Confirm "build, don't buy" verdict** for cold email — needed if Track B picked
+- [ ] **Send 19 queued Gmail partnership outreach drafts** (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez, etc.) — independent of any S643 track
+- [ ] **Provision second Workspace seat** for `outreach@finda.sale` ($6/mo) — needed before any cold-outreach dev work
+- [ ] **Remove `_spf.smartlead.ai` from outreach.finda.sale SPF record** during next DNS housekeeping pass (we are not signing up for Smartlead)
