@@ -46,9 +46,9 @@ const DEFAULT_CATEGORIES = [
 
 const SALE_TYPE_OPTIONS = [
   { value: '', label: 'All Types' },
-  { value: 'ESTATE', label: 'Estate Sale' },
   { value: 'YARD', label: 'Yard Sale' },
   { value: 'GARAGE', label: 'Garage Sale' },
+  { value: 'ESTATE', label: 'Estate Sale' },
   { value: 'MOVING', label: 'Moving Sale' },
   { value: 'DOWNSIZING', label: 'Downsizing Sale' },
   { value: 'AUCTION', label: 'Auction' },
