@@ -65,7 +65,7 @@ export default function CityPage(props: CityPageProps) {
         <meta name="twitter:description" content={description} />
         <meta name="twitter:image" content={imageUrl} />
         <link rel="canonical" href={url} />
-        <meta name="robots" content="index, follow" />
+        <meta name="robots" content={topFinds.length === 0 && recentSales.length === 0 ? 'noindex, follow' : 'index, follow'} />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
         {/* Schema.org structured data */}
