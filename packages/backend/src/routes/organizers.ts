@@ -1866,22 +1866,4 @@ router.post('/:id/claim', async (req: Request, res: Response) => {
           <p>Or copy and paste this link in your browser: ${verificationUrl}</p>
           <p>This link expires in 72 hours.</p>
           <p>Once verified, we'll review your claim request within 2-3 business days.</p>
-          <p>If you didn't submit this request, you can safely ignore this email.</p>
-        `,
-      });
-    } catch (emailError) {
-      // Fail open: log error but don't prevent claim creation
-      console.error('Failed to send verification email:', emailError);
-    }
-
-    res.status(201).json({
-      success: true,
-      message: `Verification email sent to ${claimantEmail}. Please check your email and click the verification link to confirm your claim request.`,
-    });
-  } catch (error) {
-    console.error('Error submitting claim request:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-export default router;
+          <p>If you didn't submit this request, you can safely igno

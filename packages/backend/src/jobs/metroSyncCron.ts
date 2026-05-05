@@ -54,8 +54,105 @@ interface EbaySoldItem {
   itemId: string;
 }
 
+interface OwnItem {
+  id: string;
+  title: string;
+  category: string | null;
+  price: number | null;
+  photoUrls: string[];
+  createdAt: Date;
+  sale: {
+    city: string;
+    state: string;
+  } | null;
+}
+
 // Token cache — eBay tokens last 2 hours; refresh 5 min early
 let cachedToken: { token: string; expires: number } | null = null;
+
+/**
+ * Extract state abbreviation from slug (e.g., "grand-rapids-mi" → "MI").
+ * Takes the last 2 characters and uppercases them.
+ */
+function getStateFromSlug(slug: string): string {
+  return slug.slice(-2).toUpperCase();
+}
+
+/**
+ * Extract city name from slug (e.g., "grand-rapids-mi" → "grand rapids").
+ * Removes the last 3 characters (state abbrev + hyphen) and replaces remaining hyphens with spaces.
+ */
+function getCityFromSlug(slug: string): string {
+  const withoutState = slug.slice(0, -3); // Remove "-MI"
+  return withoutState.replace(/-/g, ' ');
+}
+
+/**
+ * Fetch up to 12 own items (from our platform) for a given metro area.
+ * Filters by state and recent creation (last 30 days).
+ */
+async function getOwnItemsForMetro(metro: MetroConfig): Promise<OwnItem[]> {
+  try {
+    const stateAbbrev = getStateFromSlug(metro.slug);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const items = await prisma.item.findMany({
+      where: {
+        isActive: true,
+        sale: {
+          status: 'PUBLISHED',
+          state: {
+            equals: stateAbbrev,
+            mode: 'insensitive',
+          },
+        },
+        createdAt: {
+          gte: thirtyDaysAgo,
+        },
+      },
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        price: true,
+        photoUrls: true,
+        createdAt: true,
+        sale: {
+          select: {
+            city: true,
+            state: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 12,
+    });
+
+    return items;
+  } catch (error) {
+    console.error(`[MetroSync] Error fetching own items for ${metro.slug}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Map an own Item to MetroTopFinds upsert data.
+ */
+function mapOwnItemToMetroTopFinds(item: OwnItem, metro: MetroConfig) {
+  const soldPrice = item.price ?? 0;
+  return {
+    citySlug: metro.slug,
+    metro: metro.metro,
+    itemTitle: item.title,
+    itemCategory: item.category,
+    soldPrice: new Decimal(soldPrice),
+    imageUrl: item.photoUrls[0] ?? null,
+    ebayListingId: `local-${item.id}`,
+    soldAt: new Date(),
+  };
+}
 
 /**
  * Fetch an eBay OAuth token directly from eBay using Railway's credentials.
@@ -169,6 +266,7 @@ async function fetchEbaySoldItems(metro: MetroConfig): Promise<EbaySoldItem[]> {
 
 /**
  * Sync sold items for a single metro area.
+ * Prefers own organizer items (last 30 days) — only falls back to eBay if < 8 own items.
  */
 async function syncMetroTopFinds(metro: MetroConfig): Promise<number> {
   let count = 0;
@@ -176,57 +274,98 @@ async function syncMetroTopFinds(metro: MetroConfig): Promise<number> {
   try {
     console.log(`[MetroSync] Starting sync for ${metro.metro}...`);
 
-    const items = await fetchEbaySoldItems(metro);
+    // Step 1: Fetch own items from our platform
+    const ownItems = await getOwnItemsForMetro(metro);
+    console.log(`[MetroSync] ${metro.metro}: found ${ownItems.length} own items`);
 
-    if (!items.length) {
-      console.log(`[MetroSync] No items found for ${metro.metro}`);
-      return count;
-    }
-
-    // Upsert each item into MetroTopFinds
-    for (const item of items) {
+    // Step 2: Upsert own items
+    for (const item of ownItems) {
       try {
-        const soldPrice = parseFloat(item.price?.value || '0');
-        if (soldPrice <= 0) continue; // Skip invalid prices
-
+        const data = mapOwnItemToMetroTopFinds(item, metro);
         await prisma.metroTopFinds.upsert({
           where: {
             citySlug_ebayListingId: {
               citySlug: metro.slug,
-              ebayListingId: item.itemId,
+              ebayListingId: data.ebayListingId,
             },
           },
           update: {
-            itemTitle: item.title,
-            itemCategory: item.condition,
-            soldPrice: new Decimal(soldPrice),
-            imageUrl: item.image?.imageUrl || null,
+            itemTitle: data.itemTitle,
+            itemCategory: data.itemCategory,
+            soldPrice: data.soldPrice,
+            imageUrl: data.imageUrl,
             updatedAt: new Date(),
           },
-          create: {
-            citySlug: metro.slug,
-            metro: metro.metro,
-            itemTitle: item.title,
-            itemCategory: item.condition,
-            soldPrice: new Decimal(soldPrice),
-            imageUrl: item.image?.imageUrl || null,
-            ebayListingId: item.itemId,
-            soldAt: new Date(),
-          },
+          create: data,
         });
 
         count++;
       } catch (err) {
         console.warn(
-          `[MetroSync] Failed to upsert item ${item.itemId} for ${metro.slug}:`,
+          `[MetroSync] Failed to upsert own item ${item.id} for ${metro.slug}:`,
           err
         );
         // Continue — one item failure shouldn't block others
       }
     }
 
+    // Step 3: If < 8 own items, fetch eBay items for remainder
+    if (ownItems.length < 8) {
+      const ebayNeeded = 12 - ownItems.length;
+      console.log(`[MetroSync] ${metro.metro}: fetching ${ebayNeeded} eBay items (own: ${ownItems.length})`);
+
+      const ebayItems = await fetchEbaySoldItems(metro);
+
+      // Take only what we need
+      const ebayItemsNeeded = ebayItems.slice(0, ebayNeeded);
+
+      // Upsert eBay items
+      for (const item of ebayItemsNeeded) {
+        try {
+          const soldPrice = parseFloat(item.price?.value || '0');
+          if (soldPrice <= 0) continue; // Skip invalid prices
+
+          await prisma.metroTopFinds.upsert({
+            where: {
+              citySlug_ebayListingId: {
+                citySlug: metro.slug,
+                ebayListingId: item.itemId,
+              },
+            },
+            update: {
+              itemTitle: item.title,
+              itemCategory: item.condition,
+              soldPrice: new Decimal(soldPrice),
+              imageUrl: item.image?.imageUrl || null,
+              updatedAt: new Date(),
+            },
+            create: {
+              citySlug: metro.slug,
+              metro: metro.metro,
+              itemTitle: item.title,
+              itemCategory: item.condition,
+              soldPrice: new Decimal(soldPrice),
+              imageUrl: item.image?.imageUrl || null,
+              ebayListingId: item.itemId,
+              soldAt: new Date(),
+            },
+          });
+
+          count++;
+        } catch (err) {
+          console.warn(
+            `[MetroSync] Failed to upsert eBay item ${item.itemId} for ${metro.slug}:`,
+            err
+          );
+          // Continue — one item failure shouldn't block others
+        }
+      }
+    } else {
+      console.log(`[MetroSync] ${metro.metro}: ${ownItems.length} own items (eBay skipped)`);
+    }
+
     console.log(
-      `[MetroSync] ${metro.metro}: synced ${count} items`
+      `[MetroSync] ${metro.metro}: ${ownItems.length} own + ${count - ownItems.length} eBay items synced (total: ${count})`
     );
   } catch (error) {
     console.error(`[MetroSync] Error syncing ${metro.slug}:`, error);

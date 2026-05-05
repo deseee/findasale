@@ -1,6 +1,7 @@
 /**
  * Phase 29: Category browse page — /categories/[category]
  * Lists all available items in the given category across published sales.
+ * ADR-074 Phase 2: Includes trending items from eBay by category.
  */
 import React from 'react';
 import { useRouter } from 'next/router';
@@ -14,6 +15,101 @@ const CATEGORIES = [
   'furniture', 'clothing', 'electronics', 'books', 'antiques',
   'tools', 'kitchen', 'art', 'jewelry', 'other',
 ];
+
+/**
+ * Slugify a category name for API calls.
+ * "Furniture" → "furniture", "Art & Decor" → "art-decor"
+ */
+function slugifyCategory(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * TrendingSection — Display trending items for a category from eBay
+ */
+interface TrendingFind {
+  id: string;
+  itemTitle: string;
+  listingPrice: number;
+  imageUrl: string | null;
+  ebayUrl: string | null;
+  ebayListingId: string;
+}
+
+interface TrendingResponse {
+  slug: string;
+  finds: TrendingFind[];
+  count: number;
+  lastUpdated: string | null;
+}
+
+const TrendingSection: React.FC<{ categorySlug: string; categoryLabel: string }> = ({ categorySlug, categoryLabel }) => {
+  const { data, isLoading } = useQuery({
+    queryKey: ['category-trending', categorySlug],
+    queryFn: async () => {
+      const res = await api.get(`/categories/${categorySlug}/top-finds`);
+      return res.data as TrendingResponse;
+    },
+    enabled: !!categorySlug,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Hide if loading or no results
+  if (isLoading || !data || data.count === 0) {
+    return null;
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-8">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100">
+          Trending in {categoryLabel}
+        </h2>
+        <span className="text-xs text-gray-400">via eBay</span>
+      </div>
+
+      {/* Horizontally scrollable cards */}
+      <div className="flex gap-3 overflow-x-auto pb-2">
+        {data.finds.slice(0, 8).map((find) => (
+          <a
+            key={find.id}
+            href={find.ebayUrl || undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 w-[120px] group"
+          >
+            {/* Image */}
+            {find.imageUrl ? (
+              <img
+                src={find.imageUrl}
+                alt={find.itemTitle}
+                className="aspect-square w-full object-cover rounded-lg mb-2 group-hover:opacity-80 transition-opacity"
+                loading="lazy"
+              />
+            ) : (
+              <div className="aspect-square bg-warm-200 dark:bg-gray-700 rounded-lg flex items-center justify-center mb-2">
+                <span className="text-2xl">📦</span>
+              </div>
+            )}
+
+            {/* Title */}
+            <h3 className="text-sm font-medium text-warm-900 dark:text-warm-100 line-clamp-2 mb-1 group-hover:text-amber-600 transition-colors">
+              {find.itemTitle}
+            </h3>
+
+            {/* Price */}
+            <p className="text-sm font-semibold text-green-600 dark:text-green-400">
+              ${find.listingPrice.toFixed(2)}
+            </p>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const CategoryPage = () => {
   const router = useRouter();
@@ -36,6 +132,9 @@ const CategoryPage = () => {
   const label = category
     ? category.charAt(0).toUpperCase() + category.slice(1)
     : '...';
+
+  // Slugify category for API calls (e.g., "Furniture" → "furniture")
+  const categorySlug = category ? slugifyCategory(category) : '';
 
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -127,60 +226,31 @@ const CategoryPage = () => {
           ))}
         </div>
 
+        {/* Trending section */}
+        {categorySlug && <TrendingSection categorySlug={categorySlug} categoryLabel={label} />}
+
+        {/* Items grid */}
         {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
         ) : isError ? (
-          <div className="min-h-screen flex flex-col items-center justify-center bg-warm-50 dark:bg-gray-900 gap-4">
-            <p className="text-warm-700 dark:text-warm-300 text-lg">Failed to load category listings.</p>
-            <button onClick={() => refetch()} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg">Try again</button>
-          </div>
-        ) : data && data.items.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {data.items.map((item: any) => (
-              <Link
-                key={item.id}
-                href={`/items/${item.id}`}
-                className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
-              >
-                {item.photoUrls?.[0] ? (
-                  <img
-                    key={item.photoUrls[0]}
-                    src={item.photoUrls[0]}
-                    alt={item.title}
-                    className="aspect-square w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="aspect-square bg-warm-200 flex items-center justify-center">
-                    <span className="text-warm-400 text-3xl">📦</span>
-                  </div>
-                )}
-                <div className="p-3 flex-1 flex flex-col">
-                  <h3 className="text-sm font-semibold text-warm-900 dark:text-warm-100 line-clamp-1 mb-1">
-                    {item.title}
-                  </h3>
-                  {item.price != null && (
-                    <p className="text-amber-600 font-bold text-sm">
-                      ${Number(item.price).toFixed(2)}
-                    </p>
-                  )}
-                  {item.sale && (
-                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-auto pt-1">
-                      {item.sale.city}, {item.sale.state}
-                    </p>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
           <div className="text-center py-16">
-            <p className="text-5xl mb-4">📦</p>
-            <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No {label} items right now</h3>
+            <p className="text-5xl mb-4">😕</p>
+            <p className="text-warm-700 dark:text-warm-300 text-lg mb-4">Failed to load items.</p>
+            <button
+              onClick={() => refetch()}
+              className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : !data || data.items.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-5xl mb-4">📭</p>
+            <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No items in this category yet</h3>
             <p className="text-warm-600 dark:text-warm-400 mb-6">
               Check back soon — new sales go live every week.
             </p>
@@ -190,6 +260,41 @@ const CategoryPage = () => {
             >
               Browse All Sales
             </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {data.items.map((item) => (
+              <Link
+                key={item.id}
+                href={`/items/${item.id}`}
+                className="group bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-shadow"
+              >
+                <div className="aspect-square bg-warm-100 dark:bg-gray-700 overflow-hidden">
+                  {item.photoUrls && item.photoUrls[0] ? (
+                    <img
+                      src={item.photoUrls[0]}
+                      alt={item.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-3xl">📦</div>
+                  )}
+                </div>
+                <div className="p-4">
+                  <h3 className="font-semibold text-warm-900 dark:text-warm-100 line-clamp-2 text-sm mb-2">
+                    {item.title}
+                  </h3>
+                  {item.price && (
+                    <p className="text-green-600 dark:text-green-400 font-bold mb-2">
+                      ${parseFloat(item.price).toFixed(2)}
+                    </p>
+                  )}
+                  <p className="text-xs text-warm-500 dark:text-warm-400">
+                    {item.sale?.title || 'Sale TBA'}
+                  </p>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </main>
