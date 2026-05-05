@@ -133,14 +133,13 @@ async function main() {
 
   console.log('[Pass 2] Scanning for blocklisted business names...');
 
-  // Fetch IDs of all unsuppressed, unclaimed, unmanaged organizers (with or without valid category)
-  // Then filter in JS using the blocklist — avoids N+1 and works without raw SQL.
+  // Fetch all unsuppressed, unclaimed, unmanaged organizers then filter in JS.
+  // The null-name check is handled in the loop below.
   const candidates = await prisma.organizer.findMany({
     where: {
       isClaimed: false,
       isUnmanagedListing: true,
       suppressOutreach: false,
-      businessName: { not: null },
     },
     select: {
       id: true,
