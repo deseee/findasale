@@ -122,17 +122,20 @@ async function fetchEbaySoldItems(metro: MetroConfig): Promise<EbaySoldItem[]> {
       return [];
     }
 
-    // Build search query: estate sale OR yard sale OR garage sale
+    // Build search query: unquoted keywords with OR so eBay treats them as boolean operators.
     // Note: eBay Browse API does not support location: query syntax — city association
     // is handled at the DB level (citySlug). Results are national listings.
-    const query = encodeURIComponent('"estate sale" OR "yard sale" OR "garage sale" OR "flea market"');
+    // Note: Do NOT wrap terms in double quotes — eBay Browse API sends %22 as literal
+    // characters, causing zero results. Unquoted OR is the correct syntax.
+    const query = encodeURIComponent('estate sale OR yard sale OR garage sale OR flea market');
 
     // eBay Browse API endpoint through Vercel proxy
     const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
     const proxySecret = process.env.EBAY_PROXY_SECRET;
 
-    // Browse API: active listings matching estate/yard/garage sale keywords
-    const apiPath = `/buy/browse/v1/item_summary/search?q=${query}&filter=conditions:{USED}&sort=newlyListed&limit=12`;
+    // Browse API: active listings matching estate/yard/garage sale keywords.
+    // No conditions filter — it combined with quoted phrases to produce zero results.
+    const apiPath = `/buy/browse/v1/item_summary/search?q=${query}&sort=newlyListed&limit=12`;
 
     const response = await fetch(
       `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(apiPath)}`,
@@ -271,9 +274,9 @@ export function initMetroSyncCron(): void {
   }
 
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('9 3 * * *', async () => {
+  cron.schedule('18 3 * * *', async () => {
     await syncAllMetros();
   });
 
-  console.log('[MetroSync] Cron registered — runs daily at 04:00 UTC (midnight EST)');
+  console.log('[MetroSync] Cron registered — runs daily at 04:00 UTC');
 }
