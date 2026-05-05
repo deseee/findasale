@@ -33,7 +33,15 @@ export type BusinessCategory =
   | 'VINTAGE'
   | 'ESTATE_SALE_CO'
   | 'LIQUIDATION'
-  | 'USED_FURNITURE';
+  | 'USED_FURNITURE'
+  | 'PAWN_SHOP'
+  | 'USED_BOOKSTORE'
+  | 'RECORD_STORE'
+  | 'USED_ELECTRONICS'
+  | 'COIN_DEALER'
+  | 'RESALE_SHOP'
+  | 'USED_SPORTING_GOODS'
+  | 'JEWELRY_RESALE';
 
 interface QueryConfig {
   /** Search term sent to Google Places Text Search */
@@ -50,7 +58,7 @@ interface QueryConfig {
   label: string;
 }
 
-/** 11 search queries covering the full secondhand/resale market (ADR-077 Innovation review) */
+/** 23 search queries covering the full secondhand/resale market (ADR-077 Innovation review) */
 export const PLACES_QUERIES: QueryConfig[] = [
   { query: 'antique mall', category: 'ANTIQUE_MALL', saleType: 'RETAIL', label: 'Antique Mall' },
   { query: 'antique dealer', category: 'ANTIQUE_DEALER', saleType: 'RETAIL', label: 'Antique Dealer' },
@@ -98,6 +106,18 @@ export const PLACES_QUERIES: QueryConfig[] = [
     googleType: 'furniture_store',
     label: 'Used Furniture Store',
   },
+  { query: 'pawn shop', category: 'PAWN_SHOP', saleType: 'RETAIL', label: 'Pawn Shop' },
+  { query: 'used bookstore', category: 'USED_BOOKSTORE', saleType: 'RETAIL', label: 'Used Bookstore' },
+  { query: 'vinyl record store', category: 'RECORD_STORE', saleType: 'RETAIL', label: 'Record Store' },
+  { query: 'used electronics store', category: 'USED_ELECTRONICS', saleType: 'RETAIL', label: 'Used Electronics' },
+  { query: 'coin dealer', category: 'COIN_DEALER', saleType: 'RETAIL', label: 'Coin Dealer' },
+  { query: 'resale shop', category: 'RESALE_SHOP', saleType: 'RETAIL', label: 'Resale Shop' },
+  { query: 'used sporting goods', category: 'USED_SPORTING_GOODS', saleType: 'RETAIL', label: 'Used Sporting Goods' },
+  { query: 'jewelry consignment', category: 'JEWELRY_RESALE', saleType: 'RETAIL', label: 'Jewelry Resale' },
+  { query: 'moving sale company', category: 'ESTATE_SALE_CO', saleType: 'RETAIL', label: 'Moving Sale Company' },
+  { query: 'estate liquidator', category: 'ESTATE_SALE_CO', saleType: 'RETAIL', label: 'Estate Liquidator' },
+  { query: 'surplus store', category: 'LIQUIDATION', saleType: 'RETAIL', label: 'Surplus Store' },
+  { query: 'salvage store', category: 'LIQUIDATION', saleType: 'RETAIL', label: 'Salvage Store' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -208,6 +228,85 @@ export const GOOGLE_PLACES_METROS: string[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Business name blocklist — comprehensive keyword filtering
+// ---------------------------------------------------------------------------
+
+/**
+ * Comprehensive blocklist of business name keywords that indicate off-target results.
+ * Matches case-insensitively. If a business name includes any of these keywords,
+ * it is filtered out regardless of the search query category.
+ */
+export const BUSINESS_NAME_BLOCKLIST = [
+  // Hospitality/lodging
+  'hotel', 'motel', 'hilton', 'hyatt', 'marriott', 'westin', 'sheraton', 'hampton inn',
+  'holiday inn', 'doubletree', 'embassy suites', 'radisson', 'best western', 'days inn',
+  'super 8', 'la quinta', 'comfort inn', 'extended stay',
+
+  // Automotive
+  'tire shop', 'tire store', 'auto parts', 'muffler', 'oil change', 'car wash',
+  'car dealership', 'auto sale', 'motor company', 'body shop', 'transmission',
+  'brake shop', 'exhaust shop', 'rim shop',
+
+  // Food/restaurant (excluding "auction cafe" context)
+  'restaurant', 'burger', 'pizza', 'taco', 'subway', 'mcdonald\'s', 'wendy\'s',
+  'chick-fil-a', 'starbucks', 'coffee shop', 'diner', 'fast food', 'donut',
+  'bar & grill', 'sports bar', 'pizza restaurant',
+
+  // Personal services
+  'barber shop', 'hair salon', 'nail salon', 'spa', 'massage', 'tattoo parlor',
+  'dry cleaner', 'laundromat', 'nail bar',
+
+  // Government/institutional/chains
+  'mta', 'metro transit', 'usps', 'post office', 'workforce solutions', 'ecoatm',
+  'dollar general', 'dollar tree', 'family dollar', 'big lots', 'ross store',
+  'burlington', 'marshalls', 'tj maxx', 'target', 'walmart', 'costco', 'sam\'s club',
+  'cvs', 'walgreens', 'rite aid', 'duane reade', 'petco', 'petsmart',
+  'dick\'s sporting goods', 'academy sports', 'spirit halloween', 'columbia sportswear',
+  'adidas', 'nike store', 'victoria\'s secret', 'bath & body', 'claire\'s', 'yankee candle',
+
+  // Construction/trades
+  'roofing', 'plumbing', 'electrician', 'hvac', 'contractor', 'construction',
+  'landscaping', 'lawn care', 'pest control', 'painting company',
+
+  // Medical
+  'urgent care', 'clinic', 'hospital', 'dental', 'optometry', 'vision center',
+  'chiropractic', 'physical therapy', 'pharmacy',
+
+  // Real estate (different from estate sale companies)
+  'real estate group', 'realty', 'realtor', 'property management',
+];
+
+// ---------------------------------------------------------------------------
+// Google Places type validation mapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps each business category to acceptable Google Places types.
+ * If a place's types array has no overlap with these acceptable types,
+ * the place is filtered out even if the name matches.
+ */
+export const ACCEPTABLE_GOOGLE_TYPES: Record<BusinessCategory, string[]> = {
+  ANTIQUE_MALL: ['antique_store', 'shopping_mall', 'store', 'point_of_interest', 'establishment'],
+  ANTIQUE_DEALER: ['antique_store', 'store', 'point_of_interest', 'establishment'],
+  CONSIGNMENT: ['consignment', 'clothing_store', 'store', 'shopping_mall', 'point_of_interest', 'establishment'],
+  THRIFT_STORE: ['thrift_store', 'used_goods_store', 'clothing_store', 'home_goods_store', 'furniture_store', 'store', 'point_of_interest', 'establishment'],
+  FLEA_MARKET: ['flea_market', 'market', 'shopping_mall', 'bazaar', 'point_of_interest', 'establishment'],
+  AUCTION_HOUSE: ['auctioneer', 'auction_house', 'store', 'establishment', 'point_of_interest'],
+  VINTAGE: ['vintage_store', 'clothing_store', 'store', 'shopping_mall', 'point_of_interest', 'establishment'],
+  ESTATE_SALE_CO: ['store', 'point_of_interest', 'establishment'],
+  LIQUIDATION: ['liquidation_store', 'store', 'point_of_interest', 'establishment'],
+  USED_FURNITURE: ['furniture_store', 'home_goods_store', 'store', 'point_of_interest', 'establishment'],
+  PAWN_SHOP: ['pawn_shop', 'store', 'point_of_interest', 'establishment'],
+  USED_BOOKSTORE: ['book_store', 'used_goods_store', 'store', 'point_of_interest', 'establishment'],
+  RECORD_STORE: ['record_store', 'music_store', 'used_goods_store', 'store', 'point_of_interest', 'establishment'],
+  USED_ELECTRONICS: ['electronics_store', 'used_goods_store', 'store', 'point_of_interest', 'establishment'],
+  COIN_DEALER: ['coin_dealer', 'store', 'point_of_interest', 'establishment'],
+  RESALE_SHOP: ['used_goods_store', 'clothing_store', 'store', 'point_of_interest', 'establishment'],
+  USED_SPORTING_GOODS: ['sporting_goods_store', 'used_goods_store', 'store', 'point_of_interest', 'establishment'],
+  JEWELRY_RESALE: ['jewelry_store', 'store', 'point_of_interest', 'establishment'],
+};
+
+// ---------------------------------------------------------------------------
 // Google Places API types
 // ---------------------------------------------------------------------------
 
@@ -219,6 +318,7 @@ interface PlaceResult {
   geometry?: { location: { lat: number; lng: number } };
   rating?: number;
   user_ratings_total?: number;
+  types?: string[];
 }
 
 interface PlacesTextSearchResponse {
@@ -332,10 +432,32 @@ export async function scrapeGooglePlacesQuery(
       // Skip non-operational businesses (temporarily/permanently closed)
       if (place.business_status && place.business_status !== 'OPERATIONAL') continue;
 
-      // Apply name blocklist (case-insensitive)
+      // Apply global business name blocklist (case-insensitive)
+      const nameLower = place.name.toLowerCase();
+      if (BUSINESS_NAME_BLOCKLIST.some((block) => nameLower.includes(block))) {
+        console.debug(`[GooglePlaces] Filtered by global blocklist: "${place.name}" (${fullQuery})`);
+        continue;
+      }
+
+      // Apply category-specific name blocklist if provided
       if (queryConfig.blocklist) {
-        const nameLower = place.name.toLowerCase();
-        if (queryConfig.blocklist.some((block) => nameLower.includes(block))) continue;
+        if (queryConfig.blocklist.some((block) => nameLower.includes(block))) {
+          console.debug(`[GooglePlaces] Filtered by category blocklist: "${place.name}" (${fullQuery})`);
+          continue;
+        }
+      }
+
+      // Validate against Google Places type filter (if types are available)
+      if (place.types && place.types.length > 0) {
+        const acceptableTypes = ACCEPTABLE_GOOGLE_TYPES[queryConfig.category];
+        const hasValidType = place.types.some((type) => acceptableTypes.includes(type));
+        if (!hasValidType) {
+          console.debug(
+            `[GooglePlaces] Filtered by type validation: "${place.name}" has types [${place.types.join(', ')}], ` +
+            `expected one of [${acceptableTypes.join(', ')}] for ${queryConfig.category} (${fullQuery})`
+          );
+          continue;
+        }
       }
 
       const { city, state } = parseCityState(place.formatted_address, metro);
