@@ -85,6 +85,31 @@ export const sendOutreachEmails = async (): Promise<void> => {
       where: {
         organizer: {
           directoryStatus: { not: 'CLOSED' },
+          // ADR-075: Only legitimate organizer types (estate sale, auction, antique, consignment, etc.)
+          businessCategory: {
+            in: [
+              'ESTATE_SALE_CO',
+              'AUCTION_HOUSE',
+              'ANTIQUE_MALL',
+              'ANTIQUE_DEALER',
+              'CONSIGNMENT',
+              'THRIFT_STORE',
+              'FLEA_MARKET',
+              'VINTAGE',
+              'LIQUIDATION',
+              'USED_FURNITURE',
+              'PAWN_SHOP',
+              'USED_BOOKSTORE',
+              'RECORD_STORE',
+              'USED_ELECTRONICS',
+              'COIN_DEALER',
+              'RESALE_SHOP',
+              'USED_SPORTING_GOODS',
+              'JEWELRY_RESALE',
+            ],
+          },
+          // ADR-075: Respect suppressOutreach flag
+          suppressOutreach: false,
         },
       },
       include: { organizer: true },

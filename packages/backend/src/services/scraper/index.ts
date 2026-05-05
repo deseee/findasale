@@ -121,6 +121,9 @@ function isValidExternalEmail(email?: string): string | null {
  * 4. name + city (normalized case-insensitive DB match)
  *
  * When a match is found, backfill missing cross-source IDs to merge data.
+ *
+ * ADR-075: Business category filter — only estate/antique/consignment/secondary sale categories allowed.
+ * Off-target categories (tire shops, hotels, fast food, government, etc.) are rejected at ingest time.
  */
 async function getOrCreateScrapedOrganizer(
   businessName: string,
@@ -133,7 +136,35 @@ async function getOrCreateScrapedOrganizer(
   hereBusinessId?: string,
   businessCategory?: string,
   contactEmail?: string
-): Promise<string> {
+): Promise<string | null> {
+  // ADR-075: Validate businessCategory against allowlist
+  const VALID_CATEGORIES = new Set([
+    'ESTATE_SALE_CO',
+    'AUCTION_HOUSE',
+    'ANTIQUE_MALL',
+    'ANTIQUE_DEALER',
+    'CONSIGNMENT',
+    'THRIFT_STORE',
+    'FLEA_MARKET',
+    'VINTAGE',
+    'LIQUIDATION',
+    'USED_FURNITURE',
+    'PAWN_SHOP',
+    'USED_BOOKSTORE',
+    'RECORD_STORE',
+    'USED_ELECTRONICS',
+    'COIN_DEALER',
+    'RESALE_SHOP',
+    'USED_SPORTING_GOODS',
+    'JEWELRY_RESALE',
+  ]);
+
+  if (businessCategory && !VALID_CATEGORIES.has(businessCategory)) {
+    console.log(
+      `[Ingest] Rejected organizer "${businessName}" — off-target category: ${businessCategory}`
+    );
+    return null;
+  }
   // ADR-077 Phase 2: Multi-source dedup
   // Check by googlePlaceId first — strongest dedup signal.
   if (googlePlaceId) {
@@ -503,7 +534,7 @@ export async function ingestScrapedListing(
     // organizerId is only used as a fallback when the listing has no named organizer.
     let finalOrganizerId: string;
     if (listing.organizerName && listing.organizerName.trim()) {
-      finalOrganizerId = await getOrCreateScrapedOrganizer(
+      const createdOrgId = await getOrCreateScrapedOrganizer(
         listing.organizerName.trim(),
         listing.sourceName,
         listing.city,
@@ -515,6 +546,14 @@ export async function ingestScrapedListing(
         listing.businessCategory,
         listing.organizerEmail
       );
+      // ADR-075: If organizer was rejected due to off-target category, skip this listing
+      if (createdOrgId === null) {
+        return {
+          status: 'skipped',
+          reason: 'Organizer rejected — off-target business category',
+        };
+      }
+      finalOrganizerId = createdOrgId;
     } else if (organizerId) {
       finalOrganizerId = organizerId;
     } else {
