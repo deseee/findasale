@@ -81,6 +81,28 @@ const PLATFORM_DOMAINS = new Set([
   'linqapp.com',          // Contact link generator — not an email
   'cardscan.com',
   'linktr.ee',
+// Government, institutional, and large-chain domains — not target organizers
+const BLOCKED_EMAIL_SUFFIXES = new Set([
+  // US/international government + institutional
+  '.gov', '.edu', '.mil',
+  // Canadian federal
+  '.gc.ca',
+  // Canadian provincial/territorial governments
+  'gov.bc.ca', 'gov.ab.ca', 'gov.on.ca', 'gov.ns.ca', 'gov.nb.ca',
+  'gov.pe.ca', 'gov.nl.ca', 'gov.sk.ca', 'gov.mb.ca', 'gov.nt.ca',
+  'gov.nu.ca', 'gov.yk.ca',
+  // Large national chains — not independent organizers
+  'goodwill.org', 'salvationarmy.org', 'habitatrestore.org',
+  'municibid.com', 'govplanet.com', 'publicsurplus.com',
+]);
+
+const isBlockedDomain = (email: string): boolean => {
+  const lower = email.toLowerCase();
+  for (const suffix of BLOCKED_EMAIL_SUFFIXES) {
+    if (lower.endsWith(suffix) || lower.includes(`@${suffix}`) || lower.includes(`.${suffix}`)) return true;
+  }
+  return false;
+};
   'bio.link',
   'square.site',
   'squarespace.com',
@@ -327,6 +349,13 @@ async function main() {
     const domain = getDomain(org.website!);
     if (!domain) {
       console.log(`${prefix}: platform domain or invalid URL — skipping`);
+      errors++;
+      return;
+    }
+
+    // Block government, institutional, and large-chain domains
+    if (isBlockedDomain(`dummy@${domain}`)) {
+      console.log(`${prefix}: blocked domain (government/institutional/chain) — skipping`);
       errors++;
       return;
     }
