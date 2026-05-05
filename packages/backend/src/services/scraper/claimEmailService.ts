@@ -36,6 +36,9 @@ export const sendClaimEmailBatch = async (): Promise<void> => {
 
   try {
     console.log('[ClaimEmail] Starting batch send');
+    if (process.env.CLAIM_EMAIL_TEST_EMAIL) {
+      console.log(`[ClaimEmail] TEST MODE — all sends redirected to ${process.env.CLAIM_EMAIL_TEST_EMAIL}`);
+    }
 
     // Find unmanaged organizers eligible for claim emails
     const eligibleOrganizers = await prisma.organizer.findMany({
@@ -134,7 +137,7 @@ export const sendClaimEmailBatch = async (): Promise<void> => {
         // Send email
         await resend.emails.send({
           from: fromEmail,
-          to: email,
+          to: process.env.CLAIM_EMAIL_TEST_EMAIL || email,
           subject: emailContent.subject,
           html,
         });
