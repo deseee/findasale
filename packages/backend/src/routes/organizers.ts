@@ -867,6 +867,11 @@ router.get('/:id', async (req: Request, res: Response) => {
           },
         },
         sales: {
+          where: {
+            status: 'PUBLISHED',
+            isInventoryContainer: false,
+            deletedAt: null,
+          },
           orderBy: { startDate: 'asc' },
           select: {
             id: true,
@@ -925,6 +930,11 @@ router.get('/:id', async (req: Request, res: Response) => {
             },
           },
           sales: {
+            where: {
+              status: 'PUBLISHED',
+              isInventoryContainer: false,
+              deletedAt: null,
+            },
             orderBy: { startDate: 'asc' },
             select: {
               id: true,
@@ -1214,7 +1224,11 @@ router.post('/admin/award-badges', authenticate, async (req: AuthRequest, res: R
           }
         },
         sales: {
-          where: { status: 'PUBLISHED' }
+          where: {
+            status: 'PUBLISHED',
+            isInventoryContainer: false,
+            deletedAt: null,
+          }
         }
       }
     });
