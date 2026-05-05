@@ -76,13 +76,20 @@ export const sendOutreachEmails = async (): Promise<void> => {
   try {
     // Email links must resolve in recipients' inboxes — localhost fallback would silently break in production.
     // Backend routes (/api/outreach/pixel, /api/outreach/unsubscribe) live on Railway, not Vercel.
-    const backendUrl = process.env.RAILWAY_BACKEND_URL || process.env.BACKEND_URL;
+    // Resolution order:
+    //   1. RAILWAY_BACKEND_URL — manual override (matches the convention used by 7 scraper scripts)
+    //   2. BACKEND_URL — generic override
+    //   3. RAILWAY_PUBLIC_DOMAIN — Railway auto-injects this (no manual setup needed)
+    const backendUrl =
+      process.env.RAILWAY_BACKEND_URL ||
+      process.env.BACKEND_URL ||
+      (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : undefined);
     if (!backendUrl) {
-      console.error('[OutreachCron] ABORT: RAILWAY_BACKEND_URL (or BACKEND_URL) is not set — cannot generate tracking URLs for outbound emails.');
+      console.error('[OutreachCron] ABORT: no backend URL available (RAILWAY_BACKEND_URL / BACKEND_URL / RAILWAY_PUBLIC_DOMAIN all unset). Cannot generate tracking URLs for outbound emails.');
       return;
     }
     const frontendUrl = process.env.FRONTEND_URL || 'https://finda.sale';
-    const WARMUP_START = new Date('2026-05-08');
+    const WARMUP_START = new Date('2026-05-06');
     const today = new Date();
     const daysSinceStart = Math.floor((today.getTime() - WARMUP_START.getTime()) / (1000 * 60 * 60 * 24));
     const dailyQuota = getDailyQuota(daysSinceStart);
