@@ -2,13 +2,20 @@ import { Request, Response } from 'express';
 
 // Allowlisted domains for image proxying
 const ALLOWED_DOMAINS = [
+  // eBay CDN
   'i.ebayimg.com',
   'ir.ebaystatic.com',
   'thumbs.ebaystatic.com',
+  // Estate sales and auction scraped sources
+  'picturescdn.estatesales.net',
+  'estatesales.net',
+  'p1.liveauctioneers.com',
+  'p2.liveauctioneers.com',
+  'photos.liveauctioneers.com',
 ];
 
 /**
- * Image proxy endpoint for eBay CDN images
+ * Image proxy endpoint for eBay CDN images and scraped sale images
  * GET /api/image-proxy?url=<encoded_url>
  *
  * Validates the `url` param is from an allowed domain, fetches the image,
