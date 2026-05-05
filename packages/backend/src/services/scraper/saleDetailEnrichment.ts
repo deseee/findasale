@@ -12,6 +12,8 @@
 import { prisma } from '../../lib/prisma';
 import { getRandomUserAgent } from './userAgents';
 import { defaultRateLimiter } from './rateLimiter';
+import axios from 'axios';
+import { v2 as cloudinary } from 'cloudinary';
 
 interface EnrichmentResult {
   processed: number;
@@ -81,6 +83,71 @@ function extractSaleEventData(html: string): { description: string | null; image
   }
 
   return { description, images };
+}
+
+/**
+ * Mirror hotlink-blocked images to Cloudinary
+ * Downloads each image server-side (bypasses hotlink protection) and uploads to Cloudinary
+ * Returns array of Cloudinary URLs; skips failed downloads/uploads gracefully
+ */
+async function mirrorImagesToCloudinary(imageUrls: string[], saleId: string): Promise<string[]> {
+  const cloudinaryUrls: string[] = [];
+  const maxImages = 5; // Limit to 5 images per sale
+
+  // Configure Cloudinary if not already configured
+  if (!cloudinary.config().cloud_name) {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+  }
+
+  for (let i = 0; i < Math.min(imageUrls.length, maxImages); i++) {
+    const imageUrl = imageUrls[i];
+    if (!imageUrl) continue;
+
+    try {
+      // Fetch image with axios — no browser Referer, bypasses hotlink protection
+      const response = await axios.get(imageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 10000,
+      });
+
+      const imageBuffer = Buffer.from(response.data);
+      const mimeType = response.headers['content-type'] || 'image/jpeg';
+
+      // Upload to Cloudinary
+      const cloudinaryUrl = await new Promise<string>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: 'auto',
+            folder: 'findasale/scraped',
+          },
+          (error, result) => {
+            if (error || !result) return reject(error ?? new Error('No result from Cloudinary'));
+            resolve(result.secure_url);
+          }
+        );
+        stream.end(imageBuffer);
+      });
+
+      cloudinaryUrls.push(cloudinaryUrl);
+      console.log(`[SaleDetailEnrichment] Mirrored image ${i + 1} for sale ${saleId}: ${imageUrl} -> ${cloudinaryUrl}`);
+    } catch (error) {
+      console.warn(
+        `[SaleDetailEnrichment] Failed to mirror image for sale ${saleId}: ${imageUrl}`,
+        error instanceof Error ? error.message : String(error)
+      );
+      // Continue to next image — don't fail the enrichment
+    }
+  }
+
+  if (cloudinaryUrls.length > 0) {
+    console.log(`[SaleDetailEnrichment] Successfully mirrored ${cloudinaryUrls.length}/${Math.min(imageUrls.length, maxImages)} images for sale ${saleId}`);
+  }
+
+  return cloudinaryUrls;
 }
 
 /**
@@ -243,7 +310,20 @@ export async function enrichSaleDetails(batchSize?: number): Promise<EnrichmentR
         }
 
         if (images.length > 0 && (!sale.photoUrls || sale.photoUrls.length === 0)) {
-          updateData.photoUrls = images;
+          try {
+            // Mirror images to Cloudinary to bypass hotlink protection
+            const cloudinaryUrls = await mirrorImagesToCloudinary(images, sale.id);
+            if (cloudinaryUrls.length > 0) {
+              updateData.photoUrls = cloudinaryUrls;
+            }
+          } catch (error) {
+            console.warn(
+              `[SaleDetailEnrichment] Cloudinary mirroring failed for sale ${sale.id}, using original URLs as fallback`,
+              error instanceof Error ? error.message : String(error)
+            );
+            // Fallback to original URLs if Cloudinary is down
+            updateData.photoUrls = images;
+          }
         }
 
         if (Object.keys(updateData).length > 0) {
