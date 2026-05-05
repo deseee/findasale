@@ -80,6 +80,9 @@ importers:
       node-cron:
         specifier: ^3.0.2
         version: 3.0.3
+      nodemailer:
+        specifier: ^6.9.16
+        version: 6.10.1
       nodemon:
         specifier: ^2.0.22
         version: 2.0.22
@@ -162,6 +165,9 @@ importers:
       '@types/node-cron':
         specifier: ^3.0.7
         version: 3.0.11
+      '@types/nodemailer':
+        specifier: ^6.4.17
+        version: 6.4.23
       '@types/pdfkit':
         specifier: ^0.13.9
         version: 0.13.9
@@ -3457,6 +3463,12 @@ packages:
     resolution: {integrity: sha512-Uarfe6J91b9HAUXxjvSOdiO2UPOKLm07Q1oh0JHxoZ1y8HoqxDAu3gVrsrOHeiio0kSsoVBt4wFrKOm0dKxVPQ==}
     dependencies:
       undici-types: 6.21.0
+
+  /@types/nodemailer@6.4.23:
+    resolution: {integrity: sha512-aFV3/NsYFLSx9mbb5gtirBSXJnAlrusoKNuPbxsASWc7vrKLmIrTQRpdcxNcSFL3VW2A2XpeLEavwb2qMi6nlQ==}
+    dependencies:
+      '@types/node': 20.19.35
+    dev: true
 
   /@types/offscreencanvas@2019.3.0:
     resolution: {integrity: sha512-esIJx9bQg+QYF0ra8GnvfianIY8qWB0GBx54PK5Eps6m+xTj86KLavHv6qDhzKcu5UUOgNfJ2pWaIIV7TRUd9Q==}
@@ -7885,6 +7897,11 @@ packages:
 
   /node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}
+
+  /nodemailer@6.10.1:
+    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+    engines: {node: '>=6.0.0'}
+    dev: false
 
   /nodemon@2.0.22:
     resolution: {integrity: sha512-B8YqaKMmyuCO7BowF1Z1/mkPqLk6cs/l63Ojtd6otKjMx47Dq1utxfRxcavH1I7VSaL8n5BUaoutadnsX3AAVQ==}
