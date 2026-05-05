@@ -1232,8 +1232,8 @@ const OrganizerSettingsPage = () => {
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
                   {[
-                    { value: 'estate_sale', label: 'Estate Sales' },
                     { value: 'yard_sale', label: 'Yard Sales' },
+                    { value: 'estate_sale', label: 'Estate Sales' },
                     { value: 'auction', label: 'Auctions' },
                     { value: 'flea_market', label: 'Flea Markets' },
                     { value: 'consignment', label: 'Consignment' },
