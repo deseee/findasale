@@ -4,9 +4,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S645 — MetroSync Fixed + Gmail outreach.finda.sale Activated (COMPLETE)**
+**Latest: S646 — CategoryTopFinds + City Own-Data + Bug Fixes + Backend Crash Restored (COMPLETE)**
 
-MetroSync was returning `total: 0` for all 20 metros. Root cause: double-quoted phrases in the eBay Browse API query (`"estate sale"`) were being sent as literal `%22` characters, causing eBay to search for items with quotation marks in the title — which don't exist. Also removed the `conditions:{USED}` filter which compounded the issue. Fix: unquoted `estate sale OR yard sale OR garage sale OR flea market` with no conditions filter. Confirmed working — 120 items synced across 20 metros. Cron reverted to `0 4 * * *`. Debug logging left in place (useful for monitoring). Structural limitation noted: eBay Browse API has no location filter, so all 20 metros return the same items. Next session: dispatch `findasale-innovation` to redesign MetroTopFinds data source strategy.
+Innovation research confirmed: eBay Browse API has no geo filter — all 20 metros return identical items. Elegant split implemented: **eBay → category pages**, **own organizer inventory → city pages**.
+
+Four tracks shipped:
+1. **CategoryTopFinds** (new): `CategoryTopFinds` Prisma model + migration `20260504120000`, `categorySyncCron.ts` (nightly 05:00 UTC, gated by `CATEGORY_SYNC_ENABLED=true`, 9 FindA.Sale categories → eBay Browse API by categoryId), `/api/categories/:slug/top-finds` route, TrendingSection component wired into `categories/[category].tsx`.
+2. **metroSyncCron own-data swap**: queries own `Item` table first (isActive, PUBLISHED, state-matched, last 30 days). If ≥8 own items → skips eBay entirely. If <8 → fills remainder from eBay. Own items keyed as `local-{itemId}` in ebayListingId.
+3. **Bug fixes**: `/items/[id]` SSR 500 (extended Prisma select in `getItemById`), Hunt Pass badge (removed "Inactive" text), tier-lapse computed from live DB not JWT.
+4. **CityTopFinds crash + backend crash**: null-guarded `toFixed()` on undefined `soldPrice` in `city/[slug].tsx` + `CityTopFinds.tsx`. Restored truncated `organizers.ts` tail (agent truncation → `SyntaxError: Unexpected end of input` on Railway).
+
+**Files changed (12):** `schema.prisma`, `migrations/20260504120000_add_category_top_finds/migration.sql` (NEW), `categorySyncCron.ts` (NEW), `routes/categories.ts` (NEW), `index.ts` (wired cron + route), `metroSyncCron.ts`, `itemController.ts`, `organizers.ts`, `coupons.tsx`, `city/[slug].tsx`, `CityTopFinds.tsx`, `categories/[category].tsx`
+
+**Patrick actions completed:** All 4 push blocks confirmed pushed.
 
 Gmail also activated for `outreach.finda.sale` this session: MX record (`outreach → SMTP.GOOGLE.COM priority 1`) added in Vercel DNS, SPF updated from Smartlead to Google (`v=spf1 include:_spf.google.com ~all`), Google Workspace wizard confirmed "Gmail is activated!", `find@outreach.finda.sale` alias created.
 
@@ -135,35 +145,30 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| /items/[id] 500 (pre-existing) | Chrome QA not run | Browser test + stack trace from Vercel logs | S627 |
-| Sale social previews blank | Likely missing INTERNAL_API_URL in Vercel | Env var verification | S628 |
-| Hunt Pass "Inactive" vs "Active" inconsistency | Not Chrome-tested | Browser verification across views | S627 |
-| Tier-lapse banner (red/dismissible vs amber/sticky) | Production state unverified | Chrome test of tier-lapse-test account | S627 |
+| Sale social previews blank | Likely missing INTERNAL_API_URL in Vercel | Check Vercel env vars; add if missing | S628 |
 
 ---
 
-## Next Session — S646
+## Next Session — S647
 
-**Primary goal: dispatch `findasale-innovation` on the MetroTopFinds data source problem.**
+**Primary goal: sale social previews (OG meta blank) — likely missing `INTERNAL_API_URL` in Vercel env vars. 5-minute fix if confirmed.**
 
-MetroSync is now working mechanically (120 items/run, no errors) but all 20 metros return identical items because eBay Browse API has no location filter and only ~6 listings match the current query. The city pages will show the same 6 items for Grand Rapids and Chicago — not useful.
+Check Vercel project env vars for `INTERNAL_API_URL`. If missing, add it pointing to Railway backend URL. Verify in Chrome: share a sale URL → confirm OG image renders. Removes last item from Blocked/Unverified Queue.
 
-**Dispatch prompt for `findasale-innovation`:**
-"MetroTopFinds (`MetroTopFinds` table, city pages) currently pulls from eBay Browse API with `estate sale OR yard sale OR garage sale OR flea market`. Problem: (1) eBay Browse API has no location filter — all 20 metros return identical national results. (2) Current query returns only ~6 results total. We need city pages to show genuinely interesting, locally-differentiated, regularly-refreshed content that feels like 'what people are finding at sales near you.' Research and propose 2–3 alternatives to eBay Browse API as the data source for MetroTopFinds. Consider: EstateSales.NET scraping (they have location-based sale listings with photos and items), GSALR API, Craigslist free section by metro, Facebook Marketplace estate sales (public), OfferUp or Poshmark location APIs, or a hybrid approach. For each option evaluate: data quality, location specificity, freshness, legal/ToS risk, implementation complexity (days), and cost. Also evaluate: could we enrich the eBay query to return more diverse results by rotating through estate-sale item categories (antiques, jewelry, collectibles, vintage furniture) with category IDs instead of title keywords? Output: ranked recommendation with implementation path."
-
-**Other next session options (choose one to run alongside innovation dispatch):**
+**Secondary tracks (pick one):**
 - **Track A** — Help Library Drafting Cluster 1 (Photo Workflow, 6 drafts). Dispatch `findasale-marketing`. Roadmap #377.
 - **Track B** — Cold Outreach + Shopper SEO Parallel Specs (deferred S642 plan). 4 parallel agents.
-- **Track C** — Pre-existing P1 bug fixes (/items/[id] 500, sale social previews, Hunt Pass status, tier-lapse banner).
+- **Track C** — CategoryTopFinds Chrome QA: confirm TrendingSection renders on a category page with real eBay data after first cron run.
 
 ### Patrick pending actions
-- Push S645 wrap block (below)
-- Choose S646 secondary track (A, B, or C alongside the innovation dispatch)
+- `prisma migrate deploy` for `20260504120000_add_category_top_finds` migration (if not done)
+- Set `CATEGORY_SYNC_ENABLED=true` in Railway env vars (categorySyncCron won't run without it)
 - Send 19 queued Gmail partnership outreach drafts
 - Provision `outreach@finda.sale` Workspace seat ($6/mo) before any cold-outreach dev work
-- Set profile photo on `outreach@finda.sale`: log into gmail.com directly with that account → Google Account icon → set `icon-72x72.png` as profile photo (Admin Console doesn't support this)
+- Set profile photo on `outreach@finda.sale`: log into gmail.com directly → Google Account icon → set `icon-72x72.png`
 
 ### Locked context (don't re-derive)
+- Architecture: eBay → category pages; own organizer inventory → city pages (S646)
 - Verdict: BUILD Workspace + Postgres cron, do NOT sign up for Smartlead/Instantly/Saleshandy/Snov
 - 4 email templates locked S636 (`outreach-email-templates-v4.md`)
 - DNS: SPF (`_spf.google.com`) + DMARC live on `outreach.finda.sale`, DKIM via Workspace keypair (S643)
@@ -189,98 +194,4 @@ MetroSync is now working mechanically (120 items/run, no errors) but all 20 metr
 Prompt: "Convert `claude_docs/strategy/OUTREACH_EMAIL_ARCHITECTURE.md` into a tightened S643-ready dev spec given S641 audit findings. Drop the Phase-2-Instantly migration assumption. Document IMAP reply parsing path explicitly (S641 architecture audit confirmed Workspace path requires +2–3 days for IMAP vs. tool path's webhook). Verify Workspace 500/day claim against current 2026 Google docs (S641 found this is a reputation milestone, not a technical cap). Update DKIM section — drop Smartlead, use Workspace-generated keypair. Specify the ~8 dev-day breakdown with exact files to create/modify. Output: spec.md ready for findasale-dev S643 dispatch."
 
 **Agent 2 — Shopper SEO Audit (architect, embed `findasale-architect` + `marketing:seo-audit` skill context)**
-Prompt: "Audit existing shopper-side discovery SEO infrastructure. Verified-existing pages: `/city/[slug]`, `/cities`, `/categories`, `/categories/[category]`, `/neighborhoods`, `/neighborhoods/[slug]`, `/city-heat-index`, `/encyclopedia`, `/guide`, `/calendar`, `/map`, individual `/sales/[id]` and `/organizers/[id]` pages. Verify: (a) sitemap.xml coverage of all dynamic slugs, (b) per-slug unique title + meta + canonical, (c) Schema.org structured data presence (Event, Place, LocalBusiness), (d) URL pattern matches shopper-search intent ('estate sales near me', '[city] yard sales', '[zip] garage sales'), (e) SSR completeness (no JS-only Googlebot rendering), (f) internal link graph (city→neighborhood→sale→organizer→category PageRank flow), (g) Google Search Console index coverage, (h) orphaned pages with no internal links. Output: audit findings + prioritized P0/P1/P2 fix list ready for findasale-dev S643 dispatch."
-
-**Agent 3 — Partnership Outreach Drafts (innovation/marketing, embed `findasale-marketing` skill context)**
-Prompt: "Patrick has 19 partnership outreach drafts queued in Gmail (Nick Loper, Codie Sanchez, NAA ×2, NASMM, ISA, NESA, etc.). Read those drafts (or if not accessible, draft fresh based on `claude_docs/strategy/cold-outreach-deep-audit-S641.md` §5.2 partnership channel framing). Verify each: institutional voice (no founder voice), no 'AI' word, inclusive sale types, one CTA, value-led not ask-led. Recommend send sequence + cadence. Output: 19 polished drafts ready for Patrick to send manually from his existing Gmail."
-
-**Agent 4 — LinkedIn Pilot Setup (innovation, embed `findasale-sales-ops` skill context)**
-Prompt: "Spec the LinkedIn outreach pilot via Expandi (~$99/mo). Identify Sales Navigator query for finding estate-sale/auction/consignment owners. Draft the multi-channel sequence (LinkedIn touch 1 → email touch 1 → LinkedIn touch 2 → email touch 2). Calculate target list size for first 30-day pilot. Risk register (LinkedIn rate limits, account safety, message variation requirements). Output: pilot launch checklist Patrick can execute Week 4 of the cold-email rollout."
-
-### Why parallel and not sequential
-All four agents read independent context. Cold-outreach spec doesn't depend on SEO audit and vice versa. Partnership drafts and LinkedIn spec are independent of both. Sequential dispatch wastes ~3× the wall-clock for the same work. Per CLAUDE.md §7 batch dispatch: budget ~1.5–2k tokens per agent in main context post-return. Wrap S642 if context >170k.
-
-### S643 dispatch plan (after S642 specs return, sequential — Dev work has file conflicts)
-- `findasale-dev` for cold outreach build (8 days estimated, may split across S643/S644)
-- `findasale-dev` for shopper SEO P0 fixes (parallel batch — different files than cold-email build, can run simultaneously per CLAUDE.md §7 BATCH DISPATCH PROTOCOL)
-
-### Patrick pending actions
-- Push S643 wrap block (includes S641 cold outreach roadmap + dashboard work — S641 was wrapped but never pushed)
-- Decide which S643 track to dispatch (A: help library drafting, B: cold outreach + SEO parallel specs, C: P1 bug fixes)
-- If Track B chosen: confirm "build, don't buy" verdict
-- Send 19 partnership outreach drafts (independent of any track)
-- Provision `outreach@finda.sale` Workspace seat ($6/mo) before any cold-outreach dev work
-- Generate Workspace App Password for `outreach@finda.sale` (needed for cold-outreach build session)
-
-### Locked context (don't re-derive)
-- Verdict: BUILD Workspace + Postgres cron, do NOT sign up for Smartlead/Instantly/Saleshandy/Snov
-- Saleshandy is fallback if (a) volume crosses 5,000/day OR (b) inbox placement <70% after 30-day warm-up OR (c) reply auto-classifier proves <90% accurate
-- 4 templates locked S636 (`outreach-email-templates-v4.md`)
-- DNS: SPF + DMARC live, DKIM via Workspace (not Smartlead — remove Smartlead SPF entry during S643 housekeeping)
-- Reply handling fully automated per D-S268
-- Shopper-side SEO is parallel critical infra (memory: feedback_seo_two_sided_distinction.md)
-- RVM permanently killed (FCC 2022 TCPA ruling)
-- Postcard gated to Phase 2 (only if email reply rate <2.5% after 8 weeks)
-
-### Other pending work (rolled forward)
-- Pre-existing bugs: /items/[id] 500, sale social previews blank, Hunt Pass status inconsistency, tier-lapse banner styling — defer past S642/S643 outreach build unless they block beta demos
-
----
-
-## Reference — Passwords & Test Accounts
-
-**All test accounts use password:** `Seedy2025!`
-
-| Account | Role | Tier | Notes |
-|---------|------|------|-------|
-| user1 (Alice) | Organizer | TEAMS | Full feature access |
-| user2 (Bob) | Organizer | PRO | Standard organizer |
-| user6 | Organizer | FREE | Charity sale owner |
-| tier-lapse-test | Organizer | PRO | Past due (test lapsed state) |
-| low-xp-shopper | Shopper | - | 10 XP (test low inventory) |
-
----
-
-## Reference — Critical Credentials & URLs
-
-**Credentials:** See private CLAUDE.md — never stored here.
-
-**Live site:** https://finda.sale
-
-**Admin scraper page:** https://finda.sale/admin/scraper
-
----
-
-## Reference — Known Issues & Carryover
-
-**P1 bugs (pre-existing):**
-- All `/items/[id]` URLs return 500 SSR error (pre-S599, not introduced by recent work)
-
-**P2 bugs (known, not blocking):**
-- Sale page social previews missing og:image/title/description (SSR not rendering SaleOGMeta)
-- Tier-lapse "Your Plan" card stays teal/cyan instead of amber when lapsed
-- Hunt Pass shows "Inactive" in one view, "Active" in another (copy/state inconsistency)
-
-**Carryover from S626:**
-- Phase 1 outreach: Google Workspace seat ($6/mo) + custom Postgres cron (cold-outreach tooling)
-- Reply handling: fully automated per decisions-log S268 (no SLA, no human routing)
-- 19 Gmail outreach drafts queued (Nick Loper, Codie Sanchez, trade associations)
-
-**Carryover from S640:**
-- `outreach.finda.sale` subdomain: SPF ✅ DMARC ✅ DKIM ⏳ — need cold outreach tool (Instantly.ai or Smartlead) to generate DKIM keypair, then add CNAME to Vercel DNS
-
----
-
-## Session Compression Log
-
-**Compression Pass — 2026-05-03**
-- Original file: 934 lines / 28.2k tokens
-- Archived sessions: S617–S630 → `monthly-digest-2026-04-archive.md` (14 session summaries)
-- Kept: 5 most recent sessions (S631–S635), Next Session block, Blocked/Unverified Queue, reference data
-- Final file: ~185 lines / 6.5k tokens
-- Reduction: 80% line count, 77% token count
-
-**Kept sections:** Current Status, Recent Sessions (5×), Blocked/Unverified Queue, Next Session, Reference (Passwords, Credentials, Known Issues)
-
-**Deleted sections:** LEGACY S603 plan content (lines 740–934), obsolete multi-page dispatch specs, superseded S603 viral mechanics exploration
-
+Prompt: "Audit existing shopper-side discovery SEO infrastructure. Verified-existing pages: `/city/[slug]`, `/cities`, `/categories`, `/categories/[category
