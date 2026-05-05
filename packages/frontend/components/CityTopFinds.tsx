@@ -81,7 +81,7 @@ export function CityTopFinds({ citySlug, items }: CityTopFindsProps) {
                       Estimated
                     </span>
                     <span className="text-lg line-through text-slate-400 dark:text-slate-500">
-                      ${item.estimatedValue.toFixed(2)}
+                      ${(item.estimatedValue ?? 0).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between items-baseline">
@@ -89,14 +89,14 @@ export function CityTopFinds({ citySlug, items }: CityTopFindsProps) {
                       Sold for
                     </span>
                     <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      ${item.actualPrice.toFixed(2)}
+                      ${(item.actualPrice ?? 0).toFixed(2)}
                     </span>
                   </div>
                 </div>
 
                 <div className="bg-blue-50 dark:bg-blue-900 px-3 py-2 rounded text-center">
                   <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-                    {item.markdownPercentage.toFixed(0)}% Savings
+                    {(item.markdownPercentage ?? 0).toFixed(0)}% Savings
                   </p>
                 </div>
               </div>
