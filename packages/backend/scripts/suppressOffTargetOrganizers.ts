@@ -55,6 +55,12 @@ const VALID_CATEGORIES = [
 /**
  * Business name keywords that indicate a non-target business.
  * Mirrors BUSINESS_NAME_BLOCKLIST in googlePlaces.ts — keep in sync.
+ *
+ * False positive notes (S648 dry-run):
+ * - 'spa' removed: too broad as substring, matched 'Spann', 'Sparrow', 'Spanish'
+ *   Replaced with specific forms: 'day spa', 'nail spa', 'massage spa', 'spa & salon'
+ * - 'realty'/'realtor' exempt when name also contains 'auction' (see match loop below)
+ *   Auction+realty combo firms are a legitimate segment of our market.
  */
 const BUSINESS_NAME_BLOCKLIST = [
   // Hospitality/lodging
@@ -72,7 +78,7 @@ const BUSINESS_NAME_BLOCKLIST = [
   'chick-fil-a', 'starbucks', 'coffee shop', 'diner', 'fast food', 'donut',
   'bar & grill', 'sports bar', 'pizza restaurant',
 
-  // Personal services
+  // Personal services ('spa' removed — too broad; replaced with specific forms)
   'barber shop', 'hair salon', 'nail salon', 'day spa', 'nail spa', 'massage spa',
   'spa & salon', 'massage', 'tattoo parlor', 'dry cleaner', 'laundromat', 'nail bar',
 
@@ -95,6 +101,9 @@ const BUSINESS_NAME_BLOCKLIST = [
   // Real estate (different from estate sale companies)
   'real estate group', 'realty', 'realtor', 'property management',
 ];
+
+/** Realty keywords that are exempt when the name also contains 'auction' */
+const REALTY_KEYWORDS = ['realty', 'realtor', 'real estate group'];
 
 async function main() {
   const CONFIRM = (process.env.CONFIRM ?? 'false') === 'true';
@@ -133,8 +142,7 @@ async function main() {
 
   console.log('[Pass 2] Scanning for blocklisted business names...');
 
-  // Fetch IDs of all unsuppressed, unclaimed, unmanaged organizers (with or without valid category)
-  // Then filter in JS using the blocklist — avoids N+1 and works without raw SQL.
+  // Fetch all unsuppressed, unclaimed, unmanaged organizers then filter in JS.
   const candidates = await prisma.organizer.findMany({
     where: {
       isClaimed: false,
@@ -156,7 +164,6 @@ async function main() {
     const matched = BUSINESS_NAME_BLOCKLIST.find((keyword) => nameLower.includes(keyword));
     if (matched) {
       // Exempt auction+realty combos — "Auction & Realty" firms are a real segment of our market
-      const REALTY_KEYWORDS = ['realty', 'realtor', 'real estate group'];
       if (REALTY_KEYWORDS.includes(matched) && nameLower.includes('auction')) continue;
 
       nameMatchIds.push(org.id);
