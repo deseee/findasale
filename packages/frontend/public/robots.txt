@@ -13,7 +13,7 @@ Allow: /contact
 Allow: /plan
 
 Disallow: /admin
-Disallow: /organizer
+Disallow: /organizer/
 Disallow: /api
 Disallow: /auth
 Disallow: /profile
@@ -33,15 +33,17 @@ Request-rate: 1/1s
 # Google-specific directives
 User-agent: Googlebot
 Allow: /
+Allow: /organizers/
 Disallow: /admin
-Disallow: /organizer
+Disallow: /organizer/
 Disallow: /api
 Crawl-delay: 0
 
 # Bing-specific directives
 User-agent: Bingbot
 Allow: /
+Allow: /organizers/
 Disallow: /admin
-Disallow: /organizer
+Disallow: /organizer/
 Disallow: /api
 Crawl-delay: 1
