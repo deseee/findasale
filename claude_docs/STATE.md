@@ -4,7 +4,17 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**Latest: S647 — Settlement Hub Fix + Cold Outreach Pipeline + SEO P0/P1 + 75 Guide Drafts (COMPLETE)**
+**Latest: S648 — Outreach Data Quality Gate + suppressOffTargetOrganizers (COMPLETE)**
+
+Three tracks: (1) Fixed `initOutreachEmailsCron` Railway startup crash — file was truncated in a prior session, missing closing braces + the entire export function. (2) Fixed `smtpPermutationVerifier.ts` TS syntax error — `BLOCKED_EMAIL_SUFFIXES` Set was inserted mid-way through `PLATFORM_DOMAINS` Set. (3) Built full data quality gate for outreach pipeline: BUSINESS_NAME_BLOCKLIST + ACCEPTABLE_GOOGLE_TYPES in googlePlaces.ts (23 queries, up from 11), ingest gate in scraper/index.ts (rejects non-VALID_CATEGORIES at write time), category + suppressOutreach filters added to claimEmailService.ts and outreachEmailsCron.ts, new `suppressOffTargetOrganizers.ts` two-pass cleanup script (Pass 1: category-based, Pass 2: name-based — catches existing junk where Google Places hardcoded a valid category). Dry-run result: 486 name-matched records. False positives caught before execution: `'spa'` matched "Spann"/"Sparrow" estate sale companies; `'realty'` matched auction+realty combo firms (our target market). Both fixed — `'spa'` replaced with specific terms, auction exemption added to realty matching.
+
+**Files changed:** `googlePlaces.ts`, `scraper/index.ts`, `claimEmailService.ts`, `outreachEmailsCron.ts`, `smtpPermutationVerifier.ts`, `suppressOffTargetOrganizers.ts`
+
+**Patrick actions:** Run suppression dry-run after fix (below), then CONFIRM=true if count + examples look clean. Set Railway env vars for outreach pipeline. See "## Next Session — S649" below.
+
+---
+
+**Previous: S647 — Settlement Hub Fix + Cold Outreach Pipeline + SEO P0/P1 + 75 Guide Drafts (COMPLETE)**
 
 Five tracks shipped:
 
@@ -166,18 +176,53 @@ Full audit and repair of 11 GitHub Actions workflows. (1) **8 workflows rewritte
 
 ---
 
-## Next Session — S648
+## Next Session — S649
 
-**Primary: Verify S647 work is live.** Check Railway deploy logs for outreach pipeline startup. Confirm `prisma migrate deploy` completed for `20260505000000`. Check Vercel deploy for SEO + hydration fixes.
+**First action:** Load `dev-environment` skill. Then use psycopg2 in the VM to do a full audit and cleanup of junk organizer data before the outreach pipeline fires.
 
-**Secondary tracks (pick one after verifying live):**
-- **Track A** — Shopper SEO P2 fixes: category description text, neighborhood context for city pages, breadcrumb visual component, national neighborhoods expansion. Deferred from S647.
-- **Track B** — Help Library Site Surface (#378): `/guides` route, FAQ inbound links, slot in approved drafts. Blocked on Patrick reviewing the 75 guide drafts first.
-- **Track C** — CategoryTopFinds Chrome QA: after nightly cron has run at 05:00 UTC, QA that TrendingSection renders real eBay data on a category page.
+**Data quality audit (primary goal):**
 
-### Patrick pending actions (S647 wrap)
+The outreach pipeline is built and gated behind `OUTREACH_ENABLED=true`. Before flipping that switch, junk organizer records must be purged. The `suppressOffTargetOrganizers.ts` script has a two-pass approach but runs from Patrick's machine. The better path for the audit is psycopg2 directly from the VM — more interactive, Claude executes the cleanup without Patrick touching PowerShell.
 
-**Push blocks — run in order:**
+Use psycopg2 to:
+1. Connect to Railway DB (public proxy URL in CLAUDE.md credentials)
+2. Query all `isUnmanagedListing=true, isClaimed=false, suppressOutreach=false` organizers
+3. Match `businessName` against the BUSINESS_NAME_BLOCKLIST in `packages/backend/src/services/scraper/sources/googlePlaces.ts`
+4. Show Patrick counts broken down by matched keyword + 20 examples per category
+5. Exempt auction+realty combos (names containing both "realty"/"realtor" AND "auction")
+6. Execute `UPDATE suppressOutreach=true` after Patrick confirms
+
+**Known false positives to watch for (caught in S648 dry-run):**
+- `'spa'` as substring matches "Spann", "Sparrow", "Spanish" — already fixed in script (replaced with 'day spa', 'massage spa', etc.) but watch for similar short-keyword false positives in the psycopg2 pass
+- `'realty'` + `'auction'` combos are legitimate auction houses — already exempted in script, replicate the exemption logic in the psycopg2 pass
+- `'construction'` is broad — "W a Construction Company Ltd" is clearly not our target, but watch for edge cases like "Construction Equipment Auction"
+- `'auto sale'` may catch car dealers that also auction — flag for Patrick review, don't auto-suppress
+
+**After suppression cleanup:**
+- Set Railway env vars to activate the pipeline:
+  - `OUTREACH_ENABLED` = `true`
+  - `OUTREACH_WORKSPACE_EMAIL` = `outreach@finda.sale`
+  - `OUTREACH_WORKSPACE_APP_PASSWORD` = [Google Workspace App Password for outreach@finda.sale]
+  - `OUTREACH_SECRET` = [generate with `openssl rand -hex 32`]
+- Then verify pipeline fires by watching Railway logs for the next 4-hour cron tick
+
+**S647 Patrick actions still pending (if not done):**
+- Push Block 1, 2, 3 from S647 (see archived section below)
+- `prisma migrate deploy` for `20260505000000_add_outreach_pipeline`
+- Send 19 queued Gmail partnership outreach drafts
+- Set profile photo on `outreach@finda.sale`
+- Read guide drafts in `claude_docs/strategy/guides-drafts/`
+
+### Locked context (don't re-derive)
+- Architecture: eBay → category pages; own organizer inventory → city pages (S646)
+- Verdict: BUILD Workspace + Postgres cron, do NOT sign up for Smartlead/Instantly/Saleshandy/Snov
+- 4 email templates locked S636 (`outreach-email-templates-v4.md`)
+- DNS: SPF (`_spf.google.com`) + DMARC live on `outreach.finda.sale`, DKIM via Workspace keypair (S646)
+- Shopper-side SEO is parallel critical infra (memory: feedback_seo_two_sided_distinction.md)
+- `businessCategory` on Organizer is NOT an enum — it's a plain String hardcoded from `PLACES_QUERIES` config. Every Google Places result gets a valid category regardless of what Google actually returned. Category filtering alone cannot distinguish Hilton hotels from thrift stores — name matching is required.
+- `toNumber()` returns `null` for null Decimal (not 0) — anti-pattern to watch in settlement/financial calculations
+
+### Patrick pending actions (S647 wrap — carry forward)
 
 **Push Block 1 — Settlement Hub + Sale Type Ordering (7 files)**
 ```powershell
@@ -216,7 +261,7 @@ git commit -m "fix(s565): hydration mismatch + shopper SSR 404s | seo: category 
 git add claude_docs/strategy/guides-drafts/
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "docs: 75 help library guide drafts (#377 complete) | wrap S647"
+git commit -m "docs: 75 help library guide drafts (#377 complete) | wrap S647+S648"
 .\push.ps1
 ```
 
@@ -227,26 +272,6 @@ $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev
 npx prisma migrate deploy
 npx prisma generate
 ```
-
-**Railway env vars to set (after Push Block 2 is deployed):**
-- `OUTREACH_ENABLED` = `true`
-- `OUTREACH_WORKSPACE_EMAIL` = `outreach@finda.sale`
-- `OUTREACH_WORKSPACE_APP_PASSWORD` = [Google Workspace App Password for outreach@finda.sale]
-- `OUTREACH_SECRET` = [32-byte random string — generate with: `openssl rand -hex 32`]
-- `OUTREACH_FROM_NAME` = `The FindA.Sale Team` (optional, defaults to this)
-
-**Remaining Patrick actions:**
-- Send 19 queued Gmail partnership outreach drafts (NESA, NAA ×2, NASMM, ISA, Nick Loper, Codie Sanchez)
-- Set profile photo on `outreach@finda.sale`: gmail.com → Google Account icon → upload `icon-72x72.png`
-- Read guide drafts in `claude_docs/strategy/guides-drafts/` and give voice-check thumbs up/down before S648 site-surface dispatch
-
-### Locked context (don't re-derive)
-- Architecture: eBay → category pages; own organizer inventory → city pages (S646)
-- Verdict: BUILD Workspace + Postgres cron, do NOT sign up for Smartlead/Instantly/Saleshandy/Snov
-- 4 email templates locked S636 (`outreach-email-templates-v4.md`)
-- DNS: SPF (`_spf.google.com`) + DMARC live on `outreach.finda.sale`, DKIM via Workspace keypair (S646)
-- Shopper-side SEO is parallel critical infra (memory: feedback_seo_two_sided_distinction.md)
-- `toNumber()` returns `null` for null Decimal (not 0) — anti-pattern to watch in settlement/financial calculations
 
 ---
 

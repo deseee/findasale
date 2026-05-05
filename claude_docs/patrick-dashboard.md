@@ -1,4 +1,4 @@
-# Patrick's Dashboard — May 5, 2026 (S647 wrap)
+# Patrick's Dashboard — May 5, 2026 (S648 wrap)
 
 ---
 
@@ -27,6 +27,16 @@ Full report: `claude_docs/audits/brand-drift-2026-05-05.md`
 ---
 
 ## What Happened This Session
+
+**S648 — Outreach data quality gate built and fixed.**
+
+Before the cold outreach pipeline fires at real organizers, junk data needed to be cleaned. Three problems fixed: (1) Railway startup crash — the outreach cron file was truncated in a prior session and missing its export function entirely; fixed and pushed. (2) TypeScript compile error in the SMTP verifier script — a Set definition was inserted mid-way through another Set, breaking the syntax. (3) Built a two-pass suppression script that catches junk organizers by both category AND business name. The name-based pass is necessary because Google Places hardcodes a valid category from the search query — even a Hilton hotel found via a "thrift store" search gets `THRIFT_STORE` as its category, so category filtering alone is useless. Also expanded the scraper from 11 to 23 search queries covering the full secondhand market.
+
+Dry-run found 486 name-matched records. Two false positives caught before executing: `'spa'` was matching "Spann" and "Sparrow" inside legitimate estate sale company names — replaced with more specific terms. `'realty'` was matching auction+realty combo firms like "Ken Carpenter Auction & Realty" which are our target market — added an exemption.
+
+**Script is ready to execute. See next session for the psycopg2 audit path.**
+
+---
 
 **S647 — Big session. Five tracks shipped.**
 
@@ -126,7 +136,8 @@ npx prisma generate
 | **City Pages** (own data) | ✅ metroSyncCron own-data swap live | — |
 | **Partnership Outreach** | 19 drafts in Patrick's Gmail | Patrick sends |
 
-## Next Session (S648)
+## Next Session (S649)
 
-1. Verify S647 is live — Railway logs for outreach pipeline + Vercel deploy for SEO fixes.
-2. Pick a track: Shopper SEO P2 / Help Library site surface (#378) / CategoryTopFinds Chrome QA.
+**Goal: audit + clean the junk organizer data, then flip `OUTREACH_ENABLED=true`.**
+
+Use psycopg2 in the VM to connect directly to Railway, run the name-based blocklist match interactively, show Patrick counts + examples broken down by keyword, then execute `UPDATE suppressOutreach=true` with Patrick's confirmation. Watch for: `'construction'`+auction combos, `'auto sale'` edge cases, any short keyword that might hit legitimate businesses. After suppression is clean, set the 4 Railway env vars and watch the logs for the first cron run.
