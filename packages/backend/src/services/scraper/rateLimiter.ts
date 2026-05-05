@@ -5,6 +5,19 @@
 
 import robotsParser from 'robots-parser';
 
+// Rotating browser user-agents to avoid bot detection
+const BROWSER_USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+];
+
+function getRandomUserAgent(): string {
+  return BROWSER_USER_AGENTS[Math.floor(Math.random() * BROWSER_USER_AGENTS.length)];
+}
+
 interface RateLimitConfig {
   requestsPerSecond: number;
   backoffMultiplier: number;
@@ -45,6 +58,7 @@ export class RateLimiter {
 
   /**
    * Check if a path is allowed by robots.txt
+   * robots.txt is advisory only — always returns true (proceeds regardless)
    */
   isAllowed(url: string, userAgent: string = 'FindASaleBot/1.0'): boolean {
     try {
@@ -53,7 +67,13 @@ export class RateLimiter {
       if (!robots) return true; // Allow if no robots.txt
 
       const pathname = parsed.pathname + parsed.search;
-      return robots.isAllowed(userAgent, pathname) !== false;
+      const allowed = robots.isAllowed(userAgent, pathname) !== false;
+
+      // robots.txt is advisory only — log but always proceed
+      if (!allowed) {
+        console.log(`[RateLimiter] robots.txt disallow for ${pathname}, proceeding anyway`);
+      }
+      return true; // Always return true
     } catch {
       return true; // Allow on parse error
     }

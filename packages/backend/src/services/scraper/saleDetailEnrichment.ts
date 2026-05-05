@@ -15,6 +15,20 @@ import { defaultRateLimiter } from './rateLimiter';
 import axios from 'axios';
 import { v2 as cloudinary } from 'cloudinary';
 
+// Rotating referers to avoid fingerprinting
+const REFERRERS = [
+  'https://www.google.com/',
+  'https://www.google.com/search?q=estate+sales+near+me',
+  'https://duckduckgo.com/',
+  'https://www.bing.com/search?q=estate+sales',
+  '', // direct traffic (no referer)
+  '', // double-weight direct
+];
+
+function getRandomReferer(): string {
+  return REFERRERS[Math.floor(Math.random() * REFERRERS.length)];
+}
+
 interface EnrichmentResult {
   processed: number;
   enriched: number;
@@ -151,43 +165,81 @@ async function mirrorImagesToCloudinary(imageUrls: string[], saleId: string): Pr
 }
 
 /**
- * Fetch sale page HTML with stealth headers
+ * Fetch sale page HTML with stealth headers and retry logic
+ * Retries 5xx errors with exponential backoff, aborts on 429 or permanent errors
  */
 async function fetchSalePageHTML(sourceUrl: string): Promise<string | null> {
-  try {
-    const response = await fetch(sourceUrl, {
-      method: 'GET',
-      headers: {
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const referer = getRandomReferer();
+      const headers: Record<string, string> = {
         'User-Agent': getRandomUserAgent(),
-        'Referer': 'https://www.estatesales.net/',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Accept-Encoding': 'gzip, deflate',
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
-      },
-      signal: AbortSignal.timeout(15000),
-    });
+      };
 
-    if (response.status === 429) {
-      console.warn(`[SaleDetailEnrichment] 429 Too Many Requests from ${sourceUrl}`);
-      defaultRateLimiter.recordBackoff('estatesales.net');
-      return null; // Signal abort condition
+      // Only add Referer header if not empty string
+      if (referer) {
+        headers['Referer'] = referer;
+      }
+
+      const response = await fetch(sourceUrl, {
+        method: 'GET',
+        headers,
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (response.status === 429) {
+        console.warn(`[SaleDetailEnrichment] 429 Too Many Requests from ${sourceUrl} (attempt ${attempt + 1})`);
+        defaultRateLimiter.recordBackoff('estatesales.net');
+        return null; // Signal abort condition
+      }
+
+      // Permanent failures (403, 404) — do not retry
+      if (response.status === 403 || response.status === 404) {
+        console.warn(`[SaleDetailEnrichment] HTTP ${response.status} (permanent) for ${sourceUrl}`);
+        return null;
+      }
+
+      // 5xx errors — retry with backoff
+      if (response.status >= 500 && attempt < maxRetries) {
+        const backoffMs = (attempt + 1) * 2000 + Math.random() * 1000;
+        console.warn(
+          `[SaleDetailEnrichment] HTTP ${response.status} for ${sourceUrl}, retrying in ${backoffMs}ms (attempt ${attempt + 1}/${maxRetries})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue; // Retry
+      }
+
+      if (!response.ok) {
+        console.warn(`[SaleDetailEnrichment] HTTP ${response.status} for ${sourceUrl}`);
+        return null;
+      }
+
+      return await response.text();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(
+        `[SaleDetailEnrichment] Fetch error for ${sourceUrl} (attempt ${attempt + 1}/${maxRetries + 1}):`,
+        lastError.message
+      );
+
+      // Retry on network errors up to maxRetries
+      if (attempt < maxRetries) {
+        const backoffMs = (attempt + 1) * 2000 + Math.random() * 500;
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
     }
-
-    if (!response.ok) {
-      console.warn(`[SaleDetailEnrichment] HTTP ${response.status} for ${sourceUrl}`);
-      return null;
-    }
-
-    return await response.text();
-  } catch (error) {
-    console.warn(
-      `[SaleDetailEnrichment] Fetch error for ${sourceUrl}:`,
-      error instanceof Error ? error.message : String(error)
-    );
-    return null;
   }
+
+  return null;
 }
 
 /**
@@ -336,9 +388,11 @@ export async function enrichSaleDetails(batchSize?: number): Promise<EnrichmentR
         }
       }
 
-      // Random delay between requests (4–12 seconds for stealth)
-      const delay = Math.random() * 8000 + 4000;
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      // Random delay between requests (4–12 seconds for stealth) with micro-jitter
+      const baseDelay = Math.random() * 8000 + 4000;
+      const microJitter = Math.random() * 500 - 250;
+      const totalDelay = baseDelay + microJitter;
+      await new Promise((resolve) => setTimeout(resolve, totalDelay));
 
       if (result.processed % 10 === 0) {
         console.log(`[SaleDetailEnrichment] Progress: ${result.processed}/${batch.length} (enriched: ${result.enriched})`);

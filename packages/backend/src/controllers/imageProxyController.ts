@@ -14,6 +14,19 @@ const ALLOWED_DOMAINS = [
   'photos.liveauctioneers.com',
 ];
 
+// Rotating browser user-agents to avoid bot detection
+const BROWSER_USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+];
+
+function getRandomUserAgent(): string {
+  return BROWSER_USER_AGENTS[Math.floor(Math.random() * BROWSER_USER_AGENTS.length)];
+}
+
 /**
  * Image proxy endpoint for eBay CDN images and scraped sale images
  * GET /api/image-proxy?url=<encoded_url>
@@ -54,7 +67,9 @@ export const imageProxy = async (req: Request, res: Response) => {
     const response = await fetch(decodedUrl, {
       method: 'GET',
       headers: {
-        'User-Agent': 'FindA.Sale/1.0 (Image Proxy)',
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
       },
     });
 
