@@ -153,7 +153,10 @@ async function fetchEbaySoldItems(metro: MetroConfig): Promise<EbaySoldItem[]> {
       return [];
     }
 
-    const data = (await response.json()) as { itemSummaries?: EbaySoldItem[] };
+    const rawText = await response.text();
+    console.log(`[MetroSync] Raw eBay response (first 500 chars): ${rawText.slice(0, 500)}`);
+    const data = JSON.parse(rawText) as { itemSummaries?: EbaySoldItem[]; total?: number; warnings?: unknown[] };
+    console.log(`[MetroSync] itemSummaries count: ${data.itemSummaries?.length ?? 0}, total: ${data.total ?? 'N/A'}`);
     return data.itemSummaries || [];
   } catch (error) {
     console.error(`[MetroSync] Fetch error for ${metro.slug}:`, error);
@@ -268,7 +271,7 @@ export function initMetroSyncCron(): void {
   }
 
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('0 3 * * *', async () => {
+  cron.schedule('9 3 * * *', async () => {
     await syncAllMetros();
   });
 
